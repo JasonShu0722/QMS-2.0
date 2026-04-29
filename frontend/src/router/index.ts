@@ -23,6 +23,63 @@ declare module 'vue-router' {
 /**
  * 路由配置
  */
+function getSingleQueryValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (Array.isArray(value) && typeof value[0] === 'string') {
+    return value[0]
+  }
+
+  return undefined
+}
+
+type EightDRedirectSource = {
+  params: Record<string, unknown>
+  query: Record<string, unknown>
+}
+
+function buildSupplierEightDRedirect(
+  to: EightDRedirectSource,
+  sourceRouteName: string,
+  defaultAction?: string,
+) {
+  const id = getSingleQueryValue(to.params.id)
+  if (!id) {
+    return { name: 'EightDWorkspace' }
+  }
+
+  return {
+    name: 'EightDWorkspace',
+    query: {
+      kind: 'supplier',
+      recordId: id,
+      action: getSingleQueryValue(to.query.action) ?? defaultAction,
+      sourceRouteName: getSingleQueryValue(to.query.sourceRouteName) ?? sourceRouteName,
+      sourceFocusId: getSingleQueryValue(to.query.sourceFocusId) ?? id,
+    },
+  }
+}
+
+function buildCustomerEightDRedirect(to: EightDRedirectSource) {
+  const id = getSingleQueryValue(to.params.id)
+  if (!id) {
+    return { name: 'EightDWorkspace' }
+  }
+
+  return {
+    name: 'EightDWorkspace',
+    query: {
+      kind: 'customer',
+      recordId: id,
+      sourceRouteName: getSingleQueryValue(to.query.sourceRouteName) ?? 'CustomerComplaintList',
+      sourceFocusId: getSingleQueryValue(to.query.sourceFocusId) ?? id,
+      sourceComplaintId: getSingleQueryValue(to.query.sourceComplaintId) ?? id,
+    },
+  }
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -80,7 +137,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'supplier/eight-d/:id?',
         name: 'EightDForm',
-        component: () => import('@/views/supplier/EightDForm.vue'),
+        redirect: (to) => buildSupplierEightDRedirect(to, 'SCARList'),
         meta: { title: '8D报告', requiresAuth: true, permission: { modulePath: 'supplier.scar', operation: 'read' } }
       },
       {
@@ -123,7 +180,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'quality/scar/eight-d/:id?',
         name: 'ScarEightDReview',
-        component: () => import('@/views/supplier/EightDForm.vue'),
+        redirect: (to) => buildSupplierEightDRedirect(to, 'ScarManagement', 'review'),
         meta: { title: 'SCAR 8D审核', requiresAuth: true, permission: { modulePath: 'quality.incoming', operation: 'read' } }
       },
       // ==================== 质量管理 - 过程 ====================
@@ -161,8 +218,14 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'quality/eight-d-customer/:id?',
         name: 'EightDCustomerForm',
-        component: () => import('@/views/EightDCustomerForm.vue'),
+        redirect: (to) => buildCustomerEightDRedirect(to),
         meta: { title: '客户8D报告', requiresAuth: true, permission: { modulePath: 'quality.customer', operation: 'read' } }
+      },
+      {
+        path: 'quality/eight-d-workspace',
+        name: 'EightDWorkspace',
+        component: () => import('@/views/EightDWorkspace.vue'),
+        meta: { title: '8D报告', requiresAuth: true }
       },
       {
         path: 'quality/customer-claims',

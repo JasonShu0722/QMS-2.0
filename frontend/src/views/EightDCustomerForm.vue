@@ -15,7 +15,7 @@
         >
           归档关闭
         </el-button>
-        <el-button @click="handleBack">返回</el-button>
+        <el-button v-if="!workspaceMode" @click="handleBack">返回</el-button>
       </div>
     </div>
 
@@ -448,8 +448,30 @@ import type {
   EightDSLAStatus,
 } from '@/types/customer-quality'
 
+const props = withDefaults(
+  defineProps<{
+    recordId?: number | string
+    workspaceMode?: boolean
+    sourceRouteName?: string
+    sourceFocusId?: string | number
+    sourceComplaintId?: string | number
+  }>(),
+  {
+    recordId: undefined,
+    workspaceMode: false,
+    sourceRouteName: undefined,
+    sourceFocusId: undefined,
+    sourceComplaintId: undefined,
+  }
+)
+
+const emit = defineEmits<{
+  (event: 'loaded-meta', payload: { title?: string }): void
+}>()
+
 const route = useRoute()
 const router = useRouter()
+const workspaceMode = computed(() => props.workspaceMode)
 
 // 数据状态
 const loading = ref(false)
@@ -568,20 +590,20 @@ function getSingleQueryValue(value: unknown): string | undefined {
 }
 
 const sourceRouteName = computed(() => {
-  const raw = getSingleQueryValue(route.query.sourceRouteName)
+  const raw = props.sourceRouteName ?? getSingleQueryValue(route.query.sourceRouteName)
   return raw && isCustomerComplaintRouteName(raw) ? raw : 'CustomerComplaintList'
 })
 
 const sourceFocusId = computed(() => {
-  const raw = getSingleQueryValue(route.query.sourceFocusId)
+  const raw = props.sourceFocusId ? String(props.sourceFocusId) : getSingleQueryValue(route.query.sourceFocusId)
   const parsed = raw ? Number.parseInt(raw, 10) : NaN
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : complaint.value?.id ?? Number(route.params.id)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : complaint.value?.id ?? Number(props.recordId ?? route.params.id)
 })
 
 const sourceComplaintId = computed(() => {
-  const raw = getSingleQueryValue(route.query.sourceComplaintId)
+  const raw = props.sourceComplaintId ? String(props.sourceComplaintId) : getSingleQueryValue(route.query.sourceComplaintId)
   const parsed = raw ? Number.parseInt(raw, 10) : NaN
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : complaint.value?.id ?? Number(route.params.id)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : complaint.value?.id ?? Number(props.recordId ?? route.params.id)
 })
 
 function buildSourceRoute() {
@@ -648,7 +670,7 @@ function formatDateTime(value?: string | null): string {
  * 加载数据
  */
 async function loadData() {
-  const complaintId = Number(route.params.id)
+  const complaintId = Number(props.recordId ?? route.params.id)
   if (!Number.isFinite(complaintId) || complaintId <= 0) {
     ElMessage.warning('请从客诉台账进入 8D 报告')
     router.replace('/quality/customer-complaints')
@@ -659,6 +681,9 @@ async function loadData() {
   try {
     // 加载客诉单信息
     complaint.value = await getCustomerComplaint(complaintId)
+    emit('loaded-meta', {
+      title: complaint.value?.complaint_number || `客诉 8D #${complaintId}`,
+    })
 
     // 加载8D报告
     try {

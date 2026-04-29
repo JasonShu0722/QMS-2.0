@@ -39,18 +39,18 @@ const WORKBENCH_QUICK_ACTION_CATALOG: WorkbenchQuickActionOption[] = [
     link: '/quality-dashboard/analysis'
   },
   {
+    id: 'quality-eight-d-workspace',
+    category: '质量数据面板',
+    title: '8D 报告中心',
+    description: '在同一工作区内切换处理供应商 8D 与客户 8D',
+    link: '/quality/eight-d-workspace'
+  },
+  {
     id: 'supplier-scar',
     category: '供应商质量管理',
     title: 'SCAR 管理',
     description: '处理供应商纠正预防措施与闭环跟踪',
     link: '/supplier/scar'
-  },
-  {
-    id: 'supplier-eight-d',
-    category: '供应商质量管理',
-    title: '供应商 8D 报告',
-    description: '查看与推进供应商 8D 问题整改',
-    link: '/supplier/eight-d'
   },
   {
     id: 'supplier-audit-plan',
@@ -135,13 +135,6 @@ const WORKBENCH_QUICK_ACTION_CATALOG: WorkbenchQuickActionOption[] = [
     title: '客诉管理',
     description: '处理客户投诉与反馈闭环',
     link: '/quality/customer-complaints'
-  },
-  {
-    id: 'customer-eight-d',
-    category: '客户质量管理',
-    title: '客户 8D 报告',
-    description: '查看客户问题的 8D 处置流程',
-    link: '/quality/eight-d-customer'
   },
   {
     id: 'customer-claims',

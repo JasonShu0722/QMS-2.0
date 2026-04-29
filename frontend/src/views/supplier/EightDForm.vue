@@ -2,7 +2,7 @@
   <div class="eight-d-form">
     <!-- 页面标题 -->
     <div class="page-header">
-      <el-button @click="goBack" circle>
+      <el-button v-if="!workspaceMode" @click="goBack" circle>
         <el-icon><ArrowLeft /></el-icon>
       </el-button>
       <h2>{{ pageTitle }}</h2>
@@ -293,11 +293,33 @@ import { useAuthStore } from '@/stores/auth'
 import type { EightDReport, SCAR } from '@/types/supplier'
 import { isScarRouteName } from '@/utils/problemIssueSummary'
 
+const props = withDefaults(
+  defineProps<{
+    recordId?: number | string
+    workspaceMode?: boolean
+    routeAction?: string
+    sourceRouteName?: string
+    sourceFocusId?: string | number
+  }>(),
+  {
+    recordId: undefined,
+    workspaceMode: false,
+    routeAction: undefined,
+    sourceRouteName: undefined,
+    sourceFocusId: undefined,
+  }
+)
+
+const emit = defineEmits<{
+  (event: 'loaded-meta', payload: { title?: string }): void
+}>()
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const scarId = computed(() => Number(route.params.id))
+const scarId = computed(() => Number(props.recordId ?? route.params.id))
+const workspaceMode = computed(() => props.workspaceMode)
 const pageTitle = computed(() => (authStore.isInternal ? 'SCAR 8D 审核' : '8D 报告填写'))
 const scarData = ref<SCAR | null>(null)
 const eightDReport = ref<EightDReport | null>(null)
@@ -328,15 +350,17 @@ function getDefaultSourceRouteName() {
 }
 
 const sourceRouteName = computed(() => {
-  const raw = getSingleQueryValue(route.query.sourceRouteName)
+  const raw = props.sourceRouteName ?? getSingleQueryValue(route.query.sourceRouteName)
   return raw && isScarRouteName(raw) ? raw : getDefaultSourceRouteName()
 })
 
 const sourceFocusId = computed(() => {
-  const raw = getSingleQueryValue(route.query.sourceFocusId)
+  const raw = props.sourceFocusId ? String(props.sourceFocusId) : getSingleQueryValue(route.query.sourceFocusId)
   const parsed = raw ? Number.parseInt(raw, 10) : NaN
   return Number.isInteger(parsed) && parsed > 0 ? parsed : scarId.value
 })
+
+const currentAction = computed(() => props.routeAction ?? getSingleQueryValue(route.query.action))
 
 function buildSourceRoute() {
   return {
@@ -538,7 +562,7 @@ const applyEightDReportToForm = (report: EightDReport) => {
 const loadEightDReport = async () => {
   eightDReport.value = null
 
-  if (!scarData.value?.has_8d_report && route.query.action !== 'review') {
+  if (!scarData.value?.has_8d_report && currentAction.value !== 'review') {
     return
   }
 
@@ -548,7 +572,7 @@ const loadEightDReport = async () => {
     applyEightDReportToForm(report)
   } catch (error) {
     console.error('Failed to load 8D report:', error)
-    if (route.query.action === 'review') {
+    if (currentAction.value === 'review') {
       ElMessage.warning('尚未查询到可审核的 8D 报告')
     }
   }
@@ -587,6 +611,7 @@ const handleReview = async (approved: boolean) => {
 const loadSCARData = async () => {
   try {
     scarData.value = await supplierApi.getSCAR(scarId.value)
+    emit('loaded-meta', { title: scarData.value?.scar_number || `SCAR 8D #${scarId.value}` })
     await loadEightDReport()
   } catch (error) {
     console.error('Failed to load SCAR data:', error)

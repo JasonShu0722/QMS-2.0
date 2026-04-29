@@ -43,6 +43,7 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: DataLine,
     children: [
       { index: '/quality/problem-center', title: '问题中心' },
+      { index: '/quality/eight-d-workspace', title: '8D 报告中心' },
       { index: '/quality-dashboard', title: '数据仪表盘' },
       { index: '/quality-dashboard/analysis', title: '专项数据分析' },
     ],
@@ -53,7 +54,6 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: OfficeBuilding,
     children: [
       { index: '/supplier/scar', title: 'SCAR 管理' },
-      { index: '/supplier/eight-d', title: '供应商 8D 报告' },
       { index: '/supplier/audit-plan', title: '供应商审核' },
       { index: '/supplier/targets', title: '目标管理' },
       { index: '/supplier/performance', title: '绩效评价' },
@@ -80,7 +80,6 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: UserFilled,
     children: [
       { index: '/quality/customer-complaints', title: '客诉管理' },
-      { index: '/quality/eight-d-customer', title: '客户 8D 报告' },
       { index: '/quality/customer-claims', title: '客户索赔' },
     ],
   },

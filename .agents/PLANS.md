@@ -452,6 +452,14 @@
     - `Set-Location frontend; npm run test -- src/utils/test/problemIssueSummary.spec.ts src/utils/test/internalUsers.spec.ts`
     - `Set-Location frontend; npm run build`
 
+  - unified 8D workspace follow-up:
+    - introduced a shared `EightDWorkspace` shell with in-page tabs, so supplier 8D and customer 8D no longer need to exist as two standalone top-level work surfaces
+    - kept existing supplier/customer business pages and APIs as inner panels, while adding old-route compatibility redirects from `EightDForm`, `ScarEightDReview`, and `EightDCustomerForm` into the shared workspace
+    - collapsed redundant navigation and workbench quick entries into a single `8D 报告中心` entry, while preserving source-driven opening from SCAR, customer complaints, and the unified problem center
+  - planned verification for this increment:
+    - `Set-Location frontend; npm run test -- src/utils/test/problemIssueSummary.spec.ts src/utils/test/internalUsers.spec.ts`
+    - `Set-Location frontend; npm run build`
+
 ## Task: Permission-Driven Surface Visibility And Supplier Quality Panel Access (2026-04-18)
 
 - Goal:
