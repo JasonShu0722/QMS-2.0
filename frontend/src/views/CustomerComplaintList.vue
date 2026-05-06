@@ -1,98 +1,143 @@
 <template>
   <div class="customer-complaint-list p-4 md:p-6">
-    <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
-      <h1 class="mb-4 text-2xl font-bold md:mb-0">客诉管理</h1>
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon class="mr-1"><Plus /></el-icon>
-        创建客诉单
-      </el-button>
+    <div class="page-header">
+      <h1 class="page-title">客户投诉</h1>
     </div>
 
-    <el-card class="mb-4">
-      <el-form :model="queryParams" inline class="flex flex-wrap gap-2">
-        <el-form-item label="客诉类型">
-          <el-select v-model="queryParams.complaint_type" placeholder="全部" clearable class="w-full md:w-40">
-            <el-option
-              v-for="option in complaintTypeOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-        </el-form-item>
+    <div class="page-toolbar">
+      <el-button type="primary" @click="showCreateDialog = true">
+        <el-icon><Plus /></el-icon>
+        <span>创建客诉单</span>
+      </el-button>
 
-        <el-form-item label="客户">
-          <el-select
-            v-model="queryParams.customer_id"
-            filterable
-            clearable
-            placeholder="全部"
-            class="w-full md:w-56"
-          >
-            <el-option
-              v-for="item in customerOptions"
-              :key="item.id"
-              :label="`${item.name} (${item.code})`"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
+      <div class="page-toolbar__group">
+        <div v-if="selectedCount > 0" class="selection-summary">
+          已选择 {{ selectedCount }} 条
+        </div>
 
-        <el-form-item label="产品类型">
-          <el-input v-model="queryParams.product_type" placeholder="请输入" clearable class="w-full md:w-40" />
-        </el-form-item>
+        <el-tooltip :disabled="batchLaunchTooltipDisabled" :content="batchLaunchHint" placement="top">
+          <div class="table-toolbar__action">
+            <el-button
+              type="primary"
+              plain
+              :disabled="!canBatchLaunchEightD"
+              :loading="batchLaunchingEightD"
+              @click="handleBatch8D"
+            >
+              批量发起8D
+            </el-button>
+          </div>
+        </el-tooltip>
+      </div>
+    </div>
 
-        <el-form-item label="状态">
-          <el-select v-model="queryParams.status" placeholder="全部" clearable class="w-full md:w-40">
-            <el-option
-              v-for="option in statusOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-        </el-form-item>
+    <el-card shadow="never" class="filter-card">
+      <el-form :model="queryParams" class="filter-shell">
+        <div class="filter-row">
+          <el-form-item class="filter-item filter-item--compact" style="width: 214px">
+            <div class="filter-field">
+              <span class="filter-field__label">客诉类型</span>
+              <el-select
+                v-model="queryParams.complaint_type"
+                placeholder="全部"
+                clearable
+                class="filter-control filter-control--select-sm"
+              >
+                <el-option
+                  v-for="option in complaintTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
 
-        <el-form-item label="日期范围">
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            value-format="YYYY-MM-DD"
-            class="w-full md:w-64"
-          />
-        </el-form-item>
+          <el-form-item class="filter-item filter-item--customer" style="width: 330px">
+            <div class="filter-field">
+              <span class="filter-field__label">客户</span>
+              <el-select
+                v-model="queryParams.customer_id"
+                filterable
+                clearable
+                placeholder="全部"
+                class="filter-control filter-control--select-lg"
+              >
+                <el-option
+                  v-for="item in customerOptions"
+                  :key="item.id"
+                  :label="`${item.name} (${item.code})`"
+                  :value="item.id"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
 
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
+          <el-form-item class="filter-item filter-item--compact" style="width: 200px">
+            <div class="filter-field">
+              <span class="filter-field__label">状态</span>
+              <el-select
+                v-model="queryParams.status"
+                placeholder="全部"
+                clearable
+                class="filter-control filter-control--select-md"
+              >
+                <el-option
+                  v-for="option in statusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+
+          <div class="filter-actions">
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
+            <el-button link type="primary" class="filter-expand" @click="showAdvancedFilters = !showAdvancedFilters">
+              {{ showAdvancedFilters ? '收起' : '展开' }}
+            </el-button>
+          </div>
+        </div>
+
+        <div v-if="showAdvancedFilters" class="filter-row filter-row--advanced">
+          <el-form-item class="filter-item filter-item--product" style="width: 280px">
+            <div class="filter-field">
+              <span class="filter-field__label">产品类型</span>
+              <el-input
+                v-model="queryParams.product_type"
+                placeholder="输入"
+                clearable
+                class="filter-control filter-control--input-md"
+              />
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--range" style="width: 480px">
+            <div class="filter-field">
+              <span class="filter-field__label">日期范围</span>
+              <el-date-picker
+                v-model="dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                class="filter-control filter-control--range"
+              />
+            </div>
+          </el-form-item>
+        </div>
       </el-form>
     </el-card>
 
-    <el-card>
-      <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div class="text-sm text-gray-500">
-          {{ batchLaunchSummary }}
-        </div>
-        <el-button
-          type="primary"
-          plain
-          :disabled="!canBatchLaunchEightD"
-          :loading="batchLaunchingEightD"
-          @click="handleBatch8D"
-        >
-          批量发起8D
-        </el-button>
-      </div>
-
+    <el-card shadow="never" class="table-card">
       <el-table
         v-loading="loading"
         :data="complaintList"
         stripe
-        class="w-full"
+        class="complaint-table"
         row-key="id"
         :row-class-name="getRowClassName"
         @selection-change="handleSelectionChange"
@@ -195,7 +240,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="mt-4 flex justify-end">
+      <div class="table-pagination">
         <el-pagination
           v-model:current-page="queryParams.page"
           v-model:page-size="queryParams.page_size"
@@ -289,6 +334,7 @@ const showAnalysisDialog = ref(false)
 const selectedComplaint = ref<CustomerComplaint | null>(null)
 const selectedComplaints = ref<CustomerComplaint[]>([])
 const dateRange = ref<[string, string] | null>(null)
+const showAdvancedFilters = ref(false)
 const launchingEightDId = ref<number | null>(null)
 const batchLaunchingEightD = ref(false)
 
@@ -309,21 +355,14 @@ const complaintTypeOptions = computed(() =>
 const canBatchLaunchEightD = computed(() =>
   canBatchLaunchCustomerComplaintEightD(selectedComplaints.value)
 )
+const selectedCount = computed(() => selectedComplaints.value.length)
 const focusedComplaintId = computed(() => parseFocusId(route.query.focusId))
 const batchLaunchHint = computed(() =>
   getCustomerComplaintBatchLaunchHint(selectedComplaints.value)
 )
-const batchLaunchSummary = computed(() => {
-  if (!selectedComplaints.value.length) {
-    return '可勾选同一客户、同一客诉类型且已完成前置处理的客诉，批量发起同一张 8D。'
-  }
-
-  if (canBatchLaunchEightD.value) {
-    return `已选择 ${selectedComplaints.value.length} 条客诉，可批量发起同一张 8D。`
-  }
-
-  return batchLaunchHint.value
-})
+const batchLaunchTooltipDisabled = computed(() =>
+  selectedCount.value === 0 || canBatchLaunchEightD.value || !batchLaunchHint.value
+)
 
 const statusOptions = buildCustomerComplaintStatusOptions()
 
@@ -455,7 +494,7 @@ async function handle8D(row: CustomerComplaint) {
   try {
     launchingEightDId.value = row.id
     await initCustomerComplaintEightD(row.id)
-    ElMessage.success(`客诉 ${row.complaint_number} 已发起 8D`)
+    ElMessage.success(`客诉 ${row.complaint_number} 已发起8D`)
     await loadComplaints()
     router.push({
       name: 'EightDCustomerForm',
@@ -492,7 +531,7 @@ async function handleBatch8D() {
       complaint_ids: complaints.map((item) => item.id),
       primary_complaint_id: primaryComplaint.id,
     })
-    ElMessage.success(`已按 ${complaints.length} 条客诉发起同一张 8D`)
+    ElMessage.success(`已按 ${complaints.length} 条客诉发起同一张8D`)
     await loadComplaints()
     router.push({
       name: 'EightDCustomerForm',
@@ -552,18 +591,274 @@ watch(
   min-height: 100vh;
 }
 
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.page-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.page-toolbar__group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-card,
+.table-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.filter-card {
+  margin-bottom: 16px;
+}
+
+.filter-card :deep(.el-card__body) {
+  overflow-x: hidden;
+}
+
+.filter-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  overflow-x: hidden;
+}
+
+.filter-row--advanced {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  overflow-x: hidden;
+}
+
+.filter-item {
+  margin-bottom: 0;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.filter-item--compact {
+  width: 214px;
+}
+
+.filter-item--customer {
+  width: 330px;
+}
+
+.filter-item--product {
+  width: 260px;
+}
+
+.filter-item--range {
+  width: 456px;
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+}
+
+.filter-field__label {
+  flex: 0 0 auto;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+  min-height: 32px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.filter-expand {
+  font-size: 12px;
+  padding-inline: 4px;
+}
+
+.filter-item :deep(.el-form-item__content) {
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.filter-item :deep(.el-input__wrapper),
+.filter-item :deep(.el-select__wrapper) {
+  min-height: 32px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.filter-control,
+.filter-control--select-sm,
+.filter-control--select-md,
+.filter-control--select-lg,
+.filter-control--input-md,
+.filter-control--range {
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-item :deep(.el-select),
+.filter-item :deep(.el-input),
+.filter-item :deep(.el-date-editor) {
+  width: 100% !important;
+  min-width: 0;
+}
+
+.filter-item :deep(.el-range-editor.el-input__wrapper) {
+  padding-inline: 10px;
+}
+
+.filter-item :deep(.el-range-input) {
+  font-size: 12px;
+}
+
+.filter-item :deep(.el-select__selected-item),
+.filter-item :deep(.el-input__inner) {
+  font-size: 12px;
+}
+
+.selection-summary {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.complaint-table :deep(.el-table__header th) {
+  color: #334155;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 :deep(.focused-row td) {
   background-color: #ecf5ff !important;
 }
 
 @media (max-width: 768px) {
+  .page-header,
+  .page-toolbar,
+  .table-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .filter-row,
+  .filter-row--advanced {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .filter-field {
+    display: grid;
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+
+  .filter-field__label {
+    line-height: 1.3;
+  }
+
+  .filter-item--compact,
+  .filter-item--customer,
+  .filter-item--product,
+  .filter-item--range {
+    width: auto;
+  }
+
+  .filter-control--select-sm,
+  .filter-control--select-md,
+  .filter-control--select-lg,
+  .filter-control--input-md,
+  .filter-control--range {
+    width: 100%;
+  }
+
+  .filter-actions {
+    justify-content: stretch;
+    margin-left: 0;
+  }
+
+  .page-toolbar__group {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .table-toolbar__action :deep(.el-button),
+  .filter-actions :deep(.el-button),
+  .page-toolbar :deep(.el-button) {
+    width: 100%;
+  }
+
   :deep(.el-table) {
     font-size: 12px;
   }
+}
 
-  :deep(.el-button) {
-    padding: 4px 8px;
-    font-size: 12px;
+@media (max-width: 1120px) {
+  .filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-row--advanced {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    grid-column: span 2;
+    justify-content: flex-end;
+    margin-left: 0;
   }
 }
 </style>

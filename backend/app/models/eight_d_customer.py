@@ -3,7 +3,7 @@
 from datetime import datetime
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, JSON, Text, UniqueConstraint, inspect
+from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, inspect
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -68,6 +68,7 @@ class EightDCustomer(Base):
         unique=True,
         comment="Primary complaint id",
     )
+    report_number = Column(String(30), nullable=True, unique=True, index=True, comment="8D report number")
 
     d0_d3_cqe = Column(JSON, nullable=True, comment="D0-D3 data maintained by CQE")
     d4_d7_responsible = Column(JSON, nullable=True, comment="D4-D7 data maintained by responsible function")
@@ -91,6 +92,18 @@ class EightDCustomer(Base):
         cascade="all, delete-orphan",
     )
     reviewer = relationship("User", foreign_keys=[reviewed_by], backref="reviewed_customer_8d")
+
+    def _get_primary_complaint(self):
+        state = inspect(self)
+        if "complaint_links" not in state.unloaded:
+            for link in self.complaint_links or []:
+                if link.is_primary and link.complaint is not None:
+                    return link.complaint
+
+        if "complaint" not in state.unloaded and self.complaint is not None:
+            return self.complaint
+
+        return None
 
     @property
     def related_complaints(self) -> list[dict]:
@@ -132,5 +145,44 @@ class EightDCustomer(Base):
 
         return []
 
+    @property
+    def primary_complaint_number(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        return complaint.complaint_number if complaint is not None else None
+
+    @property
+    def complaint_type(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        if complaint is None or complaint.complaint_type is None:
+            return None
+        return complaint.complaint_type.value
+
+    @property
+    def customer_code(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        return complaint.customer_code if complaint is not None else None
+
+    @property
+    def customer_name(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        return complaint.customer_name if complaint is not None else None
+
+    @property
+    def end_customer_name(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        return complaint.end_customer_name if complaint is not None else None
+
+    @property
+    def product_type(self) -> str | None:
+        complaint = self._get_primary_complaint()
+        return complaint.product_type if complaint is not None else None
+
+    @property
+    def related_complaint_count(self) -> int:
+        return len(self.related_complaints)
+
     def __repr__(self) -> str:
-        return f"<EightDCustomer(id={self.id}, complaint_id={self.complaint_id}, status={self.status})>"
+        return (
+            f"<EightDCustomer(id={self.id}, report_number={self.report_number}, "
+            f"complaint_id={self.complaint_id}, status={self.status})>"
+        )

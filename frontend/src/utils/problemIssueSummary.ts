@@ -55,6 +55,7 @@ type ProblemIssueSourceRouteLookup = Pick<ProblemIssueSummaryItem, 'source_type'
 type ScarRouteName = 'SCARList' | 'ScarManagement'
 type CustomerComplaintRouteName =
   | 'CustomerComplaintList'
+  | 'CustomerEightDList'
   | 'CustomerComplaintDetail'
   | 'EightDCustomerForm'
   | 'ProblemIssueCenter'

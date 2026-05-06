@@ -9,9 +9,9 @@
     </div>
 
     <el-card class="filter-card" shadow="never">
-      <el-form :model="filterForm" inline>
-        <el-form-item label="状态">
-          <el-select v-model="filterForm.status" placeholder="全部" clearable>
+      <el-form :model="filterForm" inline class="list-filter-form">
+        <el-form-item label="状态" class="list-filter-item list-filter-item--status" style="width: 236px">
+          <el-select v-model="filterForm.status" placeholder="全部" clearable class="filter-select">
             <el-option label="待处理" value="open" />
             <el-option label="供应商回复中" value="supplier_responding" />
             <el-option label="待审核" value="under_review" />
@@ -21,8 +21,8 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="严重度">
-          <el-select v-model="filterForm.severity" placeholder="全部" clearable>
+        <el-form-item label="严重度" class="list-filter-item list-filter-item--severity" style="width: 206px">
+          <el-select v-model="filterForm.severity" placeholder="全部" clearable class="filter-select">
             <el-option label="严重" value="critical" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
@@ -30,25 +30,27 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="开始日期">
+        <el-form-item label="开始日期" class="list-filter-item list-filter-item--date" style="width: 286px">
           <el-date-picker
             v-model="filterForm.start_date"
             type="date"
             placeholder="选择日期"
             value-format="YYYY-MM-DD"
+            class="filter-date"
           />
         </el-form-item>
 
-        <el-form-item label="结束日期">
+        <el-form-item label="结束日期" class="list-filter-item list-filter-item--date" style="width: 286px">
           <el-date-picker
             v-model="filterForm.end_date"
             type="date"
             placeholder="选择日期"
             value-format="YYYY-MM-DD"
+            class="filter-date"
           />
         </el-form-item>
 
-        <el-form-item>
+        <el-form-item class="list-filter-item list-filter-item--actions">
           <el-button type="primary" @click="handleSearch">
             <el-icon><Search /></el-icon>
             查询
@@ -466,6 +468,71 @@ onMounted(async () => {
 
   .filter-card {
     margin-bottom: 20px;
+  }
+
+  .filter-card :deep(.el-card__body) {
+    overflow-x: hidden;
+  }
+
+  .list-filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  .list-filter-form :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+
+  .list-filter-item {
+    margin-right: 0;
+  }
+
+  .list-filter-item :deep(.el-form-item__label) {
+    height: 32px;
+    padding-right: 6px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 32px;
+  }
+
+  .list-filter-item :deep(.el-form-item__content) {
+    width: 100%;
+  }
+
+  .list-filter-item--status {
+    width: 236px;
+  }
+
+  .list-filter-item--severity {
+    width: 206px;
+  }
+
+  .list-filter-item--date {
+    width: 286px;
+  }
+
+  .list-filter-item--actions {
+    margin-left: auto;
+  }
+
+  .list-filter-item :deep(.el-select),
+  .list-filter-item :deep(.el-date-editor) {
+    width: 100% !important;
+  }
+
+  .list-filter-item :deep(.el-select__wrapper),
+  .list-filter-item :deep(.el-input__wrapper) {
+    min-height: 32px;
+    font-size: 13px;
+  }
+
+  .filter-select,
+  .filter-date {
+    width: 100%;
   }
 
   .table-card {

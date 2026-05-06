@@ -80,6 +80,7 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: UserFilled,
     children: [
       { index: '/quality/customer-complaints', title: '客诉管理' },
+      { index: '/quality/customer-eight-d', title: '客诉8D' },
       { index: '/quality/customer-claims', title: '客户索赔' },
     ],
   },

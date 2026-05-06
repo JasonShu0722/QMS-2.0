@@ -223,6 +223,27 @@ export function getEightDStatusLabel(status?: EightDStatus): string {
   return STATUS_LABELS[status] ?? status
 }
 
+export function getEightDStageLabel(status?: EightDStatus): string {
+  switch (status) {
+    case 'draft':
+    case 'd0_d3_completed':
+      return 'D0-D3'
+    case 'd4_d7_in_progress':
+    case 'd4_d7_completed':
+    case 'rejected':
+      return 'D4-D7'
+    case 'd8_in_progress':
+      return 'D8'
+    case 'in_review':
+    case 'approved':
+      return '审核'
+    case 'closed':
+      return '关闭'
+    default:
+      return '-'
+  }
+}
+
 export function getEightDApprovalLevelLabel(level?: ApprovalLevel): string {
   if (!level) {
     return '未设置'

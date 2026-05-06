@@ -611,6 +611,15 @@ function buildSourceRoute() {
     return { name: 'ProblemIssueCenter' as const }
   }
 
+  if (sourceRouteName.value === 'CustomerEightDList') {
+    return {
+      name: 'CustomerEightDList' as const,
+      query: {
+        focusId: String(sourceFocusId.value),
+      },
+    }
+  }
+
   if (sourceRouteName.value === 'CustomerComplaintDetail') {
     return {
       name: 'CustomerComplaintDetail' as const,
@@ -682,7 +691,7 @@ async function loadData() {
     // 加载客诉单信息
     complaint.value = await getCustomerComplaint(complaintId)
     emit('loaded-meta', {
-      title: complaint.value?.complaint_number || `客诉 8D #${complaintId}`,
+      title: eightDData.value?.report_number || complaint.value?.complaint_number || `客诉 8D #${complaintId}`,
     })
 
     // 加载8D报告
@@ -690,6 +699,9 @@ async function loadData() {
       eightDData.value = await getEightDCustomer(complaintId)
       eightDSLAStatus.value = await getEightDSLAStatus(complaintId)
       syncFormsWithEightD(eightDData.value)
+      emit('loaded-meta', {
+        title: eightDData.value.report_number || complaint.value?.complaint_number || `客诉 8D #${complaintId}`,
+      })
     } catch (error: any) {
       if (error.response?.status !== 404) {
         throw error

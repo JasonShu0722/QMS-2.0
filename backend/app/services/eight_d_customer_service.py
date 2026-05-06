@@ -4,11 +4,12 @@ from datetime import datetime
 import logging
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.customer_complaint import CustomerComplaint, ComplaintStatus, PhysicalAnalysisStatus, SeverityLevel
+from app.core.problem_management import build_8d_number, get_problem_category_by_customer_complaint_type
+from app.models.customer_complaint import ComplaintType, CustomerComplaint, ComplaintStatus, PhysicalAnalysisStatus, SeverityLevel
 from app.models.eight_d_customer import EightDCustomer, EightDCustomerComplaintLink, EightDStatus, ApprovalLevel
 from app.models.lesson_learned import LessonLearned, SourceType
 from app.schemas.eight_d_customer import D4D7Request, D8Request, EightDReviewRequest, SLAStatus
@@ -77,6 +78,44 @@ class EightDCustomerService:
     def _ensure_scope_editable(report: EightDCustomer) -> None:
         if report.status != EightDStatus.D4_D7_IN_PROGRESS:
             raise ValueError("当前仅支持在 D4-D7 进行中阶段调整 8D 关联范围")
+
+    @staticmethod
+    def _build_fallback_report_number(report: EightDCustomer) -> str:
+        primary_complaint = EightDCustomerService._get_primary_complaint(report)
+        category_key = get_problem_category_by_customer_complaint_type(primary_complaint.complaint_type.value).key
+        return build_8d_number(category_key=category_key, sequence=report.id, occurred_at=report.created_at)
+
+    @staticmethod
+    async def _generate_report_number(
+        db: AsyncSession,
+        primary_complaint: CustomerComplaint,
+    ) -> str:
+        category_key = get_problem_category_by_customer_complaint_type(primary_complaint.complaint_type.value).key
+        current = datetime.utcnow()
+        yymm = current.strftime("%y%m")
+        prefix = f"ZX8D-{category_key}-{yymm}-"
+
+        result = await db.execute(
+            select(EightDCustomer.report_number)
+            .where(EightDCustomer.report_number.like(f"{prefix}%"))
+            .order_by(EightDCustomer.report_number.desc())
+            .limit(1)
+        )
+        latest_report_number = result.scalar_one_or_none()
+
+        if latest_report_number:
+            try:
+                sequence = int(str(latest_report_number).rsplit("-", 1)[-1]) + 1
+            except ValueError:
+                sequence = 1
+        else:
+            sequence = 1
+
+        return build_8d_number(
+            category_key=category_key,
+            sequence=sequence,
+            occurred_at=current,
+        )
 
     @staticmethod
     def _sync_d0_d3_scope_metadata(report: EightDCustomer, complaints: list[CustomerComplaint]) -> None:
@@ -225,6 +264,7 @@ class EightDCustomerService:
 
         eight_d = EightDCustomer(
             complaint_id=primary_complaint.id,
+            report_number=await EightDCustomerService._generate_report_number(db=db, primary_complaint=primary_complaint),
             d0_d3_cqe=EightDCustomerService._build_initial_d0_d3(
                 primary_complaint=primary_complaint,
                 complaints=ordered_complaints,
@@ -419,6 +459,82 @@ class EightDCustomerService:
             user_id,
         )
         return await EightDCustomerService.get_by_id(db=db, report_id=report_id)
+
+    @staticmethod
+    async def list_reports(
+        db: AsyncSession,
+        *,
+        report_number: Optional[str] = None,
+        complaint_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        product_type: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[EightDCustomer], int]:
+        conditions = []
+
+        if report_number:
+            conditions.append(EightDCustomer.report_number.ilike(f"%{report_number.strip()}%"))
+        if complaint_type:
+            conditions.append(CustomerComplaint.complaint_type == ComplaintType(complaint_type))
+        if customer_id:
+            conditions.append(CustomerComplaint.customer_id == customer_id)
+        if product_type:
+            conditions.append(CustomerComplaint.product_type.ilike(f"%{product_type.strip()}%"))
+        if status:
+            conditions.append(EightDCustomer.status == EightDStatus(status))
+        if start_date:
+            conditions.append(EightDCustomer.created_at >= start_date)
+        if end_date:
+            conditions.append(EightDCustomer.created_at <= end_date)
+
+        count_query = (
+            select(func.count(EightDCustomer.id))
+            .select_from(EightDCustomer)
+            .join(CustomerComplaint, CustomerComplaint.id == EightDCustomer.complaint_id)
+        )
+        if conditions:
+            count_query = count_query.where(and_(*conditions))
+
+        total = (await db.execute(count_query)).scalar_one()
+
+        query = (
+            EightDCustomerService._report_query()
+            .join(CustomerComplaint, CustomerComplaint.id == EightDCustomer.complaint_id)
+            .order_by(EightDCustomer.updated_at.desc(), EightDCustomer.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        result = await db.execute(query)
+        reports = list(result.scalars().unique().all())
+        return reports, total
+
+    @staticmethod
+    def build_report_summary(report: EightDCustomer) -> dict:
+        return {
+            "id": report.id,
+            "complaint_id": report.complaint_id,
+            "report_number": report.report_number or EightDCustomerService._build_fallback_report_number(report),
+            "primary_complaint_number": report.primary_complaint_number,
+            "complaint_type": report.complaint_type,
+            "customer_code": report.customer_code,
+            "customer_name": report.customer_name,
+            "end_customer_name": report.end_customer_name,
+            "product_type": report.product_type,
+            "related_complaint_count": report.related_complaint_count,
+            "status": report.status,
+            "approval_level": report.approval_level,
+            "created_at": report.created_at,
+            "updated_at": report.updated_at,
+            "submitted_at": report.submitted_at,
+            "reviewed_at": report.reviewed_at,
+        }
 
     @staticmethod
     async def submit_d4_d7(

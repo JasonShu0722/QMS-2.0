@@ -336,6 +336,15 @@ function buildSourceRoute() {
     return { name: 'ProblemIssueCenter' as const }
   }
 
+  if (sourceRouteName.value === 'CustomerEightDList') {
+    return {
+      name: 'CustomerEightDList' as const,
+      query: {
+        focusId: String(sourceFocusId.value),
+      },
+    }
+  }
+
   if (sourceRouteName.value === 'EightDCustomerForm') {
     return {
       name: 'EightDCustomerForm' as const,
@@ -426,14 +435,23 @@ async function handleOpenEightD() {
     return
   }
 
+  const nextSourceQuery =
+    sourceRouteName.value === 'CustomerEightDList'
+      ? {
+          sourceRouteName: 'CustomerEightDList',
+          sourceFocusId: String(sourceFocusId.value),
+          sourceComplaintId: String(complaint.value.id),
+        }
+      : {
+          sourceRouteName: 'CustomerComplaintDetail',
+          sourceComplaintId: String(complaint.value.id),
+        }
+
   if (complaint.value.eight_d_report_id) {
     router.push({
       name: 'EightDCustomerForm',
       params: { id: complaint.value.id },
-      query: {
-        sourceRouteName: 'CustomerComplaintDetail',
-        sourceComplaintId: String(complaint.value.id),
-      },
+      query: nextSourceQuery,
     })
     return
   }
@@ -442,15 +460,12 @@ async function handleOpenEightD() {
     launchingEightD.value = true
     await initCustomerComplaintEightD(complaint.value.id)
     ElMessage.success(`客诉 ${complaint.value.complaint_number} 已发起 8D`)
-    await loadComplaint()
-    router.push({
-      name: 'EightDCustomerForm',
-      params: { id: complaint.value.id },
-      query: {
-        sourceRouteName: 'CustomerComplaintDetail',
-        sourceComplaintId: String(complaint.value.id),
-      },
-    })
+      await loadComplaint()
+      router.push({
+        name: 'EightDCustomerForm',
+        params: { id: complaint.value.id },
+        query: nextSourceQuery,
+      })
   } catch (error: any) {
     ElMessage.error(error.message || '发起 8D 失败')
     console.error('launch 8D from complaint detail error:', error)

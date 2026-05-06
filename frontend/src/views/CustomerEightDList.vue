@@ -1,0 +1,620 @@
+<template>
+  <div class="customer-eight-d-list p-4 md:p-6">
+    <div class="page-header">
+      <h1 class="page-title">客诉8D</h1>
+    </div>
+
+    <el-card shadow="never" class="filter-card">
+      <el-form :model="queryParams" class="filter-shell">
+        <div class="filter-row">
+          <el-form-item class="filter-item filter-item--report" style="width: 216px">
+            <div class="filter-field">
+              <span class="filter-field__label">8D编号</span>
+              <el-input
+                v-model="queryParams.report_number"
+                placeholder="输入"
+                clearable
+                class="filter-control filter-control--input-md"
+              />
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--compact" style="width: 214px">
+            <div class="filter-field">
+              <span class="filter-field__label">客诉类型</span>
+              <el-select
+                v-model="queryParams.complaint_type"
+                placeholder="全部"
+                clearable
+                class="filter-control filter-control--select-sm"
+              >
+                <el-option
+                  v-for="option in complaintTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--customer" style="width: 330px">
+            <div class="filter-field">
+              <span class="filter-field__label">客户</span>
+              <el-select
+                v-model="queryParams.customer_id"
+                filterable
+                clearable
+                placeholder="全部"
+                class="filter-control filter-control--select-lg"
+              >
+                <el-option
+                  v-for="item in customerOptions"
+                  :key="item.id"
+                  :label="`${item.name} (${item.code})`"
+                  :value="item.id"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--compact" style="width: 200px">
+            <div class="filter-field">
+              <span class="filter-field__label">状态</span>
+              <el-select
+                v-model="queryParams.status"
+                placeholder="全部"
+                clearable
+                class="filter-control filter-control--select-md"
+              >
+                <el-option
+                  v-for="option in statusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+
+          <div class="filter-actions">
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
+            <el-button link type="primary" class="filter-expand" @click="showAdvancedFilters = !showAdvancedFilters">
+              {{ showAdvancedFilters ? '收起' : '展开' }}
+            </el-button>
+          </div>
+        </div>
+
+        <div v-if="showAdvancedFilters" class="filter-row filter-row--advanced">
+          <el-form-item class="filter-item filter-item--product" style="width: 280px">
+            <div class="filter-field">
+              <span class="filter-field__label">产品类型</span>
+              <el-input
+                v-model="queryParams.product_type"
+                placeholder="输入"
+                clearable
+                class="filter-control filter-control--input-md"
+              />
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--range" style="width: 480px">
+            <div class="filter-field">
+              <span class="filter-field__label">日期范围</span>
+              <el-date-picker
+                v-model="dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                class="filter-control filter-control--range"
+              />
+            </div>
+          </el-form-item>
+        </div>
+      </el-form>
+    </el-card>
+
+    <el-card shadow="never" class="table-card">
+      <el-table
+        v-loading="loading"
+        :data="reportList"
+        row-key="id"
+        stripe
+        class="report-table"
+        :row-class-name="getRowClassName"
+      >
+        <el-table-column label="8D编号" min-width="190" fixed>
+          <template #default="{ row }">
+            <el-button link type="primary" class="report-link" @click="openReport(row)">
+              {{ row.report_number }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="主客诉编号" min-width="150">
+          <template #default="{ row }">
+            <el-button link type="primary" class="report-link" @click="openComplaint(row)">
+              {{ row.primary_complaint_number || '-' }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.complaint_type === ComplaintType.ZERO_KM ? 'danger' : 'warning'">
+              {{ getEightDComplaintTypeLabel(row.complaint_type) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="客户" min-width="220">
+          <template #default="{ row }">
+            <div class="font-medium">{{ row.customer_name || row.customer_code || '-' }}</div>
+            <div class="text-xs text-gray-500">{{ row.customer_code || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="end_customer_name" label="终端客户" min-width="160">
+          <template #default="{ row }">{{ row.end_customer_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="product_type" label="产品类型" width="140">
+          <template #default="{ row }">{{ row.product_type || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="关联客诉" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag type="info">{{ row.related_complaint_count }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="当前阶段" width="120">
+          <template #default="{ row }">
+            {{ getEightDStageLabel(row.status) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="130">
+          <template #default="{ row }">
+            <el-tag :type="getStatusTagType(row.status)">
+              {{ getEightDStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openReport(row)">进入8D</el-button>
+            <el-button link type="primary" size="small" @click="openComplaint(row)">查看客诉</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          v-model:current-page="queryParams.page"
+          v-model:page-size="queryParams.page_size"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="loadReports"
+          @current-change="loadReports"
+        />
+      </div>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+
+import { getCustomerComplaintCustomerOptions, getCustomerEightDReports } from '@/api/customer-quality'
+import { ComplaintType, EightDStatus, type CustomerComplaintCustomerOption, type CustomerEightDListItem, type CustomerEightDListQuery } from '@/types/customer-quality'
+import { buildCustomerComplaintTypeOptions } from '@/utils/problemManagement'
+import { getEightDComplaintTypeLabel, getEightDStageLabel, getEightDStatusLabel } from '@/utils/customerEightD'
+import { useProblemManagementStore } from '@/stores/problemManagement'
+
+const route = useRoute()
+const router = useRouter()
+const problemManagementStore = useProblemManagementStore()
+
+const loading = ref(false)
+const reportList = ref<CustomerEightDListItem[]>([])
+const customerOptions = ref<CustomerComplaintCustomerOption[]>([])
+const total = ref(0)
+const dateRange = ref<[string, string] | null>(null)
+const showAdvancedFilters = ref(false)
+
+const queryParams = reactive<CustomerEightDListQuery>({
+  page: 1,
+  page_size: 20,
+  report_number: undefined,
+  complaint_type: undefined,
+  customer_id: undefined,
+  product_type: undefined,
+  status: undefined,
+  start_date: undefined,
+  end_date: undefined,
+})
+
+const complaintTypeOptions = computed(() =>
+  buildCustomerComplaintTypeOptions(problemManagementStore.getCategory)
+)
+
+const statusOptions = [
+  { value: EightDStatus.D4_D7_IN_PROGRESS, label: 'D4-D7 进行中' },
+  { value: EightDStatus.D4_D7_COMPLETED, label: 'D4-D7 已完成' },
+  { value: EightDStatus.D8_IN_PROGRESS, label: 'D8 进行中' },
+  { value: EightDStatus.IN_REVIEW, label: '审核中' },
+  { value: EightDStatus.APPROVED, label: '已批准' },
+  { value: EightDStatus.REJECTED, label: '已驳回' },
+  { value: EightDStatus.CLOSED, label: '已关闭' },
+]
+
+const focusedReportId = computed(() => {
+  const raw = Array.isArray(route.query.focusId) ? route.query.focusId[0] : route.query.focusId
+  const parsed = raw ? Number(raw) : NaN
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+})
+
+function getStatusTagType(status?: EightDStatus) {
+  switch (status) {
+    case EightDStatus.CLOSED:
+    case EightDStatus.APPROVED:
+      return 'success'
+    case EightDStatus.REJECTED:
+      return 'danger'
+    case EightDStatus.IN_REVIEW:
+      return 'warning'
+    default:
+      return 'primary'
+  }
+}
+
+function formatDateTime(value?: string) {
+  if (!value) {
+    return '-'
+  }
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+async function loadCustomerOptions() {
+  try {
+    customerOptions.value = await getCustomerComplaintCustomerOptions()
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载客户清单失败')
+  }
+}
+
+async function loadReports() {
+  loading.value = true
+  try {
+    if (dateRange.value) {
+      queryParams.start_date = dateRange.value[0]
+      queryParams.end_date = dateRange.value[1]
+    } else {
+      queryParams.start_date = undefined
+      queryParams.end_date = undefined
+    }
+
+    const response = await getCustomerEightDReports(queryParams)
+    reportList.value = response.items
+    total.value = response.total
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载客诉8D清单失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleSearch() {
+  queryParams.page = 1
+  void loadReports()
+}
+
+function handleReset() {
+  queryParams.page = 1
+  queryParams.page_size = 20
+  queryParams.report_number = undefined
+  queryParams.complaint_type = undefined
+  queryParams.customer_id = undefined
+  queryParams.product_type = undefined
+  queryParams.status = undefined
+  dateRange.value = null
+  void loadReports()
+}
+
+function openReport(row: CustomerEightDListItem) {
+  router.push({
+    name: 'EightDWorkspace',
+    query: {
+      kind: 'customer',
+      recordId: String(row.complaint_id),
+      sourceRouteName: 'CustomerEightDList',
+      sourceFocusId: String(row.id),
+      sourceComplaintId: String(row.complaint_id),
+    },
+  })
+}
+
+function openComplaint(row: CustomerEightDListItem) {
+  router.push({
+    name: 'CustomerComplaintDetail',
+    params: { id: String(row.complaint_id) },
+    query: {
+      sourceRouteName: 'CustomerEightDList',
+      sourceFocusId: String(row.id),
+    },
+  })
+}
+
+function getRowClassName({ row }: { row: CustomerEightDListItem }) {
+  return focusedReportId.value === row.id ? 'focused-row' : ''
+}
+
+onMounted(() => {
+  void problemManagementStore.loadCatalog()
+  void loadCustomerOptions()
+  void loadReports()
+})
+
+watch(
+  () => route.query.focusId,
+  () => {
+    void loadReports()
+  }
+)
+</script>
+
+<style scoped>
+.customer-eight-d-list {
+  min-height: 100vh;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.page-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.filter-card,
+.table-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.filter-card {
+  margin-bottom: 16px;
+}
+
+.filter-card :deep(.el-card__body) {
+  overflow-x: hidden;
+}
+
+.filter-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  overflow-x: hidden;
+}
+
+.filter-row--advanced {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  overflow-x: hidden;
+}
+
+.filter-item {
+  margin-bottom: 0;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.filter-item--report,
+.filter-item--compact {
+  width: 214px;
+}
+
+.filter-item--customer {
+  width: 330px;
+}
+
+.filter-item--product {
+  width: 260px;
+}
+
+.filter-item--range {
+  width: 456px;
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+}
+
+.filter-field__label {
+  flex: 0 0 auto;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+  min-height: 32px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.filter-expand {
+  font-size: 12px;
+  padding-inline: 4px;
+}
+
+.filter-item :deep(.el-form-item__content) {
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.filter-item :deep(.el-input__wrapper),
+.filter-item :deep(.el-select__wrapper) {
+  min-height: 32px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.filter-control,
+.filter-control--select-sm,
+.filter-control--select-md,
+.filter-control--select-lg,
+.filter-control--input-md,
+.filter-control--range {
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-item :deep(.el-select),
+.filter-item :deep(.el-input),
+.filter-item :deep(.el-date-editor) {
+  width: 100% !important;
+  min-width: 0;
+}
+
+.filter-item :deep(.el-range-editor.el-input__wrapper) {
+  padding-inline: 10px;
+}
+
+.filter-item :deep(.el-range-input) {
+  font-size: 12px;
+}
+
+.filter-item :deep(.el-select__selected-item),
+.filter-item :deep(.el-input__inner) {
+  font-size: 12px;
+}
+
+.report-link {
+  padding: 0;
+}
+
+.report-table :deep(.el-table__header th) {
+  color: #334155;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+:deep(.focused-row td) {
+  background-color: #ecf5ff !important;
+}
+
+@media (max-width: 768px) {
+  .page-header,
+  .table-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .filter-row,
+  .filter-row--advanced {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .filter-field {
+    display: grid;
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+
+  .filter-field__label {
+    line-height: 1.3;
+  }
+
+  .filter-item--report,
+  .filter-item--compact,
+  .filter-item--customer,
+  .filter-item--product,
+  .filter-item--range {
+    width: auto;
+  }
+
+  .filter-control--select-sm,
+  .filter-control--select-md,
+  .filter-control--select-lg,
+  .filter-control--input-md,
+  .filter-control--range {
+    width: 100%;
+  }
+
+  .filter-actions {
+    justify-content: stretch;
+    margin-left: 0;
+  }
+
+  .filter-actions :deep(.el-button) {
+    width: 100%;
+  }
+
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-row--advanced {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    grid-column: span 2;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+}
+</style>

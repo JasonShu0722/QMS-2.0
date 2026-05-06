@@ -1,8 +1,9 @@
 """Customer 8D report API endpoints."""
 
-from typing import List
+from datetime import date, datetime, time
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,6 +13,7 @@ from app.schemas.eight_d_customer import (
     D4D7Request,
     D8Request,
     EightDBatchInitRequest,
+    EightDCustomerListResponse,
     EightDCustomerResponse,
     EightDPrimaryComplaintSwitchRequest,
     EightDReviewRequest,
@@ -21,6 +23,49 @@ from app.schemas.eight_d_customer import (
 from app.services.eight_d_customer_service import EightDCustomerService
 
 router = APIRouter(prefix="/customer-complaints", tags=["8D Customer Reports"])
+
+
+@router.get("/8d/reports", response_model=EightDCustomerListResponse)
+async def list_customer_8d_reports(
+    report_number: Optional[str] = None,
+    complaint_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    product_type: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    try:
+        reports, total = await EightDCustomerService.list_reports(
+            db=db,
+            report_number=report_number,
+            complaint_type=complaint_type,
+            customer_id=customer_id,
+            product_type=product_type,
+            status=status_filter,
+            start_date=datetime.combine(start_date, time.min) if start_date else None,
+            end_date=datetime.combine(end_date, time.max) if end_date else None,
+            page=page,
+            page_size=page_size,
+        )
+        return EightDCustomerListResponse(
+            total=total,
+            items=[EightDCustomerService.build_report_summary(report) for report in reports],
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"查询客户 8D 清单失败: {exc}",
+        ) from exc
 
 
 @router.post("/8d/init", response_model=EightDCustomerResponse)

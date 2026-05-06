@@ -222,6 +222,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '客户8D报告', requiresAuth: true, permission: { modulePath: 'quality.customer', operation: 'read' } }
       },
       {
+        path: 'quality/customer-eight-d',
+        name: 'CustomerEightDList',
+        component: () => import('@/views/CustomerEightDList.vue'),
+        meta: { title: '客诉8D', requiresAuth: true, permission: { modulePath: 'quality.customer', operation: 'read' } }
+      },
+      {
         path: 'quality/eight-d-workspace',
         name: 'EightDWorkspace',
         component: () => import('@/views/EightDWorkspace.vue'),

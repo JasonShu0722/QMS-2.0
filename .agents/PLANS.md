@@ -456,7 +456,11 @@
     - introduced a shared `EightDWorkspace` shell with in-page tabs, so supplier 8D and customer 8D no longer need to exist as two standalone top-level work surfaces
     - kept existing supplier/customer business pages and APIs as inner panels, while adding old-route compatibility redirects from `EightDForm`, `ScarEightDReview`, and `EightDCustomerForm` into the shared workspace
     - collapsed redundant navigation and workbench quick entries into a single `8D 报告中心` entry, while preserving source-driven opening from SCAR, customer complaints, and the unified problem center
-  - planned verification for this increment:
+    - added a dedicated `客诉8D` ledger under customer-quality management, backed by a new customer-8D list API and stable `ZX8D-<分类>-<YYMM>-<SEQ>` numbering for newly created customer 8D reports
+    - the new ledger now supports report-number / complaint-type / customer / product-type / status / date filters, opens into the shared `EightDWorkspace`, and round-trips back from `EightDCustomerForm` and `CustomerComplaintDetail` with focused-row context
+  - latest verification for this increment:
+    - `& '.\.venv\Scripts\python.exe' -m pytest backend/test/test_customer_complaint_api.py`
+    - `Set-Location backend; $env:PYTHONIOENCODING='utf-8'; & '..\.venv\Scripts\python.exe' scripts/validate_migration.py alembic/versions/2026_04_29_1810-a6b5c4d3e2f1_add_customer_8d_report_number.py`
     - `Set-Location frontend; npm run test -- src/utils/test/problemIssueSummary.spec.ts src/utils/test/internalUsers.spec.ts`
     - `Set-Location frontend; npm run build`
 

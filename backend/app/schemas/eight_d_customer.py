@@ -198,6 +198,7 @@ class EightDCustomerResponse(BaseModel):
     """8D报告响应模型"""
     id: int
     complaint_id: int
+    report_number: Optional[str] = None
     status: EightDStatusEnum
     approval_level: ApprovalLevelEnum
     related_complaints: List[EightDComplaintLinkSummary] = Field(default_factory=list)
@@ -222,6 +223,36 @@ class EightDCustomerResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class EightDCustomerListItemResponse(BaseModel):
+    """客户 8D 清单摘要模型"""
+
+    id: int
+    complaint_id: int
+    report_number: str
+    primary_complaint_number: Optional[str] = None
+    complaint_type: Optional[str] = None
+    customer_code: Optional[str] = None
+    customer_name: Optional[str] = None
+    end_customer_name: Optional[str] = None
+    product_type: Optional[str] = None
+    related_complaint_count: int = 0
+    status: EightDStatusEnum
+    approval_level: ApprovalLevelEnum
+    created_at: datetime
+    updated_at: datetime
+    submitted_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+
+
+class EightDCustomerListResponse(BaseModel):
+    """客户 8D 清单分页响应"""
+
+    total: int
+    items: List[EightDCustomerListItemResponse]
+    page: int
+    page_size: int
 
 
 class SLAStatus(BaseModel):

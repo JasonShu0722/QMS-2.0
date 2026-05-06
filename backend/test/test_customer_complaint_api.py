@@ -208,6 +208,68 @@ async def test_init_eight_d_report_after_disposition_plan(async_client: AsyncCli
 
 
 @pytest.mark.asyncio
+async def test_list_customer_eight_d_reports(async_client: AsyncClient, test_user_token: str):
+    create_response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "complaint_type": "after_sales",
+            "customer_code": "CUST8D01",
+            "product_type": "ECU-BOX",
+            "defect_description": "\u552e\u540e\u5ba2\u8bc9\u5df2\u7ecf\u5b8c\u6210\u5904\u7406\u65b9\u6848\u5907\u6848\u5e76\u51c6\u5907\u53d1\u8d778D",
+            "requires_physical_analysis": False,
+            "vin_code": "LVS12345678901234",
+            "mileage": 12000,
+            "purchase_date": "2025-11-01",
+        },
+    )
+    assert create_response.status_code == 201
+    complaint_id = create_response.json()["id"]
+
+    disposition_response = await async_client.post(
+        f"/api/v1/customer-complaints/{complaint_id}/physical-disposition",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "disposition_plan": "\u5df2\u5b8c\u6210\u5ba2\u8bc9\u5904\u7406\u65b9\u6848\u5907\u6848\u5e76\u7b49\u5f85\u540e\u7eed8D\u95ed\u73af",
+            "disposition_status": "in_progress",
+        },
+    )
+    assert disposition_response.status_code == 200
+
+    init_response = await async_client.post(
+        f"/api/v1/customer-complaints/{complaint_id}/8d/init",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+    )
+    assert init_response.status_code == 200
+    report_number = init_response.json()["report_number"]
+    assert report_number.startswith("ZX8D-CQ1-")
+
+    list_response = await async_client.get(
+        "/api/v1/customer-complaints/8d/reports",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+    )
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] >= 1
+
+    target = next(item for item in payload["items"] if item["complaint_id"] == complaint_id)
+    assert target["report_number"] == report_number
+    assert target["primary_complaint_number"] == create_response.json()["complaint_number"]
+    assert target["complaint_type"] == "after_sales"
+    assert target["status"] == "d4_d7_in_progress"
+
+    filter_response = await async_client.get(
+        "/api/v1/customer-complaints/8d/reports",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        params={"report_number": report_number},
+    )
+    assert filter_response.status_code == 200
+    filtered_payload = filter_response.json()
+    assert filtered_payload["total"] == 1
+    assert filtered_payload["items"][0]["report_number"] == report_number
+
+
+@pytest.mark.asyncio
 async def test_record_physical_disposition_rejects_analysis_required_case(async_client: AsyncClient, test_user_token: str):
     create_response = await async_client.post(
         "/api/v1/customer-complaints",

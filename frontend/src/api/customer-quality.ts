@@ -21,6 +21,8 @@ import type {
   CustomerComplaintPhysicalDispositionRecord,
   CustomerComplaintListQuery,
   CustomerComplaintListResponse,
+  CustomerEightDListQuery,
+  CustomerEightDListResponse,
   CustomerQualityAnalysis,
   EightDBatchInitRequest,
   EightDPrimaryComplaintSwitchRequest,
@@ -175,6 +177,16 @@ export async function getEightDCustomer(complaintId: number): Promise<EightDCust
     method: 'get',
   })) as unknown as BackendEightDCustomer
   return normalizeEightDCustomer(response)
+}
+
+export async function getCustomerEightDReports(
+  params: CustomerEightDListQuery
+): Promise<CustomerEightDListResponse> {
+  return request({
+    url: '/api/v1/customer-complaints/8d/reports',
+    method: 'get',
+    params,
+  })
 }
 
 export async function submitEightDCustomer(

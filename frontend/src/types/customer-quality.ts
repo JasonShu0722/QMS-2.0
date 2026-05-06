@@ -176,6 +176,7 @@ export interface EightDComplaintLinkSummary {
 export interface EightDCustomer {
   id: number
   complaint_id: number
+  report_number?: string
   related_complaints: EightDComplaintLinkSummary[]
   d0_d3_cqe?: Record<string, any>
   d4_d7_responsible?: D4D7Data
@@ -236,6 +237,44 @@ export interface EightDSLAStatus {
   is_submission_overdue: boolean
   is_archive_overdue: boolean
   remaining_days: number
+}
+
+export interface CustomerEightDListQuery {
+  page?: number
+  page_size?: number
+  report_number?: string
+  complaint_type?: ComplaintType
+  customer_id?: number
+  product_type?: string
+  status?: EightDStatus
+  start_date?: string
+  end_date?: string
+}
+
+export interface CustomerEightDListItem {
+  id: number
+  complaint_id: number
+  report_number: string
+  primary_complaint_number?: string
+  complaint_type?: ComplaintType | string
+  customer_code?: string
+  customer_name?: string
+  end_customer_name?: string
+  product_type?: string
+  related_complaint_count: number
+  status: EightDStatus
+  approval_level: ApprovalLevel
+  created_at: string
+  updated_at: string
+  submitted_at?: string
+  reviewed_at?: string
+}
+
+export interface CustomerEightDListResponse {
+  total: number
+  page: number
+  page_size: number
+  items: CustomerEightDListItem[]
 }
 
 // Claims
