@@ -30,6 +30,7 @@ export interface SCAR {
   supplier_id: number
   supplier_name?: string
   material_code: string
+  material_category?: 'structure' | 'electronic'
   defect_description: string
   defect_qty: number
   severity: 'low' | 'medium' | 'high' | 'critical'
@@ -207,6 +208,21 @@ export interface SCARListParams {
   severity?: string
   start_date?: string
   end_date?: string
+}
+
+export interface SCARSupplierOption {
+  id: number
+  code: string
+  name: string
+  status: string
+}
+
+export interface SCARInternalUserOption {
+  id: number
+  username: string
+  full_name: string
+  department?: string
+  position?: string
 }
 
 /**

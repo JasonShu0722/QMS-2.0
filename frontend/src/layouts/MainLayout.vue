@@ -48,6 +48,40 @@
             <div v-if="currentPageTitle" class="page-context">
               <strong class="page-context__title">{{ currentPageTitle }}</strong>
             </div>
+
+            <div
+              v-if="showEightDHeaderTabs"
+              class="workspace-tabs"
+              role="tablist"
+              aria-label="8D报告标签页"
+            >
+              <div
+                v-for="tab in eightDHeaderTabs"
+                :key="tab.key"
+                class="workspace-tab"
+                :class="{ 'is-active': eightDActiveKey === tab.key }"
+                role="tab"
+                tabindex="0"
+                :aria-selected="eightDActiveKey === tab.key"
+                @click="handleActivateEightDTab(tab.key)"
+                @keydown.enter.prevent="handleActivateEightDTab(tab.key)"
+                @keydown.space.prevent="handleActivateEightDTab(tab.key)"
+              >
+                <span class="workspace-tab__dot" :class="`is-${tab.kind}`"></span>
+                <span class="workspace-tab__label">{{ tab.title }}</span>
+                <span
+                  class="workspace-tab__close"
+                  role="button"
+                  tabindex="0"
+                  aria-label="关闭标签"
+                  @click.stop="handleCloseEightDTab(tab.key)"
+                  @keydown.enter.stop.prevent="handleCloseEightDTab(tab.key)"
+                  @keydown.space.stop.prevent="handleCloseEightDTab(tab.key)"
+                >
+                  <el-icon><Close /></el-icon>
+                </span>
+              </div>
+            </div>
           </div>
 
           <div class="header-right">
@@ -110,11 +144,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Expand, Fold, User } from '@element-plus/icons-vue'
+import { Close, Expand, Fold, User } from '@element-plus/icons-vue'
 import MobileLayout from './MobileLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEnvironment } from '@/composables/useEnvironment'
 import { useFeatureFlagStore } from '@/stores/featureFlag'
+import { useEightDWorkspaceStore } from '@/stores/eightDWorkspace'
 import { NAV_SECTIONS, PRIMARY_NAV_ITEMS, RESERVED_NAV_ITEMS } from '@/config/navigation'
 import { canAccessRouteMeta, type RouteAccessMeta } from '@/utils/accessControl'
 import { getEnvironmentLabel, isPreviewEnvironment } from '@/utils/environment'
@@ -123,6 +158,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const featureFlagStore = useFeatureFlagStore()
+const eightDWorkspaceStore = useEightDWorkspaceStore()
 const { currentEnvironment, switchButtonText, switchEnvironment, syncEnvironmentState } = useEnvironment()
 
 const isCollapse = ref(false)
@@ -135,6 +171,10 @@ const currentEnvLabel = computed(() => getEnvironmentLabel(currentEnvironment.va
 const canSwitchEnvironment = computed(() => authStore.allowedEnvironments.length > 1)
 const currentPageTitle = computed(() => String(route.meta.title || ''))
 const shouldCompactContentTitle = computed(() => Boolean(currentPageTitle.value))
+const isEightDWorkspaceRoute = computed(() => route.name === 'EightDWorkspace')
+const eightDHeaderTabs = computed(() => eightDWorkspaceStore.tabs)
+const eightDActiveKey = computed(() => eightDWorkspaceStore.activeKey)
+const showEightDHeaderTabs = computed(() => eightDHeaderTabs.value.length > 0)
 const routeAccessContext = computed(() => ({
   isAuthenticated: authStore.isAuthenticated,
   isInternal: authStore.isInternal,
@@ -288,10 +328,27 @@ function openPasswordChange() {
   })
 }
 
+function handleActivateEightDTab(key: string) {
+  eightDWorkspaceStore.setActiveKey(key)
+
+  if (!isEightDWorkspaceRoute.value) {
+    router.push({ name: 'EightDWorkspace' })
+  }
+}
+
+function handleCloseEightDTab(key: string) {
+  eightDWorkspaceStore.closeTab(key)
+
+  if (isEightDWorkspaceRoute.value && eightDWorkspaceStore.tabs.length === 0) {
+    router.replace({ name: 'ProblemIssueCenter' })
+  }
+}
+
 onMounted(async () => {
   updateIsMobile()
   window.addEventListener('resize', updateIsMobile)
   syncEnvironmentState()
+  eightDWorkspaceStore.initialize()
 
   if (authStore.isAuthenticated) {
     await Promise.all([
@@ -385,6 +442,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   border-bottom: 1px solid #e6e6e6;
   background-color: #fff;
   padding: 0 20px;
@@ -406,6 +464,7 @@ watch(
 }
 
 .header-left {
+  flex: 1;
   min-width: 0;
 }
 
@@ -430,6 +489,113 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.workspace-tabs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 2px 2px;
+  scrollbar-width: none;
+}
+
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  max-width: 260px;
+  height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8e2f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 0 10px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.workspace-tab:hover {
+  border-color: #8ec5ff;
+  background: #eff6ff;
+}
+
+.workspace-tab:focus-visible {
+  border-color: #409eff;
+  outline: 2px solid rgba(64, 158, 255, 0.18);
+  outline-offset: 2px;
+}
+
+.workspace-tab:active {
+  transform: translateY(1px);
+}
+
+.workspace-tab.is-active {
+  border-color: #409eff;
+  background: #409eff;
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(64, 158, 255, 0.2);
+}
+
+.workspace-tab__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.workspace-tab__dot.is-supplier {
+  background: #f59e0b;
+}
+
+.workspace-tab__dot.is-customer {
+  background: #10b981;
+}
+
+.workspace-tab.is-active .workspace-tab__dot {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.workspace-tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab__close {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  opacity: 0.74;
+  transition: background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.workspace-tab__close:hover,
+.workspace-tab__close:focus-visible {
+  background: rgba(15, 23, 42, 0.08);
+  opacity: 1;
+  outline: none;
+}
+
+.workspace-tab.is-active .workspace-tab__close:hover,
+.workspace-tab.is-active .workspace-tab__close:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .env-badge {
@@ -490,6 +656,10 @@ watch(
 @media (max-width: 992px) {
   .page-context__title {
     font-size: 16px;
+  }
+
+  .workspace-tab {
+    max-width: 180px;
   }
 }
 

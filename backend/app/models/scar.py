@@ -47,6 +47,7 @@ class SCAR(Base):
     
     # 物料信息
     material_code: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="物料编码")
+    material_category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True, comment="来料分类：structure/electronic")
     
     # 缺陷描述
     defect_description: Mapped[str] = mapped_column(Text, nullable=False, comment="缺陷描述")
@@ -96,6 +97,7 @@ class SCAR(Base):
             "scar_number": self.scar_number,
             "supplier_id": self.supplier_id,
             "material_code": self.material_code,
+            "material_category": self.material_category,
             "defect_description": self.defect_description,
             "defect_qty": self.defect_qty,
             "severity": self.severity,

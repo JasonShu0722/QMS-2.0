@@ -2,16 +2,21 @@
 SCAR 和 8D 报告 API 路由
 """
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.models.user import User
+from app.models.supplier import Supplier, SupplierStatus
+from app.models.role_tag import RoleTag
+from app.models.user import User, UserStatus, UserType
+from app.models.user_role_assignment import UserRoleAssignment
 from app.schemas.scar import (
     SCARCreate, SCARUpdate, SCARResponse, SCARListQuery,
     EightDSubmit, EightDReview, EightDResponse,
-    AIPreReviewRequest, AIPreReviewResponse
+    AIPreReviewRequest, AIPreReviewResponse, SCARInternalUserOption,
+    SCARSupplierOption
 )
 from app.services.scar_service import SCARService, EightDService, AIPreReviewService
 from app.core.exceptions import NotFoundException, BusinessException
@@ -19,7 +24,125 @@ from app.core.exceptions import NotFoundException, BusinessException
 router = APIRouter(prefix="/scar", tags=["SCAR & 8D Management"])
 
 
+def _enum_value(value):
+    return value.value if hasattr(value, "value") else value
+
+
 # ============ SCAR 管理接口 ============
+
+@router.get("/supplier-options", response_model=list[SCARSupplierOption])
+async def search_supplier_options(
+    keyword: str | None = Query(None, description="按供应商代码或名称搜索"),
+    limit: int = Query(20, ge=1, le=50, description="返回数量"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    SCAR 创建弹窗使用的供应商检索。
+
+    内部用户可按供应商代码或名称搜索激活供应商，外部供应商账号不可访问。
+    """
+    if _enum_value(current_user.user_type) != UserType.INTERNAL.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅内部用户可检索供应商")
+
+    query = (
+        select(Supplier)
+        .where(Supplier.status == SupplierStatus.ACTIVE)
+        .order_by(Supplier.code.asc())
+        .limit(limit)
+    )
+
+    normalized_keyword = keyword.strip() if keyword else ""
+    if normalized_keyword:
+        like_value = f"%{normalized_keyword}%"
+        query = query.where(
+            or_(
+                Supplier.code.ilike(like_value),
+                Supplier.name.ilike(like_value),
+            )
+        )
+
+    result = await db.execute(query)
+    return [
+        SCARSupplierOption(
+            id=supplier.id,
+            code=supplier.code,
+            name=supplier.name,
+            status=str(_enum_value(supplier.status)),
+        )
+        for supplier in result.scalars().all()
+    ]
+
+
+@router.get("/sqe-options", response_model=list[SCARInternalUserOption])
+async def search_sqe_options(
+    keyword: str | None = Query(None, description="按姓名、账号、部门或岗位检索供应商质量工程师"),
+    limit: int = Query(20, ge=1, le=50, description="返回数量"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    8D 报告提交审核时使用的供应商质量工程师选项。
+    优先返回绑定“供应商质量工程师”角色标签的内部账号；本地未配置角色时回退内部激活账号，避免流程卡死。
+    """
+    normalized_keyword = keyword.strip() if keyword else ""
+    keyword_filter = None
+    if normalized_keyword:
+        like_value = f"%{normalized_keyword}%"
+        keyword_filter = or_(
+            User.username.ilike(like_value),
+            User.full_name.ilike(like_value),
+            User.department.ilike(like_value),
+            User.position.ilike(like_value),
+        )
+
+    base_conditions = [
+        User.user_type == UserType.INTERNAL,
+        User.status == UserStatus.ACTIVE,
+    ]
+
+    role_stmt = (
+        select(User)
+        .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
+        .join(RoleTag, RoleTag.id == UserRoleAssignment.role_tag_id)
+        .where(
+            *base_conditions,
+            RoleTag.role_key == "quality.supplier.engineer",
+            RoleTag.is_active.is_(True),
+        )
+        .distinct()
+        .order_by(User.full_name.asc(), User.username.asc())
+        .limit(limit)
+    )
+    if keyword_filter is not None:
+        role_stmt = role_stmt.where(keyword_filter)
+
+    result = await db.execute(role_stmt)
+    users = list(result.scalars().all())
+
+    if not users:
+        fallback_stmt = (
+            select(User)
+            .where(*base_conditions)
+            .order_by(User.full_name.asc(), User.username.asc())
+            .limit(limit)
+        )
+        if keyword_filter is not None:
+            fallback_stmt = fallback_stmt.where(keyword_filter)
+
+        fallback_result = await db.execute(fallback_stmt)
+        users = list(fallback_result.scalars().all())
+
+    return [
+        SCARInternalUserOption(
+            id=user.id,
+            username=user.username,
+            full_name=user.full_name,
+            department=user.department,
+            position=user.position,
+        )
+        for user in users
+    ]
 
 @router.post("", response_model=SCARResponse, status_code=status.HTTP_201_CREATED)
 async def create_scar(
@@ -192,6 +315,65 @@ async def get_scar_detail(
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get SCAR detail: {str(e)}")
+
+
+@router.patch("/{scar_id}", response_model=SCARResponse)
+async def update_scar(
+    scar_id: int,
+    scar_data: SCARUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    更新 SCAR 基础信息。
+
+    当前主要用于补充/修正来料分类，保证 8D 报告编号中的 IQ0/IQ1 来自业务选项。
+    """
+    try:
+        if _enum_value(current_user.user_type) != UserType.INTERNAL.value:
+            raise HTTPException(status_code=403, detail="Only internal users can update SCAR")
+
+        scar = await SCARService.update_scar(
+            db=db,
+            scar_id=scar_id,
+            scar_data=scar_data,
+            updated_by=current_user.id,
+            current_user=current_user,
+        )
+
+        response = SCARResponse.from_orm(scar)
+
+        supplier_result = await db.execute(
+            select(Supplier).where(Supplier.id == scar.supplier_id)
+        )
+        supplier = supplier_result.scalar_one_or_none()
+        if supplier:
+            response.supplier_name = supplier.name
+
+        if scar.current_handler_id:
+            handler_result = await db.execute(
+                select(User).where(User.id == scar.current_handler_id)
+            )
+            handler = handler_result.scalar_one_or_none()
+            if handler:
+                response.current_handler_name = handler.full_name
+
+        from app.models.eight_d import EightD
+        eight_d_result = await db.execute(
+            select(EightD).where(EightD.scar_id == scar.id)
+        )
+        response.has_8d_report = eight_d_result.scalar_one_or_none() is not None
+
+        return response
+
+    except NotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update SCAR: {str(e)}")
 
 
 # ============ 8D 报告管理接口 ============

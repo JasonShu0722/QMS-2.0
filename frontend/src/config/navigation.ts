@@ -43,7 +43,6 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: DataLine,
     children: [
       { index: '/quality/problem-center', title: '问题中心' },
-      { index: '/quality/eight-d-workspace', title: '8D 报告中心' },
       { index: '/quality-dashboard', title: '数据仪表盘' },
       { index: '/quality-dashboard/analysis', title: '专项数据分析' },
     ],

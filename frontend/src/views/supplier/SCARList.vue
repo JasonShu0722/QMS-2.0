@@ -76,6 +76,11 @@
         <el-table-column prop="scar_number" label="单据编号" width="150" fixed />
         <el-table-column prop="supplier_name" label="供应商" width="150" />
         <el-table-column prop="material_code" label="物料编码" width="140" />
+        <el-table-column prop="material_category" label="来料分类" width="120">
+          <template #default="{ row }">
+            {{ getMaterialCategoryLabel(row.material_category) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="defect_description" label="缺陷描述" min-width="220" show-overflow-tooltip />
         <el-table-column prop="defect_qty" label="不良数量" width="100" align="right" />
         <el-table-column prop="severity" label="严重度" width="100">
@@ -133,18 +138,41 @@
     <el-dialog v-model="showCreateDialog" title="创建 SCAR" width="600px">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="120px">
         <el-form-item label="供应商" prop="supplier_id">
-          <el-select v-model="createForm.supplier_id" placeholder="请选择供应商" filterable>
+          <el-select
+            v-model="createForm.supplier_id"
+            placeholder="请输入供应商代码或名称"
+            filterable
+            remote
+            reserve-keyword
+            clearable
+            remote-show-suffix
+            :remote-method="loadSupplierOptions"
+            :loading="supplierSearchLoading"
+            @visible-change="handleSupplierSelectVisibleChange"
+          >
             <el-option
               v-for="supplier in suppliers"
               :key="supplier.id"
-              :label="supplier.name"
+              :label="formatSupplierOptionLabel(supplier)"
               :value="supplier.id"
-            />
+            >
+              <div class="supplier-option">
+                <span class="supplier-option__name">{{ supplier.name }}</span>
+                <span class="supplier-option__code">{{ supplier.code }}</span>
+              </div>
+            </el-option>
           </el-select>
         </el-form-item>
 
         <el-form-item label="物料编码" prop="material_code">
           <el-input v-model="createForm.material_code" placeholder="请输入物料编码" />
+        </el-form-item>
+
+        <el-form-item label="来料分类" prop="material_category">
+          <el-select v-model="createForm.material_category" placeholder="请选择来料分类">
+            <el-option label="结构料（IQ0）" value="structure" />
+            <el-option label="电子料（IQ1）" value="electronic" />
+          </el-select>
         </el-form-item>
 
         <el-form-item label="缺陷描述" prop="defect_description">
@@ -197,7 +225,8 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 
 import { supplierApi } from '@/api/supplier'
 import { useAuthStore } from '@/stores/auth'
-import type { SCAR, SCARListParams } from '@/types/supplier'
+import type { SCAR, SCARListParams, SCARSupplierOption } from '@/types/supplier'
+import { isScarRouteName } from '@/utils/problemIssueSummary'
 
 const route = useRoute()
 const router = useRouter()
@@ -205,9 +234,10 @@ const authStore = useAuthStore()
 
 const loading = ref(false)
 const creating = ref(false)
+const supplierSearchLoading = ref(false)
 const showCreateDialog = ref(false)
 const scarList = ref<SCAR[]>([])
-const suppliers = ref<any[]>([])
+const suppliers = ref<SCARSupplierOption[]>([])
 
 const filterForm = reactive<SCARListParams>({
   status: undefined,
@@ -225,6 +255,7 @@ const pagination = reactive({
 const createForm = reactive<any>({
   supplier_id: undefined,
   material_code: '',
+  material_category: undefined,
   defect_description: '',
   defect_qty: 1,
   severity: 'medium',
@@ -236,6 +267,7 @@ const createFormRef = ref()
 const createRules = {
   supplier_id: [{ required: true, message: '请选择供应商', trigger: 'change' }],
   material_code: [{ required: true, message: '请输入物料编码', trigger: 'blur' }],
+  material_category: [{ required: true, message: '请选择来料分类', trigger: 'change' }],
   defect_description: [{ required: true, message: '请输入缺陷描述', trigger: 'blur' }],
   defect_qty: [{ required: true, message: '请输入不良数量', trigger: 'blur' }],
   severity: [{ required: true, message: '请选择严重度', trigger: 'change' }],
@@ -281,6 +313,14 @@ function getSeverityLabel(severity: string) {
     low: '低',
   }
   return labels[severity] || severity
+}
+
+function getMaterialCategoryLabel(category?: string) {
+  const labels: Record<string, string> = {
+    structure: '结构料（IQ0）',
+    electronic: '电子料（IQ1）',
+  }
+  return labels[category || ''] || '待选择'
 }
 
 function getStatusType(status: string) {
@@ -382,14 +422,9 @@ async function handlePageChange() {
   await loadSCARList()
 }
 
-function navigateToFocusedScar(scarId: number) {
-  router.push({
-    name: currentRouteName.value,
-    query: {
-      ...route.query,
-      focusId: String(scarId),
-    },
-  })
+function getSourceRouteName() {
+  const routeName = typeof route.name === 'string' ? route.name : ''
+  return isScarRouteName(routeName) ? routeName : currentRouteName.value
 }
 
 function handleRowClick(row: SCAR) {
@@ -397,7 +432,14 @@ function handleRowClick(row: SCAR) {
 }
 
 function handleView(row: SCAR) {
-  navigateToFocusedScar(row.id)
+  router.push({
+    name: authStore.isInternal ? 'ScarEightDReview' : 'EightDForm',
+    params: { id: String(row.id) },
+    query: {
+      sourceRouteName: getSourceRouteName(),
+      sourceFocusId: String(row.id),
+    },
+  })
 }
 
 function handleSubmit8D(row: SCAR) {
@@ -406,7 +448,7 @@ function handleSubmit8D(row: SCAR) {
     params: { id: String(row.id) },
     query: {
       action: 'submit',
-      sourceRouteName: currentRouteName.value,
+      sourceRouteName: getSourceRouteName(),
       sourceFocusId: String(row.id),
     },
   })
@@ -416,6 +458,31 @@ function getRowClassName({ row }: { row: SCAR }) {
   return focusedScarId.value === row.id ? 'focused-row' : ''
 }
 
+function formatSupplierOptionLabel(supplier: SCARSupplierOption) {
+  return `${supplier.name} (${supplier.code})`
+}
+
+async function loadSupplierOptions(keyword = '') {
+  supplierSearchLoading.value = true
+  try {
+    suppliers.value = await supplierApi.getSCARSupplierOptions({
+      keyword: keyword.trim() || undefined,
+      limit: 20,
+    })
+  } catch (error: any) {
+    suppliers.value = []
+    ElMessage.error(error.message || '搜索供应商失败')
+  } finally {
+    supplierSearchLoading.value = false
+  }
+}
+
+function handleSupplierSelectVisibleChange(visible: boolean) {
+  if (visible && suppliers.value.length === 0) {
+    void loadSupplierOptions()
+  }
+}
+
 async function handleCreate() {
   try {
     await createFormRef.value.validate()
@@ -423,6 +490,7 @@ async function handleCreate() {
     await supplierApi.createSCAR(createForm)
     ElMessage.success('创建成功')
     showCreateDialog.value = false
+    createFormRef.value?.resetFields()
     await loadSCARList()
   } catch (error) {
     console.error('Failed to create SCAR:', error)
@@ -533,6 +601,28 @@ onMounted(async () => {
   .filter-select,
   .filter-date {
     width: 100%;
+  }
+
+  .supplier-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .supplier-option__name {
+    overflow: hidden;
+    color: #1f2937;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .supplier-option__code {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: 12px;
   }
 
   .table-card {

@@ -10,6 +10,8 @@ import type {
   BarcodeValidation,
   SupplierDashboardData,
   SCARListParams,
+  SCARInternalUserOption,
+  SCARSupplierOption,
   PaginatedResponse
 } from '@/types/supplier'
 
@@ -32,6 +34,20 @@ export const supplierApi = {
   },
 
   /**
+   * SCAR 创建时按供应商代码/名称检索供应商
+   */
+  getSCARSupplierOptions(params?: { keyword?: string; limit?: number }): Promise<SCARSupplierOption[]> {
+    return request.get('/v1/scar/supplier-options', { params })
+  },
+
+  /**
+   * SCAR 8D 提交审核时检索供应商质量工程师
+   */
+  getSCARSQEOptions(params?: { keyword?: string; limit?: number }): Promise<SCARInternalUserOption[]> {
+    return request.get('/v1/scar/sqe-options', { params })
+  },
+
+  /**
    * 获取 SCAR 详情
    */
   getSCAR(id: number): Promise<SCAR> {
@@ -43,6 +59,10 @@ export const supplierApi = {
    */
   createSCAR(data: Partial<SCAR>): Promise<SCAR> {
     return request.post('/v1/scar', data)
+  },
+
+  updateSCAR(id: number, data: Partial<SCAR>): Promise<SCAR> {
+    return request.patch(`/v1/scar/${id}`, data)
   },
 
   /**

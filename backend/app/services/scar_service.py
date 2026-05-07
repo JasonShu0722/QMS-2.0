@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.scar import SCAR, SCARStatus, SCARSeverity
 from app.models.eight_d import EightD, EightDStatus
 from app.models.supplier import Supplier
-from app.models.user import User
+from app.models.user import User, UserStatus, UserType
 from app.schemas.scar import (
     SCARCreate, SCARUpdate, SCARListQuery,
     EightDSubmit, EightDReview
@@ -88,6 +88,7 @@ class SCARService:
             scar_number=scar_number,
             supplier_id=scar_data.supplier_id,
             material_code=scar_data.material_code,
+            material_category=scar_data.material_category,
             defect_description=scar_data.defect_description,
             defect_qty=scar_data.defect_qty,
             severity=scar_data.severity,
@@ -116,6 +117,52 @@ class SCARService:
             # TODO: 发送邮件通知（需要集成 SMTP 服务）
             # await EmailService.send_scar_notification(supplier.contact_email, scar)
         
+        return scar
+
+    @staticmethod
+    async def update_scar(
+        db: AsyncSession,
+        scar_id: int,
+        scar_data: SCARUpdate,
+        updated_by: int,
+        current_user: User
+    ) -> SCAR:
+        """更新 SCAR 基础字段。"""
+        scar = await SCARService.get_scar_by_id(db, scar_id, current_user)
+        update_data = scar_data.dict(exclude_unset=True)
+        supplier_id_changed = (
+            "supplier_id" in update_data
+            and update_data["supplier_id"] is not None
+            and update_data["supplier_id"] != scar.supplier_id
+        )
+
+        if supplier_id_changed:
+            supplier_result = await db.execute(
+                select(Supplier).where(Supplier.id == update_data["supplier_id"])
+            )
+            supplier = supplier_result.scalar_one_or_none()
+            if not supplier:
+                raise NotFoundException(f"Supplier with id {update_data['supplier_id']} not found")
+
+        for field, value in update_data.items():
+            setattr(scar, field, value)
+
+        if supplier_id_changed:
+            user_result = await db.execute(
+                select(User)
+                .where(and_(
+                    User.supplier_id == scar.supplier_id,
+                    User.status == UserStatus.ACTIVE
+                ))
+                .limit(1)
+            )
+            supplier_user = user_result.scalar_one_or_none()
+            scar.current_handler_id = supplier_user.id if supplier_user else None
+
+        scar.updated_by = updated_by
+        scar.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(scar)
         return scar
     
     @staticmethod
@@ -229,16 +276,37 @@ class EightDService:
             select(EightD).where(EightD.scar_id == scar_id)
         )
         eight_d = result.scalar_one_or_none()
+        is_draft = eight_d_data.status == "draft"
+        now = datetime.utcnow()
+        next_status = EightDStatus.DRAFT if is_draft else EightDStatus.SUBMITTED
+        reviewer = None
+
+        if not is_draft:
+            reviewer_id = eight_d_data.reviewer_id or scar.created_by
+            if not reviewer_id:
+                raise BusinessException("Please select a supplier quality engineer for 8D review")
+
+            reviewer_result = await db.execute(
+                select(User).where(and_(
+                    User.id == reviewer_id,
+                    User.user_type == UserType.INTERNAL,
+                    User.status == UserStatus.ACTIVE,
+                ))
+            )
+            reviewer = reviewer_result.scalar_one_or_none()
+            if not reviewer:
+                raise BusinessException("Selected supplier quality engineer is unavailable")
         
         if eight_d:
             # 更新现有报告
             eight_d.d0_d3_data = eight_d_data.d0_d3_data
             eight_d.d4_d7_data = eight_d_data.d4_d7_data
             eight_d.d8_data = eight_d_data.d8_data
-            eight_d.status = EightDStatus.SUBMITTED
+            eight_d.status = next_status
             eight_d.submitted_by = submitted_by
-            eight_d.submitted_at = datetime.utcnow()
-            eight_d.updated_at = datetime.utcnow()
+            if not is_draft:
+                eight_d.submitted_at = now
+            eight_d.updated_at = now
         else:
             # 创建新报告
             eight_d = EightD(
@@ -246,25 +314,28 @@ class EightDService:
                 d0_d3_data=eight_d_data.d0_d3_data,
                 d4_d7_data=eight_d_data.d4_d7_data,
                 d8_data=eight_d_data.d8_data,
-                status=EightDStatus.SUBMITTED,
+                status=next_status,
                 submitted_by=submitted_by,
-                submitted_at=datetime.utcnow()
+                submitted_at=None if is_draft else now
             )
             db.add(eight_d)
         
         # 更新 SCAR 状态
-        scar.status = SCARStatus.UNDER_REVIEW
-        scar.current_handler_id = scar.created_by or scar.current_handler_id
-        scar.updated_at = datetime.utcnow()
+        if is_draft:
+            scar.status = SCARStatus.SUPPLIER_RESPONDING
+        else:
+            scar.status = SCARStatus.UNDER_REVIEW
+            scar.current_handler_id = reviewer.id
+        scar.updated_at = now
         
         await db.commit()
         await db.refresh(eight_d)
         
         # 通知 SQE（查找创建 SCAR 的人）
-        if scar.created_by:
+        if not is_draft and reviewer:
             await NotificationHub.send_notification(
                 db=db,
-                user_ids=[scar.created_by],
+                user_ids=[reviewer.id],
                 message_type="workflow_exception",
                 title=f"8D 报告已提交：{scar.scar_number}",
                 content=f"供应商已提交 8D 报告，请及时审核。",

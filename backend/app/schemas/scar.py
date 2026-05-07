@@ -12,6 +12,7 @@ class SCARCreate(BaseModel):
     """创建 SCAR 请求模型"""
     supplier_id: int = Field(..., description="供应商ID")
     material_code: str = Field(..., min_length=1, max_length=100, description="物料编码")
+    material_category: Optional[str] = Field(None, description="来料分类：structure/electronic")
     defect_description: str = Field(..., min_length=1, description="缺陷描述")
     defect_qty: int = Field(..., gt=0, description="不良数量")
     severity: str = Field(..., description="严重度: low, medium, high, critical")
@@ -24,9 +25,20 @@ class SCARCreate(BaseModel):
             raise ValueError(f'severity must be one of {allowed}')
         return v
 
+    @validator('material_category')
+    def validate_material_category(cls, v):
+        if v is not None:
+            allowed = ['structure', 'electronic']
+            if v not in allowed:
+                raise ValueError(f'material_category must be one of {allowed}')
+        return v
+
 
 class SCARUpdate(BaseModel):
     """更新 SCAR 请求模型"""
+    supplier_id: Optional[int] = Field(None, description="供应商ID")
+    material_code: Optional[str] = Field(None, min_length=1, max_length=100, description="物料编码")
+    material_category: Optional[str] = Field(None, description="来料分类：structure/electronic")
     defect_description: Optional[str] = Field(None, min_length=1, description="缺陷描述")
     defect_qty: Optional[int] = Field(None, gt=0, description="不良数量")
     severity: Optional[str] = Field(None, description="严重度")
@@ -41,6 +53,14 @@ class SCARUpdate(BaseModel):
                 raise ValueError(f'severity must be one of {allowed}')
         return v
 
+    @validator('material_category')
+    def validate_material_category(cls, v):
+        if v is not None:
+            allowed = ['structure', 'electronic']
+            if v not in allowed:
+                raise ValueError(f'material_category must be one of {allowed}')
+        return v
+
 
 class SCARResponse(BaseModel):
     """SCAR 响应模型"""
@@ -48,6 +68,7 @@ class SCARResponse(BaseModel):
     scar_number: str
     supplier_id: int
     material_code: str
+    material_category: Optional[str] = None
     defect_description: str
     defect_qty: int
     severity: str
@@ -76,17 +97,46 @@ class SCARListQuery(BaseModel):
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
 
 
+class SCARSupplierOption(BaseModel):
+    """SCAR 创建时使用的供应商检索选项"""
+    id: int
+    code: str
+    name: str
+    status: str
+
+
+class SCARInternalUserOption(BaseModel):
+    """SCAR 8D 提交审核时使用的内部人员选项"""
+    id: int
+    username: str
+    full_name: str
+    department: Optional[str] = None
+    position: Optional[str] = None
+
+
 # ============ 8D Report Schemas ============
 
 class EightDSubmit(BaseModel):
     """供应商提交 8D 报告请求模型"""
     d0_d3_data: Optional[Dict[str, Any]] = Field(None, description="D0-D3 阶段数据")
-    d4_d7_data: Dict[str, Any] = Field(..., description="D4-D7 阶段数据（必填）")
+    status: Optional[str] = Field("submitted", description="8D 报告状态：draft/submitted")
+    reviewer_id: Optional[int] = Field(None, description="提交审核的供应商质量工程师ID")
+    d4_d7_data: Dict[str, Any] = Field(default_factory=dict, description="D4-D7 阶段数据")
     d8_data: Optional[Dict[str, Any]] = Field(None, description="D8 阶段数据")
+
+    @validator('status')
+    def validate_status(cls, v):
+        allowed = ['draft', 'submitted']
+        if v not in allowed:
+            raise ValueError(f'status must be one of {allowed}')
+        return v
     
     @validator('d4_d7_data')
-    def validate_d4_d7(cls, v):
+    def validate_d4_d7(cls, v, values):
         """验证 D4-D7 必填字段"""
+        if values.get('status') == 'draft':
+            return v or {}
+
         required_fields = ['root_cause', 'corrective_action', 'preventive_action']
         for field in required_fields:
             if field not in v or not v[field]:
