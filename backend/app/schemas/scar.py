@@ -8,6 +8,32 @@ from pydantic import BaseModel, Field, validator
 
 # ============ SCAR Schemas ============
 
+def validate_scar_evidence_files(files):
+    if files is None:
+        return files
+
+    if len(files) > 10:
+        raise ValueError("evidence_files cannot contain more than 10 files")
+
+    max_size = 10 * 1024 * 1024
+    for file in files:
+        if not isinstance(file, dict):
+            raise ValueError("each evidence file must be an object")
+
+        file_type = str(file.get("type") or "")
+        data_url = str(file.get("data_url") or "")
+        if file_type and not file_type.startswith("image/"):
+            raise ValueError("SCAR evidence files only support images")
+        if data_url and not data_url.startswith("data:image/"):
+            raise ValueError("SCAR evidence data_url must be an image")
+
+        size = file.get("size")
+        if isinstance(size, (int, float)) and size > max_size:
+            raise ValueError("each evidence file cannot exceed 10MB")
+
+    return files
+
+
 class SCARCreate(BaseModel):
     """创建 SCAR 请求模型"""
     supplier_id: int = Field(..., description="供应商ID")
@@ -15,6 +41,7 @@ class SCARCreate(BaseModel):
     material_category: Optional[str] = Field(None, description="来料分类：structure/electronic")
     defect_description: str = Field(..., min_length=1, description="缺陷描述")
     defect_qty: int = Field(..., gt=0, description="不良数量")
+    evidence_files: Optional[list[Dict[str, Any]]] = Field(None, description="附图佐证")
     severity: str = Field(..., description="严重度: low, medium, high, critical")
     deadline: datetime = Field(..., description="截止日期")
     
@@ -33,6 +60,10 @@ class SCARCreate(BaseModel):
                 raise ValueError(f'material_category must be one of {allowed}')
         return v
 
+    @validator('evidence_files')
+    def validate_evidence_files(cls, v):
+        return validate_scar_evidence_files(v)
+
 
 class SCARUpdate(BaseModel):
     """更新 SCAR 请求模型"""
@@ -41,6 +72,7 @@ class SCARUpdate(BaseModel):
     material_category: Optional[str] = Field(None, description="来料分类：structure/electronic")
     defect_description: Optional[str] = Field(None, min_length=1, description="缺陷描述")
     defect_qty: Optional[int] = Field(None, gt=0, description="不良数量")
+    evidence_files: Optional[list[Dict[str, Any]]] = Field(None, description="附图佐证")
     severity: Optional[str] = Field(None, description="严重度")
     deadline: Optional[datetime] = Field(None, description="截止日期")
     current_handler_id: Optional[int] = Field(None, description="当前处理人ID")
@@ -61,6 +93,10 @@ class SCARUpdate(BaseModel):
                 raise ValueError(f'material_category must be one of {allowed}')
         return v
 
+    @validator('evidence_files')
+    def validate_evidence_files(cls, v):
+        return validate_scar_evidence_files(v)
+
 
 class SCARResponse(BaseModel):
     """SCAR 响应模型"""
@@ -71,6 +107,7 @@ class SCARResponse(BaseModel):
     material_category: Optional[str] = None
     defect_description: str
     defect_qty: int
+    evidence_files: Optional[list[Dict[str, Any]]] = None
     severity: str
     status: str
     current_handler_id: Optional[int]
@@ -137,7 +174,14 @@ class EightDSubmit(BaseModel):
         if values.get('status') == 'draft':
             return v or {}
 
-        required_fields = ['root_cause', 'corrective_action', 'preventive_action']
+        v = v or {}
+        response_mode = v.get('response_mode')
+        severity = v.get('severity')
+        if response_mode == 'brief' or severity == 'low':
+            required_fields = ['root_cause', 'corrective_action', 'completion_time']
+        else:
+            required_fields = ['root_cause', 'corrective_action', 'preventive_action']
+
         for field in required_fields:
             if field not in v or not v[field]:
                 raise ValueError(f'D4-D7 data must contain {field}')
@@ -170,6 +214,11 @@ class EightDResponse(BaseModel):
     submitter_name: Optional[str] = None
     reviewer_name: Optional[str] = None
     scar_number: Optional[str] = None
+    approval_workflow: Optional[Dict[str, Any]] = None
+    current_approval_level: Optional[str] = None
+    current_approval_level_label: Optional[str] = None
+    current_approval_user_id: Optional[int] = None
+    current_approval_user_name: Optional[str] = None
     
     class Config:
         from_attributes = True

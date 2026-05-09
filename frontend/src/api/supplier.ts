@@ -10,6 +10,7 @@ import type {
   BarcodeValidation,
   SupplierDashboardData,
   SCARListParams,
+  SCARHistoryItem,
   SCARInternalUserOption,
   SCARSupplierOption,
   PaginatedResponse
@@ -63,6 +64,10 @@ export const supplierApi = {
 
   updateSCAR(id: number, data: Partial<SCAR>): Promise<SCAR> {
     return request.patch(`/v1/scar/${id}`, data)
+  },
+
+  getSCARHistory(id: number): Promise<SCARHistoryItem[]> {
+    return request.get(`/v1/scar/${id}/history`)
   },
 
   /**

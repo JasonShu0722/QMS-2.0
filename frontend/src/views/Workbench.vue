@@ -151,9 +151,6 @@
               </div>
 
               <div v-if="problemIssuePreviewItems.length" class="problem-issue-preview-list">
-                <div class="problem-issue-preview-list__hint">
-                  {{ problemIssuePreviewHint }}
-                </div>
                 <div
                   v-if="problemIssuePreviewModuleSummaries.length"
                   class="problem-issue-preview-list__modules"
@@ -197,7 +194,7 @@
               </div>
               <el-empty
                 v-else
-                description="当前没有可直接处理的问题"
+                description="暂无问题"
                 :image-size="68"
               />
             </div>
@@ -244,12 +241,37 @@
               </div>
             </template>
 
-            <template v-if="featureBlocks.announcements">
+            <div v-if="notificationItems.length" class="notification-feed">
+              <button
+                v-for="notification in notificationItems"
+                :key="notification.id"
+                type="button"
+                class="notification-feed-item"
+                :class="{ 'notification-feed-item--unread': !notification.is_read }"
+                @click="handleNotificationClick(notification)"
+              >
+                <div class="notification-feed-item__main">
+                  <div class="notification-feed-item__title">
+                    {{ notification.title }}
+                  </div>
+                  <div class="notification-feed-item__content">
+                    {{ notification.content }}
+                  </div>
+                </div>
+                <div class="notification-feed-item__meta">
+                  <el-tag size="small" effect="plain" :type="getNotificationTagType(notification.message_type)">
+                    {{ getNotificationTypeLabel(notification.message_type) }}
+                  </el-tag>
+                  <span>{{ formatNotificationTime(notification.created_at) }}</span>
+                </div>
+              </button>
+            </div>
+            <template v-else-if="featureBlocks.announcements">
               <AnnouncementList />
             </template>
             <template v-else>
               <div class="announcement-placeholder">
-                <el-empty description="暂无公告" :image-size="88" />
+                <el-empty description="暂无通知" :image-size="88" />
               </div>
             </template>
           </el-card>
@@ -576,6 +598,7 @@ import { Bell, Check, Search, Setting, UploadFilled, User } from '@element-plus/
 import { VueCropper } from 'vue-cropper'
 import 'vue-cropper/dist/index.css'
 import { announcementApi } from '@/api/announcement'
+import { notificationApi } from '@/api/notification'
 import { problemManagementApi } from '@/api/problem-management'
 import { workbenchApi } from '@/api/workbench'
 import AnnouncementDialog from '@/components/AnnouncementDialog.vue'
@@ -593,6 +616,8 @@ import {
   type WorkbenchQuickActionOption
 } from '@/config/workbenchQuickActions'
 import type { Announcement } from '@/types/announcement'
+import type { Notification, NotificationType } from '@/types/notification'
+import { NotificationTypeColors, NotificationTypeLabels } from '@/types/notification'
 import type {
   ChangePasswordRequest,
   DashboardData,
@@ -659,6 +684,7 @@ const problemIssuePreviewFilter = ref<ProblemIssueCenterQuickFilter>('actionable
 
 const showAnnouncementDialog = ref(false)
 const unreadImportantAnnouncements = ref<Announcement[]>([])
+const notificationItems = ref<Notification[]>([])
 
 const avatarInputRef = ref<HTMLInputElement>()
 const cropperRef = ref<any>()
@@ -777,13 +803,6 @@ const canAccessProblemIssueCenter = computed(() =>
 )
 const showProblemIssueCard = computed(() => canAccessProblemIssueCenter.value)
 const currentProblemIssueUserId = computed(() => sessionUser.value?.id || authStore.userInfo?.id || null)
-const problemIssuePreviewHint = computed(() =>
-  problemIssuePreviewFilter.value === 'overdue'
-    ? '暂无可直接处理项，优先展示超期问题'
-    : problemIssuePreviewFilter.value === 'created'
-      ? '暂无可直接处理项和超期项，展示我发起的问题'
-      : '优先展示当前可直接处理的问题'
-)
 const problemIssuePreviewModuleSummaries = computed(() =>
   buildProblemIssueModuleSummaries(problemIssuePreviewModuleCounts.value)
 )
@@ -1098,10 +1117,21 @@ async function loadDashboardData() {
     dashboardData.value = await workbenchApi.getDashboardData()
     initializeQuickActions()
     void loadProblemIssueSnapshot()
+    void loadNotifications()
   } catch (error: any) {
     ElMessage.error(error.message || '加载工作台数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const response = await notificationApi.getNotifications(undefined, 1, 6)
+    notificationItems.value = response.notifications || []
+  } catch (error) {
+    console.error('Failed to load notifications:', error)
+    notificationItems.value = []
   }
 }
 
@@ -1322,6 +1352,43 @@ function handleProblemIssuePreviewClick(item: ProblemIssueSummaryItem) {
 function handleTodoDialogTaskClick(task: TodoTask) {
   showTodoDialog.value = false
   handleTaskClick(task)
+}
+
+function getNotificationTypeLabel(type: NotificationType) {
+  return NotificationTypeLabels[type] || '通知'
+}
+
+function getNotificationTagType(type: NotificationType): 'success' | 'warning' | 'info' | 'primary' | 'danger' {
+  return (NotificationTypeColors[type] || 'info') as 'success' | 'warning' | 'info' | 'primary' | 'danger'
+}
+
+function formatNotificationTime(value?: string) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
+async function handleNotificationClick(notification: Notification) {
+  if (!notification.is_read) {
+    notification.is_read = true
+    void notificationApi.markAsRead(notification.id)
+  }
+
+  if (notification.link) {
+    await router.push(notification.link)
+  }
 }
 
 function formatTodoDeadline(deadline: string | null) {
@@ -1695,12 +1762,6 @@ watch(() => route.query.settings, () => {
   gap: 10px;
 }
 
-.problem-issue-preview-list__hint {
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .problem-issue-preview-list__modules {
   display: flex;
   flex-wrap: wrap;
@@ -1798,6 +1859,66 @@ watch(() => route.query.settings, () => {
 .quick-action-title {
   font-weight: 600;
   color: #303133;
+}
+
+.notification-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notification-feed-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e6edf8;
+  border-radius: 14px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-feed-item:hover {
+  border-color: #bfd9ff;
+  box-shadow: 0 10px 24px rgba(64, 158, 255, 0.08);
+}
+
+.notification-feed-item--unread {
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.notification-feed-item__main {
+  min-width: 0;
+}
+
+.notification-feed-item__title {
+  color: #1f2a37;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.notification-feed-item__content {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-feed-item__meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  color: #7b8794;
+  font-size: 12px;
 }
 
 .quick-action-config-panel {

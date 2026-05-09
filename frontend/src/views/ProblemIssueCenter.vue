@@ -2,9 +2,6 @@
   <div class="problem-issue-center p-4 md:p-6">
     <div class="mb-6">
       <h1 class="text-2xl font-bold">问题中心</h1>
-      <p class="mt-1 text-sm text-gray-500">
-        统一汇总供应商质量、客户质量、制程质量、新品质量和审核管理的问题单，后续再逐步接入更多板块。
-      </p>
     </div>
 
     <el-card class="mb-6">
@@ -83,10 +80,10 @@
 
     <el-card v-loading="loading">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
-        <span>当前统一问题条目：{{ total }}</span>
+        <span>问题 {{ total }}</span>
         <div class="flex flex-wrap items-center gap-2">
-          <el-tag size="small" type="success">当前页可处理 {{ actionableCount }}</el-tag>
-          <el-tag size="small" :type="overdueCount ? 'danger' : 'info'">当前页超期 {{ overdueCount }}</el-tag>
+          <el-tag size="small" type="success">可处理 {{ actionableCount }}</el-tag>
+          <el-tag size="small" :type="overdueCount ? 'danger' : 'info'">超期 {{ overdueCount }}</el-tag>
         </div>
       </div>
 

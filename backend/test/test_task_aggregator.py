@@ -4,6 +4,9 @@ Test Task Aggregator Service
 """
 import pytest
 from datetime import datetime, timedelta
+from app.models.scar import SCAR, SCARSeverity, SCARStatus
+from app.models.supplier import Supplier, SupplierStatus
+from app.models.user import User, UserStatus, UserType
 from app.services.task_aggregator import TaskAggregator, TaskItem
 
 
@@ -128,6 +131,62 @@ class TestTaskAggregator:
         assert task_dict["description"] == "测试任务"
         assert "deadline" in task_dict
     
+    @pytest.mark.asyncio
+    async def test_get_user_tasks_includes_current_handler_scar(self, async_db_session):
+        supplier = Supplier(
+            name="测试供应商",
+            code="S001",
+            status=SupplierStatus.ACTIVE,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        async_db_session.add(supplier)
+        await async_db_session.commit()
+        await async_db_session.refresh(supplier)
+
+        user = User(
+            username="supplier_todo",
+            password_hash="hashed",
+            full_name="供应商待办账号",
+            email="supplier@example.com",
+            user_type=UserType.SUPPLIER,
+            status=UserStatus.ACTIVE,
+            supplier_id=supplier.id,
+            allowed_environments="stable,preview",
+            password_changed_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        async_db_session.add(user)
+        await async_db_session.commit()
+        await async_db_session.refresh(user)
+
+        scar = SCAR(
+            scar_number="SCAR-TEST-001",
+            supplier_id=supplier.id,
+            material_code="MAT-001",
+            material_category="structure",
+            defect_description="装配干涉",
+            defect_qty=1,
+            severity=SCARSeverity.LOW,
+            status=SCARStatus.OPEN,
+            current_handler_id=user.id,
+            deadline=datetime.utcnow() + timedelta(days=2),
+            created_at=datetime(2026, 5, 7),
+            updated_at=datetime.utcnow(),
+        )
+        async_db_session.add(scar)
+        await async_db_session.commit()
+        await async_db_session.refresh(scar)
+
+        tasks = await TaskAggregator.get_user_tasks(async_db_session, user.id)
+
+        assert len(tasks) == 1
+        assert tasks[0].task_type == "SCAR问题回复"
+        assert tasks[0].task_number == f"ZX8D-IQ0-2605-{scar.id:03d}"
+        assert tasks[0].link.startswith(f"/supplier/eight-d/{scar.id}")
+        assert "测试供应商" in tasks[0].description
+
     @pytest.mark.asyncio
     async def test_get_user_tasks_empty(self, async_db_session):
         """测试获取用户待办任务（空列表）"""

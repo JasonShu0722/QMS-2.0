@@ -18,7 +18,7 @@ async def test_send_notification(db_session: AsyncSession):
     # 创建测试用户
     user = User(
         username="test_notify_user",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="Test Notify User",
         email="notify@test.com",
         user_type=UserType.INTERNAL,
@@ -58,7 +58,7 @@ async def test_send_notification_multiple_users(db_session: AsyncSession):
     for i in range(3):
         user = User(
             username=f"test_user_{i}",
-            hashed_password="hashed_password",
+            password_hash="hashed_password",
             full_name=f"Test User {i}",
             email=f"user{i}@test.com",
             user_type=UserType.INTERNAL,
@@ -94,7 +94,7 @@ async def test_mark_as_read(db_session: AsyncSession):
     # 创建测试用户和通知
     user = User(
         username="test_read_user",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="Test Read User",
         email="read@test.com",
         user_type=UserType.INTERNAL,
@@ -139,7 +139,7 @@ async def test_mark_as_read_wrong_user(db_session: AsyncSession):
     # 创建两个测试用户
     user1 = User(
         username="user1",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="User 1",
         email="user1@test.com",
         user_type=UserType.INTERNAL,
@@ -147,7 +147,7 @@ async def test_mark_as_read_wrong_user(db_session: AsyncSession):
     )
     user2 = User(
         username="user2",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="User 2",
         email="user2@test.com",
         user_type=UserType.INTERNAL,
@@ -186,7 +186,7 @@ async def test_mark_all_as_read(db_session: AsyncSession):
     # 创建测试用户
     user = User(
         username="test_readall_user",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="Test ReadAll User",
         email="readall@test.com",
         user_type=UserType.INTERNAL,
@@ -232,7 +232,7 @@ async def test_get_unread_count(db_session: AsyncSession):
     # 创建测试用户
     user = User(
         username="test_count_user",
-        hashed_password="hashed_password",
+        password_hash="hashed_password",
         full_name="Test Count User",
         email="count@test.com",
         user_type=UserType.INTERNAL,

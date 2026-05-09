@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.supplier import Supplier, SupplierStatus
+from app.models.operation_log import OperationLog
 from app.models.role_tag import RoleTag
+from app.models.scar import SCAR
 from app.models.user import User, UserStatus, UserType
 from app.models.user_role_assignment import UserRoleAssignment
 from app.schemas.scar import (
@@ -26,6 +28,49 @@ router = APIRouter(prefix="/scar", tags=["SCAR & 8D Management"])
 
 def _enum_value(value):
     return value.value if hasattr(value, "value") else value
+
+
+async def _build_eight_d_response(
+    db: AsyncSession,
+    eight_d,
+    scar_id: int,
+    reviewer_name: str | None = None,
+) -> EightDResponse:
+    response = EightDResponse.from_orm(eight_d)
+
+    if eight_d.submitted_by:
+        submitter_result = await db.execute(select(User).where(User.id == eight_d.submitted_by))
+        submitter = submitter_result.scalar_one_or_none()
+        if submitter:
+            response.submitter_name = submitter.full_name
+
+    if reviewer_name:
+        response.reviewer_name = reviewer_name
+    elif eight_d.reviewed_by:
+        reviewer_result = await db.execute(select(User).where(User.id == eight_d.reviewed_by))
+        reviewer = reviewer_result.scalar_one_or_none()
+        if reviewer:
+            response.reviewer_name = reviewer.full_name
+
+    scar_result = await db.execute(select(SCAR).where(SCAR.id == scar_id))
+    scar = scar_result.scalar_one_or_none()
+    if scar:
+        response.scar_number = scar.scar_number
+        workflow = EightDService.get_approval_workflow(eight_d, scar)
+        response.approval_workflow = workflow
+        current_level = workflow.get("current_level")
+        response.current_approval_level = current_level
+        response.current_approval_level_label = workflow.get("current_level_label") or EightDService.get_approval_level_label(current_level)
+        response.current_approval_user_id = workflow.get("current_user_id") or scar.current_handler_id
+        response.current_approval_user_name = workflow.get("current_user_name")
+
+        if response.current_approval_user_id and not response.current_approval_user_name:
+            handler_result = await db.execute(select(User).where(User.id == response.current_approval_user_id))
+            handler = handler_result.scalar_one_or_none()
+            if handler:
+                response.current_approval_user_name = handler.full_name
+
+    return response
 
 
 # ============ SCAR 管理接口 ============
@@ -231,6 +276,7 @@ async def get_scar_list(
         scar_list = []
         for scar in scars:
             response = SCARResponse.from_orm(scar)
+            response.evidence_files = None
             
             # 查询供应商名称
             supplier_result = await db.execute(
@@ -239,6 +285,14 @@ async def get_scar_list(
             supplier = supplier_result.scalar_one_or_none()
             if supplier:
                 response.supplier_name = supplier.name
+
+            if scar.current_handler_id:
+                handler_result = await db.execute(
+                    select(User).where(User.id == scar.current_handler_id)
+                )
+                handler = handler_result.scalar_one_or_none()
+                if handler:
+                    response.current_handler_name = handler.full_name
             
             # 检查是否有 8D 报告
             from app.models.eight_d import EightD
@@ -259,6 +313,54 @@ async def get_scar_list(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get SCAR list: {str(e)}")
+
+
+@router.get("/{scar_id}/history", response_model=list[dict])
+async def get_scar_history(
+    scar_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        await SCARService.get_scar_by_id(
+            db=db,
+            scar_id=scar_id,
+            current_user=current_user
+        )
+
+        result = await db.execute(
+            select(OperationLog, User.full_name, User.username)
+            .outerjoin(User, User.id == OperationLog.user_id)
+            .where(
+                OperationLog.target_module == "scar",
+                OperationLog.target_id == scar_id,
+            )
+            .order_by(OperationLog.created_at.asc(), OperationLog.id.asc())
+        )
+
+        items = []
+        for log, full_name, username in result.all():
+            after_data = log.after_data or {}
+            items.append({
+                "id": log.id,
+                "operation_type": log.operation_type,
+                "action": after_data.get("action") or log.operation_type,
+                "content": after_data.get("content"),
+                "user_id": log.user_id,
+                "user_name": full_name or username,
+                "created_at": log.created_at,
+                "before_data": log.before_data,
+                "after_data": log.after_data,
+            })
+
+        return items
+
+    except NotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get SCAR history: {str(e)}")
 
 
 @router.get("/{scar_id}", response_model=SCARResponse)
@@ -405,7 +507,7 @@ async def submit_8d_report(
             current_user=current_user
         )
         
-        response = EightDResponse.from_orm(eight_d)
+        response = await _build_eight_d_response(db, eight_d, scar_id)
         
         # 查询提交人名称
         if eight_d.submitted_by:
@@ -458,7 +560,7 @@ async def get_8d_report(
         if not eight_d:
             raise HTTPException(status_code=404, detail="8D report not found")
         
-        response = EightDResponse.from_orm(eight_d)
+        response = await _build_eight_d_response(db, eight_d, scar_id)
         
         # 查询提交人和审核人名称
         from sqlalchemy import select
@@ -529,7 +631,7 @@ async def review_8d_report(
             reviewed_by=current_user.id
         )
         
-        response = EightDResponse.from_orm(eight_d)
+        response = await _build_eight_d_response(db, eight_d, scar_id, current_user.full_name)
         
         # 查询审核人名称
         response.reviewer_name = current_user.full_name

@@ -264,6 +264,7 @@
 
 - 问题回复形式统一分为 `brief`（问题简报）和 `eight_d`（8D 报告）。
 - 问题主单号采用 `ZXQ-<分类子类>-<YYMM>-<SEQ3>`，8D 报告号采用 `ZX8D-<分类子类>-<YYMM>-<SEQ3>`。
+- 供应商 SCAR/8D 关闭审批按严重度分级：低严重度由 `quality.supplier.engineer` 审批关闭；中、高严重度由 `quality.supplier.engineer` -> `quality.supplier.manager` 审批关闭；重大问题由 `quality.supplier.engineer` -> `quality.supplier.manager` -> `quality.minister` 审批关闭。
 - 当前已确认分类编码：
   - `CQ0`：0km
   - `CQ1`：售后

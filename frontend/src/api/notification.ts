@@ -22,7 +22,7 @@ export const notificationApi = {
   ): Promise<NotificationListResponse> {
     const params: any = { page, page_size: pageSize }
     if (type) {
-      params.type = type
+      params.message_type = type
     }
     return request.get('/v1/notifications', { params })
   },

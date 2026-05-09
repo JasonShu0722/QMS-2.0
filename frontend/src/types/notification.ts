@@ -5,7 +5,7 @@
 /**
  * 通知类型
  */
-export type NotificationType = 'workflow' | 'system' | 'alert'
+export type NotificationType = 'workflow_exception' | 'system_alert' | 'warning'
 
 /**
  * 通知对象
@@ -15,7 +15,7 @@ export interface Notification {
   user_id: number
   title: string
   content: string
-  type: NotificationType
+  message_type: NotificationType
   link?: string
   is_read: boolean
   read_at?: string
@@ -26,18 +26,18 @@ export interface Notification {
  * 通知类型标签映射
  */
 export const NotificationTypeLabels: Record<NotificationType, string> = {
-  workflow: '流程异常',
-  system: '系统提醒',
-  alert: '预警通知'
+  workflow_exception: '流程',
+  system_alert: '系统',
+  warning: '预警'
 }
 
 /**
  * 通知类型颜色映射
  */
 export const NotificationTypeColors: Record<NotificationType, string> = {
-  workflow: 'warning',
-  system: 'info',
-  alert: 'danger'
+  workflow_exception: 'warning',
+  system_alert: 'info',
+  warning: 'danger'
 }
 
 /**
@@ -53,8 +53,8 @@ export interface UnreadCountResponse {
 export interface NotificationListResponse {
   notifications: Notification[]
   total: number
-  page: number
-  page_size: number
+  page?: number
+  page_size?: number
 }
 
 /**

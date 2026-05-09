@@ -228,7 +228,7 @@ const getSeverityType = (severity: string) => {
 // 获取严重度标签
 const getSeverityLabel = (severity: string) => {
   const labels: Record<string, string> = {
-    critical: '严重',
+    critical: '重大',
     high: '高',
     medium: '中',
     low: '低'

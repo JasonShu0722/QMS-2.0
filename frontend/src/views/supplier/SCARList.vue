@@ -23,7 +23,7 @@
 
         <el-form-item label="严重度" class="list-filter-item list-filter-item--severity" style="width: 206px">
           <el-select v-model="filterForm.severity" placeholder="全部" clearable class="filter-select">
-            <el-option label="严重" value="critical" />
+            <el-option label="重大" value="critical" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
             <el-option label="低" value="low" />
@@ -73,39 +73,43 @@
         style="cursor: pointer"
         @row-click="handleRowClick"
       >
-        <el-table-column prop="scar_number" label="单据编号" width="150" fixed />
-        <el-table-column prop="supplier_name" label="供应商" width="150" />
-        <el-table-column prop="material_code" label="物料编码" width="140" />
-        <el-table-column prop="material_category" label="来料分类" width="120">
+        <el-table-column label="报告编号" width="170" fixed align="center" header-align="center">
+          <template #default="{ row }">
+            {{ getReportNumber(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="supplier_name" label="供应商" width="150" align="center" header-align="center" />
+        <el-table-column prop="material_code" label="物料编码" width="140" align="center" header-align="center" />
+        <el-table-column prop="material_category" label="来料分类" width="120" align="center" header-align="center">
           <template #default="{ row }">
             {{ getMaterialCategoryLabel(row.material_category) }}
           </template>
         </el-table-column>
-        <el-table-column prop="defect_description" label="缺陷描述" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="defect_qty" label="不良数量" width="100" align="right" />
-        <el-table-column prop="severity" label="严重度" width="100">
+        <el-table-column prop="defect_description" label="缺陷描述" min-width="220" show-overflow-tooltip align="left" header-align="center" />
+        <el-table-column prop="defect_qty" label="不良数量" width="100" align="center" header-align="center" />
+        <el-table-column prop="severity" label="严重度" width="100" align="center" header-align="center">
           <template #default="{ row }">
             <el-tag :type="getSeverityType(row.severity)" size="small">
               {{ getSeverityLabel(row.severity) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="120">
+        <el-table-column prop="status" label="状态" width="120" align="center" header-align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)" size="small">
               {{ getStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="deadline" label="截止日期" width="120">
+        <el-table-column prop="deadline" label="截止日期" width="120" align="center" header-align="center">
           <template #default="{ row }">
             <span :class="{ 'text-danger': isOverdue(row.deadline) }">
               {{ formatDate(row.deadline) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="current_handler_name" label="当前处理人" width="120" />
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column prop="current_handler_name" label="当前处理人" width="120" align="center" header-align="center" />
+        <el-table-column label="操作" width="170" fixed="right" align="center" header-align="center">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click.stop="handleView(row)">
               查看
@@ -135,7 +139,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="showCreateDialog" title="创建 SCAR" width="600px">
+    <el-dialog v-model="showCreateDialog" title="创建 SCAR" width="600px" @paste="handleCreateEvidencePaste">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="120px">
         <el-form-item label="供应商" prop="supplier_id">
           <el-select
@@ -190,7 +194,7 @@
 
         <el-form-item label="严重度" prop="severity">
           <el-select v-model="createForm.severity" placeholder="请选择严重度">
-            <el-option label="严重" value="critical" />
+            <el-option label="重大" value="critical" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
             <el-option label="低" value="low" />
@@ -204,6 +208,45 @@
             placeholder="选择截止日期"
             value-format="YYYY-MM-DD HH:mm:ss"
           />
+        </el-form-item>
+
+        <el-form-item label="附图佐证">
+          <div class="scar-evidence" tabindex="0" @paste="handleCreateEvidencePaste">
+            <el-upload
+              drag
+              action="#"
+              multiple
+              accept="image/*"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="handleCreateEvidenceChange"
+            >
+              <div class="scar-evidence__drop">
+                <div class="scar-evidence__title">上传附图</div>
+              </div>
+            </el-upload>
+
+            <div v-if="createEvidenceFiles.length" class="scar-evidence__list">
+              <div
+                v-for="file in createEvidenceFiles"
+                :key="file.id"
+                class="scar-evidence__item"
+              >
+                <el-image
+                  v-if="file.data_url"
+                  class="scar-evidence__thumb"
+                  :src="file.data_url"
+                  fit="cover"
+                  :preview-src-list="createEvidencePreviewList"
+                />
+                <div class="scar-evidence__meta">
+                  <el-input v-model="file.name" size="small" />
+                  <span>{{ formatFileSize(file.size) }}</span>
+                </div>
+                <el-button link type="danger" @click="removeCreateEvidence(file.id)">删除</el-button>
+              </div>
+            </div>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -225,7 +268,7 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 
 import { supplierApi } from '@/api/supplier'
 import { useAuthStore } from '@/stores/auth'
-import type { SCAR, SCARListParams, SCARSupplierOption } from '@/types/supplier'
+import type { EvidenceFile, SCAR, SCARListParams, SCARSupplierOption } from '@/types/supplier'
 import { isScarRouteName } from '@/utils/problemIssueSummary'
 
 const route = useRoute()
@@ -238,6 +281,10 @@ const supplierSearchLoading = ref(false)
 const showCreateDialog = ref(false)
 const scarList = ref<SCAR[]>([])
 const suppliers = ref<SCARSupplierOption[]>([])
+const createEvidenceFiles = ref<EvidenceFile[]>([])
+const createEvidencePreviewList = computed(() =>
+  createEvidenceFiles.value.map((item) => item.data_url).filter(Boolean) as string[]
+)
 
 const filterForm = reactive<SCARListParams>({
   status: undefined,
@@ -307,7 +354,7 @@ function getSeverityType(severity: string) {
 
 function getSeverityLabel(severity: string) {
   const labels: Record<string, string> = {
-    critical: '严重',
+    critical: '重大',
     high: '高',
     medium: '中',
     low: '低',
@@ -321,6 +368,34 @@ function getMaterialCategoryLabel(category?: string) {
     electronic: '电子料（IQ1）',
   }
   return labels[category || ''] || '待选择'
+}
+
+function getMaterialCategoryCode(category?: string) {
+  const codeMap: Record<string, string> = {
+    structure: '0',
+    electronic: '1',
+  }
+  return codeMap[category || ''] || '?'
+}
+
+function formatYearMonth(value?: string) {
+  const date = value ? new Date(value) : new Date()
+  const validDate = Number.isNaN(date.getTime()) ? new Date() : date
+  const year = String(validDate.getFullYear()).slice(-2)
+  const month = String(validDate.getMonth() + 1).padStart(2, '0')
+  return `${year}${month}`
+}
+
+function formatSequence(value?: number) {
+  if (!value || value < 1) {
+    return '001'
+  }
+
+  return String(((value - 1) % 999) + 1).padStart(3, '0')
+}
+
+function getReportNumber(row: SCAR) {
+  return `ZX8D-IQ${getMaterialCategoryCode(row.material_category)}-${formatYearMonth(row.created_at)}-${formatSequence(row.id)}`
 }
 
 function getStatusType(status: string) {
@@ -462,6 +537,81 @@ function formatSupplierOptionLabel(supplier: SCARSupplierOption) {
   return `${supplier.name} (${supplier.code})`
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+async function buildEvidenceFile(file: File, source: string): Promise<EvidenceFile> {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: file.name || `图片佐证${createEvidenceFiles.value.length + 1}.png`,
+    original_name: file.name,
+    size: file.size,
+    type: file.type,
+    data_url: await readFileAsDataUrl(file),
+    source,
+    uploaded_at: new Date().toISOString(),
+  }
+}
+
+async function appendCreateEvidence(files: File[], source: string) {
+  const maxSize = 10 * 1024 * 1024
+  const imageFiles = files.filter((file) => file.type.startsWith('image/'))
+  if (imageFiles.length !== files.length) {
+    ElMessage.warning('附图佐证仅支持图片文件')
+  }
+
+  const validFiles = imageFiles.filter((file) => file.size <= maxSize)
+  if (validFiles.length !== imageFiles.length) {
+    ElMessage.warning('单张附图不能超过 10MB')
+  }
+
+  const evidenceList = await Promise.all(validFiles.map((file) => buildEvidenceFile(file, source)))
+  createEvidenceFiles.value.push(...evidenceList)
+}
+
+function handleCreateEvidenceChange(uploadFile: any) {
+  const rawFile = uploadFile?.raw as File | undefined
+  if (rawFile) {
+    void appendCreateEvidence([rawFile], 'upload')
+  }
+}
+
+function handleCreateEvidencePaste(event: ClipboardEvent) {
+  const files = Array.from(event.clipboardData?.files || [])
+  if (!files.length) {
+    return
+  }
+
+  event.preventDefault()
+  void appendCreateEvidence(files, 'paste')
+}
+
+function removeCreateEvidence(id?: string) {
+  createEvidenceFiles.value = createEvidenceFiles.value.filter((file) => file.id !== id)
+}
+
+function formatFileSize(size?: number) {
+  if (!size) {
+    return ''
+  }
+
+  if (size < 1024) {
+    return `${size} B`
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`
+  }
+
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
 async function loadSupplierOptions(keyword = '') {
   supplierSearchLoading.value = true
   try {
@@ -487,10 +637,14 @@ async function handleCreate() {
   try {
     await createFormRef.value.validate()
     creating.value = true
-    await supplierApi.createSCAR(createForm)
+    await supplierApi.createSCAR({
+      ...createForm,
+      evidence_files: createEvidenceFiles.value,
+    })
     ElMessage.success('创建成功')
     showCreateDialog.value = false
     createFormRef.value?.resetFields()
+    createEvidenceFiles.value = []
     await loadSCARList()
   } catch (error) {
     console.error('Failed to create SCAR:', error)
@@ -625,7 +779,73 @@ onMounted(async () => {
     font-size: 12px;
   }
 
+  .scar-evidence {
+    width: 100%;
+  }
+
+  .scar-evidence :deep(.el-upload),
+  .scar-evidence :deep(.el-upload-dragger) {
+    width: 100%;
+  }
+
+  .scar-evidence__drop {
+    padding: 8px 0;
+    color: #64748b;
+    text-align: center;
+  }
+
+  .scar-evidence__title {
+    color: #1f2937;
+    font-weight: 700;
+  }
+
+  .scar-evidence__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .scar-evidence__item {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .scar-evidence__thumb {
+    width: 54px;
+    height: 54px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #e2e8f0;
+  }
+
+  .scar-evidence__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+
+    span {
+      color: #64748b;
+      font-size: 12px;
+    }
+  }
+
   .table-card {
+    :deep(.el-table__header th) {
+      text-align: center;
+    }
+
+    :deep(.el-table__cell) {
+      vertical-align: middle;
+    }
+
     .pagination-container {
       margin-top: 20px;
       display: flex;

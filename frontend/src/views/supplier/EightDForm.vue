@@ -7,29 +7,30 @@
       <h2>{{ pageTitle }}</h2>
     </div>
 
-    <el-card class="report-shell" shadow="never">
-      <template #header>
-        <div class="report-heading">
-          <div>
-            <div class="eyebrow">供应商来料质量</div>
-            <h2>{{ displayReportNumber }}</h2>
-          </div>
-          <div v-if="authStore.isInternal || authStore.isSupplier" class="report-actions">
-            <el-button v-if="authStore.isInternal" @click="openScarEditDialog">
-              <el-icon><Edit /></el-icon>
-              编辑基础信息
-            </el-button>
-            <el-button v-if="authStore.isSupplier" @click="handleSaveDraft" :loading="saving">
-              <el-icon><Document /></el-icon>
-              保存草稿
-            </el-button>
-            <el-button v-if="authStore.isSupplier" type="primary" @click="handleSubmit" :loading="submitting">
-              <el-icon><Check /></el-icon>
-              提交报告
-            </el-button>
-          </div>
+    <section class="report-shell">
+      <div class="report-heading">
+        <div>
+          <div class="eyebrow">供应商来料质量</div>
+          <h2>{{ displayReportNumber }}</h2>
         </div>
-      </template>
+        <div v-if="authStore.isInternal || authStore.isSupplier" class="report-actions">
+          <el-button @click="openHistoryDialog">
+            履历
+          </el-button>
+          <el-button v-if="authStore.isInternal" @click="openScarEditDialog">
+            <el-icon><Edit /></el-icon>
+            编辑基础信息
+          </el-button>
+          <el-button v-if="canSupplierEdit" @click="handleSaveDraft" :loading="saving">
+            <el-icon><Document /></el-icon>
+            保存草稿
+          </el-button>
+          <el-button v-if="canSupplierEdit" type="primary" @click="handleSubmit" :loading="submitting">
+            <el-icon><Check /></el-icon>
+            提交报告
+          </el-button>
+        </div>
+      </div>
 
       <el-descriptions class="scar-summary" :column="2" border>
         <el-descriptions-item label="供应商">{{ scarData?.supplier_name || '-' }}</el-descriptions-item>
@@ -56,7 +57,30 @@
         </el-descriptions-item>
       </el-descriptions>
 
-      <div v-if="authStore.isSupplier" class="reviewer-picker">
+      <div v-if="scarEvidenceFiles.length" class="scar-evidence-strip">
+        <div class="scar-evidence-strip__title">附图佐证</div>
+        <div class="scar-evidence-strip__list">
+          <div
+            v-for="file in scarEvidenceFiles"
+            :key="file.id || file.name"
+            class="scar-evidence-strip__item"
+          >
+            <el-image
+              v-if="isImageEvidence(file)"
+              class="scar-evidence-strip__thumb"
+              :src="file.data_url || file.url"
+              fit="cover"
+              :preview-src-list="scarEvidencePreviewList"
+            />
+            <div v-else class="scar-evidence-strip__file">
+              <el-icon><Document /></el-icon>
+            </div>
+            <span>{{ file.name }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="canSupplierEdit" class="reviewer-picker">
         <span class="reviewer-picker__label">提交审核人</span>
         <el-select
           v-model="formData.reviewer_id"
@@ -77,7 +101,7 @@
           />
         </el-select>
       </div>
-    </el-card>
+    </section>
 
     <el-form
       ref="formRef"
@@ -85,9 +109,9 @@
       :model="formData"
       :rules="rules"
       label-position="top"
-      :disabled="!authStore.isSupplier"
+      :disabled="!canSupplierEdit"
     >
-      <el-card class="form-section" shadow="never">
+      <el-card v-if="!isLowSeverity" class="form-section" shadow="never">
         <template #header>
           <span class="section-title">问题描述与临时处理</span>
         </template>
@@ -124,7 +148,7 @@
 
       <el-card class="form-section" shadow="never">
         <template #header>
-          <span class="section-title">原因分析与纠正预防</span>
+          <span class="section-title">{{ isLowSeverity ? '低等级问题简报' : '原因分析与纠正预防' }}</span>
         </template>
 
         <el-form-item label="原因分析" prop="root_cause">
@@ -136,17 +160,17 @@
           />
         </el-form-item>
 
-        <div class="two-column">
-          <el-form-item label="纠正措施" prop="corrective_action">
+        <div class="two-column" :class="{ 'two-column--brief': isLowSeverity }">
+          <el-form-item :label="isLowSeverity ? '改善对策' : '纠正措施'" prop="corrective_action">
             <el-input
               v-model="formData.corrective_action"
               type="textarea"
               :rows="4"
-              placeholder="针对根本原因填写具体纠正措施、责任人和完成节点"
+              :placeholder="isLowSeverity ? '填写改善对策、责任人和完成节点' : '针对根本原因填写具体纠正措施、责任人和完成节点'"
             />
           </el-form-item>
 
-          <el-form-item label="预防/防再发措施" prop="preventive_action">
+          <el-form-item v-if="!isLowSeverity" label="预防/防再发措施" prop="preventive_action">
             <el-input
               v-model="formData.preventive_action"
               type="textarea"
@@ -156,7 +180,16 @@
           </el-form-item>
         </div>
 
-        <div class="two-column">
+        <el-form-item v-if="isLowSeverity" label="完成时间" prop="completion_time" class="brief-completion-item">
+          <el-date-picker
+            v-model="formData.completion_time"
+            type="datetime"
+            placeholder="选择完成时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
+        </el-form-item>
+
+        <div v-if="!isLowSeverity" class="two-column">
           <el-form-item label="验证结果" prop="verification_result">
             <el-input
               v-model="formData.verification_result"
@@ -175,6 +208,63 @@
             />
           </el-form-item>
         </div>
+
+        <div class="implementation-evidence">
+          <div class="implementation-evidence__header">
+            <span>对策实施证据</span>
+          </div>
+
+          <el-upload
+            drag
+            action="#"
+            multiple
+            :auto-upload="false"
+            :show-file-list="false"
+            :disabled="!canSupplierEdit"
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar"
+            :on-change="handleImplementationEvidenceChange"
+          >
+            <div class="implementation-evidence__drop">
+              <el-icon><Upload /></el-icon>
+              <span>上传文件</span>
+            </div>
+          </el-upload>
+
+          <div v-if="implementationEvidenceFiles.length" class="implementation-evidence__list">
+            <div
+              v-for="file in implementationEvidenceFiles"
+              :key="file.id"
+              class="implementation-evidence__item"
+            >
+              <el-image
+                v-if="isImageEvidence(file)"
+                class="implementation-evidence__thumb"
+                :src="file.data_url || file.url"
+                fit="cover"
+                :preview-src-list="implementationEvidencePreviewList"
+              />
+              <div v-else class="implementation-evidence__file">
+                <el-icon><Document /></el-icon>
+              </div>
+              <div class="implementation-evidence__meta">
+                <el-input
+                  v-model="file.name"
+                  size="small"
+                  :disabled="!canSupplierEdit"
+                />
+                <span>{{ formatEvidenceFileSize(file.size) }}</span>
+              </div>
+              <el-button
+                v-if="canSupplierEdit"
+                link
+                type="danger"
+                @click="removeImplementationEvidence(file.id)"
+              >
+                删除
+              </el-button>
+            </div>
+          </div>
+        </div>
       </el-card>
 
       <el-card class="form-section attachment-section" shadow="never">
@@ -187,33 +277,30 @@
           class="report-upload"
           multiple
           :auto-upload="false"
-          :disabled="!authStore.isSupplier"
+          :disabled="!canSupplierEdit"
           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar"
         >
-          <el-button type="primary" plain>
+          <el-button type="primary" plain :disabled="!canSupplierEdit">
             <el-icon><Upload /></el-icon>
             选择报告附件
           </el-button>
-          <template #tip>
-            <div class="upload-tip">
-              用于提交详细 8D 报告、分析图片、验证数据或供应商内部报告。当前先随报告保存附件清单，正式文件存储接口接入后再自动上传。
-            </div>
-          </template>
         </el-upload>
       </el-card>
     </el-form>
 
     <div
-      v-if="authStore.isInternal && eightDReport?.status === 'submitted'"
+      v-if="canReviewCurrentStep"
       class="review-panel"
     >
       <el-descriptions :column="2" border class="review-summary">
         <el-descriptions-item label="报告状态">
-          <el-tag type="warning">{{ getEightDStatusLabel(eightDReport.status) }}</el-tag>
+          <el-tag type="warning">{{ getEightDStatusLabel(eightDReport?.status) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="提交人">{{ eightDReport.submitter_name || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="提交时间">{{ formatDate(eightDReport.submitted_at) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="审核人">{{ eightDReport.reviewer_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="审批节点">{{ currentApprovalLabel }}</el-descriptions-item>
+        <el-descriptions-item label="当前处理人">{{ eightDReport?.current_approval_user_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="提交人">{{ eightDReport?.submitter_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="提交时间">{{ formatDate(eightDReport?.submitted_at) || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="审核人">{{ eightDReport?.reviewer_name || '-' }}</el-descriptions-item>
       </el-descriptions>
 
       <el-form :model="reviewForm" label-position="top" class="review-form">
@@ -222,15 +309,14 @@
             v-model="reviewForm.review_comments"
             type="textarea"
             :rows="3"
-            placeholder="填写本次 8D 审核意见"
           />
         </el-form-item>
         <div class="review-actions">
           <el-button type="primary" :loading="reviewing" @click="handleReview(true)">
-            批准 8D
+            通过
           </el-button>
           <el-button type="danger" plain :loading="reviewing" @click="handleReview(false)">
-            驳回 8D
+            驳回
           </el-button>
         </div>
       </el-form>
@@ -299,7 +385,7 @@
               <el-option label="低" value="low" />
               <el-option label="中" value="medium" />
               <el-option label="高" value="high" />
-              <el-option label="严重" value="critical" />
+              <el-option label="重大" value="critical" />
             </el-select>
           </el-form-item>
 
@@ -334,6 +420,33 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="showHistoryDialog"
+      title="履历"
+      width="720px"
+      destroy-on-close
+      :teleported="false"
+    >
+      <el-skeleton v-if="historyLoading" :rows="4" animated />
+      <el-timeline v-else-if="historyItems.length" class="history-timeline">
+        <el-timeline-item
+          v-for="item in historyItems"
+          :key="item.id"
+          :timestamp="formatDateTime(item.created_at)"
+          placement="top"
+        >
+          <div class="history-item">
+            <div class="history-item__title">
+              <strong>{{ item.action }}</strong>
+              <span>{{ item.user_name || '-' }}</span>
+            </div>
+            <div v-if="item.content" class="history-item__content">{{ item.content }}</div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+      <el-empty v-else description="暂无履历" :image-size="82" />
+    </el-dialog>
   </div>
 </template>
 
@@ -344,7 +457,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Document, Check, Edit, Upload } from '@element-plus/icons-vue'
 import { supplierApi } from '@/api/supplier'
 import { useAuthStore } from '@/stores/auth'
-import type { EightDReport, SCAR, SCARInternalUserOption, SCARSupplierOption } from '@/types/supplier'
+import type { EightDReport, EvidenceFile, SCAR, SCARHistoryItem, SCARInternalUserOption, SCARSupplierOption } from '@/types/supplier'
 import { isScarRouteName } from '@/utils/problemIssueSummary'
 
 const props = withDefaults(
@@ -382,12 +495,52 @@ const submitting = ref(false)
 const reviewing = ref(false)
 const scarEditSaving = ref(false)
 const showScarEditDialog = ref(false)
+const showHistoryDialog = ref(false)
 const supplierSearchLoading = ref(false)
 const sqeSearchLoading = ref(false)
+const historyLoading = ref(false)
 const fileList = ref<any[]>([])
+const implementationEvidenceFiles = ref<EvidenceFile[]>([])
 const aiReviewResult = ref<any>(null)
 const supplierOptions = ref<SCARSupplierOption[]>([])
 const sqeOptions = ref<SCARInternalUserOption[]>([])
+const historyItems = ref<SCARHistoryItem[]>([])
+const scarEvidenceFiles = computed<EvidenceFile[]>(() =>
+  Array.isArray(scarData.value?.evidence_files) ? scarData.value.evidence_files : []
+)
+const scarEvidencePreviewList = computed(() =>
+  scarEvidenceFiles.value
+    .filter((file) => isImageEvidence(file) && Boolean(file.data_url || file.url))
+    .map((file) => file.data_url || file.url || '')
+)
+const implementationEvidencePreviewList = computed(() =>
+  implementationEvidenceFiles.value
+    .filter((file) => isImageEvidence(file) && Boolean(file.data_url || file.url))
+    .map((file) => file.data_url || file.url || '')
+)
+const isLowSeverity = computed(() => scarData.value?.severity === 'low')
+const activeResponseName = computed(() => (isLowSeverity.value ? '问题简报' : '8D 报告'))
+const canSupplierEdit = computed(() => {
+  if (!authStore.isSupplier) {
+    return false
+  }
+
+  const reportStatus = eightDReport.value?.status
+  const scarStatus = scarData.value?.status
+  const editableReport = !reportStatus || reportStatus === 'draft' || reportStatus === 'rejected'
+  const editableScar = !scarStatus || scarStatus === 'open' || scarStatus === 'supplier_responding' || scarStatus === 'rejected'
+  return editableReport && editableScar
+})
+const canReviewCurrentStep = computed(() => {
+  if (!authStore.isInternal || eightDReport.value?.status !== 'submitted') {
+    return false
+  }
+
+  const currentUserId = authStore.userInfo?.id
+  const currentApprovalUserId = eightDReport.value.current_approval_user_id
+  return !currentApprovalUserId || !currentUserId || currentApprovalUserId === currentUserId
+})
+const currentApprovalLabel = computed(() => eightDReport.value?.current_approval_level_label || '审批')
 const reviewForm = reactive({
   review_comments: ''
 })
@@ -402,6 +555,7 @@ const formData = reactive({
   corrective_action: '',
   preventive_action: '',
   verification_result: '',
+  completion_time: '',
   standardization: '',
   horizontal_deployment: ''
 })
@@ -419,7 +573,7 @@ const scarEditForm = reactive({
   deadline: ''
 })
 
-const rules = {
+const fullReportRules = {
   problem_description: [{ required: true, message: '请填写问题描述', trigger: 'blur' }],
   containment_action: [{ required: true, message: '请填写围堵/应急措施', trigger: 'blur' }],
   interim_action: [{ required: true, message: '请填写临时对策', trigger: 'blur' }],
@@ -428,6 +582,14 @@ const rules = {
   preventive_action: [{ required: true, message: '请填写预防/防再发措施', trigger: 'blur' }],
   verification_result: [{ required: true, message: '请填写验证结果', trigger: 'blur' }]
 }
+
+const briefReportRules = {
+  root_cause: [{ required: true, message: '请填写原因分析', trigger: 'blur' }],
+  corrective_action: [{ required: true, message: '请填写改善对策', trigger: 'blur' }],
+  completion_time: [{ required: true, message: '请选择完成时间', trigger: 'change' }]
+}
+
+const rules = computed(() => (isLowSeverity.value ? briefReportRules : fullReportRules))
 
 const scarEditRules = {
   supplier_id: [{ required: true, message: '请选择供应商', trigger: 'change' }],
@@ -526,7 +688,7 @@ const getSeverityType = (severity?: string) => {
 
 const getSeverityLabel = (severity?: string) => {
   const labels: Record<string, string> = {
-    critical: '严重',
+    critical: '重大',
     high: '高',
     medium: '中',
     low: '低'
@@ -550,8 +712,10 @@ const getEightDStatusLabel = (status?: string) => {
   const labels: Record<string, string> = {
     draft: '草稿',
     submitted: '待审核',
+    under_review: '审核中',
     approved: '已批准',
-    rejected: '已驳回'
+    rejected: '已驳回',
+    closed: '已关闭'
   }
   return labels[status || ''] || status || '-'
 }
@@ -559,6 +723,18 @@ const getEightDStatusLabel = (status?: string) => {
 const formatDate = (date?: string) => {
   if (!date) return ''
   return new Date(date).toLocaleDateString('zh-CN')
+}
+
+const formatDateTime = (date?: string) => {
+  if (!date) return ''
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(parsed)
 }
 
 const isOverdue = (deadline?: string) => {
@@ -574,8 +750,90 @@ function buildInitialProblemDescription(scar: SCAR) {
   const qty = scar.defect_qty ? `不良数量 ${scar.defect_qty}` : '不良数量待确认'
   const severity = getSeverityLabel(scar.severity)
   const deadline = formatDate(scar.deadline) || '待确认'
+  const responseScope = scar.severity === 'low'
+    ? '原因分析、改善对策、完成时间及佐证/报告附件提交'
+    : '原因分析、临时围堵、纠正预防措施及验证资料提交'
 
-  return `针对 ${supplier}，物料 ${material}（${category}）发现${defect}，${qty}，严重度 ${severity}，要求在 ${deadline} 前完成原因分析、临时围堵、纠正预防措施及验证资料提交。`
+  return `针对 ${supplier}，物料 ${material}（${category}）发现${defect}，${qty}，严重度 ${severity}，要求在 ${deadline} 前完成${responseScope}。`
+}
+
+function readEvidenceFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+async function buildImplementationEvidenceFile(file: File): Promise<EvidenceFile> {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: file.name || `对策证据${implementationEvidenceFiles.value.length + 1}`,
+    original_name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+    data_url: await readEvidenceFileAsDataUrl(file),
+    source: 'implementation',
+    uploaded_at: new Date().toISOString(),
+  }
+}
+
+async function appendImplementationEvidence(files: File[]) {
+  const maxSize = 10 * 1024 * 1024
+  const validFiles = files.filter((file) => file.size <= maxSize)
+
+  if (validFiles.length !== files.length) {
+    ElMessage.warning('单个佐证文件不能超过 10MB')
+  }
+
+  const evidenceList = await Promise.all(validFiles.map((file) => buildImplementationEvidenceFile(file)))
+  implementationEvidenceFiles.value.push(...evidenceList)
+}
+
+function handleImplementationEvidenceChange(uploadFile: any) {
+  const rawFile = uploadFile?.raw as File | undefined
+  if (rawFile) {
+    void appendImplementationEvidence([rawFile])
+  }
+}
+
+function removeImplementationEvidence(id?: string) {
+  implementationEvidenceFiles.value = implementationEvidenceFiles.value.filter((file) => file.id !== id)
+}
+
+function isImageEvidence(file: EvidenceFile) {
+  return Boolean(file.type?.startsWith('image/') || file.data_url?.startsWith('data:image/') || file.url?.match(/\.(png|jpe?g|gif|webp|bmp)$/i))
+}
+
+function formatEvidenceFileSize(size?: number) {
+  if (!size) {
+    return ''
+  }
+
+  if (size < 1024) {
+    return `${size} B`
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`
+  }
+
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+function serializeEvidenceFiles(files: EvidenceFile[]) {
+  return files.map((file) => ({
+    id: file.id,
+    name: file.name,
+    original_name: file.original_name,
+    size: file.size,
+    type: file.type,
+    data_url: file.data_url,
+    url: file.url,
+    source: file.source,
+    uploaded_at: file.uploaded_at,
+  }))
 }
 
 function buildReportPayload(status: 'draft' | 'submitted') {
@@ -585,6 +843,7 @@ function buildReportPayload(status: 'draft' | 'submitted') {
     size: file.size,
     url: file.url,
   }))
+  const responseMode = isLowSeverity.value ? 'brief' : 'eight_d'
 
   return {
     d0_d3_data: {
@@ -597,12 +856,17 @@ function buildReportPayload(status: 'draft' | 'submitted') {
       d3_interim_action: formData.interim_action,
     },
     d4_d7_data: {
+      response_mode: responseMode,
+      severity: scarData.value?.severity,
       root_cause: formData.root_cause,
       corrective_action: formData.corrective_action,
-      preventive_action: formData.preventive_action,
+      improvement_action: formData.corrective_action,
+      preventive_action: isLowSeverity.value ? formData.corrective_action : formData.preventive_action,
       verification_result: formData.verification_result,
+      completion_time: formData.completion_time,
       standardization: formData.standardization,
       report_attachments: attachmentSummary,
+      implementation_evidence_files: serializeEvidenceFiles(implementationEvidenceFiles.value),
       d4_root_cause: formData.root_cause,
       d5_corrective_action: formData.corrective_action,
       d6_verification: formData.verification_result,
@@ -627,9 +891,10 @@ function applyEightDReportToForm(report: EightDReport) {
   formData.containment_action = d0d3.containment_action || d0d3.d0_emergency_action || formData.containment_action
   formData.interim_action = d0d3.interim_action || d0d3.d3_interim_action || formData.interim_action
   formData.root_cause = d4d7.root_cause || d4d7.d4_root_cause || ''
-  formData.corrective_action = d4d7.corrective_action || d4d7.d5_corrective_action || ''
+  formData.corrective_action = d4d7.corrective_action || d4d7.improvement_action || d4d7.d5_corrective_action || ''
   formData.preventive_action = d4d7.preventive_action || d4d7.standardization || ''
   formData.verification_result = d4d7.verification_result || d4d7.d6_verification || ''
+  formData.completion_time = d4d7.completion_time || ''
   formData.standardization = d4d7.standardization || d4d7.d7_modified_files || ''
   formData.horizontal_deployment = d8.horizontal_deployment || d8.d8_horizontal_deployment || ''
 
@@ -640,6 +905,21 @@ function applyEightDReportToForm(report: EightDReport) {
         status: file?.status || 'ready',
         url: file?.url,
         size: file?.size,
+      }))
+    : []
+
+  const implementationEvidence = d4d7.implementation_evidence_files || []
+  implementationEvidenceFiles.value = Array.isArray(implementationEvidence)
+    ? implementationEvidence.map((file: any, index: number) => ({
+        id: file?.id || `implementation-${index}-${Date.now()}`,
+        name: file?.name || file?.original_name || `对策证据${index + 1}`,
+        original_name: file?.original_name,
+        size: file?.size,
+        type: file?.type,
+        data_url: file?.data_url,
+        url: file?.url,
+        source: file?.source || 'implementation',
+        uploaded_at: file?.uploaded_at,
       }))
     : []
 }
@@ -710,6 +990,23 @@ function handleSQESelectVisibleChange(visible: boolean) {
   if (visible && sqeOptions.value.length === 0) {
     void loadSQEOptions()
   }
+}
+
+async function loadHistoryItems() {
+  try {
+    historyLoading.value = true
+    historyItems.value = await supplierApi.getSCARHistory(scarId.value)
+  } catch (error) {
+    console.error('Failed to load SCAR history:', error)
+    ElMessage.error('加载履历失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function openHistoryDialog() {
+  showHistoryDialog.value = true
+  await loadHistoryItems()
 }
 
 function openScarEditDialog() {
@@ -791,6 +1088,10 @@ function ensureReviewerReady() {
 }
 
 const handleSaveDraft = async () => {
+  if (!canSupplierEdit.value) {
+    return
+  }
+
   if (!ensureMaterialCategoryReady()) {
     return
   }
@@ -800,7 +1101,7 @@ const handleSaveDraft = async () => {
     const report = await supplierApi.submit8DReport(scarId.value, buildReportPayload('draft') as any)
     eightDReport.value = report
     applyEightDReportToForm(report)
-    ElMessage.success('草稿已保存')
+    ElMessage.success(`${activeResponseName.value}草稿已保存`)
   } catch (error) {
     console.error('Failed to save draft:', error)
     ElMessage.error('保存草稿失败')
@@ -810,6 +1111,10 @@ const handleSaveDraft = async () => {
 }
 
 const handleSubmit = async () => {
+  if (!canSupplierEdit.value) {
+    return
+  }
+
   if (!ensureMaterialCategoryReady()) {
     return
   }
@@ -822,7 +1127,7 @@ const handleSubmit = async () => {
     await formRef.value.validate()
 
     await ElMessageBox.confirm(
-      '提交后将进入内部审核，请确认 8D 报告内容和附件清单已完成。',
+      `提交后将进入内部审核，请确认${activeResponseName.value}内容和附件清单已完成。`,
       '确认提交',
       {
         confirmButtonText: '确认提交',
@@ -836,7 +1141,7 @@ const handleSubmit = async () => {
     eightDReport.value = report
     applyEightDReportToForm(report)
     await loadSCARData()
-    ElMessage.success('8D 报告已提交')
+    ElMessage.success(`${activeResponseName.value}已提交`)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Failed to submit 8D report:', error)
@@ -885,7 +1190,10 @@ const handleReview = async (approved: boolean) => {
 
     eightDReport.value = report
     reviewForm.review_comments = ''
-    ElMessage.success(approved ? '8D 已批准' : '8D 已驳回')
+    const successMessage = approved
+      ? (report.status === 'closed' ? '已关闭' : `已转${report.current_approval_level_label || '下一节点'}`)
+      : '已驳回'
+    ElMessage.success(successMessage)
     await loadSCARData()
   } catch (error) {
     console.error('Failed to review 8D report:', error)
@@ -947,17 +1255,10 @@ onMounted(() => {
   }
 
   .report-shell {
-    border: none !important;
+    display: block;
+    border: 0;
     background: transparent;
-
-    :deep(.el-card__header) {
-      padding: 0 0 14px;
-      border-bottom: 0;
-    }
-
-    :deep(.el-card__body) {
-      padding: 0;
-    }
+    overflow: visible;
   }
 
   .report-heading {
@@ -965,6 +1266,7 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     gap: 18px;
+    margin-bottom: 24px;
 
     .eyebrow {
       margin-bottom: 4px;
@@ -1004,6 +1306,60 @@ onMounted(() => {
 
     .material-category-select {
       width: 180px;
+    }
+  }
+
+  .scar-evidence-strip {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #e0e9f4;
+    border-radius: 10px;
+    background: #f8fbff;
+
+    .scar-evidence-strip__title {
+      margin-bottom: 10px;
+      color: #22344d;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .scar-evidence-strip__list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .scar-evidence-strip__item {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      color: #22344d;
+      font-size: 13px;
+
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .scar-evidence-strip__thumb,
+    .scar-evidence-strip__file {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #edf4fb;
+    }
+
+    .scar-evidence-strip__file {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #527096;
+      font-size: 19px;
     }
   }
 
@@ -1065,20 +1421,106 @@ onMounted(() => {
     gap: 18px 22px;
   }
 
-  .attachment-section {
-    .report-upload {
+  .two-column--brief {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-completion-item {
+    :deep(.el-date-editor.el-input) {
+      width: min(320px, 100%);
+    }
+  }
+
+  .implementation-evidence {
+    margin-top: 4px;
+    padding-top: 4px;
+
+    .implementation-evidence__header {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 10px;
+      margin-bottom: 10px;
+
+      span {
+        color: #22344d;
+        font-weight: 800;
+      }
     }
 
-    .upload-tip {
-      max-width: 760px;
-      color: #71819a;
-      font-size: 13px;
-      line-height: 1.6;
+    :deep(.el-upload) {
+      width: 100%;
     }
+
+    :deep(.el-upload-dragger) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 86px;
+      padding: 0;
+      border-color: #cfdbe9;
+      background: #f8fbff;
+    }
+
+    .implementation-evidence__drop {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #49627f;
+      font-weight: 700;
+    }
+
+    .implementation-evidence__list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .implementation-evidence__item {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid #e1e9f2;
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    .implementation-evidence__thumb,
+    .implementation-evidence__file {
+      width: 46px;
+      height: 46px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #eef4fb;
+    }
+
+    .implementation-evidence__file {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #527096;
+      font-size: 20px;
+    }
+
+    .implementation-evidence__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+
+      span {
+        color: #71819a;
+        font-size: 12px;
+      }
+    }
+  }
+
+  .attachment-section .report-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .review-panel {
@@ -1101,6 +1543,38 @@ onMounted(() => {
     .el-date-editor {
       width: 100%;
     }
+  }
+
+  .history-timeline {
+    padding: 4px 8px 0;
+  }
+
+  .history-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .history-item__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    strong {
+      color: #13243a;
+      font-size: 14px;
+    }
+
+    span {
+      color: #6b7c93;
+      font-size: 13px;
+    }
+  }
+
+  .history-item__content {
+    color: #42556f;
+    font-size: 13px;
+    line-height: 1.6;
   }
 
   .text-danger {

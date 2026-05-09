@@ -33,6 +33,7 @@ export interface SCAR {
   material_category?: 'structure' | 'electronic'
   defect_description: string
   defect_qty: number
+  evidence_files?: EvidenceFile[]
   severity: 'low' | 'medium' | 'high' | 'critical'
   status: 'open' | 'supplier_responding' | 'under_review' | 'approved' | 'rejected' | 'closed'
   current_handler_id?: number
@@ -45,6 +46,18 @@ export interface SCAR {
   eight_d_report?: EightDReport
 }
 
+export interface EvidenceFile {
+  id?: string
+  name: string
+  original_name?: string
+  size?: number
+  type?: string
+  data_url?: string
+  url?: string
+  source?: string
+  uploaded_at?: string
+}
+
 /**
  * 8D 报告
  */
@@ -54,7 +67,7 @@ export interface EightDReport {
   d0_d3_data?: Record<string, any>
   d4_d7_data?: Record<string, any>
   d8_data?: Record<string, any>
-  status: 'draft' | 'submitted' | 'approved' | 'rejected'
+  status: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'closed'
   submitted_by?: number
   reviewed_by?: number
   review_comments?: string
@@ -63,8 +76,25 @@ export interface EightDReport {
   submitter_name?: string
   reviewer_name?: string
   scar_number?: string
+  approval_workflow?: Record<string, any>
+  current_approval_level?: string
+  current_approval_level_label?: string
+  current_approval_user_id?: number
+  current_approval_user_name?: string
   created_at: string
   updated_at: string
+}
+
+export interface SCARHistoryItem {
+  id: number
+  operation_type: string
+  action: string
+  content?: string
+  user_id?: number
+  user_name?: string
+  created_at: string
+  before_data?: Record<string, any>
+  after_data?: Record<string, any>
 }
 
 /**

@@ -6,11 +6,16 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.problem_management import build_8d_number
+from app.models.operation_log import OperationLog
+from app.models.role_tag import RoleTag
 from app.models.scar import SCAR, SCARStatus, SCARSeverity
 from app.models.eight_d import EightD, EightDStatus
 from app.models.supplier import Supplier
 from app.models.user import User, UserStatus, UserType
+from app.models.user_role_assignment import UserRoleAssignment
 from app.schemas.scar import (
     SCARCreate, SCARUpdate, SCARListQuery,
     EightDSubmit, EightDReview
@@ -21,6 +26,48 @@ from app.core.exceptions import NotFoundException, BusinessException
 
 class SCARService:
     """SCAR 管理服务"""
+
+    @staticmethod
+    def _enum_value(value) -> str:
+        return value.value if hasattr(value, "value") else str(value)
+
+    @staticmethod
+    def _snapshot_scar(scar: SCAR) -> dict:
+        data = scar.to_dict()
+        data["status"] = SCARService._enum_value(scar.status)
+        data["severity"] = SCARService._enum_value(scar.severity)
+        data["created_by"] = scar.created_by
+        data["updated_by"] = scar.updated_by
+        return data
+
+    @staticmethod
+    def _record_history(
+        db: AsyncSession,
+        *,
+        scar_id: int,
+        user_id: Optional[int],
+        operation_type: str,
+        action: str,
+        content: Optional[str] = None,
+        before_data: Optional[dict] = None,
+        after_data: Optional[dict] = None,
+    ) -> None:
+        payload = dict(after_data or {})
+        payload["action"] = action
+        if content:
+            payload["content"] = content
+
+        db.add(
+            OperationLog(
+                user_id=user_id,
+                operation_type=operation_type,
+                target_module="scar",
+                target_id=scar_id,
+                before_data=before_data,
+                after_data=payload,
+                created_at=datetime.utcnow(),
+            )
+        )
     
     @staticmethod
     async def generate_scar_number(db: AsyncSession) -> str:
@@ -91,6 +138,7 @@ class SCARService:
             material_category=scar_data.material_category,
             defect_description=scar_data.defect_description,
             defect_qty=scar_data.defect_qty,
+            evidence_files=scar_data.evidence_files,
             severity=scar_data.severity,
             status=SCARStatus.OPEN,
             current_handler_id=supplier_user.id if supplier_user else None,
@@ -100,6 +148,16 @@ class SCARService:
         )
         
         db.add(scar)
+        await db.flush()
+        SCARService._record_history(
+            db,
+            scar_id=scar.id,
+            user_id=created_by,
+            operation_type="create",
+            action="发单",
+            content=f"创建供应商质量问题：{scar.scar_number}",
+            after_data=SCARService._snapshot_scar(scar),
+        )
         await db.commit()
         await db.refresh(scar)
         
@@ -129,6 +187,7 @@ class SCARService:
     ) -> SCAR:
         """更新 SCAR 基础字段。"""
         scar = await SCARService.get_scar_by_id(db, scar_id, current_user)
+        before_data = SCARService._snapshot_scar(scar)
         update_data = scar_data.dict(exclude_unset=True)
         supplier_id_changed = (
             "supplier_id" in update_data
@@ -161,6 +220,16 @@ class SCARService:
 
         scar.updated_by = updated_by
         scar.updated_at = datetime.utcnow()
+        SCARService._record_history(
+            db,
+            scar_id=scar.id,
+            user_id=updated_by,
+            operation_type="update",
+            action="修改",
+            content=f"修改供应商质量问题：{scar.scar_number}",
+            before_data=before_data,
+            after_data=SCARService._snapshot_scar(scar),
+        )
         await db.commit()
         await db.refresh(scar)
         return scar
@@ -245,6 +314,173 @@ class SCARService:
 
 class EightDService:
     """8D 报告管理服务"""
+
+    APPROVAL_LEVEL_LABELS = {
+        "engineer": "工程师",
+        "manager": "科室经理",
+        "minister": "部长",
+    }
+    APPROVAL_LEVEL_ROLE_KEYS = {
+        "engineer": "quality.supplier.engineer",
+        "manager": "quality.supplier.manager",
+        "minister": "quality.minister",
+    }
+    APPROVAL_LEVEL_FALLBACK_KEYWORDS = {
+        "engineer": ["供应商", "工程师"],
+        "manager": ["供应商", "经理"],
+        "minister": ["部长"],
+    }
+    APPROVAL_LEVELS_BY_SEVERITY = {
+        SCARSeverity.LOW.value: ["engineer"],
+        SCARSeverity.MEDIUM.value: ["engineer", "manager"],
+        SCARSeverity.HIGH.value: ["engineer", "manager"],
+        SCARSeverity.CRITICAL.value: ["engineer", "manager", "minister"],
+    }
+
+    @staticmethod
+    def get_approval_level_label(level: Optional[str]) -> Optional[str]:
+        if not level:
+            return None
+        return EightDService.APPROVAL_LEVEL_LABELS.get(level, level)
+
+    @staticmethod
+    def _get_approval_levels(scar: SCAR) -> list[str]:
+        severity = SCARService._enum_value(scar.severity)
+        return list(
+            EightDService.APPROVAL_LEVELS_BY_SEVERITY.get(
+                severity,
+                EightDService.APPROVAL_LEVELS_BY_SEVERITY[SCARSeverity.MEDIUM.value],
+            )
+        )
+
+    @staticmethod
+    def _with_approval_workflow(d8_data: Optional[dict], workflow: dict) -> dict:
+        next_data = dict(d8_data or {})
+        next_data["approval_workflow"] = workflow
+        return next_data
+
+    @staticmethod
+    def _build_approval_workflow(scar: SCAR, first_reviewer: User) -> dict:
+        required_levels = EightDService._get_approval_levels(scar)
+        current_level = required_levels[0] if required_levels else None
+        return {
+            "severity": SCARService._enum_value(scar.severity),
+            "required_levels": required_levels,
+            "current_index": 0,
+            "current_level": current_level,
+            "current_level_label": EightDService.get_approval_level_label(current_level),
+            "current_user_id": first_reviewer.id if current_level else None,
+            "current_user_name": first_reviewer.full_name if current_level else None,
+            "status": "pending" if current_level else "approved",
+            "history": [],
+        }
+
+    @staticmethod
+    def get_approval_workflow(eight_d: EightD, scar: SCAR) -> dict:
+        d8_data = eight_d.d8_data or {}
+        existing = d8_data.get("approval_workflow") if isinstance(d8_data, dict) else None
+        if isinstance(existing, dict):
+            return existing
+
+        required_levels = EightDService._get_approval_levels(scar)
+        current_level = required_levels[0] if required_levels else None
+        return {
+            "severity": SCARService._enum_value(scar.severity),
+            "required_levels": required_levels,
+            "current_index": 0,
+            "current_level": current_level,
+            "current_level_label": EightDService.get_approval_level_label(current_level),
+            "current_user_id": scar.current_handler_id,
+            "current_user_name": None,
+            "status": "pending" if eight_d.status == EightDStatus.SUBMITTED else SCARService._enum_value(eight_d.status),
+            "history": [],
+        }
+
+    @staticmethod
+    def _set_approval_workflow(eight_d: EightD, workflow: dict) -> None:
+        eight_d.d8_data = EightDService._with_approval_workflow(eight_d.d8_data, workflow)
+        flag_modified(eight_d, "d8_data")
+
+    @staticmethod
+    async def _find_internal_user_by_role(
+        db: AsyncSession,
+        role_key: str,
+        fallback_keywords: Optional[list[str]] = None,
+    ) -> Optional[User]:
+        result = await db.execute(
+            select(User)
+            .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
+            .join(RoleTag, RoleTag.id == UserRoleAssignment.role_tag_id)
+            .where(
+                RoleTag.role_key == role_key,
+                RoleTag.is_active.is_(True),
+                User.user_type == UserType.INTERNAL,
+                User.status == UserStatus.ACTIVE,
+            )
+            .order_by(User.id.asc())
+            .limit(1)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+
+        if fallback_keywords:
+            keyword_conditions = []
+            for keyword in fallback_keywords:
+                like_value = f"%{keyword}%"
+                keyword_conditions.extend([
+                    User.full_name.ilike(like_value),
+                    User.department.ilike(like_value),
+                    User.position.ilike(like_value),
+                ])
+            fallback_result = await db.execute(
+                select(User)
+                .where(
+                    User.user_type == UserType.INTERNAL,
+                    User.status == UserStatus.ACTIVE,
+                    or_(*keyword_conditions),
+                )
+                .order_by(User.id.asc())
+                .limit(1)
+            )
+            return fallback_result.scalar_one_or_none()
+
+        return None
+
+    @staticmethod
+    async def _find_next_approval_user(db: AsyncSession, level: str) -> Optional[User]:
+        return await EightDService._find_internal_user_by_role(
+            db,
+            EightDService.APPROVAL_LEVEL_ROLE_KEYS[level],
+            EightDService.APPROVAL_LEVEL_FALLBACK_KEYWORDS.get(level),
+        )
+
+    @staticmethod
+    def _format_scar_report_number(scar: SCAR) -> str:
+        category_key = "IQ1" if scar.material_category == "electronic" else "IQ0"
+        created_at = scar.created_at or datetime.utcnow()
+        sequence = ((scar.id - 1) % 999) + 1 if scar.id else 1
+        return build_8d_number(category_key, sequence, created_at)
+
+    @staticmethod
+    def _build_supplier_report_link(scar_id: int) -> str:
+        return f"/supplier/eight-d/{scar_id}?sourceRouteName=SCARList&sourceFocusId={scar_id}"
+
+    @staticmethod
+    def _snapshot_report(eight_d: EightD, scar: SCAR) -> dict:
+        return {
+            "scar_id": scar.id,
+            "scar_number": scar.scar_number,
+            "report_number": EightDService._format_scar_report_number(scar),
+            "status": SCARService._enum_value(eight_d.status),
+            "scar_status": SCARService._enum_value(scar.status),
+            "submitted_by": eight_d.submitted_by,
+            "reviewed_by": eight_d.reviewed_by,
+            "review_comments": eight_d.review_comments,
+            "submitted_at": eight_d.submitted_at.isoformat() if eight_d.submitted_at else None,
+            "reviewed_at": eight_d.reviewed_at.isoformat() if eight_d.reviewed_at else None,
+            "approval_workflow": EightDService.get_approval_workflow(eight_d, scar),
+        }
     
     @staticmethod
     async def submit_8d_report(
@@ -280,6 +516,7 @@ class EightDService:
         now = datetime.utcnow()
         next_status = EightDStatus.DRAFT if is_draft else EightDStatus.SUBMITTED
         reviewer = None
+        d8_data = dict(eight_d_data.d8_data or {})
 
         if not is_draft:
             reviewer_id = eight_d_data.reviewer_id or scar.created_by
@@ -296,12 +533,15 @@ class EightDService:
             reviewer = reviewer_result.scalar_one_or_none()
             if not reviewer:
                 raise BusinessException("Selected supplier quality engineer is unavailable")
+
+            approval_workflow = EightDService._build_approval_workflow(scar, reviewer)
+            d8_data = EightDService._with_approval_workflow(d8_data, approval_workflow)
         
         if eight_d:
             # 更新现有报告
             eight_d.d0_d3_data = eight_d_data.d0_d3_data
             eight_d.d4_d7_data = eight_d_data.d4_d7_data
-            eight_d.d8_data = eight_d_data.d8_data
+            eight_d.d8_data = d8_data
             eight_d.status = next_status
             eight_d.submitted_by = submitted_by
             if not is_draft:
@@ -313,7 +553,7 @@ class EightDService:
                 scar_id=scar_id,
                 d0_d3_data=eight_d_data.d0_d3_data,
                 d4_d7_data=eight_d_data.d4_d7_data,
-                d8_data=eight_d_data.d8_data,
+                d8_data=d8_data,
                 status=next_status,
                 submitted_by=submitted_by,
                 submitted_at=None if is_draft else now
@@ -327,19 +567,30 @@ class EightDService:
             scar.status = SCARStatus.UNDER_REVIEW
             scar.current_handler_id = reviewer.id
         scar.updated_at = now
+
+        SCARService._record_history(
+            db,
+            scar_id=scar.id,
+            user_id=submitted_by,
+            operation_type="draft" if is_draft else "submit",
+            action="保存草稿" if is_draft else "提交",
+            content=f"{EightDService._format_scar_report_number(scar)} {'保存草稿' if is_draft else '提交审核'}",
+            after_data=EightDService._snapshot_report(eight_d, scar),
+        )
         
         await db.commit()
         await db.refresh(eight_d)
         
         # 通知 SQE（查找创建 SCAR 的人）
         if not is_draft and reviewer:
+            report_number = EightDService._format_scar_report_number(scar)
             await NotificationHub.send_notification(
                 db=db,
                 user_ids=[reviewer.id],
                 message_type="workflow_exception",
-                title=f"8D 报告已提交：{scar.scar_number}",
-                content=f"供应商已提交 8D 报告，请及时审核。",
-                link=f"/quality/scar/eight-d/{scar.id}?action=review"
+                title=f"8D 报告已提交：{report_number}",
+                content="供应商已提交 8D 报告，请审核。",
+                link=f"/quality/scar/eight-d/{scar.id}?action=review&sourceRouteName=ScarManagement&sourceFocusId={scar.id}"
             )
         
         return eight_d
@@ -377,39 +628,179 @@ class EightDService:
             select(SCAR).where(SCAR.id == scar_id)
         )
         scar = scar_result.scalar_one()
-        
-        # 更新 8D 报告
-        eight_d.status = EightDStatus.APPROVED if review_data.approved else EightDStatus.REJECTED
+
+        if scar.current_handler_id and scar.current_handler_id != reviewed_by:
+            raise BusinessException("当前用户不是该节点审批人")
+
+        reviewer_result = await db.execute(select(User).where(User.id == reviewed_by))
+        reviewer = reviewer_result.scalar_one_or_none()
+        if not reviewer:
+            raise NotFoundException(f"User with id {reviewed_by} not found")
+
+        workflow = EightDService.get_approval_workflow(eight_d, scar)
+        required_levels = list(workflow.get("required_levels") or EightDService._get_approval_levels(scar))
+        try:
+            current_index = int(workflow.get("current_index") or 0)
+        except (TypeError, ValueError):
+            current_index = 0
+
+        if current_index >= len(required_levels):
+            current_index = 0
+
+        current_level = workflow.get("current_level")
+        if not current_level and required_levels:
+            current_level = required_levels[current_index]
+
+        current_level_label = EightDService.get_approval_level_label(current_level) or "审批"
+        review_comments = review_data.review_comments or "无"
+        now = datetime.utcnow()
+        history = list(workflow.get("history") or [])
+        history.append({
+            "level": current_level,
+            "level_label": current_level_label,
+            "approver_id": reviewed_by,
+            "approver_name": reviewer.full_name,
+            "approved": review_data.approved,
+            "comments": review_comments,
+            "reviewed_at": now.isoformat(),
+        })
+
         eight_d.reviewed_by = reviewed_by
-        eight_d.review_comments = review_data.review_comments
-        eight_d.reviewed_at = datetime.utcnow()
-        eight_d.updated_at = datetime.utcnow()
-        
-        # 更新 SCAR 状态
-        if review_data.approved:
-            scar.status = SCARStatus.APPROVED
-        else:
+        eight_d.review_comments = review_comments
+        eight_d.reviewed_at = now
+        eight_d.updated_at = now
+
+        if not review_data.approved:
+            workflow.update({
+                "status": "rejected",
+                "rejected_level": current_level,
+                "rejected_level_label": current_level_label,
+                "current_level": None,
+                "current_level_label": None,
+                "current_index": current_index,
+                "current_user_id": eight_d.submitted_by,
+                "current_user_name": None,
+                "history": history,
+            })
+            eight_d.status = EightDStatus.REJECTED
             scar.status = SCARStatus.REJECTED
-            # 驳回时，重新指派给供应商
             scar.current_handler_id = eight_d.submitted_by
-        
-        scar.updated_at = datetime.utcnow()
-        
+            scar.updated_at = now
+            EightDService._set_approval_workflow(eight_d, workflow)
+
+            SCARService._record_history(
+                db,
+                scar_id=scar.id,
+                user_id=reviewed_by,
+                operation_type="reject",
+                action="驳回",
+                content=review_comments,
+                after_data=EightDService._snapshot_report(eight_d, scar),
+            )
+
+            await db.commit()
+            await db.refresh(eight_d)
+
+            if scar.current_handler_id:
+                report_number = EightDService._format_scar_report_number(scar)
+                await NotificationHub.send_notification(
+                    db=db,
+                    user_ids=[scar.current_handler_id],
+                    message_type="workflow_exception",
+                    title=f"8D 报告被驳回：{report_number}",
+                    content=f"{current_level_label}驳回：{review_comments}",
+                    link=EightDService._build_supplier_report_link(scar.id)
+                )
+
+            return eight_d
+
+        next_index = current_index + 1
+        if next_index < len(required_levels):
+            next_level = required_levels[next_index]
+            next_user = await EightDService._find_next_approval_user(db, next_level)
+            next_level_label = EightDService.get_approval_level_label(next_level) or "下一节点"
+            if not next_user:
+                raise BusinessException(f"未找到{next_level_label}审批人，请先维护角色标签")
+
+            workflow.update({
+                "status": "pending",
+                "current_index": next_index,
+                "current_level": next_level,
+                "current_level_label": next_level_label,
+                "current_user_id": next_user.id,
+                "current_user_name": next_user.full_name,
+                "history": history,
+            })
+            eight_d.status = EightDStatus.SUBMITTED
+            scar.status = SCARStatus.UNDER_REVIEW
+            scar.current_handler_id = next_user.id
+            scar.updated_at = now
+            EightDService._set_approval_workflow(eight_d, workflow)
+
+            SCARService._record_history(
+                db,
+                scar_id=scar.id,
+                user_id=reviewed_by,
+                operation_type="approve",
+                action=f"{current_level_label}审批",
+                content=review_comments,
+                after_data=EightDService._snapshot_report(eight_d, scar),
+            )
+
+            await db.commit()
+            await db.refresh(eight_d)
+
+            report_number = EightDService._format_scar_report_number(scar)
+            await NotificationHub.send_notification(
+                db=db,
+                user_ids=[next_user.id],
+                message_type="workflow_exception",
+                title=f"8D 报告待审批：{report_number}",
+                content=f"{next_level_label}审批",
+                link=f"/quality/scar/eight-d/{scar.id}?action=review&sourceRouteName=ScarManagement&sourceFocusId={scar.id}"
+            )
+
+            return eight_d
+
+        workflow.update({
+            "status": "approved",
+            "current_index": current_index,
+            "current_level": None,
+            "current_level_label": None,
+            "current_user_id": None,
+            "current_user_name": None,
+            "history": history,
+        })
+        eight_d.status = EightDStatus.CLOSED
+        scar.status = SCARStatus.CLOSED
+        scar.current_handler_id = None
+        scar.updated_at = now
+        EightDService._set_approval_workflow(eight_d, workflow)
+
+        SCARService._record_history(
+            db,
+            scar_id=scar.id,
+            user_id=reviewed_by,
+            operation_type="approve",
+            action=f"{current_level_label}审批关闭",
+            content=review_comments,
+            after_data=EightDService._snapshot_report(eight_d, scar),
+        )
+
         await db.commit()
         await db.refresh(eight_d)
-        
-        # 通知供应商
+
         if eight_d.submitted_by:
-            status_text = "已批准" if review_data.approved else "已驳回"
+            report_number = EightDService._format_scar_report_number(scar)
             await NotificationHub.send_notification(
                 db=db,
                 user_ids=[eight_d.submitted_by],
                 message_type="workflow_exception",
-                title=f"8D 报告审核结果：{scar.scar_number}",
-                content=f"您的 8D 报告{status_text}。审核意见：{review_data.review_comments}",
-                link=f"/supplier/eight-d/{scar.id}"
+                title=f"8D 报告已关闭：{report_number}",
+                content=f"{current_level_label}审批通过",
+                link=EightDService._build_supplier_report_link(scar.id)
             )
-        
+
         return eight_d
     
     @staticmethod

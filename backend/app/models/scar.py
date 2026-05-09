@@ -4,7 +4,7 @@ Supplier Corrective Action Request - 供应商纠正措施请求
 """
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Integer, Text, DateTime, Enum as SQLEnum, ForeignKey
+from sqlalchemy import JSON, String, Integer, Text, DateTime, Enum as SQLEnum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -16,7 +16,7 @@ class SCARSeverity(str, enum.Enum):
     LOW = "low"          # 低
     MEDIUM = "medium"    # 中
     HIGH = "high"        # 高
-    CRITICAL = "critical"  # 严重
+    CRITICAL = "critical"  # 重大
 
 
 class SCARStatus(str, enum.Enum):
@@ -52,6 +52,7 @@ class SCAR(Base):
     # 缺陷描述
     defect_description: Mapped[str] = mapped_column(Text, nullable=False, comment="缺陷描述")
     defect_qty: Mapped[int] = mapped_column(Integer, nullable=False, comment="不良数量")
+    evidence_files: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, comment="创建SCAR时上传的附图佐证")
     
     # 严重度
     severity: Mapped[str] = mapped_column(
@@ -100,6 +101,7 @@ class SCAR(Base):
             "material_category": self.material_category,
             "defect_description": self.defect_description,
             "defect_qty": self.defect_qty,
+            "evidence_files": self.evidence_files,
             "severity": self.severity,
             "status": self.status,
             "current_handler_id": self.current_handler_id,
