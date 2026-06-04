@@ -17,7 +17,8 @@ vi.mock('@/api/auth', () => ({
     login: vi.fn(),
     getCaptcha: vi.fn(),
     getCurrentUser: vi.fn(),
-    checkPermission: vi.fn()
+    checkPermission: vi.fn(),
+    getPermissionTree: vi.fn().mockResolvedValue({})
   }
 }))
 
@@ -122,7 +123,9 @@ describe('Login.vue', () => {
 
     expect(wrapper.find('.login-container').exists()).toBe(true)
     expect(wrapper.find('.user-type-selector').exists()).toBe(true)
-    expect(wrapper.text()).toContain('让质量更透明')
+    expect(wrapper.text()).toContain('账号登录')
+    expect(wrapper.find('.quality-map').exists()).toBe(true)
+    expect(wrapper.find('.entry-environments').exists()).toBe(false)
     expect(wrapper.find('a[href="/register"]').exists()).toBe(true)
   })
 
@@ -211,8 +214,7 @@ describe('Login.vue', () => {
       password: 'Test@123456',
       user_type: 'internal',
       captcha: undefined,
-      captcha_id: undefined,
-      environment: 'stable'
+      captcha_id: undefined
     })
     expect(router.currentRoute.value.path).toBe('/workbench')
   })
@@ -255,8 +257,7 @@ describe('Login.vue', () => {
       password: 'Supplier@123',
       user_type: 'supplier',
       captcha: '1234',
-      captcha_id: 'captcha-123',
-      environment: 'stable'
+      captcha_id: 'captcha-123'
     })
   })
 

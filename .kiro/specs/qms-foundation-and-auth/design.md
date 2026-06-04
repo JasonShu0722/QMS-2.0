@@ -33,7 +33,7 @@
 
 当前仓库已经落地的底座能力如下：
 
-1. **统一认证闭环**：内部员工与供应商共用统一登录页；公共注册入口仅面向内部员工开放；供应商登录保留验证码；登录时显式选择 `stable / preview` 环境；`allowed_environments` 成为唯一环境准入规则。
+1. **统一认证闭环**：内部员工与供应商共用统一登录页；公共注册入口仅面向内部员工开放；供应商登录保留验证码；`stable / preview` 由当前域名和后端运行实例决定，登录页不再提供环境选择；`allowed_environments` 成为唯一运行环境准入规则。
 2. **稳定会话契约**：登录成功后除 Token 外，统一返回 `user_info`、`environment`、`allowed_environments`、平台管理员标识、头像/签名路径和供应商名称；其中当前 `is_platform_admin` 语义应解释为超级管理员（SuperAdmin）bootstrap 标识。
 3. **平台管理员 bootstrap**：系统管理后台入口通过独立平台管理员标识引导，不依赖业务权限矩阵先完成自举。
 4. **管理员分层与角色标签基础**：除 SuperAdmin 外，业务管理员（Admin）仍作为后续正式分层目标存在；当前权限治理基础已先通过 `role_tags / role_permissions / user_role_assignments` 三张表落地。
@@ -46,7 +46,7 @@
 
 ### 核心设计目标
 
-1. **统一认证入口与环境准入**：支持内部员工（Phase 1: 账号密码，预留 LDAP/AD）和外部供应商（账号密码 + 图形验证码）的统一登录，并返回稳定会话对象；公共注册入口仅对内部员工开放。
+1. **统一认证入口与环境准入**：支持内部员工（Phase 1: 账号密码，预留 LDAP/AD）和外部供应商（账号密码 + 图形验证码）的统一登录，并返回稳定会话对象；公共注册入口仅对内部员工开放；登录目标环境由当前后端运行实例决定。
 2. **细粒度权限控制**：基于“功能模块-操作类型”的二维权限矩阵，支持录入/查阅/修改/删除/导出五种操作的独立配置。
 3. **平台管理自举与分层**：在权限矩阵完全配置前，通过超级管理员引导机制保障用户管理、权限矩阵、功能开关等后台能力可进入；后续再把日常运维能力下沉给业务管理员角色。
 4. **基础工作台优先**：先交付可联调、可验证的工作台基础版，再逐步补齐指标增强块、公告中心和跨业务任务聚合。
@@ -332,15 +332,15 @@ classDiagram
 
 **Phase 1 实现范围**：
 - ✅ LocalAuthStrategy（账号密码 + JWT）
-- ✅ 供应商验证码校验、密码过期引导、环境准入控制
+- ✅ 供应商验证码校验、密码过期引导、运行环境准入控制
 - ⏸️ LDAPAuthStrategy（预留接口，不实现）
 
 **认证流程**：
 
-1. **登录请求** → 前端提交 `{username, password, user_type, environment}`；供应商附带验证码
+1. **登录请求** → 前端提交 `{username, password, user_type}`；供应商附带验证码
 2. **策略选择** → 后端根据 `user_type` 选择 LocalAuthStrategy
 3. **密码验证** → 使用 Passlib 验证密码哈希
-4. **环境校验** → 使用 `allowed_environments` 判断当前环境是否可登录
+4. **环境校验** → 使用后端 `settings.ENVIRONMENT` 与 `allowed_environments` 判断当前运行环境是否可登录
 5. **生成 Token** → 使用 Python-Jose 生成 JWT（有效期 24 小时）
 6. **返回响应** → `{access_token, token_type, user_info, environment, allowed_environments, password_expired}`
 

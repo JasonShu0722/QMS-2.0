@@ -93,7 +93,7 @@ VITE_ENVIRONMENT=stable
 
 这里必须使用 `/api`，让 Vite 代理请求到后端，避免本地跨域问题。
 
-这里的 `stable` 只是本地默认业务环境。项目本身仍然支持 `stable / preview` 双环境，登录时会把目标环境一并提交给后端。
+这里的 `stable` 只是本地默认运行入口语义。项目本身仍然支持 `stable / preview` 双运行入口，但登录目标环境由后端当前 `ENVIRONMENT` 决定，登录页和登录请求不再提交目标环境。
 
 ### 根目录 Compose 配置
 
@@ -140,7 +140,7 @@ VITE_ENVIRONMENT=stable
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/login ^
   -H "Content-Type: application/json" ^
-  -d "{\"username\":\"Admin\",\"password\":\"你的密码\",\"user_type\":\"internal\",\"environment\":\"stable\"}"
+  -d "{\"username\":\"Admin\",\"password\":\"你的密码\",\"user_type\":\"internal\"}"
 ```
 
 如果接口能成功返回 token，问题通常在前端请求链路，不在账号本身。

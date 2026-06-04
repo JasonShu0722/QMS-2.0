@@ -1,52 +1,38 @@
 <template>
-  <div :class="['login-container', isPreviewMode ? 'login-container--preview' : '']">
-    <header :class="['login-topbar', isPreviewMode ? 'login-topbar--preview' : '']">
+  <div class="login-container">
+    <header class="login-topbar">
       <div class="brand-block">
         <span class="brand-mark">QMS</span>
         <span class="brand-caption">Quality Management System</span>
       </div>
 
-      <div class="entry-environments" role="tablist" aria-label="环境切换">
-        <button
-          type="button"
-          :class="['entry-environment', currentEnvironment === 'stable' ? 'entry-environment--active' : '']"
-          @click="selectEnvironment('stable')"
-        >
-          正式环境
-        </button>
-        <button
-          type="button"
-          :class="[
-            'entry-environment',
-            currentEnvironment === 'preview' ? 'entry-environment--active entry-environment--preview' : ''
-          ]"
-          @click="selectEnvironment('preview')"
-        >
-          预览环境
-        </button>
+      <div class="entry-note" aria-hidden="true">
+        <span class="entry-note__line"></span>
+        <span>质量管理平台</span>
       </div>
     </header>
 
-    <main :class="['login-stage', { 'login-stage--compact': isMobile, 'login-stage--preview': isPreviewMode }]">
-      <section class="hero-panel">
-        <div class="hero-copy">
-          <p class="hero-kicker">Quality Management System</p>
-          <h1>
-            让质量更透明
-            <br>
-            让协同更高效
-          </h1>
-          <p class="hero-subtitle">Make quality visible across teams and keep collaboration moving.</p>
+    <main :class="['login-stage', { 'login-stage--compact': isMobile }]">
+      <section class="hero-panel" aria-hidden="true">
+        <div class="quality-map">
+          <div class="quality-map__rail"></div>
+          <div class="quality-map__axis quality-map__axis--top"></div>
+          <div class="quality-map__axis quality-map__axis--bottom"></div>
+          <div class="quality-map__node quality-map__node--iqc">IQC</div>
+          <div class="quality-map__node quality-map__node--scar">SCAR</div>
+          <div class="quality-map__node quality-map__node--eightd">8D</div>
+          <div class="quality-map__node quality-map__node--ppap">PPAP</div>
+          <div class="quality-map__marker quality-map__marker--a"></div>
+          <div class="quality-map__marker quality-map__marker--b"></div>
+          <div class="quality-map__marker quality-map__marker--c"></div>
         </div>
       </section>
 
       <section class="login-panel">
-        <div :class="['login-panel-shell', isPreviewMode ? 'login-panel-shell--preview' : 'login-panel-shell--stable']">
+        <div class="login-panel-shell">
           <div class="login-panel-head">
-            <h2>账号登录</h2>
-            <span :class="['environment-badge', isPreviewMode ? 'environment-badge--preview' : '']">
-              {{ isPreviewMode ? '预览环境' : '正式环境' }}
-            </span>
+            <p>QMS Access</p>
+            <h1>账号登录</h1>
           </div>
 
           <el-radio-group v-model="userType" class="user-type-selector" size="large">
@@ -153,7 +139,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Connection, Lock, PictureFilled, User } from '@element-plus/icons-vue'
 import { authApi } from '@/api/auth'
-import { useEnvironment } from '@/composables/useEnvironment'
 import { useAuthStore } from '@/stores/auth'
 import { clearRememberedLogin, loadRememberedLogin, persistRememberedLogin } from '@/utils/loginRemembering'
 
@@ -162,7 +147,6 @@ const MOBILE_BREAKPOINT = 900
 const router = useRouter()
 const authStore = useAuthStore()
 const loginFormRef = ref<FormInstance>()
-const { currentEnvironment, isPreview, switchEnvironment, syncEnvironmentState } = useEnvironment()
 
 const isMobile = ref(window.innerWidth < MOBILE_BREAKPOINT)
 const userType = ref<'internal' | 'supplier'>('internal')
@@ -176,8 +160,6 @@ const loginForm = reactive({
   password: '',
   captcha: ''
 })
-
-const isPreviewMode = computed(() => isPreview.value)
 
 const loginRules = computed<FormRules>(() => ({
   username: [
@@ -195,12 +177,6 @@ const loginRules = computed<FormRules>(() => ({
 
 const handleResize = () => {
   isMobile.value = window.innerWidth < MOBILE_BREAKPOINT
-}
-
-const selectEnvironment = (target: 'stable' | 'preview') => {
-  if (currentEnvironment.value !== target) {
-    switchEnvironment()
-  }
 }
 
 const refreshCaptcha = async () => {
@@ -249,8 +225,7 @@ const handleLogin = async () => {
       loginForm.password,
       userType.value,
       userType.value === 'supplier' ? loginForm.captcha : undefined,
-      userType.value === 'supplier' ? captchaId.value : undefined,
-      currentEnvironment.value
+      userType.value === 'supplier' ? captchaId.value : undefined
     )
 
     if (rememberPassword.value) {
@@ -282,7 +257,6 @@ const handleLogin = async () => {
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
-  syncEnvironmentState()
 
   const rememberedLogin = loadRememberedLogin(localStorage)
 
@@ -320,21 +294,15 @@ defineExpose({
 
 <style scoped>
 .login-container {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.18), transparent 22%),
-    radial-gradient(circle at 84% 16%, rgba(255, 255, 255, 0.12), transparent 24%),
-    linear-gradient(135deg, #0a73d1 0%, #1492ec 42%, #25abff 100%);
+    linear-gradient(90deg, rgba(13, 40, 57, 0.96) 0 43%, rgba(238, 242, 241, 0.98) 43% 100%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 32px);
+  color: #102333;
   overflow: hidden;
-}
-
-.login-container--preview {
-  background:
-    radial-gradient(circle at 14% 20%, rgba(255, 255, 255, 0.16), transparent 24%),
-    radial-gradient(circle at 84% 14%, rgba(255, 255, 255, 0.1), transparent 22%),
-    linear-gradient(135deg, #a76410 0%, #d7851c 42%, #f3a33b 100%);
 }
 
 .login-topbar {
@@ -345,68 +313,44 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   min-height: 64px;
-  padding: 0 clamp(28px, 4vw, 56px);
-  background: linear-gradient(90deg, rgba(3, 70, 122, 0.84), rgba(11, 111, 188, 0.38));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(14px);
-}
-
-.login-topbar--preview {
-  background: linear-gradient(90deg, rgba(100, 52, 6, 0.88), rgba(184, 110, 18, 0.42));
+  padding: 0 48px;
+  background: rgba(8, 30, 45, 0.82);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
 }
 
 .brand-block {
   display: flex;
   align-items: baseline;
-  gap: 16px;
-  color: #f8fbff;
+  gap: 14px;
+  color: #f7fbfc;
 }
 
 .brand-mark {
-  font-size: clamp(28px, 2.2vw, 40px);
+  font-size: 32px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
 }
 
 .brand-caption {
   font-size: 13px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
   opacity: 0.72;
+  letter-spacing: 0;
 }
 
-.entry-environments {
+.entry-note {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.entry-environment {
-  min-width: 92px;
-  height: 38px;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.84);
+  gap: 12px;
+  color: rgba(247, 251, 252, 0.78);
   font-size: 14px;
-  transition: all 0.24s ease;
+  letter-spacing: 0;
 }
 
-.entry-environment:hover {
-  border-color: rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.entry-environment--active {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(255, 255, 255, 0.96);
-  color: #1377d6;
-  box-shadow: 0 10px 26px rgba(7, 39, 83, 0.16);
-}
-
-.entry-environment--preview.entry-environment--active {
-  color: #dd8d14;
+.entry-note__line {
+  width: 42px;
+  height: 1px;
+  background: #d9a441;
 }
 
 .login-stage {
@@ -414,51 +358,12 @@ defineExpose({
   flex: 1;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(0, 1fr) 420px;
   align-items: center;
-  gap: clamp(24px, 3.6vw, 48px);
+  gap: 48px;
   min-height: 0;
   height: calc(100vh - 64px);
-  padding: clamp(18px, 2.6vw, 30px) clamp(24px, 3.4vw, 52px) clamp(16px, 2.2vw, 22px);
-}
-
-.login-stage::before,
-.login-stage::after,
-.hero-panel::before,
-.hero-panel::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.login-stage::before {
-  right: 10%;
-  top: 8%;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 64%);
-}
-
-.login-stage::after {
-  inset: auto auto -10% -5%;
-  width: min(50vw, 760px);
-  aspect-ratio: 1 / 1;
-  background: repeating-linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.08) 0 14px,
-    rgba(255, 255, 255, 0) 14px 34px
-  );
-  clip-path: polygon(20% 100%, 42% 18%, 56% 18%, 88% 100%, 68% 100%, 59% 72%, 34% 72%, 27% 100%);
-  opacity: 0.72;
-}
-
-.login-stage--preview::after {
-  background: repeating-linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.1) 0 14px,
-    rgba(255, 255, 255, 0) 14px 34px
-  );
+  padding: 32px 52px;
 }
 
 .hero-panel {
@@ -466,55 +371,112 @@ defineExpose({
   min-height: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
-.hero-panel::before {
-  left: 0;
-  bottom: -26%;
-  width: min(44vw, 640px);
-  height: min(44vw, 640px);
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.09), transparent 66%);
-}
-
-.hero-panel::after {
-  right: 6%;
-  bottom: 4%;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  opacity: 0.44;
-}
-
-.hero-copy {
+.quality-map {
   position: relative;
-  z-index: 1;
-  max-width: 620px;
-  color: #ffffff;
+  width: min(100%, 620px);
+  height: 430px;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 42px);
 }
 
-.hero-kicker {
-  margin: 0 0 18px;
-  font-size: 15px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 0.82;
+.quality-map__rail,
+.quality-map__axis,
+.quality-map__marker {
+  position: absolute;
+  pointer-events: none;
 }
 
-.hero-copy h1 {
-  margin: 0;
-  font-size: clamp(36px, 4vw, 58px);
-  line-height: 1.08;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.quality-map__rail {
+  left: 11%;
+  right: 10%;
+  top: 49%;
+  height: 2px;
+  background: linear-gradient(90deg, #4db6ac, #d9a441 54%, #e55f4f);
 }
 
-.hero-subtitle {
-  margin: 16px 0 0;
-  font-size: clamp(17px, 1.55vw, 22px);
-  line-height: 1.45;
-  max-width: 500px;
-  opacity: 0.88;
+.quality-map__axis {
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.quality-map__axis--top {
+  top: 30%;
+}
+
+.quality-map__axis--bottom {
+  bottom: 26%;
+}
+
+.quality-map__node {
+  position: absolute;
+  width: 104px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(247, 251, 252, 0.94);
+  color: #173042;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.quality-map__node--iqc {
+  left: 8%;
+  top: 22%;
+}
+
+.quality-map__node--scar {
+  left: 36%;
+  top: 43%;
+}
+
+.quality-map__node--eightd {
+  right: 12%;
+  top: 18%;
+}
+
+.quality-map__node--ppap {
+  right: 24%;
+  bottom: 18%;
+}
+
+.quality-map__marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: #d9a441;
+  box-shadow: 0 0 0 6px rgba(217, 164, 65, 0.16);
+}
+
+.quality-map__marker--a {
+  left: 28%;
+  top: 48%;
+}
+
+.quality-map__marker--b {
+  right: 31%;
+  top: 48%;
+  background: #4db6ac;
+  box-shadow: 0 0 0 6px rgba(77, 182, 172, 0.16);
+}
+
+.quality-map__marker--c {
+  right: 14%;
+  bottom: 25%;
+  background: #e55f4f;
+  box-shadow: 0 0 0 6px rgba(229, 95, 79, 0.16);
 }
 
 .login-panel {
@@ -527,99 +489,54 @@ defineExpose({
 .login-panel-shell {
   --panel-title: #0f2748;
   --panel-muted: rgba(34, 59, 92, 0.74);
-  --panel-field-bg: rgba(255, 255, 255, 0.96);
+  --panel-field-bg: rgba(255, 255, 255, 0.98);
   --panel-field-border: rgba(15, 39, 72, 0.12);
   --panel-field-text: #223b5c;
   --panel-field-placeholder: rgba(34, 59, 92, 0.58);
   --panel-icon: rgba(34, 59, 92, 0.58);
-  --panel-segment-bg: rgba(233, 242, 251, 0.96);
+  --panel-segment-bg: rgba(232, 239, 241, 0.96);
   --panel-segment-text: #4a6787;
-  --panel-segment-border: rgba(40, 112, 184, 0.16);
-  --panel-primary-start: #2d8cf0;
-  --panel-primary-end: #4ba6ff;
-  --panel-primary-shadow: rgba(35, 131, 228, 0.26);
+  --panel-segment-border: rgba(45, 84, 105, 0.14);
+  --panel-primary-start: #137c78;
+  --panel-primary-end: #1d928d;
+  --panel-primary-shadow: rgba(19, 124, 120, 0.22);
   --panel-primary-contrast: #ffffff;
-  --panel-secondary-bg: rgba(227, 238, 249, 0.96);
+  --panel-secondary-bg: rgba(232, 239, 241, 0.96);
   --panel-secondary-text: #526f8d;
-  --panel-secondary-border: rgba(21, 76, 136, 0.12);
-  --panel-badge-bg: rgba(19, 119, 214, 0.12);
-  --panel-badge-text: #1377d6;
-  --panel-focus-border: rgba(47, 142, 239, 0.34);
-  --panel-focus-ring: rgba(47, 142, 239, 0.1);
-  --panel-trigger-border: rgba(47, 142, 239, 0.28);
-  --panel-checkbox-border: rgba(47, 142, 239, 0.34);
+  --panel-secondary-border: rgba(45, 84, 105, 0.14);
+  --panel-focus-border: rgba(19, 124, 120, 0.34);
+  --panel-focus-ring: rgba(19, 124, 120, 0.1);
+  --panel-trigger-border: rgba(19, 124, 120, 0.28);
+  --panel-checkbox-border: rgba(19, 124, 120, 0.34);
   width: 100%;
   max-width: 420px;
-  padding: 24px 24px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 250, 255, 0.92));
-  box-shadow: 0 34px 72px rgba(6, 34, 73, 0.18);
-  backdrop-filter: blur(16px);
-}
-
-.login-panel-shell--stable {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 250, 255, 0.93));
-}
-
-.login-panel-shell--preview {
-  --panel-title: #68370c;
-  --panel-muted: rgba(104, 55, 12, 0.72);
-  --panel-field-bg: rgba(255, 252, 245, 0.96);
-  --panel-field-border: rgba(184, 118, 38, 0.16);
-  --panel-field-text: #6d4418;
-  --panel-field-placeholder: rgba(109, 68, 24, 0.54);
-  --panel-icon: rgba(109, 68, 24, 0.56);
-  --panel-segment-bg: rgba(255, 238, 210, 0.94);
-  --panel-segment-text: #97602b;
-  --panel-segment-border: rgba(202, 142, 63, 0.18);
-  --panel-primary-start: #d88b22;
-  --panel-primary-end: #f2a53b;
-  --panel-primary-shadow: rgba(208, 130, 27, 0.24);
-  --panel-primary-contrast: #fffaf0;
-  --panel-secondary-bg: rgba(255, 239, 214, 0.96);
-  --panel-secondary-text: #8b5a25;
-  --panel-secondary-border: rgba(191, 123, 39, 0.12);
-  --panel-badge-bg: rgba(221, 141, 20, 0.14);
-  --panel-badge-text: #cf7f12;
-  --panel-focus-border: rgba(216, 139, 34, 0.34);
-  --panel-focus-ring: rgba(216, 139, 34, 0.1);
-  --panel-trigger-border: rgba(216, 139, 34, 0.28);
-  --panel-checkbox-border: rgba(216, 139, 34, 0.34);
-  border-color: rgba(255, 212, 149, 0.92);
-  background: linear-gradient(180deg, rgba(255, 248, 236, 0.98), rgba(255, 239, 214, 0.94));
-  box-shadow: 0 34px 72px rgba(128, 79, 16, 0.18);
+  padding: 28px;
+  border: 1px solid rgba(11, 42, 62, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 28px 60px rgba(13, 40, 57, 0.18);
+  backdrop-filter: blur(14px);
 }
 
 .login-panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
-.login-panel-head h2 {
-  margin: 0;
-  color: var(--panel-title);
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 700;
-}
-
-.environment-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 84px;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: var(--panel-badge-bg);
-  color: var(--panel-badge-text);
+.login-panel-head p {
+  margin: 0 0 8px;
+  color: #7a8b95;
   font-size: 13px;
   font-weight: 600;
-  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.login-panel-head h1 {
+  margin: 0;
+  color: var(--panel-title);
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .user-type-selector {
@@ -635,7 +552,7 @@ defineExpose({
 .user-type-selector :deep(.el-radio-button__inner) {
   width: 100%;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid var(--panel-segment-border);
   background: var(--panel-segment-bg);
   color: var(--panel-segment-text);
@@ -644,11 +561,11 @@ defineExpose({
 }
 
 .user-type-selector :deep(.el-radio-button:first-child .el-radio-button__inner) {
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .user-type-selector :deep(.el-radio-button:last-child .el-radio-button__inner) {
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .user-type-selector :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
@@ -669,7 +586,7 @@ defineExpose({
 
 .login-form :deep(.el-input__wrapper) {
   min-height: 46px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--panel-field-bg);
   box-shadow: 0 0 0 1px var(--panel-field-border) inset;
 }
@@ -706,7 +623,7 @@ defineExpose({
 .captcha-trigger {
   width: 128px;
   height: 46px;
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .captcha-image {
@@ -760,7 +677,7 @@ defineExpose({
   min-height: 46px;
   margin: 0;
   padding: 0 16px;
-  border-radius: 14px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -804,21 +721,25 @@ defineExpose({
 }
 
 @media (max-width: 1100px) {
+  .login-container {
+    background:
+      linear-gradient(180deg, rgba(13, 40, 57, 0.96) 0 34%, rgba(238, 242, 241, 0.98) 34% 100%),
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 32px);
+  }
+
   .login-stage {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: 22px;
     justify-items: center;
     height: auto;
     min-height: calc(100vh - 64px);
-    padding-top: 18px;
-    padding-bottom: 22px;
+    padding: 22px 32px 28px;
   }
 
   .hero-panel {
     min-height: auto;
     width: 100%;
     justify-content: center;
-    text-align: center;
   }
 
   .login-panel {
@@ -826,12 +747,28 @@ defineExpose({
     justify-content: center;
   }
 
-  .login-stage::after {
-    left: 50%;
-    bottom: 38%;
-    width: min(70vw, 620px);
-    transform: translateX(-50%);
-    opacity: 0.36;
+  .quality-map {
+    width: min(100%, 560px);
+    height: 160px;
+  }
+
+  .quality-map__node {
+    width: 82px;
+    height: 42px;
+    font-size: 13px;
+  }
+
+  .quality-map__node--iqc,
+  .quality-map__node--eightd {
+    top: 18%;
+  }
+
+  .quality-map__node--scar {
+    top: 42%;
+  }
+
+  .quality-map__node--ppap {
+    bottom: 12%;
   }
 }
 
@@ -841,46 +778,18 @@ defineExpose({
     padding: 0 20px;
   }
 
-  .brand-block {
-    gap: 10px;
-  }
-
-  .brand-mark {
-    font-size: 30px;
-    letter-spacing: 0.1em;
-  }
-
-  .brand-caption {
-    display: none;
-  }
-
   .login-stage {
     min-height: calc(100vh - 60px);
     padding: 16px 20px 22px;
   }
 
   .login-stage--compact .hero-panel {
-    padding-top: 12px;
-  }
-
-  .hero-kicker {
-    margin-bottom: 14px;
-    font-size: 13px;
-    letter-spacing: 0.16em;
-  }
-
-  .hero-copy h1 {
-    font-size: clamp(30px, 8vw, 42px);
-  }
-
-  .hero-subtitle {
-    margin-top: 14px;
-    font-size: 17px;
+    padding-top: 6px;
   }
 
   .login-panel-shell {
     padding: 20px 18px 18px;
-    border-radius: 24px;
+    border-radius: 8px;
   }
 
   .login-panel-head {
@@ -889,37 +798,17 @@ defineExpose({
 }
 
 @media (max-width: 640px) {
-  .entry-environments {
-    gap: 6px;
-  }
-
-  .entry-environment {
-    min-width: 82px;
-    height: 34px;
-    padding: 0 12px;
-    font-size: 13px;
-  }
-
-  .login-stage::after,
-  .hero-panel::after {
+  .brand-caption,
+  .entry-note {
     display: none;
   }
 
-  .hero-copy {
-    max-width: 100%;
-  }
-
-  .hero-subtitle {
-    font-size: 16px;
+  .hero-panel {
+    display: none;
   }
 
   .login-panel-shell {
     max-width: none;
-  }
-
-  .login-panel-head {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .captcha-row {

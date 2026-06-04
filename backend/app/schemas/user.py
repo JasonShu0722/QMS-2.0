@@ -157,7 +157,10 @@ class LoginRequestSchema(BaseModel):
     user_type: str = Field(..., description="用户类型: internal 或 supplier")
     captcha: Optional[str] = Field(None, description="图形验证码")
     captcha_id: Optional[str] = Field(None, description="验证码 ID")
-    environment: Optional[str] = Field("stable", description="登录目标环境")
+    environment: Optional[str] = Field(
+        None,
+        description="兼容旧客户端字段；登录目标环境由当前后端运行环境决定",
+    )
 
     @field_validator("user_type")
     @classmethod

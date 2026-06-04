@@ -35,6 +35,21 @@ router = APIRouter(prefix="/auth", tags=["认证管理"])
 
 local_auth = LocalAuthStrategy()
 GENERIC_REGISTRATION_VALIDATION_ERROR = "注册信息校验未通过，请检查后重试"
+LOGIN_ENVIRONMENTS = {"stable", "preview"}
+
+
+def _current_login_environment() -> str:
+    environment = (settings.ENVIRONMENT or "stable").strip().lower()
+    return environment if environment in LOGIN_ENVIRONMENTS else "stable"
+
+
+def _parse_allowed_environments(raw_environments: str | None) -> list[str]:
+    parsed = [
+        item.strip()
+        for item in (raw_environments or "stable").split(",")
+        if item.strip()
+    ]
+    return parsed or ["stable"]
 
 
 def _normalize_internal_registration_email_domain() -> str:
@@ -145,12 +160,12 @@ async def login(
         user = user_result.scalar_one()
         await local_auth.record_successful_login(db, user)
 
-        requested_env = login_data.environment or "stable"
-        allowed = (user.allowed_environments or "stable").split(",")
-        if requested_env not in allowed:
+        login_environment = _current_login_environment()
+        allowed = _parse_allowed_environments(user.allowed_environments)
+        if login_environment not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"您没有 {requested_env} 环境的访问权限，请联系管理员",
+                detail=f"您没有 {login_environment} 环境的访问权限，请联系管理员",
             )
 
         access_token = local_auth.create_access_token(user.id)
@@ -158,17 +173,17 @@ async def login(
             access_token=access_token,
             token_type="bearer",
             user_info=await build_user_response(db, user),
-            environment=requested_env,
+            environment=login_environment,
             allowed_environments=allowed,
             password_expired=True,
         )
 
-    requested_env = login_data.environment or "stable"
-    allowed = (user.allowed_environments or "stable").split(",")
-    if requested_env not in allowed:
+    login_environment = _current_login_environment()
+    allowed = _parse_allowed_environments(user.allowed_environments)
+    if login_environment not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"您没有 {requested_env} 环境的访问权限，请联系管理员",
+            detail=f"您没有 {login_environment} 环境的访问权限，请联系管理员",
         )
 
     access_token = local_auth.create_access_token(user.id)
@@ -176,7 +191,7 @@ async def login(
         access_token=access_token,
         token_type="bearer",
         user_info=await build_user_response(db, user),
-        environment=requested_env,
+        environment=login_environment,
         allowed_environments=allowed,
         password_expired=False,
     )

@@ -11,14 +11,14 @@
 
 这一层决定主要使用哪份配置文件。
 
-### 2. 业务环境
+### 2. 运行入口 / 发布环境
 
 - `stable`：正式版
 - `preview`：预览版
 
-这一层决定用户登录到哪个业务环境，以及网关把请求转发到哪套服务。
+这一层决定网关把请求转发到哪套前后端服务，也决定后端登录时使用哪个运行环境做准入校验。
 
-`.env` 和 `.env.production` 不是拿来切换业务环境本身的。
+`.env` 和 `.env.production` 不是拿来切换运行入口本身的。
 它们更像是“系统运行参数”和“部署参数”。
 
 ## 二、项目里的关键规则
@@ -35,21 +35,24 @@ Nginx 会根据域名把请求转发到：
 - `frontend-stable` / `backend-stable`
 - `frontend-preview` / `backend-preview`
 
-### 2. 页面保留环境切换按钮
+### 2. 登录页不再提供环境选择
 
-这不是和双域名冲突，而是项目定义的一部分。
+正式 / 预览属于发布入口，不属于普通用户登录前需要选择的业务参数。
 
-- 在线上环境中，点击“正式版 / 预览版”按钮，本质上是在两个入口域名之间切换
-- 在本地开发中，没有双域名，所以按钮退化为切换本地保存的 `current_environment`
+- 登录页只保留内部员工 / 供应商身份切换
+- 线上环境由当前域名决定进入正式版还是预览版
+- 登录后的桌面 / 移动布局仍可为具备权限的用户提供入口切换
 
-### 3. 登录请求仍显式携带 environment
+### 3. 登录请求不携带 environment
 
-登录请求依旧会带上：
+登录请求只提交身份认证所需字段：
 
-- `environment=stable`
-- `environment=preview`
+- `username`
+- `password`
+- `user_type`
+- 供应商登录额外提交 `captcha` 与 `captcha_id`
 
-这样后端可以继续基于用户权限做环境准入校验。
+后端使用当前实例的 `settings.ENVIRONMENT` 与用户 `allowed_environments` 做运行环境准入校验。旧客户端如果仍提交 `environment` 字段，后端会兼容接收，但不会把它作为登录目标。
 
 ## 三、几份环境文件分别做什么
 
@@ -146,8 +149,7 @@ VITE_ENVIRONMENT=stable
 - `VITE_API_BASE_URL=/api`
   让 Vite 代理请求到本地后端，避免浏览器跨域
 - `VITE_ENVIRONMENT=stable`
-  只是本地默认语义
-  真正线上环境切换仍由双域名入口加按钮行为共同决定
+  只是保留的构建期语义，不再驱动登录页环境选择
 
 ## 四、正式版 / 预览版到底由什么决定
 
@@ -173,9 +175,9 @@ VITE_ENVIRONMENT=stable
 - `PRIMARY_DOMAIN` 路由到稳定环境
 - `PREVIEW_DOMAIN` 路由到预览环境
 
-### 3. 登录请求中的 `environment`
+### 3. 后端运行环境
 
-后端登录接口会读取登录请求中的 `environment` 字段。
+后端登录接口使用 `settings.ENVIRONMENT` 判断当前运行环境。
 
 相关代码：
 
@@ -184,7 +186,7 @@ VITE_ENVIRONMENT=stable
 
 ### 4. 用户本身的环境权限
 
-数据库用户有 `allowed_environments` 字段，用于控制其可登录的业务环境。
+数据库用户有 `allowed_environments` 字段，用于控制其可登录的运行入口。普通用户通常只需要 `stable`，Key User 或管理员可额外具备 `preview`。
 
 相关代码：
 
@@ -202,7 +204,6 @@ VITE_ENVIRONMENT=stable
 
 - [useEnvironment.ts](/E:/WorkSpace/QMS/frontend/src/composables/useEnvironment.ts)
 - [auth.ts](/E:/WorkSpace/QMS/frontend/src/stores/auth.ts)
-- [Login.vue](/E:/WorkSpace/QMS/frontend/src/views/Login.vue)
 - [MainLayout.vue](/E:/WorkSpace/QMS/frontend/src/layouts/MainLayout.vue)
 - [MobileLayout.vue](/E:/WorkSpace/QMS/frontend/src/layouts/MobileLayout.vue)
 
@@ -221,7 +222,7 @@ VITE_ENVIRONMENT=stable
 ## 六、当前已经统一的约定
 
 - 本地前端默认使用 `VITE_API_BASE_URL=/api`
-- 本地前端默认使用 `VITE_ENVIRONMENT=stable`
+- 本地前端可保留 `VITE_ENVIRONMENT=stable` 作为构建期标识
 - 服务器部署必须显式使用 `docker compose --env-file .env.production`
-- 正式版与预览版在线上由双域名入口加按钮切换共同实现
-- 前端登录页、桌面布局、移动布局都复用同一套环境切换逻辑
+- 正式版与预览版在线上由双域名入口和后端 `ENVIRONMENT` 共同决定
+- 前端登录页不展示环境切换；登录后的桌面布局和移动布局可展示当前环境及授权切换入口

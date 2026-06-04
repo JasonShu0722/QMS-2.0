@@ -107,7 +107,7 @@ describe('auth store', () => {
     })
 
     const store = useAuthStore()
-    await store.login('platform-admin', 'Secret123!', 'internal', undefined, undefined, 'preview')
+    await store.login('platform-admin', 'Secret123!', 'internal')
 
     expect(store.token).toBe('token-123')
     expect(store.currentEnvironment).toBe('preview')
@@ -149,7 +149,7 @@ describe('auth store', () => {
     expect(window.localStorage.setItem).toHaveBeenCalledWith('password_expired', 'true')
   })
 
-  it('keeps the selected entry environment when backend returns a runtime environment marker', async () => {
+  it('normalizes unsupported backend environment markers back to stable', async () => {
     loginMock.mockResolvedValue({
       access_token: 'token-dev',
       token_type: 'bearer',
@@ -171,7 +171,7 @@ describe('auth store', () => {
     })
 
     const store = useAuthStore()
-    await store.login('local-admin', 'Secret123!', 'internal', undefined, undefined, 'stable')
+    await store.login('local-admin', 'Secret123!', 'internal')
 
     expect(store.currentEnvironment).toBe('stable')
     expect(window.localStorage.setItem).toHaveBeenCalledWith('current_environment', 'stable')

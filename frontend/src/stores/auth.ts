@@ -9,7 +9,7 @@ import { detectEntryEnvironment, normalizeEntryEnvironment, type EntryEnvironmen
  * Environment rules:
  * - On deployed domains, runtime hostname is the source of truth.
  * - In local development, `current_environment` in localStorage is used.
- * - Login requests still send the selected business environment explicitly.
+ * - Login responses from the backend settle the authenticated runtime environment.
  */
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('access_token'))
@@ -120,8 +120,7 @@ export const useAuthStore = defineStore('auth', () => {
     password: string,
     userType: 'internal' | 'supplier',
     captcha?: string,
-    captchaId?: string,
-    environment: EntryEnvironment = 'stable'
+    captchaId?: string
   ): Promise<void> {
     const { authApi } = await import('@/api/auth')
 
@@ -130,13 +129,12 @@ export const useAuthStore = defineStore('auth', () => {
       password,
       user_type: userType,
       captcha,
-      captcha_id: captchaId,
-      environment
+      captcha_id: captchaId
     })
 
     token.value = response.access_token
     userInfo.value = response.user_info
-    currentEnvironment.value = normalizeEntryEnvironment(environment)
+    currentEnvironment.value = normalizeEntryEnvironment(response.environment)
 
     localStorage.setItem('access_token', response.access_token)
     localStorage.setItem(

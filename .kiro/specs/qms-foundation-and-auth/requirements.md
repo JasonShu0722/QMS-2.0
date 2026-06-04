@@ -121,7 +121,7 @@
 4. WHEN 用户输入错误密码连续 5 次 THEN THE QMS_System SHALL 锁定账号 30 分钟
 5. WHEN 用户首次登录或密码超过 90 天 THEN THE QMS_System SHALL 强制用户修改密码
 6. WHEN 用户设置新密码 THEN THE QMS_System SHALL 验证密码包含大写、小写、数字、特殊字符中至少三种且长度大于 8 位
-7. WHEN 用户选择 stable 或 preview 环境 THEN THE QMS_System SHALL 使用 `allowed_environments` 作为唯一登录准入规则
+7. WHEN 用户从 stable 或 preview 运行入口登录 THEN THE QMS_System SHALL 使用后端当前运行环境与 `allowed_environments` 作为唯一登录准入规则
 8. WHEN 用户登录成功 THEN THE QMS_System SHALL 生成 JWT_Token 并返回稳定会话对象，至少包含 `user_info`、`environment`、`allowed_environments` 与 `password_expired`
 9. WHERE LDAP_Auth 功能启用 WHEN 内部员工选择 SSO 登录 THEN THE QMS_System SHALL 调用 LDAP 接口进行身份验证（预留功能）
 

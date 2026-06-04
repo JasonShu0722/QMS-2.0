@@ -60,7 +60,6 @@ export interface LoginRequest {
   user_type: UserType
   captcha?: string
   captcha_id?: string
-  environment?: string
 }
 
 /**

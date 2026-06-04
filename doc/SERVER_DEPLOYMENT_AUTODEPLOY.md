@@ -89,9 +89,9 @@ Nginx 模板文件为：
 这里需要特别注意：
 
 - `.env.production` 负责的是服务器部署参数
-- `stable / preview` 负责的是业务环境隔离
+- `stable / preview` 负责的是运行入口与发布通道隔离
 
-也就是说，`.env.production` 不会替代项目里原本的双环境设计。正式版和预览版仍然由两套前后端服务、登录参数 `environment`、以及用户 `allowed_environments` 权限共同决定。
+也就是说，`.env.production` 不会替代项目里原本的双环境设计。正式版和预览版仍然由两套前后端服务、后端 `ENVIRONMENT` 运行标识，以及用户 `allowed_environments` 权限共同决定；登录请求本身不再提交目标环境。
 
 当前默认是 HTTP 内部监听，适合先跑通服务器环境和自动更新链路。
 如果你使用的是 `Nginx Proxy Manager`，HTTPS 可以直接在 NPM 上申请和管理，QMS 容器内不需要再单独处理公网 `443`。

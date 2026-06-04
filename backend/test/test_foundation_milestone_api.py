@@ -213,8 +213,8 @@ async def test_register_approve_and_login_flow(async_client: AsyncClient, db_ses
 
 
 @pytest.mark.asyncio
-async def test_login_rejects_environment_outside_allowed_environments(
-    async_client: AsyncClient, db_session: AsyncSession
+async def test_login_uses_runtime_environment_for_environment_gate(
+    async_client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ):
     await _create_user(
         db_session,
@@ -223,7 +223,7 @@ async def test_login_rejects_environment_outside_allowed_environments(
         allowed_environments="stable",
     )
 
-    response = await async_client.post(
+    legacy_client_response = await async_client.post(
         "/api/v1/auth/login",
         json={
             "username": "stable_only_user",
@@ -233,8 +233,22 @@ async def test_login_rejects_environment_outside_allowed_environments(
         },
     )
 
-    assert response.status_code == 403
-    assert "preview" in response.json()["detail"]
+    assert legacy_client_response.status_code == 200
+    assert legacy_client_response.json()["environment"] == "stable"
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "preview")
+
+    preview_response = await async_client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "stable_only_user",
+            "password": "StableOnly123!",
+            "user_type": "internal",
+        },
+    )
+
+    assert preview_response.status_code == 403
+    assert "preview" in preview_response.json()["detail"]
 
 
 @pytest.mark.asyncio
