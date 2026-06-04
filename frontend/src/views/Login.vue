@@ -100,9 +100,6 @@
 
             <div class="form-meta">
               <el-checkbox v-model="rememberPassword">记住密码</el-checkbox>
-              <router-link v-if="userType === 'internal'" to="/register" class="register-link">
-                立即注册
-              </router-link>
             </div>
 
             <el-button
@@ -460,34 +457,36 @@ defineExpose({
 }
 
 .login-panel-shell {
-  --panel-title: #0f2748;
-  --panel-muted: rgba(34, 59, 92, 0.74);
+  --panel-title: #0d2b51;
+  --panel-muted: rgba(36, 68, 104, 0.72);
   --panel-field-bg: rgba(255, 255, 255, 0.98);
-  --panel-field-border: rgba(15, 39, 72, 0.12);
-  --panel-field-text: #223b5c;
-  --panel-field-placeholder: rgba(34, 59, 92, 0.58);
-  --panel-icon: rgba(34, 59, 92, 0.58);
-  --panel-segment-bg: rgba(232, 239, 241, 0.96);
-  --panel-segment-text: #4a6787;
-  --panel-segment-border: rgba(45, 84, 105, 0.14);
-  --panel-primary-start: #137c78;
-  --panel-primary-end: #1d928d;
-  --panel-primary-shadow: rgba(19, 124, 120, 0.22);
+  --panel-field-border: rgba(30, 91, 150, 0.14);
+  --panel-field-text: #203d62;
+  --panel-field-placeholder: rgba(50, 80, 116, 0.58);
+  --panel-icon: rgba(67, 99, 132, 0.58);
+  --panel-segment-bg: rgba(232, 243, 253, 0.92);
+  --panel-segment-text: #426992;
+  --panel-segment-border: rgba(35, 108, 179, 0.16);
+  --panel-primary-start: #156fc8;
+  --panel-primary-end: #2f9af0;
+  --panel-primary-shadow: rgba(16, 100, 197, 0.24);
   --panel-primary-contrast: #ffffff;
-  --panel-secondary-bg: rgba(232, 239, 241, 0.96);
-  --panel-secondary-text: #526f8d;
-  --panel-secondary-border: rgba(45, 84, 105, 0.14);
-  --panel-focus-border: rgba(19, 124, 120, 0.34);
-  --panel-focus-ring: rgba(19, 124, 120, 0.1);
-  --panel-trigger-border: rgba(19, 124, 120, 0.28);
-  --panel-checkbox-border: rgba(19, 124, 120, 0.34);
+  --panel-secondary-bg: rgba(230, 241, 251, 0.92);
+  --panel-secondary-text: #496b90;
+  --panel-secondary-border: rgba(35, 108, 179, 0.18);
+  --panel-focus-border: rgba(39, 137, 231, 0.42);
+  --panel-focus-ring: rgba(39, 137, 231, 0.12);
+  --panel-trigger-border: rgba(39, 137, 231, 0.28);
+  --panel-checkbox-border: rgba(39, 137, 231, 0.34);
   width: 100%;
   max-width: 420px;
   padding: 28px;
-  border: 1px solid rgba(11, 42, 62, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 28px 60px rgba(13, 40, 57, 0.18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 249, 255, 0.94));
+  box-shadow:
+    0 34px 78px rgba(5, 57, 116, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.84) inset;
   backdrop-filter: blur(14px);
 }
 
@@ -497,7 +496,7 @@ defineExpose({
 
 .login-panel-head p {
   margin: 0 0 8px;
-  color: #7a8b95;
+  color: #748da3;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0;
@@ -530,7 +529,8 @@ defineExpose({
   background: var(--panel-segment-bg);
   color: var(--panel-segment-text);
   font-weight: 600;
-  transition: all 0.24s ease;
+  box-shadow: none;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .user-type-selector :deep(.el-radio-button:first-child .el-radio-button__inner) {
@@ -545,7 +545,9 @@ defineExpose({
   background: linear-gradient(135deg, var(--panel-primary-start), var(--panel-primary-end));
   border-color: transparent;
   color: var(--panel-primary-contrast);
-  box-shadow: 0 14px 28px var(--panel-primary-shadow);
+  box-shadow:
+    0 14px 26px var(--panel-primary-shadow),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 
 .login-form {
@@ -561,7 +563,9 @@ defineExpose({
   min-height: 46px;
   border-radius: 8px;
   background: var(--panel-field-bg);
-  box-shadow: 0 0 0 1px var(--panel-field-border) inset;
+  box-shadow:
+    0 0 0 1px var(--panel-field-border) inset,
+    0 10px 24px rgba(13, 78, 143, 0.05);
 }
 
 .login-form :deep(.el-input__wrapper.is-focus) {
@@ -633,17 +637,6 @@ defineExpose({
   background: rgba(255, 255, 255, 0.9);
 }
 
-.register-link {
-  color: var(--panel-primary-start);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.register-link:hover {
-  opacity: 0.88;
-}
-
 .login-button,
 .sso-button {
   width: 100%;
@@ -663,7 +656,9 @@ defineExpose({
   margin-bottom: 12px;
   border: none;
   background: linear-gradient(135deg, var(--panel-primary-start), var(--panel-primary-end));
-  box-shadow: 0 18px 30px var(--panel-primary-shadow);
+  box-shadow:
+    0 18px 34px var(--panel-primary-shadow),
+    0 1px 0 rgba(255, 255, 255, 0.24) inset;
 }
 
 .login-button:hover {

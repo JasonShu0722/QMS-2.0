@@ -97,7 +97,7 @@ describe('Login.vue', () => {
       routes: [
         { path: '/login', component: Login },
         { path: '/workbench', component: { template: '<div>Workbench</div>' } },
-        { path: '/register', component: { template: '<div>Register</div>' } }
+        { path: '/register', redirect: '/login' }
       ]
     })
 
@@ -127,10 +127,10 @@ describe('Login.vue', () => {
     expect(wrapper.find('.hero-copy').exists()).toBe(true)
     expect(wrapper.text()).toContain('让质量更透明')
     expect(wrapper.find('.entry-environments').exists()).toBe(false)
-    expect(wrapper.find('a[href="/register"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/register"]').exists()).toBe(false)
   })
 
-  it('hides the register entry when supplier login is selected', async () => {
+  it('keeps the register entry hidden when supplier login is selected', async () => {
     vi.mocked(authApi.getCaptcha).mockResolvedValue({
       captcha_image: 'data:image/png;base64,test',
       captcha_id: 'captcha-1',
