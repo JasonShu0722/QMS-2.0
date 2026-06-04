@@ -13,18 +13,16 @@
     </header>
 
     <main :class="['login-stage', { 'login-stage--compact': isMobile }]">
-      <section class="hero-panel" aria-hidden="true">
-        <div class="quality-map">
-          <div class="quality-map__rail"></div>
-          <div class="quality-map__axis quality-map__axis--top"></div>
-          <div class="quality-map__axis quality-map__axis--bottom"></div>
-          <div class="quality-map__node quality-map__node--iqc">IQC</div>
-          <div class="quality-map__node quality-map__node--scar">SCAR</div>
-          <div class="quality-map__node quality-map__node--eightd">8D</div>
-          <div class="quality-map__node quality-map__node--ppap">PPAP</div>
-          <div class="quality-map__marker quality-map__marker--a"></div>
-          <div class="quality-map__marker quality-map__marker--b"></div>
-          <div class="quality-map__marker quality-map__marker--c"></div>
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="hero-kicker">Quality Management System</p>
+          <h1>
+            让质量更透明<br>
+            让协同更高效
+          </h1>
+          <p class="hero-subtitle">
+            Make quality visible across teams and keep collaboration moving.
+          </p>
         </div>
       </section>
 
@@ -298,9 +296,9 @@ defineExpose({
   display: flex;
   flex-direction: column;
   background:
-    linear-gradient(90deg, rgba(13, 40, 57, 0.96) 0 43%, rgba(238, 242, 241, 0.98) 43% 100%),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 32px),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 32px);
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.18), transparent 22%),
+    radial-gradient(circle at 84% 16%, rgba(255, 255, 255, 0.12), transparent 24%),
+    linear-gradient(135deg, #0a73d1 0%, #1492ec 42%, #25abff 100%);
   color: #102333;
   overflow: hidden;
 }
@@ -314,9 +312,9 @@ defineExpose({
   justify-content: space-between;
   min-height: 64px;
   padding: 0 48px;
-  background: rgba(8, 30, 45, 0.82);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(90deg, rgba(3, 70, 122, 0.84), rgba(11, 111, 188, 0.38));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
 }
 
 .brand-block {
@@ -366,117 +364,92 @@ defineExpose({
   padding: 32px 52px;
 }
 
+.login-stage::before,
+.login-stage::after,
+.hero-panel::before,
+.hero-panel::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.login-stage::before {
+  right: 10%;
+  top: 8%;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 64%);
+}
+
+.login-stage::after {
+  inset: auto auto -10% -5%;
+  width: min(50vw, 760px);
+  aspect-ratio: 1 / 1;
+  background: repeating-linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.08) 0 14px,
+    rgba(255, 255, 255, 0) 14px 34px
+  );
+  clip-path: polygon(20% 100%, 42% 18%, 56% 18%, 88% 100%, 68% 100%, 59% 72%, 34% 72%, 27% 100%);
+  opacity: 0.72;
+}
+
 .hero-panel {
   position: relative;
   min-height: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
-.quality-map {
+.hero-panel::before {
+  left: 0;
+  bottom: -26%;
+  width: min(44vw, 640px);
+  height: min(44vw, 640px);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.09), transparent 66%);
+}
+
+.hero-panel::after {
+  right: 6%;
+  bottom: 4%;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  opacity: 0.44;
+}
+
+.hero-copy {
   position: relative;
-  width: min(100%, 620px);
-  height: 430px;
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 42px),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 42px);
+  z-index: 1;
+  max-width: 620px;
+  color: #ffffff;
 }
 
-.quality-map__rail,
-.quality-map__axis,
-.quality-map__marker {
-  position: absolute;
-  pointer-events: none;
+.hero-kicker {
+  margin: 0 0 18px;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.82;
 }
 
-.quality-map__rail {
-  left: 11%;
-  right: 10%;
-  top: 49%;
-  height: 2px;
-  background: linear-gradient(90deg, #4db6ac, #d9a441 54%, #e55f4f);
-}
-
-.quality-map__axis {
-  left: 18%;
-  right: 18%;
-  height: 1px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.2);
-}
-
-.quality-map__axis--top {
-  top: 30%;
-}
-
-.quality-map__axis--bottom {
-  bottom: 26%;
-}
-
-.quality-map__node {
-  position: absolute;
-  width: 104px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: rgba(247, 251, 252, 0.94);
-  color: #173042;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
-  font-size: 16px;
-  font-weight: 800;
+.hero-copy h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1.08;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
-.quality-map__node--iqc {
-  left: 8%;
-  top: 22%;
-}
-
-.quality-map__node--scar {
-  left: 36%;
-  top: 43%;
-}
-
-.quality-map__node--eightd {
-  right: 12%;
-  top: 18%;
-}
-
-.quality-map__node--ppap {
-  right: 24%;
-  bottom: 18%;
-}
-
-.quality-map__marker {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  background: #d9a441;
-  box-shadow: 0 0 0 6px rgba(217, 164, 65, 0.16);
-}
-
-.quality-map__marker--a {
-  left: 28%;
-  top: 48%;
-}
-
-.quality-map__marker--b {
-  right: 31%;
-  top: 48%;
-  background: #4db6ac;
-  box-shadow: 0 0 0 6px rgba(77, 182, 172, 0.16);
-}
-
-.quality-map__marker--c {
-  right: 14%;
-  bottom: 25%;
-  background: #e55f4f;
-  box-shadow: 0 0 0 6px rgba(229, 95, 79, 0.16);
+.hero-subtitle {
+  margin: 18px 0 0;
+  font-size: clamp(17px, 1.55vw, 21px);
+  line-height: 1.55;
+  max-width: 440px;
+  opacity: 0.88;
 }
 
 .login-panel {
@@ -721,12 +694,6 @@ defineExpose({
 }
 
 @media (max-width: 1100px) {
-  .login-container {
-    background:
-      linear-gradient(180deg, rgba(13, 40, 57, 0.96) 0 34%, rgba(238, 242, 241, 0.98) 34% 100%),
-      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 32px);
-  }
-
   .login-stage {
     grid-template-columns: minmax(0, 1fr);
     gap: 22px;
@@ -740,6 +707,7 @@ defineExpose({
     min-height: auto;
     width: 100%;
     justify-content: center;
+    text-align: center;
   }
 
   .login-panel {
@@ -747,28 +715,12 @@ defineExpose({
     justify-content: center;
   }
 
-  .quality-map {
-    width: min(100%, 560px);
-    height: 160px;
-  }
-
-  .quality-map__node {
-    width: 82px;
-    height: 42px;
-    font-size: 13px;
-  }
-
-  .quality-map__node--iqc,
-  .quality-map__node--eightd {
-    top: 18%;
-  }
-
-  .quality-map__node--scar {
-    top: 42%;
-  }
-
-  .quality-map__node--ppap {
-    bottom: 12%;
+  .login-stage::after {
+    left: 50%;
+    bottom: 34%;
+    width: min(70vw, 620px);
+    transform: translateX(-50%);
+    opacity: 0.36;
   }
 }
 
@@ -785,6 +737,21 @@ defineExpose({
 
   .login-stage--compact .hero-panel {
     padding-top: 6px;
+  }
+
+  .hero-kicker {
+    margin-bottom: 14px;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(30px, 8vw, 42px);
+  }
+
+  .hero-subtitle {
+    margin-top: 14px;
+    font-size: 17px;
   }
 
   .login-panel-shell {
@@ -804,6 +771,11 @@ defineExpose({
   }
 
   .hero-panel {
+    display: none;
+  }
+
+  .login-stage::after,
+  .hero-panel::after {
     display: none;
   }
 
