@@ -57,8 +57,110 @@ class UnifiedProblemStatus(str, Enum):
     RESPONDING = "responding"
     PENDING_REVIEW = "pending_review"
     VERIFYING = "verifying"
+    APPROVED = "approved"
     CLOSED = "closed"
     REJECTED = "rejected"
+
+
+class ProblemRiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ProblemReportSourceCreate(BaseModel):
+    """Source mapping supplied when creating a formal problem report."""
+
+    source_type: str = Field(..., description="Source entity type")
+    source_id: int = Field(..., gt=0, description="Source entity id")
+    source_parent_id: Optional[int] = Field(default=None, description="Parent source id when applicable")
+    source_number: Optional[str] = Field(default=None, description="Source ledger number")
+    is_primary: bool = Field(default=False, description="Whether this is the primary source")
+
+
+class ProblemReportSourcesUpdate(BaseModel):
+    """Replace the source range of a formal problem report."""
+
+    sources: list[ProblemReportSourceCreate] = Field(..., min_length=1, description="Replacement source mappings")
+
+
+class ProblemReportSourceResponse(BaseModel):
+    id: int
+    problem_report_id: Optional[int] = None
+    source_type: str
+    source_id: int
+    source_parent_id: Optional[int] = None
+    source_number: Optional[str] = None
+    is_primary: bool = False
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ProblemReportCreate(BaseModel):
+    """Create a formal cross-module problem report."""
+
+    module_key: Optional[str] = Field(default=None, description="Module key; inferred from category if omitted")
+    problem_category_key: str = Field(..., description="Problem category key")
+    title: str = Field(..., min_length=1, max_length=500, description="Problem title")
+    description: Optional[str] = Field(default=None, description="Problem description")
+    risk_level: ProblemRiskLevel = Field(default=ProblemRiskLevel.MEDIUM, description="Risk level")
+    response_mode: str = Field(default="brief", description="brief or eight_d")
+    responsible_dept: Optional[str] = Field(default=None, description="Responsible department")
+    assigned_to: Optional[int] = Field(default=None, description="Assigned user id")
+    due_at: Optional[datetime] = Field(default=None, description="Due date/time")
+    sources: list[ProblemReportSourceCreate] = Field(default_factory=list, description="Source mappings")
+
+
+class ProblemReportBriefResponse(BaseModel):
+    root_cause: Optional[str] = Field(default=None, description="Root cause")
+    containment_action: Optional[str] = Field(default=None, description="Containment action")
+    corrective_action: Optional[str] = Field(default=None, description="Corrective action")
+    evidence_files: list[str] = Field(default_factory=list, description="Evidence file paths")
+
+
+class ProblemReportReview(BaseModel):
+    approved: bool = Field(..., description="Review result")
+    review_comment: Optional[str] = Field(default=None, description="Review comment")
+
+
+class ProblemReportClose(BaseModel):
+    close_comment: Optional[str] = Field(default=None, description="Close comment")
+
+
+class ProblemReportResponse(BaseModel):
+    id: int
+    problem_number: str
+    eight_d_number: Optional[str] = None
+    module_key: str
+    problem_category_key: str
+    problem_category_label: str
+    title: str
+    description: Optional[str] = None
+    risk_level: str
+    response_mode: str
+    status: str
+    responsible_dept: Optional[str] = None
+    assigned_to: Optional[int] = None
+    action_owner_id: Optional[int] = None
+    owner_id: Optional[int] = None
+    created_by: Optional[int] = None
+    verified_by: Optional[int] = None
+    closed_by: Optional[int] = None
+    brief_response: Optional[dict] = None
+    due_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+    rejected_reason: Optional[str] = None
+    reopened_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    sources: list[ProblemReportSourceResponse] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
 
 
 class ProblemIssueSummaryQuery(BaseModel):
@@ -66,6 +168,8 @@ class ProblemIssueSummaryQuery(BaseModel):
 
     module_key: Optional[str] = Field(default=None, description="Module key filter")
     problem_category_key: Optional[str] = Field(default=None, description="Problem category filter")
+    risk_level: Optional[str] = Field(default=None, description="Risk level filter")
+    response_mode: Optional[str] = Field(default=None, description="Response mode filter")
     unified_status: Optional[UnifiedProblemStatus] = Field(default=None, description="Unified status filter")
     keyword: Optional[str] = Field(default=None, description="Keyword filter")
     only_assigned_to_me: bool = Field(default=False, description="Only include issues assigned to the current user")
@@ -86,6 +190,10 @@ class ProblemIssueSummaryItem(BaseModel):
     source_id: int = Field(..., description="Source entity id")
     source_parent_id: Optional[int] = Field(default=None, description="Parent source entity id when applicable")
     source_label: str = Field(..., description="Source label")
+    problem_report_id: Optional[int] = Field(default=None, description="Formal problem report id")
+    problem_number: Optional[str] = Field(default=None, description="Formal ZXQ problem number")
+    eight_d_number: Optional[str] = Field(default=None, description="Formal ZX8D report number")
+    risk_level: Optional[str] = Field(default=None, description="Risk level")
     module_key: str = Field(..., description="Module key")
     problem_category_key: str = Field(..., description="Problem category key")
     problem_category_label: str = Field(..., description="Problem category label")

@@ -56,10 +56,27 @@
           <el-descriptions-item label="客户">{{ complaint.customer_name || complaint.customer_code }}</el-descriptions-item>
           <el-descriptions-item label="客户代码">{{ complaint.customer_code }}</el-descriptions-item>
           <el-descriptions-item label="终端客户">{{ complaint.end_customer_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="收件日期">{{ complaint.received_date || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="发生日期">{{ complaint.occurrence_date || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="生产/出厂">{{ complaint.production_date || '-' }}</el-descriptions-item>
           <el-descriptions-item label="产品类型">{{ complaint.product_type }}</el-descriptions-item>
+          <el-descriptions-item label="产品型号">{{ complaint.product_model || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="项目阶段">{{ complaint.project_stage || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="批次/条码">{{ complaint.batch_code || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="追溯码">{{ complaint.trace_code || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="退件类型">{{ complaint.return_type || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="退件月份">{{ complaint.return_month || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="服务月数">{{ complaint.service_months ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="服务月分类">{{ complaint.service_month_category || '-' }}</el-descriptions-item>
           <el-descriptions-item label="VIN">{{ complaint.vin_code || '-' }}</el-descriptions-item>
           <el-descriptions-item label="里程">{{ complaint.mileage ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="购买日期">{{ complaint.purchase_date || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="里程分类">{{ complaint.mileage_category || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="4S店">{{ complaint.dealer_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="发生区域">{{ complaint.occurrence_region || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="故障分类">{{ complaint.fault_category || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="服务方式">{{ complaint.service_method || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="解析优先级">{{ complaint.analysis_priority || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="故障数">{{ complaint.failure_count ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="缺陷描述" :span="2">
             {{ complaint.defect_description }}
           </el-descriptions-item>

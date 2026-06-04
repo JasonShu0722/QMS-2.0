@@ -2,6 +2,8 @@ export type ProblemResponseMode = 'brief' | 'eight_d'
 
 export type ProblemHandlingLevel = 'simple' | 'complex' | 'major'
 
+export type ProblemRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
 export type ProblemModuleKey =
   | 'customer_quality'
   | 'process_quality'
@@ -29,6 +31,7 @@ export type UnifiedProblemStatus =
   | 'responding'
   | 'pending_review'
   | 'verifying'
+  | 'approved'
   | 'closed'
   | 'rejected'
 
@@ -65,6 +68,8 @@ export interface InternalUserOption {
 export interface ProblemIssueSummaryQuery {
   module_key?: ProblemModuleKey
   problem_category_key?: ProblemCategoryKey
+  risk_level?: ProblemRiskLevel
+  response_mode?: ProblemResponseMode
   unified_status?: UnifiedProblemStatus
   keyword?: string
   only_assigned_to_me?: boolean
@@ -80,6 +85,10 @@ export interface ProblemIssueSummaryItem {
   source_id: number
   source_parent_id?: number | null
   source_label: string
+  problem_report_id?: number | null
+  problem_number?: string | null
+  eight_d_number?: string | null
+  risk_level?: ProblemRiskLevel | string | null
   module_key: ProblemModuleKey | string
   problem_category_key: ProblemCategoryKey | string
   problem_category_label: string
@@ -108,4 +117,81 @@ export interface ProblemIssueSummaryListResponse {
   page_size: number
   module_counts?: Record<string, number>
   items: ProblemIssueSummaryItem[]
+}
+
+export interface ProblemReportSourceCreate {
+  source_type: string
+  source_id: number
+  source_parent_id?: number | null
+  source_number?: string | null
+  is_primary?: boolean
+}
+
+export interface ProblemReportSourceResponse extends ProblemReportSourceCreate {
+  id: number
+  problem_report_id?: number | null
+  created_at?: string | null
+}
+
+export interface ProblemReportSourcesUpdate {
+  sources: ProblemReportSourceCreate[]
+}
+
+export interface ProblemReportCreate {
+  module_key?: ProblemModuleKey | string | null
+  problem_category_key: ProblemCategoryKey | string
+  title: string
+  description?: string | null
+  risk_level?: ProblemRiskLevel
+  response_mode?: ProblemResponseMode
+  responsible_dept?: string | null
+  assigned_to?: number | null
+  due_at?: string | null
+  sources?: ProblemReportSourceCreate[]
+}
+
+export interface ProblemReportBriefResponse {
+  root_cause?: string | null
+  containment_action?: string | null
+  corrective_action?: string | null
+  evidence_files?: string[]
+}
+
+export interface ProblemReportReview {
+  approved: boolean
+  review_comment?: string | null
+}
+
+export interface ProblemReportClose {
+  close_comment?: string | null
+}
+
+export interface ProblemReportResponse {
+  id: number
+  problem_number: string
+  eight_d_number?: string | null
+  module_key: ProblemModuleKey | string
+  problem_category_key: ProblemCategoryKey | string
+  problem_category_label: string
+  title: string
+  description?: string | null
+  risk_level: ProblemRiskLevel | string
+  response_mode: ProblemResponseMode | string
+  status: UnifiedProblemStatus | string
+  responsible_dept?: string | null
+  assigned_to?: number | null
+  action_owner_id?: number | null
+  owner_id?: number | null
+  created_by?: number | null
+  verified_by?: number | null
+  closed_by?: number | null
+  brief_response?: Record<string, unknown> | null
+  due_at?: string | null
+  reviewed_at?: string | null
+  closed_at?: string | null
+  rejected_reason?: string | null
+  reopened_count: number
+  created_at: string
+  updated_at: string
+  sources: ProblemReportSourceResponse[]
 }

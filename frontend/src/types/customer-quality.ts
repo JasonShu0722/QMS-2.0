@@ -28,7 +28,24 @@ export interface CustomerComplaint {
   customer_code: string
   customer_name?: string
   end_customer_name?: string
+  received_date?: string
+  occurrence_date?: string
+  production_date?: string
   product_type: string
+  product_model?: string
+  project_stage?: string
+  batch_code?: string
+  trace_code?: string
+  return_type?: string
+  return_month?: string
+  service_months?: number
+  service_month_category?: string
+  dealer_name?: string
+  occurrence_region?: string
+  fault_category?: string
+  service_method?: string
+  analysis_priority?: string
+  failure_count?: number
   defect_description: string
   severity_level: string
   is_return_required: boolean
@@ -48,8 +65,14 @@ export interface CustomerComplaint {
   physical_analysis_updated_by?: number
   eight_d_report_id?: number
   eight_d_status?: EightDStatus
+  problem_report_id?: number | null
+  problem_number?: string | null
+  problem_report_eight_d_number?: string | null
+  problem_report_response_mode?: 'brief' | 'eight_d' | string | null
+  problem_report_risk_level?: string | null
   vin_code?: string
   mileage?: number
+  mileage_category?: string
   purchase_date?: string
   status: ComplaintStatus | 'pending_analysis' | 'in_progress' | 'pending_8d' | 'under_review'
   cqe_id?: number
@@ -67,13 +90,40 @@ export interface CustomerComplaintCreate {
   customer_code?: string
   customer_name?: string
   end_customer_name?: string
+  received_date?: string
+  occurrence_date?: string
+  production_date?: string
   product_type: string
+  product_model?: string
+  project_stage?: string
+  batch_code?: string
+  trace_code?: string
+  return_type?: string
+  return_month?: string
+  service_months?: number
+  service_month_category?: string
+  dealer_name?: string
+  occurrence_region?: string
+  fault_category?: string
+  service_method?: string
+  analysis_priority?: string
+  failure_count?: number
   defect_description: string
   is_return_required: boolean
   requires_physical_analysis: boolean
   vin_code?: string
   mileage?: number
+  mileage_category?: string
   purchase_date?: string
+}
+
+export interface CustomerComplaintBatchCreate {
+  items: CustomerComplaintCreate[]
+}
+
+export interface CustomerComplaintBatchCreateResponse {
+  total: number
+  items: CustomerComplaint[]
 }
 
 export interface CustomerComplaintListQuery {
@@ -246,7 +296,8 @@ export interface CustomerEightDListQuery {
   complaint_type?: ComplaintType
   customer_id?: number
   product_type?: string
-  status?: EightDStatus
+  status?: string
+  response_mode?: 'brief' | 'eight_d'
   start_date?: string
   end_date?: string
 }
@@ -254,7 +305,13 @@ export interface CustomerEightDListQuery {
 export interface CustomerEightDListItem {
   id: number
   complaint_id: number
+  problem_report_id?: number | null
+  eight_d_report_id?: number | null
   report_number: string
+  problem_number?: string | null
+  eight_d_number?: string | null
+  response_mode: 'brief' | 'eight_d' | string
+  risk_level?: string | null
   primary_complaint_number?: string
   complaint_type?: ComplaintType | string
   customer_code?: string
@@ -262,7 +319,7 @@ export interface CustomerEightDListItem {
   end_customer_name?: string
   product_type?: string
   related_complaint_count: number
-  status: EightDStatus
+  status: string
   approval_level: ApprovalLevel
   created_at: string
   updated_at: string

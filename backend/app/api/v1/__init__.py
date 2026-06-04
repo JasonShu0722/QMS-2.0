@@ -3,7 +3,7 @@ API Version 1
 统一管理所有 v1 版本的 API 路由
 """
 from fastapi import APIRouter
-from app.api.v1 import auth, tasks, notifications, profile, announcements, feature_flags, quality_metrics, ai, scar, supplier_lifecycle, supplier_targets, supplier_meetings, supplier_performance, ppap, inspection_specs, barcode_validation, process_defects, process_issues, customer_complaints, eight_d_customer, customer_claims, supplier_claims, lesson_learned, new_product_projects, trial_production, audit_plans, audit_templates, audit_executions, audit_ncs, customer_audits, instruments, quality_costs, workbench, requirements_panel, requirements_panel_auth, problem_management
+from app.api.v1 import auth, tasks, notifications, profile, announcements, feature_flags, quality_metrics, ai, scar, supplier_lifecycle, supplier_targets, supplier_meetings, supplier_performance, ppap, inspection_specs, barcode_validation, process_defects, process_issues, customer_complaints, eight_d_customer, customer_claims, supplier_claims, lesson_learned, new_product_projects, trial_production, trial_issues, new_product_defects, audit_plans, audit_templates, audit_executions, audit_ncs, customer_audits, instruments, quality_costs, workbench, requirements_panel, requirements_panel_auth, problem_management
 from app.api.v1.admin import (
     permissions, 
     users, 
@@ -46,6 +46,8 @@ api_router.include_router(supplier_claims.router)
 api_router.include_router(lesson_learned.router)
 api_router.include_router(new_product_projects.router)
 api_router.include_router(trial_production.router)
+api_router.include_router(trial_issues.router)
+api_router.include_router(new_product_defects.router)
 api_router.include_router(audit_plans.router)
 api_router.include_router(audit_templates.router)
 api_router.include_router(audit_executions.router)

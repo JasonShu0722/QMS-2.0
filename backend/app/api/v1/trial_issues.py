@@ -61,7 +61,7 @@ async def create_trial_issue(
         raise HTTPException(status_code=500, detail=f"创建试产问题失败: {str(e)}")
 
 
-@router.get("/{issue_id}", response_model=TrialIssueResponse)
+@router.get("/{issue_id:int}", response_model=TrialIssueResponse)
 async def get_trial_issue(
     issue_id: int,
     db: AsyncSession = Depends(get_db),

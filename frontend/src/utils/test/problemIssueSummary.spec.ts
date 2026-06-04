@@ -3,14 +3,19 @@ import { describe, expect, it } from 'vitest'
 import {
   buildProblemIssueModuleSummaries,
   buildProblemIssueModuleOptions,
+  buildProblemIssueResponseModeOptions,
+  buildProblemIssueRiskLevelOptions,
   buildUnifiedProblemStatusOptions,
   getProblemIssueCenterRoute,
   getProblemIssueModuleLabel,
   getProblemIssueQuickActionLabel,
   getProblemIssueQuickActionRoute,
   getProblemIssueResponseModeLabel,
+  getProblemIssueRiskLevelLabel,
+  getProblemIssueRiskLevelType,
   getProblemIssueSourceActionLabel,
   getProblemIssueSourceRoute,
+  getProblemIssueTrackingNumber,
   getProblemIssueWorkbenchPreviewActionLabel,
   getUnifiedProblemStatusLabel,
   getUnifiedProblemStatusType,
@@ -25,6 +30,8 @@ describe('problem issue summary helpers', () => {
     expect(getProblemIssueModuleLabel('incoming_quality')).toBe('供应商质量')
     expect(getProblemIssueModuleLabel('audit_management')).toBe('审核管理')
     expect(getUnifiedProblemStatusLabel('pending_review')).toBe('待审核')
+    expect(getUnifiedProblemStatusLabel('approved')).toBe('已批准')
+    expect(getUnifiedProblemStatusType('approved')).toBe('success')
     expect(getUnifiedProblemStatusType('rejected')).toBe('danger')
   })
 
@@ -42,8 +49,19 @@ describe('problem issue summary helpers', () => {
       'responding',
       'pending_review',
       'verifying',
+      'approved',
       'closed',
       'rejected',
+    ])
+    expect(buildProblemIssueRiskLevelOptions().map((item) => item.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'critical',
+    ])
+    expect(buildProblemIssueResponseModeOptions().map((item) => item.value)).toEqual([
+      'brief',
+      'eight_d',
     ])
   })
 
@@ -91,8 +109,11 @@ describe('problem issue summary helpers', () => {
     expect(getProblemIssueResponseModeLabel('brief')).toBe('简报')
     expect(getProblemIssueResponseModeLabel('eight_d')).toBe('8D')
     expect(getProblemIssueResponseModeLabel(null)).toBe('-')
+    expect(getProblemIssueRiskLevelLabel('critical')).toBe('严重')
+    expect(getProblemIssueRiskLevelType('critical')).toBe('danger')
+    expect(getProblemIssueRiskLevelLabel(null)).toBe('-')
 
-    expect(getProblemIssueSourceActionLabel({ source_type: 'customer_complaint' })).toBe('查看客诉')
+    expect(getProblemIssueSourceActionLabel({ source_type: 'customer_complaint' })).toBe('查看问题单')
     expect(getProblemIssueSourceRoute({ source_type: 'customer_complaint', source_id: 12 })).toEqual({
       name: 'CustomerComplaintDetail',
       params: { id: 12 },
@@ -105,19 +126,19 @@ describe('problem issue summary helpers', () => {
       params: { id: 8 },
     })
 
-    expect(getProblemIssueSourceActionLabel({ source_type: 'scar' })).toBe('查看 SCAR')
+    expect(getProblemIssueSourceActionLabel({ source_type: 'scar' })).toBe('查看问题单')
     expect(getProblemIssueSourceRoute({ source_type: 'scar', source_id: 21 })).toEqual({
       name: 'ScarManagement',
       query: { focusId: '21' },
     })
 
-    expect(getProblemIssueSourceActionLabel({ source_type: 'trial_issue' })).toBe('查看试产问题')
+    expect(getProblemIssueSourceActionLabel({ source_type: 'trial_issue' })).toBe('查看问题单')
     expect(getProblemIssueSourceRoute({ source_type: 'trial_issue', source_id: 15 })).toEqual({
       name: 'TrialIssueList',
       query: { focusId: '15' },
     })
 
-    expect(getProblemIssueSourceActionLabel({ source_type: 'audit_nc' })).toBe('查看 NC')
+    expect(getProblemIssueSourceActionLabel({ source_type: 'audit_nc' })).toBe('查看问题单')
     expect(getProblemIssueSourceRoute({ source_type: 'audit_nc', source_id: 9 })).toEqual({
       name: 'AuditNCList',
       query: { focusId: '9' },
@@ -128,7 +149,7 @@ describe('problem issue summary helpers', () => {
         source_type: 'audit_nc',
         problem_category_key: 'AQ3',
       } as any)
-    ).toBe('查看客审任务')
+    ).toBe('查看问题单')
     expect(
       getProblemIssueSourceRoute({
         source_type: 'audit_nc',
@@ -144,6 +165,27 @@ describe('problem issue summary helpers', () => {
         openIssueTasks: 'true',
       },
     })
+  })
+
+  it('uses formal problem or 8D numbers as the problem-center tracking number', () => {
+    expect(
+      getProblemIssueTrackingNumber({
+        eight_d_number: 'ZX8D-IQ0-2605-001',
+        problem_number: 'ZXQ-IQ0-2605-001',
+        reference_no: 'SCAR-20260507-0001',
+      })
+    ).toBe('ZX8D-IQ0-2605-001')
+
+    expect(
+      getProblemIssueTrackingNumber({
+        problem_number: 'ZXQ-CQ1-2605-001',
+        reference_no: 'CC-20260528-001',
+      })
+    ).toBe('ZXQ-CQ1-2605-001')
+
+    expect(getProblemIssueTrackingNumber({ reference_no: 'PD-20260528-001' })).toBe(
+      'PD-20260528-001'
+    )
   })
 
   it('derives quick-action labels and routes for actionable items', () => {
@@ -499,6 +541,8 @@ describe('problem issue summary helpers', () => {
     expect(
       parseProblemIssueCenterRouteQuery({
         module_key: 'incoming_quality',
+        risk_level: 'high',
+        response_mode: 'eight_d',
         only_created_by_me: 'true',
         only_actionable_to_me: 'true',
         only_overdue: '1',
@@ -507,6 +551,8 @@ describe('problem issue summary helpers', () => {
       })
     ).toEqual({
       module_key: 'incoming_quality',
+      risk_level: 'high',
+      response_mode: 'eight_d',
       only_assigned_to_me: false,
       only_actionable_to_me: true,
       only_created_by_me: true,

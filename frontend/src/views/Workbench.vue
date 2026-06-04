@@ -187,7 +187,7 @@
                   </div>
                   <div class="problem-issue-preview-item__meta">
                     <span>{{ getProblemIssueModuleLabel(item.module_key) }}</span>
-                    <span>{{ item.reference_no || '-' }}</span>
+                    <span>{{ getProblemIssueTrackingNumber(item) }}</span>
                     <span>{{ getUnifiedProblemStatusLabel(item.unified_status) }}</span>
                   </div>
                 </button>
@@ -635,6 +635,7 @@ import {
   getProblemIssueModuleLabel,
   getProblemIssueQuickActionRoute,
   getProblemIssueSourceRoute,
+  getProblemIssueTrackingNumber,
   getProblemIssueWorkbenchPreviewActionLabel,
   getUnifiedProblemStatusLabel,
   getProblemIssueCenterRoute,

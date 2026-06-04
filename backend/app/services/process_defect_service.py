@@ -20,6 +20,26 @@ from app.core.exceptions import NotFoundException, BusinessException
 
 
 class ProcessDefectService:
+    @staticmethod
+    async def generate_defect_number(db: AsyncSession) -> str:
+        today = datetime.utcnow().strftime("%Y%m%d")
+        prefix = f"PD-{today}-"
+        result = await db.execute(
+            select(ProcessDefect.defect_number)
+            .where(ProcessDefect.defect_number.like(f"{prefix}%"))
+            .order_by(ProcessDefect.defect_number.desc())
+            .limit(1)
+        )
+        latest_number = result.scalar_one_or_none()
+        if latest_number:
+            try:
+                sequence = int(str(latest_number).rsplit("-", 1)[-1]) + 1
+            except ValueError:
+                sequence = 1
+        else:
+            sequence = 1
+        return f"{prefix}{sequence:03d}"
+
     """过程质量不良品数据服务"""
     
     # 预设失效类型选项（可根据实际业务扩展）
@@ -119,6 +139,7 @@ class ProcessDefectService:
         
         # 创建不良品记录
         defect = ProcessDefect(
+            defect_number=await ProcessDefectService.generate_defect_number(db),
             defect_date=defect_data.defect_date,
             work_order=defect_data.work_order,
             process_id=defect_data.process_id,

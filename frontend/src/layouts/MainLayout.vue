@@ -116,12 +116,14 @@
             type="warning"
             :closable="false"
             show-icon
-            title="当前账号密码已过期，请尽快修改密码。"
           >
-            <template #default>
-              <el-button link type="warning" @click="openPasswordChange">
-                立即修改密码
-              </el-button>
+            <template #title>
+              <span class="password-expired-title">
+                <span>当前账号密码已过期，请尽快修改密码。</span>
+                <el-button link type="warning" class="password-expired-action" @click="openPasswordChange">
+                  立即修改密码
+                </el-button>
+              </span>
             </template>
           </el-alert>
         </div>
@@ -449,11 +451,36 @@ watch(
 }
 
 .password-expired-banner {
-  padding: 12px 20px 0;
+  padding: 0;
 }
 
 .password-expired-banner :deep(.el-alert) {
-  border-radius: 12px;
+  min-height: 44px;
+  border-radius: 0;
+  padding: 8px 24px;
+}
+
+.password-expired-banner :deep(.el-alert__content) {
+  display: flex;
+  align-items: center;
+}
+
+.password-expired-banner :deep(.el-alert__title) {
+  display: flex;
+  align-items: center;
+  line-height: 20px;
+}
+
+.password-expired-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.password-expired-action {
+  padding: 0;
 }
 
 .header-left,
@@ -650,7 +677,25 @@ watch(
 
 .main-content {
   background-color: #f3f6fb;
-  padding: 14px 16px 18px;
+  padding: 0 0 16px;
+}
+
+.main-content :deep(.page-stage > .el-card) {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.main-content :deep(.page-stage > .el-card > .el-card__body) {
+  padding: 14px 20px;
+}
+
+.main-content :deep(.page-stage > .mb-6) {
+  margin-bottom: 10px !important;
+}
+
+.main-content :deep(.page-stage > .mb-4) {
+  margin-bottom: 10px !important;
 }
 
 @media (max-width: 992px) {
@@ -665,7 +710,11 @@ watch(
 
 @media (max-width: 768px) {
   .main-content {
-    padding: 10px 12px 14px;
+    padding-bottom: 12px;
+  }
+
+  .main-content :deep(.page-stage > .el-card > .el-card__body) {
+    padding: 12px;
   }
 }
 </style>

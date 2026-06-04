@@ -110,6 +110,7 @@ class CustomerAuditIssueTaskCreate(BaseModel):
         default="medium",
         description="优先级: low, medium, high, critical"
     )
+    response_mode: str = Field(default="brief", description="brief or eight_d")
 
     class Config:
         json_schema_extra = {
@@ -148,6 +149,10 @@ class CustomerAuditIssueTaskResponse(BaseModel):
     created_by: Optional[int]
     problem_category_key: Optional[str] = None
     problem_category_label: Optional[str] = None
+    problem_report_id: Optional[int] = None
+    problem_number: Optional[str] = None
+    eight_d_number: Optional[str] = None
+    response_mode: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -76,6 +76,7 @@ class ProcessDefectUpdate(BaseModel):
 class ProcessDefectResponse(BaseModel):
     """不良品记录响应模型"""
     id: int
+    defect_number: Optional[str] = None
     defect_date: date
     work_order: str
     process_id: str

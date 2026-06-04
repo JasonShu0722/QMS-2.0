@@ -16,6 +16,12 @@ import type {
   TrialIssue,
   TrialIssueCreate,
   TrialIssueStatistics,
+  NewProductDefect,
+  NewProductDefectCreate,
+  NewProductDefectListResponse,
+  NewProductDefectProblemReportCreate,
+  NewProductDefectProblemReportResponse,
+  NewProductDefectUpdate,
   PaginatedResponse
 } from '@/types/new-product'
 
@@ -307,5 +313,28 @@ export const newProductApi = {
    */
   getTrialIssueStatistics(trialId: number): Promise<TrialIssueStatistics> {
     return request.get(`/v1/trial-issues/statistics`, { params: { trial_id: trialId } })
+  },
+
+  getNewProductDefects(params?: any): Promise<NewProductDefectListResponse> {
+    return request.get('/v1/new-product-defects', { params })
+  },
+
+  getNewProductDefect(id: number): Promise<NewProductDefect> {
+    return request.get(`/v1/new-product-defects/${id}`)
+  },
+
+  createNewProductDefect(data: NewProductDefectCreate): Promise<NewProductDefect> {
+    return request.post('/v1/new-product-defects', data)
+  },
+
+  updateNewProductDefect(id: number, data: NewProductDefectUpdate): Promise<NewProductDefect> {
+    return request.put(`/v1/new-product-defects/${id}`, data)
+  },
+
+  createNewProductDefectProblemReport(
+    id: number,
+    data: NewProductDefectProblemReportCreate
+  ): Promise<NewProductDefectProblemReportResponse> {
+    return request.post(`/v1/new-product-defects/${id}/problem-report`, data)
   }
 }

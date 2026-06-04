@@ -17,16 +17,10 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="问题分类">
-          <el-select
-            v-model="queryForm.problem_category_key"
-            clearable
-            filterable
-            placeholder="全部"
-            class="w-full md:w-48"
-          >
+        <el-form-item label="统一状态">
+          <el-select v-model="queryForm.unified_status" clearable placeholder="全部" class="w-full md:w-40">
             <el-option
-              v-for="option in categoryOptions"
+              v-for="option in statusOptions"
               :key="option.value"
               :label="option.label"
               :value="option.value"
@@ -34,10 +28,21 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="统一状态">
-          <el-select v-model="queryForm.unified_status" clearable placeholder="全部" class="w-full md:w-40">
+        <el-form-item label="风险">
+          <el-select v-model="queryForm.risk_level" clearable placeholder="全部" class="w-full md:w-32">
             <el-option
-              v-for="option in statusOptions"
+              v-for="option in riskLevelOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="回复形式">
+          <el-select v-model="queryForm.response_mode" clearable placeholder="全部" class="w-full md:w-36">
+            <el-option
+              v-for="option in responseModeOptions"
               :key="option.value"
               :label="option.label"
               :value="option.value"
@@ -79,34 +84,10 @@
     </el-card>
 
     <el-card v-loading="loading">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
-        <span>问题 {{ total }}</span>
-        <div class="flex flex-wrap items-center gap-2">
-          <el-tag size="small" type="success">可处理 {{ actionableCount }}</el-tag>
-          <el-tag size="small" :type="overdueCount ? 'danger' : 'info'">超期 {{ overdueCount }}</el-tag>
-        </div>
-      </div>
-
-      <div v-if="issueModuleSummaries.length" class="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span class="text-gray-500">模块分布</span>
-        <button
-          v-for="summary in issueModuleSummaries"
-          :key="`issue-module-${summary.moduleKey}`"
-          type="button"
-          class="problem-issue-center__module-chip"
-          :class="{ 'is-active': queryForm.module_key === summary.moduleKey }"
-          @click="handleModuleSummaryClick(summary.moduleKey)"
-        >
-          <span>{{ summary.label }}</span>
-          <strong>{{ summary.count }}</strong>
-        </button>
-      </div>
-
       <el-table :data="items" stripe class="w-full">
-        <el-table-column prop="reference_no" label="来源编号" min-width="160">
+        <el-table-column label="跟进编号" min-width="190">
           <template #default="{ row }">
-            <div class="font-medium">{{ row.reference_no || '-' }}</div>
-            <div class="text-xs text-gray-500">{{ row.source_label }}</div>
+            <div class="font-medium">{{ getProblemIssueTrackingNumber(row) }}</div>
           </template>
         </el-table-column>
 
@@ -115,8 +96,6 @@
             <span>{{ getProblemIssueModuleLabel(row.module_key) }}</span>
           </template>
         </el-table-column>
-
-        <el-table-column prop="problem_category_label" label="问题分类" width="140" />
 
         <el-table-column prop="title" label="问题标题" min-width="260" show-overflow-tooltip />
 
@@ -142,6 +121,14 @@
           <template #default="{ row }">
             <el-tag size="small" :type="row.response_mode === 'eight_d' ? 'primary' : 'info'">
               {{ getProblemIssueResponseModeLabel(row.response_mode) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="风险" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getProblemIssueRiskLevelType(row.risk_level)">
+              {{ getProblemIssueRiskLevelLabel(row.risk_level) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -221,7 +208,6 @@ import { ElMessage } from 'element-plus'
 
 import { problemManagementApi } from '@/api/problem-management'
 import { useAuthStore } from '@/stores/auth'
-import { useProblemManagementStore } from '@/stores/problemManagement'
 import type {
   InternalUserOption,
   ProblemIssueSummaryItem,
@@ -231,26 +217,27 @@ import type {
 import { formatDateTimeInBeijing } from '@/utils/dateTime'
 import { buildInternalUserLabelMap } from '@/utils/internalUsers'
 import {
-  buildProblemIssueModuleSummaries,
   buildProblemIssueModuleOptions,
+  buildProblemIssueResponseModeOptions,
+  buildProblemIssueRiskLevelOptions,
   buildUnifiedProblemStatusOptions,
   getProblemIssueModuleLabel,
   getProblemIssueQuickActionLabel,
   getProblemIssueQuickActionRoute,
   getProblemIssueResponseModeLabel,
+  getProblemIssueRiskLevelLabel,
+  getProblemIssueRiskLevelType,
+  getProblemIssueTrackingNumber,
   parseProblemIssueCenterRouteQuery,
   getProblemIssueSourceActionLabel,
   getProblemIssueSourceRoute,
   getUnifiedProblemStatusLabel,
   getUnifiedProblemStatusType,
-  isProblemIssueQuickActionable,
-  normalizeProblemIssueModuleCounts,
 } from '@/utils/problemIssueSummary'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const problemManagementStore = useProblemManagementStore()
 
 const SUPPORTED_MODULE_KEYS: ProblemModuleKey[] = [
   'customer_quality',
@@ -263,23 +250,15 @@ const SUPPORTED_MODULE_KEYS: ProblemModuleKey[] = [
 const loading = ref(false)
 const items = ref<ProblemIssueSummaryItem[]>([])
 const total = ref(0)
-const moduleCounts = ref<Partial<Record<ProblemModuleKey, number>>>({})
 const internalUsers = ref<InternalUserOption[]>([])
 
 const currentUserId = computed(() => authStore.userInfo?.id ?? null)
 const internalUserLabelMap = computed(() => buildInternalUserLabelMap(internalUsers.value))
 
-const actionableCount = computed(() =>
-  items.value.filter((item) => isProblemIssueQuickActionable(item, currentUserId.value)).length
-)
-const overdueCount = computed(() => items.value.filter((item) => item.is_overdue).length)
-const issueModuleSummaries = computed(() =>
-  buildProblemIssueModuleSummaries(moduleCounts.value, SUPPORTED_MODULE_KEYS)
-)
-
 const queryForm = reactive<ProblemIssueSummaryQuery>({
   module_key: undefined,
-  problem_category_key: undefined,
+  risk_level: undefined,
+  response_mode: undefined,
   unified_status: undefined,
   keyword: undefined,
   only_assigned_to_me: false,
@@ -294,26 +273,8 @@ const moduleOptions = buildProblemIssueModuleOptions().filter((option) =>
   SUPPORTED_MODULE_KEYS.includes(option.value)
 )
 const statusOptions = buildUnifiedProblemStatusOptions()
-
-const categoryOptions = computed(() => {
-  const categories = queryForm.module_key
-    ? problemManagementStore.categoriesByModule[queryForm.module_key] ?? []
-    : SUPPORTED_MODULE_KEYS.flatMap(
-        (moduleKey) => problemManagementStore.categoriesByModule[moduleKey] ?? []
-      )
-
-  return categories.map((item) => ({
-    value: item.key,
-    label: item.label,
-  }))
-})
-
-watch(
-  () => queryForm.module_key,
-  () => {
-    clearInvisibleProblemCategory()
-  }
-)
+const riskLevelOptions = buildProblemIssueRiskLevelOptions()
+const responseModeOptions = buildProblemIssueResponseModeOptions()
 
 watch(
   () => route.query,
@@ -330,13 +291,7 @@ async function loadIssueSummaries() {
     const response = await problemManagementApi.getIssueSummaries(queryForm)
     items.value = response.items
     total.value = response.total
-    moduleCounts.value = normalizeProblemIssueModuleCounts(
-      response.module_counts,
-      response.items,
-      SUPPORTED_MODULE_KEYS
-    )
   } catch (error: any) {
-    moduleCounts.value = {}
     ElMessage.error(error.message || '加载问题中心失败')
   } finally {
     loading.value = false
@@ -363,7 +318,8 @@ function applyRouteQueryToForm() {
   const parsedQuery = parseProblemIssueCenterRouteQuery(route.query)
 
   queryForm.module_key = parsedQuery.module_key
-  queryForm.problem_category_key = parsedQuery.problem_category_key
+  queryForm.risk_level = parsedQuery.risk_level
+  queryForm.response_mode = parsedQuery.response_mode
   queryForm.unified_status = parsedQuery.unified_status
   queryForm.keyword = parsedQuery.keyword
   queryForm.only_assigned_to_me = parsedQuery.only_assigned_to_me ?? false
@@ -372,7 +328,6 @@ function applyRouteQueryToForm() {
   queryForm.only_overdue = parsedQuery.only_overdue ?? false
   queryForm.page = parsedQuery.page ?? 1
   queryForm.page_size = parsedQuery.page_size ?? 20
-  clearInvisibleProblemCategory()
 }
 
 async function handleSearch() {
@@ -382,7 +337,8 @@ async function handleSearch() {
 
 async function handleReset() {
   queryForm.module_key = undefined
-  queryForm.problem_category_key = undefined
+  queryForm.risk_level = undefined
+  queryForm.response_mode = undefined
   queryForm.unified_status = undefined
   queryForm.keyword = undefined
   queryForm.only_assigned_to_me = false
@@ -392,26 +348,6 @@ async function handleReset() {
   queryForm.page = 1
   queryForm.page_size = 20
   await loadIssueSummaries()
-}
-
-async function handleModuleSummaryClick(moduleKey: ProblemModuleKey) {
-  queryForm.module_key = queryForm.module_key === moduleKey ? undefined : moduleKey
-  clearInvisibleProblemCategory()
-  queryForm.page = 1
-  await loadIssueSummaries()
-}
-
-function clearInvisibleProblemCategory() {
-  if (!queryForm.problem_category_key) {
-    return
-  }
-
-  const isStillVisible = categoryOptions.value.some(
-    (item) => item.value === queryForm.problem_category_key
-  )
-  if (!isStillVisible) {
-    queryForm.problem_category_key = undefined
-  }
 }
 
 function handleQuickAction(item: ProblemIssueSummaryItem) {
@@ -434,7 +370,6 @@ function handleOpenSource(item: ProblemIssueSummaryItem) {
 }
 
 onMounted(async () => {
-  await problemManagementStore.loadCatalog()
   await loadInternalUsers()
   applyRouteQueryToForm()
   await loadIssueSummaries()
@@ -445,25 +380,5 @@ onMounted(async () => {
 .problem-issue-center {
   min-height: 100vh;
   background-color: #f5f7fa;
-}
-
-.problem-issue-center__module-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #dcdfe6;
-  border-radius: 999px;
-  padding: 4px 10px;
-  color: #606266;
-  background: #fff;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.problem-issue-center__module-chip:hover,
-.problem-issue-center__module-chip.is-active {
-  border-color: #409eff;
-  color: #1d4ed8;
-  background: #ecf5ff;
 }
 </style>

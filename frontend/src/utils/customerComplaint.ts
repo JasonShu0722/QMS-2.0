@@ -152,6 +152,30 @@ export function canBatchLaunchCustomerComplaintEightD(
   return getCustomerComplaintBatchLaunchHint(complaints) === ''
 }
 
+export function canLaunchCustomerComplaintEightDSelection(
+  complaints: EightDLaunchCandidate[]
+): boolean {
+  return getCustomerComplaintEightDSelectionLaunchHint(complaints) === ''
+}
+
+export function getCustomerComplaintEightDSelectionLaunchHint(
+  complaints: EightDLaunchCandidate[]
+): string {
+  if (!complaints.length) {
+    return '请至少选择一条客诉记录'
+  }
+
+  if (complaints.length === 1) {
+    const complaint = complaints[0]
+    if (canOpenCustomerComplaintEightD(complaint)) {
+      return ''
+    }
+    return '请先完成客诉的实物处理方案备案或实物解析'
+  }
+
+  return getCustomerComplaintBatchLaunchHint(complaints)
+}
+
 export function getCustomerComplaintBatchLaunchHint(
   complaints: EightDLaunchCandidate[]
 ): string {

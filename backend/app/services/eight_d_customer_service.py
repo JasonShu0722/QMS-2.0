@@ -12,13 +12,20 @@ from app.core.problem_management import build_8d_number, get_problem_category_by
 from app.models.customer_complaint import ComplaintType, CustomerComplaint, ComplaintStatus, PhysicalAnalysisStatus, SeverityLevel
 from app.models.eight_d_customer import EightDCustomer, EightDCustomerComplaintLink, EightDStatus, ApprovalLevel
 from app.models.lesson_learned import LessonLearned, SourceType
+from app.models.problem_report import ProblemReport, ProblemReportSource, ProblemReportStatus
 from app.schemas.eight_d_customer import D4D7Request, D8Request, EightDReviewRequest, SLAStatus
+from app.schemas.problem_management import ProblemReportCreate, ProblemReportSourceCreate
+from app.services.problem_management_service import ProblemManagementService
 
 logger = logging.getLogger(__name__)
 
 
 class EightDCustomerService:
     """Service layer for customer 8D reports."""
+
+    @staticmethod
+    def _enum_value(value):
+        return value.value if hasattr(value, "value") else value
 
     @staticmethod
     def _report_query():
@@ -188,6 +195,27 @@ class EightDCustomerService:
         }
 
     @staticmethod
+    def _map_customer_risk_level(complaints: list[CustomerComplaint]) -> str:
+        severity_rank = {
+            SeverityLevel.TBD: 0,
+            SeverityLevel.MINOR: 1,
+            SeverityLevel.MAJOR: 2,
+            SeverityLevel.CRITICAL: 3,
+        }
+        highest = max(
+            (complaint.severity_level for complaint in complaints),
+            key=lambda value: severity_rank.get(value, 0),
+            default=SeverityLevel.TBD,
+        )
+        if highest == SeverityLevel.CRITICAL:
+            return "critical"
+        if highest == SeverityLevel.MAJOR:
+            return "high"
+        if highest == SeverityLevel.MINOR:
+            return "medium"
+        return "medium"
+
+    @staticmethod
     async def init_report(
         db: AsyncSession,
         complaint_id: int,
@@ -285,6 +313,34 @@ class EightDCustomerService:
             )
             if complaint.status in [ComplaintStatus.PENDING, ComplaintStatus.IN_ANALYSIS]:
                 complaint.status = ComplaintStatus.IN_RESPONSE
+
+        category = get_problem_category_by_customer_complaint_type(primary_complaint.complaint_type.value)
+        await ProblemManagementService.create_problem_report(
+            db=db,
+            report_data=ProblemReportCreate(
+                module_key="customer_quality",
+                problem_category_key=category.key,
+                title=primary_complaint.defect_description,
+                description=primary_complaint.defect_description,
+                risk_level=EightDCustomerService._map_customer_risk_level(ordered_complaints),
+                response_mode="eight_d",
+                responsible_dept=primary_complaint.responsible_dept,
+                assigned_to=primary_complaint.cqe_id or primary_complaint.created_by,
+                sources=[
+                    ProblemReportSourceCreate(
+                        source_type="customer_complaint",
+                        source_id=complaint.id,
+                        source_number=complaint.complaint_number,
+                        is_primary=complaint.id == primary_complaint.id,
+                    )
+                    for complaint in ordered_complaints
+                ],
+            ),
+            created_by=user_id,
+            eight_d_number=eight_d.report_number,
+            status=ProblemReportStatus.RESPONDING,
+            commit=False,
+        )
 
         await db.commit()
 
@@ -459,6 +515,272 @@ class EightDCustomerService:
             user_id,
         )
         return await EightDCustomerService.get_by_id(db=db, report_id=report_id)
+
+    @staticmethod
+    async def _load_complaints_by_id(
+        db: AsyncSession,
+        complaint_ids: set[int],
+    ) -> dict[int, CustomerComplaint]:
+        if not complaint_ids:
+            return {}
+
+        result = await db.execute(
+            select(CustomerComplaint).where(CustomerComplaint.id.in_(complaint_ids))
+        )
+        return {complaint.id: complaint for complaint in result.scalars().all()}
+
+    @staticmethod
+    async def _load_eight_d_by_complaint_id(
+        db: AsyncSession,
+        complaint_ids: set[int],
+    ) -> dict[int, EightDCustomer]:
+        if not complaint_ids:
+            return {}
+
+        result = await db.execute(
+            EightDCustomerService._report_query()
+            .outerjoin(
+                EightDCustomerComplaintLink,
+                EightDCustomerComplaintLink.report_id == EightDCustomer.id,
+            )
+            .where(
+                or_(
+                    EightDCustomer.complaint_id.in_(complaint_ids),
+                    EightDCustomerComplaintLink.complaint_id.in_(complaint_ids),
+                )
+            )
+        )
+        reports = list(result.scalars().unique().all())
+        report_by_complaint_id: dict[int, EightDCustomer] = {}
+        for report in reports:
+            report_by_complaint_id[report.complaint_id] = report
+            for link in report.complaint_links or []:
+                report_by_complaint_id[link.complaint_id] = report
+        return report_by_complaint_id
+
+    @staticmethod
+    def _build_formal_follow_up_item(
+        report: ProblemReport,
+        primary_source: ProblemReportSource,
+        primary_complaint: CustomerComplaint,
+        eight_d: Optional[EightDCustomer],
+        related_source_count: int,
+    ) -> dict:
+        response_mode = report.response_mode or "brief"
+        eight_d_number = report.eight_d_number
+        if response_mode == "eight_d" and eight_d:
+            eight_d_number = eight_d.report_number or eight_d_number or EightDCustomerService._build_fallback_report_number(eight_d)
+
+        display_number = eight_d_number if response_mode == "eight_d" else report.problem_number
+        if not display_number:
+            display_number = report.problem_number or primary_source.source_number or f"PR-{report.id}"
+
+        status_value = (
+            EightDCustomerService._enum_value(eight_d.status)
+            if response_mode == "eight_d" and eight_d
+            else EightDCustomerService._enum_value(report.status)
+        )
+        approval_level = eight_d.approval_level if eight_d else ApprovalLevel.NONE
+        related_count = related_source_count
+        if response_mode == "eight_d" and eight_d:
+            related_count = max(related_count, eight_d.related_complaint_count)
+
+        return {
+            "id": eight_d.id if eight_d else report.id,
+            "complaint_id": primary_complaint.id,
+            "problem_report_id": report.id,
+            "eight_d_report_id": eight_d.id if eight_d else None,
+            "report_number": display_number,
+            "problem_number": report.problem_number,
+            "eight_d_number": eight_d_number,
+            "response_mode": response_mode,
+            "risk_level": EightDCustomerService._enum_value(report.risk_level),
+            "primary_complaint_number": primary_complaint.complaint_number,
+            "complaint_type": EightDCustomerService._enum_value(primary_complaint.complaint_type),
+            "customer_code": primary_complaint.customer_code,
+            "customer_name": primary_complaint.customer_name,
+            "end_customer_name": primary_complaint.end_customer_name,
+            "product_type": primary_complaint.product_type,
+            "related_complaint_count": related_count,
+            "status": status_value,
+            "approval_level": approval_level,
+            "created_at": report.created_at,
+            "updated_at": report.updated_at,
+            "submitted_at": eight_d.submitted_at if eight_d else None,
+            "reviewed_at": eight_d.reviewed_at if eight_d else report.reviewed_at,
+        }
+
+    @staticmethod
+    def _build_orphan_eight_d_follow_up_item(report: EightDCustomer) -> dict:
+        primary_complaint = EightDCustomerService._get_primary_complaint(report)
+        report_number = report.report_number or EightDCustomerService._build_fallback_report_number(report)
+        return {
+            "id": report.id,
+            "complaint_id": primary_complaint.id,
+            "problem_report_id": None,
+            "eight_d_report_id": report.id,
+            "report_number": report_number,
+            "problem_number": None,
+            "eight_d_number": report_number,
+            "response_mode": "eight_d",
+            "risk_level": EightDCustomerService._map_customer_risk_level(
+                EightDCustomerService._get_related_complaints(report)
+            ),
+            "primary_complaint_number": primary_complaint.complaint_number,
+            "complaint_type": EightDCustomerService._enum_value(primary_complaint.complaint_type),
+            "customer_code": primary_complaint.customer_code,
+            "customer_name": primary_complaint.customer_name,
+            "end_customer_name": primary_complaint.end_customer_name,
+            "product_type": primary_complaint.product_type,
+            "related_complaint_count": report.related_complaint_count,
+            "status": EightDCustomerService._enum_value(report.status),
+            "approval_level": report.approval_level,
+            "created_at": report.created_at,
+            "updated_at": report.updated_at,
+            "submitted_at": report.submitted_at,
+            "reviewed_at": report.reviewed_at,
+        }
+
+    @staticmethod
+    def _matches_follow_up_filters(
+        item: dict,
+        *,
+        report_number: Optional[str] = None,
+        complaint_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        product_type: Optional[str] = None,
+        status: Optional[str] = None,
+        response_mode: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        primary_complaint: Optional[CustomerComplaint] = None,
+    ) -> bool:
+        if response_mode and item.get("response_mode") != response_mode:
+            return False
+        if complaint_type and item.get("complaint_type") != complaint_type:
+            return False
+        if customer_id and (primary_complaint is None or primary_complaint.customer_id != customer_id):
+            return False
+        if product_type and product_type.strip().lower() not in str(item.get("product_type") or "").lower():
+            return False
+        if status and item.get("status") != status:
+            return False
+        if start_date and item["created_at"] < start_date:
+            return False
+        if end_date and item["created_at"] > end_date:
+            return False
+        if report_number:
+            keyword = report_number.strip().lower()
+            candidates = [
+                item.get("report_number"),
+                item.get("problem_number"),
+                item.get("eight_d_number"),
+                item.get("primary_complaint_number"),
+                item.get("customer_code"),
+                item.get("customer_name"),
+            ]
+            if not any(keyword in str(value).lower() for value in candidates if value):
+                return False
+        return True
+
+    @staticmethod
+    async def list_follow_up_reports(
+        db: AsyncSession,
+        *,
+        report_number: Optional[str] = None,
+        complaint_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        product_type: Optional[str] = None,
+        status: Optional[str] = None,
+        response_mode: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict], int]:
+        report_result = await db.execute(
+            select(ProblemReport)
+            .options(selectinload(ProblemReport.sources))
+            .where(ProblemReport.module_key == "customer_quality")
+            .order_by(ProblemReport.updated_at.desc(), ProblemReport.id.desc())
+        )
+        formal_reports = list(report_result.scalars().unique().all())
+
+        source_ids = {
+            source.source_id
+            for report in formal_reports
+            for source in (report.sources or [])
+            if source.source_type == "customer_complaint"
+        }
+        complaints_by_id = await EightDCustomerService._load_complaints_by_id(db, source_ids)
+        eight_d_by_complaint_id = await EightDCustomerService._load_eight_d_by_complaint_id(db, source_ids)
+
+        items: list[dict] = []
+        seen_eight_d_ids: set[int] = set()
+        for report in formal_reports:
+            sources = [
+                source
+                for source in (report.sources or [])
+                if source.source_type == "customer_complaint"
+            ]
+            if not sources:
+                continue
+
+            primary_source = next((source for source in sources if source.is_primary), sources[0])
+            primary_complaint = complaints_by_id.get(primary_source.source_id)
+            if not primary_complaint:
+                continue
+
+            eight_d = eight_d_by_complaint_id.get(primary_complaint.id)
+            item = EightDCustomerService._build_formal_follow_up_item(
+                report=report,
+                primary_source=primary_source,
+                primary_complaint=primary_complaint,
+                eight_d=eight_d,
+                related_source_count=len(sources),
+            )
+            if eight_d:
+                seen_eight_d_ids.add(eight_d.id)
+            if EightDCustomerService._matches_follow_up_filters(
+                item,
+                report_number=report_number,
+                complaint_type=complaint_type,
+                customer_id=customer_id,
+                product_type=product_type,
+                status=status,
+                response_mode=response_mode,
+                start_date=start_date,
+                end_date=end_date,
+                primary_complaint=primary_complaint,
+            ):
+                items.append(item)
+
+        orphan_query = EightDCustomerService._report_query().order_by(EightDCustomer.updated_at.desc(), EightDCustomer.id.desc())
+        orphan_result = await db.execute(orphan_query)
+        orphan_reports = list(orphan_result.scalars().unique().all())
+        for report in orphan_reports:
+            if report.id in seen_eight_d_ids:
+                continue
+            primary_complaint = EightDCustomerService._get_primary_complaint(report)
+            item = EightDCustomerService._build_orphan_eight_d_follow_up_item(report)
+            if EightDCustomerService._matches_follow_up_filters(
+                item,
+                report_number=report_number,
+                complaint_type=complaint_type,
+                customer_id=customer_id,
+                product_type=product_type,
+                status=status,
+                response_mode=response_mode,
+                start_date=start_date,
+                end_date=end_date,
+                primary_complaint=primary_complaint,
+            ):
+                items.append(item)
+
+        items.sort(key=lambda item: (item["updated_at"], item["created_at"], item["id"]), reverse=True)
+        total = len(items)
+        offset = (page - 1) * page_size
+        return items[offset : offset + page_size], total
 
     @staticmethod
     async def list_reports(

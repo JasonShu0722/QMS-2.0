@@ -61,26 +61,42 @@ class CustomerComplaintCreate(BaseModel):
     customer_code: Optional[str] = Field(None, min_length=1, max_length=50, description="客户代码（兼容旧数据）")
     customer_name: Optional[str] = Field(None, min_length=1, max_length=200, description="客户名称（兼容旧数据）")
     end_customer_name: Optional[str] = Field(None, max_length=200, description="终端客户名称")
+    received_date: Optional[date] = Field(None, description="收件日期")
+    occurrence_date: Optional[date] = Field(None, description="发生/故障日期")
+    production_date: Optional[date] = Field(None, description="生产/出厂日期")
     product_type: str = Field(..., min_length=1, max_length=100, description="产品类型")
+    product_model: Optional[str] = Field(None, max_length=100, description="产品型号")
+    project_stage: Optional[str] = Field(None, max_length=100, description="项目阶段")
+    batch_code: Optional[str] = Field(None, max_length=100, description="批次号/条码")
+    trace_code: Optional[str] = Field(None, max_length=100, description="产品追溯码")
+    return_type: Optional[str] = Field(None, max_length=50, description="零星退件/集中退件")
+    return_month: Optional[str] = Field(None, max_length=20, description="退件月份")
+    service_months: Optional[int] = Field(None, ge=0, description="服务月数")
+    service_month_category: Optional[str] = Field(None, max_length=50, description="服务月分类")
+    dealer_name: Optional[str] = Field(None, max_length=200, description="4S 店名称")
+    occurrence_region: Optional[str] = Field(None, max_length=100, description="发生区域")
+    fault_category: Optional[str] = Field(None, max_length=100, description="故障分类")
+    service_method: Optional[str] = Field(None, max_length=100, description="服务方式")
+    analysis_priority: Optional[str] = Field(None, max_length=50, description="解析优先级")
+    failure_count: Optional[int] = Field(None, ge=1, description="故障数")
     defect_description: str = Field(..., min_length=10, description="缺陷描述（至少 10 字）")
     is_return_required: bool = Field(False, description="是否涉及退件")
     requires_physical_analysis: bool = Field(False, description="是否需要实物解析")
     vin_code: Optional[str] = Field(None, max_length=50, description="VIN 码（售后客诉必填）")
     mileage: Optional[int] = Field(None, ge=0, description="失效里程（售后客诉必填）")
+    mileage_category: Optional[str] = Field(None, max_length=50, description="里程分类")
     purchase_date: Optional[date] = Field(None, description="购车日期（售后客诉必填）")
 
     @model_validator(mode="after")
     def validate_after_sales_fields(self) -> "CustomerComplaintCreate":
-        if self.customer_id is None and not self.customer_code:
-            raise ValueError("请选择客户或填写客户代码")
+        if self.customer_id is None and not self.customer_code and not self.customer_name:
+            raise ValueError("请选择客户或填写客户名称/客户代码")
 
         if self.complaint_type == ComplaintTypeEnum.AFTER_SALES:
             if not self.vin_code:
                 raise ValueError("售后客诉时，VIN 码为必填项")
             if self.mileage is None:
                 raise ValueError("售后客诉时，失效里程为必填项")
-            if not self.purchase_date:
-                raise ValueError("售后客诉时，购车日期为必填项")
 
         return self
 
@@ -89,7 +105,11 @@ class CustomerComplaintCreate(BaseModel):
             "example": {
                 "complaint_type": "after_sales",
                 "customer_id": 1,
+                "received_date": "2026-05-01",
+                "occurrence_date": "2026-04-30",
                 "product_type": "MCU 控制器",
+                "product_model": "AV010A",
+                "trace_code": "TRACE-001",
                 "defect_description": "客户反馈车辆行驶中突然断电，检查发现 MCU 主板烧毁",
                 "end_customer_name": "某终端项目",
                 "is_return_required": True,
@@ -99,6 +119,12 @@ class CustomerComplaintCreate(BaseModel):
                 "purchase_date": "2023-06-15",
             }
         }
+
+
+class CustomerComplaintBatchCreate(BaseModel):
+    """批量创建客诉单请求模型"""
+
+    items: list[CustomerComplaintCreate] = Field(..., min_length=1, max_length=100, description="客诉单列表")
 
 
 class PhysicalDispositionRecordRequest(BaseModel):
@@ -171,7 +197,24 @@ class CustomerComplaintResponse(BaseModel):
     customer_code: str
     customer_name: Optional[str]
     end_customer_name: Optional[str]
+    received_date: Optional[date]
+    occurrence_date: Optional[date]
+    production_date: Optional[date]
     product_type: str
+    product_model: Optional[str]
+    project_stage: Optional[str]
+    batch_code: Optional[str]
+    trace_code: Optional[str]
+    return_type: Optional[str]
+    return_month: Optional[str]
+    service_months: Optional[int]
+    service_month_category: Optional[str]
+    dealer_name: Optional[str]
+    occurrence_region: Optional[str]
+    fault_category: Optional[str]
+    service_method: Optional[str]
+    analysis_priority: Optional[str]
+    failure_count: Optional[int]
     defect_description: str
     severity_level: SeverityLevelEnum
     is_return_required: bool
@@ -191,11 +234,17 @@ class CustomerComplaintResponse(BaseModel):
     physical_analysis_updated_by: Optional[int]
     eight_d_report_id: Optional[int]
     eight_d_status: Optional[EightDStatusEnum]
+    problem_report_id: Optional[int] = None
+    problem_number: Optional[str] = None
+    problem_report_eight_d_number: Optional[str] = None
+    problem_report_response_mode: Optional[str] = None
+    problem_report_risk_level: Optional[str] = None
     problem_category_key: Optional[str] = None
     problem_category_label: Optional[str] = None
     module_key: Optional[str] = None
     vin_code: Optional[str]
     mileage: Optional[int]
+    mileage_category: Optional[str]
     purchase_date: Optional[date]
     status: ComplaintStatusEnum
     cqe_id: Optional[int]
@@ -215,6 +264,13 @@ class CustomerComplaintListResponse(BaseModel):
     items: list[CustomerComplaintResponse]
     page: int
     page_size: int
+
+
+class CustomerComplaintBatchCreateResponse(BaseModel):
+    """批量创建客诉单响应模型"""
+
+    total: int
+    items: list[CustomerComplaintResponse]
 
 
 class CustomerComplaintCustomerOption(BaseModel):

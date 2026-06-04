@@ -20,6 +20,7 @@ from app.models.customer_complaint import (
 )
 from app.models.eight_d_customer import EightDCustomerComplaintLink
 from app.models.customer_master import CustomerMaster, CustomerStatus
+from app.models.problem_report import ProblemReport, ProblemReportSource
 from app.models.user import User, UserStatus, UserType
 from app.schemas.customer_complaint import (
     CustomerComplaintCreate,
@@ -36,14 +37,54 @@ class CustomerComplaintService:
     """客诉管理服务"""
 
     @staticmethod
-    async def create_complaint(
+    def _clean_text(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @staticmethod
+    async def _attach_problem_report_links(
+        db: AsyncSession,
+        complaints: list[CustomerComplaint],
+    ) -> None:
+        complaint_ids = [complaint.id for complaint in complaints if complaint.id]
+        if not complaint_ids:
+            return
+
+        result = await db.execute(
+            select(ProblemReportSource, ProblemReport)
+            .join(ProblemReport, ProblemReport.id == ProblemReportSource.problem_report_id)
+            .where(
+                ProblemReportSource.source_type == "customer_complaint",
+                ProblemReportSource.source_id.in_(complaint_ids),
+            )
+            .order_by(ProblemReport.updated_at.desc(), ProblemReport.id.desc())
+        )
+        report_by_complaint_id: dict[int, ProblemReport] = {}
+        for source, report in result.all():
+            report_by_complaint_id.setdefault(source.source_id, report)
+
+        for complaint in complaints:
+            report = report_by_complaint_id.get(complaint.id)
+            if report is None:
+                continue
+            complaint.problem_report_id = report.id
+            complaint.problem_number = report.problem_number
+            complaint.problem_report_eight_d_number = report.eight_d_number
+            complaint.problem_report_response_mode = report.response_mode
+            complaint.problem_report_risk_level = (
+                report.risk_level.value if hasattr(report.risk_level, "value") else report.risk_level
+            )
+
+    @staticmethod
+    async def _resolve_customer_snapshot(
         db: AsyncSession,
         complaint_data: CustomerComplaintCreate,
-        created_by_id: int,
-    ) -> CustomerComplaint:
+    ) -> tuple[Optional[int], str, str]:
         customer_id = complaint_data.customer_id
-        customer_code = complaint_data.customer_code
-        customer_name = complaint_data.customer_name
+        customer_code = CustomerComplaintService._clean_text(complaint_data.customer_code)
+        customer_name = CustomerComplaintService._clean_text(complaint_data.customer_name)
 
         if customer_id is not None:
             customer_result = await db.execute(select(CustomerMaster).where(CustomerMaster.id == customer_id))
@@ -56,49 +97,171 @@ class CustomerComplaintService:
             customer_code = customer.code
             customer_name = customer.name
 
+        if customer_id is None and (customer_code or customer_name):
+            customer = None
+            if customer_code:
+                customer_result = await db.execute(
+                    select(CustomerMaster).where(
+                        CustomerMaster.status == CustomerStatus.ACTIVE,
+                        CustomerMaster.code == customer_code,
+                    )
+                )
+                customer = customer_result.scalar_one_or_none()
+
+            if customer is None and customer_name:
+                customer_result = await db.execute(
+                    select(CustomerMaster)
+                    .where(
+                        CustomerMaster.status == CustomerStatus.ACTIVE,
+                        CustomerMaster.name == customer_name,
+                    )
+                    .order_by(CustomerMaster.code.asc())
+                    .limit(1)
+                )
+                customer = customer_result.scalar_one_or_none()
+
+            if customer:
+                customer_id = customer.id
+                customer_code = customer.code
+                customer_name = customer.name
+
+        if not customer_code and not customer_name:
+            raise ValueError("客户名称或客户代码不能为空")
+
         if not customer_code:
-            raise ValueError("客户代码不能为空")
+            customer_code = customer_name
 
         if not customer_name:
             customer_name = customer_code
 
-        complaint_number = await CustomerComplaintService._generate_complaint_number(db)
+        return customer_id, customer_code, customer_name
+
+    @staticmethod
+    def _build_complaint(
+        complaint_data: CustomerComplaintCreate,
+        complaint_number: str,
+        customer_id: Optional[int],
+        customer_code: str,
+        customer_name: str,
+        created_by_id: int,
+    ) -> CustomerComplaint:
         severity_level = CustomerComplaintService._determine_severity_level(
             complaint_data.defect_description,
             complaint_data.complaint_type.value,
         )
 
-        complaint = CustomerComplaint(
+        return CustomerComplaint(
             complaint_number=complaint_number,
             complaint_type=ComplaintType(complaint_data.complaint_type.value),
             customer_id=customer_id,
             customer_code=customer_code,
             customer_name_snapshot=customer_name,
-            end_customer_name=complaint_data.end_customer_name,
-            product_type=complaint_data.product_type,
-            defect_description=complaint_data.defect_description,
+            end_customer_name=CustomerComplaintService._clean_text(complaint_data.end_customer_name),
+            received_date=complaint_data.received_date,
+            occurrence_date=complaint_data.occurrence_date,
+            production_date=complaint_data.production_date,
+            product_type=complaint_data.product_type.strip(),
+            product_model=CustomerComplaintService._clean_text(complaint_data.product_model),
+            project_stage=CustomerComplaintService._clean_text(complaint_data.project_stage),
+            batch_code=CustomerComplaintService._clean_text(complaint_data.batch_code),
+            trace_code=CustomerComplaintService._clean_text(complaint_data.trace_code),
+            return_type=CustomerComplaintService._clean_text(complaint_data.return_type),
+            return_month=CustomerComplaintService._clean_text(complaint_data.return_month),
+            service_months=complaint_data.service_months,
+            service_month_category=CustomerComplaintService._clean_text(complaint_data.service_month_category),
+            dealer_name=CustomerComplaintService._clean_text(complaint_data.dealer_name),
+            occurrence_region=CustomerComplaintService._clean_text(complaint_data.occurrence_region),
+            fault_category=CustomerComplaintService._clean_text(complaint_data.fault_category),
+            service_method=CustomerComplaintService._clean_text(complaint_data.service_method),
+            analysis_priority=CustomerComplaintService._clean_text(complaint_data.analysis_priority),
+            failure_count=complaint_data.failure_count,
+            defect_description=complaint_data.defect_description.strip(),
             severity_level=severity_level,
             is_return_required=complaint_data.is_return_required,
             requires_physical_analysis=complaint_data.requires_physical_analysis,
-            vin_code=complaint_data.vin_code,
+            vin_code=CustomerComplaintService._clean_text(complaint_data.vin_code),
             mileage=complaint_data.mileage,
+            mileage_category=CustomerComplaintService._clean_text(complaint_data.mileage_category),
             purchase_date=complaint_data.purchase_date,
             status=ComplaintStatus.PENDING,
             created_by=created_by_id,
+        )
+
+    @staticmethod
+    async def create_complaint(
+        db: AsyncSession,
+        complaint_data: CustomerComplaintCreate,
+        created_by_id: int,
+    ) -> CustomerComplaint:
+        customer_id, customer_code, customer_name = await CustomerComplaintService._resolve_customer_snapshot(
+            db=db,
+            complaint_data=complaint_data,
+        )
+        complaint_number = await CustomerComplaintService._generate_complaint_number(db)
+        complaint = CustomerComplaintService._build_complaint(
+            complaint_data=complaint_data,
+            complaint_number=complaint_number,
+            customer_id=customer_id,
+            customer_code=customer_code,
+            customer_name=customer_name,
+            created_by_id=created_by_id,
         )
 
         db.add(complaint)
         await db.commit()
         await db.refresh(complaint)
 
-        logger.info("创建客诉单成功: %s, 严重度=%s", complaint_number, severity_level.value)
+        logger.info("创建客诉单成功: %s, 严重度=%s", complaint_number, complaint.severity_level.value)
         return complaint
+
+    @staticmethod
+    async def create_complaints(
+        db: AsyncSession,
+        complaint_items: List[CustomerComplaintCreate],
+        created_by_id: int,
+    ) -> list[CustomerComplaint]:
+        if not complaint_items:
+            raise ValueError("请至少提供一条客诉记录")
+
+        today = datetime.now().strftime("%Y%m%d")
+        prefix = f"CC-{today}-"
+        next_seq = await CustomerComplaintService._get_next_complaint_sequence(db, prefix)
+        complaints: list[CustomerComplaint] = []
+
+        for index, complaint_data in enumerate(complaint_items):
+            customer_id, customer_code, customer_name = await CustomerComplaintService._resolve_customer_snapshot(
+                db=db,
+                complaint_data=complaint_data,
+            )
+            complaint_number = f"{prefix}{next_seq + index:03d}"
+            complaints.append(
+                CustomerComplaintService._build_complaint(
+                    complaint_data=complaint_data,
+                    complaint_number=complaint_number,
+                    customer_id=customer_id,
+                    customer_code=customer_code,
+                    customer_name=customer_name,
+                    created_by_id=created_by_id,
+                )
+            )
+
+        db.add_all(complaints)
+        await db.commit()
+
+        for complaint in complaints:
+            await db.refresh(complaint)
+
+        logger.info("批量创建客诉单成功: count=%s", len(complaints))
+        return complaints
 
     @staticmethod
     async def _generate_complaint_number(db: AsyncSession) -> str:
         today = datetime.now().strftime("%Y%m%d")
         prefix = f"CC-{today}-"
+        return f"{prefix}{await CustomerComplaintService._get_next_complaint_sequence(db, prefix):03d}"
 
+    @staticmethod
+    async def _get_next_complaint_sequence(db: AsyncSession, prefix: str) -> int:
         result = await db.execute(
             select(func.max(CustomerComplaint.complaint_number)).where(
                 CustomerComplaint.complaint_number.like(f"{prefix}%")
@@ -112,7 +275,7 @@ class CustomerComplaintService:
         else:
             new_seq = 1
 
-        return f"{prefix}{new_seq:03d}"
+        return new_seq
 
     @staticmethod
     def _determine_severity_level(defect_description: str, complaint_type: str) -> SeverityLevel:
@@ -324,7 +487,10 @@ class CustomerComplaintService:
             )
             .where(CustomerComplaint.id == complaint_id)
         )
-        return result.scalar_one_or_none()
+        complaint = result.scalar_one_or_none()
+        if complaint:
+            await CustomerComplaintService._attach_problem_report_links(db, [complaint])
+        return complaint
 
     @staticmethod
     async def list_customer_options(
@@ -422,5 +588,6 @@ class CustomerComplaintService:
         query = query.offset((page - 1) * page_size).limit(page_size)
 
         result = await db.execute(query)
-        complaints = result.scalars().all()
-        return list(complaints), total
+        complaints = list(result.scalars().all())
+        await CustomerComplaintService._attach_problem_report_links(db, complaints)
+        return complaints, total

@@ -2,6 +2,9 @@
 权限引擎测试
 测试权限检查、缓存机制、数据隔离等核心功能
 """
+import asyncio
+import time
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -19,6 +22,32 @@ from app.core.permissions import (
     require_any_permission,
     require_all_permissions
 )
+
+
+@pytest.mark.asyncio
+async def test_permission_cache_read_times_out_quickly(monkeypatch):
+    """Redis 异常变慢时，权限树应快速降级到数据库查询。"""
+
+    class SlowRedis:
+        async def get(self, _cache_key: str):
+            await asyncio.sleep(0.2)
+            return None
+
+    async def fake_get_redis_client():
+        return SlowRedis()
+
+    monkeypatch.setattr("app.core.permissions.get_redis_client", fake_get_redis_client)
+    monkeypatch.setattr("app.core.permissions.REDIS_OPERATION_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr("app.core.permissions.REDIS_FAILURE_BACKOFF_SECONDS", 60.0)
+    monkeypatch.setattr("app.core.permissions._redis_disabled_until", 0.0)
+
+    started_at = time.perf_counter()
+    assert await PermissionChecker._get_cached_permissions(99999) is None
+    assert time.perf_counter() - started_at < 0.1
+
+    started_at = time.perf_counter()
+    assert await PermissionChecker._get_cached_permissions(99999) is None
+    assert time.perf_counter() - started_at < 0.01
 
 
 @pytest.fixture(autouse=True)

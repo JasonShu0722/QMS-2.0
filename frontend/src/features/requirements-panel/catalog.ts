@@ -147,8 +147,8 @@ export const requirementsPanelCatalog: RequirementPanelCatalog = {
           priority: 'high',
           scope: '核心需求',
           phase: '一期核心',
-          status: 'doing',
-          acceptance: '内部人员可按模块、问题分类、统一状态查看跨版块问题清单，并可从问题中心跳转回来源业务单据；第一批先覆盖客户质量、制程质量、新品质量与审核管理。'
+          status: 'verified',
+          acceptance: '内部人员可按模块、问题分类、风险等级、回复形式、统一状态查看跨版块问题清单，并可看到正式 ZXQ 问题主单号、ZX8D 报告号与来源业务单据；第一批覆盖客户质量、制程质量、新品质量与审核管理。'
         },
         {
           id: 'dashboard-visual-board',

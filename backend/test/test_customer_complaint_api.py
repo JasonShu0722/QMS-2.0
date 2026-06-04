@@ -3,6 +3,21 @@
 import pytest
 from httpx import AsyncClient
 
+from app.models.customer_complaint import CustomerComplaint
+
+
+def test_customer_complaint_physical_status_enums_use_database_values():
+    assert CustomerComplaint.__table__.columns["physical_disposition_status"].type.enums == [
+        "pending",
+        "in_progress",
+        "completed",
+    ]
+    assert CustomerComplaint.__table__.columns["physical_analysis_status"].type.enums == [
+        "pending",
+        "assigned",
+        "completed",
+    ]
+
 
 @pytest.mark.asyncio
 async def test_record_physical_disposition_success(async_client: AsyncClient, test_user_token: str):
@@ -36,6 +51,99 @@ async def test_record_physical_disposition_success(async_client: AsyncClient, te
     assert data["physical_disposition_status"] == "in_progress"
     assert data["status"] == "pending"
     assert data["physical_disposition_plan"]
+
+
+@pytest.mark.asyncio
+async def test_batch_create_customer_complaints_with_basic_info(async_client: AsyncClient, test_user_token: str):
+    response = await async_client.post(
+        "/api/v1/customer-complaints/batch",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "items": [
+                {
+                    "complaint_type": "0km",
+                    "customer_code": "CUST-BATCH-01",
+                    "customer_name": "批量客户一",
+                    "received_date": "2026-05-01",
+                    "occurrence_date": "2026-04-30",
+                    "production_date": "2026-04-20",
+                    "product_type": "MCU",
+                    "product_model": "AV010A",
+                    "project_stage": "量产",
+                    "batch_code": "BATCH-001",
+                    "trace_code": "TRACE-001",
+                    "defect_description": "客户产线发现控制器上电异常需要登记跟进",
+                    "failure_count": 2,
+                    "fault_category": "功能异常",
+                    "analysis_priority": "P2",
+                    "is_return_required": True,
+                    "requires_physical_analysis": True,
+                },
+                {
+                    "complaint_type": "after_sales",
+                    "customer_code": "CUST-BATCH-02",
+                    "customer_name": "批量客户二",
+                    "received_date": "2026-05-02",
+                    "return_month": "2026-05",
+                    "occurrence_date": "2026-04-28",
+                    "return_type": "零星退件",
+                    "product_type": "VCU",
+                    "product_model": "VCU-A",
+                    "trace_code": "TRACE-002",
+                    "service_months": 13,
+                    "service_month_category": "12-24月",
+                    "vin_code": "LGB61YEA0NS074109",
+                    "mileage": 19944,
+                    "mileage_category": "1-2万公里",
+                    "dealer_name": "广州日产",
+                    "occurrence_region": "华南",
+                    "fault_category": "过温故障",
+                    "service_method": "更换总成",
+                    "defect_description": "车辆报故障码无法解析申请更换总成并跟进分析",
+                    "purchase_date": "2024-01-01",
+                    "is_return_required": True,
+                    "requires_physical_analysis": True,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["total"] == 2
+    assert data["items"][0]["received_date"] == "2026-05-01"
+    assert data["items"][0]["product_model"] == "AV010A"
+    assert data["items"][0]["failure_count"] == 2
+    assert data["items"][1]["return_type"] == "零星退件"
+    assert data["items"][1]["return_month"] == "2026-05"
+    assert data["items"][1]["service_months"] == 13
+    assert data["items"][1]["service_month_category"] == "12-24月"
+    assert data["items"][1]["mileage_category"] == "1-2万公里"
+    assert data["items"][1]["dealer_name"] == "广州日产"
+
+
+@pytest.mark.asyncio
+async def test_create_customer_complaint_accepts_customer_name_snapshot(async_client: AsyncClient, test_user_token: str):
+    response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "complaint_type": "0km",
+            "customer_name": "附件导入客户",
+            "occurrence_date": "2026-05-03",
+            "product_type": "MCU",
+            "product_model": "MCU-0KM-A",
+            "defect_description": "客户现场基础信息表仅提供客户名称仍需支持登记",
+            "is_return_required": False,
+            "requires_physical_analysis": False,
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["customer_code"] == "附件导入客户"
+    assert data["customer_name"] == "附件导入客户"
+    assert data["product_model"] == "MCU-0KM-A"
 
 
 @pytest.mark.asyncio
@@ -254,6 +362,9 @@ async def test_list_customer_eight_d_reports(async_client: AsyncClient, test_use
 
     target = next(item for item in payload["items"] if item["complaint_id"] == complaint_id)
     assert target["report_number"] == report_number
+    assert target["response_mode"] == "eight_d"
+    assert target["problem_number"].startswith("ZXQ-CQ1-")
+    assert target["eight_d_number"] == report_number
     assert target["primary_complaint_number"] == create_response.json()["complaint_number"]
     assert target["complaint_type"] == "after_sales"
     assert target["status"] == "d4_d7_in_progress"
@@ -267,6 +378,75 @@ async def test_list_customer_eight_d_reports(async_client: AsyncClient, test_use
     filtered_payload = filter_response.json()
     assert filtered_payload["total"] == 1
     assert filtered_payload["items"][0]["report_number"] == report_number
+
+
+@pytest.mark.asyncio
+async def test_customer_follow_up_reports_include_brief_problem_reports(
+    async_client: AsyncClient,
+    test_user_token: str,
+):
+    create_response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "complaint_type": "after_sales",
+            "customer_code": "CUST-FOLLOW-BRIEF",
+            "customer_name": "Brief Follow Customer",
+            "product_type": "VCU",
+            "defect_description": "After-sales complaint should create a ZXQ brief follow-up list row",
+            "is_return_required": False,
+            "requires_physical_analysis": False,
+            "vin_code": "LVSFOLLOWBRIEF001",
+            "mileage": 1200,
+        },
+    )
+    assert create_response.status_code == 201
+    complaint = create_response.json()
+
+    report_response = await async_client.post(
+        "/api/v1/problem-management/reports",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        json={
+            "module_key": "customer_quality",
+            "problem_category_key": "CQ1",
+            "title": "Brief complaint follow-up",
+            "description": "Brief complaint follow-up should be visible together with customer 8D reports",
+            "risk_level": "medium",
+            "response_mode": "brief",
+            "sources": [
+                {
+                    "source_type": "customer_complaint",
+                    "source_id": complaint["id"],
+                    "source_number": complaint["complaint_number"],
+                    "is_primary": True,
+                }
+            ],
+        },
+    )
+    assert report_response.status_code == 201
+    problem_report = report_response.json()
+    assert problem_report["problem_number"].startswith("ZXQ-CQ1-")
+    assert problem_report["eight_d_number"] is None
+
+    list_response = await async_client.get(
+        "/api/v1/customer-complaints/8d/reports",
+        headers={"Authorization": f"Bearer {test_user_token}"},
+        params={"report_number": problem_report["problem_number"]},
+    )
+
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] == 1
+    item = payload["items"][0]
+    assert item["report_number"] == problem_report["problem_number"]
+    assert item["problem_number"] == problem_report["problem_number"]
+    assert item["eight_d_number"] is None
+    assert item["response_mode"] == "brief"
+    assert item["problem_report_id"] == problem_report["id"]
+    assert item["complaint_id"] == complaint["id"]
+    assert item["primary_complaint_number"] == complaint["complaint_number"]
+    assert item["complaint_type"] == "after_sales"
+    assert item["status"] == "open"
 
 
 @pytest.mark.asyncio

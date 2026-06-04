@@ -3,7 +3,7 @@ Shared problem-management metadata and first-batch read-only issue summary APIs.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -19,6 +19,12 @@ from app.models.user import User
 from app.schemas.problem_management import (
     InternalUserOption,
     NumberingRuleItem,
+    ProblemReportBriefResponse,
+    ProblemReportClose,
+    ProblemReportCreate,
+    ProblemReportResponse,
+    ProblemReportReview,
+    ProblemReportSourcesUpdate,
     ProblemCategoryItem,
     ProblemIssueSummaryListResponse,
     ProblemIssueSummaryQuery,
@@ -83,6 +89,139 @@ async def list_internal_user_options(
     )
 
 
+@router.post(
+    "/reports",
+    response_model=ProblemReportResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a formal problem report",
+)
+async def create_problem_report(
+    report_data: ProblemReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a ZXQ formal problem report from one or more source ledgers."""
+
+    try:
+        report = await ProblemManagementService.create_problem_report(
+            db=db,
+            report_data=report_data,
+            created_by=current_user.id,
+        )
+        return ProblemManagementService.build_report_response(report)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get(
+    "/reports/{report_id}",
+    response_model=ProblemReportResponse,
+    summary="Get a formal problem report",
+)
+async def get_problem_report(
+    report_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    report = await ProblemManagementService.get_report_by_id(db, report_id)
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem report not found")
+    return ProblemManagementService.build_report_response(report)
+
+
+@router.put(
+    "/reports/{report_id}/sources",
+    response_model=ProblemReportResponse,
+    summary="Replace the source range of a formal problem report",
+)
+async def update_problem_report_sources(
+    report_id: int,
+    source_data: ProblemReportSourcesUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    try:
+        report = await ProblemManagementService.replace_report_sources(
+            db=db,
+            report_id=report_id,
+            source_data=source_data,
+        )
+        return ProblemManagementService.build_report_response(report)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/reports/{report_id}/brief-response",
+    response_model=ProblemReportResponse,
+    summary="Submit a brief response for a formal problem report",
+)
+async def submit_problem_report_brief_response(
+    report_id: int,
+    response_data: ProblemReportBriefResponse,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        report = await ProblemManagementService.submit_brief_response(
+            db=db,
+            report_id=report_id,
+            response_data=response_data,
+            user_id=current_user.id,
+        )
+        return ProblemManagementService.build_report_response(report)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/reports/{report_id}/review",
+    response_model=ProblemReportResponse,
+    summary="Review a formal problem report response",
+)
+async def review_problem_report(
+    report_id: int,
+    review_data: ProblemReportReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        report = await ProblemManagementService.review_problem_report(
+            db=db,
+            report_id=report_id,
+            review_data=review_data,
+            reviewer_id=current_user.id,
+        )
+        return ProblemManagementService.build_report_response(report)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/reports/{report_id}/close",
+    response_model=ProblemReportResponse,
+    summary="Close a formal problem report",
+)
+async def close_problem_report(
+    report_id: int,
+    close_data: ProblemReportClose,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        report = await ProblemManagementService.close_problem_report(
+            db=db,
+            report_id=report_id,
+            close_data=close_data,
+            closed_by=current_user.id,
+        )
+        return ProblemManagementService.build_report_response(report)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get(
     "/issues",
     response_model=ProblemIssueSummaryListResponse,
@@ -91,6 +230,8 @@ async def list_internal_user_options(
 async def list_problem_issue_summaries(
     module_key: str | None = Query(None, description="Module key"),
     problem_category_key: str | None = Query(None, description="Problem category key"),
+    risk_level: str | None = Query(None, description="Risk level"),
+    response_mode: str | None = Query(None, description="Response mode"),
     unified_status: UnifiedProblemStatus | None = Query(None, description="Unified status"),
     keyword: str | None = Query(None, description="Keyword"),
     only_assigned_to_me: bool = Query(False, description="Only include items assigned to the current user"),
@@ -110,6 +251,8 @@ async def list_problem_issue_summaries(
     query = ProblemIssueSummaryQuery(
         module_key=module_key,
         problem_category_key=problem_category_key,
+        risk_level=risk_level,
+        response_mode=response_mode,
         unified_status=unified_status,
         keyword=keyword,
         only_assigned_to_me=only_assigned_to_me,

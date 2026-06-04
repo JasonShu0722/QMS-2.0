@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCustomerComplaintAnalysisStatusOptions,
   canBatchLaunchCustomerComplaintEightD,
+  canLaunchCustomerComplaintEightDSelection,
   buildCustomerComplaintDispositionStatusOptions,
   buildCustomerComplaintStatusOptions,
   canHandleCustomerComplaintAnalysis,
   canHandleCustomerComplaintDisposition,
   canOpenCustomerComplaintEightD,
   getCustomerComplaintBatchLaunchHint,
+  getCustomerComplaintEightDSelectionLaunchHint,
   getCustomerComplaintEightDActionLabel,
   getCustomerComplaintDispositionStatusLabel,
   getCustomerComplaintDispositionStatusType,
@@ -204,5 +206,26 @@ describe('customer complaint helpers', () => {
         { ...readyComplaints[1], eight_d_report_id: 9 },
       ])
     ).toContain('已发起 8D')
+  })
+
+  it('allows selected 8D launch with a single ready complaint', () => {
+    const readyComplaint = {
+      complaint_type: ComplaintType.ZERO_KM,
+      customer_id: 1,
+      customer_code: 'CUST001',
+      requires_physical_analysis: false,
+      physical_analysis_status: 'pending',
+      physical_disposition_plan: '已完成备案',
+      eight_d_report_id: undefined,
+    } as const
+
+    expect(canLaunchCustomerComplaintEightDSelection([readyComplaint])).toBe(true)
+    expect(getCustomerComplaintEightDSelectionLaunchHint([readyComplaint])).toBe('')
+    expect(getCustomerComplaintEightDSelectionLaunchHint([])).toContain('至少选择一条')
+    expect(
+      getCustomerComplaintEightDSelectionLaunchHint([
+        { ...readyComplaint, physical_disposition_plan: undefined },
+      ])
+    ).toContain('实物处理方案备案或实物解析')
   })
 })

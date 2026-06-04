@@ -38,6 +38,7 @@ class TrialIssue(Base):
     __tablename__ = "trial_issues"
 
     id = Column(Integer, primary_key=True, index=True)
+    problem_report_id = Column(Integer, ForeignKey("problem_reports.id"), nullable=True, index=True, comment="formal problem report id")
     
     # 关联试产记录
     trial_id = Column(Integer, ForeignKey("trial_productions.id"), nullable=False, index=True, comment="试产记录ID")
@@ -108,6 +109,7 @@ class TrialIssue(Base):
         """转换为字典格式"""
         return {
             "id": self.id,
+            "problem_report_id": self.problem_report_id,
             "trial_id": self.trial_id,
             "issue_number": self.issue_number,
             "issue_description": self.issue_description,

@@ -32,6 +32,7 @@ async def list_customer_8d_reports(
     customer_id: Optional[int] = None,
     product_type: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
+    response_mode: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     page: int = 1,
@@ -41,13 +42,14 @@ async def list_customer_8d_reports(
 ):
     _ = current_user
     try:
-        reports, total = await EightDCustomerService.list_reports(
+        reports, total = await EightDCustomerService.list_follow_up_reports(
             db=db,
             report_number=report_number,
             complaint_type=complaint_type,
             customer_id=customer_id,
             product_type=product_type,
             status=status_filter,
+            response_mode=response_mode,
             start_date=datetime.combine(start_date, time.min) if start_date else None,
             end_date=datetime.combine(end_date, time.max) if end_date else None,
             page=page,
@@ -55,7 +57,7 @@ async def list_customer_8d_reports(
         )
         return EightDCustomerListResponse(
             total=total,
-            items=[EightDCustomerService.build_report_summary(report) for report in reports],
+            items=reports,
             page=page,
             page_size=page_size,
         )

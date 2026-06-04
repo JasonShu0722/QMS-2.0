@@ -11,6 +11,10 @@ from sqlalchemy.orm import selectinload
 
 from app.models.trial_issue import TrialIssue, IssueStatus, IssueType
 from app.models.trial_production import TrialProduction
+from app.models.problem_report import ProblemReportStatus
+from app.core.problem_management import get_problem_category_by_trial_issue_type
+from app.schemas.problem_management import ProblemReportCreate, ProblemReportSourceCreate
+from app.services.problem_management_service import ProblemManagementService
 from app.schemas.trial_issue import (
     TrialIssueCreate,
     TrialIssueUpdate,
@@ -433,16 +437,40 @@ class TrialIssueService:
         if issue.is_escalated_to_8d:
             raise ValueError(f"问题已升级为8D报告: eight_d_id={issue.eight_d_id}")
         
-        # TODO: 创建8D报告记录
-        # 这里需要调用8D报告服务创建8D报告
-        # eight_d_id = await eight_d_service.create_from_trial_issue(db, issue)
-        
-        # 暂时使用模拟ID
-        eight_d_id = None  # 待实现8D报告模块后填充
+        category = get_problem_category_by_trial_issue_type(
+            issue.issue_type.value if hasattr(issue.issue_type, "value") else str(issue.issue_type)
+        )
+        report = await ProblemManagementService.create_problem_report(
+            db=db,
+            report_data=ProblemReportCreate(
+                module_key="new_product_quality",
+                problem_category_key=category.key,
+                title=issue.issue_description,
+                description=escalate_data.escalation_reason,
+                risk_level="high",
+                response_mode="eight_d",
+                responsible_dept=issue.assigned_dept,
+                assigned_to=issue.assigned_to,
+                due_at=issue.deadline,
+                sources=[
+                    ProblemReportSourceCreate(
+                        source_type="trial_issue",
+                        source_id=issue.id,
+                        source_number=issue.issue_number,
+                        is_primary=True,
+                    )
+                ],
+            ),
+            created_by=current_user_id,
+            status=ProblemReportStatus.RESPONDING,
+            commit=False,
+        )
+        eight_d_id = report.id
         
         # 更新升级信息
         issue.is_escalated_to_8d = True
         issue.eight_d_id = eight_d_id
+        issue.problem_report_id = report.id
         issue.escalated_at = datetime.utcnow()
         issue.escalation_reason = escalate_data.escalation_reason
         issue.status = IssueStatus.ESCALATED
@@ -450,6 +478,10 @@ class TrialIssueService:
         
         await db.commit()
         await db.refresh(issue)
+        issue.problem_number = report.problem_number
+        issue.eight_d_number = report.eight_d_number
+        issue.risk_level = ProblemManagementService._enum_value(report.risk_level)
+        issue.response_mode = report.response_mode
         
         print(f"✅ 升级为8D报告成功: issue_id={issue.id}, 8d_id={eight_d_id}")
         

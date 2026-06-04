@@ -5,6 +5,8 @@ import type {
   ProblemIssueSummaryItem,
   ProblemIssueSummaryQuery,
   ProblemModuleKey,
+  ProblemResponseMode,
+  ProblemRiskLevel,
   UnifiedProblemStatus,
 } from '@/types/problem-management'
 
@@ -52,6 +54,10 @@ type ProblemIssueSourceLabelSource = Pick<ProblemIssueSummaryItem, 'source_type'
 type ProblemIssueSourceRouteLookup = Pick<ProblemIssueSummaryItem, 'source_type' | 'source_id'> &
   Partial<Pick<ProblemIssueSummaryItem, 'source_parent_id' | 'problem_category_key'>>
 
+type ProblemIssueTrackingNumberSource = Partial<
+  Pick<ProblemIssueSummaryItem, 'eight_d_number' | 'problem_number' | 'reference_no'>
+>
+
 type ScarRouteName = 'SCARList' | 'ScarManagement'
 type CustomerComplaintRouteName =
   | 'CustomerComplaintList'
@@ -74,12 +80,29 @@ const STATUS_META: Record<UnifiedProblemStatus, StatusMeta> = {
   responding: { label: '处理中', tagType: 'primary' },
   pending_review: { label: '待审核', tagType: 'info' },
   verifying: { label: '待验证', tagType: 'warning' },
+  approved: { label: '已批准', tagType: 'success' },
   closed: { label: '已关闭', tagType: 'success' },
   rejected: { label: '已驳回', tagType: 'danger' },
 }
 
+const RISK_META: Record<ProblemRiskLevel, StatusMeta> = {
+  low: { label: '低', tagType: 'info' },
+  medium: { label: '中', tagType: 'primary' },
+  high: { label: '高', tagType: 'warning' },
+  critical: { label: '严重', tagType: 'danger' },
+}
+
+const RESPONSE_MODE_META: Record<ProblemResponseMode, string> = {
+  brief: '简报',
+  eight_d: '8D',
+}
+
 const MODULE_KEYS = new Set<ProblemModuleKey>(Object.keys(MODULE_LABELS) as ProblemModuleKey[])
 const STATUS_KEYS = new Set<UnifiedProblemStatus>(Object.keys(STATUS_META) as UnifiedProblemStatus[])
+const RISK_KEYS = new Set<ProblemRiskLevel>(Object.keys(RISK_META) as ProblemRiskLevel[])
+const RESPONSE_MODE_KEYS = new Set<ProblemResponseMode>(
+  Object.keys(RESPONSE_MODE_META) as ProblemResponseMode[]
+)
 const PROBLEM_ISSUE_MODULE_ORDER = Object.keys(MODULE_LABELS) as ProblemModuleKey[]
 const SCAR_ROUTE_NAMES = new Set<ScarRouteName>(['SCARList', 'ScarManagement'])
 const CUSTOMER_COMPLAINT_ROUTE_NAMES = new Set<CustomerComplaintRouteName>([
@@ -220,6 +243,20 @@ export function buildUnifiedProblemStatusOptions() {
   }))
 }
 
+export function buildProblemIssueRiskLevelOptions() {
+  return (Object.keys(RISK_META) as ProblemRiskLevel[]).map((riskLevel) => ({
+    value: riskLevel,
+    label: RISK_META[riskLevel].label,
+  }))
+}
+
+export function buildProblemIssueResponseModeOptions() {
+  return (Object.keys(RESPONSE_MODE_META) as ProblemResponseMode[]).map((responseMode) => ({
+    value: responseMode,
+    label: RESPONSE_MODE_META[responseMode],
+  }))
+}
+
 export function getProblemIssueModuleLabel(moduleKey: string): string {
   return MODULE_LABELS[moduleKey as ProblemModuleKey] ?? moduleKey
 }
@@ -274,28 +311,26 @@ export function getUnifiedProblemStatusType(status: UnifiedProblemStatus): Statu
   return STATUS_META[status]?.tagType ?? 'info'
 }
 
+export function getProblemIssueRiskLevelLabel(riskLevel?: string | null): string {
+  return RISK_META[riskLevel as ProblemRiskLevel]?.label ?? '-'
+}
+
+export function getProblemIssueRiskLevelType(riskLevel?: string | null): StatusMeta['tagType'] {
+  return RISK_META[riskLevel as ProblemRiskLevel]?.tagType ?? 'info'
+}
+
 export function getProblemIssueResponseModeLabel(
   responseMode: ProblemIssueSummaryItem['response_mode']
 ): string {
-  if (responseMode === 'eight_d') {
-    return '8D'
-  }
-
-  if (responseMode === 'brief') {
-    return '简报'
-  }
-
-  return '-'
+  return RESPONSE_MODE_META[responseMode as ProblemResponseMode] ?? '-'
 }
 
-export function getProblemIssueSourceActionLabel(item: ProblemIssueSourceLabelSource): string {
-  if (item.source_type === 'customer_complaint') return '查看客诉'
-  if (item.source_type === 'process_issue') return '查看问题单'
-  if (item.source_type === 'scar') return '查看 SCAR'
-  if (item.source_type === 'trial_issue') return '查看试产问题'
-  if (item.source_type === 'audit_nc' && item.problem_category_key === 'AQ3') return '查看客审任务'
-  if (item.source_type === 'audit_nc') return '查看 NC'
-  return '查看来源'
+export function getProblemIssueTrackingNumber(item: ProblemIssueTrackingNumberSource): string {
+  return item.eight_d_number || item.problem_number || item.reference_no || '-'
+}
+
+export function getProblemIssueSourceActionLabel(_item: ProblemIssueSourceLabelSource): string {
+  return '查看问题单'
 }
 
 export function getProblemIssueSourceRoute(item: ProblemIssueSourceRouteLookup): RouteLocationRaw | null {
@@ -549,6 +584,8 @@ export function parseProblemIssueCenterRouteQuery(
 ): Partial<ProblemIssueSummaryQuery> {
   const moduleKey = getSingleQueryValue(query.module_key)
   const categoryKey = getSingleQueryValue(query.problem_category_key)
+  const riskLevel = getSingleQueryValue(query.risk_level)
+  const responseMode = getSingleQueryValue(query.response_mode)
   const unifiedStatus = getSingleQueryValue(query.unified_status)
   const keyword = getSingleQueryValue(query.keyword)
 
@@ -565,6 +602,14 @@ export function parseProblemIssueCenterRouteQuery(
 
   if (categoryKey) {
     parsed.problem_category_key = categoryKey as ProblemCategoryKey
+  }
+
+  if (riskLevel && RISK_KEYS.has(riskLevel as ProblemRiskLevel)) {
+    parsed.risk_level = riskLevel as ProblemRiskLevel
+  }
+
+  if (responseMode && RESPONSE_MODE_KEYS.has(responseMode as ProblemResponseMode)) {
+    parsed.response_mode = responseMode as ProblemResponseMode
   }
 
   if (unifiedStatus && STATUS_KEYS.has(unifiedStatus as UnifiedProblemStatus)) {

@@ -225,7 +225,7 @@ const routes: RouteRecordRaw[] = [
         path: 'quality/customer-eight-d',
         name: 'CustomerEightDList',
         component: () => import('@/views/CustomerEightDList.vue'),
-        meta: { title: '客诉8D', requiresAuth: true, permission: { modulePath: 'quality.customer', operation: 'read' } }
+        meta: { title: '客诉问题跟进', requiresAuth: true, permission: { modulePath: 'quality.customer', operation: 'read' } }
       },
       {
         path: 'quality/eight-d-workspace',
@@ -336,6 +336,12 @@ const routes: RouteRecordRaw[] = [
         name: 'TrialProduction',
         component: () => import('@/views/TrialProduction.vue'),
         meta: { title: '试产管理', requiresAuth: true, permission: { modulePath: 'newproduct.trial', operation: 'read' } }
+      },
+      {
+        path: 'newproduct/defects',
+        name: 'NewProductDefectList',
+        component: () => import('@/views/NewProductDefectList.vue'),
+        meta: { title: '新品不良登记', requiresAuth: true, permission: { modulePath: 'newproduct.trial', operation: 'read' } }
       },
       {
         path: 'newproduct/trial-issues',

@@ -79,7 +79,7 @@ export const NAV_SECTIONS: NavigationSection[] = [
     icon: UserFilled,
     children: [
       { index: '/quality/customer-complaints', title: '客诉管理' },
-      { index: '/quality/customer-eight-d', title: '客诉8D' },
+      { index: '/quality/customer-eight-d', title: '客诉问题跟进' },
       { index: '/quality/customer-claims', title: '客户索赔' },
     ],
   },
@@ -93,6 +93,7 @@ export const NAV_SECTIONS: NavigationSection[] = [
       { index: '/newproduct/stage-review', title: '阶段评审' },
       { index: '/newproduct/lesson-check', title: '经验教训检查' },
       { index: '/newproduct/trial', title: '试产管理' },
+      { index: '/newproduct/defects', title: '新品不良登记' },
       { index: '/newproduct/trial-issues', title: '试产问题' },
       { index: '/newproduct/trial-summary', title: '试产总结' },
     ],

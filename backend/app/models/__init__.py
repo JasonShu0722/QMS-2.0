@@ -23,6 +23,7 @@ from app.models.quality_metric import QualityMetric, MetricType
 from app.models.ims_sync_log import IMSSyncLog, SyncStatus, SyncType
 from app.models.requirements_panel_status import RequirementsPanelStatus
 from app.models.requirements_panel_user import RequirementsPanelUser
+from app.models.problem_report import ProblemReport, ProblemReportSource, ProblemRiskLevel, ProblemReportStatus
 
 # Supplier Quality Management Models (供应商质量管理模型)
 from app.models.scar import SCAR, SCARSeverity, SCARStatus
@@ -67,6 +68,7 @@ from app.models.project_lesson_check import ProjectLessonCheck
 from app.models.stage_review import StageReview, ReviewResult
 from app.models.trial_production import TrialProduction, TrialStatus
 from app.models.trial_issue import TrialIssue, IssueType, IssueStatus
+from app.models.new_product_defect import NewProductDefect, NewProductDefectSourceType, NewProductDefectStatus
 from app.models.initial_flow_control import InitialFlowControl, FlowControlStatus, FlowControlType
 
 # Audit Management Models (审核管理模型)
@@ -119,6 +121,10 @@ __all__ = [
     "SyncType",
     "RequirementsPanelStatus",
     "RequirementsPanelUser",
+    "ProblemReport",
+    "ProblemReportSource",
+    "ProblemRiskLevel",
+    "ProblemReportStatus",
     # Supplier Quality Management
     "SCAR",
     "SCARSeverity",
@@ -177,6 +183,9 @@ __all__ = [
     "TrialIssue",
     "IssueType",
     "IssueStatus",
+    "NewProductDefect",
+    "NewProductDefectSourceType",
+    "NewProductDefectStatus",
     "InitialFlowControl",
     "FlowControlStatus",
     "FlowControlType",

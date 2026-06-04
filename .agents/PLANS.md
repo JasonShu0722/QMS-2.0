@@ -245,7 +245,16 @@
   - 当前任务聚合、通知发送、权限校验在业务模块内落地深度不一致，不能假设已有底座已天然可复用
   - 若统一主模型改造跨度过大，应回退为“统一问题中心 + 模块扩展子表”的渐进方案，避免一次性替换全部现有表
 - Status:
-  - in progress
+  - completed
+  - implemented formal `problem_reports` / `problem_report_sources`, `ZXQ-*` / `ZX8D-*` numbering, risk/response filters, and duplicate suppression in the unified problem center
+  - connected customer complaint brief/8D mapping, process defect `PD-*` + process issue `ZXQ-PQ*`, new-product defect `NPD-*` + `ZXQ/ZX8D-DQ*`, trial issue 8D escalation, and customer-audit issue task `AQ3`
+  - frontend problem center now displays formal follow-up numbers, 8D numbers, risk tags, and filters by risk / response mode
+  - verification passed:
+    - `& '.\.venv\Scripts\python.exe' -m pytest backend/test/test_problem_management.py backend/test/test_problem_management_api.py`
+    - `Set-Location backend; & '..\.venv\Scripts\python.exe' -m alembic upgrade head`
+    - `Set-Location frontend; npm run test -- src/utils/test/problemIssueSummary.spec.ts`
+    - `Set-Location frontend; npm run test:foundation`
+    - `Set-Location frontend; npm run build`
 - Notes:
   - 分析阶段先输出现状梳理、统一设计建议、角色权限矩阵和最小闭环范围；讨论确认后再进入代码落地。
   - 问题回复形式增加分级：简单/单点问题可走“问题简报”，复杂/重大问题走“8D报告”；发起时可选择，跟进责任人和管理角色可在流程中即时调整，并保留切换审计轨迹。
@@ -487,3 +496,46 @@
   - menu visibility may drift from route guarding if permission metadata is duplicated instead of centralized
   - supplier analytics access must not leak peer-supplier rankings or unrelated internal analysis tabs
   - rollback points are `frontend/src/layouts/MainLayout.vue`, `frontend/src/views/Workbench.vue`, `frontend/src/stores/auth.ts`, `frontend/src/router/index.ts`, `frontend/src/views/QualityDashboard.vue`, `backend/app/api/v1/auth.py`, and `backend/app/api/v1/quality_metrics.py`
+
+## Task: Problem Management Formal Report Expansion (2026-05-27)
+
+- Goal:
+  - land the confirmed `source ledger -> ZXQ formal problem report -> brief/8D follow-up -> problem center` pattern across customer complaints, process quality, new product quality, and audit management
+  - preserve existing source-ledger numbers while adding `ZXQ-<category>-<YYMM>-<SEQ3>` as the formal follow-up number
+  - keep customer and supplier 8D chains intact while mapping 8D follow-ups to the formal problem-report layer
+- Non-goals:
+  - no new approval-engine framework
+  - no rewrite of SCAR or customer 8D workspaces
+  - no destructive migration or historical migration edits
+- Planned implementation:
+  - add `problem_reports` and `problem_report_sources`
+  - add source numbers for process defects and new-product defect intake where needed
+  - create formal reports from problem-management API, customer 8D init, process issue creation, trial issue 8D escalation, and customer-audit issue tasks
+  - keep customer complaints as a source ledger: users manually select one or more complaints before launching a formal report, and can later adjust the linked complaint range from the list entry
+  - make the unified problem center prefer formal reports and hide duplicated legacy source rows
+  - expose risk level, response mode, `ZXQ`, and `ZX8D` fields to frontend summary rows
+- Planned verification:
+  - `& '.\.venv\Scripts\python.exe' -m pytest backend/test/test_problem_management.py backend/test/test_problem_management_api.py`
+  - `Set-Location backend; & '..\.venv\Scripts\python.exe' -m alembic upgrade head`
+  - `Set-Location frontend; npm run test:foundation`
+  - `Set-Location frontend; npm run build`
+- Risks / rollback:
+  - duplicated rows can appear if source mappings are incomplete
+  - legacy `PQI-*` and `TI-*` source numbers must stay readable while `ZXQ-*` becomes the formal report number
+  - rollback points are `backend/app/models/problem_report.py`, `backend/app/services/problem_management_service.py`, the new migration, and the touched source-service integrations
+- Status:
+  - completed
+  - implemented a unified formal problem-report layer with `problem_reports`, `problem_report_sources`, and `new_product_defects`
+  - connected customer complaints, customer 8D init, process defects/issues, trial-issue 8D escalation, new-product defect intake, and customer-audit issue tasks to the `ZXQ` / `ZX8D` numbering layer
+  - updated the customer complaint list so formal follow-up launch is manually range-selected, linked problem documents are visible from the list, and brief-report source ranges can be adjusted after launch
+  - added a new-product defect intake page and surfaced it through route, navigation, and workbench quick actions
+  - updated the unified problem center to display formal follow-up numbers, risk level, response mode, and source-ledger references
+  - synchronized the requirements catalog and product/requirements documentation for the new first-batch scope
+  - verification evidence:
+    - `& '.\.venv\Scripts\python.exe' -m pytest backend/test/test_problem_management.py backend/test/test_problem_management_api.py -q --disable-warnings` -> 26 passed
+    - customer complaint regression now covers list-level `ZXQ` links and replacement of the linked source range
+    - `npm.cmd run test -- src/utils/test/problemIssueSummary.spec.ts` -> 8 passed
+    - `npm.cmd run test:foundation` -> 25 passed
+    - `npm.cmd run build` -> passed, with existing Sass legacy JS API and chunk-size warnings
+    - `alembic upgrade head` -> passed against local PostgreSQL after Docker was started and `localhost` was normalized to `127.0.0.1`; `alembic current` reported `f6a7b8c9d0e1 (head)`
+    - PostgreSQL table check confirmed `problem_reports`, `problem_report_sources`, and `new_product_defects`

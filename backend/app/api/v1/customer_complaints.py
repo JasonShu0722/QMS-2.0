@@ -11,6 +11,8 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.customer_complaint import (
+    CustomerComplaintBatchCreate,
+    CustomerComplaintBatchCreateResponse,
     CustomerComplaintCreate,
     CustomerComplaintCustomerOption,
     CustomerComplaintInternalUserOption,
@@ -77,6 +79,33 @@ async def create_complaint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"创建客诉单失败: {exc}",
+        ) from exc
+
+
+@router.post(
+    "/batch",
+    response_model=CustomerComplaintBatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="批量创建客诉单",
+)
+async def batch_create_complaints(
+    batch_data: CustomerComplaintBatchCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        complaints = await CustomerComplaintService.create_complaints(
+            db=db,
+            complaint_items=batch_data.items,
+            created_by_id=current_user.id,
+        )
+        return CustomerComplaintBatchCreateResponse(total=len(complaints), items=complaints)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量创建客诉单失败: {exc}",
         ) from exc
 
 

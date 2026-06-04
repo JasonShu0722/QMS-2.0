@@ -14,6 +14,8 @@ import type {
   CustomerClaimListQuery,
   CustomerClaimListResponse,
   CustomerComplaint,
+  CustomerComplaintBatchCreate,
+  CustomerComplaintBatchCreateResponse,
   CustomerComplaintCreate,
   CustomerComplaintCustomerOption,
   CustomerComplaintInternalUserOption,
@@ -43,7 +45,7 @@ export async function getCustomerComplaints(
   params: CustomerComplaintListQuery
 ): Promise<CustomerComplaintListResponse> {
   return request({
-    url: '/api/v1/customer-complaints',
+    url: '/v1/customer-complaints',
     method: 'get',
     params,
   })
@@ -51,7 +53,7 @@ export async function getCustomerComplaints(
 
 export async function getCustomerComplaint(id: number): Promise<CustomerComplaint> {
   return request({
-    url: `/api/v1/customer-complaints/${id}`,
+    url: `/v1/customer-complaints/${id}`,
     method: 'get',
   })
 }
@@ -60,7 +62,7 @@ export async function getCustomerComplaintCustomerOptions(
   params?: { keyword?: string }
 ): Promise<CustomerComplaintCustomerOption[]> {
   return request({
-    url: '/api/v1/customer-complaints/customers',
+    url: '/v1/customer-complaints/customers',
     method: 'get',
     params,
   })
@@ -70,7 +72,7 @@ export async function getCustomerComplaintInternalUserOptions(
   params?: { keyword?: string }
 ): Promise<CustomerComplaintInternalUserOption[]> {
   return request({
-    url: '/api/v1/customer-complaints/internal-users',
+    url: '/v1/customer-complaints/internal-users',
     method: 'get',
     params,
   })
@@ -78,7 +80,17 @@ export async function getCustomerComplaintInternalUserOptions(
 
 export async function createCustomerComplaint(data: CustomerComplaintCreate): Promise<CustomerComplaint> {
   return request({
-    url: '/api/v1/customer-complaints',
+    url: '/v1/customer-complaints',
+    method: 'post',
+    data,
+  })
+}
+
+export async function batchCreateCustomerComplaints(
+  data: CustomerComplaintBatchCreate
+): Promise<CustomerComplaintBatchCreateResponse> {
+  return request({
+    url: '/v1/customer-complaints/batch',
     method: 'post',
     data,
   })
@@ -89,7 +101,7 @@ export async function submitPreliminaryAnalysis(
   data: PreliminaryAnalysis
 ): Promise<CustomerComplaint> {
   return request({
-    url: `/api/v1/customer-complaints/${id}/preliminary-analysis`,
+    url: `/v1/customer-complaints/${id}/preliminary-analysis`,
     method: 'post',
     data,
   })
@@ -100,7 +112,7 @@ export async function recordCustomerComplaintPhysicalDisposition(
   data: CustomerComplaintPhysicalDispositionRecord
 ): Promise<CustomerComplaint> {
   return request({
-    url: `/api/v1/customer-complaints/${id}/physical-disposition`,
+    url: `/v1/customer-complaints/${id}/physical-disposition`,
     method: 'post',
     data,
   })
@@ -111,7 +123,7 @@ export async function recordCustomerComplaintPhysicalAnalysis(
   data: CustomerComplaintPhysicalAnalysisRecord
 ): Promise<CustomerComplaint> {
   return request({
-    url: `/api/v1/customer-complaints/${id}/physical-analysis`,
+    url: `/v1/customer-complaints/${id}/physical-analysis`,
     method: 'post',
     data,
   })
@@ -119,7 +131,7 @@ export async function recordCustomerComplaintPhysicalAnalysis(
 
 export async function initCustomerComplaintEightD(complaintId: number): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/init`,
+    url: `/v1/customer-complaints/${complaintId}/8d/init`,
     method: 'post',
   })) as unknown as BackendEightDCustomer
   return normalizeEightDCustomer(response)
@@ -129,7 +141,7 @@ export async function initBatchCustomerComplaintEightD(
   data: EightDBatchInitRequest
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: '/api/v1/customer-complaints/8d/init',
+    url: '/v1/customer-complaints/8d/init',
     method: 'post',
     data,
   })) as unknown as BackendEightDCustomer
@@ -141,7 +153,7 @@ export async function appendCustomerComplaintEightDScope(
   data: EightDScopeAppendRequest
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/complaints`,
+    url: `/v1/customer-complaints/${complaintId}/8d/complaints`,
     method: 'post',
     data,
   })) as unknown as BackendEightDCustomer
@@ -153,7 +165,7 @@ export async function removeCustomerComplaintEightDScopeComplaint(
   linkedComplaintId: number
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/complaints/${linkedComplaintId}`,
+    url: `/v1/customer-complaints/${complaintId}/8d/complaints/${linkedComplaintId}`,
     method: 'delete',
   })) as unknown as BackendEightDCustomer
   return normalizeEightDCustomer(response)
@@ -164,7 +176,7 @@ export async function switchCustomerComplaintEightDPrimaryComplaint(
   data: EightDPrimaryComplaintSwitchRequest
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/primary-complaint`,
+    url: `/v1/customer-complaints/${complaintId}/8d/primary-complaint`,
     method: 'post',
     data,
   })) as unknown as BackendEightDCustomer
@@ -173,7 +185,7 @@ export async function switchCustomerComplaintEightDPrimaryComplaint(
 
 export async function getEightDCustomer(complaintId: number): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d`,
+    url: `/v1/customer-complaints/${complaintId}/8d`,
     method: 'get',
   })) as unknown as BackendEightDCustomer
   return normalizeEightDCustomer(response)
@@ -183,7 +195,7 @@ export async function getCustomerEightDReports(
   params: CustomerEightDListQuery
 ): Promise<CustomerEightDListResponse> {
   return request({
-    url: '/api/v1/customer-complaints/8d/reports',
+    url: '/v1/customer-complaints/8d/reports',
     method: 'get',
     params,
   })
@@ -194,7 +206,7 @@ export async function submitEightDCustomer(
   data: EightDCustomerSubmit
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/d4-d7`,
+    url: `/v1/customer-complaints/${complaintId}/8d/d4-d7`,
     method: 'post',
     data: buildEightDD4D7Payload(data),
   })) as unknown as BackendEightDCustomer
@@ -206,7 +218,7 @@ export async function submitEightDD8(
   data: EightDD8Submit
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/d8`,
+    url: `/v1/customer-complaints/${complaintId}/8d/d8`,
     method: 'post',
     data: buildEightDD8Payload(data),
   })) as unknown as BackendEightDCustomer
@@ -218,7 +230,7 @@ export async function reviewEightDCustomer(
   data: EightDReview
 ): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/review`,
+    url: `/v1/customer-complaints/${complaintId}/8d/review`,
     method: 'post',
     data,
   })) as unknown as BackendEightDCustomer
@@ -227,7 +239,7 @@ export async function reviewEightDCustomer(
 
 export async function archiveEightDCustomer(complaintId: number): Promise<EightDCustomer> {
   const response = (await request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/archive`,
+    url: `/v1/customer-complaints/${complaintId}/8d/archive`,
     method: 'post',
   })) as unknown as BackendEightDCustomer
   return normalizeEightDCustomer(response)
@@ -235,7 +247,7 @@ export async function archiveEightDCustomer(complaintId: number): Promise<EightD
 
 export async function getEightDSLAStatus(complaintId: number): Promise<EightDSLAStatus> {
   return request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/sla`,
+    url: `/v1/customer-complaints/${complaintId}/8d/sla`,
     method: 'get',
   })
 }
@@ -245,7 +257,7 @@ export async function rejectEightDCustomer(
   reason: string
 ): Promise<{ message: string }> {
   return request({
-    url: `/api/v1/customer-complaints/${complaintId}/8d/reject`,
+    url: `/v1/customer-complaints/${complaintId}/8d/reject`,
     method: 'post',
     data: { reason },
   })
@@ -253,7 +265,7 @@ export async function rejectEightDCustomer(
 
 export async function getCustomerClaims(params: CustomerClaimListQuery): Promise<CustomerClaimListResponse> {
   return request({
-    url: '/api/v1/customer-claims',
+    url: '/v1/customer-claims',
     method: 'get',
     params,
   })
@@ -261,14 +273,14 @@ export async function getCustomerClaims(params: CustomerClaimListQuery): Promise
 
 export async function getCustomerClaim(id: number): Promise<CustomerClaim> {
   return request({
-    url: `/api/v1/customer-claims/${id}`,
+    url: `/v1/customer-claims/${id}`,
     method: 'get',
   })
 }
 
 export async function createCustomerClaim(data: CustomerClaimCreate): Promise<CustomerClaim> {
   return request({
-    url: '/api/v1/customer-claims',
+    url: '/v1/customer-claims',
     method: 'post',
     data,
   })
@@ -276,7 +288,7 @@ export async function createCustomerClaim(data: CustomerClaimCreate): Promise<Cu
 
 export async function getSupplierClaims(params: SupplierClaimListQuery): Promise<SupplierClaimListResponse> {
   return request({
-    url: '/api/v1/supplier-claims',
+    url: '/v1/supplier-claims',
     method: 'get',
     params,
   })
@@ -284,14 +296,14 @@ export async function getSupplierClaims(params: SupplierClaimListQuery): Promise
 
 export async function getSupplierClaim(id: number): Promise<SupplierClaim> {
   return request({
-    url: `/api/v1/supplier-claims/${id}`,
+    url: `/v1/supplier-claims/${id}`,
     method: 'get',
   })
 }
 
 export async function createSupplierClaim(data: SupplierClaimCreate): Promise<SupplierClaim> {
   return request({
-    url: '/api/v1/supplier-claims',
+    url: '/v1/supplier-claims',
     method: 'post',
     data,
   })
@@ -302,7 +314,7 @@ export async function transferToSupplierClaim(
   data: Omit<SupplierClaimCreate, 'complaint_id'>
 ): Promise<SupplierClaim> {
   return request({
-    url: `/api/v1/customer-complaints/${complaintId}/transfer-claim`,
+    url: `/v1/customer-complaints/${complaintId}/transfer-claim`,
     method: 'post',
     data,
   })
@@ -312,7 +324,7 @@ export async function getCustomerQualityAnalysis(
   params?: { start_date?: string; end_date?: string }
 ): Promise<CustomerQualityAnalysis> {
   return request({
-    url: '/api/v1/quality-metrics/customer-analysis',
+    url: '/v1/quality-metrics/customer-analysis',
     method: 'get',
     params,
   })

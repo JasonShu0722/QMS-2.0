@@ -20,11 +20,19 @@
             <el-button
               type="primary"
               plain
-              :disabled="!canBatchLaunchEightD"
+              :disabled="!canLaunchSelectedEightD"
               :loading="batchLaunchingEightD"
               @click="handleBatch8D"
             >
-              批量发起8D
+              {{ selectedEightDButtonLabel }}
+            </el-button>
+            <el-button
+              type="success"
+              plain
+              :disabled="selectedCount === 0"
+              @click="handleOpenProblemLaunchDialog"
+            >
+              发起问题跟进
             </el-button>
           </div>
         </el-tooltip>
@@ -204,6 +212,20 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="问题单据" width="170">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.problem_report_id"
+              link
+              type="primary"
+              size="small"
+              @click="handleOpenProblemReportLink(row)"
+            >
+              {{ row.problem_number }}
+            </el-button>
+            <span v-else class="text-gray-400">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="170" />
         <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
@@ -256,9 +278,8 @@
     <el-dialog
       v-model="showCreateDialog"
       title="创建客诉单"
-      width="90%"
+      width="min(960px, 92vw)"
       :close-on-click-modal="false"
-      class="max-w-2xl"
     >
       <CustomerComplaintForm @success="handleCreateSuccess" @cancel="showCreateDialog = false" />
     </el-dialog>
@@ -274,6 +295,105 @@
       :complaint="selectedComplaint"
       @success="handleAnalysisSuccess"
     />
+
+    <el-dialog
+      v-model="showProblemLaunchDialog"
+      :title="problemLaunchDialogTitle"
+      width="90%"
+      class="max-w-3xl"
+      :close-on-click-modal="false"
+    >
+      <div class="mb-4 flex flex-wrap gap-2">
+        <el-tag
+          v-for="source in problemLaunchSources"
+          :key="`${source.source_type}-${source.source_id}`"
+          :type="source.is_primary ? 'primary' : 'info'"
+        >
+          {{ source.source_number || source.source_id }}
+        </el-tag>
+      </div>
+
+      <el-form :model="problemLaunchForm" label-width="120px">
+        <el-form-item label="主客诉" required>
+          <el-select v-model="problemLaunchForm.primary_complaint_id" class="w-full">
+            <el-option
+              v-for="source in problemLaunchSources"
+              :key="source.source_id"
+              :label="source.source_number || String(source.source_id)"
+              :value="source.source_id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="回复形式">
+          <el-radio-group v-model="problemLaunchForm.response_mode">
+            <el-radio-button
+              v-for="option in responseModeOptions"
+              :key="option.value"
+              :label="option.value"
+            >
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="风险等级">
+          <el-select v-model="problemLaunchForm.risk_level" class="w-full">
+            <el-option
+              v-for="option in riskLevelOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="责任部门">
+          <el-input v-model="problemLaunchForm.responsible_dept" />
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="责任人">
+          <el-select
+            v-model="problemLaunchForm.assigned_to"
+            clearable
+            filterable
+            class="w-full"
+            :loading="loadingInternalUsers"
+          >
+            <el-option
+              v-for="user in internalUsers"
+              :key="user.id"
+              :label="formatInternalUserOption(user)"
+              :value="user.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="完成时限">
+          <el-date-picker
+            v-model="problemLaunchForm.due_at"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            class="w-full"
+          />
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="问题标题">
+          <el-input v-model="problemLaunchForm.title" />
+        </el-form-item>
+        <el-form-item v-if="problemLaunchMode === 'create'" label="问题描述">
+          <el-input v-model="problemLaunchForm.description" type="textarea" :rows="3" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="showProblemLaunchDialog = false">取消</el-button>
+        <el-button
+          v-if="problemLaunchMode === 'edit'"
+          :disabled="selectedCount === 0"
+          @click="applySelectedComplaintsToProblemRange"
+        >
+          使用当前选中范围
+        </el-button>
+        <el-button type="primary" :loading="submittingProblemLaunch" @click="submitProblemLaunch">
+          {{ problemLaunchMode === 'edit' ? '保存范围' : '发起' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -289,6 +409,7 @@ import {
   initBatchCustomerComplaintEightD,
   initCustomerComplaintEightD,
 } from '@/api/customer-quality'
+import { problemManagementApi } from '@/api/problem-management'
 import CustomerComplaintAnalysisDialog from '@/components/CustomerComplaintAnalysisDialog.vue'
 import CustomerComplaintDispositionDialog from '@/components/CustomerComplaintDispositionDialog.vue'
 import CustomerComplaintForm from '@/components/CustomerComplaintForm.vue'
@@ -299,18 +420,25 @@ import type {
   CustomerComplaintListQuery,
 } from '@/types/customer-quality'
 import { ComplaintType } from '@/types/customer-quality'
+import type {
+  InternalUserOption,
+  ProblemReportResponse,
+  ProblemReportSourceCreate,
+  ProblemResponseMode,
+  ProblemRiskLevel,
+} from '@/types/problem-management'
 import {
   buildCustomerComplaintTypeOptions,
   getCustomerComplaintTypeLabel as resolveCustomerComplaintTypeLabel,
 } from '@/utils/problemManagement'
 import {
   buildCustomerComplaintStatusOptions,
-  canBatchLaunchCustomerComplaintEightD,
   canHandleCustomerComplaintAnalysis,
   canHandleCustomerComplaintDisposition,
+  canLaunchCustomerComplaintEightDSelection,
   canOpenCustomerComplaintEightD,
-  getCustomerComplaintBatchLaunchHint,
   getCustomerComplaintEightDActionLabel,
+  getCustomerComplaintEightDSelectionLaunchHint,
   getCustomerComplaintDispositionStatusLabel,
   getCustomerComplaintDispositionStatusType,
   getCustomerComplaintPhysicalAnalysisStatusLabel,
@@ -319,6 +447,10 @@ import {
   getCustomerComplaintStatusType,
 } from '@/utils/customerComplaint'
 import { getEightDStatusLabel } from '@/utils/customerEightD'
+import {
+  buildProblemIssueResponseModeOptions,
+  buildProblemIssueRiskLevelOptions,
+} from '@/utils/problemIssueSummary'
 
 const route = useRoute()
 const router = useRouter()
@@ -337,6 +469,35 @@ const dateRange = ref<[string, string] | null>(null)
 const showAdvancedFilters = ref(false)
 const launchingEightDId = ref<number | null>(null)
 const batchLaunchingEightD = ref(false)
+const showProblemLaunchDialog = ref(false)
+const submittingProblemLaunch = ref(false)
+const loadingInternalUsers = ref(false)
+const problemLaunchMode = ref<'create' | 'edit'>('create')
+const problemLaunchReport = ref<ProblemReportResponse | null>(null)
+const problemLaunchSources = ref<ProblemReportSourceCreate[]>([])
+const internalUsers = ref<InternalUserOption[]>([])
+const responseModeOptions = buildProblemIssueResponseModeOptions()
+const riskLevelOptions = buildProblemIssueRiskLevelOptions()
+
+const problemLaunchForm = reactive<{
+  primary_complaint_id?: number
+  response_mode: ProblemResponseMode
+  risk_level: ProblemRiskLevel
+  responsible_dept: string
+  assigned_to?: number
+  due_at?: string
+  title: string
+  description: string
+}>({
+  primary_complaint_id: undefined,
+  response_mode: 'brief',
+  risk_level: 'medium',
+  responsible_dept: '',
+  assigned_to: undefined,
+  due_at: undefined,
+  title: '',
+  description: '',
+})
 
 const queryParams = reactive<CustomerComplaintListQuery>({
   page: 1,
@@ -352,16 +513,26 @@ const queryParams = reactive<CustomerComplaintListQuery>({
 const complaintTypeOptions = computed(() =>
   buildCustomerComplaintTypeOptions(problemManagementStore.getCategory)
 )
-const canBatchLaunchEightD = computed(() =>
-  canBatchLaunchCustomerComplaintEightD(selectedComplaints.value)
+const canLaunchSelectedEightD = computed(() =>
+  canLaunchCustomerComplaintEightDSelection(selectedComplaints.value)
 )
 const selectedCount = computed(() => selectedComplaints.value.length)
 const focusedComplaintId = computed(() => parseFocusId(route.query.focusId))
 const batchLaunchHint = computed(() =>
-  getCustomerComplaintBatchLaunchHint(selectedComplaints.value)
+  getCustomerComplaintEightDSelectionLaunchHint(selectedComplaints.value)
+)
+const selectedEightDButtonLabel = computed(() =>
+  selectedCount.value > 1
+    ? '批量发起8D'
+    : selectedComplaints.value[0]?.eight_d_report_id
+      ? '查看8D'
+      : '发起8D'
 )
 const batchLaunchTooltipDisabled = computed(() =>
-  selectedCount.value === 0 || canBatchLaunchEightD.value || !batchLaunchHint.value
+  selectedCount.value === 0 || canLaunchSelectedEightD.value || !batchLaunchHint.value
+)
+const problemLaunchDialogTitle = computed(() =>
+  problemLaunchMode.value === 'edit' ? '调整问题单据范围' : '发起问题跟进'
 )
 
 const statusOptions = buildCustomerComplaintStatusOptions()
@@ -386,6 +557,52 @@ function parseFocusId(value: unknown): number | null {
 
   const parsed = Number(raw)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function buildComplaintProblemSources(
+  complaints: CustomerComplaint[],
+  primaryComplaintId?: number
+): ProblemReportSourceCreate[] {
+  return complaints.map((complaint, index) => ({
+    source_type: 'customer_complaint',
+    source_id: complaint.id,
+    source_number: complaint.complaint_number,
+    is_primary: primaryComplaintId ? complaint.id === primaryComplaintId : index === 0,
+  }))
+}
+
+function resetProblemLaunchForm(complaints: CustomerComplaint[]) {
+  const primaryComplaint = complaints[0]
+  problemLaunchForm.primary_complaint_id = primaryComplaint?.id
+  problemLaunchForm.response_mode = 'brief'
+  problemLaunchForm.risk_level = 'medium'
+  problemLaunchForm.responsible_dept = primaryComplaint?.responsible_dept || ''
+  problemLaunchForm.assigned_to = primaryComplaint?.responsible_user_id
+  problemLaunchForm.due_at = undefined
+  problemLaunchForm.title = primaryComplaint ? `客诉问题跟进-${primaryComplaint.complaint_number}` : ''
+  problemLaunchForm.description = complaints
+    .map((complaint) => `${complaint.complaint_number}: ${complaint.defect_description}`)
+    .join('\n')
+}
+
+function formatInternalUserOption(user: InternalUserOption): string {
+  const name = user.full_name || user.username
+  return user.department ? `${name} / ${user.department}` : name
+}
+
+async function ensureInternalUsersLoaded() {
+  if (internalUsers.value.length) {
+    return
+  }
+
+  loadingInternalUsers.value = true
+  try {
+    internalUsers.value = await problemManagementApi.getInternalUsers()
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载责任人失败')
+  } finally {
+    loadingInternalUsers.value = false
+  }
 }
 
 async function loadCustomerOptions() {
@@ -478,6 +695,167 @@ function handleSelectionChange(selection: CustomerComplaint[]) {
   selectedComplaints.value = selection
 }
 
+async function handleOpenProblemLaunchDialog() {
+  if (!selectedComplaints.value.length) {
+    ElMessage.warning('请先选择客诉范围')
+    return
+  }
+
+  problemLaunchMode.value = 'create'
+  problemLaunchReport.value = null
+  problemLaunchSources.value = buildComplaintProblemSources(selectedComplaints.value)
+  resetProblemLaunchForm(selectedComplaints.value)
+  showProblemLaunchDialog.value = true
+  void ensureInternalUsersLoaded()
+}
+
+async function handleOpenProblemReportLink(row: CustomerComplaint) {
+  if (!row.problem_report_id) {
+    return
+  }
+
+  if (row.problem_report_response_mode === 'eight_d') {
+    router.push({
+      name: 'CustomerEightDList',
+      query: {
+        sourceRouteName: 'CustomerComplaintList',
+        focusId: String(row.eight_d_report_id || row.problem_report_id),
+        report_number: row.problem_report_eight_d_number || row.problem_number || row.complaint_number,
+        response_mode: 'eight_d',
+      },
+    })
+    return
+  }
+
+  try {
+    const report = await problemManagementApi.getProblemReport(row.problem_report_id)
+    problemLaunchMode.value = 'edit'
+    problemLaunchReport.value = report
+    problemLaunchSources.value = report.sources
+      .filter((source) => source.source_type === 'customer_complaint')
+      .map((source) => ({
+        source_type: source.source_type,
+        source_id: source.source_id,
+        source_parent_id: source.source_parent_id,
+        source_number: source.source_number,
+        is_primary: source.is_primary,
+      }))
+    const primarySource = problemLaunchSources.value.find((source) => source.is_primary) || problemLaunchSources.value[0]
+    problemLaunchForm.primary_complaint_id = primarySource?.source_id
+    showProblemLaunchDialog.value = true
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载问题单据失败')
+  }
+}
+
+function applySelectedComplaintsToProblemRange() {
+  if (!selectedComplaints.value.length) {
+    ElMessage.warning('请先选择新的客诉范围')
+    return
+  }
+
+  problemLaunchSources.value = buildComplaintProblemSources(
+    selectedComplaints.value,
+    problemLaunchForm.primary_complaint_id
+  )
+  if (!problemLaunchSources.value.some((source) => source.is_primary)) {
+    problemLaunchSources.value[0].is_primary = true
+    problemLaunchForm.primary_complaint_id = problemLaunchSources.value[0].source_id
+  }
+}
+
+function normalizeProblemLaunchSources(): ProblemReportSourceCreate[] {
+  const primaryComplaintId = problemLaunchForm.primary_complaint_id || problemLaunchSources.value[0]?.source_id
+  const sources = problemLaunchSources.value.map((source, index) => ({
+    ...source,
+    is_primary: primaryComplaintId ? source.source_id === primaryComplaintId : index === 0,
+  }))
+  if (sources.length && !sources.some((source) => source.is_primary)) {
+    sources[0].is_primary = true
+    problemLaunchForm.primary_complaint_id = sources[0].source_id
+  }
+  return sources
+}
+
+async function submitProblemLaunch() {
+  const sources = normalizeProblemLaunchSources()
+  if (!sources.length) {
+    ElMessage.warning('请先选择客诉范围')
+    return
+  }
+
+  submittingProblemLaunch.value = true
+  try {
+    if (problemLaunchMode.value === 'edit') {
+      if (!problemLaunchReport.value) {
+        return
+      }
+      await problemManagementApi.updateProblemReportSources(problemLaunchReport.value.id, { sources })
+      ElMessage.success('问题单据范围已更新')
+      showProblemLaunchDialog.value = false
+      await loadComplaints()
+      return
+    }
+
+    const primarySource = sources.find((source) => source.is_primary) || sources[0]
+    const primaryComplaint = selectedComplaints.value.find((item) => item.id === primarySource.source_id)
+    if (!primaryComplaint) {
+      ElMessage.warning('请选择主客诉')
+      return
+    }
+
+    if (problemLaunchForm.response_mode === 'eight_d') {
+      const report = await initBatchCustomerComplaintEightD({
+        complaint_ids: sources.map((source) => source.source_id),
+        primary_complaint_id: primaryComplaint.id,
+      })
+      ElMessage.success('已按所选范围发起 8D')
+      showProblemLaunchDialog.value = false
+      await loadComplaints()
+      router.push({
+        name: 'CustomerEightDList',
+        query: {
+          sourceRouteName: 'CustomerComplaintList',
+          focusId: String(report.id),
+          report_number: report.report_number,
+          response_mode: 'eight_d',
+        },
+      })
+      return
+    }
+
+    const categoryKey = primaryComplaint.complaint_type === ComplaintType.ZERO_KM ? 'CQ0' : 'CQ1'
+    const report = await problemManagementApi.createProblemReport({
+      module_key: 'customer_quality',
+      problem_category_key: categoryKey,
+      title: problemLaunchForm.title || `客诉问题跟进-${primaryComplaint.complaint_number}`,
+      description: problemLaunchForm.description || primaryComplaint.defect_description,
+      risk_level: problemLaunchForm.risk_level,
+      response_mode: 'brief',
+      responsible_dept: problemLaunchForm.responsible_dept || primaryComplaint.responsible_dept,
+      assigned_to: problemLaunchForm.assigned_to,
+      due_at: problemLaunchForm.due_at,
+      sources,
+    })
+    ElMessage.success('已发起问题简报')
+    showProblemLaunchDialog.value = false
+    await loadComplaints()
+    router.push({
+      name: 'CustomerEightDList',
+      query: {
+        sourceRouteName: 'CustomerComplaintList',
+        focusId: String(report.id),
+        report_number: report.problem_number,
+        response_mode: report.response_mode,
+      },
+    })
+  } catch (error: any) {
+    ElMessage.error(error.message || '发起问题跟进失败')
+  } finally {
+    submittingProblemLaunch.value = false
+  }
+}
+
 async function handle8D(row: CustomerComplaint) {
   if (row.eight_d_report_id) {
     router.push({
@@ -493,15 +871,16 @@ async function handle8D(row: CustomerComplaint) {
 
   try {
     launchingEightDId.value = row.id
-    await initCustomerComplaintEightD(row.id)
+    const report = await initCustomerComplaintEightD(row.id)
     ElMessage.success(`客诉 ${row.complaint_number} 已发起8D`)
     await loadComplaints()
     router.push({
-      name: 'EightDCustomerForm',
-      params: { id: row.id },
+      name: 'CustomerEightDList',
       query: {
         sourceRouteName: 'CustomerComplaintList',
-        sourceFocusId: String(row.id),
+        focusId: String(report.id),
+        report_number: report.report_number,
+        response_mode: 'eight_d',
       },
     })
   } catch (error: any) {
@@ -513,7 +892,7 @@ async function handle8D(row: CustomerComplaint) {
 
 async function handleBatch8D() {
   const complaints = selectedComplaints.value
-  const launchHint = getCustomerComplaintBatchLaunchHint(complaints)
+  const launchHint = getCustomerComplaintEightDSelectionLaunchHint(complaints)
   if (launchHint) {
     ElMessage.warning(launchHint)
     return
@@ -521,7 +900,17 @@ async function handleBatch8D() {
 
   const primaryComplaint = complaints[0]
   if (!primaryComplaint) {
-    ElMessage.warning('请先选择客诉记录')
+    ElMessage.warning('请至少选择一条客诉记录')
+    return
+  }
+
+  if (complaints.length === 1) {
+    batchLaunchingEightD.value = true
+    try {
+      await handle8D(primaryComplaint)
+    } finally {
+      batchLaunchingEightD.value = false
+    }
     return
   }
 
@@ -534,11 +923,12 @@ async function handleBatch8D() {
     ElMessage.success(`已按 ${complaints.length} 条客诉发起同一张8D`)
     await loadComplaints()
     router.push({
-      name: 'EightDCustomerForm',
-      params: { id: report.complaint_id || primaryComplaint.id },
+      name: 'CustomerEightDList',
       query: {
         sourceRouteName: 'CustomerComplaintList',
-        sourceFocusId: String(report.complaint_id || primaryComplaint.id),
+        focusId: String(report.id),
+        report_number: report.report_number,
+        response_mode: 'eight_d',
       },
     })
   } catch (error: any) {

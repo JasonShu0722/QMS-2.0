@@ -36,7 +36,7 @@ interface ProcessDefectListResponse {
  */
 export async function getProcessDefects(params: ProcessDefectListQuery): Promise<ProcessDefectListResponse> {
   return request({
-    url: '/api/v1/process-defects',
+    url: '/v1/process-defects',
     method: 'get',
     params
   });
@@ -47,7 +47,7 @@ export async function getProcessDefects(params: ProcessDefectListQuery): Promise
  */
 export async function getProcessDefect(id: number): Promise<ProcessDefect> {
   return request({
-    url: `/api/v1/process-defects/${id}`,
+    url: `/v1/process-defects/${id}`,
     method: 'get'
   });
 }
@@ -57,7 +57,7 @@ export async function getProcessDefect(id: number): Promise<ProcessDefect> {
  */
 export async function createProcessDefect(data: ProcessDefectCreate): Promise<ProcessDefect> {
   return request({
-    url: '/api/v1/process-defects',
+    url: '/v1/process-defects',
     method: 'post',
     data
   });
@@ -68,7 +68,7 @@ export async function createProcessDefect(data: ProcessDefectCreate): Promise<Pr
  */
 export async function updateProcessDefect(id: number, data: ProcessDefectUpdate): Promise<ProcessDefect> {
   return request({
-    url: `/api/v1/process-defects/${id}`,
+    url: `/v1/process-defects/${id}`,
     method: 'put',
     data
   });
@@ -79,7 +79,7 @@ export async function updateProcessDefect(id: number, data: ProcessDefectUpdate)
  */
 export async function deleteProcessDefect(id: number): Promise<{ message: string }> {
   return request({
-    url: `/api/v1/process-defects/${id}`,
+    url: `/v1/process-defects/${id}`,
     method: 'delete'
   });
 }
@@ -89,7 +89,7 @@ export async function deleteProcessDefect(id: number): Promise<{ message: string
  */
 export async function getDefectTypes(): Promise<{ defect_types: DefectTypeOption[] }> {
   return request({
-    url: '/api/v1/process-defects/defect-types',
+    url: '/v1/process-defects/options/defect-types',
     method: 'get'
   });
 }
@@ -99,7 +99,7 @@ export async function getDefectTypes(): Promise<{ defect_types: DefectTypeOption
  */
 export async function getResponsibilityCategories(): Promise<{ categories: ResponsibilityCategoryOption[] }> {
   return request({
-    url: '/api/v1/process-defects/responsibility-categories',
+    url: '/v1/process-defects/options/responsibility-categories',
     method: 'get'
   });
 }
@@ -111,7 +111,7 @@ export async function getResponsibilityCategories(): Promise<{ categories: Respo
  */
 export async function getProcessIssues(params: ProcessIssueFilter): Promise<ProcessIssueListResponse> {
   return request({
-    url: '/api/v1/process-issues',
+    url: '/v1/process-issues',
     method: 'get',
     params
   });
@@ -122,7 +122,7 @@ export async function getProcessIssues(params: ProcessIssueFilter): Promise<Proc
  */
 export async function getProcessIssue(id: number): Promise<ProcessIssue> {
   return request({
-    url: `/api/v1/process-issues/${id}`,
+    url: `/v1/process-issues/${id}`,
     method: 'get'
   });
 }
@@ -132,7 +132,7 @@ export async function getProcessIssue(id: number): Promise<ProcessIssue> {
  */
 export async function createProcessIssue(data: ProcessIssueCreate): Promise<ProcessIssueCreateResponse> {
   return request({
-    url: '/api/v1/process-issues',
+    url: '/v1/process-issues',
     method: 'post',
     data
   });
@@ -143,7 +143,7 @@ export async function createProcessIssue(data: ProcessIssueCreate): Promise<Proc
  */
 export async function respondToProcessIssue(id: number, data: ProcessIssueResponse): Promise<ProcessIssueOperationResponse> {
   return request({
-    url: `/api/v1/process-issues/${id}/response`,
+    url: `/v1/process-issues/${id}/response`,
     method: 'post',
     data
   });
@@ -154,7 +154,7 @@ export async function respondToProcessIssue(id: number, data: ProcessIssueRespon
  */
 export async function verifyProcessIssue(id: number, data: ProcessIssueVerification): Promise<ProcessIssueOperationResponse> {
   return request({
-    url: `/api/v1/process-issues/${id}/verify`,
+    url: `/v1/process-issues/${id}/verify`,
     method: 'post',
     data
   });
@@ -165,7 +165,7 @@ export async function verifyProcessIssue(id: number, data: ProcessIssueVerificat
  */
 export async function closeProcessIssue(id: number, data: ProcessIssueClose): Promise<ProcessIssueOperationResponse> {
   return request({
-    url: `/api/v1/process-issues/${id}/close`,
+    url: `/v1/process-issues/${id}/close`,
     method: 'post',
     data
   });

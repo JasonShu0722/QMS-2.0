@@ -2,6 +2,8 @@
 权限引擎核心逻辑
 Permission Engine - 细粒度权限检查、缓存管理、数据隔离
 """
+import asyncio
+from time import monotonic
 from typing import Optional, Dict, Set, Any, Iterable
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +34,18 @@ SUPPLIER_PERFORMANCE_READ_KEY = Permission.build_permission_key(
 
 # Redis 客户端（用于权限缓存）
 _redis_client: Optional[redis.Redis] = None
+_redis_disabled_until = 0.0
+REDIS_OPERATION_TIMEOUT_SECONDS = 0.25
+REDIS_FAILURE_BACKOFF_SECONDS = 60.0
+
+
+def _is_redis_temporarily_disabled() -> bool:
+    return monotonic() < _redis_disabled_until
+
+
+def _mark_redis_temporarily_disabled() -> None:
+    global _redis_disabled_until
+    _redis_disabled_until = monotonic() + REDIS_FAILURE_BACKOFF_SECONDS
 
 
 async def get_redis_client() -> redis.Redis:
@@ -46,7 +60,11 @@ async def get_redis_client() -> redis.Redis:
         _redis_client = redis.from_url(
             settings.REDIS_URL,
             encoding="utf-8",
-            decode_responses=True
+            decode_responses=True,
+            socket_connect_timeout=REDIS_OPERATION_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_OPERATION_TIMEOUT_SECONDS,
+            retry_on_timeout=False,
+            health_check_interval=30,
         )
     return _redis_client
 
@@ -223,10 +241,16 @@ class PermissionChecker:
             user_id: 用户ID
         """
         try:
+            if _is_redis_temporarily_disabled():
+                return
             redis_client = await get_redis_client()
             cache_key = f"{PermissionChecker.CACHE_PREFIX}{user_id}"
-            await redis_client.delete(cache_key)
+            await asyncio.wait_for(
+                redis_client.delete(cache_key),
+                timeout=REDIS_OPERATION_TIMEOUT_SECONDS,
+            )
         except Exception as e:
+            _mark_redis_temporarily_disabled()
             # Redis 连接失败不应阻塞业务，仅记录日志
             print(f"Warning: Failed to clear permission cache for user {user_id}: {e}")
 
@@ -249,9 +273,14 @@ class PermissionChecker:
             Optional[Set[str]]: 权限键集合，缓存未命中时返回 None
         """
         try:
+            if _is_redis_temporarily_disabled():
+                return None
             redis_client = await get_redis_client()
             cache_key = f"{PermissionChecker.CACHE_PREFIX}{user_id}"
-            cached_data = await redis_client.get(cache_key)
+            cached_data = await asyncio.wait_for(
+                redis_client.get(cache_key),
+                timeout=REDIS_OPERATION_TIMEOUT_SECONDS,
+            )
             
             if cached_data:
                 # 反序列化 JSON 字符串为集合
@@ -259,6 +288,7 @@ class PermissionChecker:
             
             return None
         except Exception as e:
+            _mark_redis_temporarily_disabled()
             # Redis 连接失败不应阻塞业务，返回 None 触发数据库查询
             print(f"Warning: Failed to get cached permissions for user {user_id}: {e}")
             return None
@@ -273,16 +303,22 @@ class PermissionChecker:
             permissions: 权限键集合
         """
         try:
+            if _is_redis_temporarily_disabled():
+                return
             redis_client = await get_redis_client()
             cache_key = f"{PermissionChecker.CACHE_PREFIX}{user_id}"
             # 序列化集合为 JSON 字符串
             cached_data = json.dumps(list(permissions))
-            await redis_client.setex(
-                cache_key,
-                PermissionChecker.CACHE_EXPIRE_SECONDS,
-                cached_data
+            await asyncio.wait_for(
+                redis_client.setex(
+                    cache_key,
+                    PermissionChecker.CACHE_EXPIRE_SECONDS,
+                    cached_data,
+                ),
+                timeout=REDIS_OPERATION_TIMEOUT_SECONDS,
             )
         except Exception as e:
+            _mark_redis_temporarily_disabled()
             # Redis 连接失败不应阻塞业务，仅记录日志
             print(f"Warning: Failed to cache permissions for user {user_id}: {e}")
     

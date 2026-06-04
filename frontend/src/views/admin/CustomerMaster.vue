@@ -136,6 +136,7 @@
             :rows="12"
             placeholder="客户代码,客户名称[,联系人,联系邮箱,联系电话]"
           />
+          <div class="import-limit-note">单次最多导入 500 条，超过请拆分后分批导入。</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -152,6 +153,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 
 import { adminApi } from '@/api/admin'
+import {
+  CUSTOMER_MASTER_IMPORT_MAX_ITEMS,
+  parseCustomerMasterImportContent,
+} from '@/utils/customerMasterImport'
 import type {
   CustomerListQuery,
   CustomerMaster,
@@ -290,28 +295,7 @@ async function submitCustomer() {
 }
 
 function parseImportItems(): CustomerMasterBulkCreateItem[] {
-  return importForm.content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const delimiter = line.includes('\t') ? '\t' : ','
-      const cells = line.split(delimiter).map((item) => item.trim())
-      if (cells.length < 2 || cells.length > 5) {
-        throw new Error('每行需填写 2 到 5 列数据')
-      }
-      const [code, name, contactPerson, contactEmail, contactPhone] = cells
-      if (!code || !name) {
-        throw new Error('客户代码和客户名称不能为空')
-      }
-      return {
-        code,
-        name,
-        contact_person: contactPerson || undefined,
-        contact_email: contactEmail || undefined,
-        contact_phone: contactPhone || undefined,
-      }
-    })
+  return parseCustomerMasterImportContent(importForm.content)
 }
 
 async function submitImport() {
@@ -326,6 +310,13 @@ async function submitImport() {
 
   if (!items.length) {
     ElMessage.error('请至少填写一条客户数据')
+    return
+  }
+
+  if (items.length > CUSTOMER_MASTER_IMPORT_MAX_ITEMS) {
+    ElMessage.error(
+      `单次最多导入 ${CUSTOMER_MASTER_IMPORT_MAX_ITEMS} 条，当前 ${items.length} 条，请分批导入`
+    )
     return
   }
 
@@ -417,6 +408,13 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.import-limit-note {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .panel-loading {

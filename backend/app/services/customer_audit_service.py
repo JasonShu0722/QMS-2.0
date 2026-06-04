@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.problem_management import get_problem_category_definition
 from app.models.audit import CustomerAudit, AuditNC
+from app.models.problem_report import ProblemReportStatus
+from app.schemas.problem_management import ProblemReportCreate, ProblemReportSourceCreate
+from app.services.problem_management_service import ProblemManagementService
 from app.schemas.customer_audit import (
     CustomerAuditCreate,
     CustomerAuditIssueTaskResponse,
@@ -218,6 +221,35 @@ class CustomerAuditService:
         )
         
         db.add(nc_task)
+        await db.flush()
+
+        category = get_problem_category_definition(CustomerAuditService.CUSTOMER_AUDIT_PROBLEM_CATEGORY_KEY)
+        report = await ProblemManagementService.create_problem_report(
+            db=db,
+            report_data=ProblemReportCreate(
+                module_key="audit_management",
+                problem_category_key=category.key,
+                title=task_data.issue_description,
+                description=task_data.issue_description,
+                risk_level=task_data.priority,
+                response_mode=task_data.response_mode,
+                responsible_dept=task_data.responsible_dept,
+                assigned_to=task_data.assigned_to,
+                due_at=task_data.deadline,
+                sources=[
+                    ProblemReportSourceCreate(
+                        source_type="audit_nc",
+                        source_id=nc_task.id,
+                        source_parent_id=task_data.customer_audit_id,
+                        source_number=f"NC-{nc_task.id}",
+                        is_primary=True,
+                    )
+                ],
+            ),
+            created_by=created_by,
+            status=ProblemReportStatus.ASSIGNED if task_data.assigned_to else ProblemReportStatus.OPEN,
+            commit=False,
+        )
         
         # 更新客户审核状态为"问题待关闭"
         if customer_audit.status == "completed":
@@ -226,6 +258,7 @@ class CustomerAuditService:
         
         await db.commit()
         await db.refresh(nc_task)
+        nc_task.problem_report = report
         
         return nc_task
 
@@ -241,6 +274,7 @@ class CustomerAuditService:
         category = get_problem_category_definition(
             CustomerAuditService.CUSTOMER_AUDIT_PROBLEM_CATEGORY_KEY
         )
+        report = getattr(task, "problem_report", None)
         return CustomerAuditIssueTaskResponse(
             id=task.id,
             customer_audit_id=customer_audit_id,
@@ -262,6 +296,10 @@ class CustomerAuditService:
             created_by=task.created_by,
             problem_category_key=category.key,
             problem_category_label=category.label,
+            problem_report_id=report.id if report else None,
+            problem_number=report.problem_number if report else None,
+            eight_d_number=report.eight_d_number if report else None,
+            response_mode=report.response_mode if report else None,
         )
     
     @staticmethod

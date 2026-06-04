@@ -1,3 +1,10 @@
+import type {
+  ProblemCategoryKey,
+  ProblemReportResponse,
+  ProblemResponseMode,
+  ProblemRiskLevel,
+} from './problem-management'
+
 /**
  * New Product Quality Management Types
  * 新品质量管理类型定义
@@ -238,6 +245,74 @@ export interface TrialIssueStatistics {
 }
 
 // ==================== 分页响应 ====================
+
+export type NewProductDefectSourceType = 'trial_defect' | 'customer_complaint'
+export type NewProductDefectStatus = 'registered' | 'promoted' | 'closed'
+
+export interface NewProductDefect {
+  id: number
+  defect_number: string
+  source_type: NewProductDefectSourceType
+  status: NewProductDefectStatus
+  defect_date: string
+  project_id?: number | null
+  trial_id?: number | null
+  customer_name?: string | null
+  customer_complaint_number?: string | null
+  product_code?: string | null
+  product_name?: string | null
+  defect_type: string
+  defect_description: string
+  defect_qty?: number | null
+  responsible_dept?: string | null
+  recorded_by: number
+  problem_report_id?: number | null
+  problem_number?: string | null
+  eight_d_number?: string | null
+  remarks?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NewProductDefectCreate {
+  source_type: NewProductDefectSourceType
+  defect_date: string
+  project_id?: number | null
+  trial_id?: number | null
+  customer_name?: string | null
+  customer_complaint_number?: string | null
+  product_code?: string | null
+  product_name?: string | null
+  defect_type: string
+  defect_description: string
+  defect_qty?: number | null
+  responsible_dept?: string | null
+  remarks?: string | null
+}
+
+export interface NewProductDefectUpdate extends Partial<NewProductDefectCreate> {}
+
+export interface NewProductDefectProblemReportCreate {
+  problem_category_key?: Extract<ProblemCategoryKey, 'DQ0' | 'DQ1'>
+  response_mode?: ProblemResponseMode
+  risk_level?: ProblemRiskLevel
+  assigned_to?: number | null
+  due_at?: string | null
+  title?: string | null
+  description?: string | null
+}
+
+export interface NewProductDefectProblemReportResponse {
+  defect: NewProductDefect
+  report: ProblemReportResponse
+}
+
+export interface NewProductDefectListResponse {
+  items: NewProductDefect[]
+  total: number
+  page: number
+  page_size: number
+}
 
 export interface PaginatedResponse<T> {
   total: number

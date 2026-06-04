@@ -110,15 +110,15 @@ class TestComplaintDataValidation:
                 purchase_date=date(2024, 1, 1),
             )
 
-        with pytest.raises(ValueError):
-            CustomerComplaintCreate(
-                complaint_type=ComplaintTypeEnum.AFTER_SALES,
-                customer_code="CUST002",
-                product_type="BMS",
-                defect_description="\u8f66\u8f86\u884c\u9a76\u4e2d\u7a81\u7136\u65ad\u7535\u9700\u7d27\u6025\u5904\u7406",
-                vin_code="VIN-001",
-                mileage=12000,
-            )
+        complaint = CustomerComplaintCreate(
+            complaint_type=ComplaintTypeEnum.AFTER_SALES,
+            customer_code="CUST002",
+            product_type="BMS",
+            defect_description="\u8f66\u8f86\u884c\u9a76\u4e2d\u7a81\u7136\u65ad\u7535\u9700\u7d27\u6025\u5904\u7406",
+            vin_code="VIN-001",
+            mileage=12000,
+        )
+        assert complaint.purchase_date is None
 
     def test_customer_reference_required(self):
         with pytest.raises(ValueError):

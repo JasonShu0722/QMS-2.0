@@ -179,6 +179,13 @@ const WORKBENCH_QUICK_ACTION_CATALOG: WorkbenchQuickActionOption[] = [
     link: '/newproduct/trial'
   },
   {
+    id: 'newproduct-defects',
+    category: '新品质量管理',
+    title: '新品不良登记',
+    description: '登记新品客诉和试产不良并发起问题跟进',
+    link: '/newproduct/defects'
+  },
+  {
     id: 'newproduct-trial-issues',
     category: '新品质量管理',
     title: '试产问题',

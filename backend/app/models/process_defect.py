@@ -29,6 +29,13 @@ class ProcessDefect(Base):
     
     # 主键
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    defect_number: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        unique=True,
+        nullable=True,
+        index=True,
+        comment="defect source number",
+    )
     
     # 不良发生日期
     defect_date: Mapped[date] = mapped_column(
@@ -149,6 +156,7 @@ class ProcessDefect(Base):
         """转换为字典格式"""
         return {
             "id": self.id,
+            "defect_number": self.defect_number,
             "defect_date": self.defect_date.isoformat(),
             "work_order": self.work_order,
             "process_id": self.process_id,

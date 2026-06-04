@@ -305,6 +305,7 @@ export interface CustomerAuditIssueTaskCreate {
   assigned_to?: number;
   deadline: string;
   priority?: string;
+  response_mode?: 'brief' | 'eight_d';
 }
 
 export interface CustomerAuditIssueTaskResponse {
@@ -328,4 +329,7 @@ export interface CustomerAuditIssueTaskResponse {
   created_by?: number;
   problem_category_key?: 'AQ3';
   problem_category_label?: string;
+  response_mode?: 'brief' | 'eight_d';
+  problem_number?: string;
+  eight_d_number?: string;
 }

@@ -5,8 +5,60 @@ import { ElMessage } from 'element-plus'
  * API 错误响应接口
  */
 interface ApiErrorResponse {
-  detail?: string
-  message?: string
+  detail?: unknown
+  message?: unknown
+}
+
+function formatValidationLocation(value: unknown): string {
+  if (!Array.isArray(value)) {
+    return ''
+  }
+
+  return value
+    .filter((item) => item !== 'body')
+    .map(String)
+    .join('.')
+}
+
+export function formatApiErrorMessage(value: unknown, fallback = '请求失败'): string {
+  if (value === undefined || value === null || value === '') {
+    return fallback
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    const messages = value
+      .map((item) => formatApiErrorMessage(item, ''))
+      .filter(Boolean)
+
+    return messages.length ? messages.join('；') : fallback
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const nested = record.detail ?? record.message
+    if (nested !== undefined) {
+      return formatApiErrorMessage(nested, fallback)
+    }
+
+    const validationMessage = record.msg
+    if (validationMessage !== undefined) {
+      const location = formatValidationLocation(record.loc)
+      const message = formatApiErrorMessage(validationMessage, fallback)
+      return location ? `${location}: ${message}` : message
+    }
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return fallback
+    }
+  }
+
+  return String(value)
 }
 
 /**
@@ -60,7 +112,7 @@ request.interceptors.response.use(
     }
 
     const { status, data } = response
-    const errorMessage = data?.detail || data?.message || '请求失败'
+    const errorMessage = formatApiErrorMessage(data?.detail ?? data?.message)
 
     switch (status) {
       case 401:

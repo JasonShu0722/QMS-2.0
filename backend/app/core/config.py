@@ -3,10 +3,41 @@ Configuration management for the QMS backend.
 """
 
 import json
+from urllib.parse import urlsplit, urlunsplit
 from typing import Optional
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def prefer_ipv4_loopback_for_localhost(url: str) -> str:
+    """Avoid Windows localhost resolving to an unavailable IPv6 listener."""
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return url
+
+    if parsed.hostname != "localhost":
+        return url
+
+    user_info = ""
+    if "@" in parsed.netloc:
+        user_info = f"{parsed.netloc.rsplit('@', 1)[0]}@"
+
+    try:
+        port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        return url
+
+    return urlunsplit(
+        (
+            parsed.scheme,
+            f"{user_info}127.0.0.1{port}",
+            parsed.path,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
 
 class Settings(BaseSettings):
@@ -90,6 +121,13 @@ class Settings(BaseSettings):
                 return json.loads(raw)
             return [item.strip() for item in raw.split(",") if item.strip()]
 
+        return value
+
+    @field_validator("DATABASE_URL", "REDIS_URL", mode="before")
+    @classmethod
+    def normalize_localhost_urls(cls, value):
+        if isinstance(value, str):
+            return prefer_ipv4_loopback_for_localhost(value)
         return value
 
 

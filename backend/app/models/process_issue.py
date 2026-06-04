@@ -30,6 +30,13 @@ class ProcessIssue(Base):
     
     # 主键
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    problem_report_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("problem_reports.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="formal problem report id",
+    )
     
     # 问题单编号（自动生成，格式：PQI-YYYYMMDD-XXXX）
     issue_number: Mapped[str] = mapped_column(
@@ -177,6 +184,7 @@ class ProcessIssue(Base):
         """转换为字典格式"""
         return {
             "id": self.id,
+            "problem_report_id": self.problem_report_id,
             "issue_number": self.issue_number,
             "issue_description": self.issue_description,
             "responsibility_category": self.responsibility_category,

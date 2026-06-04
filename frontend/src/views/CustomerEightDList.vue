@@ -1,33 +1,28 @@
 <template>
-  <div class="customer-eight-d-list p-4 md:p-6">
+  <div class="customer-follow-up-list p-4 md:p-6">
     <div class="page-header">
-      <h1 class="page-title">客诉8D</h1>
+      <h1 class="page-title">客诉问题跟进</h1>
     </div>
 
     <el-card shadow="never" class="filter-card">
       <el-form :model="queryParams" class="filter-shell">
         <div class="filter-row">
-          <el-form-item class="filter-item filter-item--report" style="width: 216px">
+          <el-form-item class="filter-item filter-item--report" style="width: 230px">
             <div class="filter-field">
-              <span class="filter-field__label">8D编号</span>
+              <span class="filter-field__label">跟进编号</span>
               <el-input
                 v-model="queryParams.report_number"
-                placeholder="输入"
+                placeholder="ZXQ / ZX8D"
                 clearable
-                class="filter-control filter-control--input-md"
+                class="filter-control"
               />
             </div>
           </el-form-item>
 
-          <el-form-item class="filter-item filter-item--compact" style="width: 214px">
+          <el-form-item class="filter-item filter-item--compact" style="width: 190px">
             <div class="filter-field">
               <span class="filter-field__label">客诉类型</span>
-              <el-select
-                v-model="queryParams.complaint_type"
-                placeholder="全部"
-                clearable
-                class="filter-control filter-control--select-sm"
-              >
+              <el-select v-model="queryParams.complaint_type" placeholder="全部" clearable class="filter-control">
                 <el-option
                   v-for="option in complaintTypeOptions"
                   :key="option.value"
@@ -38,7 +33,21 @@
             </div>
           </el-form-item>
 
-          <el-form-item class="filter-item filter-item--customer" style="width: 330px">
+          <el-form-item class="filter-item filter-item--compact" style="width: 190px">
+            <div class="filter-field">
+              <span class="filter-field__label">回复形式</span>
+              <el-select v-model="queryParams.response_mode" placeholder="全部" clearable class="filter-control">
+                <el-option
+                  v-for="option in responseModeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+
+          <el-form-item class="filter-item filter-item--customer" style="width: 320px">
             <div class="filter-field">
               <span class="filter-field__label">客户</span>
               <el-select
@@ -46,7 +55,7 @@
                 filterable
                 clearable
                 placeholder="全部"
-                class="filter-control filter-control--select-lg"
+                class="filter-control"
               >
                 <el-option
                   v-for="item in customerOptions"
@@ -58,15 +67,10 @@
             </div>
           </el-form-item>
 
-          <el-form-item class="filter-item filter-item--compact" style="width: 200px">
+          <el-form-item class="filter-item filter-item--compact" style="width: 190px">
             <div class="filter-field">
               <span class="filter-field__label">状态</span>
-              <el-select
-                v-model="queryParams.status"
-                placeholder="全部"
-                clearable
-                class="filter-control filter-control--select-md"
-              >
+              <el-select v-model="queryParams.status" placeholder="全部" clearable class="filter-control">
                 <el-option
                   v-for="option in statusOptions"
                   :key="option.value"
@@ -90,12 +94,7 @@
           <el-form-item class="filter-item filter-item--product" style="width: 280px">
             <div class="filter-field">
               <span class="filter-field__label">产品类型</span>
-              <el-input
-                v-model="queryParams.product_type"
-                placeholder="输入"
-                clearable
-                class="filter-control filter-control--input-md"
-              />
+              <el-input v-model="queryParams.product_type" placeholder="输入" clearable class="filter-control" />
             </div>
           </el-form-item>
 
@@ -121,25 +120,30 @@
       <el-table
         v-loading="loading"
         :data="reportList"
-        row-key="id"
+        :row-key="getRowKey"
         stripe
         class="report-table"
         :row-class-name="getRowClassName"
       >
-        <el-table-column label="8D编号" min-width="190" fixed>
+        <el-table-column label="跟进编号" min-width="190" fixed>
           <template #default="{ row }">
-            <el-button link type="primary" class="report-link" @click="openReport(row)">
+            <el-button link type="primary" class="report-link" @click="openFollowUp(row)">
               {{ row.report_number }}
             </el-button>
+            <div v-if="row.response_mode === 'eight_d' && row.problem_number" class="sub-number">
+              {{ row.problem_number }}
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="主客诉编号" min-width="150">
+
+        <el-table-column label="来源客诉" min-width="150">
           <template #default="{ row }">
             <el-button link type="primary" class="report-link" @click="openComplaint(row)">
               {{ row.primary_complaint_number || '-' }}
             </el-button>
           </template>
         </el-table-column>
+
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
             <el-tag :type="row.complaint_type === ComplaintType.ZERO_KM ? 'danger' : 'warning'">
@@ -147,43 +151,63 @@
             </el-tag>
           </template>
         </el-table-column>
+
         <el-table-column label="客户" min-width="220">
           <template #default="{ row }">
             <div class="font-medium">{{ row.customer_name || row.customer_code || '-' }}</div>
             <div class="text-xs text-gray-500">{{ row.customer_code || '-' }}</div>
           </template>
         </el-table-column>
+
         <el-table-column prop="end_customer_name" label="终端客户" min-width="160">
           <template #default="{ row }">{{ row.end_customer_name || '-' }}</template>
         </el-table-column>
+
         <el-table-column prop="product_type" label="产品类型" width="140">
           <template #default="{ row }">{{ row.product_type || '-' }}</template>
         </el-table-column>
+
         <el-table-column label="关联客诉" width="100" align="center">
           <template #default="{ row }">
             <el-tag type="info">{{ row.related_complaint_count }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="当前阶段" width="120">
+
+        <el-table-column label="回复形式" width="100">
           <template #default="{ row }">
-            {{ getEightDStageLabel(row.status) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="130">
-          <template #default="{ row }">
-            <el-tag :type="getStatusTagType(row.status)">
-              {{ getEightDStatusLabel(row.status) }}
+            <el-tag :type="row.response_mode === 'eight_d' ? 'primary' : 'info'">
+              {{ getResponseModeLabel(row.response_mode) }}
             </el-tag>
           </template>
         </el-table-column>
+
+        <el-table-column label="风险" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getProblemIssueRiskLevelType(row.risk_level)">
+              {{ getProblemIssueRiskLevelLabel(row.risk_level) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="状态" width="130">
+          <template #default="{ row }">
+            <el-tag :type="getStatusTagType(row)">
+              {{ getFollowUpStatusLabel(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column label="更新时间" width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.updated_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openReport(row)">进入8D</el-button>
+            <el-button link type="primary" size="small" @click="openFollowUp(row)">
+              {{ row.response_mode === 'eight_d' ? '进入8D' : '查看问题单' }}
+            </el-button>
             <el-button link type="primary" size="small" @click="openComplaint(row)">查看客诉</el-button>
           </template>
         </el-table-column>
@@ -210,9 +234,23 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { getCustomerComplaintCustomerOptions, getCustomerEightDReports } from '@/api/customer-quality'
-import { ComplaintType, EightDStatus, type CustomerComplaintCustomerOption, type CustomerEightDListItem, type CustomerEightDListQuery } from '@/types/customer-quality'
+import {
+  ComplaintType,
+  type CustomerComplaintCustomerOption,
+  type CustomerEightDListItem,
+  type CustomerEightDListQuery,
+  type EightDStatus,
+} from '@/types/customer-quality'
+import {
+  buildProblemIssueResponseModeOptions,
+  getProblemIssueResponseModeLabel,
+  getProblemIssueRiskLevelLabel,
+  getProblemIssueRiskLevelType,
+  getUnifiedProblemStatusLabel,
+  getUnifiedProblemStatusType,
+} from '@/utils/problemIssueSummary'
 import { buildCustomerComplaintTypeOptions } from '@/utils/problemManagement'
-import { getEightDComplaintTypeLabel, getEightDStageLabel, getEightDStatusLabel } from '@/utils/customerEightD'
+import { getEightDComplaintTypeLabel, getEightDStatusLabel } from '@/utils/customerEightD'
 import { useProblemManagementStore } from '@/stores/problemManagement'
 
 const route = useRoute()
@@ -234,6 +272,7 @@ const queryParams = reactive<CustomerEightDListQuery>({
   customer_id: undefined,
   product_type: undefined,
   status: undefined,
+  response_mode: undefined,
   start_date: undefined,
   end_date: undefined,
 })
@@ -241,15 +280,21 @@ const queryParams = reactive<CustomerEightDListQuery>({
 const complaintTypeOptions = computed(() =>
   buildCustomerComplaintTypeOptions(problemManagementStore.getCategory)
 )
+const responseModeOptions = buildProblemIssueResponseModeOptions()
 
 const statusOptions = [
-  { value: EightDStatus.D4_D7_IN_PROGRESS, label: 'D4-D7 进行中' },
-  { value: EightDStatus.D4_D7_COMPLETED, label: 'D4-D7 已完成' },
-  { value: EightDStatus.D8_IN_PROGRESS, label: 'D8 进行中' },
-  { value: EightDStatus.IN_REVIEW, label: '审核中' },
-  { value: EightDStatus.APPROVED, label: '已批准' },
-  { value: EightDStatus.REJECTED, label: '已驳回' },
-  { value: EightDStatus.CLOSED, label: '已关闭' },
+  { value: 'open', label: '待处理' },
+  { value: 'assigned', label: '已分派' },
+  { value: 'responding', label: '处理中' },
+  { value: 'pending_review', label: '待审核' },
+  { value: 'verifying', label: '待验证' },
+  { value: 'd4_d7_in_progress', label: 'D4-D7进行中' },
+  { value: 'd4_d7_completed', label: 'D4-D7完成' },
+  { value: 'd8_in_progress', label: 'D8进行中' },
+  { value: 'in_review', label: '8D审核中' },
+  { value: 'approved', label: '已批准' },
+  { value: 'rejected', label: '已驳回' },
+  { value: 'closed', label: '已关闭' },
 ]
 
 const focusedReportId = computed(() => {
@@ -258,18 +303,72 @@ const focusedReportId = computed(() => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 })
 
-function getStatusTagType(status?: EightDStatus) {
-  switch (status) {
-    case EightDStatus.CLOSED:
-    case EightDStatus.APPROVED:
-      return 'success'
-    case EightDStatus.REJECTED:
-      return 'danger'
-    case EightDStatus.IN_REVIEW:
-      return 'warning'
-    default:
-      return 'primary'
+const eightDStatusValues = new Set([
+  'draft',
+  'd0_d3_completed',
+  'd4_d7_in_progress',
+  'd4_d7_completed',
+  'd8_in_progress',
+  'in_review',
+  'approved',
+  'rejected',
+  'closed',
+])
+
+function isEightDRow(row: CustomerEightDListItem) {
+  return row.response_mode === 'eight_d'
+}
+
+function getRowKey(row: CustomerEightDListItem) {
+  return `${row.response_mode}-${row.id}-${row.problem_report_id || row.eight_d_report_id || row.report_number}`
+}
+
+function getResponseModeLabel(responseMode?: string) {
+  return getProblemIssueResponseModeLabel(responseMode as any)
+}
+
+function getRouteQueryText(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined
+}
+
+function applyRouteQueryFilters() {
+  const reportNumber = getRouteQueryText(route.query.report_number)
+  if (reportNumber) {
+    queryParams.report_number = reportNumber
+    queryParams.page = 1
   }
+
+  const responseMode = getRouteQueryText(route.query.response_mode)
+  if (responseMode === 'brief' || responseMode === 'eight_d') {
+    queryParams.response_mode = responseMode
+    queryParams.page = 1
+  }
+}
+
+function getFollowUpStatusLabel(row: CustomerEightDListItem) {
+  if (isEightDRow(row) && eightDStatusValues.has(row.status)) {
+    return getEightDStatusLabel(row.status as EightDStatus)
+  }
+  return getUnifiedProblemStatusLabel(row.status as any)
+}
+
+function getStatusTagType(row: CustomerEightDListItem) {
+  if (isEightDRow(row)) {
+    switch (row.status) {
+      case 'closed':
+      case 'approved':
+        return 'success'
+      case 'rejected':
+        return 'danger'
+      case 'in_review':
+      case 'd4_d7_completed':
+        return 'warning'
+      default:
+        return 'primary'
+    }
+  }
+  return getUnifiedProblemStatusType(row.status as any)
 }
 
 function formatDateTime(value?: string) {
@@ -302,7 +401,7 @@ async function loadReports() {
     reportList.value = response.items
     total.value = response.total
   } catch (error: any) {
-    ElMessage.error(error.message || '加载客诉8D清单失败')
+    ElMessage.error(error.message || '加载客诉问题跟进清单失败')
   } finally {
     loading.value = false
   }
@@ -321,19 +420,31 @@ function handleReset() {
   queryParams.customer_id = undefined
   queryParams.product_type = undefined
   queryParams.status = undefined
+  queryParams.response_mode = undefined
   dateRange.value = null
   void loadReports()
 }
 
-function openReport(row: CustomerEightDListItem) {
+function openFollowUp(row: CustomerEightDListItem) {
+  if (isEightDRow(row)) {
+    router.push({
+      name: 'EightDWorkspace',
+      query: {
+        kind: 'customer',
+        recordId: String(row.complaint_id),
+        sourceRouteName: 'CustomerEightDList',
+        sourceFocusId: String(row.id),
+        sourceComplaintId: String(row.complaint_id),
+      },
+    })
+    return
+  }
+
   router.push({
-    name: 'EightDWorkspace',
+    name: 'ProblemIssueCenter',
     query: {
-      kind: 'customer',
-      recordId: String(row.complaint_id),
-      sourceRouteName: 'CustomerEightDList',
-      sourceFocusId: String(row.id),
-      sourceComplaintId: String(row.complaint_id),
+      module_key: 'customer_quality',
+      keyword: row.report_number,
     },
   })
 }
@@ -354,21 +465,23 @@ function getRowClassName({ row }: { row: CustomerEightDListItem }) {
 }
 
 onMounted(() => {
+  applyRouteQueryFilters()
   void problemManagementStore.loadCatalog()
   void loadCustomerOptions()
   void loadReports()
 })
 
 watch(
-  () => route.query.focusId,
+  () => [route.query.focusId, route.query.report_number, route.query.response_mode],
   () => {
+    applyRouteQueryFilters()
     void loadReports()
   }
 )
 </script>
 
 <style scoped>
-.customer-eight-d-list {
+.customer-follow-up-list {
   min-height: 100vh;
 }
 
@@ -418,34 +531,6 @@ watch(
 .filter-row--advanced {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #e2e8f0;
-  overflow-x: hidden;
-}
-
-.filter-item {
-  margin-bottom: 0;
-  min-width: 0;
-  flex: 0 0 auto;
-}
-
-.filter-item--report,
-.filter-item--compact {
-  width: 214px;
-}
-
-.filter-item--customer {
-  width: 330px;
-}
-
-.filter-item--product {
-  width: 260px;
-}
-
-.filter-item--range {
-  width: 456px;
 }
 
 .filter-field {
@@ -494,10 +579,6 @@ watch(
 }
 
 .filter-control,
-.filter-control--select-sm,
-.filter-control--select-md,
-.filter-control--select-lg,
-.filter-control--input-md,
 .filter-control--range {
   width: 100%;
   min-width: 0;
@@ -514,10 +595,7 @@ watch(
   padding-inline: 10px;
 }
 
-.filter-item :deep(.el-range-input) {
-  font-size: 12px;
-}
-
+.filter-item :deep(.el-range-input),
 .filter-item :deep(.el-select__selected-item),
 .filter-item :deep(.el-input__inner) {
   font-size: 12px;
@@ -525,6 +603,13 @@ watch(
 
 .report-link {
   padding: 0;
+}
+
+.sub-number {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .report-table :deep(.el-table__header th) {
@@ -576,14 +661,6 @@ watch(
   .filter-item--product,
   .filter-item--range {
     width: auto;
-  }
-
-  .filter-control--select-sm,
-  .filter-control--select-md,
-  .filter-control--select-lg,
-  .filter-control--input-md,
-  .filter-control--range {
-    width: 100%;
   }
 
   .filter-actions {

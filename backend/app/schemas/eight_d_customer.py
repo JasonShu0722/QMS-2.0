@@ -226,11 +226,17 @@ class EightDCustomerResponse(BaseModel):
 
 
 class EightDCustomerListItemResponse(BaseModel):
-    """客户 8D 清单摘要模型"""
+    """客户问题跟进清单摘要模型，兼容客诉简报和客诉 8D。"""
 
     id: int
     complaint_id: int
+    problem_report_id: Optional[int] = None
+    eight_d_report_id: Optional[int] = None
     report_number: str
+    problem_number: Optional[str] = None
+    eight_d_number: Optional[str] = None
+    response_mode: str = "eight_d"
+    risk_level: Optional[str] = None
     primary_complaint_number: Optional[str] = None
     complaint_type: Optional[str] = None
     customer_code: Optional[str] = None
@@ -238,7 +244,7 @@ class EightDCustomerListItemResponse(BaseModel):
     end_customer_name: Optional[str] = None
     product_type: Optional[str] = None
     related_complaint_count: int = 0
-    status: EightDStatusEnum
+    status: str
     approval_level: ApprovalLevelEnum
     created_at: datetime
     updated_at: datetime

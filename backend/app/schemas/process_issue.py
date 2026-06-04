@@ -184,6 +184,11 @@ class ProcessIssueFilter(BaseModel):
 class ProcessIssueDetail(BaseModel):
     """制程问题单详情响应模型"""
     id: int
+    problem_report_id: Optional[int] = None
+    problem_number: Optional[str] = None
+    eight_d_number: Optional[str] = None
+    risk_level: Optional[str] = None
+    response_mode: Optional[str] = None
     issue_number: str
     issue_description: str
     responsibility_category: str
@@ -224,6 +229,11 @@ class ProcessIssueCreateResponse(BaseModel):
     """创建问题单响应模型"""
     id: int
     issue_number: str
+    problem_report_id: Optional[int] = None
+    problem_number: Optional[str] = None
+    eight_d_number: Optional[str] = None
+    risk_level: Optional[str] = None
+    response_mode: Optional[str] = None
     message: str = Field(default="制程问题单创建成功")
     
     class Config:

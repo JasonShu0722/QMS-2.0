@@ -22,6 +22,7 @@ from ...schemas.process_issue import (
     ProcessIssueOperationResponse
 )
 from ...services.process_issue_service import ProcessIssueService
+from ...services.problem_management_service import ProblemManagementService
 
 router = APIRouter(prefix="/process-issues", tags=["Process Issues - 制程质量问题管理"])
 
@@ -74,9 +75,18 @@ async def create_process_issue(
         #     link=f"/process-quality/issues/{new_issue.id}"
         # )
         
+        problem_report = None
+        if new_issue.problem_report_id:
+            problem_report = await ProblemManagementService.get_report_by_id(db, new_issue.problem_report_id)
+
         return ProcessIssueCreateResponse(
             id=new_issue.id,
             issue_number=new_issue.issue_number,
+            problem_report_id=new_issue.problem_report_id,
+            problem_number=problem_report.problem_number if problem_report else None,
+            eight_d_number=problem_report.eight_d_number if problem_report else None,
+            risk_level=ProblemManagementService._enum_value(problem_report.risk_level) if problem_report else None,
+            response_mode=problem_report.response_mode if problem_report else None,
             message="制程问题单创建成功"
         )
     

@@ -115,7 +115,7 @@ class TrialIssueSolution(BaseModel):
 
 class TrialIssueVerification(BaseModel):
     """验证解决方案请求模型"""
-    verification_result: str = Field(..., regex="^(passed|failed)$", description="验证结果：passed/failed")
+    verification_result: str = Field(..., pattern="^(passed|failed)$", description="验证结果：passed/failed")
     verification_comments: Optional[str] = Field(None, description="验证备注")
 
     class Config:
@@ -156,6 +156,11 @@ class LegacyIssueApproval(BaseModel):
 class TrialIssueResponse(BaseModel):
     """试产问题响应模型"""
     id: int
+    problem_report_id: Optional[int] = None
+    problem_number: Optional[str] = None
+    eight_d_number: Optional[str] = None
+    risk_level: Optional[str] = None
+    response_mode: Optional[str] = None
     trial_id: int
     issue_number: Optional[str]
     issue_description: str

@@ -501,6 +501,395 @@ async def test_customer_audit_issue_task_appears_in_problem_management_actionabl
 
 
 @pytest.mark.asyncio
+async def test_create_brief_problem_report_from_customer_complaint_generates_formal_zxq(
+    async_client: AsyncClient,
+    test_user: User,
+    test_user_token: str,
+):
+    headers = {"Authorization": f"Bearer {test_user_token}"}
+
+    complaint_response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        json={
+            "complaint_type": "after_sales",
+            "customer_code": "CUST-ZXQ-BRIEF",
+            "product_type": "MODULE-CQ",
+            "defect_description": "after-sales complaint should be promoted into a formal brief problem report",
+            "requires_physical_analysis": False,
+            "vin_code": "LSVAA4182E2123499",
+            "mileage": 3600,
+            "purchase_date": "2024-01-01",
+        },
+    )
+    assert complaint_response.status_code == 201
+    complaint = complaint_response.json()
+
+    create_response = await async_client.post(
+        "/api/v1/problem-management/reports",
+        headers=headers,
+        json={
+            "module_key": "customer_quality",
+            "problem_category_key": "CQ1",
+            "title": "Formal brief follow-up for after-sales complaint",
+            "description": "Create a ZXQ problem report without creating an 8D report.",
+            "risk_level": "high",
+            "response_mode": "brief",
+            "responsible_dept": "Quality",
+            "assigned_to": test_user.id,
+            "due_at": (datetime.utcnow() + timedelta(days=5)).isoformat(),
+            "sources": [
+                {
+                    "source_type": "customer_complaint",
+                    "source_id": complaint["id"],
+                    "source_number": complaint["complaint_number"],
+                    "is_primary": True,
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+    created_report = create_response.json()
+    assert created_report["problem_number"].startswith("ZXQ-CQ1-")
+    assert created_report["eight_d_number"] is None
+    assert created_report["risk_level"] == "high"
+    assert created_report["response_mode"] == "brief"
+
+    summary_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"problem_category_key": "CQ1"},
+    )
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total"] == 1
+    item = summary["items"][0]
+    assert item["source_type"] == "customer_complaint"
+    assert item["source_id"] == complaint["id"]
+    assert item["problem_report_id"] == created_report["id"]
+    assert item["problem_number"] == created_report["problem_number"]
+    assert item["reference_no"] == created_report["problem_number"]
+    assert item["risk_level"] == "high"
+
+    complaint_list_response = await async_client.get(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        params={"customer_code": "CUST-ZXQ-BRIEF"},
+    )
+    assert complaint_list_response.status_code == 200
+    listed_complaints = complaint_list_response.json()["items"]
+    assert len(listed_complaints) == 1
+    assert listed_complaints[0]["id"] == complaint["id"]
+    assert listed_complaints[0]["problem_report_id"] == created_report["id"]
+    assert listed_complaints[0]["problem_number"] == created_report["problem_number"]
+    assert listed_complaints[0]["problem_report_response_mode"] == "brief"
+    assert listed_complaints[0]["problem_report_risk_level"] == "high"
+
+    replacement_complaint_response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        json={
+            "complaint_type": "after_sales",
+            "customer_code": "CUST-ZXQ-BRIEF-2",
+            "product_type": "MODULE-CQ",
+            "defect_description": "replacement complaint should be linkable when the source range is adjusted",
+            "requires_physical_analysis": False,
+            "vin_code": "LSVAA4182E2123500",
+            "mileage": 4100,
+            "purchase_date": "2024-02-01",
+        },
+    )
+    assert replacement_complaint_response.status_code == 201
+    replacement_complaint = replacement_complaint_response.json()
+
+    update_sources_response = await async_client.put(
+        f"/api/v1/problem-management/reports/{created_report['id']}/sources",
+        headers=headers,
+        json={
+            "sources": [
+                {
+                    "source_type": "customer_complaint",
+                    "source_id": replacement_complaint["id"],
+                    "source_number": replacement_complaint["complaint_number"],
+                    "is_primary": True,
+                }
+            ]
+        },
+    )
+    assert update_sources_response.status_code == 200
+    updated_report = update_sources_response.json()
+    assert updated_report["sources"][0]["source_id"] == replacement_complaint["id"]
+
+    first_after_range_update = await async_client.get(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        params={"customer_code": "CUST-ZXQ-BRIEF"},
+    )
+    assert first_after_range_update.status_code == 200
+    assert first_after_range_update.json()["items"][0]["problem_report_id"] is None
+
+    replacement_after_range_update = await async_client.get(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        params={"customer_code": "CUST-ZXQ-BRIEF-2"},
+    )
+    assert replacement_after_range_update.status_code == 200
+    assert replacement_after_range_update.json()["items"][0]["problem_report_id"] == created_report["id"]
+
+    filtered_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"risk_level": "high", "response_mode": "brief"},
+    )
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["total"] == 1
+
+    no_match_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"risk_level": "low", "response_mode": "brief"},
+    )
+    assert no_match_response.status_code == 200
+    assert no_match_response.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_customer_8d_initialization_creates_formal_problem_report_mapping(
+    async_client: AsyncClient,
+    test_user_token: str,
+):
+    headers = {"Authorization": f"Bearer {test_user_token}"}
+
+    complaint_response = await async_client.post(
+        "/api/v1/customer-complaints",
+        headers=headers,
+        json={
+            "complaint_type": "0km",
+            "customer_code": "CUST-ZXQ-8D",
+            "product_type": "MODULE-CQ8D",
+            "defect_description": "0km complaint should build ZXQ and ZX8D mapping when 8D starts",
+            "requires_physical_analysis": False,
+        },
+    )
+    assert complaint_response.status_code == 201
+    complaint = complaint_response.json()
+
+    disposition_response = await async_client.post(
+        f"/api/v1/customer-complaints/{complaint['id']}/physical-disposition",
+        headers=headers,
+        json={
+            "disposition_plan": "Confirmed containment and disposition, customer 8D required.",
+            "disposition_owner": "CQE",
+        },
+    )
+    assert disposition_response.status_code == 200
+
+    init_response = await async_client.post(
+        f"/api/v1/customer-complaints/{complaint['id']}/8d/init",
+        headers=headers,
+    )
+    assert init_response.status_code == 200
+    report = init_response.json()
+    assert report["report_number"].startswith("ZX8D-CQ0-")
+
+    summary_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"problem_category_key": "CQ0"},
+    )
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total"] == 1
+    item = summary["items"][0]
+    assert item["source_type"] == "customer_complaint"
+    assert item["source_id"] == complaint["id"]
+    assert item["problem_number"].startswith("ZXQ-CQ0-")
+    assert item["eight_d_number"] == report["report_number"]
+    assert item["response_mode"] == "eight_d"
+
+
+@pytest.mark.asyncio
+async def test_process_defect_and_issue_create_formal_process_problem_report(
+    async_client: AsyncClient,
+    test_user: User,
+    test_user_token: str,
+):
+    headers = {"Authorization": f"Bearer {test_user_token}"}
+
+    defect_response = await async_client.post(
+        "/api/v1/process-defects",
+        headers=headers,
+        json={
+            "defect_date": datetime.utcnow().date().isoformat(),
+            "work_order": "WO-ZXQ-PQ",
+            "process_id": "SMT-01",
+            "line_id": "LINE-PCBA-01",
+            "defect_type": "solder bridge",
+            "defect_qty": 5,
+            "responsibility_category": "process_defect",
+            "remarks": "Process defect should retain PD source number.",
+        },
+    )
+    assert defect_response.status_code == 201
+    defect = defect_response.json()
+    assert defect["defect_number"].startswith("PD-")
+
+    issue_response = await async_client.post(
+        "/api/v1/process-issues",
+        headers=headers,
+        json={
+            "issue_description": "SMT solder bridge process issue should create a ZXQ formal follow-up",
+            "responsibility_category": "process_defect",
+            "assigned_to": test_user.id,
+            "related_defect_ids": [defect["id"]],
+        },
+    )
+
+    assert issue_response.status_code == 201
+    created_issue = issue_response.json()
+    assert created_issue["issue_number"].startswith("PQI-")
+    assert created_issue["problem_number"].startswith("ZXQ-PQ0-")
+    assert created_issue["problem_report_id"] is not None
+
+    summary_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"module_key": "process_quality", "problem_category_key": "PQ0"},
+    )
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total"] == 1
+    item = summary["items"][0]
+    assert item["source_type"] == "process_issue"
+    assert item["problem_report_id"] == created_issue["problem_report_id"]
+    assert item["problem_number"] == created_issue["problem_number"]
+    assert item["reference_no"] == created_issue["problem_number"]
+    assert item["risk_level"] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_trial_issue_escalation_creates_new_product_zx8d_problem_report(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    test_user: User,
+    test_user_token: str,
+):
+    headers = {"Authorization": f"Bearer {test_user_token}"}
+    trial_issue = await _seed_trial_issue(
+        db_session,
+        user=test_user,
+        name_suffix="zx8d-trial",
+        issue_description="Trial issue escalation should create a new-product 8D problem report",
+        issue_status=IssueStatus.IN_PROGRESS,
+    )
+
+    escalate_response = await async_client.post(
+        f"/api/v1/trial-issues/{trial_issue.id}/escalate",
+        headers=headers,
+        json={"escalation_reason": "Complex trial issue requires 8D follow-up."},
+    )
+
+    assert escalate_response.status_code == 200
+    escalated_issue = escalate_response.json()
+    assert escalated_issue["is_escalated_to_8d"] is True
+    assert escalated_issue["eight_d_id"] is not None
+    assert escalated_issue["problem_report_id"] == escalated_issue["eight_d_id"]
+    assert escalated_issue["eight_d_number"].startswith("ZX8D-DQ0-")
+
+    summary_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"module_key": "new_product_quality", "problem_category_key": "DQ0"},
+    )
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total"] == 1
+    item = summary["items"][0]
+    assert item["source_type"] == "trial_issue"
+    assert item["problem_report_id"] == escalated_issue["problem_report_id"]
+    assert item["problem_number"].startswith("ZXQ-DQ0-")
+    assert item["eight_d_number"] == escalated_issue["eight_d_number"]
+    assert item["response_mode"] == "eight_d"
+
+
+@pytest.mark.asyncio
+async def test_new_product_defect_can_start_formal_problem_report(
+    async_client: AsyncClient,
+    test_user: User,
+    test_user_token: str,
+):
+    headers = {"Authorization": f"Bearer {test_user_token}"}
+
+    defect_response = await async_client.post(
+        "/api/v1/new-product-defects",
+        headers=headers,
+        json={
+            "source_type": "customer_complaint",
+            "defect_date": datetime.utcnow().date().isoformat(),
+            "customer_name": "EV Customer",
+            "customer_complaint_number": "NP-CUST-001",
+            "product_code": "NPD-MODULE-01",
+            "defect_type": "field functional failure",
+            "defect_description": "New product customer complaint should be registered before formal follow-up.",
+            "defect_qty": 2,
+            "responsible_dept": "DQE",
+        },
+    )
+    assert defect_response.status_code == 201
+    defect = defect_response.json()
+    assert defect["defect_number"].startswith("NPD-")
+    assert defect["source_type"] == "customer_complaint"
+
+    report_response = await async_client.post(
+        f"/api/v1/new-product-defects/{defect['id']}/problem-report",
+        headers=headers,
+        json={
+            "problem_category_key": "DQ1",
+            "risk_level": "critical",
+            "response_mode": "eight_d",
+            "assigned_to": test_user.id,
+        },
+    )
+    assert report_response.status_code == 200
+    payload = report_response.json()
+    assert payload["defect"]["problem_report_id"] == payload["report"]["id"]
+    assert payload["report"]["problem_number"].startswith("ZXQ-DQ1-")
+    assert payload["report"]["eight_d_number"].startswith("ZX8D-DQ1-")
+
+    defect_list_response = await async_client.get(
+        "/api/v1/new-product-defects",
+        headers=headers,
+        params={"keyword": defect["defect_number"]},
+    )
+    assert defect_list_response.status_code == 200
+    defect_list = defect_list_response.json()
+    assert defect_list["total"] == 1
+    assert defect_list["items"][0]["problem_report_id"] == payload["report"]["id"]
+    assert defect_list["items"][0]["problem_number"] == payload["report"]["problem_number"]
+    assert defect_list["items"][0]["eight_d_number"] == payload["report"]["eight_d_number"]
+
+    summary_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={"module_key": "new_product_quality", "problem_category_key": "DQ1"},
+    )
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total"] == 1
+    item = summary["items"][0]
+    assert item["source_type"] == "new_product_defect"
+    assert item["source_id"] == defect["id"]
+    assert item["problem_number"] == payload["report"]["problem_number"]
+    assert item["eight_d_number"] == payload["report"]["eight_d_number"]
+    assert item["risk_level"] == "critical"
+
+
+@pytest.mark.asyncio
 async def test_get_problem_management_issue_summaries_returns_all_first_batch_items(
     async_client: AsyncClient,
     db_session: AsyncSession,
@@ -606,8 +995,9 @@ async def test_get_problem_management_issue_summaries_returns_all_first_batch_it
 
     scar_item = next(item for item in data["items"] if item["source_type"] == "scar")
     assert scar_item["problem_category_key"] == "IQ0"
-    assert scar_item["problem_category_label"] == "结构料"
     assert scar_item["reference_no"].startswith("SCAR-")
+    assert scar_item["eight_d_number"].startswith("ZX8D-IQ0-")
+    assert scar_item["risk_level"] == "high"
     assert scar_item["unified_status"] == "open"
     assert scar_item["response_mode"] == "eight_d"
     assert scar_item["action_owner_id"] == test_user.id
@@ -693,6 +1083,14 @@ async def test_get_problem_management_issue_summaries_filters_by_module_and_stat
         defect_description="connector solder issue on electronic component",
         scar_status=SCARStatus.UNDER_REVIEW,
     )
+    await _seed_scar(
+        db_session,
+        user=test_user,
+        name_suffix="3004",
+        material_code="PCB-APPROVED-001",
+        defect_description="approved supplier issue should keep approved status in problem center",
+        scar_status=SCARStatus.APPROVED,
+    )
     await _seed_trial_issue(
         db_session,
         user=test_user,
@@ -773,7 +1171,23 @@ async def test_get_problem_management_issue_summaries_filters_by_module_and_stat
     assert scar_data["total"] == 1
     assert scar_data["items"][0]["source_type"] == "scar"
     assert scar_data["items"][0]["problem_category_key"] == "IQ1"
+    assert scar_data["items"][0]["risk_level"] == "high"
     assert scar_data["items"][0]["response_mode"] == "eight_d"
+
+    approved_scar_response = await async_client.get(
+        "/api/v1/problem-management/issues",
+        headers=headers,
+        params={
+            "module_key": "incoming_quality",
+            "unified_status": "approved",
+        },
+    )
+    assert approved_scar_response.status_code == 200
+    approved_scar_data = approved_scar_response.json()
+    assert approved_scar_data["total"] == 1
+    assert approved_scar_data["items"][0]["source_type"] == "scar"
+    assert approved_scar_data["items"][0]["unified_status"] == "approved"
+    assert approved_scar_data["items"][0]["risk_level"] == "high"
 
     trial_response = await async_client.get(
         "/api/v1/problem-management/issues",
@@ -800,7 +1214,7 @@ async def test_get_problem_management_issue_summaries_filters_by_module_and_stat
     )
     assert my_items_response.status_code == 200
     my_items_data = my_items_response.json()
-    assert my_items_data["total"] == 5
+    assert my_items_data["total"] == 6
     assert {item["source_type"] for item in my_items_data["items"]} == {
         "audit_nc",
         "customer_complaint",
@@ -836,7 +1250,7 @@ async def test_get_problem_management_issue_summaries_filters_by_module_and_stat
     )
     assert created_by_me_response.status_code == 200
     created_by_me_data = created_by_me_response.json()
-    assert created_by_me_data["total"] == 5
+    assert created_by_me_data["total"] == 6
     assert {item["source_type"] for item in created_by_me_data["items"]} == {
         "audit_nc",
         "customer_complaint",

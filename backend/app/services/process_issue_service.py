@@ -10,7 +10,11 @@ from sqlalchemy.orm import selectinload
 import json
 
 from ..models.process_issue import ProcessIssue, ProcessIssueStatus
-from ..models.process_defect import ResponsibilityCategory
+from ..models.process_defect import ProcessDefect, ResponsibilityCategory
+from app.core.problem_management import get_problem_category_by_process_context
+from app.models.problem_report import ProblemReportStatus
+from app.schemas.problem_management import ProblemReportCreate, ProblemReportSourceCreate
+from app.services.problem_management_service import ProblemManagementService
 from ..schemas.process_issue import (
     ProcessIssueCreate,
     ProcessIssueResponse,
@@ -90,6 +94,58 @@ class ProcessIssueService:
         )
         
         db.add(new_issue)
+        await db.flush()
+
+        defects: list[ProcessDefect] = []
+        if issue_data.related_defect_ids:
+            defect_result = await db.execute(
+                select(ProcessDefect).where(ProcessDefect.id.in_(issue_data.related_defect_ids))
+            )
+            defects = list(defect_result.scalars().all())
+
+        process_context = [issue_number, issue_data.issue_description]
+        for defect in defects:
+            process_context.extend([defect.process_id, defect.line_id, defect.defect_type])
+        category = get_problem_category_by_process_context(*process_context)
+        report = await ProblemManagementService.create_problem_report(
+            db=db,
+            report_data=ProblemReportCreate(
+                module_key="process_quality",
+                problem_category_key=category.key,
+                title=issue_data.issue_description,
+                description=issue_data.issue_description,
+                risk_level="medium",
+                response_mode="brief",
+                responsible_dept=(
+                    issue_data.responsibility_category.value
+                    if hasattr(issue_data.responsibility_category, "value")
+                    else str(issue_data.responsibility_category)
+                ),
+                assigned_to=issue_data.assigned_to,
+                sources=[
+                    ProblemReportSourceCreate(
+                        source_type="process_issue",
+                        source_id=new_issue.id,
+                        source_number=new_issue.issue_number,
+                        is_primary=True,
+                    ),
+                    *[
+                        ProblemReportSourceCreate(
+                            source_type="process_defect",
+                            source_id=defect.id,
+                            source_number=defect.defect_number,
+                            is_primary=False,
+                        )
+                        for defect in defects
+                    ],
+                ],
+            ),
+            created_by=created_by,
+            status=ProblemReportStatus.OPEN,
+            commit=False,
+        )
+        new_issue.problem_report_id = report.id
+
         await db.commit()
         await db.refresh(new_issue)
         

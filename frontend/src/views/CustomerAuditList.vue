@@ -169,6 +169,12 @@
         <el-form-item label="问题分类">
           <el-tag type="info">{{ issueTaskProblemCategoryKey }} / {{ issueTaskProblemCategoryLabel }}</el-tag>
         </el-form-item>
+        <el-form-item label="回复形式">
+          <el-radio-group v-model="issueTaskForm.response_mode">
+            <el-radio-button label="brief">问题简报</el-radio-button>
+            <el-radio-button label="eight_d">8D报告</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="问题描述" required>
           <el-input v-model="issueTaskForm.issue_description" type="textarea" :rows="4" />
         </el-form-item>
@@ -237,6 +243,13 @@
         :row-class-name="getIssueTaskRowClassName"
       >
         <el-table-column prop="problem_category_key" label="分类" width="90" />
+        <el-table-column label="回复" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.response_mode === 'eight_d' ? 'primary' : 'info'">
+              {{ row.response_mode === 'eight_d' ? '8D' : '简报' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="issue_description" label="问题描述" min-width="240" show-overflow-tooltip />
         <el-table-column prop="responsible_dept" label="责任部门" width="140" />
         <el-table-column label="责任人" min-width="180" show-overflow-tooltip>
@@ -355,6 +368,7 @@ const issueTaskForm = reactive<CustomerAuditIssueTaskCreate>({
   assigned_to: undefined,
   deadline: '',
   priority: 'medium',
+  response_mode: 'brief',
 })
 
 const formRules: FormRules = {
@@ -565,6 +579,7 @@ function handleCreateIssueTask(audit: CustomerAudit) {
     assigned_to: undefined,
     deadline: '',
     priority: 'medium',
+    response_mode: 'brief',
   })
   showIssueTaskDialog.value = true
 }

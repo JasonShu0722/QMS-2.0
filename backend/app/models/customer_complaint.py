@@ -12,6 +12,10 @@ from .base import Base
 from app.core.problem_management import get_problem_category_by_customer_complaint_type
 
 
+def enum_values(enum_cls):
+    return [item.value for item in enum_cls]
+
+
 class ComplaintType(str, enum.Enum):
     """客诉类型枚举"""
 
@@ -72,11 +76,28 @@ class CustomerComplaint(Base):
     customer_code = Column(String(50), nullable=False, index=True, comment="客户代码")
     customer_name_snapshot = Column(String(200), nullable=True, comment="客户名称快照")
     end_customer_name = Column(String(200), nullable=True, comment="终端客户名称")
+    received_date = Column(Date, nullable=True, comment="收件日期")
+    occurrence_date = Column(Date, nullable=True, comment="发生/故障日期")
+    production_date = Column(Date, nullable=True, comment="生产/出厂日期")
     product_type = Column(String(100), nullable=False, comment="产品类型")
+    product_model = Column(String(100), nullable=True, comment="产品型号")
+    project_stage = Column(String(100), nullable=True, comment="项目阶段")
+    batch_code = Column(String(100), nullable=True, comment="批次号/条码")
+    trace_code = Column(String(100), nullable=True, comment="产品追溯码")
+    return_type = Column(String(50), nullable=True, comment="零星退件/集中退件")
+    return_month = Column(String(20), nullable=True, comment="退件月份")
+    service_months = Column(Integer, nullable=True, comment="服务月数")
+    service_month_category = Column(String(50), nullable=True, comment="服务月分类")
+    dealer_name = Column(String(200), nullable=True, comment="4S 店名称")
+    occurrence_region = Column(String(100), nullable=True, comment="发生区域")
+    fault_category = Column(String(100), nullable=True, comment="故障分类")
+    service_method = Column(String(100), nullable=True, comment="服务方式")
+    analysis_priority = Column(String(50), nullable=True, comment="解析优先级")
+    failure_count = Column(Integer, nullable=True, comment="故障数")
     is_return_required = Column(Boolean, nullable=False, default=False, comment="是否涉及退件")
     requires_physical_analysis = Column(Boolean, nullable=False, default=False, comment="是否需要实物解析")
     physical_disposition_status = Column(
-        SQLEnum(PhysicalDispositionStatus),
+        SQLEnum(PhysicalDispositionStatus, values_callable=enum_values),
         nullable=False,
         default=PhysicalDispositionStatus.PENDING,
         comment="实物处理备案状态",
@@ -91,7 +112,7 @@ class CustomerComplaint(Base):
         comment="实物处理更新人 ID",
     )
     physical_analysis_status = Column(
-        SQLEnum(PhysicalAnalysisStatus),
+        SQLEnum(PhysicalAnalysisStatus, values_callable=enum_values),
         nullable=False,
         default=PhysicalAnalysisStatus.PENDING,
         comment="实物解析任务状态",
@@ -121,6 +142,7 @@ class CustomerComplaint(Base):
     # 售后客诉特有字段；0KM 客诉时可为空
     vin_code = Column(String(50), nullable=True, comment="VIN 码（车架号）")
     mileage = Column(Integer, nullable=True, comment="失效里程（公里）")
+    mileage_category = Column(String(50), nullable=True, comment="里程分类")
     purchase_date = Column(Date, nullable=True, comment="购车日期")
 
     # 流程控制
