@@ -292,10 +292,11 @@ defineExpose({
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.18), transparent 22%),
-    radial-gradient(circle at 84% 16%, rgba(255, 255, 255, 0.12), transparent 24%),
-    linear-gradient(135deg, #0a73d1 0%, #1492ec 42%, #25abff 100%);
+  background-color: #149ced;
+  background-image: url('../assets/login-hero-bg.svg');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   color: #102333;
   overflow: hidden;
 }
@@ -358,38 +359,11 @@ defineExpose({
   gap: 48px;
   min-height: 0;
   height: calc(100vh - 64px);
-  padding: 32px 52px;
-}
-
-.login-stage::before,
-.login-stage::after,
-.hero-panel::before,
-.hero-panel::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.login-stage::before {
-  right: 10%;
-  top: 8%;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 64%);
-}
-
-.login-stage::after {
-  inset: auto auto -10% -5%;
-  width: min(50vw, 760px);
-  aspect-ratio: 1 / 1;
-  background: repeating-linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.08) 0 14px,
-    rgba(255, 255, 255, 0) 14px 34px
-  );
-  clip-path: polygon(20% 100%, 42% 18%, 56% 18%, 88% 100%, 68% 100%, 59% 72%, 34% 72%, 27% 100%);
-  opacity: 0.72;
+  padding:
+    32px
+    clamp(52px, 4.8vw, 92px)
+    32px
+    clamp(72px, 9.7vw, 188px);
 }
 
 .hero-panel {
@@ -398,24 +372,6 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: flex-start;
-}
-
-.hero-panel::before {
-  left: 0;
-  bottom: -26%;
-  width: min(44vw, 640px);
-  height: min(44vw, 640px);
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.09), transparent 66%);
-}
-
-.hero-panel::after {
-  right: 6%;
-  bottom: 4%;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  opacity: 0.44;
 }
 
 .hero-copy {
@@ -709,14 +665,6 @@ defineExpose({
     width: 100%;
     justify-content: center;
   }
-
-  .login-stage::after {
-    left: 50%;
-    bottom: 34%;
-    width: min(70vw, 620px);
-    transform: translateX(-50%);
-    opacity: 0.36;
-  }
 }
 
 @media (max-width: 900px) {
@@ -766,11 +714,6 @@ defineExpose({
   }
 
   .hero-panel {
-    display: none;
-  }
-
-  .login-stage::after,
-  .hero-panel::after {
     display: none;
   }
 

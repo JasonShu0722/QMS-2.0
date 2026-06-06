@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="pageGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#058fe8"/>
+      <stop offset="0.46" stop-color="#149ced"/>
+      <stop offset="1" stop-color="#26acec"/>
+    </linearGradient>
+    <radialGradient id="leftGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(260 440) rotate(30) scale(760 580)">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rightLift" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1580 170) rotate(124) scale(720 560)">
+      <stop offset="0" stop-color="#7ee4ff" stop-opacity="0.2"/>
+      <stop offset="0.7" stop-color="#7ee4ff" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#7ee4ff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="diagonalStripes" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
+      <rect x="0" y="-28" width="22" height="112" rx="3" fill="#ffffff" opacity="0.26"/>
+    </pattern>
+    <clipPath id="energyMark">
+      <path d="M14 1010 383 203c50-108 208-111 267-5l497 812H906L549 392c-18-31-63-30-78 2L336 677h278l116 207H238l-58 126H14Z"/>
+    </clipPath>
+    <filter id="soften" x="-12%" y="-12%" width="124%" height="124%">
+      <feGaussianBlur stdDeviation="0.7"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#pageGradient)"/>
+  <rect width="1920" height="1080" fill="url(#leftGlow)"/>
+  <rect width="1920" height="1080" fill="url(#rightLift)"/>
+
+  <g transform="translate(40 66) scale(1.12)" clip-path="url(#energyMark)" filter="url(#soften)" opacity="0.34">
+    <rect x="-80" y="-40" width="1320" height="1120" fill="url(#diagonalStripes)"/>
+  </g>
+
+</svg>
