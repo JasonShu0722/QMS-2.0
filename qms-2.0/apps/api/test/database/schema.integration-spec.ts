@@ -20,6 +20,14 @@ describeWithDatabase('PostgreSQL schema', () => {
   });
   afterAll(async () => prisma?.$disconnect());
 
+  it('rejects duplicate global role codes through the partial unique index', async () => {
+    const code = `GLOBAL-${crypto.randomUUID()}`;
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.role.create({ data: { code, name: 'Global role' } });
+      await tx.role.create({ data: { code, name: 'Duplicate global role' } });
+    })).rejects.toMatchObject({ code: 'P2002' });
+  });
+
   // test:integration runs migrate deploy and the local demo seed before this suite.
   // It requires development mode, a loopback DATABASE_URL, and seed passwords.
   // Missing seed data must fail rather than silently creating a replacement fixture.
