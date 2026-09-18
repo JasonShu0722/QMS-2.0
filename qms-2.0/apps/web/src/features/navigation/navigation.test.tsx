@@ -1,10 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { InternalLayout } from '../../layouts/InternalLayout';
 import { SupplierLayout } from '../../layouts/SupplierLayout';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 describe('portal navigation', () => {
+  beforeEach(() => {
+    useWorkTabsStore.getState().reset();
+  });
+
+  function LocationProbe() {
+    return <output aria-label="current path">{useLocation().pathname}</output>;
+  }
+
   it('shows the internal workbench with full domain navigation', () => {
     render(
       <MemoryRouter initialEntries={['/app/workbench']}>
@@ -49,5 +59,53 @@ describe('portal navigation', () => {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(screen.queryByRole('link', { name: '问题中心' })).not.toBeInTheDocument();
+  });
+
+  it('registers internal domain navigation as an active work tab', async () => {
+    render(
+      <MemoryRouter initialEntries={['/app/workbench']}>
+        <InternalLayout />
+        <Routes>
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: '问题中心' }));
+    await userEvent.click(screen.getByRole('link', { name: '问题中心' }));
+
+    const state = useWorkTabsStore.getState();
+    expect(screen.getByLabelText('current path')).toHaveTextContent('/app/problem-center');
+    expect(state.activeTabId).toBe('/app/problem-center');
+    expect(state.recentTabIds[0]).toBe('/app/problem-center');
+    expect(state.tabs.filter((tab) => tab.id === '/app/problem-center')).toHaveLength(1);
+    expect(state.tabs.find((tab) => tab.id === '/app/problem-center')).toMatchObject({
+      title: '问题中心',
+      path: '/app/problem-center',
+    });
+  });
+
+  it('registers supplier navigation entries consistently', async () => {
+    render(
+      <MemoryRouter initialEntries={['/supplier/inbox']}>
+        <SupplierLayout />
+        <Routes>
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: '整改' }));
+    await userEvent.click(screen.getByRole('link', { name: '整改' }));
+
+    const state = useWorkTabsStore.getState();
+    expect(screen.getByLabelText('current path')).toHaveTextContent('/supplier/corrections');
+    expect(state.activeTabId).toBe('/supplier/corrections');
+    expect(state.recentTabIds[0]).toBe('/supplier/corrections');
+    expect(state.tabs.filter((tab) => tab.id === '/supplier/corrections')).toHaveLength(1);
+    expect(state.tabs.find((tab) => tab.id === '/supplier/corrections')).toMatchObject({
+      title: '整改',
+      path: '/supplier/corrections',
+    });
   });
 });

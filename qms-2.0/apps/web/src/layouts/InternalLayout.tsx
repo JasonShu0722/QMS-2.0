@@ -1,7 +1,8 @@
 import { Layout, Typography } from 'antd';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { activeInternalDomain, internalNavigation } from '../features/navigation/navigation';
 import { WorkTabs } from '../work-tabs/WorkTabs';
+import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
 
 const { Content, Sider } = Layout;
@@ -17,9 +18,16 @@ function EmptyDomain({ title }: { title: string }) {
 
 export function InternalLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const openTab = useWorkTabsStore((state) => state.openTab);
   const isWorkbench = location.pathname === '/app/workbench' || location.pathname === '/app';
   const active = activeInternalDomain(location.pathname);
   const collapsed = !isWorkbench;
+
+  function openNavigationTab(item: { label: string; path: string }) {
+    openTab({ id: item.path, title: item.label, path: item.path });
+    navigate(item.path);
+  }
 
   return (
     <Layout className="app-shell">
@@ -31,7 +39,15 @@ export function InternalLayout() {
           {internalNavigation.map((item) => {
             const Icon = item.icon;
             return (
-              <Link className={item.path === active?.path ? 'nav-item active' : 'nav-item'} key={item.path} to={item.path}>
+              <Link
+                className={item.path === active?.path ? 'nav-item active' : 'nav-item'}
+                key={item.path}
+                onClick={(event) => {
+                  event.preventDefault();
+                  openNavigationTab(item);
+                }}
+                to={item.path}
+              >
                 <Icon size={18} />
                 {!collapsed ? <span>{item.label}</span> : <span className="sr-only">{item.label}</span>}
               </Link>
@@ -61,4 +77,3 @@ export function InternalLayout() {
     </Layout>
   );
 }
-

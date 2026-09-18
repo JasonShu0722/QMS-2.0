@@ -1,12 +1,20 @@
 import { Layout, Typography } from 'antd';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supplierNavigation } from '../features/navigation/navigation';
+import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 
 const { Content, Sider } = Layout;
 
 export function SupplierLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const openTab = useWorkTabsStore((state) => state.openTab);
   const active = supplierNavigation.find((item) => location.pathname.startsWith(item.path)) ?? supplierNavigation[0];
+
+  function openNavigationTab(item: { label: string; path: string }) {
+    openTab({ id: item.path, title: item.label, path: item.path });
+    navigate(item.path);
+  }
 
   return (
     <Layout className="app-shell supplier-shell">
@@ -18,7 +26,15 @@ export function SupplierLayout() {
           {supplierNavigation.map((item) => {
             const Icon = item.icon;
             return (
-              <Link className={item.path === active.path ? 'nav-item active' : 'nav-item'} key={item.path} to={item.path}>
+              <Link
+                className={item.path === active.path ? 'nav-item active' : 'nav-item'}
+                key={item.path}
+                onClick={(event) => {
+                  event.preventDefault();
+                  openNavigationTab(item);
+                }}
+                to={item.path}
+              >
                 <Icon size={18} />
                 <span>{item.label}</span>
               </Link>
@@ -35,4 +51,3 @@ export function SupplierLayout() {
     </Layout>
   );
 }
-
