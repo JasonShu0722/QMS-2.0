@@ -182,7 +182,24 @@ describe('problem and workflow PostgreSQL schema', () => {
           (id, organization_id, workflow_definition_id, workflow_version_id, instance_key, status, current_node_id, version, updated_at)
         VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, ${versionA}::uuid, ${`WRONG-NODE-${suffix}`}, 'RUNNING', ${nodeA2}::uuid, 1, CURRENT_TIMESTAMP)
       `).rejects.toMatchObject({ code: 'P2010' });
+      const instanceA = crypto.randomUUID();
+      await prisma.$executeRaw`
+        INSERT INTO workflow_instances
+          (id, organization_id, workflow_definition_id, workflow_version_id, instance_key, status, version, updated_at)
+        VALUES (${instanceA}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, ${versionA}::uuid, ${`TASK-INSTANCE-${suffix}`}, 'RUNNING', 1, CURRENT_TIMESTAMP)
+      `;
+      await expect(prisma.$executeRaw`
+        INSERT INTO workflow_tasks
+          (id, organization_id, workflow_version_id, workflow_instance_id, workflow_node_id, status, version, updated_at)
+        VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${versionA}::uuid, ${instanceA}::uuid, ${nodeA2}::uuid, 'PENDING', 1, CURRENT_TIMESTAMP)
+      `).rejects.toMatchObject({ code: 'P2010' });
+      await expect(prisma.$executeRaw`
+        INSERT INTO workflow_tasks
+          (id, organization_id, workflow_version_id, workflow_instance_id, workflow_node_id, status, version, updated_at)
+        VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${versionA2}::uuid, ${instanceA}::uuid, ${nodeA2}::uuid, 'PENDING', 1, CURRENT_TIMESTAMP)
+      `).rejects.toMatchObject({ code: 'P2010' });
     } finally {
+      await prisma.$executeRaw`DELETE FROM workflow_tasks WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_transitions WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_instances WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_nodes WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
