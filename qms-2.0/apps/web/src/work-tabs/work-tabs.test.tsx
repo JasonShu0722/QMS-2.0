@@ -10,6 +10,10 @@ describe('work tabs store', () => {
     useWorkTabsStore.getState().reset();
   });
 
+  function LocationProbe() {
+    return <output aria-label="current path">{useLocation().pathname}</output>;
+  }
+
   it('activates an existing tab instead of duplicating it', () => {
     useWorkTabsStore.getState().openTab({ id: 'problem:42', title: '供应商问题 #42', path: '/app/problem-center/42' });
     useWorkTabsStore.getState().openTab({ id: 'problem:42', title: '供应商问题 #42', path: '/app/problem-center/42' });
@@ -43,10 +47,6 @@ describe('work tabs store', () => {
   });
 
   it('navigates to the restored tab path when closing the active tab', async () => {
-    function LocationProbe() {
-      return <output aria-label="current path">{useLocation().pathname}</output>;
-    }
-
     const store = useWorkTabsStore.getState();
     store.openTab({ id: 'a', title: 'A', path: '/app/a' });
     store.openTab({ id: 'b', title: 'B', path: '/app/b' });
@@ -64,5 +64,55 @@ describe('work tabs store', () => {
 
     expect(screen.getByLabelText('current path')).toHaveTextContent('/app/a');
     expect(useWorkTabsStore.getState().activeTabId).toBe('a');
+  });
+
+  it('keeps router and store synchronized when clicking a visible tab', async () => {
+    const store = useWorkTabsStore.getState();
+    store.openTab({ id: 'a', title: 'A', path: '/app/a' });
+    store.openTab({ id: 'b', title: 'B', path: '/app/b' });
+
+    render(
+      <MemoryRouter initialEntries={['/app/b']}>
+        <WorkTabs />
+        <Routes>
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: 'A' }));
+    await userEvent.click(screen.getByRole('link', { name: 'A' }));
+
+    const state = useWorkTabsStore.getState();
+    expect(screen.getByLabelText('current path')).toHaveTextContent('/app/a');
+    expect(state.activeTabId).toBe('a');
+    expect(state.recentTabIds.slice(0, 2)).toEqual(['a', 'b']);
+    expect(state.tabs.filter((tab) => tab.id === 'a')).toHaveLength(1);
+  });
+
+  it('keeps router and store synchronized when choosing an overflow tab', async () => {
+    const store = useWorkTabsStore.getState();
+    for (let index = 0; index < 10; index += 1) {
+      store.openTab({ id: `record:${index}`, title: `记录 ${index}`, path: `/app/records/${index}` });
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/app/records/9']}>
+        <WorkTabs />
+        <Routes>
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const overflowTab = useWorkTabsStore.getState().overflowTabs[0];
+    await userEvent.click(screen.getByRole('button', { name: '全部标签' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: overflowTab.title }));
+
+    const state = useWorkTabsStore.getState();
+    expect(screen.getByLabelText('current path')).toHaveTextContent(overflowTab.path);
+    expect(state.activeTabId).toBe(overflowTab.id);
+    expect(state.recentTabIds[0]).toBe(overflowTab.id);
+    expect(state.tabs.filter((tab) => tab.id === overflowTab.id)).toHaveLength(1);
   });
 });

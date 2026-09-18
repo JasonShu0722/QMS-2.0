@@ -4,9 +4,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useWorkTabsStore } from './workTabsStore';
 
 export function WorkTabs() {
-  const { activeTabId, closeTab, overflowTabs, shouldShowStrip, visibleTabs } = useWorkTabsStore();
+  const { activeTabId, closeTab, openTab, overflowTabs, shouldShowStrip, visibleTabs } = useWorkTabsStore();
   const navigate = useNavigate();
   if (!shouldShowStrip) return null;
+
+  function activateAndNavigate(tab: { id: string; title: string; path: string }) {
+    openTab(tab);
+    navigate(tab.path);
+  }
 
   function closeAndNavigate(tabId: string) {
     closeTab(tabId);
@@ -19,13 +24,24 @@ export function WorkTabs() {
     <div className="work-tabs" role="tablist" aria-label="工作标签">
       {visibleTabs.map((tab) => (
         <div className={tab.id === activeTabId ? 'work-tab active' : 'work-tab'} key={tab.id} role="tab">
-          <Link to={tab.path}>{tab.title}</Link>
+          <Link to={tab.path} onClick={() => activateAndNavigate(tab)}>
+            {tab.title}
+          </Link>
           <Button aria-label={`关闭 ${tab.title}`} icon={<X size={13} />} size="small" type="text" onClick={() => closeAndNavigate(tab.id)} />
         </div>
       ))}
       {overflowTabs.length ? (
         <Dropdown
-          menu={{ items: overflowTabs.map((tab) => ({ key: tab.id, label: <Link to={tab.path}>{tab.title}</Link> })) }}
+          menu={{
+            onClick: ({ key }) => {
+              const tab = useWorkTabsStore.getState().tabs.find((item) => item.id === key);
+              if (tab) activateAndNavigate(tab);
+            },
+            items: overflowTabs.map((tab) => ({
+              key: tab.id,
+              label: tab.title,
+            })),
+          }}
         >
           <Button aria-label="全部标签" icon={<MoreHorizontal size={16} />} size="small" />
         </Dropdown>
