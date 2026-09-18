@@ -20,6 +20,10 @@ describe('portal navigation', () => {
     expect(screen.getByText('即将逾期')).toBeInTheDocument();
     expect(screen.getByText('高风险')).toBeInTheDocument();
     expect(screen.getByText('关键指标')).toBeInTheDocument();
+    expect(screen.getAllByText('待接入')).toHaveLength(5);
+    expect(screen.queryByText('12')).not.toBeInTheDocument();
+    expect(screen.queryByText('5')).not.toBeInTheDocument();
+    expect(screen.queryByText('98.6%')).not.toBeInTheDocument();
   });
 
   it('collapses to an icon rail and exposes the active domain context menu', () => {
@@ -47,4 +51,3 @@ describe('portal navigation', () => {
     expect(screen.queryByRole('link', { name: '问题中心' })).not.toBeInTheDocument();
   });
 });
-
