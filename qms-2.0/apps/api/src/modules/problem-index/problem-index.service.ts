@@ -178,7 +178,7 @@ export class ProblemIndexService {
   }
 
   async findById(id: string, organizationId: string, client: ProblemIndexClient = this.prisma as unknown as ProblemIndexClient): Promise<Record<string, unknown>> {
-    const result = await client.problemIndex.findUnique({ where: { organizationId_id: { organizationId, id } } });
+    const result = await client.problemIndex.findFirst({ where: { organizationId, id } });
     if (!result) throw new NotFoundException('PROBLEM_INDEX_NOT_FOUND');
     return result;
   }
