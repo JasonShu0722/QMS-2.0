@@ -75,12 +75,12 @@ describe('thin problem index', () => {
   it('scopes page and detail queries to the authorized organization', async () => {
     tx.problemIndex.findMany.mockResolvedValue([{ id: 'problem-id', organizationId }]);
     tx.problemIndex.count.mockResolvedValue(1);
-    tx.problemIndex.findUnique.mockResolvedValue({ id: 'problem-id', organizationId });
+    tx.problemIndex.findFirst.mockResolvedValue({ id: 'problem-id', organizationId });
     const service = new ProblemIndexService(prisma as never, numbering as never, audit as never, outbox as never);
     await service.findIndexPage({ organizationId, page: 1, pageSize: 20 });
     await service.findById('problem-id', organizationId);
     expect(tx.problemIndex.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId }) }));
-    expect(tx.problemIndex.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId_id: { organizationId, id: 'problem-id' } } }));
+    expect(tx.problemIndex.findFirst).toHaveBeenCalledWith({ where: { organizationId, id: 'problem-id' } });
     expect(otherOrganizationId).not.toBe(organizationId);
   });
 
