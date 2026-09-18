@@ -47,6 +47,43 @@ describe('PostgreSQL immutable numbering', () => {
     expect(historical.ruleVersionId).toBe(old.id);
   });
 
+  it('rejects explicit versions from another organization or rule code', async () => {
+    const current = await prisma.numberRuleVersion.findFirstOrThrow({
+      where: { organizationId, ruleCode },
+      orderBy: { version: 'desc' },
+    });
+
+    await expect(prisma.$transaction((tx) => service.allocateReportNumber(tx, {
+      organizationId: crypto.randomUUID(),
+      ruleCode,
+      classificationCode: 'QA',
+      ruleVersionId: current.id,
+    }))).rejects.toThrow('NUMBER_RULE_NOT_FOUND');
+
+    await expect(prisma.$transaction((tx) => service.allocateReportNumber(tx, {
+      organizationId,
+      ruleCode: 'OTHER',
+      classificationCode: 'QA',
+      ruleVersionId: current.id,
+    }))).rejects.toThrow('NUMBER_RULE_NOT_FOUND');
+  });
+
+  it('publishes concurrent versions as a unique monotonic sequence', async () => {
+    const concurrentRuleCode = `CONC_${crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const published = await Promise.all(Array.from({ length: 12 }, () => service.publishRuleVersion({
+      organizationId,
+      ruleCode: concurrentRuleCode,
+    })));
+    const versions = published.map((value) => value.version).sort((left, right) => left - right);
+
+    expect(versions).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+    expect(new Set(published.map((value) => value.id)).size).toBe(12);
+    expect(await prisma.numberRuleVersion.count({ where: { organizationId, ruleCode: concurrentRuleCode, active: true } })).toBe(1);
+    expect((await prisma.numberRuleVersion.findFirstOrThrow({
+      where: { organizationId, ruleCode: concurrentRuleCode, active: true },
+    })).version).toBe(12);
+  });
+
   it('rolls sequence allocation back with the caller transaction', async () => {
     await expect(prisma.$transaction(async (tx) => {
       await service.allocateReportNumber(tx, { organizationId, ruleCode, classificationCode: 'QA' });

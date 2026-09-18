@@ -48,4 +48,42 @@ describe('NumberingService', () => {
     expect(() => service.assertImmutable('QA-2609-001', 'QA-2609-001')).not.toThrow();
     expect(() => service.assertImmutable('QA-2609-001', 'QA-2609-002')).toThrow('NUMBER_IMMUTABLE');
   });
+
+  it('scopes an explicit rule version to the requested organization and rule code', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const tx = {
+      numberRuleVersion: { findFirst },
+      $queryRaw: jest.fn(),
+    };
+    const service = new NumberingService({} as never);
+
+    await expect(service.allocateReportNumber(tx as never, {
+      organizationId: 'org-2',
+      ruleCode: 'PROBLEM',
+      classificationCode: 'QA',
+      ruleVersionId: 'rule-1',
+    })).rejects.toThrow('NUMBER_RULE_NOT_FOUND');
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'rule-1', organizationId: 'org-2', ruleCode: 'PROBLEM' },
+    }));
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('takes a transaction advisory lock before publishing a rule version', async () => {
+    const tx = {
+      numberRuleVersion: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn().mockResolvedValue({ id: 'rule-1', version: 1, pattern: '{CODE}-{YYMM}-{SEQ3}' }),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const service = new NumberingService({
+      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx)),
+    } as never);
+
+    await service.publishRuleVersion({ organizationId: 'org-1', ruleCode: 'PROBLEM' });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+  });
 });

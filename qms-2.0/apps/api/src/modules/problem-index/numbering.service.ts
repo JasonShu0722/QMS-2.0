@@ -15,9 +15,9 @@ interface NumberRuleVersion {
 interface NumberingClient {
   $transaction<T>(work: (tx: NumberingClient) => Promise<T>): Promise<T>;
   $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
   numberRuleVersion: {
     findFirst(args: { where: Record<string, unknown>; orderBy: Record<string, unknown> }): Promise<NumberRuleVersion | null>;
-    findUnique(args: { where: Record<string, unknown> }): Promise<NumberRuleVersion | null>;
     updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
     create(args: { data: Record<string, unknown> }): Promise<NumberRuleVersion>;
   };
@@ -57,6 +57,11 @@ export class NumberingService {
 
     const client = this.prisma as NumberingClient;
     return client.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${input.organizationId}:${input.ruleCode}`}, 0)
+        )
+      `;
       const previous = await tx.numberRuleVersion.findFirst({
         where: { organizationId: input.organizationId, ruleCode: input.ruleCode },
         orderBy: { version: 'desc' },
@@ -90,7 +95,14 @@ export class NumberingService {
     const at = input.at ?? new Date();
     const period = `${String(at.getUTCFullYear()).slice(-2)}${String(at.getUTCMonth() + 1).padStart(2, '0')}`;
     const rule = input.ruleVersionId
-      ? await tx.numberRuleVersion.findUnique({ where: { id: input.ruleVersionId } })
+      ? await tx.numberRuleVersion.findFirst({
+        where: {
+          id: input.ruleVersionId,
+          organizationId: input.organizationId,
+          ruleCode: input.ruleCode,
+        },
+        orderBy: { version: 'desc' },
+      })
       : await tx.numberRuleVersion.findFirst({
         where: { organizationId: input.organizationId, ruleCode: input.ruleCode, active: true },
         orderBy: { version: 'desc' },
