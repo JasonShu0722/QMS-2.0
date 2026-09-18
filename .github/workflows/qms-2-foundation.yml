@@ -1,0 +1,75 @@
+name: QMS 2.0 foundation
+
+on:
+  push:
+    paths:
+      - 'qms-2.0/**'
+      - 'AGENTS.md'
+      - '.github/workflows/qms-2-foundation.yml'
+  pull_request:
+    paths:
+      - 'qms-2.0/**'
+      - 'AGENTS.md'
+      - '.github/workflows/qms-2-foundation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: qms-2.0
+    env:
+      CI: 'true'
+      PG_CONTAINER: qms2-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Install independent workspace
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+      - name: Check archive isolation
+        run: corepack pnpm run check:archive-isolation
+      - name: Check generated OpenAPI contract
+        run: corepack pnpm run contracts:check
+      - name: Web and API unit tests
+        run: corepack pnpm test
+      - name: Create ephemeral PostgreSQL 18
+        run: |
+          POSTGRES_PASSWORD=$(openssl rand -hex 24)
+          export POSTGRES_PASSWORD
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> "$GITHUB_ENV"
+          docker run --detach --name "$PG_CONTAINER" -e POSTGRES_PASSWORD -e POSTGRES_USER=qms -e POSTGRES_DB=qms2 -p 127.0.0.1::5432 postgres:18
+          for attempt in {1..30}; do
+            if docker exec "$PG_CONTAINER" pg_isready -U qms -d qms2; then break; fi
+            sleep 2
+          done
+          docker exec "$PG_CONTAINER" pg_isready -U qms -d qms2
+          PG_PORT=$(docker port "$PG_CONTAINER" 5432/tcp | cut -d: -f2)
+          DATABASE_URL="postgresql://qms:$POSTGRES_PASSWORD@127.0.0.1:$PG_PORT/qms2"
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          for name in QMS_SEED_INTERNAL_PASSWORD QMS_SEED_SUPPLIER_PASSWORD QMS_RATE_LIMIT_SECRET MINIO_ROOT_PASSWORD; do
+            value=$(openssl rand -hex 24)
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+          echo "MINIO_ROOT_USER=qms-ci" >> "$GITHUB_ENV"
+      - name: Real PostgreSQL integration tests
+        env:
+          NODE_ENV: development
+        run: corepack pnpm --filter @qms/api test:integration
+      - name: Build Web and API
+        run: corepack pnpm build
+      - name: Validate foundation Compose
+        run: docker compose -f deployment/docker-compose.foundation.yml config --quiet
+      - name: Destroy ephemeral database
+        if: always()
+        run: docker rm --force --volumes "$PG_CONTAINER" || true

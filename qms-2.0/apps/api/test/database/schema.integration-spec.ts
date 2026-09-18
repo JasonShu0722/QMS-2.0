@@ -3,15 +3,11 @@ import { sanitizeMetadata } from '../../src/common/contracts/error-response.js';
 import type { Prisma } from '../../src/generated/prisma/client.js';
 
 const databaseUrl = process.env.DATABASE_URL;
-const describeWithDatabase = databaseUrl ? describe : describe.skip;
-
 if (!databaseUrl) {
-  console.warn(
-    'Skipping PostgreSQL integration test: DATABASE_URL is not configured; SQLite fallback is forbidden.',
-  );
+  throw new Error('PostgreSQL integration requires DATABASE_URL; skipping and SQLite fallback are forbidden.');
 }
 
-describeWithDatabase('PostgreSQL schema', () => {
+describe('PostgreSQL schema', () => {
   let prisma: PrismaService;
 
   beforeAll(async () => {

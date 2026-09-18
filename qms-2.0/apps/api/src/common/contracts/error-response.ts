@@ -1,10 +1,19 @@
+import { ApiProperty } from '@nestjs/swagger';
+
 export type ErrorFields = Record<string, string[]>;
 
-export interface ErrorResponse {
-  code: string;
-  message: string;
-  fields: ErrorFields;
-  traceId: string;
+export class ErrorResponse {
+  @ApiProperty()
+  code!: string;
+
+  @ApiProperty()
+  message!: string;
+
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } })
+  fields!: ErrorFields;
+
+  @ApiProperty()
+  traceId!: string;
 }
 
 export interface ErrorResponseInput {

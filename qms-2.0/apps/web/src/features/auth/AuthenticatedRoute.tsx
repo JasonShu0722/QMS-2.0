@@ -2,7 +2,7 @@ import { Alert, Button, Spin } from 'antd';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { ApiError, getSession, type AccountType, type SessionResponse } from '../../api/client';
+import { ApiError, getSession, type AccountType, type SessionView } from '../../api/client';
 
 type AuthenticatedRouteProps = {
   accountType: AccountType;
@@ -14,7 +14,7 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
   const [retryCount, setRetryCount] = useState(0);
   const [state, setState] = useState<
     | { status: 'loading' }
-    | { status: 'authenticated'; session: SessionResponse }
+    | { status: 'authenticated'; session: SessionView }
     | { status: 'unauthenticated' }
     | { status: 'error' }
   >({ status: 'loading' });

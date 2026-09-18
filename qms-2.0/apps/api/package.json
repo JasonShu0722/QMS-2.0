@@ -23,6 +23,7 @@
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/swagger": "11.2.0",
     "@prisma/adapter-pg": "^7.0.0",
     "@prisma/client": "^7.0.0",
     "argon2": "^0.41.1",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
     "@nestjs/testing": "11.1.6",
+    "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.30",
     "@types/pg": "^8.15.5",

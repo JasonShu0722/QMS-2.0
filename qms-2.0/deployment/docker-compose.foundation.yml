@@ -1,0 +1,79 @@
+name: qms2-foundation
+
+x-api-environment: &api-environment
+  NODE_ENV: ${NODE_ENV:-production}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-qms}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-qms2}
+  QMS_RATE_LIMIT_SECRET: ${QMS_RATE_LIMIT_SECRET:?Set QMS_RATE_LIMIT_SECRET}
+  QMS_TRUST_PROXY_HOPS: '1'
+  QMS_OBJECT_STORAGE_PROVIDER: minio
+  QMS_OBJECT_STORAGE_ENDPOINT: http://minio:9000
+  QMS_OBJECT_STORAGE_BUCKET: ${QMS_OBJECT_STORAGE_BUCKET:-qms-foundation}
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qms}
+      POSTGRES_DB: ${POSTGRES_DB:-qms2}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: [server, /data, --console-address, ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+    ports:
+      - 127.0.0.1:${MINIO_PORT:-9000}:9000
+      - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
+    volumes:
+      - minio-data:/data
+
+  api:
+    image: qms2-foundation-api:local
+    build:
+      context: ..
+      dockerfile: deployment/api.Dockerfile
+    command: [node, dist/main.js]
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/v1/openapi.json').then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    image: qms2-foundation-api:local
+    command: [node, dist/worker.js]
+    environment: *api-environment
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/web.Dockerfile
+    ports:
+      - 127.0.0.1:${WEB_PORT:-8080}:80
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  minio-data:

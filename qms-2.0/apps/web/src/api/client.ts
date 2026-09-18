@@ -1,22 +1,14 @@
-export type AccountType = 'INTERNAL' | 'SUPPLIER';
+import type {
+  AccountType, ApiErrorPayload, CsrfResponse, LoginRequest, LoginResponse, SessionResponse,
+} from '@qms/contracts';
 
-export type LoginResponse = {
+export type { AccountType, LoginResponse } from '@qms/contracts';
+
+export type SessionView = {
   accountType: AccountType;
-  landingPath: '/app/workbench' | '/supplier/inbox';
-};
-
-export type SessionResponse = {
-  accountType: AccountType;
-  landingPath: '/app/workbench' | '/supplier/inbox';
-  userId?: string;
-  organizationId?: string;
-};
-
-export type ApiErrorPayload = {
-  code: string;
-  message: string;
-  fields?: Record<string, string[]>;
-  traceId?: string;
+  landingPath: LoginResponse['landingPath'];
+  userId: SessionResponse['user']['id'];
+  organizationId: SessionResponse['user']['organizationId'];
 };
 
 export class ApiError extends Error {
@@ -24,7 +16,7 @@ export class ApiError extends Error {
   readonly fields: Record<string, string[]>;
   readonly traceId?: string;
 
-  constructor(payload: ApiErrorPayload) {
+  constructor(payload: Pick<ApiErrorPayload, 'code' | 'message'> & Partial<ApiErrorPayload>) {
     super(payload.message);
     this.name = 'ApiError';
     this.code = payload.code;
@@ -54,6 +46,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       code: `HTTP_${response.status}`,
       message: '请求无法处理',
       fields: {},
+      traceId: '',
     };
     throw new ApiError({ ...fallback, ...(payload as Partial<ApiErrorPayload>) });
   }
@@ -61,11 +54,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function csrfToken(): Promise<string> {
-  const response = await request<{ csrfToken: string }>('/api/v1/auth/csrf');
+  const response = await request<CsrfResponse>('/api/v1/auth/csrf');
   return response.csrfToken;
 }
 
-export async function login(credentials: { identifier: string; password: string }): Promise<LoginResponse> {
+export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   const token = await csrfToken();
   return request<LoginResponse>('/api/v1/auth/login', {
     method: 'POST',
@@ -74,29 +67,15 @@ export async function login(credentials: { identifier: string; password: string 
   });
 }
 
-export async function getSession(): Promise<SessionResponse> {
-  const response = await request<
-    | {
-        user: {
-          id: string;
-          organizationId: string;
-          accountType: AccountType;
-        };
-        accountType?: AccountType;
-        landingPath?: SessionResponse['landingPath'];
-      }
-    | SessionResponse
-  >('/api/v1/auth/session');
-
-  const accountType = 'user' in response ? response.user.accountType : response.accountType;
-  const landingPath =
-    response.landingPath ??
-    (accountType === 'SUPPLIER' ? '/supplier/inbox' : '/app/workbench');
+export async function getSession(): Promise<SessionView> {
+  const response = await request<SessionResponse>('/api/v1/auth/session');
+  const accountType = response.user.accountType;
+  const landingPath = accountType === 'SUPPLIER' ? '/supplier/inbox' : '/app/workbench';
 
   return {
     accountType,
     landingPath,
-    userId: 'user' in response ? response.user.id : response.userId,
-    organizationId: 'user' in response ? response.user.organizationId : response.organizationId,
+    userId: response.user.id,
+    organizationId: response.user.organizationId,
   };
 }

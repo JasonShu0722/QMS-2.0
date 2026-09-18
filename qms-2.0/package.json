@@ -12,7 +12,11 @@
     "test": "node --test test/structure.test.mjs && pnpm --recursive test",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
-    "contracts:check": "pnpm --filter @qms/contracts build",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "contracts:check": "node scripts/check-openapi-sync.mjs",
     "check:archive-isolation": "node scripts/check-archive-isolation.mjs"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.10.1"
   }
 }

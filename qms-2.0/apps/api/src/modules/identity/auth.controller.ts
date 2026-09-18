@@ -10,7 +10,9 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
-import { LoginDto } from './dto/login.dto.js';
+import { ApiCookieAuth, ApiHeader, ApiNoContentResponse, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
+import { ErrorResponse } from '../../common/contracts/error-response.js';
+import { CsrfResponseDto, LoginDto, LoginResponseDto, SessionResponseDto } from './dto/login.dto.js';
 import { IdentityService } from './identity.service.js';
 import { RateLimitGuard } from './rate-limit.guard.js';
 import {
@@ -24,6 +26,7 @@ import {
 } from './session.service.js';
 
 @Controller('api/v1/auth')
+@ApiResponse({ status: 'default', type: ErrorResponse, description: 'Controlled API error' })
 export class AuthController {
   constructor(
     private readonly identity: IdentityService,
@@ -31,6 +34,7 @@ export class AuthController {
   ) {}
 
   @Get('csrf')
+  @ApiOkResponse({ type: CsrfResponseDto })
   csrf(@Res({ passthrough: true }) response: Response) {
     const csrfToken = randomBytes(32).toString('base64url');
     response.cookie(CSRF_COOKIE, csrfToken, csrfCookieOptions());
@@ -38,6 +42,8 @@ export class AuthController {
   }
 
   @Post('login')
+  @ApiOkResponse({ type: LoginResponseDto })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
   @HttpCode(200)
   @UseGuards(RateLimitGuard)
   async login(
@@ -51,11 +57,16 @@ export class AuthController {
   }
 
   @Get('session')
+  @ApiOkResponse({ type: SessionResponseDto })
+  @ApiCookieAuth('qms_session')
   session(@Req() request: Request) {
     return this.identity.current(parseCookie(request.headers.cookie, SESSION_COOKIE));
   }
 
   @Post('logout')
+  @ApiNoContentResponse()
+  @ApiCookieAuth('qms_session')
+  @ApiHeader({ name: 'x-csrf-token', required: true })
   @HttpCode(204)
   @UseGuards(RateLimitGuard)
   async logout(
