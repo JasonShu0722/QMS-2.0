@@ -1,7 +1,11 @@
 import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import type { Request } from 'express';
 import { parseCookie, SESSION_COOKIE } from './session.service.js';
+
+const RATE_LIMIT_SECRET_ENV = 'QMS_RATE_LIMIT_SECRET';
+const DEVELOPMENT_RATE_LIMIT_SECRET =
+  'qms-development-rate-limit-secret-not-for-production';
 
 interface RateEntry {
   failures: number;
@@ -13,10 +17,25 @@ interface RateEntry {
 @Injectable()
 export class RateLimitService {
   private readonly entries = new Map<string, RateEntry>();
+  private readonly secret: string;
+
+  constructor() {
+    const configuredSecret = process.env[RATE_LIMIT_SECRET_ENV]?.trim();
+    if (configuredSecret) {
+      this.secret = configuredSecret;
+      return;
+    }
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`${RATE_LIMIT_SECRET_ENV} must be configured in production`);
+    }
+    this.secret = DEVELOPMENT_RATE_LIMIT_SECRET;
+  }
 
   key(accountIdentifier: string, ip: string): string {
-    return createHash('sha256')
-      .update(`${accountIdentifier.trim().toLowerCase()}\0${ip}`)
+    const normalizedIdentifier = accountIdentifier.trim().toLowerCase();
+    const normalizedIp = ip.trim().toLowerCase();
+    return createHmac('sha256', this.secret)
+      .update(`${normalizedIdentifier}\0${normalizedIp}`)
       .digest('hex');
   }
 

@@ -37,6 +37,7 @@ describe('identity HTTP contract', () => {
   let app: INestApplication;
   let passwordHash: string;
   const originalNodeEnv = process.env.NODE_ENV;
+  const originalRateLimitSecret = process.env.QMS_RATE_LIMIT_SECRET;
   const prisma = {
     user: { findFirst: jest.fn() },
     session: {
@@ -48,6 +49,7 @@ describe('identity HTTP contract', () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'production';
+    process.env.QMS_RATE_LIMIT_SECRET = 'identity-test-rate-limit-secret';
     passwordHash = await new PasswordHasherService().hash('Correct horse battery staple!');
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
@@ -71,6 +73,8 @@ describe('identity HTTP contract', () => {
     await app.close();
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
+    if (originalRateLimitSecret === undefined) delete process.env.QMS_RATE_LIMIT_SECRET;
+    else process.env.QMS_RATE_LIMIT_SECRET = originalRateLimitSecret;
   });
 
   async function csrf(): Promise<{ cookie: string; token: string }> {
