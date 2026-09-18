@@ -5,6 +5,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 import { FileManagementModule } from './modules/file-management/file-management.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { TaskNotificationModule } from './modules/task-notification/task-notification.module.js';
+import { ProblemIndexModule } from './modules/problem-index/problem-index.module.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { TaskNotificationModule } from './modules/task-notification/task-notific
     AuditLogModule,
     FileManagementModule,
     TaskNotificationModule,
+    ProblemIndexModule,
   ],
 })
 export class AppModule {}

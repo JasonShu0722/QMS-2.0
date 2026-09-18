@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 
 const DEFAULT_PATTERN = '{CODE}-{YYMM}-{SEQ3}';
@@ -48,7 +48,7 @@ export interface AllocatedReportNumber {
 
 @Injectable()
 export class NumberingService {
-  constructor(private readonly prisma: NumberingClient | PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: NumberingClient | PrismaService) {}
 
   async publishRuleVersion(input: PublishRuleVersionInput): Promise<NumberRuleVersion> {
     this.assertCode(input.ruleCode, 'NUMBER_RULE_CODE_INVALID');
