@@ -5,6 +5,13 @@ export type LoginResponse = {
   landingPath: '/app/workbench' | '/supplier/inbox';
 };
 
+export type SessionResponse = {
+  accountType: AccountType;
+  landingPath: '/app/workbench' | '/supplier/inbox';
+  userId?: string;
+  organizationId?: string;
+};
+
 export type ApiErrorPayload = {
   code: string;
   message: string;
@@ -67,3 +74,29 @@ export async function login(credentials: { identifier: string; password: string 
   });
 }
 
+export async function getSession(): Promise<SessionResponse> {
+  const response = await request<
+    | {
+        user: {
+          id: string;
+          organizationId: string;
+          accountType: AccountType;
+        };
+        accountType?: AccountType;
+        landingPath?: SessionResponse['landingPath'];
+      }
+    | SessionResponse
+  >('/api/v1/auth/session');
+
+  const accountType = 'user' in response ? response.user.accountType : response.accountType;
+  const landingPath =
+    response.landingPath ??
+    (accountType === 'SUPPLIER' ? '/supplier/inbox' : '/app/workbench');
+
+  return {
+    accountType,
+    landingPath,
+    userId: 'user' in response ? response.user.id : response.userId,
+    organizationId: 'user' in response ? response.user.organizationId : response.organizationId,
+  };
+}

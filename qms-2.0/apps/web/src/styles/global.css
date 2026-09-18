@@ -33,6 +33,13 @@ a {
   background: linear-gradient(145deg, #e8edf3 0%, #f7f4ed 48%, #e2ebea 100%);
 }
 
+.route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f5f7fa;
+}
+
 .login-card {
   width: min(420px, calc(100vw - 32px));
   border-radius: 8px;
