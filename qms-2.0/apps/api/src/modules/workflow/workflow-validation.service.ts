@@ -85,6 +85,7 @@ export class WorkflowValidationService {
       incoming.get(transition.to)!.push(transition.from);
       this.validateCondition(transition.condition, transition.id, errors);
     }
+    if (this.hasCycle(outgoing)) errors.push('WORKFLOW_CYCLE_NOT_ALLOWED');
     if (starts.length === 1 && ends.length === 1) {
       const reachable = this.walk(starts[0]!.id, outgoing);
       const canClose = this.walk(ends[0]!.id, incoming);
@@ -135,7 +136,7 @@ export class WorkflowValidationService {
   private validateCondition(condition: Record<string, unknown> | undefined, id: string, errors: string[]): void {
     if (condition === undefined || Object.keys(condition).length === 0) return;
     if (typeof condition !== 'object' || Array.isArray(condition)) { errors.push(`WORKFLOW_CONDITION_INVALID:${id}`); return; }
-    for (const key of Object.keys(condition)) if (SCRIPT_KEYS.has(key)) errors.push(`WORKFLOW_SCRIPT_NOT_ALLOWED:${id}`);
+    if (this.containsScriptKey(condition)) errors.push(`WORKFLOW_SCRIPT_NOT_ALLOWED:${id}`);
     const field = condition.field;
     const operator = condition.operator;
     if (typeof field !== 'string' || !CONDITION_FIELDS.has(field)) errors.push(`WORKFLOW_CONDITION_FIELD_NOT_ALLOWED:${id}`);
@@ -153,7 +154,34 @@ export class WorkflowValidationService {
   }
 
   private rejectScript(config: Record<string, unknown>, code: string, errors: string[]): void {
-    for (const key of Object.keys(config)) if (SCRIPT_KEYS.has(key)) errors.push(code);
+    if (this.containsScriptKey(config)) errors.push(code);
+  }
+
+  private containsScriptKey(value: unknown): boolean {
+    if (Array.isArray(value)) return value.some((entry) => this.containsScriptKey(entry));
+    if (!value || typeof value !== 'object') return false;
+    for (const [key, entry] of Object.entries(value)) {
+      const normalized = key.toLowerCase();
+      if (SCRIPT_KEYS.has(key) || normalized.includes('script') || normalized === 'eval' || normalized.includes('function')) return true;
+      if (this.containsScriptKey(entry)) return true;
+    }
+    return false;
+  }
+
+  private hasCycle(graph: Map<string, string[]>): boolean {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (node: string): boolean => {
+      if (visiting.has(node)) return true;
+      if (visited.has(node)) return false;
+      visiting.add(node);
+      for (const next of graph.get(node) ?? []) if (visit(next)) return true;
+      visiting.delete(node);
+      visited.add(node);
+      return false;
+    };
+    for (const node of graph.keys()) if (visit(node)) return true;
+    return false;
   }
 
   private walk(start: string, graph: Map<string, string[]>): Set<string> {

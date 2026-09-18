@@ -40,6 +40,32 @@ describe('WorkflowValidationService', () => {
     expect(service.validateDraft(draft).valid).toBe(false);
   });
 
+  it('rejects a directed cycle even when the end remains reachable', () => {
+    const draft = validDraft();
+    draft.transitions.push({ id: 'cycle', from: 'verify', to: 'approval' });
+    const result = service.validateDraft(draft);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('WORKFLOW_CYCLE_NOT_ALLOWED');
+  });
+
+  it('rejects script keys nested in node config and transition condition', () => {
+    const nodeDraft = validDraft();
+    nodeDraft.nodes[1]!.config = {
+      assignment: { roleCode: 'MANAGER', metadata: { steps: [{ eval: 'process.env.SECRET' }] } },
+    };
+    const nodeResult = service.validateDraft(nodeDraft);
+    expect(nodeResult.valid).toBe(false);
+    expect(nodeResult.errors).toContain('WORKFLOW_SCRIPT_NOT_ALLOWED:approval');
+
+    const conditionDraft = validDraft();
+    conditionDraft.transitions[0]!.condition = {
+      field: 'severity', operator: 'eq', value: 'high', nested: { options: [{ functionBody: 'return true' }] },
+    };
+    const conditionResult = service.validateDraft(conditionDraft);
+    expect(conditionResult.valid).toBe(false);
+    expect(conditionResult.errors).toContain('WORKFLOW_SCRIPT_NOT_ALLOWED:t1');
+  });
+
   it('rejects invalid SLA, reminder and condition values', () => {
     const draft = validDraft();
     draft.nodes[0]!.config = { isStart: true, assignment: { roleCode: 'QUALITY' }, slaMinutes: 0, reminders: [{ offsetMinutes: -1 }] };
