@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @qms/api --filter @qms/web dev",
-    "test": "node --test test/structure.test.mjs && pnpm --recursive test",
+    "test": "node --test test/structure.test.mjs test/contracts-package.test.mjs && pnpm --recursive test",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "contracts:generate": "node scripts/generate-contracts.mjs",
