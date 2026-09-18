@@ -135,8 +135,10 @@ describe('problem and workflow PostgreSQL schema', () => {
     const definitionA = crypto.randomUUID();
     const definitionB = crypto.randomUUID();
     const versionA = crypto.randomUUID();
+    const versionA2 = crypto.randomUUID();
     const versionB = crypto.randomUUID();
     const nodeA = crypto.randomUUID();
+    const nodeA2 = crypto.randomUUID();
     const nodeB = crypto.randomUUID();
     await prisma.$executeRaw`
       INSERT INTO organizations (id, code, name, type, updated_at) VALUES
@@ -152,6 +154,7 @@ describe('problem and workflow PostgreSQL schema', () => {
       await prisma.$executeRaw`
         INSERT INTO workflow_versions (id, organization_id, workflow_definition_id, version, status, updated_at)
         VALUES (${versionA}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, 1, 'DRAFT', CURRENT_TIMESTAMP),
+               (${versionA2}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, 2, 'DRAFT', CURRENT_TIMESTAMP),
                (${versionB}::uuid, ${organizationB}::uuid, ${definitionB}::uuid, 1, 'DRAFT', CURRENT_TIMESTAMP)
       `;
       await expect(prisma.$executeRaw`
@@ -161,6 +164,7 @@ describe('problem and workflow PostgreSQL schema', () => {
       await prisma.$executeRaw`
         INSERT INTO workflow_nodes (id, organization_id, workflow_version_id, node_key, type, name, updated_at)
         VALUES (${nodeA}::uuid, ${organizationA}::uuid, ${versionA}::uuid, 'A', 'ACTION', 'Node A', CURRENT_TIMESTAMP),
+               (${nodeA2}::uuid, ${organizationA}::uuid, ${versionA2}::uuid, 'A2', 'ACTION', 'Node A2', CURRENT_TIMESTAMP),
                (${nodeB}::uuid, ${organizationB}::uuid, ${versionB}::uuid, 'B', 'ACTION', 'Node B', CURRENT_TIMESTAMP)
       `;
       await expect(prisma.$executeRaw`
@@ -168,7 +172,19 @@ describe('problem and workflow PostgreSQL schema', () => {
           (id, organization_id, workflow_version_id, transition_key, from_node_id, to_node_id, updated_at)
         VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${versionA}::uuid, 'CROSS', ${nodeB}::uuid, ${nodeA}::uuid, CURRENT_TIMESTAMP)
       `).rejects.toMatchObject({ code: 'P2010' });
+      await expect(prisma.$executeRaw`
+        INSERT INTO workflow_transitions
+          (id, organization_id, workflow_version_id, transition_key, from_node_id, to_node_id, updated_at)
+        VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${versionA}::uuid, 'WRONG-VERSION', ${nodeA2}::uuid, ${nodeA}::uuid, CURRENT_TIMESTAMP)
+      `).rejects.toMatchObject({ code: 'P2010' });
+      await expect(prisma.$executeRaw`
+        INSERT INTO workflow_instances
+          (id, organization_id, workflow_definition_id, workflow_version_id, instance_key, status, current_node_id, version, updated_at)
+        VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, ${versionA}::uuid, ${`WRONG-NODE-${suffix}`}, 'RUNNING', ${nodeA2}::uuid, 1, CURRENT_TIMESTAMP)
+      `).rejects.toMatchObject({ code: 'P2010' });
     } finally {
+      await prisma.$executeRaw`DELETE FROM workflow_transitions WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
+      await prisma.$executeRaw`DELETE FROM workflow_instances WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_nodes WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_versions WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
       await prisma.$executeRaw`DELETE FROM workflow_definitions WHERE organization_id IN (${organizationA}::uuid, ${organizationB}::uuid)`;
@@ -264,11 +280,11 @@ describe('problem and workflow PostgreSQL schema', () => {
       FROM information_schema.referential_constraints
       WHERE constraint_schema = 'public'
         AND (constraint_name = 'problem_indexes_organization_id_owner_id_fkey'
-          OR constraint_name = 'workflow_transitions_organization_id_from_node_id_fkey')
+          OR constraint_name = 'workflow_transitions_organization_id_workflow_version_id_from_node_id_fkey')
     `;
     expect(foreignKeys.map(({ constraint_name }) => constraint_name)).toEqual(expect.arrayContaining([
       'problem_indexes_organization_id_owner_id_fkey',
-      'workflow_transitions_organization_id_from_node_id_fkey',
+      'workflow_transitions_organization_id_workflow_version_id_from_node_id_fkey',
     ]));
   });
 });

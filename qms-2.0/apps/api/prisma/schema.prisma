@@ -382,6 +382,7 @@ model WorkflowNode {
 
   @@unique([workflowVersionId, nodeKey])
   @@unique([organizationId, id])
+  @@unique([organizationId, workflowVersionId, id])
   @@index([organizationId, workflowVersionId])
   @@map("workflow_nodes")
 }
@@ -401,8 +402,8 @@ model WorkflowTransition {
   updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   workflowVersion   WorkflowVersion @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Cascade)
-  fromNode          WorkflowNode   @relation("TransitionFromNode", fields: [organizationId, fromNodeId], references: [organizationId, id], onDelete: Cascade)
-  toNode            WorkflowNode   @relation("TransitionToNode", fields: [organizationId, toNodeId], references: [organizationId, id], onDelete: Cascade)
+  fromNode          WorkflowNode   @relation("TransitionFromNode", fields: [organizationId, workflowVersionId, fromNodeId], references: [organizationId, workflowVersionId, id], onDelete: Cascade)
+  toNode            WorkflowNode   @relation("TransitionToNode", fields: [organizationId, workflowVersionId, toNodeId], references: [organizationId, workflowVersionId, id], onDelete: Cascade)
 
   @@unique([workflowVersionId, transitionKey])
   @@unique([organizationId, id])
@@ -428,7 +429,7 @@ model WorkflowInstance {
   organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   definition           WorkflowDefinition    @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
   workflowVersion      WorkflowVersion      @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
-  currentNode          WorkflowNode?         @relation("InstanceCurrentNode", fields: [organizationId, currentNodeId], references: [organizationId, id], onDelete: Restrict)
+  currentNode          WorkflowNode?         @relation("InstanceCurrentNode", fields: [organizationId, workflowVersionId, currentNodeId], references: [organizationId, workflowVersionId, id], onDelete: Restrict)
   problems             ProblemIndex[]
   tasks                WorkflowTask[]
 
