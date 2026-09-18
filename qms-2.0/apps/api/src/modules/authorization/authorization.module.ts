@@ -1,0 +1,18 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthenticatedGuard } from '../../common/guards/authenticated.guard.js';
+import { IdentityModule } from '../identity/identity.module.js';
+import { OrganizationModule } from '../organization/organization.module.js';
+import { AuthorizationService } from './authorization.service.js';
+import { PermissionsController } from './permissions.controller.js';
+
+@Module({
+  imports: [IdentityModule, OrganizationModule],
+  controllers: [PermissionsController],
+  providers: [
+    AuthorizationService,
+    { provide: APP_GUARD, useClass: AuthenticatedGuard },
+  ],
+  exports: [AuthorizationService],
+})
+export class AuthorizationModule {}

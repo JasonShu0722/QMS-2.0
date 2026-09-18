@@ -20,6 +20,9 @@ const CONTROLLED_ERROR_CODES = new Set([
   'AUTH_SESSION_REQUIRED',
   'AUTH_RATE_LIMITED',
   'CSRF_INVALID',
+  'FEATURE_PERMISSION_DENIED',
+  'ORGANIZATION_SCOPE_DENIED',
+  'WORKFLOW_PERMISSION_REQUIRED',
 ]);
 
 function safeHttpError(exception: HttpException): SafeHttpError | undefined {
