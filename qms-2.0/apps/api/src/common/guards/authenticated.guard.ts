@@ -51,6 +51,7 @@ export class AuthenticatedGuard implements CanActivate {
     const session = await this.sessions.resolve(token);
     if (!session) this.sessionRequired();
 
+    await this.authorization.assertAccess(session, requirement);
     const target = requirement.organizationScope
       ? singleString(
           requestValue(
@@ -64,7 +65,6 @@ export class AuthenticatedGuard implements CanActivate {
       requestedOrganizationId: target,
       optional: requirement.organizationScope?.optional ?? true,
     });
-    await this.authorization.assertAccess(session, requirement, organizationId);
     request[AUTHENTICATED_SESSION] = session;
     request.authorizedOrganizationId = organizationId;
     return true;

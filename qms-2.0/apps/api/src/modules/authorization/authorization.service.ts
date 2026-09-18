@@ -20,7 +20,6 @@ export class AuthorizationService {
   async assertAccess(
     session: AuthorizedSession,
     requirement: AccessContextRequirement,
-    organizationId: string,
   ): Promise<void> {
     if (requirement.workflowPermission) {
       throw new HttpException(
@@ -28,7 +27,11 @@ export class AuthorizationService {
         403,
       );
     }
-    await this.assertFeature(session.user.id, organizationId, requirement.featurePermission);
+    await this.assertFeature(
+      session.user.id,
+      session.user.organizationId,
+      requirement.featurePermission,
+    );
   }
 
   async assertFeature(

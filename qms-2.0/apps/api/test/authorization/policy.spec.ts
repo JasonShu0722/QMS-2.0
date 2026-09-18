@@ -78,7 +78,6 @@ describe('authorization policy', () => {
           featurePermission: 'organization:read',
           workflowPermission: 'approval:advance',
         },
-        'org-supplier-a',
       ),
     ).rejects.toMatchObject<HttpException>({
       response: { code: 'WORKFLOW_PERMISSION_REQUIRED' },
