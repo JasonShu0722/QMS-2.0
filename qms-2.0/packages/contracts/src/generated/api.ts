@@ -144,6 +144,34 @@ export interface components {
             organization: components["schemas"]["OrganizationDto"];
             userId: string;
         };
+        /** @enum {string} */
+        ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+        /** @enum {string} */
+        ResponseForm: "BRIEF" | "EIGHT_D";
+        /** @enum {string} */
+        WorkflowNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+        /** @enum {string} */
+        WorkflowVersionStatus: "DRAFT" | "PUBLISHED" | "RETIRED";
+        /** @enum {string} */
+        TaskStatus: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED" | "OVERDUE";
+        /** @enum {string} */
+        NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
+        /** @enum {string} */
+        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED";
+        PlatformTypesDto: {
+            /**
+             * @description Stable code owned by the domain service.
+             * @example neutral-test
+             */
+            problemDomainCode: string;
+            problemStatus: components["schemas"]["ProblemStatus"];
+            responseForm: components["schemas"]["ResponseForm"];
+            workflowNodeType: components["schemas"]["WorkflowNodeType"];
+            workflowVersionStatus: components["schemas"]["WorkflowVersionStatus"];
+            taskStatus: components["schemas"]["TaskStatus"];
+            notificationStatus: components["schemas"]["NotificationStatus"];
+            platformErrorCode: components["schemas"]["PlatformErrorCode"];
+        };
     };
     responses: never;
     parameters: never;

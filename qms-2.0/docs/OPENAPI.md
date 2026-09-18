@@ -27,3 +27,7 @@ corepack pnpm contracts:check
 `test/common/openapi.spec.ts` 验证真实 Nest HTTP schema 发布、登录请求响应、组织参数、权限响应和错误必填字段；使用持久层替身，不冒充真实数据库登录。Playwright 另行验证运行网关的真实登录、CSRF、组织隔离与会话撤销。
 
 附件、Outbox、流程设计、业务台账与编号目前没有公开 HTTP 契约。服务或模型存在不表示已有可用 API；后续公开接口必须先在 API 定义 DTO、权限与 OpenAPI，再生成前端契约。
+
+批次 2 任务 2 使用 `PlatformTypesDto` 作为 Swagger extra model 暴露平台枚举，不新增业务 HTTP 入口。枚举和固定错误消息由 API 持有，contracts 只导出生成 schema 的派生类型。领域码为领域服务拥有的稳定 string，中性测试域使用 `neutral-test`；平台不预设业务分类。
+
+异常过滤器只根据稳定错误码构造固定公开消息，HTTP 5xx 始终返回 `INTERNAL_ERROR` 和通用消息，并保留服务端请求 trace。现阶段过滤器的 `fields` 默认为空；后续字段反馈必须从受控字段错误码映射固定消息，禁止直接转发异常中的字段值或任意消息。受信任调用方通过 `toErrorResponse` 构造的安全字段反馈仍予保留。

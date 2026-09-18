@@ -11,7 +11,6 @@ module.exports = {
   },
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
-    '^@qms/contracts$': '<rootDir>/../../packages/contracts/src/index.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
 };
