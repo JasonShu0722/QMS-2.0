@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +19,13 @@ assert.equal(await exists('pnpm-workspace.yaml'), true, 'workspace manifest must
 assert.equal(await exists('apps/api/package.json'), true, 'API package must exist');
 assert.equal(await exists('apps/web/package.json'), true, 'web package must exist');
 assert.equal(await exists('packages/contracts/package.json'), true, 'contracts package must exist');
+
+const workspaceManifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+assert.match(
+  workspaceManifest.scripts.test,
+  /node --test test[\\/]structure\.test\.mjs/,
+  'default test must run the qms-2.0 structure test',
+);
 
 for (const directory of ['apps', 'apps/api', 'apps/web', 'packages', 'packages/contracts', 'test', 'scripts']) {
   assert.equal(await exists(directory), true, `${directory} must exist`);

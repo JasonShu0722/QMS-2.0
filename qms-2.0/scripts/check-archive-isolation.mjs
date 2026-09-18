@@ -19,8 +19,18 @@ function search(command, args) {
   }
 }
 
-const tracked = run('git', ['ls-files', '--', 'qms-2.0']);
+function listTrackedFiles() {
+  try {
+    return run('git', ['ls-files', '--', 'qms-2.0']);
+  } catch {
+    console.error('archive isolation: FAIL (git checkout required)');
+    process.exit(1);
+  }
+}
+
+const tracked = listTrackedFiles();
 const frozenRelease = ['qms', '1.0'].join('-');
+const frozenReleasePattern = frozenRelease.replace('.', '\\.');
 const archiveSegment = ['archive', frozenRelease].join('/');
 const trackedArchive = tracked.match(new RegExp(`(?:^|\\n)(?:.*${archiveSegment.replace('/', '\\/')}.*)(?:\\n|$)`, 'g'));
 const files = [
@@ -34,7 +44,7 @@ const files = [
   'scripts/check-archive-isolation.mjs',
 ];
 const contents = await Promise.all(files.map((file) => readFile(join(root, file), 'utf8')));
-const forbidden = new RegExp(`(?:archive[\\/]${frozenRelease}|${frozenRelease})`, 'i');
+const forbidden = new RegExp(`(?:archive[\\/]${frozenReleasePattern}|${frozenReleasePattern})`, 'i');
 
 const rgMatches = search('rg', [
   '--line-number',
