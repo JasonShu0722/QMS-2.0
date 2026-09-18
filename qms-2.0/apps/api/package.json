@@ -11,7 +11,7 @@
     "dev": "node node_modules/@nestjs/cli/bin/nest.js start --watch",
     "build": "node node_modules/prisma/build/index.js generate && node node_modules/@nestjs/cli/bin/nest.js build",
     "test": "node node_modules/prisma/build/index.js generate && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns=schema.integration-spec.ts --",
-    "test:integration": "node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js migrate deploy && node node_modules/prisma/build/index.js db seed && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/database/schema.integration-spec.ts test/database/problem-workflow-schema.integration-spec.ts",
+    "test:integration": "node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js migrate deploy && node node_modules/prisma/build/index.js db seed && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/database/schema.integration-spec.ts test/database/problem-workflow-schema.integration-spec.ts test/problem-index/problem-index.integration-spec.ts",
     "lint": "node node_modules/prisma/build/index.js generate && node node_modules/typescript/bin/tsc --noEmit",
     "db:validate": "node node_modules/prisma/build/index.js validate",
     "test:db-config": "node scripts/check-prisma-config.mjs",
