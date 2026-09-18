@@ -66,6 +66,12 @@ describe('WorkflowValidationService', () => {
     expect(conditionResult.errors).toContain('WORKFLOW_SCRIPT_NOT_ALLOWED:t1');
   });
 
+  it('rejects case-insensitive script keys', () => {
+    const draft = validDraft();
+    draft.nodes[0]!.config = { assignment: { roleCode: 'QUALITY', JavaScript: 'return true' } };
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
   it('rejects invalid SLA, reminder and condition values', () => {
     const draft = validDraft();
     draft.nodes[0]!.config = { isStart: true, assignment: { roleCode: 'QUALITY' }, slaMinutes: 0, reminders: [{ offsetMinutes: -1 }] };

@@ -162,7 +162,7 @@ export class WorkflowValidationService {
     if (!value || typeof value !== 'object') return false;
     for (const [key, entry] of Object.entries(value)) {
       const normalized = key.toLowerCase();
-      if (SCRIPT_KEYS.has(key) || normalized.includes('script') || normalized === 'eval' || normalized.includes('function')) return true;
+      if (SCRIPT_KEYS.has(normalized) || normalized.includes('script') || normalized === 'eval' || normalized.includes('function')) return true;
       if (this.containsScriptKey(entry)) return true;
     }
     return false;
