@@ -340,9 +340,12 @@ model WorkflowVersion {
   id                   String                 @id @default(uuid()) @db.Uuid
   organizationId       String                 @map("organization_id") @db.Uuid
   workflowDefinitionId String                 @map("workflow_definition_id") @db.Uuid
-  version              Int
-  status               WorkflowVersionStatus @default(DRAFT)
-  publishedAt          DateTime?              @map("published_at") @db.Timestamptz(3)
+    version              Int
+    status               WorkflowVersionStatus @default(DRAFT)
+    publishedAt          DateTime?              @map("published_at") @db.Timestamptz(3)
+    publishedById        String?                @map("published_by_id") @db.Uuid
+    changeNote           String?                @map("change_note") @db.VarChar(500)
+    structureSnapshot    Json                   @default("{}") @map("structure_snapshot")
   createdById          String?                @map("created_by_id") @db.Uuid
   updatedById          String?                @map("updated_by_id") @db.Uuid
   createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)

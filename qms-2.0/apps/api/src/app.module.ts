@@ -6,6 +6,7 @@ import { FileManagementModule } from './modules/file-management/file-management.
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { TaskNotificationModule } from './modules/task-notification/task-notification.module.js';
 import { ProblemIndexModule } from './modules/problem-index/problem-index.module.js';
+import { WorkflowModule } from './modules/workflow/workflow.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ProblemIndexModule } from './modules/problem-index/problem-index.module
     FileManagementModule,
     TaskNotificationModule,
     ProblemIndexModule,
+    WorkflowModule,
   ],
 })
 export class AppModule {}
