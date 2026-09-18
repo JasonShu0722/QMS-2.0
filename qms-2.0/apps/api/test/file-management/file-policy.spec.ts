@@ -35,13 +35,20 @@ describe('file management foundation', () => {
     ).toThrow('FILE_COUNT_EXCEEDED');
   });
 
-  it('creates supplier uploads as quarantined records with UUID object keys', async () => {
+  it('creates supplier upload metadata and upload URLs with the same UUID object key', async () => {
     const prisma = {
       fileObject: {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
       },
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService());
+    const storage = {
+      createUploadUrl: jest.fn().mockImplementation((objectKey: string) => Promise.resolve({
+        objectKey,
+        url: `http://localhost:9000/qms-foundation/${objectKey}`,
+        headers: { 'content-type': 'application/pdf' },
+      })),
+    };
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage);
 
     const created = await service.initializeUpload({
       accountType: 'SUPPLIER',
@@ -55,12 +62,24 @@ describe('file management foundation', () => {
       resourceId: 'foundation-only',
     });
 
-    expect(created.status).toBe('QUARANTINED');
-    expect(created.objectKey).toMatch(
+    expect(storage.createUploadUrl).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      ),
+      'application/pdf',
+    );
+    expect(created).toMatchObject({
+      uploadUrl: `http://localhost:9000/qms-foundation/${created.metadata.objectKey}`,
+      headers: { 'content-type': 'application/pdf' },
+      metadata: {
+        status: 'QUARANTINED',
+      },
+    });
+    expect(created.metadata.objectKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(created.objectKey).not.toContain('supplier');
-    expect(created.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(created.metadata.objectKey).not.toContain('supplier');
+    expect(created.metadata.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(prisma.fileObject.create.mock.calls[0][0].data).toMatchObject({
       organizationId: '20000000-0000-4000-8000-000000000002',
       uploadedById: '10000000-0000-4000-8000-000000000002',
@@ -68,6 +87,7 @@ describe('file management foundation', () => {
       version: 1,
       status: 'QUARANTINED',
     });
+    expect(prisma.fileObject.create.mock.calls[0][0].data.objectKey).toBe(created.metadata.objectKey);
   });
 
   it('validates MIME and size before creating upload metadata', async () => {
@@ -76,13 +96,11 @@ describe('file management foundation', () => {
         create: jest.fn().mockResolvedValue({}),
       },
     };
-    const service = new FileLifecycleService(
-      prisma as never,
-      new FilePolicyService({
-        allowedMimeTypes: ['application/pdf'],
-        maxBytes: 10,
-      }),
-    );
+    const storage = { createUploadUrl: jest.fn() };
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService({
+      allowedMimeTypes: ['application/pdf'],
+      maxBytes: 10,
+    }), storage as never);
 
     await expect(
       service.initializeUpload({
@@ -96,9 +114,46 @@ describe('file management foundation', () => {
       }),
     ).rejects.toThrow('FILE_MIME_NOT_ALLOWED');
     expect(prisma.fileObject.create).not.toHaveBeenCalled();
+    expect(storage.createUploadUrl).not.toHaveBeenCalled();
   });
 
-  it('allows downloads only after scan availability and uses logical delete', async () => {
+  it('marks quarantined files available only after a clean scan', async () => {
+    const prisma = {
+      fileObject: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'file-id', status: 'AVAILABLE' }),
+      },
+    };
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
+
+    await expect(
+      service.markAvailableAfterScan('file-id', { clean: true, scanner: 'local-av' }),
+    ).resolves.toEqual({ id: 'file-id', status: 'AVAILABLE' });
+    expect(prisma.fileObject.updateMany).toHaveBeenCalledWith({
+      where: { id: 'file-id', status: 'QUARANTINED' },
+      data: { status: 'AVAILABLE' },
+    });
+  });
+
+  it('keeps failed scans quarantined and refuses the availability transition', async () => {
+    const prisma = {
+      fileObject: {
+        updateMany: jest.fn(),
+      },
+    };
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
+
+    await expect(
+      service.markAvailableAfterScan('file-id', {
+        clean: false,
+        scanner: 'local-av',
+        reason: 'malware signature',
+      }),
+    ).rejects.toThrow('FILE_SCAN_REJECTED');
+    expect(prisma.fileObject.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('allows downloads only after availability and uses logical delete', async () => {
     const prisma = {
       fileObject: {
         findUnique: jest.fn().mockResolvedValueOnce({ status: 'QUARANTINED' }).mockResolvedValueOnce({
@@ -107,7 +162,7 @@ describe('file management foundation', () => {
         update: jest.fn().mockResolvedValue({ id: 'file-id', status: 'DELETED' }),
       },
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService());
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
 
     await expect(service.assertDownloadable('file-id')).rejects.toThrow('FILE_NOT_AVAILABLE');
     await expect(service.assertDownloadable('file-id')).resolves.toEqual({ status: 'AVAILABLE' });

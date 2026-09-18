@@ -73,14 +73,15 @@ describe('transactional outbox foundation', () => {
   it('manually retries failed events by returning them to pending state', async () => {
     const prisma = {
       outboxEvent: {
-        update: jest.fn().mockResolvedValue({ id: 'event-1', status: 'PENDING' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'event-1', status: 'PENDING' }),
       },
     };
     const worker = new OutboxWorkerService(prisma as never);
 
     await expect(worker.retryFailed('event-1')).resolves.toMatchObject({ status: 'PENDING' });
-    expect(prisma.outboxEvent.update).toHaveBeenCalledWith({
-      where: { id: 'event-1' },
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'event-1', status: 'FAILED' },
       data: {
         status: 'PENDING',
         attempts: 0,
@@ -89,5 +90,23 @@ describe('transactional outbox foundation', () => {
         processedAt: null,
       },
     });
+  });
+
+  it('does not reopen processed or already pending events for manual retry', async () => {
+    const prisma = {
+      outboxEvent: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn(),
+      },
+    };
+    const worker = new OutboxWorkerService(prisma as never);
+
+    await expect(worker.retryFailed('event-1')).rejects.toThrow('OUTBOX_RETRY_REQUIRES_FAILED');
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'event-1', status: 'FAILED' },
+      }),
+    );
+    expect(prisma.outboxEvent.findUnique).not.toHaveBeenCalled();
   });
 });

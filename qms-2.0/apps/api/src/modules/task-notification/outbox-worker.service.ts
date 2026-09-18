@@ -15,7 +15,9 @@ interface OutboxEvent {
 interface OutboxClient {
   outboxEvent: {
     findMany(args: Record<string, unknown>): Promise<OutboxEvent[]>;
+    findUnique(args: Record<string, unknown>): Promise<unknown>;
     update(args: Record<string, unknown>): Promise<unknown>;
+    updateMany(args: Record<string, unknown>): Promise<{ count: number }>;
   };
 }
 
@@ -79,8 +81,8 @@ export class OutboxWorkerService {
   }
 
   async retryFailed(eventId: string): Promise<unknown> {
-    return this.prisma.outboxEvent.update({
-      where: { id: eventId },
+    const retry = await this.prisma.outboxEvent.updateMany({
+      where: { id: eventId, status: 'FAILED' },
       data: {
         status: 'PENDING',
         attempts: 0,
@@ -88,6 +90,11 @@ export class OutboxWorkerService {
         availableAt: this.now(),
         processedAt: null,
       },
+    });
+    if (retry.count !== 1) throw new Error('OUTBOX_RETRY_REQUIRES_FAILED');
+
+    return this.prisma.outboxEvent.findUnique({
+      where: { id: eventId },
     });
   }
 
