@@ -23,8 +23,14 @@ function requestValue(request: Request, source: string, field = 'organizationId'
 
 function singleString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) return value.trim();
-  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) {
-    return value[0].trim();
+  if (Array.isArray(value)) {
+    if (value.length > 1) {
+      throw new HttpException(
+        { code: 'ORGANIZATION_SCOPE_AMBIGUOUS', message: '组织范围参数不能重复' },
+        400,
+      );
+    }
+    if (typeof value[0] === 'string' && value[0].trim()) return value[0].trim();
   }
   return undefined;
 }

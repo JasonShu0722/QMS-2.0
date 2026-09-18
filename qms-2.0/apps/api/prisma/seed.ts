@@ -37,13 +37,20 @@ async function seed(): Promise<void> {
           where: { organizationId_code: { organizationId: organization.id, code: 'LOCAL_MEMBER' } },
           update: {}, create: { organizationId: organization.id, code: 'LOCAL_MEMBER', name: '本地演示成员' },
         });
-        const permission = await tx.permission.upsert({
-          where: { code: 'workbench:read' }, update: {}, create: { code: 'workbench:read', name: '查看工作台' },
-        });
-        await tx.rolePermission.upsert({
-          where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
-          update: {}, create: { roleId: role.id, permissionId: permission.id },
-        });
+        const permissions = [
+          ['workbench:read', '查看工作台'],
+          ['organization:read', '查看组织'],
+          ['system:permissions:read', '查看系统权限'],
+        ] as const;
+        for (const [code, name] of permissions) {
+          const permission = await tx.permission.upsert({
+            where: { code }, update: {}, create: { code, name },
+          });
+          await tx.rolePermission.upsert({
+            where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+            update: {}, create: { roleId: role.id, permissionId: permission.id },
+          });
+        }
         const assignment = { userId: user.id, roleId: role.id, organizationId: organization.id };
         await tx.userRole.upsert({ where: { userId_roleId_organizationId: assignment }, update: {}, create: assignment });
       }

@@ -225,6 +225,15 @@ describe('supplier isolation HTTP guard', () => {
     );
   });
 
+  it('rejects duplicate organization scope parameters as ambiguous', async () => {
+    const response = await get(
+      `/api/v1/system/permissions?organizationId=${ORG_SUPPLIER_A.id}&organizationId=${ORG_SUPPLIER_B.id}`,
+      'supplier-a-token',
+    ).expect(400);
+
+    expect(response.body.code).toBe('ORGANIZATION_SCOPE_AMBIGUOUS');
+  });
+
   it('allows an internal administrator to access each authorized supplier organization', async () => {
     const supplierA = await get(
       `/api/v1/organizations/current?organizationId=${ORG_SUPPLIER_A.id}`,
