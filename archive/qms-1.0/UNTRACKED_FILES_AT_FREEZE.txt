@@ -1,0 +1,2 @@
+backend/alembic/versions/2026_06_08_0900-c9d0e1f2a3b4_align_preview_workbench_flags.py
+docs/superpowers/plans/2026-09-18-qms-2.0-phase-0-archive.md

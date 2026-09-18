@@ -1,0 +1,277 @@
+# QMS dual-environment compose stack.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: qms_postgres
+    environment:
+      POSTGRES_DB: qms_db
+      POSTGRES_USER: qms_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - qms_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qms_user -d qms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: qms_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - qms_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  backend-stable:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qms_backend_stable
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qms_user:${DB_PASSWORD}@postgres:5432/qms_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      ENVIRONMENT: stable
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_HOURS: ${ACCESS_TOKEN_EXPIRE_HOURS:-24}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}
+      IMS_BASE_URL: ${IMS_BASE_URL:-}
+      IMS_API_KEY: ${IMS_API_KEY:-}
+      IMS_TIMEOUT: ${IMS_TIMEOUT:-30}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      REQ_PANEL_ADMIN_USERNAME: ${REQ_PANEL_ADMIN_USERNAME:-requirements_admin}
+      REQ_PANEL_ADMIN_PASSWORD: ${REQ_PANEL_ADMIN_PASSWORD:-ReqPanelAdmin@2026}
+      REQ_PANEL_ADMIN_FULL_NAME: ${REQ_PANEL_ADMIN_FULL_NAME:-需求面板管理员}
+      REQ_PANEL_VIEWER_USERNAME: ${REQ_PANEL_VIEWER_USERNAME:-requirements_viewer}
+      REQ_PANEL_VIEWER_PASSWORD: ${REQ_PANEL_VIEWER_PASSWORD:-ReqPanelViewer@2026}
+      REQ_PANEL_VIEWER_FULL_NAME: ${REQ_PANEL_VIEWER_FULL_NAME:-需求面板查阅账号}
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-52428800}
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    ports:
+      - "${QMS_BIND_IP:-127.0.0.1}:${BACKEND_STABLE_PORT:-8000}:8000"
+    networks:
+      - qms_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  frontend-stable:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_ENVIRONMENT: stable
+    container_name: qms_frontend_stable
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - qms_network
+    depends_on:
+      - backend-stable
+    restart: unless-stopped
+
+  backend-preview:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qms_backend_preview
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qms_user:${DB_PASSWORD}@postgres:5432/qms_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      ENVIRONMENT: preview
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_HOURS: ${ACCESS_TOKEN_EXPIRE_HOURS:-24}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}
+      IMS_BASE_URL: ${IMS_BASE_URL:-}
+      IMS_API_KEY: ${IMS_API_KEY:-}
+      IMS_TIMEOUT: ${IMS_TIMEOUT:-30}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      REQ_PANEL_ADMIN_USERNAME: ${REQ_PANEL_ADMIN_USERNAME:-requirements_admin}
+      REQ_PANEL_ADMIN_PASSWORD: ${REQ_PANEL_ADMIN_PASSWORD:-ReqPanelAdmin@2026}
+      REQ_PANEL_ADMIN_FULL_NAME: ${REQ_PANEL_ADMIN_FULL_NAME:-需求面板管理员}
+      REQ_PANEL_VIEWER_USERNAME: ${REQ_PANEL_VIEWER_USERNAME:-requirements_viewer}
+      REQ_PANEL_VIEWER_PASSWORD: ${REQ_PANEL_VIEWER_PASSWORD:-ReqPanelViewer@2026}
+      REQ_PANEL_VIEWER_FULL_NAME: ${REQ_PANEL_VIEWER_FULL_NAME:-需求面板查阅账号}
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-52428800}
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    ports:
+      - "${QMS_BIND_IP:-127.0.0.1}:${BACKEND_PREVIEW_PORT:-8001}:8000"
+    networks:
+      - qms_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  frontend-preview:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_ENVIRONMENT: preview
+    container_name: qms_frontend_preview
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - qms_network
+    depends_on:
+      - backend-preview
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: qms_nginx
+    environment:
+      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-qms.bigshuaibee.cn}
+      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN:-preview.qms.bigshuaibee.cn}
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates
+      NGINX_ENVSUBST_TEMPLATE_SUFFIX: .template
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+    volumes:
+      - ./deployment/nginx/nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
+      - ./deployment/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "${QMS_BIND_IP:-127.0.0.1}:${QMS_NGINX_PORT:-8081}:80"
+    networks:
+      - qms_network
+    depends_on:
+      - backend-stable
+      - backend-preview
+      - frontend-stable
+      - frontend-preview
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qms_celery_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qms_user:${DB_PASSWORD}@postgres:5432/qms_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      ENVIRONMENT: stable
+      SECRET_KEY: ${SECRET_KEY}
+      IMS_BASE_URL: ${IMS_BASE_URL:-}
+      IMS_API_KEY: ${IMS_API_KEY:-}
+      SMTP_SERVER: ${SMTP_SERVER:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    volumes:
+      - ./backend:/app
+    networks:
+      - qms_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qms_celery_beat
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qms_user:${DB_PASSWORD}@postgres:5432/qms_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+      ENVIRONMENT: stable
+      SECRET_KEY: ${SECRET_KEY}
+      IMS_BASE_URL: ${IMS_BASE_URL:-}
+      IMS_API_KEY: ${IMS_API_KEY:-}
+    volumes:
+      - ./backend:/app
+    networks:
+      - qms_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >-
+      sh -c "rm -f /tmp/celerybeat-schedule* /tmp/celerybeat.pid &&
+      celery -A app.core.celery_app beat --loglevel=info
+      --pidfile=/tmp/celerybeat.pid --schedule /tmp/celerybeat-schedule"
+    restart: unless-stopped
+
+networks:
+  qms_network:
+    driver: bridge
+    name: qms_network
+
+volumes:
+  postgres_data:
+    driver: local
+    name: qms_postgres_data
+
+  redis_data:
+    driver: local
+    name: qms_redis_data
+
+  backend_uploads:
+    driver: local
+    name: qms_backend_stable_uploads

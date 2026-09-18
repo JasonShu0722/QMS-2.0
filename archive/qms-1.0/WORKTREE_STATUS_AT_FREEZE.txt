@@ -1,0 +1,17 @@
+ M .kiro/specs/qms-foundation-and-auth/design.md
+ M .kiro/specs/qms-foundation-and-auth/requirements.md
+ M .kiro/steering/product.md
+ M .kiro/steering/structure.md
+ M backend/app/api/v1/feature_flags.py
+ M backend/app/api/v1/problem_management.py
+ M backend/app/schemas/problem_management.py
+ M backend/app/services/feature_flag_service.py
+ M backend/app/services/problem_management_service.py
+ M backend/test/test_foundation_milestone_api.py
+ M backend/test/test_problem_management_api.py
+ M deployment/doc/DEPLOYMENT_GUIDE.md
+ M docker-compose.yml
+ M frontend/src/types/problem-management.ts
+ M frontend/src/views/ProblemIssueCenter.vue
+?? backend/alembic/versions/2026_06_08_0900-c9d0e1f2a3b4_align_preview_workbench_flags.py
+?? docs/superpowers/plans/2026-09-18-qms-2.0-phase-0-archive.md

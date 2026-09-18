@@ -1,0 +1,1217 @@
+diff --git a/.kiro/specs/qms-foundation-and-auth/design.md b/.kiro/specs/qms-foundation-and-auth/design.md
+index 6b34e13..9c0a098 100644
+--- a/.kiro/specs/qms-foundation-and-auth/design.md
++++ b/.kiro/specs/qms-foundation-and-auth/design.md
+@@ -171,6 +171,7 @@ graph TD
+     classDef preview fill:#eef,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5;
+     classDef stable fill:#dfd,stroke:#333,stroke-width:2px;
+     classDef shared fill:#ffd,stroke:#333,stroke-width:3px;
++    classDef storage fill:#f8f1d4,stroke:#333,stroke-width:2px;
+ 
+     Supplier[供应商] --> Nginx
+     Staff[内部员工] --> Nginx
+@@ -185,13 +186,15 @@ graph TD
+     ApiPreview --> Postgres
+     ApiStable --> Redis[(Redis)]:::shared
+     ApiPreview --> Redis
++    ApiStable --> SharedUploads[(shared uploads)]:::storage
++    ApiPreview --> SharedUploads
+     Worker[celery-worker]:::shared --> Redis
+     Worker --> Postgres
+ ```
+ 
+ ### 双轨发布机制
+ 
+-**核心原理**：通过 Nginx 基于域名的路由规则，将请求分发到不同容器实例；`stable` 与 `preview` 共享同一个 PostgreSQL 数据库，但通过环境变量、功能开关和非破坏性迁移维持兼容。
++**核心原理**：通过 Nginx 基于域名的路由规则，将请求分发到不同容器实例；`stable` 与 `preview` 共享同一个 PostgreSQL 数据库和上传文件资产，但通过环境变量、功能开关和非破坏性迁移维持兼容。
+ 
+ **当前路由规则**：
+ 
+diff --git a/.kiro/specs/qms-foundation-and-auth/requirements.md b/.kiro/specs/qms-foundation-and-auth/requirements.md
+index 26855b0..2469522 100644
+--- a/.kiro/specs/qms-foundation-and-auth/requirements.md
++++ b/.kiro/specs/qms-foundation-and-auth/requirements.md
+@@ -306,7 +306,8 @@
+ 3. WHEN 用户访问正式域名 THEN THE QMS_System SHALL 路由请求到 Stable_Environment 容器
+ 4. WHEN 任一环境写入数据 THEN THE QMS_System SHALL 将数据存储到 Shared_Database
+ 5. WHEN 任一环境读取数据 THEN THE QMS_System SHALL 从 Shared_Database 查询数据
+-6. WHEN 用户同时具备 stable 与 preview 访问权限 THEN THE QMS_System SHALL 在前端展示环境标识与切换入口
++6. WHEN 任一环境上传头像、电子签名或业务附件 THEN THE QMS_System SHALL 使另一环境可按同一文件路径读取该上传资产
++7. WHEN 用户同时具备 stable 与 preview 访问权限 THEN THE QMS_System SHALL 在前端展示环境标识与切换入口
+ 
+ ### Requirement 15: 数据库兼容性管理
+ 
+diff --git a/.kiro/steering/product.md b/.kiro/steering/product.md
+index 8b3154d..959ac31 100644
+--- a/.kiro/steering/product.md
++++ b/.kiro/steering/product.md
+@@ -710,6 +710,7 @@ inclusion: always
+         - *代码版本*：经过验证的稳定版本。
+ - 数据共享：
+     - 原则：两个环境连接同一个 PostgreSQL 数据库，确保数据实时互通（例如：在预览版录入的测试单据，正式版也能查到，保证业务不割裂）。
++    - 用户头像、电子签名、业务附件等上传文件视为共享业务资产，需与数据库中的文件路径保持同一可访问性，避免一个环境可见、另一个环境缺失。
+ 
+ ### 2.12.2 数据库兼容性规范（针对预览版）
+ *（为防止预览版修改数据库导致正式版崩溃，系统需强制遵循以下开发约束）*
+diff --git a/.kiro/steering/structure.md b/.kiro/steering/structure.md
+index 916853e..822d0ae 100644
+--- a/.kiro/steering/structure.md
++++ b/.kiro/steering/structure.md
+@@ -147,8 +147,8 @@ graph TD
+     ApiPreview --> Postgres
+     ApiStable --> Redis[(Redis)]:::shared
+     ApiPreview --> Redis
+-    ApiStable --> UploadStable[(stable uploads)]:::storage
+-    ApiPreview --> UploadPreview[(preview uploads)]:::storage
++    ApiStable --> SharedUploads[(shared uploads)]:::storage
++    ApiPreview --> SharedUploads
+ 
+     Worker[celery-worker]:::shared --> Redis
+     Worker --> Postgres
+@@ -162,7 +162,7 @@ graph TD
+ - 两套环境共享同一个 PostgreSQL 数据库，数据库迁移必须遵守非破坏性原则。
+ - Redis 通过不同逻辑库区分部分环境和任务用途。
+ - `celery-worker` 与 `celery-beat` 属于共享异步基础设施，当前围绕通知、定时任务、后续集成能力预留运行位。
+-- 稳定环境与预览环境各自使用独立上传目录卷，避免附件与上传文件相互覆盖。
++- 稳定环境与预览环境共享同一上传目录卷，确保头像、签名、附件等文件资产与共享数据库中的文件路径保持一致。
+ - 功能开关按“环境优先，再按 global / whitelist 判断”执行可见性控制。
+ 
+ ## Development and Verification Flow
+diff --git a/backend/app/api/v1/feature_flags.py b/backend/app/api/v1/feature_flags.py
+index 0584ac5..96baac4 100644
+--- a/backend/app/api/v1/feature_flags.py
++++ b/backend/app/api/v1/feature_flags.py
+@@ -6,6 +6,7 @@ from typing import Optional
+ from fastapi import APIRouter, Depends, HTTPException, status
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
++from app.core.config import settings
+ from app.core.database import get_db
+ from app.core.dependencies import get_current_user
+ from app.models.user import User, UserType
+@@ -62,7 +63,8 @@ async def get_my_features(
+         enabled_features = await FeatureFlagService.get_user_enabled_features(
+             db=db,
+             user_id=current_user.id,
+-            supplier_id=supplier_id
++            supplier_id=supplier_id,
++            environment=settings.ENVIRONMENT,
+         )
+         
+         return UserEnabledFeaturesResponse(
+diff --git a/backend/app/api/v1/problem_management.py b/backend/app/api/v1/problem_management.py
+index b53fcc4..8a90736 100644
+--- a/backend/app/api/v1/problem_management.py
++++ b/backend/app/api/v1/problem_management.py
+@@ -241,6 +241,7 @@ async def list_problem_issue_summaries(
+     ),
+     only_created_by_me: bool = Query(False, description="Only include items created by the current user"),
+     only_overdue: bool = Query(False, description="Only include overdue items"),
++    formal_only: bool = Query(False, description="Only include formal ZXQ/ZX8D problem reports"),
+     page: int = Query(1, ge=1, description="Page number"),
+     page_size: int = Query(20, ge=1, le=100, description="Page size"),
+     db: AsyncSession = Depends(get_db),
+@@ -259,6 +260,7 @@ async def list_problem_issue_summaries(
+         only_actionable_to_me=only_actionable_to_me,
+         only_created_by_me=only_created_by_me,
+         only_overdue=only_overdue,
++        formal_only=formal_only,
+         page=page,
+         page_size=page_size,
+     )
+diff --git a/backend/app/schemas/problem_management.py b/backend/app/schemas/problem_management.py
+index 032a040..0a7eac5 100644
+--- a/backend/app/schemas/problem_management.py
++++ b/backend/app/schemas/problem_management.py
+@@ -179,6 +179,7 @@ class ProblemIssueSummaryQuery(BaseModel):
+     )
+     only_created_by_me: bool = Field(default=False, description="Only include issues created by the current user")
+     only_overdue: bool = Field(default=False, description="Only include overdue issues")
++    formal_only: bool = Field(default=False, description="Only include formal ZXQ/ZX8D problem reports")
+     page: int = Field(default=1, ge=1, description="Page number")
+     page_size: int = Field(default=20, ge=1, le=100, description="Page size")
+ 
+@@ -197,8 +198,13 @@ class ProblemIssueSummaryItem(BaseModel):
+     module_key: str = Field(..., description="Module key")
+     problem_category_key: str = Field(..., description="Problem category key")
+     problem_category_label: str = Field(..., description="Problem category label")
++    source_category_label: Optional[str] = Field(default=None, description="Source category label")
+     reference_no: Optional[str] = Field(default=None, description="Source reference number")
+     title: str = Field(..., description="Summary title")
++    cause_analysis: Optional[str] = Field(default=None, description="Cause analysis summary")
++    improvement_plan: Optional[str] = Field(default=None, description="Improvement plan summary")
++    responsibility_category: Optional[str] = Field(default=None, description="Responsibility category")
++    responsibility_category_label: Optional[str] = Field(default=None, description="Responsibility category label")
+     raw_status: str = Field(..., description="Original module status")
+     unified_status: UnifiedProblemStatus = Field(..., description="Normalized unified status")
+     responsible_dept: Optional[str] = Field(default=None, description="Responsible department")
+diff --git a/backend/app/services/feature_flag_service.py b/backend/app/services/feature_flag_service.py
+index 4242a20..a80ce90 100644
+--- a/backend/app/services/feature_flag_service.py
++++ b/backend/app/services/feature_flag_service.py
+@@ -24,7 +24,7 @@ class FeatureFlagService:
+             "feature_name": "Workbench Metrics",
+             "description": "Controls the foundation metrics block on the workbench.",
+             "environment": FeatureFlagEnvironment.PREVIEW,
+-            "is_enabled": True,
++            "is_enabled": False,
+         },
+         {
+             "feature_key": "foundation.workbench.announcements",
+@@ -38,7 +38,7 @@ class FeatureFlagService:
+             "feature_name": "Workbench Announcements",
+             "description": "Controls the announcements block on the workbench.",
+             "environment": FeatureFlagEnvironment.PREVIEW,
+-            "is_enabled": True,
++            "is_enabled": False,
+         },
+         {
+             "feature_key": "instruments.management",
+diff --git a/backend/app/services/problem_management_service.py b/backend/app/services/problem_management_service.py
+index 13daaf9..14297c1 100644
+--- a/backend/app/services/problem_management_service.py
++++ b/backend/app/services/problem_management_service.py
+@@ -23,7 +23,9 @@ from app.core.problem_management import (
+ )
+ from app.models.audit import AuditExecution, AuditNC, AuditPlan, CustomerAudit
+ from app.models.customer_complaint import ComplaintStatus, ComplaintType, CustomerComplaint, SeverityLevel
++from app.models.eight_d import EightD
+ from app.models.eight_d_customer import EightDCustomerComplaintLink
++from app.models.new_product_defect import NewProductDefect, NewProductDefectSourceType
+ from app.models.problem_report import ProblemReport, ProblemReportSource, ProblemReportStatus, ProblemRiskLevel
+ from app.models.process_defect import ProcessDefect
+ from app.models.process_issue import ProcessIssue, ProcessIssueStatus
+@@ -549,6 +551,257 @@ class ProblemManagementService:
+         }
+         return labels.get(source_type, "问题跟进")
+ 
++    @staticmethod
++    def _summary_text(value) -> str | None:
++        if value is None:
++            return None
++        if isinstance(value, str):
++            value = value.strip()
++            return value or None
++        if isinstance(value, list):
++            parts = [ProblemManagementService._summary_text(item) for item in value]
++            return "；".join(part for part in parts if part) or None
++        if isinstance(value, dict):
++            for key in [
++                "root_cause",
++                "root_cause_analysis",
++                "corrective_action",
++                "corrective_actions",
++                "action",
++                "solution",
++                "description",
++                "content",
++            ]:
++                text = ProblemManagementService._summary_text(value.get(key))
++                if text:
++                    return text
++        return str(value).strip() or None
++
++    @staticmethod
++    def _first_text(*values) -> str | None:
++        for value in values:
++            text = ProblemManagementService._summary_text(value)
++            if text:
++                return text
++        return None
++
++    @staticmethod
++    def _summary_field(payload, *keys: str) -> str | None:
++        if not isinstance(payload, dict):
++            return None
++        for key in keys:
++            text = ProblemManagementService._summary_text(payload.get(key))
++            if text:
++                return text
++        return None
++
++    @staticmethod
++    def _responsibility_category_label(value: str | None) -> str | None:
++        labels = {
++            "process_defect": "制程不良",
++            "operation_defect": "作业不良",
++            "material_defect": "物料不良",
++            "equipment_defect": "设备不良",
++            "design": "设计",
++            "tooling": "工装/模具",
++            "process": "工艺",
++            "material": "物料",
++            "equipment": "设备",
++            "other": "其他",
++        }
++        return labels.get(value or "", value)
++
++    @staticmethod
++    def _source_category_label(source_type: str, category_key: str | None = None, source_subtype: str | None = None) -> str:
++        if source_type == "customer_complaint":
++            return "0KM客诉" if category_key == "CQ0" else "售后客诉"
++        if source_type == "process_issue":
++            return "制程问题"
++        if source_type == "process_defect":
++            return "制程不良"
++        if source_type == "new_product_defect":
++            return "新品客诉" if source_subtype == NewProductDefectSourceType.CUSTOMER_COMPLAINT.value else "新品试产"
++        if source_type == "trial_issue":
++            return "试产问题"
++        if source_type == "audit_nc":
++            return "客户审核" if category_key == "AQ3" else "审核问题"
++        if source_type == "scar":
++            if category_key == "IQ0":
++                return "结构件来料"
++            if category_key == "IQ1":
++                return "电子件来料"
++            return "供应商来料"
++        return "问题来源"
++
++    @staticmethod
++    def _extract_cause_from_payload(payload: dict | None) -> str | None:
++        if not isinstance(payload, dict):
++            return None
++        return ProblemManagementService._first_text(
++            ProblemManagementService._summary_field(
++                payload,
++                "root_cause",
++                "root_cause_analysis",
++                "root_cause_initial",
++            ),
++            ProblemManagementService._summary_field(
++                payload.get("d4_root_cause"),
++                "root_cause",
++                "root_cause_analysis",
++            ),
++            ProblemManagementService._summary_field(
++                payload.get("d4_d7_data"),
++                "root_cause",
++                "root_cause_analysis",
++            ),
++            ProblemManagementService._summary_field(
++                payload.get("d4_d7_responsible"),
++                "d4_root_cause",
++                "root_cause",
++                "root_cause_analysis",
++            ),
++        )
++
++    @staticmethod
++    def _extract_improvement_from_payload(payload: dict | None) -> str | None:
++        if not isinstance(payload, dict):
++            return None
++        return ProblemManagementService._first_text(
++            ProblemManagementService._summary_field(
++                payload,
++                "corrective_action",
++                "corrective_actions",
++                "containment_action",
++                "solution",
++                "d5_corrective_actions",
++                "preventive_action",
++            ),
++            ProblemManagementService._summary_field(
++                payload.get("d4_d7_data"),
++                "corrective_action",
++                "corrective_actions",
++                "containment_action",
++                "preventive_action",
++            ),
++            ProblemManagementService._summary_field(
++                payload.get("d4_d7_responsible"),
++                "d5_corrective_actions",
++                "corrective_action",
++                "corrective_actions",
++                "solution",
++            ),
++        )
++
++    @staticmethod
++    async def _load_formal_source_summaries(
++        db: AsyncSession,
++        reports: list[ProblemReport],
++    ) -> dict[tuple[str, int], dict[str, str | None]]:
++        source_ids: dict[str, set[int]] = {}
++        for report in reports:
++            for source in report.sources or []:
++                source_ids.setdefault(source.source_type, set()).add(source.source_id)
++
++        summaries: dict[tuple[str, int], dict[str, str | None]] = {}
++
++        if source_ids.get("customer_complaint"):
++            result = await db.execute(
++                select(CustomerComplaint).where(CustomerComplaint.id.in_(source_ids["customer_complaint"]))
++            )
++            for complaint in result.scalars().all():
++                category = get_problem_category_by_customer_complaint_type(complaint.complaint_type.value)
++                summaries[("customer_complaint", complaint.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label(
++                        "customer_complaint",
++                        category.key,
++                    ),
++                    "cause_analysis": complaint.physical_analysis_summary,
++                    "improvement_plan": complaint.physical_disposition_plan,
++                    "responsibility_category": complaint.responsible_dept,
++                    "responsibility_category_label": complaint.responsible_dept,
++                    "customer_name": complaint.customer_name_snapshot or complaint.customer_code,
++                }
++
++        if source_ids.get("process_issue"):
++            result = await db.execute(select(ProcessIssue).where(ProcessIssue.id.in_(source_ids["process_issue"])))
++            for issue in result.scalars().all():
++                responsibility = ProblemManagementService._enum_value(issue.responsibility_category)
++                summaries[("process_issue", issue.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label("process_issue"),
++                    "cause_analysis": issue.root_cause,
++                    "improvement_plan": issue.corrective_action,
++                    "responsibility_category": responsibility,
++                    "responsibility_category_label": ProblemManagementService._responsibility_category_label(responsibility),
++                    "customer_name": None,
++                }
++
++        if source_ids.get("trial_issue"):
++            result = await db.execute(select(TrialIssue).where(TrialIssue.id.in_(source_ids["trial_issue"])))
++            for issue in result.scalars().all():
++                responsibility = ProblemManagementService._enum_value(issue.issue_type)
++                summaries[("trial_issue", issue.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label("trial_issue"),
++                    "cause_analysis": issue.root_cause,
++                    "improvement_plan": issue.solution,
++                    "responsibility_category": responsibility,
++                    "responsibility_category_label": ProblemManagementService._responsibility_category_label(responsibility),
++                    "customer_name": None,
++                }
++
++        if source_ids.get("audit_nc"):
++            result = await db.execute(select(AuditNC).where(AuditNC.id.in_(source_ids["audit_nc"])))
++            for nc in result.scalars().all():
++                summaries[("audit_nc", nc.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label("audit_nc"),
++                    "cause_analysis": nc.root_cause,
++                    "improvement_plan": nc.corrective_action,
++                    "responsibility_category": nc.responsible_dept,
++                    "responsibility_category_label": nc.responsible_dept,
++                    "customer_name": None,
++                }
++
++        if source_ids.get("new_product_defect"):
++            result = await db.execute(
++                select(NewProductDefect).where(NewProductDefect.id.in_(source_ids["new_product_defect"]))
++            )
++            for defect in result.scalars().all():
++                source_subtype = ProblemManagementService._enum_value(defect.source_type)
++                summaries[("new_product_defect", defect.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label(
++                        "new_product_defect",
++                        source_subtype=source_subtype,
++                    ),
++                    "cause_analysis": None,
++                    "improvement_plan": None,
++                    "responsibility_category": defect.responsible_dept,
++                    "responsibility_category_label": defect.responsible_dept,
++                    "customer_name": defect.customer_name,
++                }
++
++        if source_ids.get("scar"):
++            result = await db.execute(select(SCAR).where(SCAR.id.in_(source_ids["scar"])))
++            scars = result.scalars().all()
++            eight_d_result = await db.execute(select(EightD).where(EightD.scar_id.in_([scar.id for scar in scars])))
++            eight_d_by_scar_id = {eight_d.scar_id: eight_d for eight_d in eight_d_result.scalars().all()}
++            for scar in scars:
++                category = get_problem_category_by_scar_context(
++                    scar.material_code,
++                    scar.defect_description,
++                    scar.material_category,
++                )
++                eight_d = eight_d_by_scar_id.get(scar.id)
++                d4_d7_data = eight_d.d4_d7_data if eight_d else None
++                summaries[("scar", scar.id)] = {
++                    "source_category_label": ProblemManagementService._source_category_label("scar", category.key),
++                    "cause_analysis": ProblemManagementService._extract_cause_from_payload(d4_d7_data),
++                    "improvement_plan": ProblemManagementService._extract_improvement_from_payload(d4_d7_data),
++                    "responsibility_category": None,
++                    "responsibility_category_label": None,
++                    "customer_name": None,
++                }
++
++        return summaries
++
+     @staticmethod
+     async def _list_formal_problem_report_items(
+         db: AsyncSession,
+@@ -571,6 +824,7 @@ class ProblemManagementService:
+ 
+         result = await db.execute(stmt)
+         reports = result.scalars().unique().all()
++        source_summaries = await ProblemManagementService._load_formal_source_summaries(db, reports)
+         now = datetime.utcnow()
+         keyword = query.keyword.strip().lower() if query.keyword else None
+         customer_audit_names: dict[int, str] = {}
+@@ -617,6 +871,25 @@ class ProblemManagementService:
+                 if source_type == "audit_nc" and report.problem_category_key == "AQ3" and source_parent_id
+                 else None
+             )
++            source_summary = source_summaries.get((source_type, source_id), {})
++            cause_analysis = ProblemManagementService._first_text(
++                ProblemManagementService._extract_cause_from_payload(report.brief_response),
++                ProblemManagementService._extract_cause_from_payload(report.eight_d_payload),
++                source_summary.get("cause_analysis"),
++            )
++            improvement_plan = ProblemManagementService._first_text(
++                ProblemManagementService._extract_improvement_from_payload(report.brief_response),
++                ProblemManagementService._extract_improvement_from_payload(report.eight_d_payload),
++                source_summary.get("improvement_plan"),
++            )
++            responsibility_category = ProblemManagementService._first_text(
++                source_summary.get("responsibility_category"),
++                report.responsible_dept,
++            )
++            responsibility_category_label = ProblemManagementService._first_text(
++                source_summary.get("responsibility_category_label"),
++                responsibility_category,
++            )
+             is_overdue = bool(
+                 report.due_at
+                 and report.due_at < now
+@@ -639,8 +912,14 @@ class ProblemManagementService:
+                     module_key=report.module_key,
+                     problem_category_key=report.problem_category_key,
+                     problem_category_label=report.problem_category_label,
++                    source_category_label=source_summary.get("source_category_label")
++                    or ProblemManagementService._source_category_label(source_type, report.problem_category_key),
+                     reference_no=report.problem_number,
+                     title=report.title,
++                    cause_analysis=cause_analysis,
++                    improvement_plan=improvement_plan,
++                    responsibility_category=responsibility_category,
++                    responsibility_category_label=responsibility_category_label,
+                     raw_status=ProblemManagementService._enum_value(report.status),
+                     unified_status=unified_status,
+                     responsible_dept=report.responsible_dept,
+@@ -650,7 +929,7 @@ class ProblemManagementService:
+                     owner_id=report.owner_id,
+                     verified_by=report.verified_by,
+                     response_mode=report.response_mode,
+-                    customer_name=customer_name,
++                    customer_name=customer_name or source_summary.get("customer_name"),
+                     is_overdue=is_overdue,
+                     due_at=report.due_at,
+                     created_at=report.created_at,
+@@ -717,8 +996,16 @@ class ProblemManagementService:
+                     module_key="customer_quality",
+                     problem_category_key=category.key,
+                     problem_category_label=category.label,
++                    source_category_label=ProblemManagementService._source_category_label(
++                        "customer_complaint",
++                        category.key,
++                    ),
+                     reference_no=complaint.complaint_number,
+                     title=complaint.defect_description,
++                    cause_analysis=complaint.physical_analysis_summary,
++                    improvement_plan=complaint.physical_disposition_plan,
++                    responsibility_category=complaint.responsible_dept,
++                    responsibility_category_label=complaint.responsible_dept,
+                     raw_status=complaint.status.value,
+                     unified_status=unified_status,
+                     responsible_dept=complaint.responsible_dept,
+@@ -813,8 +1100,13 @@ class ProblemManagementService:
+                     module_key="audit_management",
+                     problem_category_key=category.key,
+                     problem_category_label=category.label,
++                    source_category_label=ProblemManagementService._source_category_label("audit_nc", category.key),
+                     reference_no=f"NC-{nc.id}",
+                     title=nc.nc_description,
++                    cause_analysis=nc.root_cause,
++                    improvement_plan=nc.corrective_action,
++                    responsibility_category=nc.responsible_dept,
++                    responsibility_category_label=nc.responsible_dept,
+                     raw_status=nc.verification_status,
+                     unified_status=unified_status,
+                     responsible_dept=nc.responsible_dept,
+@@ -912,8 +1204,15 @@ class ProblemManagementService:
+                     module_key="process_quality",
+                     problem_category_key=category.key,
+                     problem_category_label=category.label,
++                    source_category_label=ProblemManagementService._source_category_label("process_issue"),
+                     reference_no=issue.issue_number,
+                     title=issue.issue_description,
++                    cause_analysis=issue.root_cause,
++                    improvement_plan=issue.corrective_action,
++                    responsibility_category=ProblemManagementService._enum_value(issue.responsibility_category),
++                    responsibility_category_label=ProblemManagementService._responsibility_category_label(
++                        ProblemManagementService._enum_value(issue.responsibility_category)
++                    ),
+                     raw_status=issue.status.value if hasattr(issue.status, "value") else str(issue.status),
+                     unified_status=unified_status,
+                     responsible_dept=issue.responsibility_category,
+@@ -985,8 +1284,15 @@ class ProblemManagementService:
+                     module_key="new_product_quality",
+                     problem_category_key=category.key,
+                     problem_category_label=category.label,
++                    source_category_label=ProblemManagementService._source_category_label("trial_issue"),
+                     reference_no=issue.issue_number,
+                     title=issue.issue_description,
++                    cause_analysis=issue.root_cause,
++                    improvement_plan=issue.solution,
++                    responsibility_category=ProblemManagementService._enum_value(issue.issue_type),
++                    responsibility_category_label=ProblemManagementService._responsibility_category_label(
++                        ProblemManagementService._enum_value(issue.issue_type)
++                    ),
+                     raw_status=issue.status.value if hasattr(issue.status, "value") else str(issue.status),
+                     unified_status=unified_status,
+                     responsible_dept=issue.assigned_dept,
+@@ -1031,6 +1337,11 @@ class ProblemManagementService:
+ 
+         result = await db.execute(stmt)
+         rows = result.all()
++        scar_ids = [scar.id for scar, _supplier_name in rows]
++        eight_d_by_scar_id = {}
++        if scar_ids:
++            eight_d_result = await db.execute(select(EightD).where(EightD.scar_id.in_(scar_ids)))
++            eight_d_by_scar_id = {eight_d.scar_id: eight_d for eight_d in eight_d_result.scalars().all()}
+         now = datetime.utcnow()
+ 
+         items: list[ProblemIssueSummaryItem] = []
+@@ -1050,6 +1361,8 @@ class ProblemManagementService:
+             is_overdue = bool(
+                 scar.deadline and scar.deadline < now and scar.status not in [SCARStatus.APPROVED, SCARStatus.CLOSED]
+             )
++            eight_d = eight_d_by_scar_id.get(scar.id)
++            d4_d7_data = eight_d.d4_d7_data if eight_d else None
+ 
+             items.append(
+                 ProblemIssueSummaryItem(
+@@ -1059,10 +1372,15 @@ class ProblemManagementService:
+                     module_key="incoming_quality",
+                     problem_category_key=category.key,
+                     problem_category_label=category.label,
++                    source_category_label=ProblemManagementService._source_category_label("scar", category.key),
+                     eight_d_number=ProblemManagementService._format_scar_eight_d_number(scar, category.key),
+                     risk_level=ProblemManagementService._enum_value(scar.severity),
+                     reference_no=scar.scar_number,
+                     title=scar.defect_description,
++                    cause_analysis=ProblemManagementService._extract_cause_from_payload(d4_d7_data),
++                    improvement_plan=ProblemManagementService._extract_improvement_from_payload(d4_d7_data),
++                    responsibility_category=None,
++                    responsibility_category_label=None,
+                     raw_status=scar.status.value if hasattr(scar.status, "value") else str(scar.status),
+                     unified_status=unified_status,
+                     responsible_dept=None,
+@@ -1105,44 +1423,47 @@ class ProblemManagementService:
+ 
+         items: list[ProblemIssueSummaryItem] = []
+         formal_items = await ProblemManagementService._list_formal_problem_report_items(db, query)
+-        mapped_sources = {
+-            (item.source_type, item.source_id)
+-            for item in formal_items
+-            if item.source_type != "problem_report"
+-        }
+-        items.extend(formal_items)
+-
+-        def without_formal_duplicates(legacy_items: list[ProblemIssueSummaryItem]) -> list[ProblemIssueSummaryItem]:
+-            return [
+-                item
+-                for item in legacy_items
+-                if (item.source_type, item.source_id) not in mapped_sources
+-            ]
+-
+-        if query.module_key in [None, "customer_quality"]:
+-            items.extend(
+-                without_formal_duplicates(await ProblemManagementService._list_customer_quality_items(db, query))
+-            )
++        if query.formal_only:
++            items.extend(formal_items)
++        else:
++            mapped_sources = {
++                (item.source_type, item.source_id)
++                for item in formal_items
++                if item.source_type != "problem_report"
++            }
++            items.extend(formal_items)
++
++            def without_formal_duplicates(legacy_items: list[ProblemIssueSummaryItem]) -> list[ProblemIssueSummaryItem]:
++                return [
++                    item
++                    for item in legacy_items
++                    if (item.source_type, item.source_id) not in mapped_sources
++                ]
++
++            if query.module_key in [None, "customer_quality"]:
++                items.extend(
++                    without_formal_duplicates(await ProblemManagementService._list_customer_quality_items(db, query))
++                )
+ 
+-        if query.module_key in [None, "audit_management"]:
+-            items.extend(
+-                without_formal_duplicates(await ProblemManagementService._list_audit_management_items(db, query))
+-            )
++            if query.module_key in [None, "audit_management"]:
++                items.extend(
++                    without_formal_duplicates(await ProblemManagementService._list_audit_management_items(db, query))
++                )
+ 
+-        if query.module_key in [None, "process_quality"]:
+-            items.extend(
+-                without_formal_duplicates(await ProblemManagementService._list_process_quality_items(db, query))
+-            )
++            if query.module_key in [None, "process_quality"]:
++                items.extend(
++                    without_formal_duplicates(await ProblemManagementService._list_process_quality_items(db, query))
++                )
+ 
+-        if query.module_key in [None, "incoming_quality"]:
+-            items.extend(
+-                without_formal_duplicates(await ProblemManagementService._list_incoming_quality_items(db, query))
+-            )
++            if query.module_key in [None, "incoming_quality"]:
++                items.extend(
++                    without_formal_duplicates(await ProblemManagementService._list_incoming_quality_items(db, query))
++                )
+ 
+-        if query.module_key in [None, "new_product_quality"]:
+-            items.extend(
+-                without_formal_duplicates(await ProblemManagementService._list_new_product_quality_items(db, query))
+-            )
++            if query.module_key in [None, "new_product_quality"]:
++                items.extend(
++                    without_formal_duplicates(await ProblemManagementService._list_new_product_quality_items(db, query))
++                )
+ 
+         if query.risk_level:
+             items = [item for item in items if item.risk_level == query.risk_level]
+diff --git a/backend/test/test_foundation_milestone_api.py b/backend/test/test_foundation_milestone_api.py
+index 27785dd..08beaaa 100644
+--- a/backend/test/test_foundation_milestone_api.py
++++ b/backend/test/test_foundation_milestone_api.py
+@@ -528,6 +528,56 @@ async def test_internal_workbench_returns_foundation_tasks_and_feature_blocks(
+     }
+ 
+ 
++@pytest.mark.asyncio
++async def test_my_features_only_returns_current_environment_flags(
++    async_client: AsyncClient,
++    db_session: AsyncSession,
++    monkeypatch: pytest.MonkeyPatch,
++):
++    feature_user = await _create_user(
++        db_session,
++        username="feature_env_user",
++        password="FeatureEnv123!",
++        allowed_environments="stable,preview",
++    )
++    await _create_feature_flag(
++        db_session,
++        feature_key="foundation.env.stable-only",
++        feature_name="Stable Only",
++        environment=FeatureFlagEnvironment.STABLE,
++        is_enabled=True,
++    )
++    await _create_feature_flag(
++        db_session,
++        feature_key="foundation.env.preview-only",
++        feature_name="Preview Only",
++        environment=FeatureFlagEnvironment.PREVIEW,
++        is_enabled=True,
++    )
++
++    monkeypatch.setattr(settings, "ENVIRONMENT", "stable")
++    stable_response = await async_client.get(
++        "/api/v1/feature-flags/my-features",
++        headers=_bearer_token_for(feature_user),
++    )
++
++    assert stable_response.status_code == 200
++    stable_features = set(stable_response.json()["enabled_features"])
++    assert "foundation.env.stable-only" in stable_features
++    assert "foundation.env.preview-only" not in stable_features
++
++    monkeypatch.setattr(settings, "ENVIRONMENT", "preview")
++    preview_response = await async_client.get(
++        "/api/v1/feature-flags/my-features",
++        headers=_bearer_token_for(feature_user),
++    )
++
++    assert preview_response.status_code == 200
++    preview_features = set(preview_response.json()["enabled_features"])
++    assert "foundation.env.preview-only" in preview_features
++    assert "foundation.env.stable-only" not in preview_features
++
++
+ @pytest.mark.asyncio
+ async def test_supplier_workbench_returns_supplier_shape_and_safe_defaults(
+     async_client: AsyncClient, db_session: AsyncSession
+diff --git a/backend/test/test_problem_management_api.py b/backend/test/test_problem_management_api.py
+index ef14bde..a125930 100644
+--- a/backend/test/test_problem_management_api.py
++++ b/backend/test/test_problem_management_api.py
+@@ -573,6 +573,40 @@ async def test_create_brief_problem_report_from_customer_complaint_generates_for
+     assert item["reference_no"] == created_report["problem_number"]
+     assert item["risk_level"] == "high"
+ 
++    legacy_complaint_response = await async_client.post(
++        "/api/v1/customer-complaints",
++        headers=headers,
++        json={
++            "complaint_type": "after_sales",
++            "customer_code": "CUST-ZXQ-LEGACY",
++            "product_type": "MODULE-CQ",
++            "defect_description": "legacy complaint remains a source ledger before formal follow-up starts",
++            "requires_physical_analysis": False,
++            "vin_code": "LSVAA4182E2123300",
++            "mileage": 3900,
++            "purchase_date": "2024-01-15",
++        },
++    )
++    assert legacy_complaint_response.status_code == 201
++
++    mixed_summary_response = await async_client.get(
++        "/api/v1/problem-management/issues",
++        headers=headers,
++        params={"problem_category_key": "CQ1"},
++    )
++    assert mixed_summary_response.status_code == 200
++    assert mixed_summary_response.json()["total"] == 2
++
++    formal_only_response = await async_client.get(
++        "/api/v1/problem-management/issues",
++        headers=headers,
++        params={"problem_category_key": "CQ1", "formal_only": True},
++    )
++    assert formal_only_response.status_code == 200
++    formal_only_summary = formal_only_response.json()
++    assert formal_only_summary["total"] == 1
++    assert formal_only_summary["items"][0]["problem_number"] == created_report["problem_number"]
++
+     complaint_list_response = await async_client.get(
+         "/api/v1/customer-complaints",
+         headers=headers,
+@@ -754,6 +788,19 @@ async def test_process_defect_and_issue_create_formal_process_problem_report(
+     assert created_issue["problem_number"].startswith("ZXQ-PQ0-")
+     assert created_issue["problem_report_id"] is not None
+ 
++    response_submit = await async_client.post(
++        f"/api/v1/process-issues/{created_issue['id']}/response",
++        headers=headers,
++        json={
++            "root_cause": "SMT stencil cleaning interval was too long and solder paste accumulated.",
++            "containment_action": "Hold the affected lot and inspect the current WIP.",
++            "corrective_action": "Shorten stencil cleaning interval and add first-piece solder bridge confirmation.",
++            "verification_period": 7,
++            "evidence_files": [],
++        },
++    )
++    assert response_submit.status_code == 200
++
+     summary_response = await async_client.get(
+         "/api/v1/problem-management/issues",
+         headers=headers,
+@@ -769,6 +816,11 @@ async def test_process_defect_and_issue_create_formal_process_problem_report(
+     assert item["problem_number"] == created_issue["problem_number"]
+     assert item["reference_no"] == created_issue["problem_number"]
+     assert item["risk_level"] == "medium"
++    assert item["source_category_label"] == "制程问题"
++    assert item["cause_analysis"] == "SMT stencil cleaning interval was too long and solder paste accumulated."
++    assert item["improvement_plan"] == "Shorten stencil cleaning interval and add first-piece solder bridge confirmation."
++    assert item["responsibility_category"] == "process_defect"
++    assert item["responsibility_category_label"] == "制程不良"
+ 
+ 
+ @pytest.mark.asyncio
+@@ -1332,9 +1384,12 @@ async def test_get_problem_management_issue_summaries_filters_only_overdue_items
+ 
+ @pytest.mark.asyncio
+ async def test_scar_8d_submission_reassigns_review_action_to_internal_creator(
++    async_client: AsyncClient,
+     db_session: AsyncSession,
+     test_user: User,
++    test_user_token: str,
+ ):
++    headers = {"Authorization": f"Bearer {test_user_token}"}
+     now = datetime.utcnow()
+     auth_strategy = LocalAuthStrategy()
+ 
+@@ -1407,3 +1462,14 @@ async def test_scar_8d_submission_reassigns_review_action_to_internal_creator(
+     await db_session.refresh(scar)
+     assert scar.status == SCARStatus.UNDER_REVIEW
+     assert scar.current_handler_id == test_user.id
++
++    summary_response = await async_client.get(
++        "/api/v1/problem-management/issues",
++        headers=headers,
++        params={"module_key": "incoming_quality", "unified_status": "pending_review"},
++    )
++    assert summary_response.status_code == 200
++    item = summary_response.json()["items"][0]
++    assert item["source_type"] == "scar"
++    assert item["cause_analysis"] == "fixture wear caused unstable connector soldering"
++    assert item["improvement_plan"] == "replace fixture and verify soldering parameters"
+diff --git a/deployment/doc/DEPLOYMENT_GUIDE.md b/deployment/doc/DEPLOYMENT_GUIDE.md
+index fafaaa1..493439b 100644
+--- a/deployment/doc/DEPLOYMENT_GUIDE.md
++++ b/deployment/doc/DEPLOYMENT_GUIDE.md
+@@ -107,6 +107,28 @@ openssl rand -hex 32
+ openssl rand -base64 24
+ ```
+ 
++### Step 2.5: 迁移共享上传卷 (Migrate Shared Upload Volume)
++
++当前 `backend-stable` 与 `backend-preview` 共用 `qms_backend_stable_uploads` 作为上传文件卷，确保头像、电子签名和业务附件与共享数据库路径一致。
++
++如果服务器曾经运行过旧版双上传卷配置，且 `qms_backend_preview_uploads` 中可能存在预览环境独有文件，请在部署前执行一次无覆盖合并：
++
++```bash
++docker run --rm \
++  -v qms_backend_preview_uploads:/preview:ro \
++  -v qms_backend_stable_uploads:/shared \
++  alpine:3.20 sh -c '
++    cd /preview &&
++    find . -type d -exec mkdir -p "/shared/{}" \; &&
++    find . -type f -exec sh -c '"'"'
++      for file do
++        target="/shared/${file#./}"
++        [ -e "$target" ] || cp "$file" "$target"
++      done
++    '"'"' sh {} +
++  '
++```
++
+ ### Step 3: 执行自动化部署脚本 (Run Automated Deployment Script)
+ 
+ ```bash
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 8b7ec69..226cd25 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -76,7 +76,7 @@ services:
+       MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-52428800}
+     volumes:
+       - ./backend:/app
+-      - backend_stable_uploads:/app/uploads
++      - backend_uploads:/app/uploads
+     ports:
+       - "${QMS_BIND_IP:-127.0.0.1}:${BACKEND_STABLE_PORT:-8000}:8000"
+     networks:
+@@ -143,7 +143,7 @@ services:
+       MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-52428800}
+     volumes:
+       - ./backend:/app
+-      - backend_preview_uploads:/app/uploads
++      - backend_uploads:/app/uploads
+     ports:
+       - "${QMS_BIND_IP:-127.0.0.1}:${BACKEND_PREVIEW_PORT:-8001}:8000"
+     networks:
+@@ -272,10 +272,6 @@ volumes:
+     driver: local
+     name: qms_redis_data
+ 
+-  backend_stable_uploads:
++  backend_uploads:
+     driver: local
+     name: qms_backend_stable_uploads
+-
+-  backend_preview_uploads:
+-    driver: local
+-    name: qms_backend_preview_uploads
+diff --git a/frontend/src/types/problem-management.ts b/frontend/src/types/problem-management.ts
+index 1cbba5f..2bf90f4 100644
+--- a/frontend/src/types/problem-management.ts
++++ b/frontend/src/types/problem-management.ts
+@@ -76,6 +76,7 @@ export interface ProblemIssueSummaryQuery {
+   only_actionable_to_me?: boolean
+   only_created_by_me?: boolean
+   only_overdue?: boolean
++  formal_only?: boolean
+   page?: number
+   page_size?: number
+ }
+@@ -92,8 +93,13 @@ export interface ProblemIssueSummaryItem {
+   module_key: ProblemModuleKey | string
+   problem_category_key: ProblemCategoryKey | string
+   problem_category_label: string
++  source_category_label?: string | null
+   reference_no?: string | null
+   title: string
++  cause_analysis?: string | null
++  improvement_plan?: string | null
++  responsibility_category?: string | null
++  responsibility_category_label?: string | null
+   raw_status: string
+   unified_status: UnifiedProblemStatus
+   responsible_dept?: string | null
+diff --git a/frontend/src/views/ProblemIssueCenter.vue b/frontend/src/views/ProblemIssueCenter.vue
+index 4478fc8..814c7f4 100644
+--- a/frontend/src/views/ProblemIssueCenter.vue
++++ b/frontend/src/views/ProblemIssueCenter.vue
+@@ -28,28 +28,6 @@
+           </el-select>
+         </el-form-item>
+ 
+-        <el-form-item label="风险">
+-          <el-select v-model="queryForm.risk_level" clearable placeholder="全部" class="w-full md:w-32">
+-            <el-option
+-              v-for="option in riskLevelOptions"
+-              :key="option.value"
+-              :label="option.label"
+-              :value="option.value"
+-            />
+-          </el-select>
+-        </el-form-item>
+-
+-        <el-form-item label="回复形式">
+-          <el-select v-model="queryForm.response_mode" clearable placeholder="全部" class="w-full md:w-36">
+-            <el-option
+-              v-for="option in responseModeOptions"
+-              :key="option.value"
+-              :label="option.label"
+-              :value="option.value"
+-            />
+-          </el-select>
+-        </el-form-item>
+-
+         <el-form-item label="关键词">
+           <el-input
+             v-model="queryForm.keyword"
+@@ -85,105 +63,52 @@
+ 
+     <el-card v-loading="loading">
+       <el-table :data="items" stripe class="w-full">
+-        <el-table-column label="跟进编号" min-width="190">
++        <el-table-column label="问题单编号" min-width="190">
+           <template #default="{ row }">
+-            <div class="font-medium">{{ getProblemIssueTrackingNumber(row) }}</div>
++            <el-button v-if="getProblemNumber(row) !== '-'" link type="primary" @click="handleOpenSource(row)">
++              {{ getProblemNumber(row) }}
++            </el-button>
++            <span v-else>-</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column label="模块" width="120">
++        <el-table-column label="来源分类" min-width="130">
+           <template #default="{ row }">
+-            <span>{{ getProblemIssueModuleLabel(row.module_key) }}</span>
++            <span>{{ row.source_category_label || row.source_label || '-' }}</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column prop="title" label="问题标题" min-width="260" show-overflow-tooltip />
+-
+-        <el-table-column label="客户/供应商/对象" min-width="180">
++        <el-table-column label="原因分析" min-width="240" show-overflow-tooltip>
+           <template #default="{ row }">
+-            <span>{{ row.customer_name || '-' }}</span>
++            <span>{{ row.cause_analysis || '-' }}</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column prop="responsible_dept" label="责任部门" width="140">
++        <el-table-column label="改善计划" min-width="260" show-overflow-tooltip>
+           <template #default="{ row }">
+-            <span>{{ row.responsible_dept || '-' }}</span>
++            <span>{{ row.improvement_plan || '-' }}</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column label="当前责任人" min-width="220" show-overflow-tooltip>
++        <el-table-column label="责任分类" min-width="140">
+           <template #default="{ row }">
+-            <span>{{ getAssignedUserLabel(row.assigned_to) }}</span>
+-          </template>
+-        </el-table-column>
+-
+-        <el-table-column label="回复形式" width="100">
+-          <template #default="{ row }">
+-            <el-tag size="small" :type="row.response_mode === 'eight_d' ? 'primary' : 'info'">
+-              {{ getProblemIssueResponseModeLabel(row.response_mode) }}
+-            </el-tag>
++            <span>{{ row.responsibility_category_label || row.responsibility_category || '-' }}</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column label="风险" width="90">
++        <el-table-column label="责任人" min-width="180" show-overflow-tooltip>
+           <template #default="{ row }">
+-            <el-tag size="small" :type="getProblemIssueRiskLevelType(row.risk_level)">
+-              {{ getProblemIssueRiskLevelLabel(row.risk_level) }}
+-            </el-tag>
++            <span>{{ getAssignedUserLabel(row.assigned_to) }}</span>
+           </template>
+         </el-table-column>
+ 
+-        <el-table-column label="统一状态" width="120">
++        <el-table-column label="问题单进度" width="130">
+           <template #default="{ row }">
+             <el-tag :type="getUnifiedProblemStatusType(row.unified_status)">
+               {{ getUnifiedProblemStatusLabel(row.unified_status) }}
+             </el-tag>
+           </template>
+         </el-table-column>
+-
+-        <el-table-column label="时限" width="180">
+-          <template #default="{ row }">
+-            <div :class="row.is_overdue ? 'font-bold text-red-600' : ''">
+-              {{ formatDateTimeInBeijing(row.due_at) }}
+-              <el-tag v-if="row.is_overdue" type="danger" size="small" class="ml-1">超期</el-tag>
+-            </div>
+-          </template>
+-        </el-table-column>
+-
+-        <el-table-column label="更新时间" width="180">
+-          <template #default="{ row }">
+-            {{ formatDateTimeInBeijing(row.updated_at) }}
+-          </template>
+-        </el-table-column>
+-
+-        <el-table-column label="操作" width="220" fixed="right">
+-          <template #default="{ row }">
+-            <div class="flex items-center gap-2">
+-              <el-button
+-                v-if="getProblemIssueQuickActionRoute(row, currentUserId)"
+-                link
+-                type="success"
+-                @click="handleQuickAction(row)"
+-              >
+-                {{ getProblemIssueQuickActionLabel(row, currentUserId) }}
+-              </el-button>
+-              <el-button
+-                v-if="getProblemIssueSourceRoute(row)"
+-                link
+-                type="primary"
+-                @click="handleOpenSource(row)"
+-              >
+-                {{ getProblemIssueSourceActionLabel(row) }}
+-              </el-button>
+-              <span
+-                v-if="!getProblemIssueQuickActionRoute(row, currentUserId) && !getProblemIssueSourceRoute(row)"
+-                class="text-gray-400"
+-              >
+-                -
+-              </span>
+-            </div>
+-          </template>
+-        </el-table-column>
+       </el-table>
+ 
+       <div class="mt-4 flex justify-end">
+@@ -207,29 +132,17 @@ import { useRoute, useRouter } from 'vue-router'
+ import { ElMessage } from 'element-plus'
+ 
+ import { problemManagementApi } from '@/api/problem-management'
+-import { useAuthStore } from '@/stores/auth'
+ import type {
+   InternalUserOption,
+   ProblemIssueSummaryItem,
+   ProblemIssueSummaryQuery,
+   ProblemModuleKey,
+ } from '@/types/problem-management'
+-import { formatDateTimeInBeijing } from '@/utils/dateTime'
+ import { buildInternalUserLabelMap } from '@/utils/internalUsers'
+ import {
+   buildProblemIssueModuleOptions,
+-  buildProblemIssueResponseModeOptions,
+-  buildProblemIssueRiskLevelOptions,
+   buildUnifiedProblemStatusOptions,
+-  getProblemIssueModuleLabel,
+-  getProblemIssueQuickActionLabel,
+-  getProblemIssueQuickActionRoute,
+-  getProblemIssueResponseModeLabel,
+-  getProblemIssueRiskLevelLabel,
+-  getProblemIssueRiskLevelType,
+-  getProblemIssueTrackingNumber,
+   parseProblemIssueCenterRouteQuery,
+-  getProblemIssueSourceActionLabel,
+   getProblemIssueSourceRoute,
+   getUnifiedProblemStatusLabel,
+   getUnifiedProblemStatusType,
+@@ -237,7 +150,6 @@ import {
+ 
+ const route = useRoute()
+ const router = useRouter()
+-const authStore = useAuthStore()
+ 
+ const SUPPORTED_MODULE_KEYS: ProblemModuleKey[] = [
+   'customer_quality',
+@@ -252,19 +164,17 @@ const items = ref<ProblemIssueSummaryItem[]>([])
+ const total = ref(0)
+ const internalUsers = ref<InternalUserOption[]>([])
+ 
+-const currentUserId = computed(() => authStore.userInfo?.id ?? null)
+ const internalUserLabelMap = computed(() => buildInternalUserLabelMap(internalUsers.value))
+ 
+ const queryForm = reactive<ProblemIssueSummaryQuery>({
+   module_key: undefined,
+-  risk_level: undefined,
+-  response_mode: undefined,
+   unified_status: undefined,
+   keyword: undefined,
+   only_assigned_to_me: false,
+   only_actionable_to_me: false,
+   only_created_by_me: false,
+   only_overdue: false,
++  formal_only: true,
+   page: 1,
+   page_size: 20,
+ })
+@@ -273,8 +183,6 @@ const moduleOptions = buildProblemIssueModuleOptions().filter((option) =>
+   SUPPORTED_MODULE_KEYS.includes(option.value)
+ )
+ const statusOptions = buildUnifiedProblemStatusOptions()
+-const riskLevelOptions = buildProblemIssueRiskLevelOptions()
+-const responseModeOptions = buildProblemIssueResponseModeOptions()
+ 
+ watch(
+   () => route.query,
+@@ -314,18 +222,21 @@ function getAssignedUserLabel(assignedTo?: number | null) {
+   return internalUserLabelMap.value[assignedTo] || `#${assignedTo}`
+ }
+ 
++function getProblemNumber(item: ProblemIssueSummaryItem) {
++  return item.eight_d_number || item.problem_number || '-'
++}
++
+ function applyRouteQueryToForm() {
+   const parsedQuery = parseProblemIssueCenterRouteQuery(route.query)
+ 
+   queryForm.module_key = parsedQuery.module_key
+-  queryForm.risk_level = parsedQuery.risk_level
+-  queryForm.response_mode = parsedQuery.response_mode
+   queryForm.unified_status = parsedQuery.unified_status
+   queryForm.keyword = parsedQuery.keyword
+   queryForm.only_assigned_to_me = parsedQuery.only_assigned_to_me ?? false
+   queryForm.only_actionable_to_me = parsedQuery.only_actionable_to_me ?? false
+   queryForm.only_created_by_me = parsedQuery.only_created_by_me ?? false
+   queryForm.only_overdue = parsedQuery.only_overdue ?? false
++  queryForm.formal_only = true
+   queryForm.page = parsedQuery.page ?? 1
+   queryForm.page_size = parsedQuery.page_size ?? 20
+ }
+@@ -337,28 +248,18 @@ async function handleSearch() {
+ 
+ async function handleReset() {
+   queryForm.module_key = undefined
+-  queryForm.risk_level = undefined
+-  queryForm.response_mode = undefined
+   queryForm.unified_status = undefined
+   queryForm.keyword = undefined
+   queryForm.only_assigned_to_me = false
+   queryForm.only_actionable_to_me = false
+   queryForm.only_created_by_me = false
+   queryForm.only_overdue = false
++  queryForm.formal_only = true
+   queryForm.page = 1
+   queryForm.page_size = 20
+   await loadIssueSummaries()
+ }
+ 
+-function handleQuickAction(item: ProblemIssueSummaryItem) {
+-  const target = getProblemIssueQuickActionRoute(item, currentUserId.value)
+-  if (!target) {
+-    return
+-  }
+-
+-  router.push(target)
+-}
+-
+ function handleOpenSource(item: ProblemIssueSummaryItem) {
+   const target = getProblemIssueSourceRoute(item)
+   if (!target) {
