@@ -20,14 +20,6 @@ const CONTROLLED_ERROR_CODES = new Set([
   'AUTH_SESSION_REQUIRED',
   'AUTH_RATE_LIMITED',
   'CSRF_INVALID',
-  'HTTP_400',
-  'HTTP_401',
-  'HTTP_403',
-  'HTTP_404',
-  'HTTP_405',
-  'HTTP_409',
-  'HTTP_422',
-  'HTTP_429',
 ]);
 
 function safeHttpError(exception: HttpException): SafeHttpError | undefined {

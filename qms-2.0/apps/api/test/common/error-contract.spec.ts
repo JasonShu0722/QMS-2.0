@@ -27,6 +27,20 @@ describe('error response contract', () => {
     expect(actual).toMatchObject({ code: 'HTTP_400', message: '请求无法处理', fields: {} });
     expect(JSON.stringify(actual)).not.toMatch(/DATABASE_PASSWORD_LEAK|SELECT|secret/);
   });
+
+  it('does not trust generic HTTP error payload messages or fields', () => {
+    let actual: unknown;
+    const response = { status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
+    const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;
+    new GlobalExceptionFilter().catch(
+      new HttpException({ code: 'HTTP_400', message: 'SELECT token FROM sessions', fields: { token: ['secret'] } }, 400),
+      host,
+    );
+
+    expect(actual).toMatchObject({ code: 'HTTP_400', message: '请求无法处理', fields: {} });
+    expect(JSON.stringify(actual)).not.toMatch(/SELECT|token|secret/);
+  });
+
   it('returns the stable public shape', () => {
     expect(
       toErrorResponse({
