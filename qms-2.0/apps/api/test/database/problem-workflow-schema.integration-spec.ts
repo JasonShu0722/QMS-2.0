@@ -280,11 +280,13 @@ describe('problem and workflow PostgreSQL schema', () => {
       FROM information_schema.referential_constraints
       WHERE constraint_schema = 'public'
         AND (constraint_name = 'problem_indexes_organization_id_owner_id_fkey'
-          OR constraint_name = 'workflow_transitions_organization_id_workflow_version_id_from_node_id_fkey')
+          OR constraint_name LIKE 'workflow_transitions_organization_id_workflow_version_id_from_n%')
     `;
     expect(foreignKeys.map(({ constraint_name }) => constraint_name)).toEqual(expect.arrayContaining([
       'problem_indexes_organization_id_owner_id_fkey',
-      'workflow_transitions_organization_id_workflow_version_id_from_node_id_fkey',
     ]));
+    expect(foreignKeys.some(({ constraint_name }) => constraint_name.startsWith(
+      'workflow_transitions_organization_id_workflow_version_id_from_n',
+    ))).toBe(true);
   });
 });
