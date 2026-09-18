@@ -5,6 +5,8 @@ import { PrismaService } from '../../database/prisma.service.js';
 const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 1_000;
 export const OUTBOX_CLOCK = 'QMS_OUTBOX_CLOCK';
+export const OUTBOX_HANDLER = 'QMS_OUTBOX_HANDLER';
+export type OutboxHandler = (event: OutboxEvent) => Promise<void>;
 
 interface OutboxEvent {
   id: string;
@@ -28,6 +30,15 @@ export interface OutboxProcessResult {
   retried: number;
 }
 
+export async function runConfiguredWorker(
+  worker: OutboxWorkerService,
+  handler: OutboxHandler | null,
+): Promise<void> {
+  // Phase 1 has no business handlers. Do not claim pending events until configured.
+  if (typeof handler !== 'function') return;
+  await worker.processDue(25, handler);
+}
+
 @Injectable()
 export class OutboxWorkerService {
   constructor(
@@ -41,6 +52,9 @@ export class OutboxWorkerService {
     limit: number,
     handler: (event: OutboxEvent) => Promise<void>,
   ): Promise<OutboxProcessResult> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error('OUTBOX_LIMIT_INVALID');
+    }
     const client = this.prisma;
     const now = this.now();
     const events = await client.$transaction((tx) => this.claimDue(tx, limit, now));

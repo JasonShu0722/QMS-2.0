@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../src/database/prisma.service.js';
+import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FileManagementModule } from '../../src/modules/file-management/file-management.module.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
@@ -11,6 +12,35 @@ import {
 } from '../../src/modules/file-management/object-storage.service.js';
 
 describe('file management foundation', () => {
+  it('aborts the metadata transaction when upload audit fails', async () => {
+    const committed: unknown[] = [];
+    const tx = {
+      fileObject: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'file-id', ...data })) },
+      auditEvent: { create: jest.fn(async () => { throw new Error('AUDIT_UNAVAILABLE'); }) },
+    };
+    const prisma = {
+      fileObject: { create: jest.fn() },
+      auditEvent: { create: jest.fn() },
+      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => {
+        const result = await work(tx);
+        committed.push(result);
+        return result;
+      }),
+    };
+    const storage = { createUploadUrl: async (objectKey: string) => ({ objectKey,
+      url: `https://storage.test/${objectKey}?signature=secret`, headers: {} }) };
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage, new AuditLogService(prisma));
+    await expect(service.initializeUpload({ accountType: 'SUPPLIER', organizationId: 'org-id',
+      uploadedById: 'user-id', originalName: 'confidential.pdf', contentType: 'application/pdf',
+      sizeBytes: 4, bytes: Buffer.from('test'), traceId: 'upload-trace',
+    })).rejects.toThrow('AUDIT_UNAVAILABLE');
+    expect(tx.fileObject.create).toHaveBeenCalledTimes(1);
+    expect(tx.auditEvent.create).toHaveBeenCalledTimes(1);
+    expect(prisma.fileObject.create).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    expect(committed).toEqual([]);
+  });
+
   it('enforces MIME, size, and batch count limits', () => {
     const policy = new FilePolicyService({
       allowedMimeTypes: ['application/pdf', 'image/png'],
@@ -57,6 +87,8 @@ describe('file management foundation', () => {
       updatedAt: new Date('2026-09-18T00:00:00.000Z'),
     };
     const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      auditEvent: { create: jest.fn().mockResolvedValue({}) },
       fileObject: {
         create: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({
@@ -74,7 +106,7 @@ describe('file management foundation', () => {
         headers: { 'content-type': 'application/pdf' },
       })),
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage);
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage, new AuditLogService(prisma));
 
     const created = await service.initializeUpload({
       accountType: 'SUPPLIER',
@@ -129,6 +161,14 @@ describe('file management foundation', () => {
     });
     expect(prisma.fileObject.create.mock.calls[0][0].data.objectKey).toBe(created.objectKey);
     expect(prisma.fileObject.create.mock.calls[0][0].data.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'ATTACHMENT_UPLOAD_INITIALIZED', actorUserId: persistedFile.uploadedById,
+      organizationId: persistedFile.organizationId, resourceId: created.fileId,
+      traceId: expect.any(String), outcome: 'SUCCESS',
+      metadata: { fileId: created.fileId, contentType: 'application/pdf', sizeBytes: 12,
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/), status: 'QUARANTINED' },
+    }) });
   });
 
   it('validates MIME and size before creating upload metadata', async () => {
@@ -141,7 +181,7 @@ describe('file management foundation', () => {
     const service = new FileLifecycleService(prisma as never, new FilePolicyService({
       allowedMimeTypes: ['application/pdf'],
       maxBytes: 10,
-    }), storage as never);
+    }), storage as never, {} as never);
 
     await expect(
       service.initializeUpload({
@@ -165,7 +205,7 @@ describe('file management foundation', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 'file-id', status: 'AVAILABLE' }),
       },
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
 
     await expect(
       service.markAvailableAfterScan('file-id', { clean: true, scanner: 'local-av' }),
@@ -182,7 +222,7 @@ describe('file management foundation', () => {
         updateMany: jest.fn(),
       },
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
 
     await expect(
       service.markAvailableAfterScan('file-id', {
@@ -203,7 +243,7 @@ describe('file management foundation', () => {
         update: jest.fn().mockResolvedValue({ id: 'file-id', status: 'DELETED' }),
       },
     };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never);
+    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
 
     await expect(service.assertDownloadable('file-id')).rejects.toThrow('FILE_NOT_AVAILABLE');
     await expect(service.assertDownloadable('file-id')).resolves.toEqual({ status: 'AVAILABLE' });

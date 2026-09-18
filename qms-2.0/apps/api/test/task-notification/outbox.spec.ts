@@ -1,8 +1,28 @@
 import { jest } from '@jest/globals';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
-import { OutboxWorkerService } from '../../src/modules/task-notification/outbox-worker.service.js';
+import { OutboxWorkerService, runConfiguredWorker } from '../../src/modules/task-notification/outbox-worker.service.js';
 
 describe('transactional outbox foundation', () => {
+  it('does not claim pending events without an explicitly configured handler', async () => {
+    const prisma = { $transaction: jest.fn(), $queryRaw: jest.fn() };
+    await runConfiguredWorker(new OutboxWorkerService(prisma as never), null);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('runs the explicitly configured handler', async () => {
+    const worker = { processDue: jest.fn().mockResolvedValue({ processed: 0 }) };
+    const handler = jest.fn(async () => {});
+    await runConfiguredWorker(worker as never, handler);
+    expect(worker.processDue).toHaveBeenCalledWith(25, handler);
+  });
+
+  it.each([0, -1, 1.5, NaN, Infinity, 101])('rejects invalid batch limit %s before claiming', async (limit) => {
+    const prisma = { $transaction: jest.fn() };
+    await expect(new OutboxWorkerService(prisma as never).processDue(limit, async () => {}))
+      .rejects.toThrow('OUTBOX_LIMIT_INVALID');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
   it('enqueues events through the caller transaction', async () => {
     const tx = {
       outboxEvent: {

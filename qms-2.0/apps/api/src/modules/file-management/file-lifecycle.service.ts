@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
+import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FilePolicyService } from './file-policy.service.js';
 import {
   OBJECT_STORAGE,
@@ -21,9 +22,11 @@ export interface InitializeUploadInput {
   bytes: Buffer;
   resourceType?: string;
   resourceId?: string;
+  traceId?: string;
 }
 
 interface FileObjectClient {
+  $transaction<T>(work: (tx: FileObjectTransaction) => Promise<T>): Promise<T>;
   fileObject: {
     create(args: { data: Record<string, unknown> }): Promise<Record<string, unknown>>;
     findUnique(args: { where: { id: string } }): Promise<Record<string, unknown> | null>;
@@ -37,6 +40,10 @@ interface FileObjectClient {
     }): Promise<Record<string, unknown>>;
   };
 }
+
+type FileObjectTransaction = Pick<FileObjectClient, 'fileObject'> & {
+  auditEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+};
 
 export interface InitializeUploadResult {
   fileId: string;
@@ -65,6 +72,7 @@ export class FileLifecycleService {
     @Inject(PrismaService) private readonly prisma: FileObjectClient,
     private readonly filePolicy: FilePolicyService,
     @Inject(OBJECT_STORAGE) private readonly objectStorage: ObjectStorage,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async initializeUpload(input: InitializeUploadInput): Promise<InitializeUploadResult> {
@@ -79,20 +87,39 @@ export class FileLifecycleService {
     const upload = await this.objectStorage.createUploadUrl(objectKey, input.contentType);
     this.assertUploadBoundToObjectKey(upload, objectKey);
 
-    const metadata = await this.prisma.fileObject.create({
-      data: {
+    const metadata = await this.prisma.$transaction(async (tx) => {
+      const file = await tx.fileObject.create({
+        data: {
+          organizationId: input.organizationId,
+          objectKey,
+          originalName: input.originalName,
+          contentType: input.contentType,
+          sizeBytes: BigInt(input.sizeBytes),
+          sha256,
+          status,
+          version: 1,
+          resourceType: input.resourceType ?? null,
+          resourceId: input.resourceId ?? null,
+          uploadedById: input.uploadedById,
+        },
+      });
+      await this.auditLog.record({
         organizationId: input.organizationId,
-        objectKey,
-        originalName: input.originalName,
-        contentType: input.contentType,
-        sizeBytes: BigInt(input.sizeBytes),
-        sha256,
-        status,
-        version: 1,
-        resourceType: input.resourceType ?? null,
-        resourceId: input.resourceId ?? null,
-        uploadedById: input.uploadedById,
-      },
+        actorUserId: input.uploadedById,
+        action: 'ATTACHMENT_UPLOAD_INITIALIZED',
+        resourceType: 'FileObject',
+        resourceId: String(file.id),
+        outcome: 'SUCCESS',
+        traceId: input.traceId ?? randomUUID(),
+        metadata: {
+          fileId: String(file.id),
+          contentType: input.contentType,
+          sizeBytes: input.sizeBytes,
+          sha256,
+          status,
+        },
+      }, tx);
+      return file;
     });
 
     return {
