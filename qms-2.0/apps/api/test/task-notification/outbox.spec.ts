@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
-import { OutboxWorkerService, runConfiguredWorker } from '../../src/modules/task-notification/outbox-worker.service.js';
+import { OUTBOX_LEASE_MS, OutboxWorkerService, runConfiguredWorker } from '../../src/modules/task-notification/outbox-worker.service.js';
 
 describe('transactional outbox foundation', () => {
   it('does not claim pending events without an explicitly configured handler', async () => {
@@ -56,7 +56,7 @@ describe('transactional outbox foundation', () => {
 
   it('claims a limited number of pending events and applies bounded exponential retry', async () => {
     const now = new Date('2026-09-18T00:00:00.000Z');
-    const claimed = [{ id: 'event-1', attempts: 4, payload: {}, eventType: 'FOUNDATION_EVENT' }];
+    const claimed = [{ id: 'event-1', attempts: 4, payload: {}, eventType: 'FOUNDATION_EVENT', processingAt: now }];
     const prisma = {
       $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
       $queryRaw: jest.fn().mockResolvedValue(claimed),
@@ -74,11 +74,12 @@ describe('transactional outbox foundation', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith({
-      where: { id: 'event-1', status: 'PROCESSING' },
+      where: { id: 'event-1', status: 'PROCESSING', processingAt: now },
       data: expect.objectContaining({
         attempts: { increment: 1 },
         status: 'FAILED',
         lastError: 'transport unavailable',
+        processingAt: null,
       }),
     });
   });
@@ -134,6 +135,7 @@ describe('transactional outbox foundation', () => {
         lastError: null,
         availableAt: expect.any(Date),
         processedAt: null,
+        processingAt: null,
       },
     });
   });
@@ -154,5 +156,53 @@ describe('transactional outbox foundation', () => {
       }),
     );
     expect(prisma.outboxEvent.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('recovers a stuck processing event after its lease expires without consuming a handler attempt', async () => {
+    let now = new Date('2026-09-18T00:00:00.000Z');
+    const event = { id: 'stuck', attempts: 2, payload: {}, eventType: 'TEST',
+      status: 'PROCESSING', processingAt: now };
+    const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      $queryRaw: jest.fn(async (query: { sql: string; values: unknown[] }) => {
+        expect(query.sql).toContain('FOR UPDATE SKIP LOCKED');
+        expect(query.sql).toContain('"status" = \'PENDING\'');
+        expect(query.sql).toContain('OR ("status" = \'PROCESSING\'');
+        expect(query.sql).toContain('"processing_at" <=');
+        const cutoff = query.values[2] as Date;
+        if (event.processingAt > cutoff) return [];
+        event.processingAt = query.values[0] as Date;
+        return [{ ...event }];
+      }),
+      outboxEvent: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const handler = jest.fn(async () => {});
+    const worker = new OutboxWorkerService(prisma as never, () => now);
+    expect(await worker.processDue(1, handler)).toEqual({ processed: 0, failed: 0, retried: 0 });
+    now = new Date(now.getTime() + OUTBOX_LEASE_MS);
+    expect(await worker.processDue(1, handler)).toEqual({ processed: 1, failed: 0, retried: 0 });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'stuck', status: 'PROCESSING', processingAt: now },
+      data: { status: 'PROCESSED', processedAt: now, processingAt: null, lastError: null },
+    });
+  });
+
+  it('reports completion storage failures without retrying or incrementing handler attempts', async () => {
+    const processingAt = new Date();
+    const storageError = new Error('database unavailable');
+    const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue([
+        { id: 'event-1', attempts: 0, payload: {}, eventType: 'TEST', processingAt },
+      ]),
+      outboxEvent: { updateMany: jest.fn().mockRejectedValue(storageError) },
+    };
+    await expect(new OutboxWorkerService(prisma as never).processDue(1, async () => {}))
+      .rejects.toMatchObject({ message: 'OUTBOX_COMPLETION_UPDATE_FAILED', cause: storageError });
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.not.objectContaining({ attempts: expect.anything() }),
+    }));
   });
 });

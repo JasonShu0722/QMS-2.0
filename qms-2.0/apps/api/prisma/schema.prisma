@@ -192,9 +192,11 @@ model OutboxEvent {
   lastError     String?   @map("last_error") @db.Text
   availableAt   DateTime  @default(now()) @map("available_at") @db.Timestamptz(3)
   processedAt   DateTime? @map("processed_at") @db.Timestamptz(3)
+  processingAt  DateTime? @map("processing_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([status, availableAt])
+  @@index([status, processingAt])
   @@index([processedAt, availableAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")

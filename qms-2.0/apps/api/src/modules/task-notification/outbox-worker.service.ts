@@ -4,6 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 
 const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 1_000;
+export const OUTBOX_LEASE_MS = 5 * 60_000;
 export const OUTBOX_CLOCK = 'QMS_OUTBOX_CLOCK';
 export const OUTBOX_HANDLER = 'QMS_OUTBOX_HANDLER';
 export type OutboxHandler = (event: OutboxEvent) => Promise<void>;
@@ -13,6 +14,7 @@ interface OutboxEvent {
   attempts: number;
   payload: unknown;
   eventType: string;
+  processingAt: Date;
 }
 
 interface OutboxClient {
@@ -63,17 +65,13 @@ export class OutboxWorkerService {
     for (const event of events) {
       try {
         await handler(event);
-        const completion = await client.outboxEvent.updateMany({
-          where: { id: event.id, status: 'PROCESSING' },
-          data: { status: 'PROCESSED', processedAt: this.now(), lastError: null },
-        });
-        if (completion.count === 1) result.processed += 1;
       } catch (error) {
         const nextAttempts = event.attempts + 1;
         const failed = nextAttempts >= MAX_ATTEMPTS;
         const completion = await client.outboxEvent.updateMany({
-          where: { id: event.id, status: 'PROCESSING' },
+          where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
           data: {
+            processingAt: null,
             attempts: { increment: 1 },
             status: failed ? 'FAILED' : 'PENDING',
             availableAt: failed ? this.now() : this.nextAttemptAt(nextAttempts),
@@ -84,6 +82,18 @@ export class OutboxWorkerService {
           if (failed) result.failed += 1;
           else result.retried += 1;
         }
+        continue;
+      }
+      // Completion failures are infrastructure errors, not handler failures.
+      // Keep the lease so another worker can recover after it expires.
+      try {
+        const completion = await client.outboxEvent.updateMany({
+          where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
+          data: { status: 'PROCESSED', processedAt: this.now(), processingAt: null, lastError: null },
+        });
+        if (completion.count === 1) result.processed += 1;
+      } catch (error) {
+        throw new Error('OUTBOX_COMPLETION_UPDATE_FAILED', { cause: error });
       }
     }
 
@@ -99,6 +109,7 @@ export class OutboxWorkerService {
         lastError: null,
         availableAt: this.now(),
         processedAt: null,
+        processingAt: null,
       },
     });
     if (retry.count !== 1) throw new Error('OUTBOX_RETRY_REQUIRES_FAILED');
@@ -116,12 +127,13 @@ export class OutboxWorkerService {
   private claimDue(client: OutboxClient, limit: number, now: Date): Promise<OutboxEvent[]> {
     return client.$queryRaw<OutboxEvent[]>(Prisma.sql`
       UPDATE "outbox_events"
-      SET "status" = 'PROCESSING'::"OutboxStatus"
+      SET "status" = 'PROCESSING'::"OutboxStatus", "processing_at" = ${now}
       WHERE "id" IN (
         SELECT "id"
         FROM "outbox_events"
-        WHERE "status" = 'PENDING'::"OutboxStatus"
-          AND "available_at" <= ${now}
+        WHERE ("status" = 'PENDING'::"OutboxStatus" AND "available_at" <= ${now})
+          OR ("status" = 'PROCESSING'::"OutboxStatus"
+            AND "processing_at" <= ${new Date(now.getTime() - OUTBOX_LEASE_MS)})
         ORDER BY "created_at" ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
@@ -129,6 +141,7 @@ export class OutboxWorkerService {
       RETURNING
         "id",
         "attempts",
+        "processing_at" AS "processingAt",
         "payload",
         "event_type" AS "eventType"
     `);
