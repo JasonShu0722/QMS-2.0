@@ -5,6 +5,8 @@ import type { LoginDto, LoginResponseDto, SessionResponseDto } from './dto/login
 import { PasswordService } from './password.service.js';
 import { RATE_LIMIT_KEY, RateLimitService } from './rate-limit.guard.js';
 import { SessionService } from './session.service.js';
+import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { requestTraceId } from '../../common/contracts/request-trace.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -15,6 +17,7 @@ export class IdentityService {
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
     private readonly limits: RateLimitService,
+    private readonly audit: AuditLogService,
   ) {}
 
   async login(
@@ -37,11 +40,11 @@ export class IdentityService {
 
     if (!user) {
       await this.passwords.verifyUnknown(password);
-      this.rejectLogin(rateKey);
+      return this.rejectLogin(rateKey, request);
     }
 
     const passwordMatches = await this.passwords.verify(user.passwordHash, password);
-    if (!passwordMatches || user.status !== 'ACTIVE') this.rejectLogin(rateKey);
+    if (!passwordMatches || user.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
 
     this.limits.recordSuccess(rateKey);
     const sessionToken = await this.sessions.create(user.id);
@@ -65,8 +68,18 @@ export class IdentityService {
     };
   }
 
-  private rejectLogin(rateKey: string): never {
+  private async rejectLogin(
+    rateKey: string,
+    request: Request,
+    user?: { id: string; organizationId: string },
+  ): Promise<never> {
     this.limits.recordFailure(rateKey);
+    await this.audit.record({
+      actorUserId: user?.id, organizationId: user?.organizationId,
+      action: 'LOGIN_FAILED', resourceType: 'User', resourceId: user?.id,
+      outcome: 'FAILURE', traceId: requestTraceId(request),
+      metadata: { reasonCode: 'AUTH_INVALID_CREDENTIALS' },
+    });
     throw new HttpException(
       { code: 'AUTH_INVALID_CREDENTIALS', message: '账号或密码错误' },
       401,

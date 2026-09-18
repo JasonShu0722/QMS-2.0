@@ -7,8 +7,10 @@ import { IdentityService } from './identity.service.js';
 import { PasswordService } from './password.service.js';
 import { RateLimitGuard, RateLimitService } from './rate-limit.guard.js';
 import { SessionService } from './session.service.js';
+import { AuditLogModule } from '../audit-log/audit-log.module.js';
 
 @Module({
+  imports: [AuditLogModule],
   controllers: [AuthController],
   providers: [
     PasswordHasherService,

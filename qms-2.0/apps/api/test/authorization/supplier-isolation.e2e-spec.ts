@@ -111,6 +111,7 @@ function hasGrant(userId: string, organizationId: string, permission?: string): 
 describe('supplier isolation HTTP guard', () => {
   let app: INestApplication;
   const prisma = {
+    auditEvent: { create: jest.fn().mockResolvedValue({}) },
     session: {
       findUnique: jest.fn(),
     },
@@ -204,6 +205,11 @@ describe('supplier isolation HTTP guard', () => {
     });
     expect(other.body.traceId).toEqual(expect.any(String));
     expect(JSON.stringify(other.body)).not.toMatch(/SELECT|password|C:\\|stack/i);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'ACTION_REJECTED', outcome: 'DENIED', traceId: other.body.traceId,
+      actorUserId: USERS.supplierA.id, organizationId: ORG_SUPPLIER_A.id,
+      metadata: { permissionCode: 'organization:read', reasonCode: 'ORGANIZATION_SCOPE_DENIED' },
+    }) });
   });
 
   it('does not let supplier query parameters broaden the server-owned organization scope', async () => {
@@ -303,5 +309,12 @@ describe('supplier isolation HTTP guard', () => {
       organizationId: ORG_SUPPLIER_A.id,
       permissions: ['organization:read', 'system:permissions:read'],
     });
+  });
+
+  it('fails closed without leaking an audit storage error on a denied request', async () => {
+    prisma.auditEvent.create.mockRejectedValueOnce(new Error('SELECT secret FROM private_table'));
+    const response = await get('/api/v1/system/permissions', 'internal-member-token').expect(500);
+    expect(response.body.code).toBe('INTERNAL_ERROR');
+    expect(JSON.stringify(response.body)).not.toMatch(/SELECT|secret|private_table|stack/);
   });
 });

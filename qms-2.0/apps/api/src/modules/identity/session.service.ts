@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import type { CookieOptions } from 'express';
 import { PrismaService } from '../../database/prisma.service.js';
+import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { requestTraceId } from '../../common/contracts/request-trace.js';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
@@ -50,7 +52,7 @@ export function parseCookie(header: string | undefined, name: string): string | 
 
 @Injectable()
 export class SessionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
 
   private tokenHash(token: string): string {
     return createHash('sha256').update(token).digest('hex');
@@ -78,10 +80,22 @@ export class SessionService {
     return session;
   }
 
-  async revoke(token: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { tokenHash: this.tokenHash(token), revokedAt: null },
-      data: { revokedAt: new Date() },
+  async revoke(token: string, traceId = requestTraceId()): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { tokenHash: this.tokenHash(token) }, include: { user: true },
+      });
+      if (!session || session.revokedAt) return;
+      const changed = await transaction.session.updateMany({
+        where: { tokenHash: this.tokenHash(token), revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (changed.count !== 1) return;
+      await this.audit.record({
+        actorUserId: session.user.id, organizationId: session.user.organizationId,
+        action: 'SESSION_REVOKED', resourceType: 'User', resourceId: session.user.id,
+        outcome: 'SUCCESS', traceId,
+      }, transaction);
     });
   }
 }

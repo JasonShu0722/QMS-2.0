@@ -15,6 +15,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { CsrfResponseDto, LoginDto, LoginResponseDto, SessionResponseDto } from './dto/login.dto.js';
 import { IdentityService } from './identity.service.js';
 import { RateLimitGuard } from './rate-limit.guard.js';
+import { requestTraceId } from '../../common/contracts/request-trace.js';
 import {
   clearSessionCookieOptions,
   csrfCookieOptions,
@@ -74,7 +75,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
     const token = parseCookie(request.headers.cookie, SESSION_COOKIE);
-    if (token) await this.sessions.revoke(token);
+    if (token) await this.sessions.revoke(token, requestTraceId(request));
     response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
   }
 }

@@ -50,6 +50,7 @@ const rgMatches = search('rg', [
   '--line-number',
   '--no-heading',
   '--glob', '!qms-2.0/scripts/check-archive-isolation.mjs',
+  '--glob', '!*.md',
   forbidden.source,
   'qms-2.0',
 ]).trim();

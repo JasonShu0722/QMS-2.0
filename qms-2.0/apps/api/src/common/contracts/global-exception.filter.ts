@@ -6,8 +6,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { randomUUID } from 'node:crypto';
 import { toErrorResponse } from './error-response.js';
+import { requestTraceId } from './request-trace.js';
 
 interface SafeHttpError {
   code: string;
@@ -64,7 +64,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         code: status >= 500 ? 'INTERNAL_ERROR' : (safe?.code ?? `HTTP_${status}`),
         message: safe?.message ?? message,
         fields: safe?.fields,
-        traceId: randomUUID(),
+        traceId: requestTraceId(host.switchToHttp().getRequest?.()),
         cause: exception,
       }),
     );

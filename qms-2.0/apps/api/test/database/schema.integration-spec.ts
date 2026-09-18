@@ -1,6 +1,20 @@
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { sanitizeMetadata } from '../../src/common/contracts/error-response.js';
 import type { Prisma } from '../../src/generated/prisma/client.js';
+import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
+import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
+import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
+import { S3CompatibleObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
+import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
+import { OutboxWorkerService } from '../../src/modules/task-notification/outbox-worker.service.js';
+import 'reflect-metadata';
+import { jest } from '@jest/globals';
+import { Test } from '@nestjs/testing';
+import { ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from '../../src/app.module.js';
+import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
+import { SessionService } from '../../src/modules/identity/session.service.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -13,8 +27,176 @@ describe('PostgreSQL schema', () => {
   beforeAll(async () => {
     prisma = new PrismaService(databaseUrl!);
     await prisma.$connect();
+    const [version] = await prisma.$queryRaw<{ server_version_num: string }[]>`SHOW server_version_num`;
+    expect(Number(version!.server_version_num)).toBeGreaterThanOrEqual(180000);
+    expect(Number(version!.server_version_num)).toBeLessThan(190000);
   });
   afterAll(async () => prisma?.$disconnect());
+
+  it('audits actual login failures and authorization denials with matching HTTP trace IDs', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService).useValue(prisma).compile();
+    const app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    await app.init();
+    const traceIds: string[] = [];
+    const supplier = await prisma.user.findFirstOrThrow({ where: { username: 'local.supplier' } });
+    const internal = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+    const sessions = app.get(SessionService);
+    const token = await sessions.create(supplier.id);
+    try {
+      const csrf = await request(app.getHttpServer()).get('/api/v1/auth/csrf').expect(200);
+      const csrfToken = csrf.body.csrfToken as string;
+      for (const identifier of [`acceptance-missing-${crypto.randomUUID()}`, supplier.username]) {
+        const rejected = await request(app.getHttpServer()).post('/api/v1/auth/login')
+          .set('Cookie', `qms_csrf=${csrfToken}`).set('x-csrf-token', csrfToken)
+          .send({ identifier, password: 'acceptance-wrong-password' }).expect(401);
+        traceIds.push(rejected.body.traceId);
+        const audit = await prisma.auditEvent.findFirstOrThrow({ where: { traceId: rejected.body.traceId } });
+        expect(audit).toMatchObject({ action: 'LOGIN_FAILED', outcome: 'FAILURE',
+          actorUserId: identifier === supplier.username ? supplier.id : null,
+          organizationId: identifier === supplier.username ? supplier.organizationId : null });
+        expect(JSON.stringify(audit.metadata)).not.toMatch(/password|cookie|token|acceptance-missing/i);
+      }
+      const denied = await request(app.getHttpServer())
+        .get(`/api/v1/organizations/current?organizationId=${internal.id}`)
+        .set('Cookie', `qms_session=${token}`).expect(403);
+      traceIds.push(denied.body.traceId);
+      const audit = await prisma.auditEvent.findFirstOrThrow({ where: { traceId: denied.body.traceId } });
+      expect(audit).toMatchObject({ action: 'ACTION_REJECTED', outcome: 'DENIED',
+        actorUserId: supplier.id, organizationId: supplier.organizationId,
+        metadata: { permissionCode: 'organization:read', reasonCode: 'ORGANIZATION_SCOPE_DENIED' } });
+    } finally {
+      await prisma.auditEvent.deleteMany({ where: { traceId: { in: traceIds } } });
+      const session = await sessions.resolve(token);
+      if (session) await prisma.session.delete({ where: { id: session.id } });
+      await app.close();
+    }
+  });
+
+  it('rolls back session revocation when audit storage fails, then records one successful revocation', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService).useValue(prisma).compile();
+    const sessions = moduleRef.get(SessionService);
+    const audit = moduleRef.get(AuditLogService);
+    const user = await prisma.user.findFirstOrThrow({ where: { username: 'local.internal' } });
+    const token = await sessions.create(user.id);
+    const session = await sessions.resolve(token);
+    const before = await prisma.auditEvent.findMany({ where: { actorUserId: user.id, action: 'SESSION_REVOKED' }, select: { id: true } });
+    const failure = jest.spyOn(audit, 'record').mockRejectedValueOnce(new Error('acceptance audit unavailable'));
+    try {
+      await expect(sessions.revoke(token)).rejects.toThrow('acceptance audit unavailable');
+      expect((await prisma.session.findUniqueOrThrow({ where: { id: session!.id } })).revokedAt).toBeNull();
+      failure.mockRestore();
+      await sessions.revoke(token);
+      await expect(sessions.resolve(token)).resolves.toBeNull();
+      await sessions.revoke(token);
+      const records = await prisma.auditEvent.findMany({ where: {
+        actorUserId: user.id, action: 'SESSION_REVOKED', id: { notIn: before.map((entry) => entry.id) },
+      } });
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({ organizationId: user.organizationId, outcome: 'SUCCESS', metadata: {} });
+      expect(records[0]!.traceId).toEqual(expect.any(String));
+    } finally {
+      failure.mockRestore();
+      await prisma.auditEvent.deleteMany({ where: {
+        actorUserId: user.id, action: 'SESSION_REVOKED', id: { notIn: before.map((entry) => entry.id) },
+      } });
+      await prisma.session.delete({ where: { id: session!.id } });
+      await moduleRef.close();
+    }
+  });
+
+  it('persists supplier quarantine, scan transitions, logical deletion and upload audit', async () => {
+    const supplier = await prisma.user.findFirstOrThrow({ where: { username: 'local.supplier' } });
+    const traceId = crypto.randomUUID();
+    const files = new FileLifecycleService(prisma as never, new FilePolicyService(),
+      new S3CompatibleObjectStorage(), new AuditLogService(prisma as never));
+    let fileId: string | undefined;
+    try {
+      const result = await files.initializeUpload({
+        accountType: 'SUPPLIER', organizationId: supplier.organizationId, uploadedById: supplier.id,
+        originalName: 'acceptance.txt', contentType: 'text/plain', sizeBytes: 8,
+        bytes: Buffer.from('evidence'), traceId,
+      });
+      fileId = result.fileId;
+      expect(result.status).toBe('QUARANTINED');
+      expect(result.objectKey).not.toContain('acceptance');
+      await expect(files.assertDownloadable(fileId)).rejects.toThrow('FILE_NOT_AVAILABLE');
+      await expect(files.markAvailableAfterScan(fileId, { clean: false, scanner: 'acceptance' }))
+        .rejects.toThrow('FILE_SCAN_REJECTED');
+      expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: fileId } })).status).toBe('QUARANTINED');
+      await files.markAvailableAfterScan(fileId, { clean: true, scanner: 'acceptance' });
+      await expect(files.assertDownloadable(fileId)).resolves.toMatchObject({ status: 'AVAILABLE' });
+      await files.deleteLogically(fileId);
+      await expect(files.assertDownloadable(fileId)).rejects.toThrow('FILE_NOT_AVAILABLE');
+      expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: fileId } })).status).toBe('DELETED');
+      const audit = await prisma.auditEvent.findFirstOrThrow({ where: { traceId } });
+      expect(audit).toMatchObject({ action: 'ATTACHMENT_UPLOAD_INITIALIZED',
+        actorUserId: supplier.id, organizationId: supplier.organizationId, resourceId: fileId, outcome: 'SUCCESS' });
+      expect(audit.metadata).toMatchObject({ fileId, status: 'QUARANTINED', sizeBytes: 8 });
+      expect(audit.metadata).not.toHaveProperty('originalName');
+    } finally {
+      await prisma.auditEvent.deleteMany({ where: { traceId } });
+      if (fileId) await prisma.fileObject.delete({ where: { id: fileId } });
+    }
+  });
+
+  it('rolls back audit and Outbox writes in the caller transaction', async () => {
+    const traceId = crypto.randomUUID();
+    const eventKey = `acceptance-${traceId}`;
+    const rollback = new Error('acceptance rollback');
+    await expect(prisma.$transaction(async (transaction) => {
+      await new AuditLogService(prisma as never).record({
+        action: 'ACTION_REJECTED', resourceType: 'Foundation', outcome: 'DENIED', traceId,
+        metadata: { reasonCode: 'ACCEPTANCE', password: 'must-not-persist' },
+      }, transaction as never);
+      await new OutboxService(prisma as never).enqueue({
+        eventKey, aggregateType: 'Foundation', aggregateId: traceId, eventType: 'ACCEPTANCE', payload: {},
+      }, transaction as never);
+      throw rollback;
+    })).rejects.toBe(rollback);
+    expect(await prisma.auditEvent.count({ where: { traceId } })).toBe(0);
+    expect(await prisma.outboxEvent.count({ where: { eventKey } })).toBe(0);
+  });
+
+  it('retries real PostgreSQL Outbox failures, reaches the limit and recovers manually', async () => {
+    expect(await prisma.outboxEvent.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } })).toBe(0);
+    let now = new Date();
+    const worker = new OutboxWorkerService(prisma as never, () => now);
+    const event = await prisma.outboxEvent.create({ data: {
+      eventKey: `acceptance-${crypto.randomUUID()}`, aggregateType: 'Foundation',
+      aggregateId: crypto.randomUUID(), eventType: 'ACCEPTANCE', payload: {}, availableAt: now,
+    } });
+    try {
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        const result = await worker.processDue(1, async () => { throw new Error('acceptance handler failure'); });
+        expect(result).toEqual({ processed: 0, failed: attempt === 5 ? 1 : 0, retried: attempt < 5 ? 1 : 0 });
+        const persisted = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+        expect(persisted.attempts).toBe(attempt);
+        expect(persisted.status).toBe(attempt === 5 ? 'FAILED' : 'PENDING');
+        expect(persisted.lastError).toBe('acceptance handler failure');
+        if (attempt < 5) {
+          expect(persisted.availableAt.getTime() - now.getTime()).toBe(1000 * 2 ** (attempt - 1));
+          expect(await worker.processDue(1, async () => {})).toEqual({ processed: 0, failed: 0, retried: 0 });
+          now = persisted.availableAt;
+        }
+      }
+      await worker.retryFailed(event.id);
+      const pending = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+      expect(pending).toMatchObject({ status: 'PENDING', attempts: 0, lastError: null });
+      const handled: string[] = [];
+      const results = await Promise.all([worker, new OutboxWorkerService(prisma as never, () => now)]
+        .map((processor) => processor.processDue(1, async (claimed) => { handled.push(claimed.id); })));
+      expect(handled).toEqual([event.id]);
+      expect(results.reduce((total, result) => total + result.processed, 0)).toBe(1);
+      expect((await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).status).toBe('PROCESSED');
+      await expect(worker.retryFailed(event.id)).rejects.toThrow('OUTBOX_RETRY_REQUIRES_FAILED');
+    } finally {
+      await prisma.outboxEvent.delete({ where: { id: event.id } });
+    }
+  });
 
   it('rejects duplicate global role codes through the partial unique index', async () => {
     const code = `GLOBAL-${crypto.randomUUID()}`;

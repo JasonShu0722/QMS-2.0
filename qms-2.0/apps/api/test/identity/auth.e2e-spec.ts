@@ -39,6 +39,8 @@ describe('identity HTTP contract', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalRateLimitSecret = process.env.QMS_RATE_LIMIT_SECRET;
   const prisma = {
+    $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
+    auditEvent: { create: jest.fn().mockResolvedValue({}) },
     user: { findFirst: jest.fn() },
     session: {
       create: jest.fn(),
@@ -137,6 +139,14 @@ describe('identity HTTP contract', () => {
     expect(unknown.body.message).toBe(wrong.body.message);
     expect(JSON.stringify(unknown.body)).not.toMatch(/stack|sql|\\|passwordHash/i);
     expect(prisma.session.create).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'LOGIN_FAILED', outcome: 'FAILURE', traceId: unknown.body.traceId,
+      actorUserId: null, organizationId: null,
+    }) });
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'LOGIN_FAILED', traceId: wrong.body.traceId,
+      actorUserId: INTERNAL_USER.id, organizationId: INTERNAL_USER.organizationId,
+    }) });
   });
 
   it.each([
@@ -229,6 +239,10 @@ describe('identity HTTP contract', () => {
     expect(prisma.session.updateMany.mock.calls[0][0].where.tokenHash).not.toBe(
       'raw-browser-session',
     );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'SESSION_REVOKED', actorUserId: INTERNAL_USER.id, outcome: 'SUCCESS', metadata: {},
+    }) });
   });
 
   it('rate limits repeated failures without reflecting the account key', async () => {
@@ -247,5 +261,17 @@ describe('identity HTTP contract', () => {
     expect(response?.status).toBe(429);
     expect(response?.body.code).toBe('AUTH_RATE_LIMITED');
     expect(JSON.stringify(response?.body)).not.toContain(INTERNAL_USER.username);
+  });
+
+  it('fails safely when recording a failed login audit is unavailable', async () => {
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.auditEvent.create.mockRejectedValueOnce(new Error('SELECT secret FROM private_table'));
+    const protection = await csrf();
+    const response = await request(app.getHttpServer()).post('/api/v1/auth/login')
+      .set('Cookie', protection.cookie).set('x-csrf-token', protection.token)
+      .send({ identifier: 'audit-unavailable-user', password: 'wrong' }).expect(500);
+    expect(response.body.code).toBe('INTERNAL_ERROR');
+    expect(JSON.stringify(response.body)).not.toMatch(/SELECT|secret|private_table|stack/);
+    expect(prisma.session.create).not.toHaveBeenCalled();
   });
 });

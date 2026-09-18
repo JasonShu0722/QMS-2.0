@@ -66,6 +66,10 @@ docker compose -f deployment/docker-compose.foundation.yml down --volumes --remo
 
 ## Verification and CI
 
+The complete reproducible acceptance entry is `corepack pnpm acceptance:phase-1`. It requires the disposable database, seed passwords, Compose variables and a running loopback gateway in `QMS_ACCEPTANCE_BASE_URL`, then runs frozen installation, database integration, unit tests, builds, Compose configuration, archive isolation, contract synchronization and real Chromium login tests. Missing prerequisites fail instead of skipping. Install Chromium first with `corepack pnpm --filter @qms/web exec playwright install chromium`.
+
+See [foundation acceptance and handoff](docs/FOUNDATION.md) for the behavior matrix, environment and actual execution results, [OpenAPI](docs/OPENAPI.md) for the contract workflow, and [security boundaries](docs/SECURITY.md) for implemented protections and remaining deployment work. A passing configuration check is not a container build or deployment result; each evidence level is recorded separately.
+
 ```powershell
 corepack pnpm check:archive-isolation
 corepack pnpm contracts:check

@@ -5,6 +5,8 @@ import { parseCookie, SESSION_COOKIE, SessionService } from '../../modules/ident
 import { ACCESS_CONTEXT_METADATA, type AccessContextRequirement } from '../../modules/authorization/access.decorator.js';
 import { AuthorizationService, type AuthorizedSession } from '../../modules/authorization/authorization.service.js';
 import { OrganizationScopeService } from '../../modules/organization/organization-scope.service.js';
+import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
+import { requestTraceId } from '../contracts/request-trace.js';
 
 export const AUTHENTICATED_SESSION = Symbol('AUTHENTICATED_SESSION');
 
@@ -42,6 +44,7 @@ export class AuthenticatedGuard implements CanActivate {
     private readonly sessions: SessionService,
     private readonly scopes: OrganizationScopeService,
     private readonly authorization: AuthorizationService,
+    private readonly audit: AuditLogService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,20 +60,28 @@ export class AuthenticatedGuard implements CanActivate {
     const session = await this.sessions.resolve(token);
     if (!session) this.sessionRequired();
 
-    await this.authorization.assertAccess(session, requirement);
-    const target = requirement.organizationScope
-      ? singleString(
-          requestValue(
-            request,
-            requirement.organizationScope.source,
-            requirement.organizationScope.field,
-          ),
-        )
-      : undefined;
-    const organizationId = await this.scopes.fromSession(session, {
-      requestedOrganizationId: target,
-      optional: requirement.organizationScope?.optional ?? true,
-    });
+    let organizationId: string;
+    try {
+      await this.authorization.assertAccess(session, requirement);
+      const target = requirement.organizationScope
+        ? singleString(requestValue(request, requirement.organizationScope.source, requirement.organizationScope.field))
+        : undefined;
+      organizationId = await this.scopes.fromSession(session, {
+        requestedOrganizationId: target,
+        optional: requirement.organizationScope?.optional ?? true,
+      });
+    } catch (error) {
+      if (error instanceof HttpException && [400, 403].includes(error.getStatus())) {
+        const payload = error.getResponse() as { code: string };
+        await this.audit.record({
+          actorUserId: session.user.id, organizationId: session.user.organizationId,
+          action: 'ACTION_REJECTED', resourceType: 'Authorization', outcome: 'DENIED',
+          traceId: requestTraceId(request),
+          metadata: { permissionCode: requirement.featurePermission, reasonCode: payload.code },
+        });
+      }
+      throw error;
+    }
     request[AUTHENTICATED_SESSION] = session;
     request.authorizedOrganizationId = organizationId;
     return true;

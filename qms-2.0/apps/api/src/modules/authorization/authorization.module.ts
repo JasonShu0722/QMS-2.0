@@ -5,9 +5,10 @@ import { IdentityModule } from '../identity/identity.module.js';
 import { OrganizationModule } from '../organization/organization.module.js';
 import { AuthorizationService } from './authorization.service.js';
 import { PermissionsController } from './permissions.controller.js';
+import { AuditLogModule } from '../audit-log/audit-log.module.js';
 
 @Module({
-  imports: [IdentityModule, OrganizationModule],
+  imports: [IdentityModule, OrganizationModule, AuditLogModule],
   controllers: [PermissionsController],
   providers: [
     AuthorizationService,

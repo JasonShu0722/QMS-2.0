@@ -2,8 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './playwright',
+  workers: 1,
+  retries: 0,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL,
+    baseURL: process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
+    trace: 'off',
+    screenshot: 'off',
+    video: 'off',
   },
 });
-

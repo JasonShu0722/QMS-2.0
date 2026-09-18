@@ -79,4 +79,18 @@ describe('trusted proxy client IP', () => {
       .set('X-Forwarded-For', '198.51.100.10').expect(200);
     expect(forged.body).toEqual(direct.body);
   });
+
+  it('blocks an exhausted client without blocking another client or accepting a forged prefix', async () => {
+    await createApp('1');
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await request(app.getHttpServer()).get('/probe')
+        .set('X-Forwarded-For', '198.51.100.10').expect(200);
+    }
+    await request(app.getHttpServer()).get('/probe')
+      .set('X-Forwarded-For', '198.51.100.10').expect(429);
+    await request(app.getHttpServer()).get('/probe')
+      .set('X-Forwarded-For', '203.0.113.99, 198.51.100.10').expect(429);
+    await request(app.getHttpServer()).get('/probe')
+      .set('X-Forwarded-For', '198.51.100.11').expect(200);
+  });
 });

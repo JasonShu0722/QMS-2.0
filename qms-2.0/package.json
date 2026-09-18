@@ -14,7 +14,8 @@
     "lint": "pnpm --recursive lint",
     "contracts:generate": "node scripts/generate-contracts.mjs",
     "contracts:check": "node scripts/check-openapi-sync.mjs",
-    "check:archive-isolation": "node scripts/check-archive-isolation.mjs"
+    "check:archive-isolation": "node scripts/check-archive-isolation.mjs",
+    "acceptance:phase-1": "node test/phase-1-acceptance.mjs"
   },
   "devDependencies": {
     "openapi-typescript": "7.10.1"
