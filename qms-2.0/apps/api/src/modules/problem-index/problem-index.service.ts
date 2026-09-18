@@ -47,6 +47,7 @@ export interface ProblemIndexPageInput {
 }
 
 interface ProblemIndexClient {
+  $executeRaw?: (query: TemplateStringsArray, ...values: unknown[]) => Promise<number>;
   problemIndex: {
     findFirst(args: { where: Record<string, unknown>; orderBy?: Record<string, unknown> }): Promise<Record<string, unknown> | null>;
     findUnique(args: { where: Record<string, unknown> }): Promise<Record<string, unknown> | null>;
@@ -80,6 +81,13 @@ export class ProblemIndexService {
     input: CreateProblemIndexInput,
   ): Promise<Record<string, unknown>> {
     this.assertCreateInput(input);
+    if (input.sourceId && transaction.$executeRaw) {
+      await transaction.$executeRaw`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${input.organizationId}:${input.sourceType}:${input.sourceId}`}, 0)
+        )
+      `;
+    }
     const existing = input.sourceId
       ? await transaction.problemIndex.findFirst({
         where: { organizationId: input.organizationId, sourceType: input.sourceType, sourceId: input.sourceId },
