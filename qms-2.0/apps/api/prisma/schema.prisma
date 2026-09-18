@@ -28,6 +28,12 @@ enum FileStatus {
   DELETED
 }
 
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
 model Organization {
   id          String           @id @default(uuid()) @db.Uuid
   code        String           @unique @db.VarChar(64)
@@ -180,12 +186,14 @@ model OutboxEvent {
   aggregateId   String    @map("aggregate_id") @db.VarChar(128)
   eventType     String    @map("event_type") @db.VarChar(150)
   payload       Json
+  status        OutboxStatus @default(PENDING)
   attempts      Int       @default(0)
   lastError     String?   @map("last_error") @db.Text
   availableAt   DateTime  @default(now()) @map("available_at") @db.Timestamptz(3)
   processedAt   DateTime? @map("processed_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  @@index([status, availableAt])
   @@index([processedAt, availableAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")

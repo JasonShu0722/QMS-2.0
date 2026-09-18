@@ -1,5 +1,5 @@
 node_modules/
-apps/api/src/generated/prisma/
+apps/api/src/generated/
 dist/
 coverage/
 .env
