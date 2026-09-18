@@ -1,6 +1,10 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { AccessContextRequirement } from './access.decorator.js';
+import {
+  PLATFORM_ERROR_MESSAGES,
+  type PlatformErrorCode,
+} from '../../common/contracts/platform-error.js';
 
 export interface AuthorizedSessionUser {
   id: string;
@@ -22,8 +26,9 @@ export class AuthorizationService {
     requirement: AccessContextRequirement,
   ): Promise<void> {
     if (requirement.workflowPermission) {
+      const code: PlatformErrorCode = 'WORKFLOW_PERMISSION_REQUIRED';
       throw new HttpException(
-        { code: 'WORKFLOW_PERMISSION_REQUIRED', message: '流程权限尚未启用' },
+        { code, message: PLATFORM_ERROR_MESSAGES[code] },
         403,
       );
     }

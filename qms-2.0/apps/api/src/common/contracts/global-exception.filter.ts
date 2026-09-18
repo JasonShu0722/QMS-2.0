@@ -8,6 +8,7 @@ import {
 import type { Response } from 'express';
 import { toErrorResponse } from './error-response.js';
 import { requestTraceId } from './request-trace.js';
+import { PLATFORM_ERROR_CODES } from './platform-error.js';
 
 interface SafeHttpError {
   code: string;
@@ -24,6 +25,7 @@ const CONTROLLED_ERROR_CODES = new Set([
   'ORGANIZATION_SCOPE_AMBIGUOUS',
   'ORGANIZATION_SCOPE_DENIED',
   'WORKFLOW_PERMISSION_REQUIRED',
+  ...PLATFORM_ERROR_CODES,
 ]);
 
 function safeHttpError(exception: HttpException): SafeHttpError | undefined {
