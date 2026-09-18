@@ -1,0 +1,18 @@
+{
+  "name": "@qms/workspace",
+  "private": true,
+  "version": "2.0.0",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.22.0 <23",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @qms/api --filter @qms/web dev",
+    "test": "pnpm --recursive test",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint",
+    "contracts:check": "pnpm --filter @qms/contracts build",
+    "check:archive-isolation": "node scripts/check-archive-isolation.mjs"
+  }
+}

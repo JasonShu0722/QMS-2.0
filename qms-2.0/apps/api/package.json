@@ -1,0 +1,28 @@
+{
+  "name": "@qms/api",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0 <23",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "dev": "node node_modules/@nestjs/cli/bin/nest.js start --watch",
+    "build": "node node_modules/@nestjs/cli/bin/nest.js build",
+    "test": "node --test",
+    "lint": "node node_modules/typescript/bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  }
+}
