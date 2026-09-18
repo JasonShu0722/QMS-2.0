@@ -14,6 +14,7 @@
     "test:integration": "node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js migrate deploy && node node_modules/prisma/build/index.js db seed && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/database/schema.integration-spec.ts",
     "lint": "node node_modules/prisma/build/index.js generate && node node_modules/typescript/bin/tsc --noEmit",
     "db:validate": "node node_modules/prisma/build/index.js validate",
+    "test:db-config": "node scripts/check-prisma-config.mjs",
     "db:generate": "node node_modules/prisma/build/index.js generate",
     "db:migrate:deploy": "node node_modules/prisma/build/index.js migrate deploy",
     "db:seed": "node node_modules/prisma/build/index.js db seed"
