@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
+import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
@@ -53,6 +54,9 @@ describe('identity HTTP contract', () => {
       .useValue(prisma)
       .compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });
@@ -129,6 +133,27 @@ describe('identity HTTP contract', () => {
     expect(unknown.body.message).toBe(wrong.body.message);
     expect(JSON.stringify(unknown.body)).not.toMatch(/stack|sql|\\|passwordHash/i);
     expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ identifier: '', password: 'x' }],
+    [{ identifier: 'valid.user', password: '' }],
+    [{ identifier: 42, password: 'x' }],
+    [null],
+    [{ identifier: 'valid.user', password: 'x', unexpected: true }],
+  ])('rejects malformed login payload %j with controlled validation response', async (payload) => {
+    const protection = await csrf();
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('Cookie', protection.cookie)
+      .set('x-csrf-token', protection.token)
+      .send(payload)
+      .expect(400);
+
+    expect(response.body.code).toBe('HTTP_400');
+    expect(response.body.message).toBe('请求无法处理');
+    expect(JSON.stringify(response.body)).not.toMatch(/TypeError|stack|passwordHash|sql/i);
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
   });
 
   it('does not authenticate a disabled account', async () => {

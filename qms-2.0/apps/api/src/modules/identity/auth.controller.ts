@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
-import type { LoginDto } from './dto/login.dto.js';
+import { LoginDto } from './dto/login.dto.js';
 import { IdentityService } from './identity.service.js';
 import { RateLimitGuard } from './rate-limit.guard.js';
 import {

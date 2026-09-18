@@ -15,6 +15,21 @@ interface SafeHttpError {
   fields?: Record<string, string[]>;
 }
 
+const CONTROLLED_ERROR_CODES = new Set([
+  'AUTH_INVALID_CREDENTIALS',
+  'AUTH_SESSION_REQUIRED',
+  'AUTH_RATE_LIMITED',
+  'CSRF_INVALID',
+  'HTTP_400',
+  'HTTP_401',
+  'HTTP_403',
+  'HTTP_404',
+  'HTTP_405',
+  'HTTP_409',
+  'HTTP_422',
+  'HTTP_429',
+]);
+
 function safeHttpError(exception: HttpException): SafeHttpError | undefined {
   const payload = exception.getResponse();
   if (
@@ -41,7 +56,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const status = isHttp
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
-    const safe = isHttp ? safeHttpError(exception) : undefined;
+    const candidate = isHttp ? safeHttpError(exception) : undefined;
+    const safe = candidate && CONTROLLED_ERROR_CODES.has(candidate.code)
+      ? candidate
+      : undefined;
     // Exception messages can contain submitted secrets or database diagnostics.
     const message = status >= 500 ? '服务暂时不可用' : '请求无法处理';
 

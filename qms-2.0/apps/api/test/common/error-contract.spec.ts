@@ -14,6 +14,19 @@ describe('error response contract', () => {
     expect(JSON.stringify(actual)).not.toMatch(/secret|SELECT|private|password/);
     expect(actual).toMatchObject({ code: status >= 500 ? 'INTERNAL_ERROR' : `HTTP_${status}`, fields: {} });
   });
+
+  it('maps an unknown downstream error code to the safe HTTP contract', () => {
+    let actual: unknown;
+    const response = { status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
+    const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;
+    new GlobalExceptionFilter().catch(
+      new HttpException({ code: 'DATABASE_PASSWORD_LEAK', message: 'SELECT password FROM users', fields: { secret: ['x'] } }, 400),
+      host,
+    );
+
+    expect(actual).toMatchObject({ code: 'HTTP_400', message: '请求无法处理', fields: {} });
+    expect(JSON.stringify(actual)).not.toMatch(/DATABASE_PASSWORD_LEAK|SELECT|secret/);
+  });
   it('returns the stable public shape', () => {
     expect(
       toErrorResponse({
