@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { FilePolicyService } from './file-policy.service.js';
 import {
-  LocalMinioObjectStorage,
+  OBJECT_STORAGE,
   type ObjectStorage,
   type UploadUrl,
 } from './object-storage.service.js';
@@ -39,9 +39,18 @@ interface FileObjectClient {
 }
 
 export interface InitializeUploadResult {
+  fileId: string;
+  status: FileStatus;
   uploadUrl: string;
   headers: Record<string, string>;
-  metadata: Record<string, unknown>;
+  objectKey: string;
+  metadata: {
+    originalName: string;
+    contentType: string;
+    sizeBytes: number | string;
+    resourceType: string | null;
+    resourceId: string | null;
+  };
 }
 
 export interface FileScanResult {
@@ -55,7 +64,7 @@ export class FileLifecycleService {
   constructor(
     @Inject(PrismaService) private readonly prisma: FileObjectClient,
     private readonly filePolicy: FilePolicyService,
-    @Inject(LocalMinioObjectStorage) private readonly objectStorage: ObjectStorage,
+    @Inject(OBJECT_STORAGE) private readonly objectStorage: ObjectStorage,
   ) {}
 
   async initializeUpload(input: InitializeUploadInput): Promise<InitializeUploadResult> {
@@ -87,9 +96,18 @@ export class FileLifecycleService {
     });
 
     return {
+      fileId: String(metadata.id),
+      status,
       uploadUrl: upload.url,
       headers: upload.headers,
-      metadata,
+      objectKey,
+      metadata: {
+        originalName: String(metadata.originalName),
+        contentType: String(metadata.contentType),
+        sizeBytes: this.toJsonSafeSize(metadata.sizeBytes),
+        resourceType: metadata.resourceType === null ? null : String(metadata.resourceType),
+        resourceId: metadata.resourceId === null ? null : String(metadata.resourceId),
+      },
     };
   }
 
@@ -127,5 +145,14 @@ export class FileLifecycleService {
 
   private assertUploadBoundToObjectKey(upload: UploadUrl, objectKey: string): void {
     if (upload.objectKey !== objectKey) throw new Error('UPLOAD_URL_OBJECT_KEY_MISMATCH');
+  }
+
+  private toJsonSafeSize(sizeBytes: unknown): number | string {
+    if (typeof sizeBytes === 'bigint') {
+      if (sizeBytes <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(sizeBytes);
+      return sizeBytes.toString();
+    }
+    if (typeof sizeBytes === 'number') return sizeBytes;
+    return String(sizeBytes);
   }
 }

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 
 const MAX_ATTEMPTS = 5;
@@ -13,10 +14,10 @@ interface OutboxEvent {
 }
 
 interface OutboxClient {
+  $transaction<T>(work: (tx: OutboxClient) => Promise<T>): Promise<T>;
+  $queryRaw<T>(query: unknown): Promise<T>;
   outboxEvent: {
-    findMany(args: Record<string, unknown>): Promise<OutboxEvent[]>;
     findUnique(args: Record<string, unknown>): Promise<unknown>;
-    update(args: Record<string, unknown>): Promise<unknown>;
     updateMany(args: Record<string, unknown>): Promise<{ count: number }>;
   };
 }
@@ -42,38 +43,33 @@ export class OutboxWorkerService {
   ): Promise<OutboxProcessResult> {
     const client = this.prisma;
     const now = this.now();
-    const events = await client.outboxEvent.findMany({
-      take: limit,
-      orderBy: { createdAt: 'asc' },
-      where: {
-        status: 'PENDING',
-        availableAt: { lte: now },
-      },
-    });
+    const events = await client.$transaction((tx) => this.claimDue(tx, limit, now));
     const result: OutboxProcessResult = { processed: 0, failed: 0, retried: 0 };
 
     for (const event of events) {
       try {
         await handler(event);
-        await client.outboxEvent.update({
-          where: { id: event.id },
+        const completion = await client.outboxEvent.updateMany({
+          where: { id: event.id, status: 'PROCESSING' },
           data: { status: 'PROCESSED', processedAt: this.now(), lastError: null },
         });
-        result.processed += 1;
+        if (completion.count === 1) result.processed += 1;
       } catch (error) {
         const nextAttempts = event.attempts + 1;
         const failed = nextAttempts >= MAX_ATTEMPTS;
-        await client.outboxEvent.update({
-          where: { id: event.id },
+        const completion = await client.outboxEvent.updateMany({
+          where: { id: event.id, status: 'PROCESSING' },
           data: {
             attempts: { increment: 1 },
             status: failed ? 'FAILED' : 'PENDING',
-            availableAt: failed ? eventAvailableNow(this.now()) : this.nextAttemptAt(nextAttempts),
+            availableAt: failed ? this.now() : this.nextAttemptAt(nextAttempts),
             lastError: errorMessage(error),
           },
         });
-        if (failed) result.failed += 1;
-        else result.retried += 1;
+        if (completion.count === 1) {
+          if (failed) result.failed += 1;
+          else result.retried += 1;
+        }
       }
     }
 
@@ -102,10 +98,27 @@ export class OutboxWorkerService {
     const delay = BASE_BACKOFF_MS * 2 ** Math.max(0, attempts - 1);
     return new Date(this.now().getTime() + delay);
   }
-}
 
-function eventAvailableNow(now: Date): Date {
-  return now;
+  private claimDue(client: OutboxClient, limit: number, now: Date): Promise<OutboxEvent[]> {
+    return client.$queryRaw<OutboxEvent[]>(Prisma.sql`
+      UPDATE "outbox_events"
+      SET "status" = 'PROCESSING'::"OutboxStatus"
+      WHERE "id" IN (
+        SELECT "id"
+        FROM "outbox_events"
+        WHERE "status" = 'PENDING'::"OutboxStatus"
+          AND "available_at" <= ${now}
+        ORDER BY "created_at" ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING
+        "id",
+        "attempts",
+        "payload",
+        "event_type" AS "eventType"
+    `);
+  }
 }
 
 function errorMessage(error: unknown): string {

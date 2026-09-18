@@ -30,6 +30,7 @@ enum FileStatus {
 
 enum OutboxStatus {
   PENDING
+  PROCESSING
   PROCESSED
   FAILED
 }

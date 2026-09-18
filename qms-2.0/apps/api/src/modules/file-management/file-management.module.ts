@@ -1,10 +1,19 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from '../../database/database.module.js';
 import { FileLifecycleService } from './file-lifecycle.service.js';
 import { FilePolicyService } from './file-policy.service.js';
-import { LocalMinioObjectStorage } from './object-storage.service.js';
+import { OBJECT_STORAGE, createObjectStorage } from './object-storage.service.js';
 
 @Module({
-  providers: [FilePolicyService, FileLifecycleService, LocalMinioObjectStorage],
-  exports: [FilePolicyService, FileLifecycleService, LocalMinioObjectStorage],
+  imports: [DatabaseModule],
+  providers: [
+    FilePolicyService,
+    FileLifecycleService,
+    {
+      provide: OBJECT_STORAGE,
+      useFactory: createObjectStorage,
+    },
+  ],
+  exports: [FilePolicyService, FileLifecycleService, OBJECT_STORAGE],
 })
 export class FileManagementModule {}

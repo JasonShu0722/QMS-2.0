@@ -1,7 +1,11 @@
 import { jest } from '@jest/globals';
+import { Test } from '@nestjs/testing';
+import { PrismaService } from '../../src/database/prisma.service.js';
 import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
+import { FileManagementModule } from '../../src/modules/file-management/file-management.module.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
 import {
+  OBJECT_STORAGE,
   S3CompatibleObjectStorage,
   createObjectStorage,
 } from '../../src/modules/file-management/object-storage.service.js';
@@ -36,9 +40,31 @@ describe('file management foundation', () => {
   });
 
   it('creates supplier upload metadata and upload URLs with the same UUID object key', async () => {
+    const persistedFile = {
+      id: '30000000-0000-4000-8000-000000000001',
+      organizationId: '20000000-0000-4000-8000-000000000002',
+      objectKey: 'will-be-replaced',
+      originalName: 'supplier ncr evidence.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 12n,
+      sha256: 'will-be-replaced',
+      status: 'QUARANTINED',
+      version: 1,
+      resourceType: 'FoundationAttachment',
+      resourceId: 'foundation-only',
+      uploadedById: '10000000-0000-4000-8000-000000000002',
+      createdAt: new Date('2026-09-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-18T00:00:00.000Z'),
+    };
     const prisma = {
       fileObject: {
-        create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            ...persistedFile,
+            objectKey: data.objectKey,
+            sha256: data.sha256,
+          }),
+        ),
       },
     };
     const storage = {
@@ -69,17 +95,31 @@ describe('file management foundation', () => {
       'application/pdf',
     );
     expect(created).toMatchObject({
-      uploadUrl: `http://localhost:9000/qms-foundation/${created.metadata.objectKey}`,
+      fileId: '30000000-0000-4000-8000-000000000001',
+      status: 'QUARANTINED',
+      uploadUrl: `http://localhost:9000/qms-foundation/${created.objectKey}`,
       headers: { 'content-type': 'application/pdf' },
       metadata: {
-        status: 'QUARANTINED',
+        originalName: 'supplier ncr evidence.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 12,
+        resourceType: 'FoundationAttachment',
+        resourceId: 'foundation-only',
       },
     });
-    expect(created.metadata.objectKey).toMatch(
+    expect(created.objectKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(created.metadata.objectKey).not.toContain('supplier');
-    expect(created.metadata.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(created.objectKey).not.toContain('supplier');
+    expect(JSON.parse(JSON.stringify(created))).toEqual(created);
+    expect(Object.keys(created).sort()).toEqual([
+      'fileId',
+      'headers',
+      'metadata',
+      'objectKey',
+      'status',
+      'uploadUrl',
+    ]);
     expect(prisma.fileObject.create.mock.calls[0][0].data).toMatchObject({
       organizationId: '20000000-0000-4000-8000-000000000002',
       uploadedById: '10000000-0000-4000-8000-000000000002',
@@ -87,7 +127,8 @@ describe('file management foundation', () => {
       version: 1,
       status: 'QUARANTINED',
     });
-    expect(prisma.fileObject.create.mock.calls[0][0].data.objectKey).toBe(created.metadata.objectKey);
+    expect(prisma.fileObject.create.mock.calls[0][0].data.objectKey).toBe(created.objectKey);
+    expect(prisma.fileObject.create.mock.calls[0][0].data.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('validates MIME and size before creating upload metadata', async () => {
@@ -204,6 +245,41 @@ describe('file management foundation', () => {
     else process.env.QMS_OBJECT_STORAGE_ENDPOINT = previousEndpoint;
     if (previousBucket === undefined) delete process.env.QMS_OBJECT_STORAGE_BUCKET;
     else process.env.QMS_OBJECT_STORAGE_BUCKET = previousBucket;
+    if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
+    else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
+  });
+
+  it('injects object storage through the configured provider token', async () => {
+    const previousProvider = process.env.QMS_OBJECT_STORAGE_PROVIDER;
+    process.env.QMS_OBJECT_STORAGE_PROVIDER = 's3';
+    const moduleRef = await Test.createTestingModule({
+      imports: [FileManagementModule],
+    })
+      .overrideProvider(PrismaService)
+      .useValue({ fileObject: { create: jest.fn() } })
+      .compile();
+
+    expect(moduleRef.get(OBJECT_STORAGE)).toBeInstanceOf(S3CompatibleObjectStorage);
+    expect(moduleRef.get(FileLifecycleService)).toBeInstanceOf(FileLifecycleService);
+    await moduleRef.close();
+
+    if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
+    else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
+  });
+
+  it('fails fast during module initialization for unsupported object storage providers', async () => {
+    const previousProvider = process.env.QMS_OBJECT_STORAGE_PROVIDER;
+    process.env.QMS_OBJECT_STORAGE_PROVIDER = 'filesystem';
+
+    await expect(
+      Test.createTestingModule({
+        imports: [FileManagementModule],
+      })
+        .overrideProvider(PrismaService)
+        .useValue({ fileObject: { create: jest.fn() } })
+        .compile(),
+    ).rejects.toThrow('OBJECT_STORAGE_PROVIDER_UNSUPPORTED');
+
     if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
     else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
   });

@@ -36,12 +36,12 @@ describe('transactional outbox foundation', () => {
 
   it('claims a limited number of pending events and applies bounded exponential retry', async () => {
     const now = new Date('2026-09-18T00:00:00.000Z');
+    const claimed = [{ id: 'event-1', attempts: 4, payload: {}, eventType: 'FOUNDATION_EVENT' }];
     const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue(claimed),
       outboxEvent: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'event-1', attempts: 4, payload: {}, eventType: 'FOUNDATION_EVENT' },
-        ]),
-        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     const worker = new OutboxWorkerService(prisma as never, () => now);
@@ -51,23 +51,49 @@ describe('transactional outbox foundation', () => {
     });
 
     expect(result).toEqual({ processed: 0, failed: 1, retried: 0 });
-    expect(prisma.outboxEvent.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        take: 10,
-        where: expect.objectContaining({
-          status: 'PENDING',
-          availableAt: { lte: now },
-        }),
-      }),
-    );
-    expect(prisma.outboxEvent.update).toHaveBeenCalledWith({
-      where: { id: 'event-1' },
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.outboxEvent.updateMany).toHaveBeenCalledWith({
+      where: { id: 'event-1', status: 'PROCESSING' },
       data: expect.objectContaining({
         attempts: { increment: 1 },
         status: 'FAILED',
         lastError: 'transport unavailable',
       }),
     });
+  });
+
+  it('does not run handlers twice when workers claim due events concurrently', async () => {
+    const now = new Date('2026-09-18T00:00:00.000Z');
+    const pending = [
+      { id: 'event-1', attempts: 0, payload: {}, eventType: 'FOUNDATION_EVENT' },
+      { id: 'event-2', attempts: 0, payload: {}, eventType: 'FOUNDATION_EVENT' },
+    ];
+    const handled: string[] = [];
+    const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      $queryRaw: jest.fn(async () => pending.splice(0, 2)),
+      outboxEvent: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const worker = new OutboxWorkerService(prisma as never, () => now);
+
+    const results = await Promise.all([
+      worker.processDue(2, async (event) => {
+        handled.push(event.id);
+      }),
+      worker.processDue(2, async (event) => {
+        handled.push(event.id);
+      }),
+    ]);
+
+    expect(results).toEqual([
+      { processed: 2, failed: 0, retried: 0 },
+      { processed: 0, failed: 0, retried: 0 },
+    ]);
+    expect(handled.sort()).toEqual(['event-1', 'event-2']);
+    expect(new Set(handled).size).toBe(handled.length);
   });
 
   it('manually retries failed events by returning them to pending state', async () => {
