@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 export const WORKFLOW_NODE_TYPES = [
   'ACTION', 'APPROVAL', 'VERIFICATION', 'CC', 'REJECT', 'RETURN', 'REOPEN', 'CLOSE',
@@ -101,7 +101,12 @@ export class WorkflowValidationService {
 
   assertValid(draft: WorkflowDraft): void {
     const result = this.validateDraft(draft);
-    if (!result.valid) throw new Error(result.errors.join(';'));
+    if (!result.valid) {
+      throw new BadRequestException({
+        code: 'WORKFLOW_DRAFT_INVALID',
+        errors: result.errors,
+      });
+    }
   }
 
   private hasAssignment(config: Record<string, unknown>): boolean {

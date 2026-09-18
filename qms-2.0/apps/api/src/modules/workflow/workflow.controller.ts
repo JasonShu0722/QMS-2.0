@@ -5,7 +5,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { WorkflowDefinitionService } from './workflow-definition.service.js';
-import { CopyWorkflowDto, CreateWorkflowDto, UpdateWorkflowDraftDto, PublishWorkflowDto, WorkflowDefinitionResponseDto, WorkflowValidationResponseDto } from './workflow.dto.js';
+import { CopyWorkflowDto, CreateWorkflowDto, UpdateWorkflowDraftDto, PublishWorkflowDto, WorkflowDefinitionResponseDto, WorkflowValidationResponseDto, WorkflowVersionResponseDto } from './workflow.dto.js';
 
 @Controller('api/v1/workflows')
 @ApiCookieAuth('qms_session')
@@ -41,7 +41,7 @@ export class WorkflowController {
 
   @Post(':id/publish')
   @ApiParam({ name: 'id', type: String })
-  @ApiOkResponse({ type: WorkflowDefinitionResponseDto })
+  @ApiOkResponse({ type: WorkflowVersionResponseDto })
   publish(@Param('id') id: string, @Body() body: PublishWorkflowDto, @Req() request: Request) {
     const authorized = request as AuthorizedRequest;
     const session = authorized[AUTHENTICATED_SESSION]!;

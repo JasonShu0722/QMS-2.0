@@ -1,9 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMinSize, IsArray, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from 'class-validator';
+import { WORKFLOW_NODE_TYPES, WORKFLOW_VERSION_STATUSES, type WorkflowNodeType, type WorkflowVersionStatus } from './workflow.types.js';
 
 export class WorkflowNodeDraftDto {
   @ApiProperty() @IsString() @MaxLength(100) id!: string;
-  @ApiProperty({ enum: ['ACTION', 'APPROVAL', 'VERIFICATION', 'CC', 'REJECT', 'RETURN', 'REOPEN', 'CLOSE'] }) @IsString() type!: string;
+  @ApiProperty({ enum: WORKFLOW_NODE_TYPES, enumName: 'WorkflowNodeType' }) @IsIn(WORKFLOW_NODE_TYPES) type!: WorkflowNodeType;
   @ApiProperty() @IsString() @MaxLength(200) name!: string;
   @ApiPropertyOptional({ type: Object }) @IsOptional() @IsObject() config?: Record<string, unknown>;
 }
@@ -16,8 +18,8 @@ export class WorkflowTransitionDraftDto {
 }
 
 export class WorkflowGraphDto {
-  @ApiProperty({ type: [WorkflowNodeDraftDto] }) @IsArray() nodes!: WorkflowNodeDraftDto[];
-  @ApiProperty({ type: [WorkflowTransitionDraftDto] }) @IsArray() transitions!: WorkflowTransitionDraftDto[];
+  @ApiProperty({ type: [WorkflowNodeDraftDto], minItems: 1 }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => WorkflowNodeDraftDto) nodes!: WorkflowNodeDraftDto[];
+  @ApiProperty({ type: [WorkflowTransitionDraftDto], minItems: 1 }) @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => WorkflowTransitionDraftDto) transitions!: WorkflowTransitionDraftDto[];
 }
 
 export class CreateWorkflowDto extends WorkflowGraphDto {
@@ -43,7 +45,7 @@ export class WorkflowVersionResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() workflowDefinitionId!: string;
   @ApiProperty() version!: number;
-  @ApiProperty() status!: string;
+  @ApiProperty({ enum: WORKFLOW_VERSION_STATUSES, enumName: 'WorkflowVersionStatus' }) status!: WorkflowVersionStatus;
   @ApiPropertyOptional() publishedAt?: string;
   @ApiPropertyOptional() publishedById?: string;
   @ApiPropertyOptional() changeNote?: string;
@@ -56,7 +58,7 @@ export class WorkflowDefinitionResponseDto {
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;
   @ApiPropertyOptional() description?: string;
-  @ApiProperty({ type: WorkflowVersionResponseDto }) draft!: WorkflowVersionResponseDto;
+  @ApiProperty({ type: WorkflowVersionResponseDto }) version!: WorkflowVersionResponseDto;
 }
 
 export class WorkflowValidationResponseDto {

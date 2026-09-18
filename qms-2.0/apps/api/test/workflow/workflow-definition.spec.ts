@@ -1,5 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { WorkflowValidationService } from '../../src/modules/workflow/workflow-validation.service.js';
+import { CreateWorkflowDto } from '../../src/modules/workflow/workflow.dto.js';
 
 const validDraft = () => ({
   nodes: [
@@ -44,5 +47,28 @@ describe('WorkflowValidationService', () => {
     const result = service.validateDraft(draft);
     expect(result.valid).toBe(false);
     expect(result.errors.join(' ')).toMatch(/SLA|REMINDER|CONDITION/);
+  });
+
+  it('raises a stable bad request when a draft fails the controlled validator', () => {
+    try {
+      service.assertValid({ nodes: [], transitions: [] });
+      throw new Error('expected draft validation to fail');
+    } catch (error) {
+      expect(error).toMatchObject({ response: { code: 'WORKFLOW_DRAFT_INVALID' }, status: 400 });
+    }
+  });
+
+  it('validates node enums and required graph arrays at the transport boundary', async () => {
+    const dto = plainToInstance(CreateWorkflowDto, {
+      code: 'QMS', name: 'QMS', nodes: [{ id: 'start', type: 'SCRIPT', name: '脚本' }], transitions: [{ id: 't', from: 'start', to: 'start' }],
+    });
+    const errors = await validate(dto);
+    const messages = JSON.stringify(errors);
+    expect(messages).toMatch(/isIn/);
+    const missingGraph = plainToInstance(CreateWorkflowDto, { code: 'QMS', name: 'QMS', nodes: [], transitions: [] });
+    await expect(validate(missingGraph)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ property: 'nodes' }),
+      expect.objectContaining({ property: 'transitions' }),
+    ]));
   });
 });
