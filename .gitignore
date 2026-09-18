@@ -149,3 +149,9 @@ dmypy.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local brainstorming prototypes
+.superpowers/
+
+# Local browser inspection artifacts
+/output/playwright/
