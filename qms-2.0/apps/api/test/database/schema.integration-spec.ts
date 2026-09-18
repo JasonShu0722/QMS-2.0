@@ -20,7 +20,8 @@ describeWithDatabase('PostgreSQL schema', () => {
   });
   afterAll(async () => prisma?.$disconnect());
 
-  // Run migrate deploy and the local demo seed before the PostgreSQL suite.
+  // test:integration runs migrate deploy and the local demo seed before this suite.
+  // It requires development mode, a loopback DATABASE_URL, and seed passwords.
   // Missing seed data must fail rather than silently creating a replacement fixture.
   it.each([
     ['INTERNAL', 'local.internal'],
