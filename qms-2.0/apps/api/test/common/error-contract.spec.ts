@@ -35,6 +35,8 @@ describe('error response contract', () => {
     'passwordHash',
     'tokenHash',
     'sessionToken',
+    'sessionId',
+    'session_id',
     'objectKey',
     'object_key',
     'access_key',

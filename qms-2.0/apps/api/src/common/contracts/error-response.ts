@@ -16,7 +16,7 @@ export interface ErrorResponseInput {
 }
 
 const SENSITIVE_KEY =
-  /password|passphrase|secret|token|authorization|cookie|objectkey|accesskey|privatekey/i;
+  /password|passphrase|secret|token|sessionid|authorization|cookie|objectkey|accesskey|privatekey/i;
 
 export function sanitizeMetadata(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sanitizeMetadata);
