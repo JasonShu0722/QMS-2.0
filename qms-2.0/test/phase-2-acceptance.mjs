@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-const root = new URL('../', import.meta.url).pathname.replace(/^\/(\w):/, '$1:');
+const root = new URL('../../', import.meta.url).pathname.replace(/^\/(\w):/, '$1:');
 const commands = [
   ['test', ['--dir', 'qms-2.0', 'test']],
   ['contracts', ['--dir', 'qms-2.0', 'contracts:check']],
