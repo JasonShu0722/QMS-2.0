@@ -76,8 +76,11 @@ export class AuthenticatedGuard implements CanActivate {
     }
 
     let organizationId: string;
+    let permissionCode = requirement.featurePermission;
     try {
       if (requirement.workflowPermission) await this.authorization.assertAccess(session, requirement);
+      const permissions = requirement.featurePermissions?.(request.body ?? {}) ?? [requirement.featurePermission];
+      permissionCode = permissions.join(',');
       const target = requirement.organizationScope
         ? singleString(requestValue(request, requirement.organizationScope.source, requirement.organizationScope.field))
         : undefined;
@@ -86,8 +89,10 @@ export class AuthenticatedGuard implements CanActivate {
         requestedOrganizationId: target,
         optional: requirement.organizationScope?.optional ?? true,
       });
-      const permissions = requirement.featurePermissions?.(request.body ?? {}) ?? [requirement.featurePermission];
-      for (const featurePermission of permissions) await this.authorization.assertAccess(session, { ...requirement, featurePermission }, organizationId);
+      for (const featurePermission of permissions) {
+        permissionCode = featurePermission;
+        await this.authorization.assertAccess(session, { ...requirement, featurePermission }, organizationId);
+      }
     } catch (error) {
       if (error instanceof HttpException && [400, 403].includes(error.getStatus())) {
         const payload = error.getResponse() as { code: string };
@@ -95,7 +100,7 @@ export class AuthenticatedGuard implements CanActivate {
           actorUserId: session.user.id, organizationId: session.user.organizationId,
           action: 'ACTION_REJECTED', resourceType: 'Authorization', outcome: 'DENIED',
           traceId: requestTraceId(request),
-          metadata: { permissionCode: requirement.featurePermission, reasonCode: payload.code },
+          metadata: { permissionCode, reasonCode: payload.code },
         });
       }
       throw error;

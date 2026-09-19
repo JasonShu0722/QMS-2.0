@@ -58,4 +58,49 @@ describe('administrator user lifecycle HTTP contract', () => {
     await request(app.getHttpServer()).post('/api/v1/admin/users').set('Cookie', 'qms_session=browser-token').send(body).expect(403);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { name: 'status-only', body: { status: 'DISABLED' }, granted: [], denied: 'account:users:status' },
+    { name: 'transfer-only', body: { accountType: 'SUPPLIER' }, granted: [], denied: 'account:users:transfer' },
+    { name: 'mixed email and status', body: { email: 'private@example.test', status: 'DISABLED' }, granted: ['account:users:update'], denied: 'account:users:status' },
+  ])('audits the denied operation for a $name PATCH', async ({ body, granted, denied }) => {
+    prisma.userRole.count.mockImplementation(async ({ where }) =>
+      granted.includes(where.role.permissions.some.permission.code) ? 1 : 0);
+
+    const response = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}`)
+      .set('Cookie', 'qms_session=browser-token; qms_csrf=csrf-token')
+      .set('x-csrf-token', 'csrf-token').send(body).expect(403);
+
+    expect(response.body.code).toBe('FEATURE_PERMISSION_DENIED');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.create).toHaveBeenCalledTimes(1);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      actorUserId: user.id, organizationId: user.organizationId,
+      action: 'ACTION_REJECTED', resourceType: 'Authorization', outcome: 'DENIED',
+      traceId: response.body.traceId,
+      metadata: { permissionCode: denied, reasonCode: 'FEATURE_PERMISSION_DENIED' },
+    }) });
+  });
+
+  it.each([
+    { name: 'unassigned', query: `organizationId=20000000-0000-4000-8000-000000000002`, status: 403, reasonCode: 'ORGANIZATION_SCOPE_DENIED' },
+    { name: 'ambiguous', query: 'organizationId=first&organizationId=second', status: 400, reasonCode: 'ORGANIZATION_SCOPE_AMBIGUOUS' },
+  ])('audits resolved operations when organization scope is $name', async ({ query, status, reasonCode }) => {
+    prisma.userRole.findFirst.mockResolvedValue(null);
+
+    const response = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}?${query}`)
+      .set('Cookie', 'qms_session=browser-token; qms_csrf=csrf-token')
+      .set('x-csrf-token', 'csrf-token')
+      .send({ status: 'DISABLED', accountType: 'SUPPLIER' }).expect(status);
+
+    expect(response.body.code).toBe(reasonCode);
+    expect(prisma.userRole.count).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.create).toHaveBeenCalledTimes(1);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'ACTION_REJECTED', resourceType: 'Authorization', outcome: 'DENIED',
+      traceId: response.body.traceId,
+      metadata: { permissionCode: 'account:users:status,account:users:transfer', reasonCode },
+    }) });
+  });
 });
