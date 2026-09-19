@@ -4,6 +4,8 @@ import { activeInternalDomain, internalNavigation } from '../features/navigation
 import { WorkTabs } from '../work-tabs/WorkTabs';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
+import { ProblemCenterPage } from '../features/problem-center/ProblemCenterPage';
+import { MyTasksPage } from '../features/tasks/MyTasksPage';
 
 const { Content, Sider } = Layout;
 
@@ -72,6 +74,8 @@ export function InternalLayout() {
             </aside>
           ) : null}
           {collapsed && active ? <EmptyDomain title={active.label} /> : null}
+          {location.pathname.startsWith('/app/problem-center') ? <ProblemCenterPage /> : null}
+          {location.pathname.startsWith('/app/my-tasks') ? <MyTasksPage /> : null}
         </Content>
       </Layout>
     </Layout>
