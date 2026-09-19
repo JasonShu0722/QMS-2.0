@@ -29,29 +29,44 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 | 方法与路径 | 参数 / body | 返回与所需权限 |
 | --- | --- | --- |
-| `GET /organizations` | 无组织选择参数 | 200 `AdminOrganizationDto[]`：`id/code/name/type/permissions`；仅列当前账号拥有 `account:users:read/manage` 或 `account:roles:read/manage` 的组织，未获任何管理权限时为空数组 |
+| `GET /organizations` | 无组织选择参数 | 200 `AdminOrganizationDto[]`：`id/code/name/type/permissions`；仅列当前账号持有下述 11 个账号权限中至少一项的组织，均未持有时为空数组；写权限不自动包含读取权限 |
 | `GET /users` | query：`organizationId`、`status=ACTIVE\|DISABLED`、`accountType=INTERNAL\|SUPPLIER`、`search`（最多 100 字符，按用户名/邮箱不区分大小写包含匹配）；不分页 | 200 `AdminUserDto[]`；`account:users:read` |
 | `GET /users/:userId` | query：`organizationId` | 200 `AdminUserDto`；`account:users:read` |
-| `POST /users` | `CreateAdminUserDto`：`username`、`initialPassword`、`accountType`、`organizationId`，可选 `email`（可为 null） | 201 `AdminUserDto`；`account:users:manage` |
-| `PATCH /users/:userId` | query：源 `organizationId`；`UpdateAdminUserDto` 可选 `email`（null 清空）、`status`、目标 `organizationId`、`accountType`；不支持修改 username | 200 `AdminUserDto`；`account:users:manage`，跨组织更新校验两端和目标已有授权 |
-| `POST /users/:userId/password-reset` | query：`organizationId`；`ResetAdminUserPasswordDto`：`temporaryCode` | 201 `PasswordResetIssuedDto`；`account:users:manage`；仅 ACTIVE 用户 |
+| `POST /users` | `CreateAdminUserDto`：`username`、`initialPassword`、`accountType`、`organizationId`，可选 `email`（可为 null） | 201 `AdminUserDto`；`account:users:create` |
+| `PATCH /users/:userId` | query：源 `organizationId`；`UpdateAdminUserDto` 可选 `email`（null 清空）、`status`、目标 `organizationId`、`accountType`；不支持修改 username | 200 `AdminUserDto`；按提交字段要求 `account:users:update/status/transfer`，混合请求须全部满足，规则见下文 |
+| `POST /users/:userId/password-reset` | query：`organizationId`；`ResetAdminUserPasswordDto`：`temporaryCode` | 201 `PasswordResetIssuedDto`；`account:users:reset`；仅 ACTIVE 用户 |
 | `GET /permissions` | query：`organizationId` | 200 `AdminPermissionDto[]`：`id/code/name`；`account:roles:read`，只读稳定权限目录 |
+| `GET /permission-catalog` | query：`organizationId`（可选 UUID） | 200 `PermissionCatalogGroupDto[]`；`account:roles:read` 和所选组织范围；分组目录、状态与可授予标记见下文 |
 | `GET /roles` | query：`organizationId` | 200 `AdminRoleDto[]`；`account:roles:read`，只列所选组织角色 |
 | `GET /roles/:roleId` | query：`organizationId` | 200 `AdminRoleDto`；`account:roles:read` |
-| `POST /roles` | `CreateAdminRoleDto`：`organizationId/code/name/permissionCodes` | 201 `AdminRoleDto`；`account:roles:manage` |
-| `POST /roles/:roleId/copy` | query：`organizationId`；`CopyAdminRoleDto`：`code/name` | 201 `AdminRoleDto`；`account:roles:manage`，复制同组织角色及其权限 |
-| `PATCH /roles/:roleId` | query：`organizationId`；`UpdateAdminRoleDto` 可选 `name/permissionCodes` | 200 `AdminRoleDto`；`account:roles:manage`；省略权限字段保留权限，空数组清空权限 |
-| `DELETE /roles/:roleId` | query：`organizationId`；无 body | 204；`account:roles:manage`，仍有成员返回 `ADMIN_ROLE_IN_USE`（409） |
+| `POST /roles` | `CreateAdminRoleDto`：`organizationId/code/name/permissionCodes` | 201 `AdminRoleDto`；`account:roles:create` |
+| `POST /roles/:roleId/copy` | query：`organizationId`；`CopyAdminRoleDto`：`code/name` | 201 `AdminRoleDto`；`account:roles:create`，复制同组织角色及其权限 |
+| `PATCH /roles/:roleId` | query：`organizationId`；`UpdateAdminRoleDto` 可选 `name/permissionCodes/expectedPermissionCodes` | 200 `AdminRoleDto`；`account:roles:update`；提交权限时必须带读取基线；省略权限字段保留权限，空数组清空权限 |
+| `DELETE /roles/:roleId` | query：`organizationId`；无 body | 204；`account:roles:delete`，仍有成员返回 `ADMIN_ROLE_IN_USE`（409） |
 | `GET /users/:userId/roles` | query：`organizationId` | 200 `AdminUserRolesDto`：`userId/organizationId/roles/permissions`；`account:roles:read` |
-| `PUT /users/:userId/roles` | query：`organizationId`；`AssignAdminRolesDto`：`roleIds`（最多 100 个不同 UUID，空数组清空） | 200 `AdminUserRolesDto`；`account:roles:manage`，替换该组织角色分配 |
+| `PUT /users/:userId/roles` | query：`organizationId`；`AssignAdminRolesDto`：`roleIds`（最多 100 个不同 UUID，空数组清空） | 200 `AdminUserRolesDto`；`account:roles:assign`，替换该组织角色分配 |
 
 所有管理员 POST/PATCH/PUT/DELETE 必须携带 `Idempotency-Key` 和 `x-csrf-token`。key 为 8–128 字符，限字母、数字、点、下划线、冒号、连字符；同一操作者、组织、key 的同动作同内容重试复用原安全响应，不重复写业务或成功审计；异内容/异动作复用返回 409。记录保存用途隔离的 HMAC 请求摘要，不保存原始请求秘密。授权在 Serializable 写事务内重新检查，不能以幂等重放绕过已撤销权限；序列化冲突返回受控 409。
 
 用户 username 为 1–100 个 ASCII 字母、数字、点、下划线或连字符；邮箱最多 254 字符；新密码/初始密码为 12–256 字符。username/email 全局去首尾空格、大小写无关唯一。用户响应包含标识、邮箱、类型、状态、MFA 状态、组织摘要和创建/更新时间，绝不返回密码哈希、Session 或重置代码。账号类型必须与目标组织类型一致。
 
-主组织迁移的 query.organizationId 是源组织，body.organizationId 是目标组织。管理员必须有两端管理权并覆盖目标用户各组织既有权限；禁止自停用、自迁移/自类型变更及携全局角色身份迁移。成功身份变更清除旧角色、撤销会话和未消费的重置凭证。用户仍有问题负责人、流程任务办理人或通知接收人引用时返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409），保留业务归属及全部角色、会话、重置凭证；数据库外键同样禁止级联迁移。普通邮箱编辑和停用不受该引用限制。
+用户 PATCH 按实际提交字段计算完整权限集合：`email` 要求 `account:users:update`，`status` 要求 `account:users:status`，`organizationId` 或 `accountType` 要求 `account:users:transfer`；空 PATCH 仍要求 update。混合请求须拥有全部对应权限，否则整体 403，不部分写入。Guard 和服务事务都检查该集合，拒绝审计记录实际缺失的权限，成功幂等回放前也重新授权。
 
-角色 code 为 1–100 字符、字母开头且仅含字母/数字/下划线/连字符；name 为 1–150 字符且不得全空白；permissionCodes 最多 200 个不同代码。角色响应为 `id/organizationId/code/name/permissions`。创建、复制、修改及分配只能使用当前组织中操作者已有权限，不能管理更高权限角色。组织接口不提供全局角色 CRUD，分配接口也不能移除既有全局角色；权限变更不能造成操作者失去既有管理权限。权限矩阵由上述目录与角色结果在 Web 展示，无单独 HTTP 端点。
+主组织迁移的 query.organizationId 是源组织，body.organizationId 是目标组织。管理员必须在两端都有 `account:users:transfer`，并覆盖目标用户各已分配组织的既有权限；目标端 transfer 撤销后，旧成功请求也不能重放。禁止自停用、自迁移/自类型变更及携全局角色身份迁移。成功身份变更清除旧角色、撤销会话和未消费的重置凭证。用户仍有问题负责人、流程任务办理人或通知接收人引用时返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409），保留业务归属及全部角色、会话、重置凭证；数据库外键同样禁止级联迁移。普通邮箱编辑和停用不受该引用限制。
+
+角色 code 为 1–100 字符、字母开头且仅含字母/数字/下划线/连字符；name 为 1–150 字符且不得全空白；permissionCodes 最多 200 个不同代码。角色响应为 `id/organizationId/code/name/permissions`。创建、复制、修改及分配只能使用当前组织中操作者已有权限，不能管理更高权限角色。组织接口不提供全局角色 CRUD，分配接口也不能移除既有全局角色；自锁保护覆盖下述全部 11 个账号权限。矩阵读取 catalog 和角色结果，保存仍走角色 PATCH，无独立批量写入入口。
+
+### 分组目录与权限基线
+
+`PermissionCatalogGroupDto` 为 `{ key, name, status, modules }`，`PermissionCatalogModuleDto` 为 `{ key, name, status, operations }`；两级 status 均为 `active | planned`。`PermissionCatalogOperationDto` 为 `{ code, name, enforcement, grantable }`，enforcement 为 `guarded | reserved`。名称、顺序和状态由 API 静态目录提供；grantable 表示代码已登记、存在于 PostgreSQL Permission 且操作者在所选组织持有该代码，仍须满足角色写权限、子集和自锁检查。
+
+目录依次为平台功能、供应商质量、制程质量、客户质量、新品质量、审核管理、系统管理。平台登记工作台、问题查询和受控流程；系统登记组织目录、当前权限上下文、用户管理和角色管理。`workbench:read` 的 enforcement 是 reserved，仅为既有预留标识，不证明独立工作台 API 已拦截；`workflow:manage` 是真实覆盖创建、编辑、校验、发布和复制的单一管理操作。未来业务板块及模块为 planned，operations 为空，没有可提交代码或本轮业务入口。伪造 planned/未知代码即使手工插入数据库，也会被角色写入拒绝（400）。既有平铺 `/permissions` 保留，不能凭其返回值绕过 catalog 注册校验。
+
+角色 PATCH 提交 `permissionCodes` 时，`expectedPermissionCodes` 条件必填，表示读取时的原权限集合；两数组最多 200 个不同的非空代码。缺失或非法基线在 DTO 校验返回 400，服务层也以 `ADMIN_PERMISSION_BASELINE_REQUIRED`（400）防守。生成类型把该字段标为可选并通过描述注明条件要求，不能据此省略基线。事务按集合比较当前权限与基线，不受顺序影响；不一致返回 `CONCURRENCY_CONFLICT`（409），包括同时提交的名称在内全部回滚。仅改名只发送 `name`，无须携带两个权限字段。Web 在 409 后保留草稿，重新加载前确认放弃；无变化不发送 PATCH。
+
+### 旧授权迁移
+
+当前账号权限为两个既有 read 和九个写权限：`account:users:read/create/update/status/transfer/reset`、`account:roles:read/create/update/delete/assign`（斜线列出同前缀的独立代码）。`20260919020000_granular_account_permissions` 在 PostgreSQL 事务内建立九个写权限，把旧 `account:users:manage` 角色关联展开为五项、旧 `account:roles:manage` 展开为四项，去重并删除旧关联和 Permission，包含全局角色。UserRole、已有 read 和历史审计原文不变，不补授 read。种子不会恢复旧 manage；运行时没有 manage OR 新权限兼容通道，升级应用须协调部署迁移。
 
 ## 一次性密码重置
 

@@ -1,6 +1,6 @@
-# 底座与 ABC 账号治理验收记录
+# 底座、ABC 与分板块权限矩阵验收记录
 
-本文件按时间保留验证历史。前半部分是阶段 1 的原始矩阵（包括当时在线镜像下载 FAIL 和缓存替代验证），不代表当前功能或最新构建状态；ABC API 修订和 Web 回归之后的最新汇总位于文末“ABC 最终聚合与本地交付”。本轮范围仅为 ABC，D–H、批次 3 和原批次 2 深度业务门禁不在本轮完成声明内。
+本文件按时间保留验证历史。前半部分是阶段 1 的原始矩阵（包括当时在线镜像下载 FAIL 和缓存替代验证），不代表当前功能或最新构建状态。ABC 历史交付保留；最新证据位于文末“分板块权限矩阵补充验收”。本轮范围为 C 矩阵与账号细权限补充，D–H、批次 3 和原批次 2 深度业务门禁不在本轮完成声明内。
 
 ## 范围与执行计划
 
@@ -212,3 +212,51 @@ Windows 运行时修正：系统 fallback `pnpm.cmd` 曾选择 Node 24；临时 
 ABC 六条浏览器行为分别为内部个人资料/改密/其他会话撤销、供应商邮箱恢复与内部入口拒绝、用户创建/搜索/差异编辑/启停、角色 CRUD/复制/分配/矩阵/在用删除拒绝、只读账号 UI 与 API 写入拒绝、签发凭证后纯角色改名及匿名一次兑换/拒绝重放。凭证只保留内存，trace、截图、视频和 failure DOM 快照关闭，断言不输出秘密。原 `phase-2.spec.ts` 只检查登录页 URL；即使该条通过，也没有验证完整平台工作流。
 
 本轮不启动 D–H 或批次 3。ABC 验收后可由用户另行分配治理任务及批次 3 非生产开发；真实供应商试点须具备 D 通知/配置、E MFA/完整找回与重置策略/高风险保护、G TLS/密钥/对象存储/备份恢复、H 导出/保留/国际化/可访问性，以及原平台流程运行时、业务 Worker handler 和完整业务浏览器主链路的深度门禁。阶段 1 附件/Outbox 服务边界与 ABC 通过都不能替代这些能力。
+
+## 分板块权限矩阵补充验收（2026-09-19）
+
+依据 [补充设计](../../docs/superpowers/specs/2026-09-19-qms-2.0-permission-matrix-design.md) 和 [实现计划](../../docs/superpowers/plans/2026-09-19-qms-2.0-permission-matrix.md)，在 `C:\Users\29591\.codex\worktrees\qms-admin-foundation\QMS`、`codex/qms-2-permission-matrix` 从 `524da124` 实施。仅扩展目录、细权限、矩阵及相应真实验收；归档只读，未开发 D–H 或业务域。命令下文从仓库根执行，配置与秘密在仓库外加载，原始日志、环境 XML 和测试产物不入 Git。
+
+环境：Node 22.22.0、pnpm 11.19.0、Docker 29.8.0、Compose 5.5.1、PostgreSQL 18.6、Playwright 1.63.0、Chromium 153.0.8010.12。PowerShell 7 shim 与 Node 22 在进程 PATH 前置；复用 C 盘 NTFS 默认 isolated 依赖，无 E 盘安装或项目移盘。一次性 Compose project 为 `qms2-permission-validation`，PostgreSQL loopback 端口 55444；API、网关和浏览器使用同一验证库。用户保留的预览 PostgreSQL 55440 不用于破坏性夹具。
+
+| 命令 / 检查 | 实际结果与证据范围 |
+| --- | --- |
+| `corepack pnpm --dir qms-2.0 install --frozen-lockfile` | PASS，依赖已就绪，579 ms；这是 NTFS 温缓存复用，不是冷安装或离线证明 |
+| `corepack pnpm --dir qms-2.0 --filter @qms/api test:integration` | PASS，真实 PostgreSQL 18.6，14 个迁移无待执行，seed 成功，3 suites / 72 tests，24.268 s；覆盖旧 manage 原子展开、不补 read、独立权限/混合 PATCH、双端迁移、撤权重放、子集/自锁及角色基线冲突等 |
+| `corepack pnpm --dir qms-2.0 --filter @qms/api test` | PASS，32 suites / 256 tests，31.945 s |
+| Web 定向与全量测试 | 最终矩阵定向 25/25 PASS，157.79 s；最终 phase-1 中全量 10 files / 69 tests PASS。此前 67 tests PASS 属模块复选框补修前历史，首次 phase-1 的 68 PASS / 1 FAIL 见下文 |
+| `corepack pnpm --dir qms-2.0 build`，显式 `NODE_ENV=production` | PASS，API/contracts/Web 全部构建；Vite 3,144 modules，已有 AntD vendor chunk 1,004.10 kB 超过 900 kB 提示，非构建错误 |
+| `corepack pnpm --dir qms-2.0 contracts:check`、`check:archive-isolation`、`docker compose -f qms-2.0/deployment/docker-compose.foundation.yml config --quiet` | 三项各 PASS；目录 DTO 和条件基线已进入生成契约，归档及 Docker context 隔离保持 |
+| 在线 Compose API 镜像构建 | PASS，仓库 Dockerfile、临时镜像 override、受限 builder；下载基础镜像与依赖，非离线构建。镜像 `sha256:460546cff5e0178b3371fde0ca051f49107fd2bc218a764417b29294d8cd68fe` |
+| 在线 Compose Web 最终产品镜像构建 | PASS，模块复选框补修 `2611ef0` 后构建，933 个 npm 下载，基础层/构建设置部分缓存复用；非离线。镜像 `sha256:55a2b90fc82b83426e3bdab83ec177abfe917747b8a7dc5bc17141b8b45ff967`；后续提交仅测试/文档，API/Web 产品源码与镜像一致 |
+| Compose 运行与 HTTP | PASS，API healthy，Worker 使用同一 API 镜像且 exit 0；MinIO health、网关 `/login`、`/api/v1/openapi.json`、`/app/admin` 均 200，SPA root shell 存在。Worker 仍仅单次底座边界，不代表业务 handler 交付 |
+| `corepack pnpm --dir qms-2.0 --filter @qms/web test:e2e playwright/permission-matrix.spec.ts playwright/account-administration.spec.ts playwright/foundation.spec.ts` | PASS，秘密输入前置检查及 10 个真实浏览器用例，49.6 s；此前原 ABC + 新矩阵 7/7 PASS，44.5 s。新场景覆盖按模块授予 create、受限账号允许/直接 API 越权 403、追加 update 和实时撤权、planned 不可授予 |
+| `corepack pnpm --dir qms-2.0 acceptance:phase-1` | 最终重跑 PASS，exit 0；8 步耗时依次 frozen 1 s、真实 PG 36 s、单测 304 s、build 49 s、Compose config 0 s、archive 4 s、contracts 24 s、浏览器 76 s。PG 3/72、API 32/256、Web 10/69（253.82 s）；秘密输入前置 1 PASS（19.4 s），真实 browser 10 PASS（51.4 s）。另有旧 phase-2 登录 smoke 1 skipped，不计入通过数；补验见下行 |
+| 补齐 `QMS_PHASE2_BASE_URL` 后 `corepack pnpm --dir qms-2.0 --filter @qms/web test:e2e` | PASS，exit 0；设置 `$env:QMS_PHASE2_BASE_URL = $env:QMS_ACCEPTANCE_BASE_URL` 为同一 loopback gateway（18094），秘密输入前置 1 PASS（20.073 s），全浏览器 11/11 PASS、0 skipped（52.4 s），新矩阵场景 10.9 s。此补验关闭原聚合旧 smoke 的跳过，不改写原记录；旧 smoke 仅验证登录页，不是平台业务链路 |
+| `corepack pnpm --dir qms-2.0 acceptance:phase-2` | PASS，exit 0；test → contracts → archive → build 四项全通过。根 structure/contracts-package 2 tests、API 32 suites / 256 tests（31.315 s）、Web 10 files / 69 tests（225.39 s）。此聚合继承 `NODE_ENV=development`，Vite 虽显示 production build，React 仍使用 development 版本（3,149 modules、vendor 1,219.91 kB）；与上方显式 `NODE_ENV=production` 独立构建分别记录，不互相替代 |
+| 保留预览库迁移 / seed | PASS，55440 库从 13 到 14 个迁移，seed 成功；所有既有密码哈希聚合比较前后一致，只输出布尔结果，未暴露摘要或凭据 |
+| 本地代码合并 | PASS，干净的 `E:\WorkSpace\QMS` main 从 `524da12` fast-forward 到 `0850cfe593ea86c5bd174490397fd6440eaf6ae8`；与验收代码提交完整 tree diff 为空，main 工作树干净。合并后 E 主目录以 Node 22 运行 `--test qms-2.0/test/structure.test.mjs qms-2.0/test/contracts-package.test.mjs`，2/2 PASS（177.3134 ms）；直接运行 `qms-2.0/scripts/check-archive-isolation.mjs` PASS，无须 E 盘依赖安装。最终文档提交另行本地 fast-forward，不 push |
+| 一次性 Docker 清理 | PASS，`qms2-permission-validation` 的 5 个容器、2 个数据卷和网络已删，临时 builder、对应容器/卷、本次 API/Web 镜像 tag 与旧未标记 Web 镜像已删。builder 删除客户端曾报 context deadline；随后独立核查注册和资源均不存在，非忽略错误。按标签核查容器/卷/网络及 builder 容器/卷均为 0；保留预览 PostgreSQL/MinIO 及其数据 |
+| 保留预览恢复 | PASS，C 盘工作树中 Node 22 的隐藏 Nest watch/API 与 Vite 已恢复；`http://127.0.0.1:5173` 的 `/login`、`/app/account`、`/app/admin`、`/reset-password`、`/api/v1/openapi.json` 均 200，schema 含新 permission-catalog，匿名请求 catalog 返回 401。真实 Chromium 153.0.8010.12 登录标题、账号/密码框和按钮可见且无 Not found；重置页标题可见，exit 0。未用保留预览库运行破坏性 fixture |
+| 仓库外临时文件清理 | FAIL / 受阻。已严格解析并限定的 `C:\Users\29591\AppData\Local\QmsValidation\permission-matrix` 和 C 工作树 `qms-2.0/apps/web/test-results` 原生 PowerShell `Remove-Item` 被自动审批拒绝，仅返回 blocked by policy，无更具体原因。未绕过，随后 `Test-Path` 均为 True；`.last-run.json` 已确认受 Git ignore 保护。两处均不入 Git；保留预览专用的 `QmsValidation/local-preview` 配置用于继续运行 |
+
+在线构建使用 `docker compose -p qms2-permission-validation -f qms-2.0/deployment/docker-compose.foundation.yml -f <仓库外 images.compose.yml> build --builder qms-permission-builder api`，Web 同命令将最后参数改为 `web`。早期未限制资源的 API 构建输出中断，随后 Windows 进程创建报 1455；用户释放内存后，临时 docker-container builder 限 1 GiB 内存、3 GiB memory+swap，重任务串行，后续两镜像均真实构建成功。未改系统 page file，未停止无关用户应用。曾因临时凭据丢失重建一次性环境；保留预览库与 MinIO 数据未删除。一次组合启动/builder 命令被自动审批拒绝，拆为独立配置、builder 和进程操作后成功，不是当前未解决阻塞。
+
+红绿与复审历史按实际阶段区分：
+
+- API 初始行为红灯 12 FAIL / 7 PASS，旧 guard 拒绝独立权限、基线/伪代码未拒绝、catalog 404；真实 PG 迁移红灯确认旧 manage 关联残留。`f815190` 实现后绿色，目标端 transfer 撤权重放也单独复现并修复。质量审查发现动态 PATCH 拒绝审计记录了错误权限，`65b1373` 先复现 5 FAIL，再 6 suites / 52 PASS，API build PASS；规格独立 HTTP 7/7 PASS 后质量 P2 关闭。
+- Web 初始 17 个行为失败，包括无角色选择和 create-only 入口、无 assign 仍显示分配；角色冲突重新加载另有行为红灯。`3b43e8d` 首次全量 67 PASS 后，规格审查发现缺模块复选框，`2611ef0` 以 5 个行为失败复现并补齐；矩阵 25 PASS，规格与质量复审通过。
+- 真实浏览器首次红灯是旧 ABC 夹具查询已退役 manage，后续修正虚拟隐藏 option 与重复标题定位，未改产品或减弱授权断言。`395b839` 的 ABC 六条和矩阵一条 7/7 PASS，规格通过；质量审查发现普通 `fill(secret)` 失败步骤会将参数写入报告。这里复现使用随机非敏感 canary，不声称真实口令已经泄漏。
+- `2473bb0` 以真实 Playwright 子 runner 的 disabled password 输入复现 RED（18.3 s），list 输出和完整 JSON（含嵌套步骤）含 canary；保护输入 GREEN（18.9 s），正常替换/输入成功、disabled 输入仍失败但只保留阶段脱敏诊断，报告不含 canary。前置检查已接入 `test:e2e`，三文件 10/10 真实网关测试通过；规格与保密质量复审通过。
+- 首次根 phase-1 FAIL：PG 72、API 256 通过，Web 68 PASS / 1 FAIL（274.64 s）；连续草稿确认中标题已存在但新组织弹窗处于 `ant-zoom-appear-prepare`、opacity 0，21.8 s 即失败，并非 45 s 测试超时。单独重跑通过不关闭聚合失败。`0850cfe` 仅在测试局部禁 motion、明确等待取消关闭，不改产品或延长 timeout；定向 2/2 和矩阵 25/25 通过，最终聚合中全量 69/69 已通过。
+- 同次测试补修关闭可信输入事件证据缺口：先用“清空触发事件、随后无事件改变值”mutation 证明旧断言误 PASS（4.8 s）；增强为事件携带值的布尔检查后同 mutation 正确 FAIL；恢复正常实现后 canary GREEN（18.075 s）。该修订没有改动秘密输入产品辅助函数。
+
+`0850cfe` 测试补修规格与质量复审均 PASS；最终全代码 `524da12..0850cfe` 先规格后质量审查 PASS，无未关闭 P1/P2/P3。最终六份文档也先规格后质量独立复审 PASS，22 个相对链接和 diff check PASS。四个补充任务完成，文件清理 FAIL/受阻的环境限制保持。文档随本交接提交，由主代理随后本地 fast-forward 同步；最终提交号与 Git 状态记入交付报告。
+
+秘密输入辅助只支持当前 Chromium 验收，通过空 fill 执行动作条件检查/清空/聚焦，再以公开 CDP `Input.insertText` 输入，布尔比较确认实际值并 finally 断开 session。它不保证 API payload、console、自定义断言或协议 debug 输出的全局脱敏；trace、截图、视频和 DOM 秘密快照仍须独立关闭。其他浏览器引擎须先验证输入通道。环境中普通 Ant Design deprecated 警告与上述 vendor chunk warning 保留，不把它们写成测试/构建失败。
+
+旧 ABC 的 E 盘安装 FAIL、`%TEMP%/qms-abc-validation` 删除被策略拒绝等事实保持历史记录。后续检查该旧临时目录已不在，但消失原因未建立，不能写成此次主动完成了旧清理。本轮验证目录仍包含仓库外配置 XML、日志、shim 和脱敏 ledger，浏览器结果目录也仍存在，删除受阻情况见表；临时 PostgreSQL 实例已销毁，残留凭据不再对应运行中的该实例。预览专用配置与日志刻意保留供本地运行。所有这些文件均未提交。
+
+本地预览仍由 C 盘 NTFS 工作树提供，编辑 E 盘主项目不会热更新到此预览；需保留 C 工作树和开发进程。预览辅助检查首次使用精确“账号”标签忽略了 Ant Design 必填星号而定位失败，读取实际 DOM 后按实际可访问名称修正定位，复验通过，未修改产品。此登录页与重置页可见性检查不替代一次性网关上已通过的账号授权浏览器闭环。
+
+本轮仅证明账号细权限及分组配置闭环。原批次 2 的 16 任务深度流程运行时、业务 Worker、完整业务浏览器链路仍缺；phase-2 四项回归不能替代它们。D–H 与批次 3 本轮不启动；既有可另行并行分配、供应商试点门禁及批次 4 专属领域模型要求保持，见 [PHASE-2](PHASE-2.md)。
