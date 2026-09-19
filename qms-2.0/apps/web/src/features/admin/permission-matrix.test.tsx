@@ -1,5 +1,6 @@
 import { render, screen, within, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import { ConfigProvider } from 'antd';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
@@ -40,7 +41,7 @@ function server(patch?: (init: RequestInit) => Response | Promise<Response>) {
   return fetch;
 }
 async function openMatrix(permissions = organization.permissions, extra: AdminOrganization[] = []) {
-  render(<AdminPage organizations={[{ ...organization, permissions }, ...extra]} />);
+  render(<ConfigProvider theme={{ token: { motion: false } }}><AdminPage organizations={[{ ...organization, permissions }, ...extra]} /></ConfigProvider>);
   await interaction.click(screen.getByRole('tab', { name: '权限矩阵' }));
   await screen.findByRole('combobox', { name: '选择角色' });
   await screen.findByRole('checkbox', { name: '用户管理 · 查看' });
@@ -148,13 +149,16 @@ it('keeps dirty drafts across tabs and confirms before switching role or organiz
   await select('选择角色', '第二角色');
   await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
   await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
   await select('管理组织', '乙组织 · b');
   await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
   await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
   await select('选择角色', '第二角色');
   await interaction.click(screen.getByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(screen.getByRole('checkbox', { name: '工作台 · 查看' })).not.toBeChecked());
   await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await select('管理组织', '乙组织 · b');

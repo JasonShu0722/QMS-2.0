@@ -12,9 +12,9 @@ test('disabled secret input fails', async ({ page }) => {
 });
 
 test('enabled secret input replaces the value and emits browser input', async ({ page }) => {
-  await page.setContent('<label>Password<input type="password" value="old value" oninput="this.dataset.edited = event.isTrusted"></label>');
+  await page.setContent('<label>Password<input type="password" value="old value" oninput="if (event.isTrusted) this.dataset.lastTrustedValue = this.value"></label>');
   const input = page.getByLabel('Password');
   await fillSecret(input, canary);
   expect((await input.inputValue()) === canary).toBe(true);
-  await expect(input).toHaveAttribute('data-edited', 'true');
+  expect((await input.getAttribute('data-last-trusted-value')) === canary).toBe(true);
 });
