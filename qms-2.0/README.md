@@ -66,6 +66,8 @@ docker compose -f deployment/docker-compose.foundation.yml down --volumes --remo
 
 ## Verification and CI
 
+Batch 2 platform acceptance entry is `corepack pnpm acceptance:phase-2`; it runs full tests, contracts, archive isolation and build checks. The batch 2 handoff and evidence matrix are recorded in [PHASE-2](docs/PHASE-2.md). Batch 3 starts with the supplier-quality pilot only after platform runtime, permissions, browser evidence and disposable PostgreSQL gates are complete.
+
 The complete reproducible acceptance entry is `corepack pnpm acceptance:phase-1`. It requires the disposable database, seed passwords, Compose variables and a running loopback gateway in `QMS_ACCEPTANCE_BASE_URL`, then runs frozen installation, database integration, unit tests, builds, Compose configuration, archive isolation, contract synchronization and real Chromium login tests. Missing prerequisites fail instead of skipping. Install Chromium first with `corepack pnpm --filter @qms/web exec playwright install chromium`.
 
 See [foundation acceptance and handoff](docs/FOUNDATION.md) for the behavior matrix, environment and actual execution results, [OpenAPI](docs/OPENAPI.md) for the contract workflow, and [security boundaries](docs/SECURITY.md) for implemented protections and remaining deployment work. A passing configuration check is not a container build or deployment result; each evidence level is recorded separately.
