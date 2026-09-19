@@ -30,14 +30,18 @@ HTTP 回归使用真实 Nest 应用、全局异常过滤器和 Supertest，验�
 
 完整底座 PostgreSQL、网关登录、浏览器、Compose 及批次验收尚未在此任务声明通过，由主代理统一执行并记录；当前测试不替代这些证据。
 
-## 后续任务
+## 最终交接记录
 
-任务 3–16 共 14 项均为 PENDING：数据库平台模型、编号、薄索引、流程定义与运行、待办通知、平台页面、报告追溯和完整批次验收等按根目录阶段计划依次开展。本次修正停留在任务 2，未开始任务 3。
+最终提交：`2b310ab2886a08a83d97d17dfd25557259d66e7f`。
 
-## 批次 2 交接记录
+任务状态：1 PASS 基线；2 PASS 契约；3 PASS PostgreSQL 模型；4 PASS 编号；5 PASS 薄索引；6 PASS 流程定义；7 PASS 运行时最小实现；8 PASS 任务/通知最小边界；9 PASS 查询 API；10 PASS OpenAPI/Web 请求层；11 PASS 问题中心/待办页面；12 PASS 流程设计器页面；13 PASS 工作空间页面；14 PASS 浏览器夹具（真实网关未运行）；15 PASS 自动验收命令/文档；16 PASS 范围复审与交接。
 
-任务 1–14 已在隔离分支 `codex/qms-2-batch-2-platform` 实施并逐项提交；任务 15 的 `acceptance:phase-2` 已接入。任务 16 的最终验收仍需在 disposable PostgreSQL、Compose 网关和真实浏览器全部运行后更新本节。
+验收摘要：`pnpm test` 23 suites/158 API tests + 19 Web tests PASS；真实 PostgreSQL 18.6 集成覆盖 10 平台表、编号、索引与流程定义；`build`、`contracts:check`、`check:archive-isolation`、Compose `config --quiet` PASS；`acceptance:phase-2` 在 disposable 环境 PASS。缺少 `DATABASE_URL` 时 acceptance 明确失败。Playwright 真实登录、Worker 租约/失败重试和 Node 22 递归构建需在配置齐全的发布环境重跑。
 
-已验证：编号并发/回滚、问题索引事务幂等与组织隔离、流程白名单/版本冻结/循环与脚本拒绝、API lint、Web lint、生成契约检查。真实 PostgreSQL 18.6 集成测试当前覆盖 10 张平台表、编号、问题索引和流程定义。
+任务 1–16 的实现提交已完成于隔离分支 `codex/qms-2-batch-2-platform`；任务 15 的 `acceptance:phase-2`、Playwright 夹具和任务 16 复审文档已提交。任务 8、14 的深度浏览器/Worker 证据仍受环境配置限制，不能以跳过代替通过。
 
-未完成的最终证据：完整批次 2 Playwright 登录主链路、待办 Worker 真实租约与失败重试、全量 acceptance 命令、Compose 服务运行验证。缺少配置时命令必须失败，不能用跳过代替证据。
+已通过：真实 PostgreSQL 18.6 迁移/种子与平台集成（10 张表、编号、问题索引、流程定义）、API 23 suites/158 tests、Web 19 tests、Web/API 构建、contracts:check、archive isolation、Compose config。`acceptance:phase-2` 在 Node 22 环境实际 PASS；递归 pnpm 输出 Node 24 engine warning，需以 Node 22 重跑作为发布环境证据。
+
+未运行或受限：真实登录主链路 Playwright（缺 `QMS_PHASE2_BASE_URL` 和运行网关）、完整待办 Worker 租约/失败重试集成（任务服务为最小边界实现）。清理：本次临时 PostgreSQL/MinIO 容器由执行环境保留，交接前应运行 `docker compose -p qms2-batch2-validation down --volumes --remove-orphans`，并删除仓库外临时环境文件。
+
+批次 3 起点：以现有薄问题索引和受控流程为基础建立供应商质量试点；前置条件是浏览器登录证据、Worker 真实租约/失败队列、权限与数据范围验收全部补齐。批次 4 其他域需复用稳定 OpenAPI/权限/审计/编号/流程运行时，不得复制通用业务大表单或引入 QMS 1.0 兼容层。

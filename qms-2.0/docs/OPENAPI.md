@@ -10,6 +10,11 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 | `POST /api/v1/auth/logout` | CSRF 校验后撤销会话、清除 Session Cookie，返回 204 |
 | `GET /api/v1/organizations/current` | 功能与组织范围校验后返回组织；可选 organizationId 不能拓宽供应商范围 |
 | `GET /api/v1/system/permissions` | 返回服务端授权上下文的组织及权限列表 |
+| `GET /api/v1/problem-index` / `:id` / `:id/workspace` | 返回组织范围内的薄问题索引 |
+| `GET /api/v1/problem-center` | 返回问题中心分页查询 |
+| `GET /api/v1/reports/problems/:id` | 返回只读报告预览，不暴露隔离附件下载地址 |
+| `GET /api/v1/problems/:id/audit-trail` | 返回问题审计追溯 |
+| `POST/PATCH /api/v1/workflows...` | 受 `workflow:manage` 保护的草稿、校验、发布和复制接口 |
 
 写请求携带 Cookie 和 `x-csrf-token`，Web 请求使用同源 `/api/v1`。错误统一包含 `code`、`message`、`fields`、`traceId`；不对客户端暴露堆栈、SQL、口令或内部路径。CSRF、限流和组织权限错误都有稳定代码；具体 status/schema 以当前生成契约为准。
 
