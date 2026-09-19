@@ -50,7 +50,7 @@ const test = base.extend<{ admin: { client: APIRequestContext; organization: Org
     const directory = await client.get('/api/v1/admin/organizations');
     expect(directory.status()).toBe(200);
     const organizations = await directory.json() as Organization[];
-    const organization = organizations.find((entry) => entry.type === 'INTERNAL' && entry.permissions.includes('account:users:manage'));
+    const organization = organizations.find((entry) => entry.type === 'INTERNAL' && entry.permissions.includes('account:users:create'));
     expect(!!organization).toBe(true);
     const users: User[] = [];
     const roles: Role[] = [];
@@ -176,9 +176,7 @@ test('C role CRUD, template copy, assignments and matrix reflect real authorizat
   const code = unique('abc_role');
   await page.getByLabel('角色代码', { exact: true }).fill(code);
   await page.getByLabel('角色名称', { exact: true }).fill(code);
-  await page.getByLabel('角色权限', { exact: true }).click();
-  await page.locator('.ant-select-item-option').filter({ hasText: 'account:users:read' }).click();
-  await page.getByLabel('角色名称', { exact: true }).click();
+  await page.getByRole('dialog').getByRole('checkbox', { name: '用户管理 · 查看用户', exact: true }).check();
   const created = page.waitForResponse((response) => response.url().endsWith('/admin/roles') && response.request().method() === 'POST');
   await page.getByRole('button', { name: '保存角色', exact: true }).click();
   const roleResponse = await created;
@@ -212,11 +210,9 @@ test('C role CRUD, template copy, assignments and matrix reflect real authorizat
   const assigned = await (await admin.client.get(scope(`users/${fixture.user.id}/roles`, admin.organization.id))).json() as Schema['AdminUserRolesDto'];
   expect(assigned.roles.some((entry) => entry.id === role.id)).toBe(true);
   await page.getByRole('tab', { name: '权限矩阵' }).click();
-  const header = page.getByRole('columnheader', { name: `${code} edited`, exact: true });
-  await expect(header).toBeVisible();
-  const index = await header.evaluate((element) => Array.from(element.parentElement!.children).indexOf(element));
-  const permissionRow = page.getByRole('row').filter({ has: page.locator('code').filter({ hasText: /^account:users:read$/ }) });
-  await expect(permissionRow.getByRole('cell').nth(index)).toHaveText('已授权');
+  await page.getByLabel('选择角色', { exact: true }).click();
+  await page.locator('.ant-select-item-option').filter({ hasText: `${code} edited` }).click();
+  await expect(page.getByRole('checkbox', { name: '用户管理 · 查看用户', exact: true })).toBeChecked();
   await page.getByRole('tab', { name: '角色', exact: true }).click();
   const inUse = page.waitForResponse((response) => response.url().includes(`/roles/${role.id}?`) && response.request().method() === 'DELETE');
   await page.getByRole('row').filter({ has: page.getByText(`${code} edited`, { exact: true }) }).getByRole('button', { name: '删除角色' }).click();
