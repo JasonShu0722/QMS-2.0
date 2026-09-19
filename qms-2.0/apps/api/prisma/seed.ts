@@ -43,6 +43,12 @@ async function seed(): Promise<void> {
           ['system:permissions:read', '查看系统权限'],
           ['problem-index:read', '查看问题索引'],
           ['workflow:manage', '管理受控流程'],
+          ...(type === 'INTERNAL' ? [
+            ['account:users:read', '查看用户账号'],
+            ['account:users:manage', '管理用户账号'],
+            ['account:roles:read', '查看角色与权限'],
+            ['account:roles:manage', '管理角色与权限'],
+          ] : []),
         ] as const;
         for (const [code, name] of permissions) {
           const permission = await tx.permission.upsert({

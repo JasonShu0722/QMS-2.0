@@ -7,6 +7,7 @@ export function AccountCenterPage() {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<string>();
+  const [success, setSuccess] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
@@ -25,28 +26,29 @@ export function AccountCenterPage() {
   useEffect(() => { void load(); }, []);
 
   async function saveProfile(values: { email?: string }) {
-    setSaving(true); setError(undefined);
-    try { setProfile(await updateAccountProfile({ email: values.email || null })); }
+    setSaving(true); setError(undefined); setSuccess(undefined);
+    try { setProfile(await updateAccountProfile({ email: values.email || null })); setSuccess('资料已保存'); }
     catch (cause) { setError(cause instanceof ApiError ? cause.message : '账号信息保存失败'); }
     finally { setSaving(false); }
   }
 
   async function savePassword(values: { currentPassword: string; newPassword: string }) {
-    setSaving(true); setError(undefined);
-    try { await changeAccountPassword(values); passwordForm.resetFields(); await load(); }
+    setSaving(true); setError(undefined); setSuccess(undefined);
+    try { await changeAccountPassword(values); passwordForm.resetFields(); setSuccess('密码已修改，其他会话已撤销'); await load(); }
     catch (cause) { setError(cause instanceof ApiError ? cause.message : '密码修改失败'); }
     finally { setSaving(false); }
   }
 
   async function revoke(sessionId: string) {
-    setError(undefined);
-    try { await revokeAccountSession(sessionId); setSessions(await getAccountSessions()); }
+    setError(undefined); setSuccess(undefined);
+    try { await revokeAccountSession(sessionId); setSessions(await getAccountSessions()); setSuccess('会话已撤销'); }
     catch (cause) { setError(cause instanceof ApiError ? cause.message : '会话撤销失败'); }
   }
 
   return <section className="account-center">
     <Typography.Title level={2}>个人账号</Typography.Title>
     {error ? <Alert type="error" showIcon message={error} /> : null}
+    {success ? <Alert type="success" showIcon title={success} /> : null}
     <div className="account-grid">
       <Card title="基本信息" loading={!profile}>
         {profile ? <Space direction="vertical" size="small" className="account-summary">

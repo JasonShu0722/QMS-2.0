@@ -1,4 +1,5 @@
-import { Layout, Typography } from 'antd';
+import { Alert, Layout, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { activeInternalDomain, internalNavigation } from '../features/navigation/navigation';
 import { WorkTabs } from '../work-tabs/WorkTabs';
@@ -9,6 +10,9 @@ import { MyTasksPage } from '../features/tasks/MyTasksPage';
 import { WorkflowDesignerPage } from '../features/workflows/WorkflowDesignerPage';
 import { ProblemWorkspacePage } from '../features/problem-workspace/ProblemWorkspacePage';
 import { AccountCenterPage } from '../features/account/AccountCenterPage';
+import { AdminPage } from '../features/admin/AdminPage';
+import { getAdminOrganizations, type AdminOrganization } from '../features/admin/admin';
+import { safeAccountError } from '../api/client';
 
 const { Content, Sider } = Layout;
 
@@ -28,6 +32,15 @@ export function InternalLayout() {
   const isWorkbench = location.pathname === '/app/workbench' || location.pathname === '/app';
   const active = activeInternalDomain(location.pathname);
   const collapsed = !isWorkbench;
+  const [organizations, setOrganizations] = useState<AdminOrganization[] | null>(null);
+  const [adminError, setAdminError] = useState<string>();
+  const isAdmin = location.pathname.startsWith('/app/admin');
+  const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin'].some((path) => location.pathname.startsWith(path));
+  useEffect(() => {
+    let current = true;
+    void getAdminOrganizations().then((result) => { if (current) setOrganizations(result); }).catch((cause) => { if (current) setAdminError(safeAccountError(cause)); });
+    return () => { current = false; };
+  }, []);
 
   function openNavigationTab(item: { label: string; path: string }) {
     openTab({ id: item.path, title: item.label, path: item.path });
@@ -41,7 +54,7 @@ export function InternalLayout() {
           QMS 2.0
         </Link>
         <nav aria-label={collapsed ? '内部领域图标导航' : '内部领域导航'} className="domain-nav">
-          {internalNavigation.map((item) => {
+          {internalNavigation.filter((item) => item.path !== '/app/admin' || !!organizations?.length).map((item) => {
             const Icon = item.icon;
             return (
               <Link
@@ -63,8 +76,9 @@ export function InternalLayout() {
       <Layout>
         <Content className="content-shell">
           <WorkTabs />
+          {adminError && !isAdmin ? <Alert type="error" title={`管理权限加载失败：${adminError}`} /> : null}
           {!collapsed ? <Workbench /> : null}
-          {active ? (
+          {active?.context?.length ? (
             <aside className="context-panel">
               <Typography.Title level={3}>{active.label}上下文</Typography.Title>
               <nav aria-label={`${active.label}上下文菜单`}>
@@ -76,12 +90,13 @@ export function InternalLayout() {
               </nav>
             </aside>
           ) : null}
-          {collapsed && active ? <EmptyDomain title={active.label} /> : null}
+          {collapsed && active && !implemented ? <EmptyDomain title={active.label} /> : null}
           {location.pathname.startsWith('/app/problem-center') ? <ProblemCenterPage /> : null}
           {location.pathname.startsWith('/app/my-tasks') ? <MyTasksPage /> : null}
           {location.pathname.startsWith('/app/workflow-designer') ? <WorkflowDesignerPage /> : null}
           {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage /> : null}
           {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
+          {isAdmin ? <AdminPage organizations={organizations} error={adminError} /> : null}
         </Content>
       </Layout>
     </Layout>

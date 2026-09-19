@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
+const getComputedStyle = window.getComputedStyle.bind(window);
+window.getComputedStyle = (element) => getComputedStyle(element);
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({

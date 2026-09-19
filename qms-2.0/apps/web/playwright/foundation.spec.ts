@@ -37,7 +37,7 @@ test.beforeAll(async ({ playwright }) => {
 for (const account of accounts) {
   test(`real ${account.type} login, scope and revocation`, async ({ page, context }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'QMS 2.0' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
     await page.getByLabel('账号', { exact: true }).fill(account.identifier);
     await page.getByLabel('密码', { exact: true }).fill(account.password!);
     const loginResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'));

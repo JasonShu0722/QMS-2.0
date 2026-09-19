@@ -98,3 +98,78 @@ git diff --stat
 实现代理本次 `rg` 范围审查仅命中供应商质量导航标签/占位路径及 S3CompatibleObjectStorage 的标准协议名称；Prisma 仅含组织、用户、角色权限、会话、审计、附件与 Outbox 十个底座模型，无上述业务模型。S3 兼容适配不是旧系统兼容层，合法导航和边界说明保留。新增安全审计是验收发现的底座缺陷补修，主代理确认范围后实施；未添加密码重置或权限修改接口。
 
 批次 2 从新批准的“问题与流程平台”设计/阶段计划开始：明确薄公共索引与领域所有权、编号不变性、受控节点及不可变流程版本、运行权限、幂等/乐观锁/事务边界；然后设计待办通知、台账个人视图、处理空间及报告追溯。先消除本矩阵未通过项，再建立这些能力的真实测试。供应商质量专业业务闭环属于后续批次 3，不在任务 8 实现。
+
+## ABC API 安全修订验证（2026-09-18 本地 / 2026-09-19 UTC）
+
+本节补充并更新前述阶段 1 历史边界：B/C 管理 API 和一次性重置 API 已实现，功能权限改为选定目标组织；管理员 Web 界面与完整浏览器聚合验收仍由后续工作完成，不能据本节宣称 ABC 产品验收完成。
+
+环境：独立工作树 `codex/qms-2-admin-foundation`，Windows PowerShell，Node 22.22.0（`corepack pnpm exec node --version` 实测）、pnpm 11.19.0，临时 PostgreSQL 18.6 / 本机 55442。凭据从仓库外临时 XML 加载，未写入代码或本文；原有 local seed 账号密码保持不变。首次红灯启动时数据库尚未迁移，先得到缺表错误；部署既有迁移后重新运行才作为有效缺陷证据。
+
+| 实际命令 / 动作 | 结果与范围 |
+| --- | --- |
+| 新 `admin-security-schema.integration-spec.ts`，修复前实跑 | FAIL：5 条分别复现目标组织越权、非法 UUID 导致 500、创建重放失败、重置 DTO 缺失、跨组织同名被接受 |
+| C 全局角色移除 / 拒绝审计新增单测 | FAIL：2 条新增失败，旧 20 条通过；接入公共事务与全局角色拒绝后通过 |
+| A 原子资料审计 / 密码 CAS / 有效会话新增单测 | FAIL：3 条复现旧行为，修复后通过 |
+| B 全局角色迁移旁路 / C 升权后旧重置凭证 | FAIL：原行为返回 200 / 204；补同事务拒绝和凭证失效后通过 |
+| 重置兑换限流伪 Cookie 回归 | FAIL：第 31 个不同假 Cookie 仍放行；改为用途前缀 + resetId + IP 后通过 |
+| `pnpm --filter @qms/api test`（加载临时 PG） | PASS：31 suites / 221 tests；现有两个 problem-index integration 文件仍由该入口运行，因此本次提供真实 PG，没有跳过或 SQLite |
+| `pnpm --filter @qms/api test:integration` | PASS：12 个迁移部署、seed 保持既有密码，3 suites / 36 tests；新增 21 条覆盖真实授权、迁移、幂等、并发、一次性重置、审计回滚、邮箱冲突及 A 密码 CAS |
+| 新 PG 安全套件 + C service + 重置限流定向测试 | PASS：3 suites / 44 tests，含成功重放不重复审计、并发消费只成功一次、全局角色旁路拒绝和升权后旧凭证失效 |
+| 移除 `DATABASE_URL` 后运行新 PG 安全套件 | 预期 FAIL / exit 1：明确提示需要 PostgreSQL 配置，0 tests 执行，没有静默跳过或数据库替代 |
+| `pnpm contracts:generate`；`pnpm contracts:check` | PASS：Swagger 导出和生成类型同步，包含组织目录、typed organization、B/C 幂等头及重置签发/兑换 DTO；生成脚本同时完成 API Prisma/Nest 构建 |
+| `pnpm --filter @qms/web test`；`pnpm --filter @qms/web build` | PASS：5 files / 20 tests，TypeScript/Vite 构建通过；已有 Ant Design 废弃属性提示，不影响结果 |
+| `pnpm check:archive-isolation`；`docker compose -f deployment/docker-compose.foundation.yml config --quiet`；`git diff --check` | PASS；仅配置解析和归档/格式隔离，不冒充新容器部署或真实浏览器验收 |
+
+限制：本修复代理未实现管理员 Web 页面、未运行更新后的 `acceptance:phase-1` 或真实网关浏览器主链路；由主代理在 UI 完成后执行最终聚合验收。本节不修改或重新认定既有阶段 2 工作流运行时、Worker、MFA、对象存储和生产治理的交付状态。新 migration 遇到历史用户名格式或大小写唯一冲突会明确失败，不删除既有数据。
+
+### ABC 复审补修：主组织迁移（2026-09-19 UTC）
+
+真实 PostgreSQL 红灯复现：问题负责人和通知接收人迁移得到 200 并级联修改业务组织，流程任务办理人迁移得到 500；三个复合外键均为 CASCADE，竞态 P2003 未映射。新增迁移 `20260919010000_restrict_business_user_transfer` 改为 RESTRICT，管理事务在主组织变化时检查三种业务引用，返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409）并记录拒绝审计。
+
+- `corepack pnpm --dir qms-2.0 --filter @qms/api test:integration`：PASS，13 个迁移和 seed，3 suites / 40 tests。新增三类引用均验证用户、业务组织、角色、会话和重置凭证原样保留，无成功审计及幂等记录；直接 SQL 也无法迁移。相同主组织的邮箱编辑和停用继续成功。
+- `corepack pnpm --dir qms-2.0 --filter @qms/api test`（加载同一临时 PG）：PASS，31 suites / 223 tests；包括竞态 P2003 映射与拒绝审计回归。
+- `corepack pnpm --dir qms-2.0 contracts:generate`：PASS，API 构建及新增错误代码生成完成。
+- `corepack pnpm --dir qms-2.0 contracts:check`：PASS，新增错误代码无契约漂移；`git diff --check`：PASS。
+
+本次仍只修复账号主组织迁移安全边界，不代表管理员 UI 或 ABC 整体验收完成。测试环境沿用本节临时 PostgreSQL，最终由主代理统一销毁。
+
+### ABC 复审补修：登录与安全变更竞态（2026-09-19 UTC）
+
+沿用 Windows PowerShell、Node 22.22.0、pnpm 11.19.0、临时 PostgreSQL 18.6 / 55442。环境从仓库外 XML 注入进程，不打印或提交凭据。登录在 Argon2 校验后获取用户 `FOR UPDATE` 行锁，在同一事务内重新核对 ACTIVE 状态、已验证密码哈希、主组织和账号类型并创建会话；身份已变化时返回既有 `AUTH_INVALID_CREDENTIALS`（401），记录失败审计且不清除失败限流记录。成功限流记录延后至会话事务提交。
+
+| 实际命令 / 动作 | 结果与范围 |
+| --- | --- |
+| `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/identity/admin-security-schema.integration-spec.ts --testNamePattern='verified login\|login session that commits'`（API 目录，修复前） | 有效 FAIL：暂停已完成真实密码校验的登录，完成一次性重置、A 改密、停用、主组织或类型变化后放行；五条均预期 401 实得 200。先登录提交后重置的反向顺序一条 PASS |
+| 同套件与 `test/identity/auth.e2e-spec.ts` 定向运行（修复后） | PASS：2 suites / 45 tests；五条竞态返回 401、没有新会话 Cookie、没有新增有效会话、失败审计存在且未记录登录成功 |
+| 新 `holds the user lock` 回归，临时仅移除 `FOR UPDATE` | 有效 FAIL：独立 PostgreSQL 事务可在最终身份校验后、会话插入前修改密码。恢复锁后该写入触发真实 lock timeout，会话提交后写入恢复；不以普通事务重新读取替代行锁 |
+| `corepack pnpm --filter @qms/api test:integration`（恢复锁后） | PASS：13 个迁移、seed，3 suites / 47 tests；新增七条覆盖五类身份竞态、先登录后重置撤销、锁持有至会话提交 |
+| `corepack pnpm --filter @qms/api test`（同一临时 PG） | PASS：31 suites / 223 tests |
+| `corepack pnpm --filter @qms/api build`；`git diff --check` | PASS；无 API DTO / OpenAPI 变更，无生成契约修改 |
+
+组织和账号类型并发夹具通过真实 PostgreSQL 事务写入并撤销会话；一次性重置和停用走 HTTP，A 改密走实际 IdentityService。锁测试首次断言误用了旧 Prisma 错误元数据形状，修正为实际 adapter 的 lock timeout 错误后再移除锁取得上述有效红灯。完整 Web、Compose、契约和网关浏览器聚合验收由主代理在最终源码镜像上执行，本节不将针对性修复验证视为全部 ABC 验收。
+
+### ABC Web 复审补修：角色差异 PATCH（2026-09-19 UTC）
+
+环境：同一独立工作树，Windows PowerShell，显式使用 `C:\Program Files\nodejs\node.exe`（22.22.0）运行 Web 本地 CLI。角色编辑使用生成的 `UpdateAdminRoleDto` 只发送变更字段；权限按集合比较，顺序变化和完全未修改均不发 PATCH。纯改名不再误触发服务端权限重建及成员重置凭证失效，也不会覆盖其他管理员并发修改的权限。无 API 或生成契约变更。
+
+| 实际命令 / 动作（Web 目录） | 结果与范围 |
+| --- | --- |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx -t 'submits only changed role fields'`（修复前） | 有效 FAIL：4 条分别复现纯改名携带权限、未改仍写、权限更新携带名称、仅顺序变化仍写 |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx`（修复后） | PASS：10 条；另定向运行顺序回归，DOM 明确验证已重排，仍不写请求 |
+| `node node_modules/vitest/vitest.mjs run` | PASS：9 files / 40 tests；已有 Ant Design 废弃属性提示 |
+| `node node_modules/typescript/bin/tsc -b`；`node node_modules/vite/bin/vite.js build` | PASS；已有 Ant Design chunk 超过 900 kB 提示 |
+| `git diff --check` | PASS |
+
+主代理聚合发现凭证标签同时匹配 dialog 和 textarea 的实际失败，组件测试改用精确 textbox 角色定位，纳入以上 40 条通过结果。浏览器重置场景已扩展为真实成员分配、签发凭证、UI 纯改角色名、匿名兑换和拒绝重放；秘密仅保留内存，断言不输出秘密，关闭 failure DOM 快照及 trace/screenshot/video。该新增浏览器场景和最终镜像完整聚合验收由主代理运行，本节不将尚未执行的浏览器回归标记为通过。
+
+### ABC Web 复审补修：保存期间创建入口（2026-09-19 UTC）
+
+环境：同一独立工作树、Windows PowerShell，显式使用 `C:\Program Files\nodejs\node.exe`（22.22.0）运行 Web 本地 CLI。用户和角色保存尚未返回时，即使关闭编辑弹窗，顶部创建入口也保持禁用；成功或失败返回后恢复，允许新建并输入。生产变更仅为两处创建按钮添加 `disabled={busy}`，避免旧保存响应清空后开的表单。
+
+| 实际命令 / 动作（Web 目录） | 结果与范围 |
+| --- | --- |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx -t 'blocks creating'`（修复前） | 有效 FAIL：用户/角色两组分别覆盖 200 和 409，共 4 条均因关闭待保存弹窗后创建按钮未禁用而失败 |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx`（修复后） | PASS：14 条，包含 4 条新回归；验证待响应时无法新建，响应后可打开新表单并输入 |
+| `node node_modules/typescript/bin/tsc -b`；`node node_modules/vite/bin/vite.js build` | PASS；保留既有 Ant Design chunk 超过 900 kB 提示 |
+
+主代理另报告完整浏览器聚合中 foundation 两条用例因仍断言旧标题 `QMS 2.0` 而失败；本次仅将该 heading 断言同步为现有登录页的 `账号登录`，保留后续真实登录、scope 与退出链路。其定向浏览器复验、最终源码全量和新镜像验收由主代理执行；本节不认定 ABC 整体交付完成。

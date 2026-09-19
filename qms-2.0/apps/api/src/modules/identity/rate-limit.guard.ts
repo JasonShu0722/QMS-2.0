@@ -83,9 +83,11 @@ export class RateLimitGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RateLimitedRequest>();
-    const body = request.body as { identifier?: unknown } | undefined;
+    const body = request.body as { identifier?: unknown; resetId?: unknown } | undefined;
     const identifier =
-      typeof body?.identifier === 'string'
+      request.path?.toLowerCase().replace(/\/+$/, '') === '/api/v1/auth/password-reset/complete'
+        ? `qms:password-reset:${typeof body?.resetId === 'string' ? body.resetId : 'invalid'}`
+        : typeof body?.identifier === 'string'
         ? body.identifier
         : (parseCookie(request.headers.cookie, SESSION_COOKIE) ?? 'anonymous');
     const key = this.limits.key(identifier, request.ip ?? request.socket.remoteAddress ?? 'unknown');

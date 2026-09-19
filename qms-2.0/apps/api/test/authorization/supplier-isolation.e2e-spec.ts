@@ -81,17 +81,17 @@ const grants = [
   {
     userId: USERS.internalAdmin.id,
     organizationId: ORG_SUPPLIER_A.id,
-    permissions: [],
+    permissions: ['organization:read'],
   },
   {
     userId: USERS.internalAdmin.id,
     organizationId: ORG_SUPPLIER_B.id,
-    permissions: [],
+    permissions: ['organization:read'],
   },
   {
     userId: USERS.internalMember.id,
     organizationId: ORG_SUPPLIER_A.id,
-    permissions: [],
+    permissions: ['organization:read'],
   },
 ];
 
@@ -219,11 +219,7 @@ describe('supplier isolation HTTP guard', () => {
     ).expect(403);
 
     expect(response.body.code).toBe('ORGANIZATION_SCOPE_DENIED');
-    expect(prisma.userRole.count).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ organizationId: ORG_SUPPLIER_A.id }),
-      }),
-    );
+    expect(prisma.userRole.count).not.toHaveBeenCalled();
     expect(prisma.userRole.count).not.toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ organizationId: ORG_SUPPLIER_B.id }),
@@ -268,7 +264,7 @@ describe('supplier isolation HTTP guard', () => {
     expect(forbidden.body.code).toBe('ORGANIZATION_SCOPE_DENIED');
   });
 
-  it('requires feature permission for the authenticated user home organization', async () => {
+  it('requires feature permission in the selected organization', async () => {
     const response = await get(
       `/api/v1/system/permissions?organizationId=${ORG_SUPPLIER_A.id}`,
       'internal-member-token',
@@ -277,19 +273,15 @@ describe('supplier isolation HTTP guard', () => {
     expect(response.body.code).toBe('FEATURE_PERMISSION_DENIED');
   });
 
-  it('rejects missing feature permission before evaluating organization scope', async () => {
+  it('rejects unassigned organization scope before evaluating feature permission', async () => {
     const response = await get(
       `/api/v1/system/permissions?organizationId=${ORG_SUPPLIER_B.id}`,
       'internal-member-token',
     ).expect(403);
 
-    expect(response.body.code).toBe('FEATURE_PERMISSION_DENIED');
-    expect(prisma.userRole.count).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ organizationId: ORG_INTERNAL.id }),
-      }),
-    );
-    expect(prisma.userRole.findFirst).not.toHaveBeenCalledWith(
+    expect(response.body.code).toBe('ORGANIZATION_SCOPE_DENIED');
+    expect(prisma.userRole.count).not.toHaveBeenCalled();
+    expect(prisma.userRole.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           userId: USERS.internalMember.id,

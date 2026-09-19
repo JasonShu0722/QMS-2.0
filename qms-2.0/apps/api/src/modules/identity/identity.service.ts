@@ -8,6 +8,7 @@ import { SessionService } from './session.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import type { AccountProfileDto, UpdateAccountProfileDto } from './dto/account.dto.js';
+import { adminError, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -31,10 +32,7 @@ export class IdentityService {
     const user = identifier
       ? await this.prisma.user.findFirst({
           where: {
-            OR: [
-              { username: { equals: identifier, mode: 'insensitive' } },
-              { email: { equals: identifier, mode: 'insensitive' } },
-            ],
+            ...(identifier.includes('@') ? { email: { equals: identifier, mode: 'insensitive' } } : { username: { equals: identifier, mode: 'insensitive' } }),
           },
         })
       : null;
@@ -47,8 +45,14 @@ export class IdentityService {
     const passwordMatches = await this.passwords.verify(user.passwordHash, password);
     if (!passwordMatches || user.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
 
+    const sessionToken = await this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
+      const current = await transaction.user.findUnique({ where: { id: user.id } });
+      if (!current || current.status !== 'ACTIVE' || current.passwordHash !== user.passwordHash || current.organizationId !== user.organizationId || current.accountType !== user.accountType) return null;
+      return this.sessions.create(current.id, transaction);
+    });
+    if (!sessionToken) return this.rejectLogin(rateKey, request, user);
     this.limits.recordSuccess(rateKey);
-    const sessionToken = await this.sessions.create(user.id);
     const response: LoginResponseDto =
       user.accountType === 'SUPPLIER'
         ? { accountType: 'SUPPLIER', landingPath: '/supplier/inbox' }
@@ -69,8 +73,8 @@ export class IdentityService {
     };
   }
 
-  async profile(userId: string): Promise<AccountProfileDto> {
-    const user = await this.prisma.user.findUnique({
+  async profile(userId: string, transaction: Pick<AdminTransaction, 'user'> = this.prisma): Promise<AccountProfileDto> {
+    const user = await transaction.user.findUnique({
       where: { id: userId },
       include: { organization: { select: { id: true, code: true, name: true } } },
     });
@@ -91,12 +95,17 @@ export class IdentityService {
   }
 
   async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string): Promise<AccountProfileDto> {
-    await this.prisma.user.update({ where: { id: userId }, data: { email: dto.email ?? null } });
-    await this.audit.record({
-      actorUserId: userId, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId,
-      outcome: 'SUCCESS', traceId,
-    });
-    return this.profile(userId);
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        await transaction.user.update({ where: { id: userId }, data: dto.email === undefined ? {} : { email: dto.email?.trim().toLowerCase() ?? null } });
+        const profile = await this.profile(userId, transaction);
+        await this.audit.record({ actorUserId: userId, organizationId: profile.organization.id, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId }, transaction);
+        return profile;
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') adminError('ADMIN_USER_DUPLICATE', 409);
+      throw error;
+    }
   }
 
   async changePassword(input: {
@@ -115,7 +124,9 @@ export class IdentityService {
     }
     const passwordHash = await this.passwords.hash(input.newPassword);
     await this.prisma.$transaction(async (transaction) => {
-      await transaction.user.update({ where: { id: input.userId }, data: { passwordHash } });
+      const changed = await transaction.user.updateMany({ where: { id: input.userId, passwordHash: user.passwordHash, status: 'ACTIVE' }, data: { passwordHash } });
+      if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+      await transaction.passwordReset.updateMany({ where: { userId: input.userId, consumedAt: null }, data: { consumedAt: new Date() } });
       await this.sessions.revokeOtherSessions(input.userId, input.currentSessionId, input.traceId, transaction);
       await this.audit.record({
         actorUserId: input.userId, organizationId: user.organizationId, action: 'PASSWORD_CHANGED',
