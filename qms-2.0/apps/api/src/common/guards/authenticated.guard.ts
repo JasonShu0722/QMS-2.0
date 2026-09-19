@@ -2,7 +2,11 @@ import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestj
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { parseCookie, SESSION_COOKIE, SessionService } from '../../modules/identity/session.service.js';
-import { ACCESS_CONTEXT_METADATA, type AccessContextRequirement } from '../../modules/authorization/access.decorator.js';
+import {
+  ACCESS_CONTEXT_METADATA,
+  AUTHENTICATION_REQUIRED_METADATA,
+  type AccessContextRequirement,
+} from '../../modules/authorization/access.decorator.js';
 import { AuthorizationService, type AuthorizedSession } from '../../modules/authorization/authorization.service.js';
 import { OrganizationScopeService } from '../../modules/organization/organization-scope.service.js';
 import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
@@ -52,13 +56,23 @@ export class AuthenticatedGuard implements CanActivate {
       ACCESS_CONTEXT_METADATA,
       [context.getHandler(), context.getClass()],
     );
-    if (!requirement) return true;
+    const authenticationRequired = this.reflector.getAllAndOverride<boolean | undefined>(
+      AUTHENTICATION_REQUIRED_METADATA,
+      [context.getHandler(), context.getClass()],
+    );
+    if (!requirement && !authenticationRequired) return true;
 
     const request = context.switchToHttp().getRequest<AuthorizedRequest>();
     const token = parseCookie(request.headers.cookie, SESSION_COOKIE);
     if (!token) this.sessionRequired();
     const session = await this.sessions.resolve(token);
     if (!session) this.sessionRequired();
+
+    if (!requirement) {
+      request[AUTHENTICATED_SESSION] = session;
+      request.authorizedOrganizationId = session.user.organizationId;
+      return true;
+    }
 
     let organizationId: string;
     try {

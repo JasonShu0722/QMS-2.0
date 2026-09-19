@@ -2,6 +2,7 @@ import { Layout, Typography } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supplierNavigation } from '../features/navigation/navigation';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
+import { AccountCenterPage } from '../features/account/AccountCenterPage';
 
 const { Content, Sider } = Layout;
 
@@ -43,10 +44,10 @@ export function SupplierLayout() {
         </nav>
       </Sider>
       <Content className="content-shell">
-        <section className="empty-domain">
+        {location.pathname.startsWith('/supplier/account') ? <AccountCenterPage /> : <section className="empty-domain">
           <Typography.Title level={2}>{active.label}</Typography.Title>
           <Typography.Paragraph type="secondary">供应商协作基础入口已就绪，暂无业务数据。</Typography.Paragraph>
-        </section>
+        </section>}
       </Content>
     </Layout>
   );

@@ -25,6 +25,7 @@ export const internalNavigation: NavigationItem[] = [
   { label: '审计管理', path: '/app/audits', icon: ClipboardCheck, context: ['计划', '发现项', '报告'] },
   { label: '体系文件', path: '/app/documents', icon: FileText, context: ['文件库', '评审', '分发'] },
   { label: '风险看板', path: '/app/risk-dashboard', icon: Gauge, context: ['风险矩阵', '预警规则'] },
+  { label: '个人账号', path: '/app/account', icon: UserCircle, context: ['基本信息', '修改密码', '登录会话'] },
 ];
 
 export const supplierNavigation: NavigationItem[] = [

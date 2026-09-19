@@ -1,5 +1,5 @@
 import type {
-  AccountType, ApiErrorPayload, CsrfResponse, LoginRequest, LoginResponse, SessionResponse,
+  AccountProfile, AccountSession, AccountType, ApiErrorPayload, ChangePasswordRequest, CsrfResponse, LoginRequest, LoginResponse, SessionResponse, UpdateAccountProfileRequest,
 } from '@qms/contracts';
 
 export type { AccountType, LoginResponse } from '@qms/contracts';
@@ -80,4 +80,38 @@ export async function getSession(): Promise<SessionView> {
     userId: response.user.id,
     organizationId: response.user.organizationId,
   };
+}
+
+export function getAccountProfile(): Promise<AccountProfile> {
+  return request<AccountProfile>('/api/v1/me');
+}
+
+export async function updateAccountProfile(body: UpdateAccountProfileRequest): Promise<AccountProfile> {
+  const token = await csrfToken();
+  return request<AccountProfile>('/api/v1/me', {
+    method: 'PATCH',
+    headers: { 'x-csrf-token': token },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function changeAccountPassword(body: ChangePasswordRequest): Promise<void> {
+  const token = await csrfToken();
+  await request<void>('/api/v1/me/password', {
+    method: 'POST',
+    headers: { 'x-csrf-token': token },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAccountSessions(): Promise<AccountSession[]> {
+  return request<AccountSession[]>('/api/v1/me/sessions');
+}
+
+export async function revokeAccountSession(sessionId: string): Promise<void> {
+  const token = await csrfToken();
+  await request<void>(`/api/v1/me/sessions/${sessionId}/revoke`, {
+    method: 'POST',
+    headers: { 'x-csrf-token': token },
+  });
 }
