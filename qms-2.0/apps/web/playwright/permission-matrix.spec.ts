@@ -1,10 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
+import { fillSecret } from './secret-input';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
-process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 if (!baseURL || !internalPassword || !process.env.DATABASE_URL) throw new Error('Permission matrix acceptance requires a real gateway, disposable PostgreSQL DATABASE_URL and the internal seed password; skipping is forbidden.');
 
 type Schema = components['schemas'];
@@ -25,7 +25,7 @@ async function write(client: APIRequestContext, path: string, method: string, da
 async function uiLogin(page: Page, identifier: string, secret: string) {
   await page.goto('/login');
   await page.getByLabel('账号', { exact: true }).fill(identifier);
-  await page.getByLabel('密码', { exact: true }).fill(secret);
+  await fillSecret(page.getByLabel('密码', { exact: true }), secret);
   const response = page.waitForResponse((entry) => entry.url().endsWith('/api/v1/auth/login'));
   await page.getByRole('button', { name: '登录', exact: true }).click();
   expect((await response).status()).toBe(200);
@@ -120,7 +120,7 @@ test('grouped matrix grants only selected user operations and revokes them on li
     const username = unique('matrix_created');
     const createdSecret = password();
     await dialog.getByLabel('用户名', { exact: true }).fill(username);
-    await dialog.getByLabel('初始密码', { exact: true }).fill(createdSecret);
+    await fillSecret(dialog.getByLabel('初始密码', { exact: true }), createdSecret);
     const created = restrictedPage.waitForResponse((response) => response.url().endsWith('/api/v1/admin/users') && response.request().method() === 'POST');
     await dialog.getByRole('button', { name: '保存用户', exact: true }).click();
     const createdResponse = await created;

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
+import { fillSecret } from './secret-input';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
 const supplierPassword = process.env.QMS_SEED_SUPPLIER_PASSWORD;
-process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 if (!baseURL || !internalPassword || !supplierPassword || !process.env.DATABASE_URL) throw new Error('ABC acceptance requires a real gateway, disposable PostgreSQL DATABASE_URL and both seed passwords; skipping is forbidden.');
 
 type Schema = components['schemas'];
@@ -29,7 +29,7 @@ async function apiLogin(client: APIRequestContext, identifier: string, secret: s
 async function uiLogin(page: Page, identifier: string, secret: string) {
   await page.goto('/login');
   await page.getByLabel('账号', { exact: true }).fill(identifier);
-  await page.getByLabel('密码', { exact: true }).fill(secret);
+  await fillSecret(page.getByLabel('密码', { exact: true }), secret);
   const response = page.waitForResponse((entry) => entry.url().endsWith('/api/v1/auth/login'));
   await page.getByRole('button', { name: '登录', exact: true }).click();
   expect((await response).status()).toBe(200);
@@ -94,8 +94,8 @@ test('A internal profile, other-session revocation and password rotation use rea
     expect((await other.request.get('/api/v1/auth/session')).status()).toBe(401);
     expect((await apiLogin(other.request, fixture.user.username, fixture.secret)).status()).toBe(200);
     const replacement = password();
-    await page.getByLabel('当前密码').fill(fixture.secret);
-    await page.getByLabel('新密码').fill(replacement);
+    await fillSecret(page.getByLabel('当前密码'), fixture.secret);
+    await fillSecret(page.getByLabel('新密码'), replacement);
     await page.getByRole('button', { name: '修改密码', exact: true }).click();
     await expect(page.getByText('密码已修改，其他会话已撤销')).toBeVisible();
     expect((await apiLogin(probe.request, fixture.user.username, fixture.secret)).status()).toBe(401);
@@ -134,7 +134,7 @@ test('B UI creates, searches, edits, disables and re-enables a user', async ({ p
   const secret = password();
   await dialog.getByLabel('用户名', { exact: true }).fill(username);
   await dialog.getByLabel('邮箱', { exact: true }).fill(`${username}@example.test`);
-  await dialog.getByLabel('初始密码').fill(secret);
+  await fillSecret(dialog.getByLabel('初始密码'), secret);
   const created = page.waitForResponse((response) => response.url().endsWith('/api/v1/admin/users') && response.request().method() === 'POST');
   await dialog.getByRole('button', { name: '保存用户' }).click();
   const result = await created;
@@ -287,8 +287,8 @@ test('B/C UI role rename preserves a memory-only credential for one anonymous re
   const replacement = password();
   try {
     await resetPage.goto('/reset-password');
-    await resetPage.getByLabel('重置凭证', { exact: true }).fill(credential);
-    await resetPage.getByLabel('新密码', { exact: true }).fill(replacement);
+    await fillSecret(resetPage.getByLabel('重置凭证', { exact: true }), credential);
+    await fillSecret(resetPage.getByLabel('新密码', { exact: true }), replacement);
     const completed = resetPage.waitForResponse((response) => response.url().endsWith('/auth/password-reset/complete'));
     await resetPage.getByRole('button', { name: '重置密码', exact: true }).click();
     expect((await completed).status()).toBe(204);

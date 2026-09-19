@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillSecret } from './secret-input';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 if (!baseURL || !process.env.QMS_SEED_INTERNAL_PASSWORD || !process.env.QMS_SEED_SUPPLIER_PASSWORD) {
@@ -39,7 +40,7 @@ for (const account of accounts) {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
     await page.getByLabel('账号', { exact: true }).fill(account.identifier);
-    await page.getByLabel('密码', { exact: true }).fill(account.password!);
+    await fillSecret(page.getByLabel('密码', { exact: true }), account.password!);
     const loginResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'));
     await page.getByRole('button', { name: '登录', exact: true }).click();
     const response = await loginResponse;
