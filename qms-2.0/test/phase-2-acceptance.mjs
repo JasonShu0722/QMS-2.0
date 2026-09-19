@@ -7,5 +7,5 @@ const commands = [
   ['build', ['--dir', 'qms-2.0', 'build']],
 ];
 const corepack = process.platform === 'win32' ? 'corepack.cmd' : 'corepack';
-for (const [name, args] of commands) { process.stdout.write(`PHASE2 ${name}...\n`); execFileSync(corepack, ['pnpm', ...args], { cwd: root, stdio: 'inherit' }); }
+for (const [name, args] of commands) { process.stdout.write(`PHASE2 ${name}...\n`); execFileSync(corepack, ['pnpm', ...args], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }); }
 process.stdout.write('PHASE2 acceptance: PASS\n');
