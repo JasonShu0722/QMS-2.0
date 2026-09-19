@@ -8,6 +8,7 @@ import {
   Target,
   UserCircle,
   Users,
+  Settings,
 } from 'lucide-react';
 
 export type NavigationItem = {
@@ -26,6 +27,7 @@ export const internalNavigation: NavigationItem[] = [
   { label: '体系文件', path: '/app/documents', icon: FileText, context: ['文件库', '评审', '分发'] },
   { label: '风险看板', path: '/app/risk-dashboard', icon: Gauge, context: ['风险矩阵', '预警规则'] },
   { label: '个人账号', path: '/app/account', icon: UserCircle, context: ['基本信息', '修改密码', '登录会话'] },
+  { label: '系统管理', path: '/app/admin', icon: Settings },
 ];
 
 export const supplierNavigation: NavigationItem[] = [

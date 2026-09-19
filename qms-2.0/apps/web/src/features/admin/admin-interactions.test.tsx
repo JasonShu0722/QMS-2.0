@@ -1,0 +1,115 @@
+import { render, screen, within, waitFor } from '@testing-library/react';
+import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
+import { afterEach, expect, it, vi } from 'vitest';
+import { UserAdministration } from './UserAdministration';
+import { RoleAdministration } from './RoleAdministration';
+import type { AdminOrganization, AdminUser } from './admin';
+import { AdminPage } from './AdminPage';
+
+const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+
+const organization: AdminOrganization = { id: 'org-a', code: 'a', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:manage', 'account:roles:read', 'account:roles:manage'] };
+const user: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+afterEach(() => vi.unstubAllGlobals());
+
+it('edits only changed user fields and keeps failed writes retryable with safe errors', async () => {
+  const requests: RequestInit[] = [];
+  let fail = true;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (init.method === 'PATCH') {
+      requests.push(init);
+      return Promise.resolve(fail ? json({ code: 'ADMIN_USER_ORGANIZATION_IN_USE', message: 'private backend detail' }, 409) : json(user));
+    }
+    return Promise.resolve(json([user]));
+  }));
+  render(<UserAdministration organization={organization} organizations={[organization]} />);
+  await userEvent.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
+  await userEvent.clear(screen.getByLabelText('邮箱'));
+  await userEvent.type(screen.getByLabelText('邮箱'), 'updated@example.test');
+  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
+  expect(await within(screen.getByRole('dialog')).findByText('该用户仍关联业务记录，无法变更主组织')).toBeInTheDocument();
+  expect(screen.queryByText('private backend detail')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('邮箱')).toHaveValue('updated@example.test');
+  fail = false;
+  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
+  expect(await screen.findByText('用户已保存')).toBeInTheDocument();
+  expect(requests.map((entry) => JSON.parse(String(entry.body)))).toEqual([{ email: 'updated@example.test' }, { email: 'updated@example.test' }]);
+  expect((requests[0].headers as Record<string, string>)['Idempotency-Key']).toBe((requests[1].headers as Record<string, string>)['Idempotency-Key']);
+}, 15_000);
+
+it('retains issued reset only until closing and generates a new code for the next operation', async () => {
+  const codes: string[] = [];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (path.includes('/password-reset')) { codes.push(JSON.parse(String(init.body)).temporaryCode); return Promise.resolve(json({ resetId: 'reset-id', expiresAt: '2026-09-19' }, 201)); }
+    return Promise.resolve(json([user]));
+  }));
+  render(<UserAdministration organization={organization} organizations={[organization]} />);
+  await userEvent.click(await screen.findByRole('button', { name: '签发重置凭证' }));
+  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
+  const credential = await screen.findByLabelText('一次性重置凭证');
+  expect((credential as HTMLTextAreaElement).value.startsWith('reset-id.')).toBe(true);
+  expect(codes[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  await userEvent.click(screen.getByRole('button', { name: '关闭并清除' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: '签发重置凭证' }));
+  expect(screen.queryByLabelText('一次性重置凭证')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
+  await screen.findByLabelText('一次性重置凭证');
+  expect(codes[0] === codes[1]).toBe(false);
+}, 30_000);
+
+it('shows global roles as read-only and exposes loading failures', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permissions') ? [] : [{ id: 'global', code: 'GLOBAL', name: 'Global Role', organizationId: null, permissions: [] }]))));
+  const rendered = render(<RoleAdministration organization={organization} />);
+  const row = (await screen.findByText('Global Role')).closest('tr')!;
+  expect(within(row).getByText('全局只读')).toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: '编辑角色' })).not.toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: '删除角色' })).not.toBeInTheDocument();
+  rendered.unmount();
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sensitive')));
+  render(<RoleAdministration organization={organization} />);
+  expect(await screen.findByText('请求失败，请重试')).toBeInTheDocument();
+});
+
+it('does not offer user role assignment without both read permissions', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([user])));
+  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:manage'] }} organizations={[organization]} />);
+  await screen.findByText('alice');
+  expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
+});
+
+it('never redisplays a credential when its pending issue dialog was closed', async () => {
+  let resolveIssue: ((response: Response) => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (path.includes('/password-reset')) return new Promise<Response>((resolve) => { resolveIssue = resolve; });
+    return Promise.resolve(json([user]));
+  }));
+  render(<UserAdministration organization={organization} organizations={[organization]} />);
+  await userEvent.click(await screen.findByRole('button', { name: '签发重置凭证' }));
+  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
+  await waitFor(() => expect(resolveIssue).toBeDefined());
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  resolveIssue!(json({ resetId: 'reset-id', expiresAt: '2026-09-19' }, 201));
+  await screen.findByText('重置凭证已签发');
+  expect(screen.queryByLabelText('一次性重置凭证')).not.toBeInTheDocument();
+}, 15_000);
+
+it('switches permissions with organization and ignores the previous organization response', async () => {
+  let resolveUsers: ((response: Response) => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => path.includes('/users?') ? new Promise<Response>((resolve) => { resolveUsers = resolve; }) : Promise.resolve(json([]))));
+  const other: AdminOrganization = { id: 'org-b', code: 'b', name: 'Organization B', type: 'SUPPLIER', permissions: ['account:roles:read'] };
+  render(<AdminPage organizations={[organization, other]} />);
+  await waitFor(() => expect(resolveUsers).toBeDefined());
+  await userEvent.click(screen.getByRole('combobox', { name: '管理组织' }));
+  await userEvent.click(screen.getByText('Organization B · b'));
+  expect(await screen.findByRole('tab', { name: '角色' })).toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: '用户' })).not.toBeInTheDocument();
+  resolveUsers!(json([user]));
+  await waitFor(() => expect(screen.queryByText('alice')).not.toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: '创建角色' })).not.toBeInTheDocument();
+}, 15_000);

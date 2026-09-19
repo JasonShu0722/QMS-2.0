@@ -19,6 +19,7 @@ export default defineConfig({
     proxy: { '/api/': 'http://127.0.0.1:3000' },
   },
   test: {
+    maxWorkers: 2,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],

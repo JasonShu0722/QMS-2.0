@@ -1,6 +1,7 @@
 import type {
   AccountProfile, AccountSession, AccountType, ApiErrorPayload, ChangePasswordRequest, CsrfResponse, LoginRequest, LoginResponse, SessionResponse, UpdateAccountProfileRequest,
 } from '@qms/contracts';
+import type { components } from '@qms/contracts';
 
 export type { AccountType, LoginResponse } from '@qms/contracts';
 
@@ -54,6 +55,50 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const apiRequest = request;
+
+type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
+  components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |
+  components['schemas']['UpdateAdminRoleDto'] | components['schemas']['CopyAdminRoleDto'] | components['schemas']['AssignAdminRolesDto'];
+
+export function createAdminMutation() {
+  let pending: { signature: string; key: string } | undefined;
+  return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody): Promise<T> {
+    const signature = JSON.stringify([path, method, body]);
+    if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
+    const attempt = pending;
+    const token = await csrfToken();
+    const result = await request<T>(path, { method, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (pending === attempt) pending = undefined;
+    return result;
+  };
+}
+
+export function safeAccountError(cause: unknown): string {
+  if (!(cause instanceof ApiError)) return '请求失败，请重试';
+  const messages: Record<string, string> = {
+    ADMIN_USER_ORGANIZATION_IN_USE: '该用户仍关联业务记录，无法变更主组织',
+    ADMIN_ROLE_IN_USE: '角色仍在使用，请先解除用户分配',
+    ADMIN_USER_DUPLICATE: '用户名或邮箱已存在',
+    ADMIN_ROLE_DUPLICATE: '角色代码已存在',
+    ADMIN_GLOBAL_ROLE_IMMUTABLE: '全局角色只读，不能通过组织管理变更',
+    ADMIN_SELF_DISABLE_FORBIDDEN: '不能停用当前账号',
+    ADMIN_SELF_LOCK_FORBIDDEN: '不能移除自身管理权限或变更自身身份',
+    ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH: '账号类型与主组织类型不一致',
+    AUTH_PASSWORD_RESET_INVALID: '重置凭证无效、已使用或已过期',
+    AUTH_PASSWORD_POLICY_INVALID: '密码不符合安全要求，请使用至少 12 位的强密码',
+    VALIDATION_FAILED: '请检查填写内容',
+    FEATURE_PERMISSION_DENIED: '无权执行此操作',
+    ORGANIZATION_SCOPE_DENIED: '无权访问该组织',
+    CSRF_INVALID: '安全校验失败，请重试',
+    RATE_LIMITED: '操作过于频繁，请稍后重试',
+  };
+  return messages[cause.code] ?? '请求被拒绝，请检查权限和填写内容后重试';
+}
+
+export async function completePasswordReset(body: components['schemas']['CompletePasswordResetDto']): Promise<void> {
+  const token = await csrfToken();
+  await request<void>('/api/v1/auth/password-reset/complete', { method: 'POST', headers: { 'x-csrf-token': token }, body: JSON.stringify(body) });
+}
 
 export async function csrfToken(): Promise<string> {
   const response = await request<CsrfResponse>('/api/v1/auth/csrf');
