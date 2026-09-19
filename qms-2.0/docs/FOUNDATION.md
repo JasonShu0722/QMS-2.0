@@ -1,4 +1,6 @@
-# 阶段 1 底座验收与交接
+# 底座与 ABC 账号治理验收记录
+
+本文件按时间保留验证历史。前半部分是阶段 1 的原始矩阵（包括当时在线镜像下载 FAIL 和缓存替代验证），不代表当前功能或最新构建状态；ABC API 修订和 Web 回归之后的最新汇总位于文末“ABC 最终聚合与本地交付”。本轮范围仅为 ABC，D–H、批次 3 和原批次 2 深度业务门禁不在本轮完成声明内。
 
 ## 范围与执行计划
 
@@ -31,7 +33,7 @@ corepack pnpm acceptance:phase-1
 
 ## 验收矩阵
 
-矩阵记录本次最终验证结果；唯一保留的 FAIL 是在线容器依赖下载超时。PASS 仅针对列出的行为和证据层级，不能扩大成后续业务功能已交付。
+本矩阵记录阶段 1 当时的最终验证结果；该轮保留的 FAIL 是在线容器依赖下载超时。PASS 仅针对列出的行为和证据层级，不能扩大成后续业务功能已交付；ABC 本轮在线镜像结果另见文末。
 
 | 项目 | 行为证据与 PASS 判定 | 可重现命令 | 本次状态 |
 | --- | --- | --- | --- |
@@ -77,7 +79,7 @@ corepack pnpm acceptance:phase-1
 | Compose 生命周期 | 修复后缓存镜像实际运行 PASS：api/postgres healthy、web/minio running、worker exited 0、API/Worker 同镜像且 API 无宿主端口、MinIO health 200、网关 OpenAPI/SPA 200 |
 | 规格复审 / 质量复审 | 主代理在提交前执行；本记录只保存最终证据，不以测试通过代替范围与文档审查 |
 
-## 已实现边界与未跑限制
+## 阶段 1 当时的边界与限制（历史）
 
 - 附件仅提供元数据策略、生命周期服务与 S3 兼容地址适配边界；没有公开上传/下载 API、签名上传、真实病毒扫描、对象版本保护或附件 UI。集成测试的扫描结果是受控输入，不代表运行防病毒服务。
 - 审计具备事务写入和元数据白名单，已接线登录失败、会话撤销、已认证授权拒绝与附件初始化。密码重置/权限修改/MFA 尚无接口，CSRF/限流/未认证拒绝也未纳入本次自动审计覆盖；不能用 `SECURITY_AUDIT_ACTIONS` 常量断言替代行为证据。
@@ -101,7 +103,7 @@ git diff --stat
 
 ## ABC API 安全修订验证（2026-09-18 本地 / 2026-09-19 UTC）
 
-本节补充并更新前述阶段 1 历史边界：B/C 管理 API 和一次性重置 API 已实现，功能权限改为选定目标组织；管理员 Web 界面与完整浏览器聚合验收仍由后续工作完成，不能据本节宣称 ABC 产品验收完成。
+本节保留 API 修订时的阶段证据：B/C 管理 API 和一次性重置 API 已实现，功能权限改为选定目标组织；当时管理员 Web 界面与完整浏览器聚合尚未完成。后续 Web 实现和本轮最终状态见文末，不能据本节单独宣称 ABC 产品验收完成。
 
 环境：独立工作树 `codex/qms-2-admin-foundation`，Windows PowerShell，Node 22.22.0（`corepack pnpm exec node --version` 实测）、pnpm 11.19.0，临时 PostgreSQL 18.6 / 本机 55442。凭据从仓库外临时 XML 加载，未写入代码或本文；原有 local seed 账号密码保持不变。首次红灯启动时数据库尚未迁移，先得到缺表错误；部署既有迁移后重新运行才作为有效缺陷证据。
 
@@ -173,3 +175,40 @@ git diff --stat
 | `node node_modules/typescript/bin/tsc -b`；`node node_modules/vite/bin/vite.js build` | PASS；保留既有 Ant Design chunk 超过 900 kB 提示 |
 
 主代理另报告完整浏览器聚合中 foundation 两条用例因仍断言旧标题 `QMS 2.0` 而失败；本次仅将该 heading 断言同步为现有登录页的 `账号登录`，保留后续真实登录、scope 与退出链路。其定向浏览器复验、最终源码全量和新镜像验收由主代理执行；本节不认定 ABC 整体交付完成。
+
+## ABC 最终聚合与本地交付（2026-09-19 UTC）
+
+结论：ABC 功能与最终验收 PASS，产品源码已本地合并，未 push。A 两门户邮箱/改密/有效会话与撤销，B 管理用户创建/查询/邮箱编辑/启停/受控组织类型迁移/一次性重置签发与兑换，C 组织角色 CRUD/复制/只读目录/角色分配/权限矩阵均有 API、生成契约、页面和验证证据。入口为 `/app/account`、`/supplier/account`、`/app/admin`、`/reset-password`。E 盘依赖安装 FAIL、临时文件清理被自动审批阻止，作为环境限制保留；不能将本轮写成全部清理完成。
+
+源码：独立工作树 `codex/qms-2-admin-foundation`；API 双阶段复审通过于 `efcf56c`，Web 双阶段复审通过于 `75b35034c32fba1c4ed1dc27dcdf111da1ded137`。最终产品与测试源码为后者；本地 main 已以 `9bccf614e47d6b764a564d20254d41649c626ff1` 合并，完整产品树与 `75b3503` 比较无差异，开发分支也已快进至该合并提交。文档规格与质量复审均 PASS，本文档收口单独提交后由主代理同步 main。环境：Windows、PowerShell 7、Node 22.22.0、pnpm 11.19.0、Docker 29.8.0、PostgreSQL 18.6、Playwright 1.63.0 / Chromium 153.0.8010.12。
+
+临时验证项目 `qms2-abc-validation`：PostgreSQL 55442、MinIO 19042 / console 19043、网关 18092；API 与浏览器使用同一临时数据库，`NODE_ENV=development` 仅支持 loopback HTTP 验收。原始日志、临时环境 XML/Compose override 和诊断材料保存在仓库外 `%TEMP%/qms-abc-validation`；本文只记录脱敏结果。用户本地预览属于另一项目 `qms2-local-preview`（PostgreSQL 55440、MinIO 19040/19041、入口 5173），不能随验收资源清理。
+
+Windows 运行时修正：系统 fallback `pnpm.cmd` 曾选择 Node 24；临时 Corepack 生成的 `.cmd` 又受本机透明加密影响无法被 cmd 读取。最终把仓库外临时 Corepack PowerShell shim 放在 PATH 前，设置 `pnpm_config_script_shell` 为 PowerShell 7 的实际路径、`pnpm_config_engine_strict=true`，并使用 Node 22.22.0 运行时；递归安装/测试/构建无 engine warning 才纳入本轮证据。临时脚本和秘密不提交。宿主 frozen install 使用已有依赖与缓存，不能宣称冷安装。
+
+| 实际命令 / 动作 | 已确认结果与限制 |
+| --- | --- |
+| `pnpm --filter @qms/api test:integration`（API 安全补修最终轮） | PASS：13 迁移、真实 PG 18.6，3 suites / 47 tests；组织范围、迁移引用保护、一次性重置/并发、事务审计、密码 CAS、登录用户行锁均含行为证据 |
+| `pnpm --filter @qms/api test`（同临时 PG） | PASS：31 suites / 223 tests；其中原有 problem-index integration 文件要求真实 PostgreSQL |
+| Web 角色差异 PATCH 全量与最后创建按钮定向回归 | 前轮全量 9 files / 40 tests PASS；最后定向 14 tests PASS（新增 4 条红绿）；最终源码聚合全量 9 files / 44 tests PASS |
+| 早期 `pnpm acceptance:phase-1` | FAIL：Web 凭证标签同时匹配 dialog 和 textarea；测试改用精确 textbox 角色定位后全量通过，历史失败保留 |
+| 先前真实网关浏览器全量 | 8/10 PASS、2 FAIL：新增 ABC 6 条全部通过，foundation 2 条仍使用旧登录页标题；`75b3503` 将标题断言同步为 `账号登录` 后，最终源码全量 10/10 PASS（38.3 秒），包含 foundation 3、ABC 6、登录页 smoke 1 |
+| 最终源码首次两次聚合 PG 步骤 | FAIL：一次 beforeAll、一次并发重试测试超过既有 5 秒时限；第二次无并行镜像构建仍失败，未直接调宽超时或跳过用例 |
+| 上述 PG 失败诊断与定向复验 | Docker Desktop VM 占用约 8 GiB，其中文件缓存约 6.6 GB，Windows 可用内存约 0.81 GiB。停止本次闲置 BuildKit、同步后释放 VM 文件缓存，未删除数据库数据；Windows 可用恢复约 6.65 GiB。原 PG 专套 32/32 PASS（12.321 秒），随后最终聚合 PG 3/47 PASS（14.414 秒）、API 31/223 PASS（26.299 秒），后续 phase-1 全步骤通过；未改测试时限 |
+| `docker compose -p qms2-abc-validation -f deployment/docker-compose.foundation.yml build api web`（按服务构建） | PASS：API `efcf56c` 与最终 Web `75b3503` 均使用仓库 Dockerfile 在线下载 npm 依赖并构建；基础层缓存不等于离线，未使用本轮 offline fallback。Web 最终镜像 `cf56b571d58c243798cb91c89169851a90d536fe95f84ad6c4477d292da3adb1` |
+| Compose 运行与存储 health | 已确认 API/PostgreSQL healthy、API 无宿主 port bindings、API/Worker 同镜像、MinIO health 200；最终 Web 镜像已 up。Worker 无业务 handler，单次 exit 0 符合底座行为，不代表通知业务完成 |
+| 最终 `pnpm acceptance:phase-1` | PASS / exit 0：frozen install、13 迁移/seed/真实 PG 3 suites / 47 tests、structure 与 contracts-package 共 2 tests、API 31 suites / 223 tests、Web 9 files / 44 tests、Web/API 构建、Compose 配置、归档隔离、contracts:check、真实浏览器 10/10 全部通过；源码 `75b3503`、同库运行网关 |
+| 随后 `pnpm acceptance:phase-2` | PASS / exit 0：API 31 suites / 223 tests、Web 9 files / 44 tests、contracts:check、归档隔离和构建通过；phase-1 → phase-2 顺序聚合整体 exit 0。仅按该脚本实际覆盖的四个步骤判定，不扩写为原平台全功能验收 |
+| 独立 `NODE_ENV=production` 构建 | PASS / exit 0；保留已有 Ant Design chunk 大小警告。聚合宿主为 development，此次另行设置 production 并完成构建，不以聚合步骤名称代替真实环境 |
+| 本地 main 产品合并 | PASS：既有 main 历史合并造成 ff-only 不成立，确认无独立产品树改动后执行本地 no-ff 合并，提交 `9bccf614e47d6b764a564d20254d41649c626ff1`；与 `75b3503` 的完整树差异检查 exit 0。未 push |
+| E 盘 `corepack pnpm --dir qms-2.0 install --frozen-lockfile` | FAIL：默认布局缓存跨盘复制 933 包后报 EISDIR，实测 E 盘为 exFAT，不支持所需符号链接；进程级 `pnpm_config_node_linker=hoisted` 两次重试均在 966/970 报 EPERM rename，分别涉及 class-validator、@prisma/studio-core。未修改 lockfile 或提交配置，停止重复安装；downloaded 0 不表示安装成功或完成离线验收 |
+| 保留的 local-preview PostgreSQL 迁移与 seed | PASS：55440 数据库部署本轮新增 2 个迁移，总计 13 个；seed 成功，所有既有用户密码摘要前后相等，检查不输出摘要或凭据。未在用户保留数据上运行破坏性浏览器 fixture |
+| 5173 本地预览恢复与轻量验证 | PASS：从已验收 NTFS 工作树的默认 isolated 依赖、各 app 自身 CLI，以 Node 22 启动 API/Vite。首次 API 编译未完成时 HTTP 500，启动完成后 `/login`、`/app/account`、`/app/admin`、`/reset-password`、`/api/v1/openapi.json` 均 200；schema 包含 admin organizations/users/roles 和 reset complete，匿名管理请求 401。另用真实 Chromium 验证登录页“账号登录”和重置页“重置密码”标题，exit 0 |
+| 验证 Docker 资源清理 | PASS：`qms2-abc-validation` 的 5 容器、2 数据卷及网络已 down，按 project 标签查询无残留；本次 API/Web 镜像标签已删除。标准 BuildKit 缓存和其他用户资源保留，local-preview PostgreSQL/MinIO 继续运行 |
+| 临时文件清理 | 受阻，未完成：对已核验绝对路径的递归删除、已列出 `.last-run.json` 与空目录删除、临时目录删除均被自动审批拒绝（`blocked by policy`，无更具体原因）。未绕过限制；仓库外 `%TEMP%/qms-abc-validation`（环境 XML、原始日志、临时 shims 等）与工作树 `qms-2.0/apps/web/test-results/.last-run.json` 仍保留且不入 Git。临时验收数据库已销毁，其测试凭据不可再用于该环境 |
+
+**当前预览目录与 main 不同：** `http://127.0.0.1:5173` 的 API/Vite 进程工作目录来自 `C:\Users\29591\.codex\worktrees\qms-admin-foundation\QMS`；本地源码已经合入 `E:\WorkSpace\QMS` 的 main，但编辑 E 盘文件不会触发此预览热更新。预览运行期间需保留该 NTFS 工作树及依赖，不能将 E 盘失败的安装描述为可用。未来可把项目、开发工作树和 pnpm store 放在同一 D 盘 NTFS 布局以复用硬链接；这是后续建议，本轮未迁移项目或数据。完整 10 条浏览器验收使用已销毁的独立验证库，本地保留数据仅运行上述无破坏性检查。
+
+ABC 六条浏览器行为分别为内部个人资料/改密/其他会话撤销、供应商邮箱恢复与内部入口拒绝、用户创建/搜索/差异编辑/启停、角色 CRUD/复制/分配/矩阵/在用删除拒绝、只读账号 UI 与 API 写入拒绝、签发凭证后纯角色改名及匿名一次兑换/拒绝重放。凭证只保留内存，trace、截图、视频和 failure DOM 快照关闭，断言不输出秘密。原 `phase-2.spec.ts` 只检查登录页 URL；即使该条通过，也没有验证完整平台工作流。
+
+本轮不启动 D–H 或批次 3。ABC 验收后可由用户另行分配治理任务及批次 3 非生产开发；真实供应商试点须具备 D 通知/配置、E MFA/完整找回与重置策略/高风险保护、G TLS/密钥/对象存储/备份恢复、H 导出/保留/国际化/可访问性，以及原平台流程运行时、业务 Worker handler 和完整业务浏览器主链路的深度门禁。阶段 1 附件/Outbox 服务边界与 ABC 通过都不能替代这些能力。

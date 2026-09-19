@@ -30,27 +30,28 @@ HTTP 回归使用真实 Nest 应用、全局异常过滤器和 Supertest，验�
 
 完整底座 PostgreSQL、网关登录、浏览器、Compose 及批次验收尚未在此任务声明通过，由主代理统一执行并记录；当前测试不替代这些证据。
 
-## 最终交接记录
+## 原批次 2 交接记录与证据范围
 
-最终提交：`2b310ab2886a08a83d97d17dfd25557259d66e7f`。
+原交接提交：`2b310ab2886a08a83d97d17dfd25557259d66e7f`。以下保留当时执行事实；原记录将任务 1–16 全部写为 PASS 的结论过宽，现按实现和验收证据区分。
 
-任务状态：1 PASS 基线；2 PASS 契约；3 PASS PostgreSQL 模型；4 PASS 编号；5 PASS 薄索引；6 PASS 流程定义；7 PASS 运行时最小实现；8 PASS 任务/通知最小边界；9 PASS 查询 API；10 PASS OpenAPI/Web 请求层；11 PASS 问题中心/待办页面；12 PASS 流程设计器页面；13 PASS 工作空间页面；14 PASS 浏览器夹具（真实网关未运行）；15 PASS 自动验收命令/文档；16 PASS 范围复审与交接。
+任务 1–6 的基线、契约、模型、编号、索引和流程定义有对应实现/测试；任务 7–8 仅形成流程运行时和任务通知最小边界；任务 9–13 有查询 API、请求层与页面实现。任务 14 的现有 `phase-2.spec.ts` 只访问登录页并检查 URL，不能证明问题中心、流程处理、审批/验证、升级、报告或失败重试。任务 15 的脚本和任务 16 的交接文档存在，不等于原计划全部行为门禁通过。
 
-验收摘要：`pnpm test` 23 suites/158 API tests + 19 Web tests PASS；真实 PostgreSQL 18.6 集成覆盖 10 平台表、编号、索引与流程定义；`build`、`contracts:check`、`check:archive-isolation`、Compose `config --quiet` PASS；`acceptance:phase-2` 在 disposable 环境 PASS。缺少 `DATABASE_URL` 时 acceptance 明确失败。Playwright 真实登录、Worker 租约/失败重试和 Node 22 递归构建需在配置齐全的发布环境重跑。
+当时验证摘要：`pnpm test` 为 API 23 suites / 158 tests、Web 19 tests PASS；另行真实 PostgreSQL 18.6 集成覆盖 10 平台表、编号、索引与流程定义；`build`、`contracts:check`、`check:archive-isolation`、Compose `config --quiet` PASS；`acceptance:phase-2` 在 disposable 环境 exit 0。递归 pnpm 曾输出 Node 24 engine warning，不能作为 Node 22 全链路验证证据。
 
-任务 1–16 的实现提交已完成于隔离分支 `codex/qms-2-batch-2-platform`；任务 15 的 `acceptance:phase-2`、Playwright 夹具和任务 16 复审文档已提交。任务 8、14 的深度浏览器/Worker 证据仍受环境配置限制，不能以跳过代替通过。
+`acceptance:phase-2` 当前只执行 `test`、`contracts:check`、`check:archive-isolation` 和 `build` 四项；它没有独立 frozen install、迁移/seed、完整 PG 集成、Compose 或浏览器步骤，也没有显式要求 `QMS_PHASE2_BASE_URL`。缺 `DATABASE_URL` 的历史失败来自测试链中的数据库依赖，不能扩写为脚本已完整验证所有前置条件。配置齐全时它通过也不能代替原计划深度验收。
 
-已通过：真实 PostgreSQL 18.6 迁移/种子与平台集成（10 张表、编号、问题索引、流程定义）、API 23 suites/158 tests、Web 19 tests、Web/API 构建、contracts:check、archive isolation、Compose config。`acceptance:phase-2` 在 Node 22 环境实际 PASS；递归 pnpm 输出 Node 24 engine warning，需以 Node 22 重跑作为发布环境证据。
+仍待独立交付/验证：完整流程节点权限、运行状态转换/并发/回滚、业务 Worker handler 的任务/通知/超时/失败重试，以及真实“领域创建—问题中心—流程处理—报告追溯”浏览器主链路。底座 Outbox 服务级领取、租约和失败重试集成已存在，但无业务 handler 的 Worker 单次退出 0 不能证明通知业务完成。
 
-未运行或受限：真实登录主链路 Playwright（缺 `QMS_PHASE2_BASE_URL` 和运行网关）、完整待办 Worker 租约/失败重试集成（任务服务为最小边界实现）。清理：本次临时 PostgreSQL/MinIO 容器由执行环境保留，交接前应运行 `docker compose -p qms2-batch2-validation down --volumes --remove-orphans`，并删除仓库外临时环境文件。
+原记录中的 `qms2-batch2-validation` PostgreSQL/MinIO 临时容器当时尚未销毁；该历史事实不是当前资源状态证明。ABC 本轮使用独立 `qms2-abc-validation`，其清理与本地预览保留状态以 FOUNDATION 最新记录为准。
 
-批次 3 起点：以现有薄问题索引和受控流程为基础建立供应商质量试点；前置条件是浏览器登录证据、Worker 真实租约/失败队列、权限与数据范围验收全部补齐。批次 4 其他域需复用稳定 OpenAPI/权限/审计/编号/流程运行时，不得复制通用业务大表单或引入 QMS 1.0 兼容层。
-## 批次 2A 前置工作包
+## 本轮 ABC 账号治理
 
-横向复审确认：批次 1/2 已交付身份与授权底座，但没有交付管理员可用的用户、组织、角色权限、系统配置、通知或审计管理功能。相关路线和首个实现切片记录在 [账号与系统管理](ACCOUNT-ADMINISTRATION.md)、[设计规格](../../docs/superpowers/specs/2026-09-18-qms-2.0-account-administration-design.md) 和 [执行计划](../../docs/superpowers/plans/2026-09-18-qms-2.0-account-administration.md)。
+本轮在 `codex/qms-2-admin-foundation` 实现 A 个人邮箱/改密/有效会话与撤销、B 用户创建/查询/编辑/启停/受控组织类型迁移/一次性重置、C 组织角色 CRUD/复制/目录/分配/权限矩阵，完成 API/Web 安全修订和双阶段复审。ABC 最终验收 PASS：PG 47、API 223、Web 44、浏览器 10 项、phase-1 → phase-2 聚合和独立 production 构建通过；实际命令及早期 FAIL 见 [FOUNDATION](FOUNDATION.md)。产品源码已本地合并；预览从已验收 NTFS 工作树运行，E 盘安装和文件清理限制另行记录。相关行为边界、设计和计划分别见 [账号与系统管理](ACCOUNT-ADMINISTRATION.md)、[设计规格](../../docs/superpowers/specs/2026-09-18-qms-2.0-account-administration-design.md) 和 [执行计划](../../docs/superpowers/plans/2026-09-18-qms-2.0-account-administration.md)。
 
-首个切片已启动并接入生成契约：个人资料读取/编辑、修改密码、登录会话列表与单会话撤销；内部与供应商账号均可从现有门户进入个人账号页。管理员用户生命周期、组织/部门/岗位、角色权限矩阵、系统配置、通知规则、任务/失败队列监控、审计查询，以及备份恢复/TLS/密钥、导出权限、国际化和可访问性治理仍未标记完成，必须在供应商质量试点前按依赖顺序验收。
+入口：内部个人账号 `/app/account`、供应商个人账号 `/supplier/account`、内部系统管理 `/app/admin`、匿名兑换 `/reset-password`。组织选择来自有权目录，管理写请求均使用 CSRF 与幂等键，权限按目标组织重新校验。Web 只使用生成的 `@qms/contracts` 类型。组织目录不是组织树维护，角色矩阵不提供流程节点权限编辑。
 
-该工作包的验收不能用 Prisma 模型或导航占位代替真实行为；必须证明权限/数据范围、CSRF、密码策略、会话撤销、事务审计、OpenAPI 同步、PostgreSQL 和浏览器主链路。供应商质量试点的明确起点仍是 2A 的用户组织与角色权限切片完成之后。
+ABC 浏览器新增六个真实网关场景检验账号、用户与角色操作以及拒绝/单次重置。原 `phase-2.spec.ts` 即使随本轮聚合通过，仍只说明登录页可访问；本轮不宣称原批次 2 的 16 项完整闭环重新验收完成。
 
-依赖策略补充：G/H 不等待 F 完成后才启动。A、B、C 通过真实验收后，可以并行启动批次 3 的领域建模、接口草案、测试夹具和非生产实现；真实供应商试点和发布验收仍需 D/E/G/H 的最小闭环门禁完成。
+## 下一轮边界
+
+本轮不启动 D–H 或批次 3。A/B/C 验收后可由用户另行分配治理工作和批次 3 领域建模、接口草案、测试夹具与非生产实现；G/H 无须等 F 结束才开始。真实供应商试点和发布仍须 D 通知/配置、E MFA/完整找回与重置策略/高风险保护、G TLS/密钥/对象存储/备份恢复、H 导出/保留/国际化/可访问性门禁通过，并补齐原平台运行时、业务 Worker 和业务浏览器主链路。批次 4 其他业务域必须拥有各自专属模型，复用稳定平台契约；不得复制通用业务大表单或引入 QMS 1.0 兼容层。

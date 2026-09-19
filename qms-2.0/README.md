@@ -2,6 +2,10 @@
 
 QMS 2.0 is the only active implementation home. This independent pnpm workspace contains React 19 / Ant Design 6 Web, the NestJS 11 modular API and Worker, Prisma 7 / PostgreSQL 18, and the generated API contract. The frozen earlier release is outside every workspace and Docker build context.
 
+## Current local preview
+
+ABC account administration is merged into local `main` in `E:\WorkSpace\QMS`, but the restored preview at `http://127.0.0.1:5173` runs from the validated NTFS worktree `C:\Users\29591\.codex\worktrees\qms-admin-foundation\QMS`. **Editing the E: checkout does not hot-reload this preview.** The product trees match; the E: exFAT dependency installation failed, including hoisted retries, so its dependencies are not a verified development environment. Keep this worktree while its API/Vite processes serve the preview. See [FOUNDATION](docs/FOUNDATION.md) for acceptance, runtime and cleanup evidence. No remote push or drive migration is part of this delivery.
+
 ## Local development
 
 Use Node.js `22.22.x`, pnpm `11.19.x`, PostgreSQL 18, and Docker Compose. Commands below run from `qms-2.0/` unless noted otherwise.
@@ -11,6 +15,17 @@ corepack enable
 corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
+
+On Windows exFAT volumes, pnpm's default dependency layout can fail with `EISDIR` because the filesystem does not support symbolic links. A hoisted layout can be selected for the current PowerShell process without changing repository configuration:
+
+```powershell
+$env:pnpm_config_node_linker = 'hoisted'
+corepack pnpm install --frozen-lockfile
+```
+
+This setting does not change the lockfile and is only an alternative installation layout. Both hoisted attempts in this delivery failed; compatibility with existing scripts is unverified because some API scripts use app-relative `node_modules/prisma` paths. The verified setup is the default isolated layout on NTFS with Node 22. Installation succeeds only when the complete command exits 0; actual exFAT errors are recorded in [FOUNDATION](docs/FOUNDATION.md).
+
+For a future local setup, keep the repository, development worktrees and pnpm store on the same NTFS volume, such as the available `D:` drive, so cached dependencies can use same-volume hard links. This is a recommendation; this iteration does not migrate the `E:` project. Hoisted mode addresses the exFAT layout limitation, not cross-volume copy cost. With dependencies already installed and the lockfile unchanged, use `dev`/`test` directly during iteration; keep the frozen install in delivery acceptance. Cache reuse is not a cold installation or offline-acceptance result.
 
 Set `DATABASE_URL` to your local PostgreSQL URL and `NODE_ENV=development` in the shell before starting the API. Vite serves port 5173 and proxies `/api/` to the API on port 3000, so browser requests and cookies stay on the same origin. Authentication uses server sessions, HttpOnly cookies and CSRF headers; no browser token storage is used.
 
@@ -66,9 +81,11 @@ docker compose -f deployment/docker-compose.foundation.yml down --volumes --remo
 
 ## Verification and CI
 
-Batch 2 platform acceptance entry is `corepack pnpm acceptance:phase-2`; it runs full tests, contracts, archive isolation and build checks. The batch 2 handoff and evidence matrix are recorded in [PHASE-2](docs/PHASE-2.md). Batch 3 starts with the supplier-quality pilot only after platform runtime, permissions, browser evidence and disposable PostgreSQL gates are complete.
+The batch 2 platform regression entry is `corepack pnpm acceptance:phase-2`; it runs tests, contracts, archive isolation and builds. It does not itself run the complete PostgreSQL integration suite, migration/seed, Compose lifecycle or browser acceptance. The batch 2 handoff and remaining platform gates are recorded in [PHASE-2](docs/PHASE-2.md). Its passing exit code does not establish a complete workflow or supplier-quality pilot.
 
-The batch 2A platform-governance work package is tracked in [account administration](docs/ACCOUNT-ADMINISTRATION.md). The foundation already stores identity, roles, permissions, sessions and audit events, but those models do not constitute administrator user management. The first 2A slice now exposes the personal account center (profile, password change and session revocation); administrator user lifecycle, organization management, permission matrix, system configuration, notification governance and audit operations remain planned prerequisites for the supplier-quality pilot.
+Batch 2A account governance is tracked in [account administration](docs/ACCOUNT-ADMINISTRATION.md). A provides email editing, password changes and active-session revocation at `/app/account` and `/supplier/account`. B/C provide organization-scoped user creation/editing/activation, controlled identity transfers, one-time password-reset issuance, organization role CRUD/copy/assignment, a read-only permission directory and matrix at `/app/admin`. Anonymous reset redemption is at `/reset-password`. All Web API types derive from the generated contract; all administrator writes require CSRF and an idempotency key. ABC implementation and acceptance pass; the actual aggregate, production build, browser and review evidence is recorded in [FOUNDATION](docs/FOUNDATION.md), separately from the E: installation failure and blocked temporary-file cleanup.
+
+This iteration does not start D–H or batch 3. After ABC acceptance, those work packages and non-production supplier-quality development may be separately assigned. A real supplier pilot still requires notification/configuration, MFA and high-risk protection, TLS/keys/object storage/backup restoration, export/retention/internationalization/accessibility gates, and the original platform workflow, business Worker and browser-flow acceptance. The existing organization selector is not organization-tree maintenance; one-time administrator reset does not deliver self-service email recovery or MFA.
 
 The complete reproducible acceptance entry is `corepack pnpm acceptance:phase-1`. It requires the disposable database, seed passwords, Compose variables and a running loopback gateway in `QMS_ACCEPTANCE_BASE_URL`, then runs frozen installation, database integration, unit tests, builds, Compose configuration, archive isolation, contract synchronization and real Chromium login tests. Missing prerequisites fail instead of skipping. Install Chromium first with `corepack pnpm --filter @qms/web exec playwright install chromium`.
 
