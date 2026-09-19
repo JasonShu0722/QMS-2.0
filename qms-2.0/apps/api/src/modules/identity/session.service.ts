@@ -4,9 +4,15 @@ import type { CookieOptions } from 'express';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
+import { HttpException } from '@nestjs/common';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
+
+type SessionTransaction = {
+  session: Pick<PrismaService['session'], 'updateMany'>;
+  auditEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+};
 
 const SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
@@ -95,6 +101,68 @@ export class SessionService {
         actorUserId: session.user.id, organizationId: session.user.organizationId,
         action: 'SESSION_REVOKED', resourceType: 'User', resourceId: session.user.id,
         outcome: 'SUCCESS', traceId,
+      }, transaction);
+    });
+  }
+
+  async listForUser(userId: string, currentSessionId: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, createdAt: true, expiresAt: true, revokedAt: true },
+    });
+    return sessions.map((session) => ({
+      ...session,
+      isCurrent: session.id === currentSessionId,
+    }));
+  }
+
+  async revokeOtherSessions(
+    userId: string,
+    currentSessionId: string,
+    traceId = requestTraceId(),
+    transaction: SessionTransaction = this.prisma,
+  ): Promise<void> {
+    const changed = await transaction.session.updateMany({
+      where: { userId, id: { not: currentSessionId }, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (changed.count > 0) {
+      await this.audit.record({
+        actorUserId: userId,
+        action: 'SESSION_REVOKED',
+        resourceType: 'Session',
+        resourceId: userId,
+        outcome: 'SUCCESS',
+        traceId,
+      }, transaction);
+    }
+  }
+
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    currentSessionId: string,
+    traceId = requestTraceId(),
+  ): Promise<void> {
+    if (sessionId === currentSessionId) {
+      throw new HttpException({ code: 'AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN', message: '当前会话请使用退出登录' }, 409);
+    }
+    await this.prisma.$transaction(async (transaction) => {
+      const changed = await transaction.session.updateMany({
+        where: { id: sessionId, userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (changed.count !== 1) {
+        throw new HttpException({ code: 'AUTH_SESSION_NOT_FOUND', message: '会话不存在或已撤销' }, 404);
+      }
+      await this.audit.record({
+        actorUserId: userId,
+        action: 'SESSION_REVOKED',
+        resourceType: 'Session',
+        resourceId: sessionId,
+        outcome: 'SUCCESS',
+        traceId,
       }, transaction);
     });
   }

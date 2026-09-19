@@ -7,6 +7,7 @@ import { RATE_LIMIT_KEY, RateLimitService } from './rate-limit.guard.js';
 import { SessionService } from './session.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
+import type { AccountProfileDto, UpdateAccountProfileDto } from './dto/account.dto.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -66,6 +67,61 @@ export class IdentityService {
         accountType: session.user.accountType,
       },
     };
+  }
+
+  async profile(userId: string): Promise<AccountProfileDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { organization: { select: { id: true, code: true, name: true } } },
+    });
+    if (!user) throw new HttpException({ code: 'AUTH_SESSION_REQUIRED', message: '请先登录' }, 401);
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      accountType: user.accountType,
+      status: user.status,
+      mfaEnabled: user.mfaEnabled,
+      organization: {
+        id: user.organization.id ?? user.organizationId,
+        code: user.organization.code,
+        name: user.organization.name,
+      },
+    };
+  }
+
+  async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string): Promise<AccountProfileDto> {
+    await this.prisma.user.update({ where: { id: userId }, data: { email: dto.email ?? null } });
+    await this.audit.record({
+      actorUserId: userId, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId,
+      outcome: 'SUCCESS', traceId,
+    });
+    return this.profile(userId);
+  }
+
+  async changePassword(input: {
+    userId: string;
+    currentSessionId: string;
+    currentPassword: string;
+    newPassword: string;
+    traceId: string;
+  }): Promise<void> {
+    if (input.newPassword === input.currentPassword || input.newPassword.length < 12) {
+      throw new HttpException({ code: 'AUTH_PASSWORD_POLICY_INVALID', message: '新密码不符合安全策略' }, 400);
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, organizationId: true, passwordHash: true } });
+    if (!user || !(await this.passwords.verify(user.passwordHash, input.currentPassword))) {
+      throw new HttpException({ code: 'AUTH_CURRENT_PASSWORD_INVALID', message: '当前密码错误' }, 401);
+    }
+    const passwordHash = await this.passwords.hash(input.newPassword);
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.user.update({ where: { id: input.userId }, data: { passwordHash } });
+      await this.sessions.revokeOtherSessions(input.userId, input.currentSessionId, input.traceId, transaction);
+      await this.audit.record({
+        actorUserId: input.userId, organizationId: user.organizationId, action: 'PASSWORD_CHANGED',
+        resourceType: 'User', resourceId: input.userId, outcome: 'SUCCESS', traceId: input.traceId,
+      }, transaction);
+    });
   }
 
   private async rejectLogin(

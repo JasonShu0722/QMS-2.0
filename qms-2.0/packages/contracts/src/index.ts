@@ -7,6 +7,10 @@ export type SessionResponse = components['schemas']['SessionResponseDto'];
 export type CsrfResponse = components['schemas']['CsrfResponseDto'];
 export type ApiErrorPayload = components['schemas']['ErrorResponse'];
 export type AccountType = SessionResponse['user']['accountType'];
+export type AccountProfile = components['schemas']['AccountProfileDto'];
+export type AccountSession = components['schemas']['AccountSessionDto'];
+export type UpdateAccountProfileRequest = components['schemas']['UpdateAccountProfileDto'];
+export type ChangePasswordRequest = components['schemas']['ChangePasswordDto'];
 
 export type PlatformErrorCode = components['schemas']['PlatformErrorCode'];
 export type ProblemDomainCode = components['schemas']['PlatformTypesDto']['problemDomainCode'];

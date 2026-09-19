@@ -63,6 +63,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountController_profile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AccountController_update"];
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AccountController_changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountController_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions/{sessionId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AccountController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/permissions": {
         parameters: {
             query?: never;
@@ -305,6 +369,36 @@ export interface components {
         SessionResponseDto: {
             user: components["schemas"]["SessionUserDto"];
         };
+        OrganizationSummaryDto: {
+            id: string;
+            code: string;
+            name: string;
+        };
+        AccountProfileDto: {
+            id: string;
+            username: string;
+            email?: string | null;
+            /** @enum {string} */
+            accountType: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            mfaEnabled: boolean;
+            organization: components["schemas"]["OrganizationSummaryDto"];
+        };
+        UpdateAccountProfileDto: {
+            email?: string | null;
+        };
+        ChangePasswordDto: {
+            currentPassword: string;
+            newPassword: string;
+        };
+        AccountSessionDto: {
+            id: string;
+            createdAt: string;
+            expiresAt: string;
+            revokedAt?: string | null;
+            isCurrent: boolean;
+        };
         PermissionsResponseDto: {
             organizationId: string;
             permissions: string[];
@@ -408,7 +502,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED";
+        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -534,6 +628,158 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_profile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountProfileDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountProfileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountProfileDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_changePassword: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSessionDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_revoke: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

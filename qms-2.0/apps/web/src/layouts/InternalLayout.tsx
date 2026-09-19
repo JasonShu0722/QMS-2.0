@@ -8,6 +8,7 @@ import { ProblemCenterPage } from '../features/problem-center/ProblemCenterPage'
 import { MyTasksPage } from '../features/tasks/MyTasksPage';
 import { WorkflowDesignerPage } from '../features/workflows/WorkflowDesignerPage';
 import { ProblemWorkspacePage } from '../features/problem-workspace/ProblemWorkspacePage';
+import { AccountCenterPage } from '../features/account/AccountCenterPage';
 
 const { Content, Sider } = Layout;
 
@@ -80,6 +81,7 @@ export function InternalLayout() {
           {location.pathname.startsWith('/app/my-tasks') ? <MyTasksPage /> : null}
           {location.pathname.startsWith('/app/workflow-designer') ? <WorkflowDesignerPage /> : null}
           {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage /> : null}
+          {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
         </Content>
       </Layout>
     </Layout>

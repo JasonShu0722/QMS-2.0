@@ -8,6 +8,10 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 | `POST /api/v1/auth/login` | 接受 `identifier`、`password`；设置 HttpOnly Session Cookie；返回账号类型与服务端 landingPath |
 | `GET /api/v1/auth/session` | 解析会话并返回 user 的 id、organizationId、accountType |
 | `POST /api/v1/auth/logout` | CSRF 校验后撤销会话、清除 Session Cookie，返回 204 |
+| `GET/PATCH /api/v1/me` | 读取或更新当前账号邮箱等可编辑资料；用户名、账号类型、组织和状态由服务端维护 |
+| `POST /api/v1/me/password` | 校验当前口令后修改密码，并撤销其他登录会话 |
+| `GET /api/v1/me/sessions` | 返回当前用户的登录会话摘要，不返回 Session 原文或哈希 |
+| `POST /api/v1/me/sessions/:sessionId/revoke` | 撤销当前用户的其他登录会话；当前会话使用退出登录 |
 | `GET /api/v1/organizations/current` | 功能与组织范围校验后返回组织；可选 organizationId 不能拓宽供应商范围 |
 | `GET /api/v1/system/permissions` | 返回服务端授权上下文的组织及权限列表 |
 | `GET /api/v1/problem-index` / `:id` / `:id/workspace` | 返回组织范围内的薄问题索引 |
@@ -32,6 +36,8 @@ corepack pnpm contracts:check
 `test/common/openapi.spec.ts` 验证真实 Nest HTTP schema 发布、登录请求响应、组织参数、权限响应和错误必填字段；使用持久层替身，不冒充真实数据库登录。Playwright 另行验证运行网关的真实登录、CSRF、组织隔离与会话撤销。
 
 附件、Outbox、流程设计、业务台账与编号目前没有公开 HTTP 契约。服务或模型存在不表示已有可用 API；后续公开接口必须先在 API 定义 DTO、权限与 OpenAPI，再生成前端契约。
+
+管理员用户 CRUD、组织树、角色权限矩阵、系统配置、通知规则、审计查询和失败队列监控尚未公开接口，属于批次 2A 后续切片，不得把底座模型误认为已交付管理能力。
 
 批次 2 任务 2 使用 `PlatformTypesDto` 作为 Swagger extra model 暴露平台枚举，不新增业务 HTTP 入口。枚举和固定错误消息由 API 持有，contracts 只导出生成 schema 的派生类型。领域码为领域服务拥有的稳定 string，中性测试域使用 `neutral-test`；平台不预设业务分类。
 
