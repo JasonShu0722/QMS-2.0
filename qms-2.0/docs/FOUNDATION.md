@@ -147,3 +147,17 @@ git diff --stat
 | `corepack pnpm --filter @qms/api build`；`git diff --check` | PASS；无 API DTO / OpenAPI 变更，无生成契约修改 |
 
 组织和账号类型并发夹具通过真实 PostgreSQL 事务写入并撤销会话；一次性重置和停用走 HTTP，A 改密走实际 IdentityService。锁测试首次断言误用了旧 Prisma 错误元数据形状，修正为实际 adapter 的 lock timeout 错误后再移除锁取得上述有效红灯。完整 Web、Compose、契约和网关浏览器聚合验收由主代理在最终源码镜像上执行，本节不将针对性修复验证视为全部 ABC 验收。
+
+### ABC Web 复审补修：角色差异 PATCH（2026-09-19 UTC）
+
+环境：同一独立工作树，Windows PowerShell，显式使用 `C:\Program Files\nodejs\node.exe`（22.22.0）运行 Web 本地 CLI。角色编辑使用生成的 `UpdateAdminRoleDto` 只发送变更字段；权限按集合比较，顺序变化和完全未修改均不发 PATCH。纯改名不再误触发服务端权限重建及成员重置凭证失效，也不会覆盖其他管理员并发修改的权限。无 API 或生成契约变更。
+
+| 实际命令 / 动作（Web 目录） | 结果与范围 |
+| --- | --- |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx -t 'submits only changed role fields'`（修复前） | 有效 FAIL：4 条分别复现纯改名携带权限、未改仍写、权限更新携带名称、仅顺序变化仍写 |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx`（修复后） | PASS：10 条；另定向运行顺序回归，DOM 明确验证已重排，仍不写请求 |
+| `node node_modules/vitest/vitest.mjs run` | PASS：9 files / 40 tests；已有 Ant Design 废弃属性提示 |
+| `node node_modules/typescript/bin/tsc -b`；`node node_modules/vite/bin/vite.js build` | PASS；已有 Ant Design chunk 超过 900 kB 提示 |
+| `git diff --check` | PASS |
+
+主代理聚合发现凭证标签同时匹配 dialog 和 textarea 的实际失败，组件测试改用精确 textbox 角色定位，纳入以上 40 条通过结果。浏览器重置场景已扩展为真实成员分配、签发凭证、UI 纯改角色名、匿名兑换和拒绝重放；秘密仅保留内存，断言不输出秘密，关闭 failure DOM 快照及 trace/screenshot/video。该新增浏览器场景和最终镜像完整聚合验收由主代理运行，本节不将尚未执行的浏览器回归标记为通过。

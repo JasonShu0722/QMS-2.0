@@ -3,7 +3,7 @@ import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-ev
 import { afterEach, expect, it, vi } from 'vitest';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
-import type { AdminOrganization, AdminUser } from './admin';
+import type { AdminOrganization, AdminRole, AdminUser } from './admin';
 import { AdminPage } from './AdminPage';
 
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
@@ -49,15 +49,15 @@ it('retains issued reset only until closing and generates a new code for the nex
   render(<UserAdministration organization={organization} organizations={[organization]} />);
   await userEvent.click(await screen.findByRole('button', { name: '签发重置凭证' }));
   await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
-  const credential = await screen.findByLabelText('一次性重置凭证');
+  const credential = await screen.findByRole('textbox', { name: '一次性重置凭证' });
   expect((credential as HTMLTextAreaElement).value.startsWith('reset-id.')).toBe(true);
   expect(codes[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
   await userEvent.click(screen.getByRole('button', { name: '关闭并清除' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await userEvent.click(screen.getByRole('button', { name: '签发重置凭证' }));
-  expect(screen.queryByLabelText('一次性重置凭证')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: '一次性重置凭证' })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
-  await screen.findByLabelText('一次性重置凭证');
+  await screen.findByRole('textbox', { name: '一次性重置凭证' });
   expect(codes[0] === codes[1]).toBe(false);
 }, 30_000);
 
@@ -73,6 +73,39 @@ it('shows global roles as read-only and exposes loading failures', async () => {
   render(<RoleAdministration organization={organization} />);
   expect(await screen.findByText('请求失败，请重试')).toBeInTheDocument();
 });
+
+it.each([
+  { action: 'rename', expected: [{ name: 'Renamed Role' }] },
+  { action: 'unchanged', expected: [] },
+  { action: 'remove permission', expected: [{ permissionCodes: ['account:roles:read'] }] },
+  { action: 'reorder permissions', expected: [] },
+])('submits only changed role fields: $action', async ({ action, expected }) => {
+  const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: 'Read users' }, { id: 'roles-read', code: 'account:roles:read', name: 'Read roles' }] };
+  const requests: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (init.method === 'PATCH') { requests.push(JSON.parse(String(init.body))); return Promise.resolve(json(role)); }
+    return Promise.resolve(json(path.includes('/permissions') ? role.permissions : [role]));
+  }));
+  render(<RoleAdministration organization={organization} />);
+  await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
+  if (action === 'rename') {
+    await userEvent.clear(screen.getByLabelText('角色名称'));
+    await userEvent.type(screen.getByLabelText('角色名称'), 'Renamed Role');
+  }
+  if (action === 'remove permission' || action === 'reorder permissions') {
+    await userEvent.click(document.querySelector('.ant-select-selection-item-remove')!);
+    if (action === 'reorder permissions') {
+      await userEvent.click(screen.getByLabelText('角色权限'));
+      await userEvent.click(screen.getByText('Read users · account:users:read', { selector: '.ant-select-item-option-content' }));
+      await userEvent.click(screen.getByLabelText('角色名称'));
+      expect([...document.querySelectorAll('.ant-select-selection-item')].map((item) => item.getAttribute('title'))).toEqual(['Read roles · account:roles:read', 'Read users · account:users:read']);
+    }
+  }
+  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(requests).toEqual(expected);
+}, 15_000);
 
 it('does not offer user role assignment without both read permissions', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([user])));
@@ -96,7 +129,7 @@ it('never redisplays a credential when its pending issue dialog was closed', asy
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   resolveIssue!(json({ resetId: 'reset-id', expiresAt: '2026-09-19' }, 201));
   await screen.findByText('重置凭证已签发');
-  expect(screen.queryByLabelText('一次性重置凭证')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: '一次性重置凭证' })).not.toBeInTheDocument();
 }, 15_000);
 
 it('switches permissions with organization and ignores the previous organization response', async () => {

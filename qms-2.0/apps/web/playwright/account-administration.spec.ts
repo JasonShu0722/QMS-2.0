@@ -256,8 +256,13 @@ test('B/C read-only fixture sees lists but writes are forbidden in UI and API', 
   expect((await write(page.request, scope(`roles/${role.id}`, admin.organization.id), 'DELETE')).status()).toBe(403);
 });
 
-test('B UI issues a memory-only credential and anonymous reset exchanges it once', async ({ page, browser, admin }) => {
+test('B/C UI role rename preserves a memory-only credential for one anonymous reset exchange', async ({ page, browser, admin }) => {
   const fixture = await admin.createUser();
+  const roleResponse = await write(admin.client, '/api/v1/admin/roles', 'POST', { organizationId: admin.organization.id, code: unique('abc_reset_role'), name: unique('Reset role'), permissionCodes: ['account:users:read'] });
+  expect(roleResponse.status()).toBe(201);
+  const role = await roleResponse.json() as Role;
+  admin.roles.push(role);
+  expect((await write(admin.client, scope(`users/${fixture.user.id}/roles`, admin.organization.id), 'PUT', { roleIds: [role.id] })).status()).toBe(200);
   await uiLogin(page, 'local.internal', internalPassword!);
   await page.goto('/app/admin');
   await (await searchUser(page, fixture.user.username)).getByRole('button', { name: '签发重置凭证' }).click();
@@ -272,6 +277,15 @@ test('B UI issues a memory-only credential and anonymous reset exchanges it once
   expect(page.url().includes(temporaryCode)).toBe(false);
   await page.getByRole('button', { name: '关闭并清除' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('tab', { name: '角色', exact: true }).click();
+  await page.getByRole('row').filter({ has: page.getByText(role.name, { exact: true }) }).getByRole('button', { name: '编辑角色' }).click();
+  await page.getByLabel('角色名称', { exact: true }).fill(`${role.name} renamed`);
+  const renamed = page.waitForResponse((response) => response.url().includes(`/roles/${role.id}?`) && response.request().method() === 'PATCH');
+  await page.getByRole('button', { name: '保存角色', exact: true }).click();
+  const renameResponse = await renamed;
+  expect(renameResponse.status()).toBe(200);
+  expect(renameResponse.request().postDataJSON()).toEqual({ name: `${role.name} renamed` });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const anonymous = await browser.newContext({ baseURL });
   const resetPage = await anonymous.newPage();
   const replacement = password();
@@ -279,7 +293,9 @@ test('B UI issues a memory-only credential and anonymous reset exchanges it once
     await resetPage.goto('/reset-password');
     await resetPage.getByLabel('重置凭证', { exact: true }).fill(credential);
     await resetPage.getByLabel('新密码', { exact: true }).fill(replacement);
+    const completed = resetPage.waitForResponse((response) => response.url().endsWith('/auth/password-reset/complete'));
     await resetPage.getByRole('button', { name: '重置密码', exact: true }).click();
+    expect((await completed).status()).toBe(204);
     await expect(resetPage.getByText('密码已重置，请重新登录')).toBeVisible();
     expect((await resetPage.getByLabel('重置凭证', { exact: true }).inputValue()).length === 0).toBe(true);
     expect((await resetPage.getByLabel('新密码', { exact: true }).inputValue()).length === 0).toBe(true);

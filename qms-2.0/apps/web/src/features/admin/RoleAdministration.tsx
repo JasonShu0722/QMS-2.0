@@ -39,7 +39,14 @@ export function RoleAdministration({ organization, matrix = false }: { organizat
     await perform(async () => {
       if (editing?.mode === 'new') await mutate.current<AdminRole>('/api/v1/admin/roles', 'POST', { code: values.code, name: values.name, permissionCodes: values.permissionCodes ?? [], organizationId: organization.id });
       else if (editing?.mode === 'copy') await mutate.current<AdminRole>(scopePath(`roles/${editing.role!.id}/copy`, organization.id), 'POST', { code: values.code, name: values.name });
-      else if (editing?.role) await mutate.current<AdminRole>(scopePath(`roles/${editing.role.id}`, organization.id), 'PATCH', { name: values.name, permissionCodes: values.permissionCodes ?? [] });
+      else if (editing?.role) {
+        const patch: components['schemas']['UpdateAdminRoleDto'] = {};
+        if (values.name !== editing.role.name) patch.name = values.name;
+        const permissionCodes = new Set(values.permissionCodes ?? []);
+        const originalCodes = new Set(editing.role.permissions.map((permission) => permission.code));
+        if (permissionCodes.size !== originalCodes.size || [...permissionCodes].some((code) => !originalCodes.has(code))) patch.permissionCodes = [...permissionCodes];
+        if (Object.keys(patch).length) await mutate.current<AdminRole>(scopePath(`roles/${editing.role.id}`, organization.id), 'PATCH', patch);
+      }
       if (alive.current) { setEditing(undefined); form.resetFields(); }
     }, '角色已保存');
   }
