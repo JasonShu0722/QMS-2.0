@@ -39,13 +39,23 @@ describe('administrator role HTTP contract', () => {
     prisma.session.findUnique.mockResolvedValue({ id: 'session', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user });
     prisma.userRole.count.mockResolvedValue(1);
     prisma.userRole.findFirst.mockResolvedValue({ organizationId });
-    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:roles:read', 'account:roles:manage'].map((code) => ({ permission: { code } })) } }]);
+    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'].map((code) => ({ permission: { code } })) } }]);
     prisma.role.findMany.mockResolvedValue([]);
     prisma.permission.findMany.mockResolvedValue([]);
     prisma.role.create.mockResolvedValue({ id: roleId, organizationId, code: 'QUALITY', name: 'Quality', permissions: [] });
   });
 
   afterAll(async () => app.close());
+
+  it('returns ordered module groups with no grantable codes in planned modules', async () => {
+    const response = await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', cookies).expect(200);
+    expect(response.body.map((group: { key: string }) => group.key)).toEqual(['platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'system']);
+    for (const group of response.body.slice(1, 6)) {
+      expect(group.status).toBe('planned');
+      expect(group.modules.length).toBeGreaterThan(0);
+      for (const module of group.modules) expect(module.operations).toEqual([]);
+    }
+  });
 
   it('requires authentication and feature permission for directory and roles', async () => {
     await request(app.getHttpServer()).get('/api/v1/admin/roles').expect(401);

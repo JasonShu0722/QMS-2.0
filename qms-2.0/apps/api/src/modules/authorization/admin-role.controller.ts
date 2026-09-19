@@ -7,12 +7,20 @@ import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guar
 import { RequireAccess } from './access.decorator.js';
 import { AdminPermissionDto, AdminRoleDto, AdminRoleScopeQueryDto, AdminUserRolesDto, AssignAdminRolesDto, CopyAdminRoleDto, CreateAdminRoleDto, UpdateAdminRoleDto } from './admin-role.dto.js';
 import { AdminRoleService } from './admin-role.service.js';
+import { PermissionCatalogGroupDto } from './admin-role.dto.js';
 
 @Controller('api/v1/admin')
 @ApiCookieAuth('qms_session')
 @ApiResponse({ status: 'default', type: ErrorResponse, description: 'Controlled API error' })
 export class AdminRoleController {
   constructor(private readonly roles: AdminRoleService) {}
+
+  @Get('permission-catalog')
+  @ApiOkResponse({ type: PermissionCatalogGroupDto, isArray: true })
+  @RequireAccess({ featurePermission: 'account:roles:read', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  catalog(@Query() _query: AdminRoleScopeQueryDto, @Req() request: Request) {
+    return this.roles.catalog(this.actor(request));
+  }
 
   @Get('permissions')
   @ApiOkResponse({ type: AdminPermissionDto, isArray: true })
@@ -39,7 +47,7 @@ export class AdminRoleController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiCreatedResponse({ type: AdminRoleDto })
-  @RequireAccess({ featurePermission: 'account:roles:manage', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
+  @RequireAccess({ featurePermission: 'account:roles:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
   create(@Body() dto: CreateAdminRoleDto, @Req() request: Request) {
     return this.roles.create(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
@@ -48,7 +56,7 @@ export class AdminRoleController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiCreatedResponse({ type: AdminRoleDto })
-  @RequireAccess({ featurePermission: 'account:roles:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:roles:create', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   copy(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: CopyAdminRoleDto, @Req() request: Request) {
     return this.roles.copy(this.actor(request), roleId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
@@ -57,7 +65,7 @@ export class AdminRoleController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminRoleDto })
-  @RequireAccess({ featurePermission: 'account:roles:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:roles:update', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   update(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: UpdateAdminRoleDto, @Req() request: Request) {
     return this.roles.update(this.actor(request), roleId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
@@ -67,7 +75,7 @@ export class AdminRoleController {
   @HttpCode(204)
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiNoContentResponse()
-  @RequireAccess({ featurePermission: 'account:roles:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:roles:delete', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   remove(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Req() request: Request) {
     return this.roles.remove(this.actor(request), roleId, requestTraceId(request), request.get('Idempotency-Key'));
   }
@@ -83,7 +91,7 @@ export class AdminRoleController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminUserRolesDto })
-  @RequireAccess({ featurePermission: 'account:roles:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:roles:assign', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   assign(@Param('userId', ParseUUIDPipe) userId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: AssignAdminRolesDto, @Req() request: Request) {
     return this.roles.assign(this.actor(request), userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }

@@ -86,7 +86,8 @@ export class AuthenticatedGuard implements CanActivate {
         requestedOrganizationId: target,
         optional: requirement.organizationScope?.optional ?? true,
       });
-      await this.authorization.assertAccess(session, requirement, organizationId);
+      const permissions = requirement.featurePermissions?.(request.body ?? {}) ?? [requirement.featurePermission];
+      for (const featurePermission of permissions) await this.authorization.assertAccess(session, { ...requirement, featurePermission }, organizationId);
     } catch (error) {
       if (error instanceof HttpException && [400, 403].includes(error.getStatus())) {
         const payload = error.getResponse() as { code: string };

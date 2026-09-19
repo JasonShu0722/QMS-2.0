@@ -32,7 +32,7 @@ describe('admin user lifecycle service', () => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE' });
     prisma.adminMutation.findUnique.mockResolvedValue(null);
-    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: ['account:users:read', 'account:users:manage'].map((code) => ({ permission: { code } })) } }] : []);
+    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }] : []);
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
     prisma.organization.findUnique.mockResolvedValue({ id: 'org-a', type: 'INTERNAL', code: 'A', name: 'Org A' });
     passwords.hash.mockResolvedValue('hashed-password');
@@ -96,7 +96,7 @@ describe('admin user lifecycle service', () => {
   });
 
   it('maps a reference created during an organization transfer to an audited conflict', async () => {
-    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: [{ permission: { code: 'account:users:manage' } }] } }] : []);
+    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: [{ permission: { code: 'account:users:transfer' } }] } }] : []);
     prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', accountType: 'INTERNAL' });
     prisma.user.update.mockRejectedValueOnce({ code: 'P2003' });
     await expect(service.update(actor, 'user-2', { organizationId: 'org-b' }, 'org-a', 'trace-transfer', 'transfer-key'))

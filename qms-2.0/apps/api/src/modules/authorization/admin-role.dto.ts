@@ -29,6 +29,48 @@ export class AdminRoleDto {
   permissions!: AdminPermissionDto[];
 }
 
+export class PermissionCatalogOperationDto {
+  @ApiProperty()
+  code!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ enum: ['guarded', 'reserved'] })
+  enforcement!: 'guarded' | 'reserved';
+
+  @ApiProperty()
+  grantable!: boolean;
+}
+
+export class PermissionCatalogModuleDto {
+  @ApiProperty()
+  key!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ enum: ['active', 'planned'] })
+  status!: 'active' | 'planned';
+
+  @ApiProperty({ type: [PermissionCatalogOperationDto] })
+  operations!: PermissionCatalogOperationDto[];
+}
+
+export class PermissionCatalogGroupDto {
+  @ApiProperty()
+  key!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ enum: ['active', 'planned'] })
+  status!: 'active' | 'planned';
+
+  @ApiProperty({ type: [PermissionCatalogModuleDto] })
+  modules!: PermissionCatalogModuleDto[];
+}
+
 export class AdminRoleScopeQueryDto {
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
@@ -66,6 +108,16 @@ export class CreateAdminRoleDto extends CopyAdminRoleDto {
 }
 
 export class UpdateAdminRoleDto {
+  @ApiPropertyOptional({ type: [String], maxItems: 200, description: 'Required when permissionCodes is supplied; previously read permission set.' })
+  @ValidateIf((object: UpdateAdminRoleDto, value) => object.permissionCodes !== undefined || value !== undefined)
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Length(1, 150, { each: true })
+  @Matches(/\S/, { each: true })
+  expectedPermissionCodes?: string[];
+
   @ApiPropertyOptional({ minLength: 1, maxLength: 150 })
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()

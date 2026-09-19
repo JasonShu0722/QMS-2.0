@@ -5,6 +5,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { PasswordResetService } from './password-reset.service.js';
 import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto } from './dto/admin-user.dto.js';
+import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
@@ -37,7 +38,7 @@ export class AdminUserService {
   }
 
   create(actor: AdminUserActor, dto: CreateAdminUserDto, traceId: string, key?: string) {
-    return this.mutations.run({ actor, organizationId: dto.organizationId, key, action: 'USER_CREATED', payload: dto, permission: 'account:users:manage', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
+    return this.mutations.run({ actor, organizationId: dto.organizationId, key, action: 'USER_CREATED', payload: dto, permission: 'account:users:create', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
       await this.assertOrganizationAccountType(transaction, dto.organizationId, dto.accountType);
       const passwordHash = await this.passwords.hash(dto.initialPassword);
       const user = await transaction.user.create({ data: { organizationId: dto.organizationId, username: dto.username.trim(), email: dto.email?.trim().toLowerCase() ?? null, accountType: dto.accountType, passwordHash }, select: USER_SELECT });
@@ -47,7 +48,9 @@ export class AdminUserService {
   }
 
   update(actor: AdminUserActor, userId: string, dto: UpdateAdminUserDto, organizationId: string, traceId: string, key?: string) {
-    return this.mutations.run({ actor, organizationId, key, action: 'USER_UPDATED', payload: { userId, dto }, permission: 'account:users:manage', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
+    const requiredPermissions = userUpdatePermissions(dto);
+    const additionalAccess = actor.id !== userId && dto.organizationId && dto.organizationId !== organizationId ? [{ organizationId: dto.organizationId, permission: 'account:users:transfer' }] : [];
+    return this.mutations.run({ actor, organizationId, key, action: 'USER_UPDATED', payload: { userId, dto }, permission: requiredPermissions, additionalAccess, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
       const existing = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true, organizationId: true, accountType: true } });
       if (!existing) adminError('ADMIN_USER_NOT_FOUND', 404);
       const targetOrganizationId = dto.organizationId ?? existing.organizationId;
@@ -55,8 +58,7 @@ export class AdminUserService {
       const identityChanged = targetOrganizationId !== existing.organizationId || targetType !== existing.accountType;
       if (actor.id === userId && dto.status === 'DISABLED') adminError('ADMIN_SELF_DISABLE_FORBIDDEN', 409);
       if (actor.id === userId && identityChanged) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
-      await assertAdminAccess(transaction, actor, targetOrganizationId, 'account:users:manage');
-      await this.assertTarget(transaction, actor, userId, identityChanged);
+      await this.assertTarget(transaction, actor, userId, requiredPermissions, identityChanged);
       await this.assertOrganizationAccountType(transaction, targetOrganizationId, targetType);
       const organizationChanged = targetOrganizationId !== existing.organizationId;
       if (organizationChanged) {
@@ -88,21 +90,21 @@ export class AdminUserService {
   }
 
   resetPassword(actor: AdminUserActor, userId: string, temporaryCode: string, organizationId: string, traceId: string, key?: string) {
-    return this.mutations.run({ actor, organizationId, key, action: 'PASSWORD_RESET_ISSUED', payload: { userId, temporaryCode }, permission: 'account:users:manage', traceId }, async (transaction) => {
+    return this.mutations.run({ actor, organizationId, key, action: 'PASSWORD_RESET_ISSUED', payload: { userId, temporaryCode }, permission: 'account:users:reset', traceId }, async (transaction) => {
       const existing = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE' }, select: { id: true } });
       if (!existing) adminError('ADMIN_USER_NOT_FOUND', 404);
-      await this.assertTarget(transaction, actor, userId);
+      await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
       const result = await this.resets.issue(transaction, userId, temporaryCode);
       await this.record(transaction, actor, organizationId, userId, 'PASSWORD_RESET_ISSUED', traceId);
       return result;
     });
   }
 
-  private async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, identityChanged = false) {
+  private async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, requiredPermissions: string[], identityChanged = false) {
     const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
     if (identityChanged && assignments.some((assignment) => assignment.role.organizationId === null)) adminError('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
     for (const organizationId of new Set(assignments.map((assignment) => assignment.organizationId))) {
-      const granted = await assertAdminAccess(transaction, actor, organizationId, 'account:users:manage');
+      const granted = await assertAdminAccess(transaction, actor, organizationId, requiredPermissions);
       const targetPermissions = assignments.filter((assignment) => assignment.organizationId === organizationId).flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code));
       if (targetPermissions.some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
     }

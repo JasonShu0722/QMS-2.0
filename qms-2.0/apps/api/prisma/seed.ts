@@ -45,9 +45,16 @@ async function seed(): Promise<void> {
           ['workflow:manage', '管理受控流程'],
           ...(type === 'INTERNAL' ? [
             ['account:users:read', '查看用户账号'],
-            ['account:users:manage', '管理用户账号'],
+            ['account:users:create', '创建用户账号'],
+            ['account:users:update', '编辑用户邮箱'],
+            ['account:users:status', '启用或停用用户'],
+            ['account:users:transfer', '变更用户组织或账号类型'],
+            ['account:users:reset', '签发密码重置凭证'],
             ['account:roles:read', '查看角色与权限'],
-            ['account:roles:manage', '管理角色与权限'],
+            ['account:roles:create', '创建或复制角色'],
+            ['account:roles:update', '编辑角色与权限'],
+            ['account:roles:delete', '删除角色'],
+            ['account:roles:assign', '分配用户角色'],
           ] : []),
         ] as const;
         for (const [code, name] of permissions) {

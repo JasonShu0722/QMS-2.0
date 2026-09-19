@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { Client } from 'pg';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -12,8 +14,51 @@ import { PasswordService } from '../../src/modules/identity/password.service.js'
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { IdentityService } from '../../src/modules/identity/identity.service.js';
 import { RateLimitService } from '../../src/modules/identity/rate-limit.guard.js';
+import { AdminUserService } from '../../src/modules/identity/admin-user.service.js';
 
 if (!process.env.DATABASE_URL) throw new Error('PostgreSQL integration requires DATABASE_URL; no skipping.');
+
+describe('granular permission PostgreSQL migration', () => {
+  it('expands existing global and scoped manage grants without adding reads or changing assignments', async () => {
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    const schema = `matrix_${randomUUID().replaceAll('-', '')}`;
+    const migration = 'prisma/migrations/20260919020000_granular_account_permissions/migration.sql';
+    try {
+      await client.query(`CREATE SCHEMA "${schema}"; SET search_path TO "${schema}"; CREATE TABLE permissions (LIKE public.permissions INCLUDING ALL); CREATE TABLE role_permissions (LIKE public.role_permissions INCLUDING ALL); CREATE TABLE roles (LIKE public.roles INCLUDING ALL); CREATE TABLE user_roles (LIKE public.user_roles INCLUDING ALL)`);
+      const globalRole = randomUUID();
+      const scopedRole = randomUUID();
+      const organizationId = randomUUID();
+      const userId = randomUUID();
+      const userManage = randomUUID();
+      const roleManage = randomUUID();
+      const existingWrite = randomUUID();
+      const existingRead = randomUUID();
+      await client.query('INSERT INTO roles (id, organization_id, code, name) VALUES ($1, NULL, $3, $3), ($2, $4, $3, $3)', [globalRole, scopedRole, 'MIGRATION', organizationId]);
+      await client.query('INSERT INTO permissions (id, code, name) VALUES ($1, $2, $2), ($3, $4, $4), ($5, $6, $6)', [userManage, 'account:users:manage', roleManage, 'account:roles:manage', existingWrite, 'account:users:update']);
+      await client.query('INSERT INTO permissions (id, code, name) VALUES ($1, $2, $2)', [existingRead, 'account:roles:read']);
+      await client.query('INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2), ($1, $3), ($1, $4), ($5, $3)', [globalRole, userManage, roleManage, existingWrite, scopedRole]);
+      await client.query('INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2)', [scopedRole, existingRead]);
+      await client.query('INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3), ($1, $4, $3)', [userId, globalRole, organizationId, scopedRole]);
+      const before = (await client.query('SELECT * FROM user_roles ORDER BY role_id')).rows;
+      if (existsSync(migration)) await client.query(readFileSync(migration, 'utf8'));
+      const grants = (await client.query('SELECT role_id, code FROM role_permissions JOIN permissions ON id = permission_id')).rows;
+      expect(grants.filter((grant) => grant.role_id === globalRole).map((grant) => grant.code).sort()).toEqual([
+        'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset',
+        'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign',
+      ].sort());
+      expect(grants.filter((grant) => grant.role_id === scopedRole).map((grant) => grant.code).sort()).toEqual(['account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'].sort());
+      expect((await client.query('SELECT * FROM permissions WHERE code LIKE $1', ['%:manage'])).rows).toEqual([]);
+      expect((await client.query('SELECT id FROM permissions WHERE code LIKE $1', ['%:read'])).rows).toEqual([{ id: existingRead }]);
+      expect((await client.query('SELECT * FROM user_roles ORDER BY role_id')).rows).toEqual(before);
+      expect((await client.query('SELECT organization_id FROM roles WHERE id = $1', [globalRole])).rows[0].organization_id).toBeNull();
+    } finally {
+      await client.query('ROLLBACK');
+      await client.query(`SET search_path TO public; DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      await client.end();
+    }
+  });
+});
 
 describe('administrator security PostgreSQL regression', () => {
   let app: INestApplication;
@@ -24,7 +69,7 @@ describe('administrator security PostgreSQL regression', () => {
   let cookie: string;
   const csrf = randomUUID();
   const suffix = randomUUID();
-  const permissionCodes = ['account:users:read', 'account:users:manage', 'account:roles:read', 'account:roles:manage'];
+  const permissionCodes = ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset', 'account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -55,6 +100,111 @@ describe('administrator security PostgreSQL regression', () => {
       await prisma.organization.deleteMany({ where: { id: { in: organizations } } });
     }
     await app?.close();
+  });
+
+  it.each(['users:create', 'users:update', 'users:status', 'users:transfer', 'users:reset', 'roles:create', 'roles:update', 'roles:delete', 'roles:assign'])('enforces isolated account:%s authority through HTTP', async (operation) => {
+    const organizationId = actor.organizationId;
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: `account:${operation}` } });
+    const limited = await prisma.user.create({ data: { organizationId, username: `isolated-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    const subject = await prisma.user.create({ data: { organizationId, username: `subject-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    const limitedRole = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Isolated', permissions: { create: { permissionId: permission.id } } } });
+    const editableRole = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Editable' } });
+    await prisma.userRole.create({ data: { userId: limited.id, organizationId, roleId: limitedRole.id } });
+    const limitedCookie = `qms_session=${await app.get(SessionService).create(limited.id)}; qms_csrf=${csrf}`;
+    const send = (method: 'post' | 'patch' | 'delete' | 'put', path: string, body: object) => request(app.getHttpServer())[method](`/api/v1/admin${path}`).set('Cookie', limitedCookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
+    const actions = [
+      { permission: 'users:create', status: 201, run: () => send('post', '/users', { organizationId, username: `created-${randomUUID()}`, accountType: 'INTERNAL', initialPassword: 'isolated-initial-password' }) },
+      { permission: 'users:update', status: 200, run: () => send('patch', `/users/${subject.id}`, { email: `isolated-${subject.id}@example.test` }) },
+      { permission: 'users:status', status: 200, run: () => send('patch', `/users/${subject.id}`, { status: 'DISABLED' }) },
+      { permission: 'users:transfer', status: 200, run: () => send('patch', `/users/${subject.id}`, { accountType: 'INTERNAL' }) },
+      { permission: 'users:reset', status: 201, run: () => send('post', `/users/${subject.id}/password-reset`, { temporaryCode: randomUUID() }) },
+      { permission: 'roles:create', status: 201, run: () => send('post', '/roles', { organizationId, code: `ROLE-${randomUUID()}`, name: 'Created', permissionCodes: [] }) },
+      { permission: 'roles:update', status: 200, run: () => send('patch', `/roles/${editableRole.id}`, { name: 'Renamed' }) },
+      { permission: 'roles:delete', status: 204, run: () => send('delete', `/roles/${editableRole.id}`, {}) },
+      { permission: 'roles:assign', status: 200, run: () => send('put', `/users/${subject.id}/roles`, { roleIds: [] }) },
+    ];
+    for (const action of actions) await action.run().expect(action.permission === operation ? action.status : 403);
+    await request(app.getHttpServer()).get('/api/v1/admin/users').set('Cookie', limitedCookie).expect(403);
+    await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', limitedCookie).expect(403);
+    if (operation === 'roles:create') await send('post', `/roles/${editableRole.id}/copy`, { code: `COPY-${randomUUID()}`, name: 'Copied' }).expect(201);
+  });
+
+  it.each(permissionCodes)('rolls back self-lock when removing %s', async (permissionCode) => {
+    const role = await prisma.role.findFirstOrThrow({ where: { organizationId: actor.organizationId, code: 'security-admin' }, include: { permissions: { include: { permission: true } } } });
+    const key = randomUUID();
+    const response = await request(app.getHttpServer()).patch(`/api/v1/admin/roles/${role.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send({ permissionCodes: permissionCodes.filter((code) => code !== permissionCode), expectedPermissionCodes: permissionCodes }).expect(409);
+    expect(response.body.code).toBe('ADMIN_SELF_LOCK_FORBIDDEN');
+    const after = await prisma.role.findUniqueOrThrow({ where: { id: role.id }, include: { permissions: { include: { permission: true } } } });
+    expect(after.permissions.map((entry) => entry.permission.code).sort()).toEqual(permissionCodes.slice().sort());
+    expect(await prisma.adminMutation.count({ where: { actorUserId: actor.id, key } })).toBe(0);
+  });
+
+  it('rejects mixed PATCH atomically and rechecks every permission before replay', async () => {
+    const organizationId = actor.organizationId;
+    const permissions = await prisma.permission.findMany({ where: { code: { in: ['account:users:update', 'account:users:status'] } } });
+    const limited = await prisma.user.create({ data: { organizationId, username: `mixed-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    const subject = await prisma.user.create({ data: { organizationId, username: `mixed-subject-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    const updatePermission = permissions.find((permission) => permission.code === 'account:users:update')!;
+    const statusPermission = permissions.find((permission) => permission.code === 'account:users:status')!;
+    const role = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Mixed', permissions: { create: { permissionId: updatePermission.id } } } });
+    await prisma.userRole.create({ data: { userId: limited.id, roleId: role.id, organizationId } });
+    const limitedActor = { id: limited.id, organizationId, accountType: 'INTERNAL' as const };
+    const service = app.get(AdminUserService);
+    const body = { email: `mixed-${subject.id}@example.test`, status: 'DISABLED' as const };
+    const key = randomUUID();
+    await expect(service.update(limitedActor, subject.id, body, organizationId, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: subject.id } })).toMatchObject({ email: null, status: 'ACTIVE' });
+    expect(await prisma.adminMutation.count({ where: { actorUserId: limited.id, key } })).toBe(0);
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: statusPermission.id } });
+    await service.update(limitedActor, subject.id, body, organizationId, randomUUID(), key);
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: role.id, permissionId: statusPermission.id } } });
+    await expect(service.update(limitedActor, subject.id, body, organizationId, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.auditEvent.count({ where: { actorUserId: limited.id, action: 'USER_UPDATED' } })).toBe(1);
+  });
+
+  it('rejects absent and stale role baselines without changing names, permissions or reset codes', async () => {
+    const organizationId = actor.organizationId;
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:read' } });
+    const role = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Original', permissions: { create: { permissionId: permission.id } } } });
+    await prisma.userRole.create({ data: { userId: target.id, roleId: role.id, organizationId } });
+    const reset = await prisma.passwordReset.create({ data: { userId: target.id, codeHash: '0'.repeat(64), expiresAt: new Date(Date.now() + 60_000) } });
+    const send = (body: object) => request(app.getHttpServer()).patch(`/api/v1/admin/roles/${role.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
+    await send({ name: 'Wrong', permissionCodes: [] }).expect(400);
+    const conflict = await send({ name: 'Wrong', permissionCodes: [], expectedPermissionCodes: [] }).expect(409);
+    expect(conflict.body.code).toBe('CONCURRENCY_CONFLICT');
+    expect(await prisma.role.findUniqueOrThrow({ where: { id: role.id }, include: { permissions: true } })).toMatchObject({ name: 'Original', permissions: [{ permissionId: permission.id }] });
+    expect((await prisma.passwordReset.findUniqueOrThrow({ where: { id: reset.id } })).consumedAt).toBeNull();
+    await send({ name: 'Renamed' }).expect(200);
+    await send({ permissionCodes: [], expectedPermissionCodes: ['account:users:read'] }).expect(200);
+    expect(await prisma.rolePermission.count({ where: { roleId: role.id } })).toBe(0);
+  });
+
+  it('rechecks destination transfer authority before replaying a successful transfer', async () => {
+    const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:transfer' } });
+    const subject = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `replay-transfer-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    await prisma.rolePermission.create({ data: { roleId: destination.id, permissionId: permission.id } });
+    const service = app.get(AdminUserService);
+    const key = randomUUID();
+    const body = { organizationId: otherOrganizationId };
+    const currentActor = { ...actor, accountType: 'INTERNAL' as const };
+    try {
+      await service.update(currentActor, subject.id, body, actor.organizationId, randomUUID(), key);
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: destination.id, permissionId: permission.id } } });
+      await expect(service.update(currentActor, subject.id, body, actor.organizationId, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+    } finally { await prisma.rolePermission.deleteMany({ where: { roleId: destination.id } }); }
+  });
+
+  it('rejects database-inserted planned permissions even when the acting administrator holds them', async () => {
+    const permission = await prisma.permission.create({ data: { code: `supplier:planned:${suffix}`, name: 'Forged planned operation' } });
+    const role = await prisma.role.findFirstOrThrow({ where: { organizationId: actor.organizationId, code: 'security-admin' } });
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+    try {
+      const rejected = await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ organizationId: actor.organizationId, code: `FORGED-${suffix}`, name: 'Forged', permissionCodes: [permission.code] }).expect(400);
+      expect(rejected.body.code).toBe('ADMIN_PERMISSION_NOT_FOUND');
+      const catalog = await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', cookie).expect(200);
+      expect(JSON.stringify(catalog.body)).not.toContain(permission.code);
+    } finally { await prisma.permission.delete({ where: { id: permission.id } }); }
   });
 
   it('rejects home-org management permission used with an unrelated role in the selected organization', async () => {
@@ -205,7 +355,7 @@ describe('administrator security PostgreSQL regression', () => {
   it('does not clear global roles by moving a user through the lifecycle endpoint', async () => {
     const global = await prisma.role.create({ data: { code: `GLOBAL-${suffix}`, name: 'Global' } });
     const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });
-    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:manage' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:transfer' } });
     await prisma.rolePermission.create({ data: { roleId: destination.id, permissionId: permission.id } });
     await prisma.userRole.create({ data: { userId: target.id, roleId: global.id, organizationId: actor.organizationId } });
     try {
@@ -260,7 +410,7 @@ describe('administrator security PostgreSQL regression', () => {
 
   it('moves users from query scope to body scope and clears sessions and old roles', async () => {
     const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });
-    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:manage' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:transfer' } });
     await prisma.rolePermission.create({ data: { roleId: destination.id, permissionId: permission.id } });
     const token = await app.get(SessionService).create(target.id);
     try {
@@ -288,7 +438,7 @@ describe('administrator security PostgreSQL regression', () => {
   it.each(['problem', 'task', 'notification'] as const)('preserves user and business state when a %s references a requested organization transfer', async (reference) => {
     const organizationId = actor.organizationId;
     const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });
-    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:manage' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:transfer' } });
     await prisma.rolePermission.create({ data: { roleId: destination.id, permissionId: permission.id } });
     const user = await prisma.user.create({ data: { organizationId, username: `transfer-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
     const role = await prisma.role.create({ data: { organizationId, code: `TRANSFER-${reference}`, name: 'Transfer fixture' } });
@@ -446,7 +596,7 @@ describe('administrator security PostgreSQL regression', () => {
     await prisma.userRole.create({ data: { userId: target.id, roleId: role.id, organizationId: actor.organizationId } });
     const temporaryCode = randomUUID();
     const issued = await request(app.getHttpServer()).post(`/api/v1/admin/users/${target.id}/password-reset`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ temporaryCode }).expect(201);
-    await request(app.getHttpServer()).patch(`/api/v1/admin/roles/${role.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ permissionCodes: ['account:users:read'] }).expect(200);
+    await request(app.getHttpServer()).patch(`/api/v1/admin/roles/${role.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ permissionCodes: ['account:users:read'], expectedPermissionCodes: [] }).expect(200);
     await request(app.getHttpServer()).post('/api/v1/auth/password-reset/complete').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ resetId: issued.body.resetId, temporaryCode, newPassword: 'stale-reset-password' }).expect(400);
   });
 });

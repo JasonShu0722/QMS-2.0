@@ -6,6 +6,7 @@ import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guar
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AdminUserService } from './admin-user.service.js';
+import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 import { AdminUserDto, AdminUserListQueryDto, CreateAdminUserDto, ResetAdminUserPasswordDto, UpdateAdminUserDto, PasswordResetIssuedDto } from './dto/admin-user.dto.js';
 
 @Controller('api/v1/admin/users')
@@ -34,7 +35,7 @@ export class AdminUserController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiCreatedResponse({ type: AdminUserDto })
-  @RequireAccess({ featurePermission: 'account:users:manage', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
+  @RequireAccess({ featurePermission: 'account:users:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
   create(@Body() dto: CreateAdminUserDto, @Req() request: Request) {
     return this.users.create(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
@@ -44,7 +45,7 @@ export class AdminUserController {
   @ApiQuery({ name: 'organizationId', required: false, type: String })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminUserDto })
-  @RequireAccess({ featurePermission: 'account:users:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:users:update', featurePermissions: userUpdatePermissions, organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   update(@Param('userId', ParseUUIDPipe) userId: string, @Body() dto: UpdateAdminUserDto, @Req() request: Request) {
     const authorized = request as AuthorizedRequest;
     return this.users.update(this.actor(request), userId, dto, authorized.authorizedOrganizationId!, requestTraceId(request), request.get('Idempotency-Key'));
@@ -55,7 +56,7 @@ export class AdminUserController {
   @ApiCreatedResponse({ type: PasswordResetIssuedDto })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiQuery({ name: 'organizationId', required: false, type: String })
-  @RequireAccess({ featurePermission: 'account:users:manage', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @RequireAccess({ featurePermission: 'account:users:reset', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   resetPassword(@Param('userId', ParseUUIDPipe) userId: string, @Body() dto: ResetAdminUserPasswordDto, @Query('organizationId') organizationId: string | undefined, @Req() request: Request) {
     const authorized = request as AuthorizedRequest;
     return this.users.resetPassword(this.actor(request), userId, dto.temporaryCode, organizationId ?? authorized.authorizedOrganizationId!, requestTraceId(request), request.get('Idempotency-Key'));

@@ -223,6 +223,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/permission-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminRoleController_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/permissions": {
         parameters: {
             query?: never;
@@ -618,6 +634,27 @@ export interface components {
             organizationId: string;
             permissions: string[];
         };
+        PermissionCatalogOperationDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            enforcement: "guarded" | "reserved";
+            grantable: boolean;
+        };
+        PermissionCatalogModuleDto: {
+            key: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "planned";
+            operations: components["schemas"]["PermissionCatalogOperationDto"][];
+        };
+        PermissionCatalogGroupDto: {
+            key: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "planned";
+            modules: components["schemas"]["PermissionCatalogModuleDto"][];
+        };
         AdminPermissionDto: {
             id: string;
             code: string;
@@ -642,6 +679,8 @@ export interface components {
             name: string;
         };
         UpdateAdminRoleDto: {
+            /** @description Required when permissionCodes is supplied; previously read permission set. */
+            expectedPermissionCodes?: string[];
             name?: string;
             permissionCodes?: string[];
         };
@@ -753,7 +792,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -1301,6 +1340,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionsResponseDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminRoleController_catalog: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionCatalogGroupDto"][];
                 };
             };
             /** @description Controlled API error */

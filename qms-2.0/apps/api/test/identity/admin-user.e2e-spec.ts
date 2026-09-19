@@ -36,7 +36,7 @@ describe('administrator user lifecycle HTTP contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue(user);
-    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:users:read', 'account:users:manage'].map((code) => ({ permission: { code } })) } }]);
+    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }]);
     prisma.session.findUnique.mockResolvedValue({
       id: 'session-1', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
     });

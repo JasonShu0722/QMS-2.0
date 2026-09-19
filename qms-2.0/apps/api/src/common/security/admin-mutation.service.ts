@@ -8,7 +8,7 @@ import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/pl
 
 export type AdminActor = { id: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
 export type AdminTransaction = Prisma.TransactionClient;
-export const ADMIN_PERMISSIONS = ['account:users:read', 'account:users:manage', 'account:roles:read', 'account:roles:manage'];
+export { ADMIN_PERMISSIONS } from '../../modules/authorization/permission-catalog.js';
 
 export function adminError(code: PlatformErrorCode, status: number): never {
   throw new HttpException({ code, message: PLATFORM_ERROR_MESSAGES[code] }, status);
@@ -19,12 +19,12 @@ export async function adminPermissions(transaction: AdminTransaction, userId: st
   return [...new Set(assignments.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)))].sort();
 }
 
-export async function assertAdminAccess(transaction: AdminTransaction, actor: AdminActor, organizationId: string, permission: string): Promise<string[]> {
+export async function assertAdminAccess(transaction: AdminTransaction, actor: AdminActor, organizationId: string, permission: string | string[]): Promise<string[]> {
   const current = await transaction.user.findUnique({ where: { id: actor.id }, select: { status: true, accountType: true, organizationId: true } });
   if (!current || current.status !== 'ACTIVE' || current.accountType !== actor.accountType || current.organizationId !== actor.organizationId) adminError('AUTH_SESSION_REQUIRED', 401);
   if (current.accountType === 'SUPPLIER' && organizationId !== current.organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
   const granted = await adminPermissions(transaction, actor.id, organizationId);
-  if (!granted.includes(permission)) adminError('FEATURE_PERMISSION_DENIED', 403);
+  if ((Array.isArray(permission) ? permission : [permission]).some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
   return granted;
 }
 
@@ -44,13 +44,14 @@ export class AdminMutationService {
     this.secret = configured ?? 'qms-development-rate-limit-secret-not-for-production';
   }
 
-  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string; traceId: string; duplicateCode?: PlatformErrorCode }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>): Promise<Result> {
+  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[] }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>): Promise<Result> {
     try {
       if (!input.key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(input.key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       const key = input.key;
       const requestDigest = createHmac('sha256', this.secret).update('qms:admin-mutation:v1\0').update(canonical(input.payload)).digest('hex');
       return await this.prisma.$transaction(async (transaction) => {
         const granted = await assertAdminAccess(transaction, input.actor, input.organizationId, input.permission);
+        for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);
         const identity = { actorUserId: input.actor.id, organizationId: input.organizationId, key };
         const existing = await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
         if (existing) {
@@ -67,7 +68,7 @@ export class AdminMutationService {
       const mappedCode = code === 'P2034' ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
       const rejection = mappedCode ? new HttpException({ code: mappedCode, message: PLATFORM_ERROR_MESSAGES[mappedCode] }, 409) : error;
       if (rejection instanceof HttpException && [400, 403, 404, 409].includes(rejection.getStatus())) {
-        await this.audit.record({ actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED', traceId: input.traceId, metadata: { permissionCode: input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } });
+        await this.audit.record({ actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED', traceId: input.traceId, metadata: { permissionCode: Array.isArray(input.permission) ? input.permission.join(',') : input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } });
       }
       throw rejection;
     }

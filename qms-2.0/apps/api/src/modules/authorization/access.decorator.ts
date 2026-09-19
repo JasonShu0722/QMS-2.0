@@ -7,6 +7,7 @@ export type OrganizationTargetSource = 'query' | 'body' | 'params' | 'session';
 
 export interface AccessContextRequirement {
   featurePermission: string;
+  featurePermissions?: (body: object) => string[];
   organizationScope?: {
     source: OrganizationTargetSource;
     field?: string;
