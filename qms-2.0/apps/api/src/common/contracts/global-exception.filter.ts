@@ -8,38 +8,18 @@ import {
 import type { Response } from 'express';
 import { toErrorResponse } from './error-response.js';
 import { requestTraceId } from './request-trace.js';
+import { PLATFORM_ERROR_CODES, PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from './platform-error.js';
 
-interface SafeHttpError {
-  code: string;
-  message: string;
-  fields?: Record<string, string[]>;
-}
-
-const CONTROLLED_ERROR_CODES = new Set([
-  'AUTH_INVALID_CREDENTIALS',
-  'AUTH_SESSION_REQUIRED',
-  'AUTH_RATE_LIMITED',
-  'CSRF_INVALID',
-  'FEATURE_PERMISSION_DENIED',
-  'ORGANIZATION_SCOPE_AMBIGUOUS',
-  'ORGANIZATION_SCOPE_DENIED',
-  'WORKFLOW_PERMISSION_REQUIRED',
-]);
-
-function safeHttpError(exception: HttpException): SafeHttpError | undefined {
+function safeErrorCode(exception: HttpException): PlatformErrorCode | undefined {
   const payload = exception.getResponse();
   if (
     typeof payload === 'object' &&
     payload !== null &&
-    typeof (payload as Partial<SafeHttpError>).code === 'string' &&
-    typeof (payload as Partial<SafeHttpError>).message === 'string'
+    'code' in payload &&
+    typeof payload.code === 'string' &&
+    PLATFORM_ERROR_CODES.includes(payload.code as PlatformErrorCode)
   ) {
-    const candidate = payload as SafeHttpError;
-    return {
-      code: candidate.code,
-      message: candidate.message,
-      fields: candidate.fields,
-    };
+    return payload.code as PlatformErrorCode;
   }
   return undefined;
 }
@@ -52,18 +32,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const status = isHttp
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
-    const candidate = isHttp ? safeHttpError(exception) : undefined;
-    const safe = candidate && CONTROLLED_ERROR_CODES.has(candidate.code)
-      ? candidate
-      : undefined;
-    // Exception messages can contain submitted secrets or database diagnostics.
-    const message = status >= 500 ? '服务暂时不可用' : '请求无法处理';
+    const code = isHttp && status < 500 ? safeErrorCode(exception) : undefined;
+    const message = status >= 500 ? '服务暂时不可用'
+      : code ? PLATFORM_ERROR_MESSAGES[code] : '请求无法处理';
 
     response.status(status).json(
       toErrorResponse({
-        code: status >= 500 ? 'INTERNAL_ERROR' : (safe?.code ?? `HTTP_${status}`),
-        message: safe?.message ?? message,
-        fields: safe?.fields,
+        code: status >= 500 ? 'INTERNAL_ERROR' : (code ?? `HTTP_${status}`),
+        message,
         traceId: requestTraceId(host.switchToHttp().getRequest?.()),
         cause: exception,
       }),

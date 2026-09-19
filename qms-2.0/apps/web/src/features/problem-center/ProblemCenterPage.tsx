@@ -1,0 +1,3 @@
+import { useEffect, useState } from 'react';
+import { getProblemCenter } from '../../api/platformQueries';
+export function ProblemCenterPage() { const [items, setItems] = useState<any[]>([]); useEffect(() => { void getProblemCenter().then((value: any) => setItems(value?.items ?? value ?? [])).catch(() => setItems([])); }, []); return <main><h1>问题中心</h1><table><thead><tr><th>报告编号</th><th>领域</th><th>严重度</th><th>状态</th><th>截止时间</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td>{item.reportNumber}</td><td>{item.domainCode}</td><td>{item.severity}</td><td>{item.status}</td><td>{item.dueAt ?? '-'}</td></tr>)}</tbody></table></main>; }

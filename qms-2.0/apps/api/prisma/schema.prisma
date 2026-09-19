@@ -129,8 +129,12 @@ model User {
   userRoles      UserRole[]
   auditEvents    AuditEvent[] @relation("AuditActor")
   uploadedFiles  FileObject[] @relation("FileUploader")
+  ownedProblems  ProblemIndex[] @relation("ProblemOwner")
+  assignedTasks  WorkflowTask[] @relation("TaskAssignee")
+  notifications  Notification[] @relation("NotificationRecipient")
 
   @@unique([organizationId, username])
+  @@unique([organizationId, id])
   @@index([organizationId, accountType])
   @@index([email])
   @@map("users")
@@ -263,9 +267,11 @@ model ProblemIndex {
   createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workflowInstance   WorkflowInstance?       @relation(fields: [workflowInstanceId], references: [id], onDelete: SetNull)
+  owner              User?                   @relation("ProblemOwner", fields: [organizationId, ownerId], references: [organizationId, id], onDelete: Restrict)
+  workflowInstance   WorkflowInstance?       @relation(fields: [organizationId, workflowInstanceId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, reportNumber])
+  @@index([organizationId, sourceType, sourceId])
   @@index([organizationId, status])
   @@index([organizationId, domainCode])
   @@index([organizationId, dueAt])
@@ -325,6 +331,7 @@ model WorkflowDefinition {
   instances      WorkflowInstance[]
 
   @@unique([organizationId, code])
+  @@unique([organizationId, id])
   @@index([organizationId, name])
   @@map("workflow_definitions")
 }
@@ -333,20 +340,24 @@ model WorkflowVersion {
   id                   String                 @id @default(uuid()) @db.Uuid
   organizationId       String                 @map("organization_id") @db.Uuid
   workflowDefinitionId String                 @map("workflow_definition_id") @db.Uuid
-  version              Int
-  status               WorkflowVersionStatus @default(DRAFT)
-  publishedAt          DateTime?              @map("published_at") @db.Timestamptz(3)
+    version              Int
+    status               WorkflowVersionStatus @default(DRAFT)
+    publishedAt          DateTime?              @map("published_at") @db.Timestamptz(3)
+    publishedById        String?                @map("published_by_id") @db.Uuid
+    changeNote           String?                @map("change_note") @db.VarChar(500)
+    structureSnapshot    Json                   @default("{}") @map("structure_snapshot")
   createdById          String?                @map("created_by_id") @db.Uuid
   updatedById          String?                @map("updated_by_id") @db.Uuid
   createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  definition           WorkflowDefinition    @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  definition           WorkflowDefinition    @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Cascade)
   nodes                WorkflowNode[]
   transitions          WorkflowTransition[]
   instances            WorkflowInstance[]
 
   @@unique([workflowDefinitionId, version])
+  @@unique([organizationId, id])
   @@index([organizationId, status])
   @@index([organizationId, workflowDefinitionId])
   @@map("workflow_versions")
@@ -366,13 +377,15 @@ model WorkflowNode {
   createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workflowVersion    WorkflowVersion        @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  workflowVersion    WorkflowVersion        @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Cascade)
   outgoingTransitions WorkflowTransition[]  @relation("TransitionFromNode")
   incomingTransitions WorkflowTransition[]  @relation("TransitionToNode")
   currentInstances    WorkflowInstance[]    @relation("InstanceCurrentNode")
-  tasks              WorkflowTask[]
+  tasks              WorkflowTask[] @relation("TaskWorkflowNode")
 
   @@unique([workflowVersionId, nodeKey])
+  @@unique([organizationId, id])
+  @@unique([organizationId, workflowVersionId, id])
   @@index([organizationId, workflowVersionId])
   @@map("workflow_nodes")
 }
@@ -391,11 +404,12 @@ model WorkflowTransition {
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workflowVersion   WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
-  fromNode          WorkflowNode   @relation("TransitionFromNode", fields: [fromNodeId], references: [id], onDelete: Cascade)
-  toNode            WorkflowNode   @relation("TransitionToNode", fields: [toNodeId], references: [id], onDelete: Cascade)
+  workflowVersion   WorkflowVersion @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Cascade)
+  fromNode          WorkflowNode   @relation("TransitionFromNode", fields: [organizationId, workflowVersionId, fromNodeId], references: [organizationId, workflowVersionId, id], onDelete: Cascade)
+  toNode            WorkflowNode   @relation("TransitionToNode", fields: [organizationId, workflowVersionId, toNodeId], references: [organizationId, workflowVersionId, id], onDelete: Cascade)
 
   @@unique([workflowVersionId, transitionKey])
+  @@unique([organizationId, id])
   @@index([organizationId, workflowVersionId])
   @@index([fromNodeId])
   @@index([toNodeId])
@@ -416,13 +430,16 @@ model WorkflowInstance {
   createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  definition           WorkflowDefinition    @relation(fields: [workflowDefinitionId], references: [id], onDelete: Restrict)
-  workflowVersion      WorkflowVersion      @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
-  currentNode          WorkflowNode?         @relation("InstanceCurrentNode", fields: [currentNodeId], references: [id], onDelete: SetNull)
+  definition           WorkflowDefinition    @relation(fields: [organizationId, workflowDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  workflowVersion      WorkflowVersion      @relation(fields: [organizationId, workflowVersionId], references: [organizationId, id], onDelete: Restrict)
+  currentNode          WorkflowNode?         @relation("InstanceCurrentNode", fields: [organizationId, workflowVersionId, currentNodeId], references: [organizationId, workflowVersionId, id], onDelete: Restrict)
   problems             ProblemIndex[]
-  tasks                WorkflowTask[]
+  tasks                WorkflowTask[] @relation("TaskWorkflowInstance")
 
   @@unique([organizationId, instanceKey])
+  @@unique([organizationId, id])
+  @@unique([organizationId, workflowVersionId, id])
+  @@unique([organizationId, workflowDefinitionId, version])
   @@index([organizationId, status])
   @@index([organizationId, workflowDefinitionId, version])
   @@map("workflow_instances")
@@ -431,6 +448,7 @@ model WorkflowInstance {
 model WorkflowTask {
   id                 String        @id @default(uuid()) @db.Uuid
   organizationId     String        @map("organization_id") @db.Uuid
+  workflowVersionId  String        @map("workflow_version_id") @db.Uuid
   workflowInstanceId String        @map("workflow_instance_id") @db.Uuid
   workflowNodeId     String        @map("workflow_node_id") @db.Uuid
   assigneeUserId     String?       @map("assignee_user_id") @db.Uuid
@@ -443,11 +461,13 @@ model WorkflowTask {
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workflowInstance   WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
-  workflowNode       WorkflowNode  @relation(fields: [workflowNodeId], references: [id], onDelete: Restrict)
+  assignee           User?         @relation("TaskAssignee", fields: [organizationId, assigneeUserId], references: [organizationId, id], onDelete: Restrict)
+  workflowInstance   WorkflowInstance @relation("TaskWorkflowInstance", fields: [organizationId, workflowVersionId, workflowInstanceId], references: [organizationId, workflowVersionId, id], onDelete: Cascade, map: "workflow_tasks_instance_version_fkey")
+  workflowNode       WorkflowNode  @relation("TaskWorkflowNode", fields: [organizationId, workflowVersionId, workflowNodeId], references: [organizationId, workflowVersionId, id], onDelete: Restrict, map: "workflow_tasks_node_version_fkey")
   notifications      Notification[]
 
   @@unique([workflowInstanceId, workflowNodeId])
+  @@unique([organizationId, id])
   @@index([organizationId, status])
   @@index([organizationId, dueAt])
   @@map("workflow_tasks")
@@ -470,7 +490,8 @@ model Notification {
   createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workflowTask   WorkflowTask?     @relation(fields: [workflowTaskId], references: [id], onDelete: Cascade)
+  recipient      User?              @relation("NotificationRecipient", fields: [organizationId, recipientUserId], references: [organizationId, id], onDelete: Restrict)
+  workflowTask   WorkflowTask?     @relation(fields: [organizationId, workflowTaskId], references: [organizationId, id], onDelete: Cascade)
 
   @@index([organizationId, status])
   @@index([organizationId, recipientUserId, status])

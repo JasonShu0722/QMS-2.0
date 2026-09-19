@@ -53,6 +53,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+export const apiRequest = request;
+
 export async function csrfToken(): Promise<string> {
   const response = await request<CsrfResponse>('/api/v1/auth/csrf');
   return response.csrfToken;

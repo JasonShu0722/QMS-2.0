@@ -19,6 +19,7 @@ export type NavigationItem = {
 
 export const internalNavigation: NavigationItem[] = [
   { label: '问题中心', path: '/app/problem-center', icon: ShieldAlert, context: ['问题台账', 'CAPA', '复盘'] },
+  { label: '我的待办', path: '/app/my-tasks', icon: ClipboardCheck, context: ['待处理', '逾期', '失败重试'] },
   { label: '流程设计', path: '/app/workflow-designer', icon: GitBranch, context: ['流程草稿', '发布记录'] },
   { label: '供应商质量', path: '/app/supplier-quality', icon: Users, context: ['准入', '绩效', '整改'] },
   { label: '审计管理', path: '/app/audits', icon: ClipboardCheck, context: ['计划', '发现项', '报告'] },

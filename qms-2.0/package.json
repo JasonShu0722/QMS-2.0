@@ -9,13 +9,14 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @qms/api --filter @qms/web dev",
-    "test": "node --test test/structure.test.mjs && pnpm --recursive test",
+    "test": "node --test test/structure.test.mjs test/contracts-package.test.mjs && pnpm --recursive test",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "contracts:generate": "node scripts/generate-contracts.mjs",
     "contracts:check": "node scripts/check-openapi-sync.mjs",
     "check:archive-isolation": "node scripts/check-archive-isolation.mjs",
-    "acceptance:phase-1": "node test/phase-1-acceptance.mjs"
+    "acceptance:phase-1": "node test/phase-1-acceptance.mjs",
+    "acceptance:phase-2": "node test/phase-2-acceptance.mjs"
   },
   "devDependencies": {
     "openapi-typescript": "7.10.1"
