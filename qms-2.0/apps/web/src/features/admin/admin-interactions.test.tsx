@@ -8,7 +8,7 @@ import { AdminPage } from './AdminPage';
 
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 
-const organization: AdminOrganization = { id: 'org-a', code: 'a', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:manage', 'account:roles:read', 'account:roles:manage'] };
+const organization: AdminOrganization = { id: 'org-a', code: 'a', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset', 'account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'] };
 const user: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
@@ -45,7 +45,7 @@ it.each([200, 409])('blocks creating a role until a closed editor finishes savin
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
     if (init.method === 'PATCH') return new Promise<Response>((resolve) => { resolveSave = resolve; });
-    return Promise.resolve(json(path.includes('/permissions') ? [] : [role]));
+    return Promise.resolve(json(path.includes('/permission-catalog') ? [] : [role]));
   }));
   render(<RoleAdministration organization={organization} />);
   await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
@@ -115,7 +115,7 @@ it('retains issued reset only until closing and generates a new code for the nex
 }, 30_000);
 
 it('shows global roles as read-only and exposes loading failures', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permissions') ? [] : [{ id: 'global', code: 'GLOBAL', name: 'Global Role', organizationId: null, permissions: [] }]))));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? [] : [{ id: 'global', code: 'GLOBAL', name: 'Global Role', organizationId: null, permissions: [] }]))));
   const rendered = render(<RoleAdministration organization={organization} />);
   const row = (await screen.findByText('Global Role')).closest('tr')!;
   expect(within(row).getByText('全局只读')).toBeInTheDocument();
@@ -130,7 +130,7 @@ it('shows global roles as read-only and exposes loading failures', async () => {
 it.each([
   { action: 'rename', expected: [{ name: 'Renamed Role' }] },
   { action: 'unchanged', expected: [] },
-  { action: 'remove permission', expected: [{ permissionCodes: ['account:roles:read'] }] },
+  { action: 'remove permission', expected: [{ permissionCodes: ['account:roles:read'], expectedPermissionCodes: ['account:users:read', 'account:roles:read'] }] },
   { action: 'reorder permissions', expected: [] },
 ])('submits only changed role fields: $action', async ({ action, expected }) => {
   const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: 'Read users' }, { id: 'roles-read', code: 'account:roles:read', name: 'Read roles' }] };
@@ -138,7 +138,7 @@ it.each([
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
     if (init.method === 'PATCH') { requests.push(JSON.parse(String(init.body))); return Promise.resolve(json(role)); }
-    return Promise.resolve(json(path.includes('/permissions') ? role.permissions : [role]));
+    return Promise.resolve(json(path.includes('/permission-catalog') ? [{ key: 'system', name: '系统管理', status: 'active', modules: [{ key: 'accounts', name: '账号', status: 'active', operations: role.permissions.map((permission) => ({ code: permission.code, name: permission.name, enforcement: 'guarded', grantable: true })) }] }] : [role]));
   }));
   render(<RoleAdministration organization={organization} />);
   await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
@@ -147,12 +147,11 @@ it.each([
     await userEvent.type(screen.getByLabelText('角色名称'), 'Renamed Role');
   }
   if (action === 'remove permission' || action === 'reorder permissions') {
-    await userEvent.click(document.querySelector('.ant-select-selection-item-remove')!);
+    await userEvent.click(screen.getByRole('checkbox', { name: '账号 · Read users' }));
     if (action === 'reorder permissions') {
-      await userEvent.click(screen.getByLabelText('角色权限'));
-      await userEvent.click(screen.getByText('Read users · account:users:read', { selector: '.ant-select-item-option-content' }));
-      await userEvent.click(screen.getByLabelText('角色名称'));
-      expect([...document.querySelectorAll('.ant-select-selection-item')].map((item) => item.getAttribute('title'))).toEqual(['Read roles · account:roles:read', 'Read users · account:users:read']);
+      await userEvent.click(screen.getByRole('checkbox', { name: '账号 · Read users' }));
+      expect(screen.getByRole('checkbox', { name: '账号 · Read users' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: '账号 · Read roles' })).toBeChecked();
     }
   }
   await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
@@ -162,7 +161,7 @@ it.each([
 
 it('does not offer user role assignment without both read permissions', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([user])));
-  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:manage'] }} organizations={[organization]} />);
+  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:assign'] }} organizations={[organization]} />);
   await screen.findByText('alice');
   expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
 });

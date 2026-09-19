@@ -80,6 +80,8 @@ export function safeAccountError(cause: unknown): string {
     ADMIN_ROLE_IN_USE: '角色仍在使用，请先解除用户分配',
     ADMIN_USER_DUPLICATE: '用户名或邮箱已存在',
     ADMIN_ROLE_DUPLICATE: '角色代码已存在',
+    CONCURRENCY_CONFLICT: '权限已被其他人修改，请重新加载后再编辑',
+    ADMIN_PERMISSION_BASELINE_REQUIRED: '请重新加载角色权限后再保存',
     ADMIN_GLOBAL_ROLE_IMMUTABLE: '全局角色只读，不能通过组织管理变更',
     ADMIN_SELF_DISABLE_FORBIDDEN: '不能停用当前账号',
     ADMIN_SELF_LOCK_FORBIDDEN: '不能移除自身管理权限或变更自身身份',
