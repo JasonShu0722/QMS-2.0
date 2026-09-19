@@ -84,7 +84,7 @@ export function UserAdministration({ organization, organizations }: { organizati
     <div className="admin-toolbar"><Space wrap>
       {canRead && <><Input.Search aria-label="搜索用户" placeholder="用户名或邮箱" allowClear onSearch={setSearch} />
         <Select aria-label="用户状态" placeholder="全部状态" allowClear value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: '启用' }, { value: 'DISABLED', label: '停用' }]} /></>}
-      {canManage && <Button type="primary" onClick={() => edit('new')}>创建用户</Button>}
+      {canManage && <Button type="primary" disabled={busy} onClick={() => edit('new')}>创建用户</Button>}
     </Space></div>
     {canRead && <Table<AdminUser> rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} columns={[
       { title: '用户名', dataIndex: 'username' }, { title: '邮箱', dataIndex: 'email' },

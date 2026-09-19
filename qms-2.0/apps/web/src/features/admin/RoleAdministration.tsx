@@ -57,7 +57,7 @@ export function RoleAdministration({ organization, matrix = false }: { organizat
       { title: '权限', fixed: 'left', render: (_, permission) => <>{permission.name}<br /><code>{permission.code}</code></> },
       ...roles.map((role) => ({ title: `${role.name}${role.organizationId === null ? '（全局）' : ''}`, key: role.id, render: (_: unknown, permission: AdminPermission) => role.permissions.some((entry) => entry.code === permission.code) ? '已授权' : '—' })),
     ]} /> : <>
-      {canManage && <div className="admin-toolbar"><Button type="primary" onClick={() => edit('new')}>创建角色</Button></div>}
+      {canManage && <div className="admin-toolbar"><Button type="primary" disabled={busy} onClick={() => edit('new')}>创建角色</Button></div>}
       <Table<AdminRole> rowKey="id" loading={loading} dataSource={roles} scroll={{ x: 750 }} columns={[
         { title: '角色名称', dataIndex: 'name' }, { title: '角色代码', dataIndex: 'code' },
         { title: '范围', render: (_, role) => role.organizationId === null ? <Tag>全局只读</Tag> : organization.name },

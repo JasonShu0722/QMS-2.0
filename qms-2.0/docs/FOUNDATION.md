@@ -161,3 +161,15 @@ git diff --stat
 | `git diff --check` | PASS |
 
 主代理聚合发现凭证标签同时匹配 dialog 和 textarea 的实际失败，组件测试改用精确 textbox 角色定位，纳入以上 40 条通过结果。浏览器重置场景已扩展为真实成员分配、签发凭证、UI 纯改角色名、匿名兑换和拒绝重放；秘密仅保留内存，断言不输出秘密，关闭 failure DOM 快照及 trace/screenshot/video。该新增浏览器场景和最终镜像完整聚合验收由主代理运行，本节不将尚未执行的浏览器回归标记为通过。
+
+### ABC Web 复审补修：保存期间创建入口（2026-09-19 UTC）
+
+环境：同一独立工作树、Windows PowerShell，显式使用 `C:\Program Files\nodejs\node.exe`（22.22.0）运行 Web 本地 CLI。用户和角色保存尚未返回时，即使关闭编辑弹窗，顶部创建入口也保持禁用；成功或失败返回后恢复，允许新建并输入。生产变更仅为两处创建按钮添加 `disabled={busy}`，避免旧保存响应清空后开的表单。
+
+| 实际命令 / 动作（Web 目录） | 结果与范围 |
+| --- | --- |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx -t 'blocks creating'`（修复前） | 有效 FAIL：用户/角色两组分别覆盖 200 和 409，共 4 条均因关闭待保存弹窗后创建按钮未禁用而失败 |
+| `node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.test.tsx`（修复后） | PASS：14 条，包含 4 条新回归；验证待响应时无法新建，响应后可打开新表单并输入 |
+| `node node_modules/typescript/bin/tsc -b`；`node node_modules/vite/bin/vite.js build` | PASS；保留既有 Ant Design chunk 超过 900 kB 提示 |
+
+主代理另报告完整浏览器聚合中 foundation 两条用例因仍断言旧标题 `QMS 2.0` 而失败；本次仅将该 heading 断言同步为现有登录页的 `账号登录`，保留后续真实登录、scope 与退出链路。其定向浏览器复验、最终源码全量和新镜像验收由主代理执行；本节不认定 ABC 整体交付完成。

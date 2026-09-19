@@ -13,6 +13,59 @@ const user: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.t
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
 
+it.each([200, 409])('blocks creating a user until a closed editor finishes saving with status %s', async (status) => {
+  let resolveSave: ((response: Response) => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (init.method === 'PATCH') return new Promise<Response>((resolve) => { resolveSave = resolve; });
+    return Promise.resolve(json([user]));
+  }));
+  render(<UserAdministration organization={organization} organizations={[organization]} />);
+  await userEvent.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
+  await userEvent.clear(screen.getByLabelText('邮箱'));
+  await userEvent.type(screen.getByLabelText('邮箱'), 'pending@example.test');
+  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
+  await waitFor(() => expect(resolveSave).toBeDefined());
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const create = screen.getByRole('button', { name: '创建用户' });
+  expect(create).toBeDisabled();
+  await userEvent.click(create);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  resolveSave!(status === 200 ? json(user) : json({ code: 'ADMIN_USER_ORGANIZATION_IN_USE' }, status));
+  await waitFor(() => expect(create).toBeEnabled());
+  await userEvent.click(create);
+  await userEvent.type(screen.getByLabelText('用户名'), 'next-user');
+  expect(screen.getByLabelText('用户名')).toHaveValue('next-user');
+}, 15_000);
+
+it.each([200, 409])('blocks creating a role until a closed editor finishes saving with status %s', async (status) => {
+  const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [] };
+  let resolveSave: ((response: Response) => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
+    if (init.method === 'PATCH') return new Promise<Response>((resolve) => { resolveSave = resolve; });
+    return Promise.resolve(json(path.includes('/permissions') ? [] : [role]));
+  }));
+  render(<RoleAdministration organization={organization} />);
+  await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
+  await userEvent.clear(screen.getByLabelText('角色名称'));
+  await userEvent.type(screen.getByLabelText('角色名称'), 'Pending Role');
+  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
+  await waitFor(() => expect(resolveSave).toBeDefined());
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const create = screen.getByRole('button', { name: '创建角色' });
+  expect(create).toBeDisabled();
+  await userEvent.click(create);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  resolveSave!(status === 200 ? json(role) : json({ code: 'CONFLICT' }, status));
+  await waitFor(() => expect(create).toBeEnabled());
+  await userEvent.click(create);
+  await userEvent.type(screen.getByLabelText('角色名称'), 'Next Role');
+  expect(screen.getByLabelText('角色名称')).toHaveValue('Next Role');
+}, 15_000);
+
 it('edits only changed user fields and keeps failed writes retryable with safe errors', async () => {
   const requests: RequestInit[] = [];
   let fail = true;
