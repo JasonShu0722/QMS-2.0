@@ -1,10 +1,12 @@
 import { render, screen, within, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { AdminPage } from './AdminPage';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
+import { GroupedPermissionSelector } from './GroupedPermissionSelector';
 import type { AdminOrganization, AdminRole, AdminUser } from './admin';
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -48,6 +50,58 @@ async function select(name: string, option: string) {
   await interaction.click(screen.getByText(option, { selector: '.ant-select-item-option-content' }));
 }
 afterEach(() => vi.unstubAllGlobals());
+
+function ControlledSelector({ initialCodes = originalCodes, onChange }: { initialCodes?: string[]; onChange: (codes: string[]) => void }) {
+  const [codes, setCodes] = useState(initialCodes);
+  return <GroupedPermissionSelector catalog={catalog} value={codes} onChange={(next) => { setCodes(next); onChange(next); }} />;
+}
+
+it('reflects module selection as unchecked, partial and all, then clears only grantable operations', async () => {
+  const onChange = vi.fn();
+  render(<ControlledSelector onChange={onChange} />);
+  const module = screen.getByRole('checkbox', { name: '用户管理 · 可授予权限' });
+  expect(module).not.toBeChecked();
+  expect(module).not.toBePartiallyChecked();
+  await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
+  expect(module).toBePartiallyChecked();
+  await interaction.click(module);
+  expect(module).toBeChecked();
+  expect(module).not.toBePartiallyChecked();
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 新建' })).toBeChecked();
+  await interaction.click(module);
+  expect(module).not.toBeChecked();
+  expect(module).not.toBePartiallyChecked();
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).not.toBeChecked();
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 新建' })).not.toBeChecked();
+  expect(onChange).toHaveBeenLastCalledWith(originalCodes);
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 重置密码' })).toBeChecked();
+  expect(screen.queryByRole('checkbox', { name: /供应商管理/ })).not.toBeInTheDocument();
+});
+
+it('limits module selection state and changes to visible grants and disables a module with no assignable match', async () => {
+  const onChange = vi.fn();
+  const initialCodes = [...originalCodes, 'account:users:read'];
+  render(<ControlledSelector initialCodes={initialCodes} onChange={onChange} />);
+  await select('板块筛选', '系统管理目录');
+  const search = screen.getByRole('textbox', { name: '搜索权限' });
+  await interaction.type(search, '新建');
+  const module = screen.getByRole('checkbox', { name: '用户管理 · 可授予权限' });
+  expect(module).not.toBeChecked();
+  expect(module).not.toBePartiallyChecked();
+  await interaction.click(module);
+  expect(module).toBeChecked();
+  expect(onChange).toHaveBeenLastCalledWith([...initialCodes, 'account:users:create']);
+  await interaction.click(module);
+  expect(module).not.toBeChecked();
+  expect(onChange).toHaveBeenLastCalledWith(initialCodes);
+  await interaction.clear(search);
+  expect(module).toBePartiallyChecked();
+  await interaction.type(search, '重置密码');
+  expect(module).toBeDisabled();
+  expect(module).not.toBeChecked();
+  expect(module).not.toBePartiallyChecked();
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 重置密码' })).toBeChecked();
+});
 
 it('renders API groups, planned modules and reserved operations with disabled ungrantable permissions', async () => {
   server(); await openMatrix();
@@ -110,6 +164,7 @@ it('keeps dirty drafts across tabs and confirms before switching role or organiz
 
 it.each([['account:roles:read'], ['account:roles:read', 'account:roles:create']])('keeps matrix read-only without update: %s', async (...permissions) => {
   server(); await openMatrix(permissions);
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 可授予权限' })).toBeDisabled();
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '用户管理全选' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '保存权限' })).toBeDisabled();
@@ -117,6 +172,7 @@ it.each([['account:roles:read'], ['account:roles:read', 'account:roles:create']]
 
 it('keeps global roles read-only even with role update permission', async () => {
   server(); await openMatrix(); await select('选择角色', '全局角色（全局只读）');
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 可授予权限' })).toBeDisabled();
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeDisabled();
 });
 

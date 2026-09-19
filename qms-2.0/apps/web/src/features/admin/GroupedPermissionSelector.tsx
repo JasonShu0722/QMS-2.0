@@ -36,8 +36,9 @@ export function GroupedPermissionSelector({ catalog, value = [], onChange, disab
       {group.modules.map((module) => {
         const planned = group.status === 'planned' || module.status === 'planned';
         const assignable = planned ? [] : module.operations.filter((operation) => operation.grantable).map((operation) => operation.code);
+        const selectedCount = assignable.filter((code) => selected.has(code)).length;
         return <section className="permission-module" key={module.key} aria-label={module.name}>
-          <header><strong>{module.name}</strong>{planned ? <Tag>待接入</Tag> : <Space>
+          <header>{planned ? <strong>{module.name}</strong> : <Checkbox aria-label={`${module.name} · 可授予权限`} checked={assignable.length > 0 && selectedCount === assignable.length} indeterminate={selectedCount > 0 && selectedCount < assignable.length} disabled={disabled || !assignable.length} onChange={(event) => change(assignable, event.target.checked)}><strong>{module.name}</strong></Checkbox>}{planned ? <Tag>待接入</Tag> : <Space>
             <Button size="small" aria-label={`${module.name}全选`} disabled={disabled || !assignable.length} onClick={() => change(assignable, true)}>全选</Button>
             <Button size="small" aria-label={`${module.name}清空`} disabled={disabled || !assignable.length} onClick={() => change(assignable, false)}>清空</Button>
           </Space>}</header>
