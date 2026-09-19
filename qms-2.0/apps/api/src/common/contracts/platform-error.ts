@@ -22,6 +22,11 @@ export const PLATFORM_ERROR_CODES = [
   'ADMIN_USER_DUPLICATE',
   'ADMIN_SELF_DISABLE_FORBIDDEN',
   'ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH',
+  'ADMIN_ROLE_NOT_FOUND',
+  'ADMIN_ROLE_DUPLICATE',
+  'ADMIN_ROLE_IN_USE',
+  'ADMIN_PERMISSION_NOT_FOUND',
+  'ADMIN_SELF_LOCK_FORBIDDEN',
 ] as const;
 export type PlatformErrorCode = (typeof PLATFORM_ERROR_CODES)[number];
 
@@ -49,4 +54,9 @@ export const PLATFORM_ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   ADMIN_USER_DUPLICATE: '用户名已存在',
   ADMIN_SELF_DISABLE_FORBIDDEN: '不能停用当前管理员账号',
   ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH: '账号类型与组织类型不匹配',
+  ADMIN_ROLE_NOT_FOUND: '角色不存在或不在当前组织范围',
+  ADMIN_ROLE_DUPLICATE: '当前组织已存在该角色代码',
+  ADMIN_ROLE_IN_USE: '角色仍有用户使用，不能删除',
+  ADMIN_PERMISSION_NOT_FOUND: '权限代码不存在',
+  ADMIN_SELF_LOCK_FORBIDDEN: '不能移除当前管理员的管理权限',
 };

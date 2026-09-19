@@ -46,6 +46,8 @@ async function seed(): Promise<void> {
           ...(type === 'INTERNAL' ? [
             ['account:users:read', '查看用户账号'],
             ['account:users:manage', '管理用户账号'],
+            ['account:roles:read', '查看角色与权限'],
+            ['account:roles:manage', '管理角色与权限'],
           ] : []),
         ] as const;
         for (const [code, name] of permissions) {
