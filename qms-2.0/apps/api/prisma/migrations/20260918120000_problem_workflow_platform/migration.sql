@@ -352,3 +352,9 @@ ALTER TABLE "notifications" ADD CONSTRAINT "notifications_organization_id_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_workflow_task_id_fkey" FOREIGN KEY ("workflow_task_id") REFERENCES "workflow_tasks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "problem_indexes" DROP CONSTRAINT "problem_indexes_workflow_instance_id_fkey";
+ALTER TABLE "problem_indexes" ADD CONSTRAINT "problem_indexes_workflow_instance_id_fkey" FOREIGN KEY ("workflow_instance_id") REFERENCES "workflow_instances"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "workflow_instances" DROP CONSTRAINT "workflow_instances_current_node_id_fkey";
+ALTER TABLE "workflow_instances" ADD CONSTRAINT "workflow_instances_current_node_id_fkey" FOREIGN KEY ("current_node_id") REFERENCES "workflow_nodes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

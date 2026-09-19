@@ -20,6 +20,13 @@ assert.equal(await exists('apps/api/package.json'), true, 'API package must exis
 assert.equal(await exists('apps/web/package.json'), true, 'web package must exist');
 assert.equal(await exists('packages/contracts/package.json'), true, 'contracts package must exist');
 
+const contractsPackage = JSON.parse(await readFile(join(root, 'packages/contracts/package.json'), 'utf8'));
+assert.deepEqual(
+  contractsPackage.exports['.'],
+  { types: './src/index.ts', import: './src/index.ts', default: './src/index.ts' },
+  'contracts exports must resolve directly to source without dist artifacts',
+);
+
 const workspaceManifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 assert.match(
   workspaceManifest.scripts.test,
