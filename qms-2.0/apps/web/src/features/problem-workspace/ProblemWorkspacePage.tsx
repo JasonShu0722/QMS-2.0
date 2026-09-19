@@ -1,0 +1,1 @@
+export function ProblemWorkspacePage() { return <main><h1>问题处理工作空间</h1><nav><button type="button">问题概览</button><button type="button">报告预览</button><button type="button">追溯</button></nav><section><h2>流程完成度</h2><p>处理 → 审批 → 验证 → 关闭</p><button type="button">提交处理</button><button type="button">升级 8D（保留报告编号）</button><p>隔离附件不可下载</p></section></main>; }
