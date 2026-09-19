@@ -26,11 +26,170 @@ a {
   border: 0;
 }
 
-.login-screen {
+.login-container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #102333;
+  background-color: #149ced;
+  background-image: url('../assets/login-hero-bg.svg');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.login-topbar {
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 0 48px;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  background: linear-gradient(90deg, rgb(3 70 122 / 84%), rgb(11 111 188 / 38%));
+  backdrop-filter: blur(14px);
+}
+
+.brand-block,
+.entry-note {
+  display: flex;
+  align-items: baseline;
+  color: #f7fbfc;
+}
+
+.brand-block {
+  gap: 14px;
+}
+
+.brand-mark {
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.brand-caption,
+.entry-note {
+  font-size: 13px;
+  opacity: 0.72;
+}
+
+.entry-note {
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.entry-note__line {
+  width: 42px;
+  height: 1px;
+  background: #d9a441;
+}
+
+.login-stage {
   display: grid;
-  min-height: 100vh;
-  place-items: center;
-  background: linear-gradient(145deg, #e8edf3 0%, #f7f4ed 48%, #e2ebea 100%);
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  align-items: center;
+  gap: 48px;
+  min-height: calc(100dvh - 64px);
+  padding: 32px clamp(52px, 4.8vw, 92px) 32px clamp(72px, 9.7vw, 188px);
+}
+
+.hero-panel {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.hero-copy {
+  max-width: 620px;
+  color: #fff;
+}
+
+.hero-kicker {
+  margin: 0 0 18px;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.hero-copy h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1.08;
+  font-weight: 700;
+}
+
+.login-panel {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-panel-shell {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 98%), rgb(242 249 255 / 94%));
+  box-shadow: 0 34px 78px rgb(5 57 116 / 22%), 0 1px 0 rgb(255 255 255 / 84%) inset;
+  backdrop-filter: blur(14px);
+}
+
+.login-panel-head {
+  margin-bottom: 22px;
+}
+
+.login-panel-head p {
+  margin: 0 0 8px;
+  color: #748da3;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.login-panel-head h1 {
+  margin: 0;
+  color: #0d2b51;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.login-form {
+  margin-top: 24px;
+}
+
+.login-form .ant-form-item-label > label {
+  color: #244468;
+  font-weight: 600;
+}
+
+.login-form .ant-input,
+.login-form .ant-input-affix-wrapper {
+  border-color: rgb(30 91 150 / 14%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 98%);
+}
+
+.login-form .ant-input-affix-wrapper {
+  min-height: 46px;
+}
+
+.login-form .ant-input:focus,
+.login-form .ant-input-affix-wrapper:focus,
+.login-form .ant-input-affix-wrapper-focused {
+  border-color: rgb(39 137 231 / 42%);
+  box-shadow: 0 0 0 4px rgb(39 137 231 / 12%);
+}
+
+.login-form .ant-btn-primary {
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #156fc8, #2f9af0);
+  box-shadow: 0 18px 34px rgb(16 100 197 / 24%), 0 1px 0 rgb(255 255 255 / 24%) inset;
+  font-weight: 600;
 }
 
 .route-loading {
@@ -40,14 +199,48 @@ a {
   background: #f5f7fa;
 }
 
-.login-card {
-  width: min(420px, calc(100vw - 32px));
-  border-radius: 8px;
-  box-shadow: 0 24px 70px rgb(31 48 70 / 16%);
+@media (max-width: 1100px) {
+  .login-stage {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    justify-items: center;
+    min-height: calc(100dvh - 64px);
+    padding: 22px 32px 28px;
+  }
+
+  .hero-panel {
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+  }
+
+  .login-panel {
+    justify-content: center;
+    width: 100%;
+  }
 }
 
-.login-form {
-  margin-top: 24px;
+@media (max-width: 640px) {
+  .login-topbar {
+    min-height: 60px;
+    padding: 0 20px;
+  }
+
+  .brand-caption,
+  .entry-note,
+  .hero-panel {
+    display: none;
+  }
+
+  .login-stage {
+    min-height: calc(100dvh - 60px);
+    padding: 16px 20px 22px;
+  }
+
+  .login-panel-shell {
+    max-width: none;
+    padding: 20px 18px 18px;
+  }
 }
 
 .app-shell {
