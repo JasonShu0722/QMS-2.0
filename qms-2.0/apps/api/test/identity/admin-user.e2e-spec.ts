@@ -21,7 +21,7 @@ describe('administrator user lifecycle HTTP contract', () => {
     user: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     organization: { findUnique: jest.fn() },
     session: { findUnique: jest.fn(), updateMany: jest.fn() },
-    userRole: { count: jest.fn(), findFirst: jest.fn() },
+    userRole: { count: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
   };
 
   beforeAll(async () => {
@@ -35,6 +35,8 @@ describe('administrator user lifecycle HTTP contract', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue(user);
+    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:users:read', 'account:users:manage'].map((code) => ({ permission: { code } })) } }]);
     prisma.session.findUnique.mockResolvedValue({
       id: 'session-1', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
     });

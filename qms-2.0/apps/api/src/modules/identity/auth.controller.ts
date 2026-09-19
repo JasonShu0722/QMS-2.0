@@ -15,6 +15,8 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { CsrfResponseDto, LoginDto, LoginResponseDto, SessionResponseDto } from './dto/login.dto.js';
 import { IdentityService } from './identity.service.js';
 import { RateLimitGuard } from './rate-limit.guard.js';
+import { PasswordResetService } from './password-reset.service.js';
+import { CompletePasswordResetDto } from './dto/admin-user.dto.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import {
   clearSessionCookieOptions,
@@ -32,6 +34,7 @@ export class AuthController {
   constructor(
     private readonly identity: IdentityService,
     private readonly sessions: SessionService,
+    private readonly resets: PasswordResetService,
   ) {}
 
   @Get('csrf')
@@ -62,6 +65,15 @@ export class AuthController {
   @ApiCookieAuth('qms_session')
   session(@Req() request: Request) {
     return this.identity.current(parseCookie(request.headers.cookie, SESSION_COOKIE));
+  }
+
+  @Post('password-reset/complete')
+  @HttpCode(204)
+  @ApiNoContentResponse()
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @UseGuards(RateLimitGuard)
+  completePasswordReset(@Body() dto: CompletePasswordResetDto, @Req() request: Request) {
+    return this.resets.complete(dto, requestTraceId(request));
   }
 
   @Post('logout')

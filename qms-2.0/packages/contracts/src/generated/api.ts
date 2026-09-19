@@ -47,6 +47,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password-reset/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_completePasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -169,6 +185,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["AdminUserController_resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminOrganizationController_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -497,6 +529,12 @@ export interface components {
         SessionResponseDto: {
             user: components["schemas"]["SessionUserDto"];
         };
+        CompletePasswordResetDto: {
+            temporaryCode: string;
+            /** Format: uuid */
+            resetId: string;
+            newPassword: string;
+        };
         OrganizationSummaryDto: {
             id: string;
             code: string;
@@ -537,7 +575,7 @@ export interface components {
             status: "ACTIVE" | "DISABLED";
             mfaEnabled: boolean;
             organizationId: string;
-            organization: Record<string, never>;
+            organization: components["schemas"]["OrganizationSummaryDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -560,7 +598,21 @@ export interface components {
             status?: "ACTIVE" | "DISABLED";
         };
         ResetAdminUserPasswordDto: {
-            newPassword: string;
+            temporaryCode: string;
+        };
+        PasswordResetIssuedDto: {
+            /** Format: uuid */
+            resetId: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        AdminOrganizationDto: {
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            type: "INTERNAL" | "SUPPLIER";
+            permissions: string[];
         };
         PermissionsResponseDto: {
             organizationId: string;
@@ -701,7 +753,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_SELF_LOCK_FORBIDDEN";
+        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -803,6 +855,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SessionResponseDto"];
                 };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthController_completePasswordReset: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePasswordResetDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Controlled API error */
             default: {
@@ -1033,6 +1117,7 @@ export interface operations {
             query?: never;
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path?: never;
             cookie?: never;
@@ -1043,7 +1128,7 @@ export interface operations {
             };
         };
         responses: {
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1096,9 +1181,12 @@ export interface operations {
     };
     AdminUserController_update: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+            };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 userId: string;
@@ -1137,6 +1225,7 @@ export interface operations {
             };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 userId: string;
@@ -1153,9 +1242,38 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PasswordResetIssuedDto"];
+                };
             };
             /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminOrganizationController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrganizationDto"][];
+                };
+            };
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -1261,6 +1379,7 @@ export interface operations {
             query?: never;
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path?: never;
             cookie?: never;
@@ -1329,6 +1448,7 @@ export interface operations {
             };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 roleId: string;
@@ -1361,6 +1481,7 @@ export interface operations {
             };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 roleId: string;
@@ -1399,6 +1520,7 @@ export interface operations {
             };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 roleId: string;
@@ -1469,6 +1591,7 @@ export interface operations {
             };
             header: {
                 "x-csrf-token": string;
+                "Idempotency-Key": string;
             };
             path: {
                 userId: string;

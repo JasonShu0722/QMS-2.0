@@ -27,6 +27,9 @@ export const PLATFORM_ERROR_CODES = [
   'ADMIN_ROLE_IN_USE',
   'ADMIN_PERMISSION_NOT_FOUND',
   'ADMIN_SELF_LOCK_FORBIDDEN',
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'AUTH_PASSWORD_RESET_INVALID',
+  'ADMIN_GLOBAL_ROLE_IMMUTABLE',
 ] as const;
 export type PlatformErrorCode = (typeof PLATFORM_ERROR_CODES)[number];
 
@@ -51,7 +54,7 @@ export const PLATFORM_ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   ORGANIZATION_SCOPE_DENIED: '无权访问该组织范围',
   WORKFLOW_PERMISSION_REQUIRED: '流程权限尚未启用',
   ADMIN_USER_NOT_FOUND: '用户不存在或不在当前组织范围',
-  ADMIN_USER_DUPLICATE: '用户名已存在',
+  ADMIN_USER_DUPLICATE: '用户名或邮箱已存在',
   ADMIN_SELF_DISABLE_FORBIDDEN: '不能停用当前管理员账号',
   ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH: '账号类型与组织类型不匹配',
   ADMIN_ROLE_NOT_FOUND: '角色不存在或不在当前组织范围',
@@ -59,4 +62,7 @@ export const PLATFORM_ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   ADMIN_ROLE_IN_USE: '角色仍有用户使用，不能删除',
   ADMIN_PERMISSION_NOT_FOUND: '权限代码不存在',
   ADMIN_SELF_LOCK_FORBIDDEN: '不能移除当前管理员的管理权限',
+  IDEMPOTENCY_KEY_REQUIRED: '请提供有效的幂等请求标识',
+  AUTH_PASSWORD_RESET_INVALID: '重置凭证无效、已使用或已过期',
+  ADMIN_GLOBAL_ROLE_IMMUTABLE: '全局角色不能通过组织角色管理修改',
 };

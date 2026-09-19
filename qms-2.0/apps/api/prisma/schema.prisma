@@ -108,6 +108,7 @@ model Organization {
   workflowInstances WorkflowInstance[]
   workflowTasks WorkflowTask[]
   notifications Notification[]
+  adminMutations AdminMutation[]
 
   @@index([type])
   @@map("organizations")
@@ -129,6 +130,8 @@ model User {
   userRoles      UserRole[]
   auditEvents    AuditEvent[] @relation("AuditActor")
   uploadedFiles  FileObject[] @relation("FileUploader")
+  adminMutations AdminMutation[]
+  passwordResets PasswordReset[]
 
   @@unique([organizationId, username])
   @@index([organizationId, accountType])
@@ -197,6 +200,35 @@ model Session {
 
   @@index([userId, expiresAt])
   @@map("sessions")
+}
+
+model AdminMutation {
+  id String @id @default(uuid()) @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  key String @db.VarChar(128)
+  action String @db.VarChar(100)
+  requestDigest String @map("request_digest") @db.Char(64)
+  response Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([actorUserId, organizationId, key])
+  @@map("admin_mutations")
+}
+
+model PasswordReset {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  codeHash String @map("code_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@map("password_resets")
 }
 
 model AuditEvent {

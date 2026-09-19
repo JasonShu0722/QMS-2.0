@@ -10,6 +10,7 @@ export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
 
 type SessionTransaction = {
+  user: Pick<PrismaService['user'], 'findUnique'>;
   session: Pick<PrismaService['session'], 'updateMany'>;
   auditEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
 };
@@ -107,7 +108,7 @@ export class SessionService {
 
   async listForUser(userId: string, currentSessionId: string) {
     const sessions = await this.prisma.session.findMany({
-      where: { userId },
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
       select: { id: true, createdAt: true, expiresAt: true, revokedAt: true },
     });
@@ -128,8 +129,10 @@ export class SessionService {
       data: { revokedAt: new Date() },
     });
     if (changed.count > 0) {
+      const user = await transaction.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
       await this.audit.record({
         actorUserId: userId,
+        organizationId: user?.organizationId,
         action: 'SESSION_REVOKED',
         resourceType: 'Session',
         resourceId: userId,
@@ -156,8 +159,10 @@ export class SessionService {
       if (changed.count !== 1) {
         throw new HttpException({ code: 'AUTH_SESSION_NOT_FOUND', message: '会话不存在或已撤销' }, 404);
       }
+      const user = await transaction.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
       await this.audit.record({
         actorUserId: userId,
+        organizationId: user?.organizationId,
         action: 'SESSION_REVOKED',
         resourceType: 'Session',
         resourceId: sessionId,

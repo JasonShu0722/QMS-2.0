@@ -98,3 +98,26 @@ git diff --stat
 实现代理本次 `rg` 范围审查仅命中供应商质量导航标签/占位路径及 S3CompatibleObjectStorage 的标准协议名称；Prisma 仅含组织、用户、角色权限、会话、审计、附件与 Outbox 十个底座模型，无上述业务模型。S3 兼容适配不是旧系统兼容层，合法导航和边界说明保留。新增安全审计是验收发现的底座缺陷补修，主代理确认范围后实施；未添加密码重置或权限修改接口。
 
 批次 2 从新批准的“问题与流程平台”设计/阶段计划开始：明确薄公共索引与领域所有权、编号不变性、受控节点及不可变流程版本、运行权限、幂等/乐观锁/事务边界；然后设计待办通知、台账个人视图、处理空间及报告追溯。先消除本矩阵未通过项，再建立这些能力的真实测试。供应商质量专业业务闭环属于后续批次 3，不在任务 8 实现。
+
+## ABC API 安全修订验证（2026-09-18 本地 / 2026-09-19 UTC）
+
+本节补充并更新前述阶段 1 历史边界：B/C 管理 API 和一次性重置 API 已实现，功能权限改为选定目标组织；管理员 Web 界面与完整浏览器聚合验收仍由后续工作完成，不能据本节宣称 ABC 产品验收完成。
+
+环境：独立工作树 `codex/qms-2-admin-foundation`，Windows PowerShell，Node 22.22.0（`corepack pnpm exec node --version` 实测）、pnpm 11.19.0，临时 PostgreSQL 18.6 / 本机 55442。凭据从仓库外临时 XML 加载，未写入代码或本文；原有 local seed 账号密码保持不变。首次红灯启动时数据库尚未迁移，先得到缺表错误；部署既有迁移后重新运行才作为有效缺陷证据。
+
+| 实际命令 / 动作 | 结果与范围 |
+| --- | --- |
+| 新 `admin-security-schema.integration-spec.ts`，修复前实跑 | FAIL：5 条分别复现目标组织越权、非法 UUID 导致 500、创建重放失败、重置 DTO 缺失、跨组织同名被接受 |
+| C 全局角色移除 / 拒绝审计新增单测 | FAIL：2 条新增失败，旧 20 条通过；接入公共事务与全局角色拒绝后通过 |
+| A 原子资料审计 / 密码 CAS / 有效会话新增单测 | FAIL：3 条复现旧行为，修复后通过 |
+| B 全局角色迁移旁路 / C 升权后旧重置凭证 | FAIL：原行为返回 200 / 204；补同事务拒绝和凭证失效后通过 |
+| 重置兑换限流伪 Cookie 回归 | FAIL：第 31 个不同假 Cookie 仍放行；改为用途前缀 + resetId + IP 后通过 |
+| `pnpm --filter @qms/api test`（加载临时 PG） | PASS：31 suites / 221 tests；现有两个 problem-index integration 文件仍由该入口运行，因此本次提供真实 PG，没有跳过或 SQLite |
+| `pnpm --filter @qms/api test:integration` | PASS：12 个迁移部署、seed 保持既有密码，3 suites / 36 tests；新增 21 条覆盖真实授权、迁移、幂等、并发、一次性重置、审计回滚、邮箱冲突及 A 密码 CAS |
+| 新 PG 安全套件 + C service + 重置限流定向测试 | PASS：3 suites / 44 tests，含成功重放不重复审计、并发消费只成功一次、全局角色旁路拒绝和升权后旧凭证失效 |
+| 移除 `DATABASE_URL` 后运行新 PG 安全套件 | 预期 FAIL / exit 1：明确提示需要 PostgreSQL 配置，0 tests 执行，没有静默跳过或数据库替代 |
+| `pnpm contracts:generate`；`pnpm contracts:check` | PASS：Swagger 导出和生成类型同步，包含组织目录、typed organization、B/C 幂等头及重置签发/兑换 DTO；生成脚本同时完成 API Prisma/Nest 构建 |
+| `pnpm --filter @qms/web test`；`pnpm --filter @qms/web build` | PASS：5 files / 20 tests，TypeScript/Vite 构建通过；已有 Ant Design 废弃属性提示，不影响结果 |
+| `pnpm check:archive-isolation`；`docker compose -f deployment/docker-compose.foundation.yml config --quiet`；`git diff --check` | PASS；仅配置解析和归档/格式隔离，不冒充新容器部署或真实浏览器验收 |
+
+限制：本修复代理未实现管理员 Web 页面、未运行更新后的 `acceptance:phase-1` 或真实网关浏览器主链路；由主代理在 UI 完成后执行最终聚合验收。本节不修改或重新认定既有阶段 2 工作流运行时、Worker、MFA、对象存储和生产治理的交付状态。新 migration 遇到历史用户名格式或大小写唯一冲突会明确失败，不删除既有数据。

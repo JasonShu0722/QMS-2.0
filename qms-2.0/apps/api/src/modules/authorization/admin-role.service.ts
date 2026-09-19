@@ -5,6 +5,7 @@ import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../../common/co
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { AdminUserActor } from '../identity/admin-user.service.js';
 import type { AssignAdminRolesDto, CopyAdminRoleDto, CreateAdminRoleDto, UpdateAdminRoleDto } from './admin-role.dto.js';
+import { AdminMutationService, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
 
 type Transaction = Prisma.TransactionClient;
 const ROLE_INCLUDE = { permissions: { include: { permission: true } } } as const;
@@ -13,7 +14,7 @@ const MANAGEMENT_PERMISSIONS = ['account:users:read', 'account:users:manage', 'a
 
 @Injectable()
 export class AdminRoleService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService) {}
 
   async permissions(actor: AdminUserActor) {
     await this.assertRead(actor);
@@ -32,10 +33,10 @@ export class AdminRoleService {
     return this.serialize(await this.role(this.prisma, roleId, this.scope(actor)));
   }
 
-  create(actor: AdminUserActor, dto: CreateAdminRoleDto, traceId: string) {
+  create(actor: AdminUserActor, dto: CreateAdminRoleDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    if (dto.organizationId !== organizationId) this.fail('ORGANIZATION_SCOPE_DENIED', 403);
-    return this.mutate(actor, async (transaction, granted) => {
+    return this.mutate(actor, { action: 'ROLE_CREATED', payload: dto, traceId, key }, async (transaction, granted) => {
+      if (dto.organizationId !== organizationId) this.fail('ORGANIZATION_SCOPE_DENIED', 403);
       const permissions = await this.resolvePermissions(transaction, dto.permissionCodes, granted);
       const role = await transaction.role.create({
         data: { organizationId, code: dto.code, name: dto.name.trim(), permissions: { create: permissions.map((permission) => ({ permissionId: permission.id })) } },
@@ -46,9 +47,9 @@ export class AdminRoleService {
     });
   }
 
-  copy(actor: AdminUserActor, roleId: string, dto: CopyAdminRoleDto, traceId: string) {
+  copy(actor: AdminUserActor, roleId: string, dto: CopyAdminRoleDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    return this.mutate(actor, async (transaction, granted) => {
+    return this.mutate(actor, { action: 'ROLE_COPIED', payload: { roleId, dto }, traceId, key }, async (transaction, granted) => {
       const template = await this.role(transaction, roleId, organizationId);
       this.assertGranted(template.permissions.map((entry) => entry.permission.code), granted);
       const role = await transaction.role.create({
@@ -60,15 +61,16 @@ export class AdminRoleService {
     });
   }
 
-  update(actor: AdminUserActor, roleId: string, dto: UpdateAdminRoleDto, traceId: string) {
+  update(actor: AdminUserActor, roleId: string, dto: UpdateAdminRoleDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    return this.mutate(actor, async (transaction, granted) => {
+    return this.mutate(actor, { action: 'ROLE_UPDATED', payload: { roleId, dto }, traceId, key }, async (transaction, granted) => {
       const existing = await this.role(transaction, roleId, organizationId);
       this.assertGranted(existing.permissions.map((entry) => entry.permission.code), granted);
       if (dto.permissionCodes !== undefined) {
         const permissions = await this.resolvePermissions(transaction, dto.permissionCodes, granted);
         await transaction.rolePermission.deleteMany({ where: { roleId } });
         if (permissions.length) await transaction.rolePermission.createMany({ data: permissions.map((permission) => ({ roleId, permissionId: permission.id })) });
+        await transaction.passwordReset.updateMany({ where: { consumedAt: null, user: { userRoles: { some: { roleId } } } }, data: { consumedAt: new Date() } });
       }
       const role = await transaction.role.update({ where: { id: roleId }, data: dto.name === undefined ? {} : { name: dto.name.trim() }, include: ROLE_INCLUDE });
       await this.assertNotLocked(transaction, actor, granted);
@@ -77,9 +79,9 @@ export class AdminRoleService {
     });
   }
 
-  remove(actor: AdminUserActor, roleId: string, traceId: string) {
+  remove(actor: AdminUserActor, roleId: string, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    return this.mutate(actor, async (transaction, granted) => {
+    return this.mutate(actor, { action: 'ROLE_DELETED', payload: { roleId }, traceId, key }, async (transaction, granted) => {
       const existing = await this.role(transaction, roleId, organizationId);
       this.assertGranted(existing.permissions.map((entry) => entry.permission.code), granted);
       if (await transaction.userRole.count({ where: { roleId } })) this.fail('ADMIN_ROLE_IN_USE', 409);
@@ -97,18 +99,20 @@ export class AdminRoleService {
     return { userId, organizationId, roles, permissions: [...new Set(roles.flatMap((role) => role.permissions.map((permission) => permission.code)))].sort() };
   }
 
-  assign(actor: AdminUserActor, userId: string, dto: AssignAdminRolesDto, traceId: string) {
+  assign(actor: AdminUserActor, userId: string, dto: AssignAdminRolesDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    return this.mutate(actor, async (transaction, granted) => {
+    return this.mutate(actor, { action: 'USER_ROLES_CHANGED', payload: { userId, dto }, traceId, key }, async (transaction, granted) => {
       await this.assertUser(transaction, userId, organizationId);
       const roleIds = [...new Set(dto.roleIds)];
       const roles = roleIds.length ? await transaction.role.findMany({ where: { id: { in: roleIds }, organizationId }, include: ROLE_INCLUDE }) : [];
       if (roles.length !== roleIds.length) this.fail('ADMIN_ROLE_NOT_FOUND', 404);
       this.assertGranted(roles.flatMap((role) => role.permissions.map((entry) => entry.permission.code)), granted);
       const existing = await transaction.userRole.findMany({ where: { userId, organizationId }, include: { role: { include: ROLE_INCLUDE } } });
+      if (existing.some((assignment) => assignment.role.organizationId === null)) this.fail('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
       this.assertGranted(existing.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)), granted);
       await transaction.userRole.deleteMany({ where: { userId, organizationId } });
       if (roleIds.length) await transaction.userRole.createMany({ data: roleIds.map((roleId) => ({ userId, roleId, organizationId })) });
+      await transaction.passwordReset.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: new Date() } });
       await this.assertNotLocked(transaction, actor, granted);
       await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_ROLES_CHANGED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId } }, transaction);
       const result = roles.map((role) => this.serialize(role));
@@ -116,24 +120,12 @@ export class AdminRoleService {
     });
   }
 
-  private async mutate<Result>(actor: AdminUserActor, work: (transaction: Transaction, granted: string[]) => Promise<Result>): Promise<Result> {
-    try {
-      return await this.prisma.$transaction(async (transaction) => {
-        const granted = await this.effectivePermissions(transaction, actor);
-        if (!granted.includes('account:roles:manage')) this.fail('FEATURE_PERMISSION_DENIED', 403);
-        return work(transaction, granted);
-      }, { isolationLevel: 'Serializable' });
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code === 'P2034') this.fail('CONCURRENCY_CONFLICT', 409);
-      if (code === 'P2002') this.fail('ADMIN_ROLE_DUPLICATE', 409);
-      throw error;
-    }
+  private mutate<Result>(actor: AdminUserActor, input: { action: string; payload: unknown; traceId: string; key?: string }, work: (transaction: Transaction, granted: string[]) => Promise<Result>): Promise<Result> {
+    return this.mutations.run({ ...input, key: input.key, actor, organizationId: this.scope(actor), permission: 'account:roles:manage', duplicateCode: 'ADMIN_ROLE_DUPLICATE' }, work);
   }
 
   private scope(actor: AdminUserActor): string {
     const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
-    if (actor.accountType === 'SUPPLIER' && organizationId !== actor.organizationId) this.fail('ORGANIZATION_SCOPE_DENIED', 403);
     return organizationId;
   }
 
@@ -172,8 +164,7 @@ export class AdminRoleService {
   }
 
   private async assertRead(actor: AdminUserActor) {
-    const granted = await this.effectivePermissions(this.prisma, actor);
-    if (!granted.includes('account:roles:read')) this.fail('FEATURE_PERMISSION_DENIED', 403);
+    await assertAdminAccess(this.prisma, actor, this.scope(actor), 'account:roles:read');
   }
 
   private serialize(role: RoleWithPermissions) {

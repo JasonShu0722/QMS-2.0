@@ -24,6 +24,7 @@ export class AuthorizationService {
   async assertAccess(
     session: AuthorizedSession,
     requirement: AccessContextRequirement,
+    organizationId = session.user.organizationId,
   ): Promise<void> {
     if (requirement.workflowPermission) {
       const code: PlatformErrorCode = 'WORKFLOW_PERMISSION_REQUIRED';
@@ -34,7 +35,7 @@ export class AuthorizationService {
     }
     await this.assertFeature(
       session.user.id,
-      session.user.organizationId,
+      organizationId,
       requirement.featurePermission,
     );
   }

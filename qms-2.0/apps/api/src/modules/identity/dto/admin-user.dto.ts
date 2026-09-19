@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { OrganizationSummaryDto } from './account.dto.js';
 
 const ACCOUNT_TYPES = ['INTERNAL', 'SUPPLIER'] as const;
 const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
@@ -7,7 +9,7 @@ const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
 export class AdminUserListQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
+  @IsUUID()
   organizationId?: string;
 
   @ApiPropertyOptional({ enum: USER_STATUSES })
@@ -31,6 +33,8 @@ export class CreateAdminUserDto {
   @ApiProperty()
   @IsString()
   @Length(1, 100)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @Matches(/^[a-zA-Z0-9._-]+$/)
   username!: string;
 
   @ApiPropertyOptional({ type: String, nullable: true })
@@ -44,7 +48,7 @@ export class CreateAdminUserDto {
   accountType!: (typeof ACCOUNT_TYPES)[number];
 
   @ApiProperty()
-  @IsString()
+  @IsUUID()
   organizationId!: string;
 
   @ApiProperty({ minLength: 12, maxLength: 256 })
@@ -61,22 +65,42 @@ export class UpdateAdminUserDto {
   email?: string | null;
 
   @ApiPropertyOptional({ enum: ACCOUNT_TYPES })
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsIn(ACCOUNT_TYPES)
   accountType?: (typeof ACCOUNT_TYPES)[number];
 
   @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsUUID()
   organizationId?: string;
 
   @ApiPropertyOptional({ enum: USER_STATUSES })
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsIn(USER_STATUSES)
   status?: (typeof USER_STATUSES)[number];
 }
 
 export class ResetAdminUserPasswordDto {
+  @ApiProperty({ minLength: 32, maxLength: 256 })
+  @IsString()
+  @Length(32, 256)
+  @Matches(/^[a-zA-Z0-9_-]+$/)
+  temporaryCode!: string;
+}
+
+export class PasswordResetIssuedDto {
+  @ApiProperty({ format: 'uuid' })
+  resetId!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  expiresAt!: string;
+}
+
+export class CompletePasswordResetDto extends ResetAdminUserPasswordDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  resetId!: string;
+
   @ApiProperty({ minLength: 12, maxLength: 256 })
   @IsString()
   @Length(12, 256)
@@ -105,12 +129,20 @@ export class AdminUserDto {
   @ApiProperty()
   organizationId!: string;
 
-  @ApiProperty()
-  organization!: { id: string; code: string; name: string };
+  @ApiProperty({ type: OrganizationSummaryDto })
+  organization!: OrganizationSummaryDto;
 
   @ApiProperty()
   createdAt!: Date;
 
   @ApiProperty()
   updatedAt!: Date;
+}
+
+export class AdminOrganizationDto extends OrganizationSummaryDto {
+  @ApiProperty({ enum: ACCOUNT_TYPES })
+  type!: (typeof ACCOUNT_TYPES)[number];
+
+  @ApiProperty({ type: [String] })
+  permissions!: string[];
 }

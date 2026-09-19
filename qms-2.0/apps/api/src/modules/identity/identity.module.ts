@@ -11,16 +11,20 @@ import { AuditLogModule } from '../audit-log/audit-log.module.js';
 import { AccountController } from './account.controller.js';
 import { AdminUserController } from './admin-user.controller.js';
 import { AdminUserService } from './admin-user.service.js';
+import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
+import { PasswordResetService } from './password-reset.service.js';
+import { AdminOrganizationController } from './admin-organization.controller.js';
 
 @Module({
-  imports: [AuditLogModule],
-  controllers: [AuthController, AccountController, AdminUserController],
+  imports: [AuditLogModule, AdminMutationModule],
+  controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController],
   providers: [
     PasswordHasherService,
     PasswordService,
     SessionService,
     IdentityService,
     AdminUserService,
+    PasswordResetService,
     RateLimitService,
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },

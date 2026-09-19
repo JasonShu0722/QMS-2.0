@@ -7,7 +7,9 @@ describe('account center service', () => {
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
+    passwordReset: { updateMany: jest.fn() },
     $transaction: jest.fn(),
   };
   const passwords = {
@@ -62,19 +64,39 @@ describe('account center service', () => {
     passwords.verify.mockResolvedValue(true);
     passwords.hash.mockResolvedValue('new-encoded');
     prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work({
-      user: { update: prisma.user.update },
+      user: { updateMany: prisma.user.updateMany },
+      passwordReset: prisma.passwordReset,
     }));
 
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
     await service.changePassword({
       userId: 'user-1', currentSessionId: 'session-1', currentPassword: 'old-password', newPassword: 'new-password-123', traceId: 'trace-1',
     });
 
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { passwordHash: 'new-encoded' } });
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1', passwordHash: 'encoded', status: 'ACTIVE' }, data: { passwordHash: 'new-encoded' } });
     expect(sessions.revokeOtherSessions).toHaveBeenCalledWith('user-1', 'session-1', 'trace-1', expect.anything());
   });
 
   it('rejects a missing profile with the controlled contract error', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(service.profile('missing')).rejects.toBeInstanceOf(HttpException);
+  });
+
+  it('updates profile and audit through the same transaction', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', organization: { id: 'org-1', code: 'internal', name: 'Internal' } });
+    prisma.user.update.mockResolvedValue({ id: 'user-1', organization: { id: 'org-1', code: 'internal', name: 'Internal' } });
+    prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
+    await service.updateProfile('user-1', { email: 'new@example.test' }, 'trace-1');
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'PROFILE_UPDATED' }), prisma);
+  });
+
+  it('rejects password verification superseded by another password change', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', passwordHash: 'encoded', organizationId: 'org-1' });
+    passwords.verify.mockResolvedValue(true);
+    passwords.hash.mockResolvedValue('new-encoded');
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
+    await expect(service.changePassword({ userId: 'user-1', currentSessionId: 'session-1', currentPassword: 'old-password', newPassword: 'new-password-123', traceId: 'trace-1' })).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(sessions.revokeOtherSessions).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,8 @@ describe('administrator role HTTP contract', () => {
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     role: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     permission: { findMany: jest.fn() },
+    user: { findUnique: jest.fn() },
+    adminMutation: { findUnique: jest.fn(), create: jest.fn() },
     session: { findUnique: jest.fn() },
     userRole: { count: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
   };
@@ -32,6 +34,8 @@ describe('administrator role HTTP contract', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue(user);
+    prisma.adminMutation.findUnique.mockResolvedValue(null);
     prisma.session.findUnique.mockResolvedValue({ id: 'session', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user });
     prisma.userRole.count.mockResolvedValue(1);
     prisma.userRole.findFirst.mockResolvedValue({ organizationId });
@@ -60,7 +64,7 @@ describe('administrator role HTTP contract', () => {
   it('rejects management without CSRF and accepts a valid role creation', async () => {
     const body = { organizationId, code: 'QUALITY', name: 'Quality', permissionCodes: [] };
     await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).send(body).expect(403);
-    await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').send(body).expect(201);
+    await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send(body).expect(201);
     expect(prisma.role.create).toHaveBeenCalledTimes(1);
   });
 
@@ -72,18 +76,18 @@ describe('administrator role HTTP contract', () => {
       { ...valid, permissionCodes: ['workbench:read', 'workbench:read'] },
       { ...valid, arbitraryScript: 'script' },
     ]) {
-      await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').send(body).expect(400);
+      await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send(body).expect(400);
     }
     expect(prisma.role.create).not.toHaveBeenCalled();
   });
 
   it('does not expose a permission directory write endpoint', async () => {
-    await request(app.getHttpServer()).post('/api/v1/admin/permissions').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').send({ code: 'new:permission' }).expect(404);
+    await request(app.getHttpServer()).post('/api/v1/admin/permissions').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send({ code: 'new:permission' }).expect(404);
   });
 
   it('rejects explicit nulls in optional role update fields', async () => {
     for (const body of [{ name: null }, { permissionCodes: null }]) {
-      await request(app.getHttpServer()).patch(`/api/v1/admin/roles/${roleId}`).set('Cookie', cookies).set('x-csrf-token', 'csrf-token').send(body).expect(400);
+      await request(app.getHttpServer()).patch(`/api/v1/admin/roles/${roleId}`).set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send(body).expect(400);
     }
   });
 });

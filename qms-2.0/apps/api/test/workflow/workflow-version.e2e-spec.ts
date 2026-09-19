@@ -74,7 +74,7 @@ describe('workflow version release', () => {
   it('rejects a workflow route without the workflow permission with a stable 403 code', async () => {
     const session = { id: 'session-1', user: { id: 'user-1', organizationId: 'org-1', accountType: 'INTERNAL' as const } };
     const sessions = { resolve: jest.fn().mockResolvedValue(session) };
-    const scopes = { fromSession: jest.fn() };
+    const scopes = { fromSession: jest.fn().mockResolvedValue('org-1') };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
     const authorization = new AuthorizationService({ userRole: { count: jest.fn().mockResolvedValue(0) } } as never);
     const guard = new AuthenticatedGuard(new Reflector(), sessions as never, scopes as never, authorization, audit as never);
@@ -88,6 +88,6 @@ describe('workflow version release', () => {
     const requirement = new Reflector().getAllAndOverride(ACCESS_CONTEXT_METADATA, [WorkflowController.prototype.create, WorkflowController]);
     expect(requirement).toMatchObject({ featurePermission: 'workflow:manage' });
     await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
-    expect(scopes.fromSession).not.toHaveBeenCalled();
+    expect(scopes.fromSession).toHaveBeenCalledWith(session, { requestedOrganizationId: undefined, optional: true });
   });
 });

@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
 import { HttpException } from '@nestjs/common';
+import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
+import { PasswordResetService } from '../../src/modules/identity/password-reset.service.js';
 import { AdminUserService } from '../../src/modules/identity/admin-user.service.js';
 
 describe('admin user lifecycle service', () => {
@@ -12,16 +14,22 @@ describe('admin user lifecycle service', () => {
       update: jest.fn(),
     },
     organization: { findUnique: jest.fn() },
+    userRole: { findMany: jest.fn(), deleteMany: jest.fn() },
+    adminMutation: { findUnique: jest.fn(), create: jest.fn() },
+    passwordReset: { updateMany: jest.fn(), create: jest.fn() },
     session: { updateMany: jest.fn() },
     $transaction: jest.fn(),
   };
   const passwords = { hash: jest.fn() };
   const audit = { record: jest.fn() };
-  const service = new AdminUserService(prisma as never, passwords as never, audit as never);
+  const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never));
   const actor = { id: 'admin-1', organizationId: 'org-a', accountType: 'INTERNAL' as const };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE' });
+    prisma.adminMutation.findUnique.mockResolvedValue(null);
+    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: ['account:users:read', 'account:users:manage'].map((code) => ({ permission: { code } })) } }] : []);
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
     prisma.organization.findUnique.mockResolvedValue({ id: 'org-a', type: 'INTERNAL', code: 'A', name: 'Org A' });
     passwords.hash.mockResolvedValue('hashed-password');
@@ -34,17 +42,18 @@ describe('admin user lifecycle service', () => {
   });
 
   it('rejects a supplier actor from creating a user in another organization', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER', status: 'ACTIVE' });
     await expect(service.create(
       { id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER' },
       { organizationId: 'supplier-b', username: 'bob', accountType: 'SUPPLIER', initialPassword: 'password-1234' },
-      'trace-1',
+      'trace-1', 'test-key-1',
     )).rejects.toMatchObject({ response: { code: 'ORGANIZATION_SCOPE_DENIED' } });
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('creates a user with a password hash and audit in one transaction', async () => {
     prisma.user.create.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } });
-    const result = await service.create(actor, { organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', initialPassword: 'password-1234' }, 'trace-1');
+    const result = await service.create(actor, { organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', initialPassword: 'password-1234' }, 'trace-1', 'test-key-1');
     expect(result).toMatchObject({ id: 'user-2', username: 'bob' });
     expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordHash: 'hashed-password' }) }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'USER_CREATED', resourceId: 'user-2' }), prisma);
@@ -53,23 +62,26 @@ describe('admin user lifecycle service', () => {
   it('updates status and organization within the authorized scope', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL' });
     prisma.user.update.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', email: 'b@example.test', accountType: 'INTERNAL', status: 'DISABLED', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } });
-    const result = await service.update(actor, 'user-2', { status: 'DISABLED', email: 'b@example.test' }, 'org-a', 'trace-1');
+    const result = await service.update(actor, 'user-2', { status: 'DISABLED', email: 'b@example.test' }, 'org-a', 'trace-1', 'test-key-1');
     expect(result.status).toBe('DISABLED');
     expect(prisma.session.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-2', revokedAt: null } }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'USER_UPDATED' }), prisma);
   });
 
   it('does not allow an administrator to disable their own account', async () => {
-    await expect(service.update(actor, actor.id, { status: 'DISABLED' }, 'org-a', 'trace-1'))
+    prisma.user.findFirst.mockResolvedValue({ ...actor });
+    await expect(service.update(actor, actor.id, { status: 'DISABLED' }, 'org-a', 'trace-1', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_SELF_DISABLE_FORBIDDEN' } });
   });
 
-  it('resets a password, revokes target sessions, and never returns the password', async () => {
+  it('issues a hashed one-time reset without changing the password or sessions', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob' });
-    await service.resetPassword(actor, 'user-2', 'new-password-1234', 'org-a', 'trace-1');
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-2' }, data: { passwordHash: 'hashed-password' } });
-    expect(prisma.session.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-2', revokedAt: null } }));
-    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'PASSWORD_RESET', resourceId: 'user-2' }), prisma);
+    prisma.passwordReset.create.mockResolvedValue({ id: 'reset-id', expiresAt: new Date() });
+    const result = await service.resetPassword(actor, 'user-2', 'temporary-code-at-least-32-characters', 'org-a', 'trace-1', 'test-key-1');
+    expect(result).toHaveProperty('resetId', 'reset-id');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.updateMany).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'PASSWORD_RESET_ISSUED', resourceId: 'user-2' }), prisma);
   });
 
   it('returns a controlled not-found error for another organization', async () => {

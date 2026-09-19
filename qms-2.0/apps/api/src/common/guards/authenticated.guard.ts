@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { isUUID } from 'class-validator';
 import { parseCookie, SESSION_COOKIE, SessionService } from '../../modules/identity/session.service.js';
 import {
   ACCESS_CONTEXT_METADATA,
@@ -76,14 +77,16 @@ export class AuthenticatedGuard implements CanActivate {
 
     let organizationId: string;
     try {
-      await this.authorization.assertAccess(session, requirement);
+      if (requirement.workflowPermission) await this.authorization.assertAccess(session, requirement);
       const target = requirement.organizationScope
         ? singleString(requestValue(request, requirement.organizationScope.source, requirement.organizationScope.field))
         : undefined;
+      if (target && !isUUID(target)) throw new HttpException('Invalid organization ID', 400);
       organizationId = await this.scopes.fromSession(session, {
         requestedOrganizationId: target,
         optional: requirement.organizationScope?.optional ?? true,
       });
+      await this.authorization.assertAccess(session, requirement, organizationId);
     } catch (error) {
       if (error instanceof HttpException && [400, 403].includes(error.getStatus())) {
         const payload = error.getResponse() as { code: string };

@@ -8,9 +8,10 @@ import { PermissionsController } from './permissions.controller.js';
 import { AuditLogModule } from '../audit-log/audit-log.module.js';
 import { AdminRoleController } from './admin-role.controller.js';
 import { AdminRoleService } from './admin-role.service.js';
+import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
 
 @Module({
-  imports: [IdentityModule, OrganizationModule, AuditLogModule],
+  imports: [IdentityModule, OrganizationModule, AuditLogModule, AdminMutationModule],
   controllers: [PermissionsController, AdminRoleController],
   providers: [
     AuthorizationService,

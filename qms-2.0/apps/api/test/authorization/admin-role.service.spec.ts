@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
 import { AdminRoleService } from '../../src/modules/authorization/admin-role.service.js';
 
 describe('administrator role management', () => {
@@ -7,11 +8,13 @@ describe('administrator role management', () => {
     permission: { findMany: jest.fn() },
     rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
     userRole: { findMany: jest.fn(), count: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
-    user: { findFirst: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
+    adminMutation: { findUnique: jest.fn(), create: jest.fn() },
+    passwordReset: { updateMany: jest.fn() },
     $transaction: jest.fn(),
   };
   const audit = { record: jest.fn() };
-  const service = new AdminRoleService(prisma as never, audit as never);
+  const service = new AdminRoleService(prisma as never, audit as never, new AdminMutationService(prisma as never, audit as never));
   const actor = { id: 'admin', organizationId: 'org-a', scopeOrganizationId: 'org-a', accountType: 'INTERNAL' as const };
   const permissionCodes = ['account:roles:read', 'account:roles:manage', 'account:users:manage', 'workbench:read'];
   const assignments = [{ role: { permissions: permissionCodes.map((code) => ({ permission: { code } })) } }];
@@ -20,6 +23,8 @@ describe('administrator role management', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
+    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE' });
+    prisma.adminMutation.findUnique.mockResolvedValue(null);
     prisma.userRole.findMany.mockResolvedValue(assignments);
     prisma.userRole.count.mockResolvedValue(0);
     prisma.role.findFirst.mockResolvedValue(role);
@@ -35,6 +40,19 @@ describe('administrator role management', () => {
     expect(prisma.permission.findMany).toHaveBeenCalledWith({ select: { id: true, code: true, name: true }, orderBy: { code: 'asc' } });
   });
 
+  it('refuses to remove a previously assigned global role', async () => {
+    prisma.userRole.findMany.mockResolvedValueOnce(assignments).mockResolvedValueOnce([{ role: { ...role, organizationId: null } }]);
+    await expect(service.assign(actor, 'target-user', { roleIds: [] }, 'trace', 'test-key-1'))
+      .rejects.toMatchObject({ response: { code: 'ADMIN_GLOBAL_ROLE_IMMUTABLE' } });
+    expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('records a rejected escalation outside the rolled-back transaction', async () => {
+    prisma.permission.findMany.mockResolvedValue([{ id: 'secret', code: 'secret:manage', name: 'Secret' }]);
+    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['secret:manage'] }, 'trace', 'test-key-1')).rejects.toBeDefined();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTION_REJECTED', outcome: 'DENIED' }));
+  });
+
   it('lists and reads roles only inside the server-authorized organization', async () => {
     await service.list(actor);
     await service.detail(actor, 'role-a');
@@ -43,13 +61,14 @@ describe('administrator role management', () => {
   });
 
   it('rejects a supplier actor from accessing another organization', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE', accountType: 'SUPPLIER' });
     await expect(service.list({ ...actor, accountType: 'SUPPLIER', scopeOrganizationId: 'org-b' }))
       .rejects.toMatchObject({ response: { code: 'ORGANIZATION_SCOPE_DENIED' } });
     expect(prisma.role.findMany).not.toHaveBeenCalled();
   });
 
   it('creates a role with existing permissions and audit in a serializable transaction', async () => {
-    await service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['workbench:read'] }, 'trace');
+    await service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['workbench:read'] }, 'trace', 'test-key-1');
     expect(prisma.role.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ organizationId: 'org-a', code: 'QUALITY', permissions: { create: [{ permissionId: 'permission-a' }] } }) }));
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ROLE_CREATED', resourceId: 'role-a' }), prisma);
@@ -57,20 +76,20 @@ describe('administrator role management', () => {
 
   it('rejects permissions missing from the stable directory', async () => {
     prisma.permission.findMany.mockResolvedValue([]);
-    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['unknown:grant'] }, 'trace'))
+    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['unknown:grant'] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_PERMISSION_NOT_FOUND' } });
     expect(prisma.role.create).not.toHaveBeenCalled();
   });
 
   it('prevents granting a permission the acting administrator does not hold', async () => {
     prisma.permission.findMany.mockResolvedValue([{ id: 'secret', code: 'secret:manage', name: 'Secret' }]);
-    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['secret:manage'] }, 'trace'))
+    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: ['secret:manage'] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
     expect(prisma.role.create).not.toHaveBeenCalled();
   });
 
   it('replaces role permissions and records the change transactionally', async () => {
-    await service.update(actor, 'role-a', { name: 'Changed', permissionCodes: ['workbench:read'] }, 'trace');
+    await service.update(actor, 'role-a', { name: 'Changed', permissionCodes: ['workbench:read'] }, 'trace', 'test-key-1');
     expect(prisma.rolePermission.deleteMany).toHaveBeenCalledWith({ where: { roleId: 'role-a' } });
     expect(prisma.rolePermission.createMany).toHaveBeenCalledWith({ data: [{ roleId: 'role-a', permissionId: 'permission-a' }] });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ROLE_UPDATED' }), prisma);
@@ -78,28 +97,28 @@ describe('administrator role management', () => {
 
   it('rejects a role update that removes the acting administrator management permission', async () => {
     prisma.userRole.findMany.mockResolvedValueOnce(assignments).mockResolvedValueOnce([]);
-    await expect(service.update(actor, 'role-a', { permissionCodes: [] }, 'trace'))
+    await expect(service.update(actor, 'role-a', { permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_SELF_LOCK_FORBIDDEN' } });
-    expect(audit.record).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTION_REJECTED' }));
   });
 
   it('deletes only unassigned roles with audit', async () => {
-    await service.remove(actor, 'role-a', 'trace');
+    await service.remove(actor, 'role-a', 'trace', 'test-key-1');
     expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 'role-a' } });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ROLE_DELETED' }), prisma);
     prisma.userRole.count.mockResolvedValue(1);
-    await expect(service.remove(actor, 'role-a', 'trace')).rejects.toMatchObject({ response: { code: 'ADMIN_ROLE_IN_USE' } });
+    await expect(service.remove(actor, 'role-a', 'trace', 'test-key-1')).rejects.toMatchObject({ response: { code: 'ADMIN_ROLE_IN_USE' } });
   });
 
   it('does not expose or modify a global or cross-organization role', async () => {
     prisma.role.findFirst.mockResolvedValue(null);
-    await expect(service.update(actor, 'global-role', { name: 'Changed' }, 'trace'))
+    await expect(service.update(actor, 'global-role', { name: 'Changed' }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_ROLE_NOT_FOUND' } });
     expect(prisma.role.update).not.toHaveBeenCalled();
   });
 
   it('replaces assignments only with roles belonging to the target user organization', async () => {
-    await service.assign(actor, 'target-user', { roleIds: ['role-a'] }, 'trace');
+    await service.assign(actor, 'target-user', { roleIds: ['role-a'] }, 'trace', 'test-key-1');
     expect(prisma.userRole.deleteMany).toHaveBeenCalledWith({ where: { userId: 'target-user', organizationId: 'org-a' } });
     expect(prisma.userRole.createMany).toHaveBeenCalledWith({ data: [{ userId: 'target-user', roleId: 'role-a', organizationId: 'org-a' }] });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'USER_ROLES_CHANGED' }), prisma);
@@ -107,22 +126,22 @@ describe('administrator role management', () => {
 
   it('rejects a global or other-organization role assignment', async () => {
     prisma.role.findMany.mockResolvedValue([]);
-    await expect(service.assign(actor, 'target-user', { roleIds: ['global-role'] }, 'trace'))
+    await expect(service.assign(actor, 'target-user', { roleIds: ['global-role'] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_ROLE_NOT_FOUND' } });
     expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
   });
 
   it('rejects a target user in another organization', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
-    await expect(service.assign(actor, 'other-user', { roleIds: [] }, 'trace'))
+    await expect(service.assign(actor, 'other-user', { roleIds: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_USER_NOT_FOUND' } });
   });
 
   it('rolls back assignment changes that would lock out the acting administrator', async () => {
     prisma.userRole.findMany.mockResolvedValueOnce(assignments).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-    await expect(service.assign(actor, actor.id, { roleIds: [] }, 'trace'))
+    await expect(service.assign(actor, actor.id, { roleIds: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_SELF_LOCK_FORBIDDEN' } });
-    expect(audit.record).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTION_REJECTED' }));
   });
 
   it('reads a user permission matrix in the selected organization', async () => {
@@ -132,20 +151,20 @@ describe('administrator role management', () => {
 
   it('maps concurrent and duplicate writes to controlled conflicts', async () => {
     prisma.$transaction.mockRejectedValueOnce({ code: 'P2034' }).mockRejectedValueOnce({ code: 'P2002' });
-    await expect(service.remove(actor, 'role-a', 'trace')).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' }, status: 409 });
-    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace'))
+    await expect(service.remove(actor, 'role-a', 'trace', 'test-key-1')).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' }, status: 409 });
+    await expect(service.create(actor, { organizationId: 'org-a', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_ROLE_DUPLICATE' }, status: 409 });
   });
 
   it('copies an existing organization role as a template with the same controlled permissions', async () => {
     prisma.role.findFirst.mockResolvedValue({ ...role, permissions: [{ permission: { id: 'permission-a', code: 'workbench:read', name: 'Workbench' } }] });
-    await service.copy(actor, 'role-a', { code: 'QUALITY_COPY', name: 'Copy' }, 'trace');
+    await service.copy(actor, 'role-a', { code: 'QUALITY_COPY', name: 'Copy' }, 'trace', 'test-key-1');
     expect(prisma.role.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ code: 'QUALITY_COPY', permissions: { create: [{ permissionId: 'permission-a' }] } }) }));
   });
 
   it('uses target organization permissions for both management and delegation', async () => {
     prisma.userRole.findMany.mockResolvedValue([]);
-    await expect(service.create({ ...actor, scopeOrganizationId: 'org-b' }, { organizationId: 'org-b', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace'))
+    await expect(service.create({ ...actor, scopeOrganizationId: 'org-b' }, { organizationId: 'org-b', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
     expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: actor.id, organizationId: 'org-b' } }));
     expect(prisma.role.create).not.toHaveBeenCalled();
@@ -153,13 +172,13 @@ describe('administrator role management', () => {
 
   it('preserves administrator read access required to reach management pages', async () => {
     prisma.userRole.findMany.mockResolvedValueOnce(assignments).mockResolvedValueOnce([{ role: { permissions: ['account:roles:manage', 'account:users:manage'].map((code) => ({ permission: { code } })) } }]);
-    await expect(service.update(actor, 'role-a', { permissionCodes: [] }, 'trace'))
+    await expect(service.update(actor, 'role-a', { permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'ADMIN_SELF_LOCK_FORBIDDEN' } });
   });
 
   it('does not let a lower-privilege administrator strip existing higher-privilege roles', async () => {
     prisma.userRole.findMany.mockResolvedValueOnce(assignments).mockResolvedValueOnce([{ role: { permissions: [{ permission: { code: 'secret:manage' } }] } }]);
-    await expect(service.assign(actor, 'target-user', { roleIds: [] }, 'trace'))
+    await expect(service.assign(actor, 'target-user', { roleIds: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
     expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
   });
