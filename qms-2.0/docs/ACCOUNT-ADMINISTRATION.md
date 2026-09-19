@@ -18,6 +18,7 @@ QMS 2.0 当前已经具备登录、会话、组织范围和权限判定底座，
 - `GET /api/v1/admin/organizations` 仅列当前用户持有用户/角色读取或管理权限的组织，返回组织摘要、`type` 和该组织 `permissions`；供应商最多本企业。
 - B/C 所有管理写请求须携带 `Idempotency-Key`（8–128 个字母、数字、点、下划线、冒号或连字符）。相同内容重试复用同一 key；新操作使用新 key；不同内容复用 key 返回 409。
 - `PATCH /api/v1/admin/users/:id?organizationId=源组织`，body 的 `organizationId` 表示目标组织；迁移要求两端管理权限，清理旧组织角色并撤销会话。含全局角色的身份迁移被拒绝，自停用、自迁移和自类型变更被拒绝。
+- 用户被问题负责人、流程任务办理人或通知接收人引用时，主组织变更返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409），保留全部业务历史、角色、会话和重置凭证。数据库外键同时禁止级联变更业务组织；邮箱编辑和停用仍可执行。业务归属调整须由相应领域定义迁移策略，不能借账号管理隐式搬移。
 - `POST /api/v1/admin/users/:id/password-reset` 接收 `{ temporaryCode }`，返回 201 `{ resetId, expiresAt }`。前端用 `crypto.getRandomValues` 生成至少 32 字符的安全随机 base64url 临时代码并一次展示；服务端不返回、不存储代码原文，签发不改变当前密码。
 - 独立 `/reset-password` 页面调用 `POST /api/v1/auth/password-reset/complete`，提交 `{ resetId, temporaryCode, newPassword }`；先取得 CSRF，成功返回 204。凭证 30 分钟过期且只能使用一次，兑换成功才更新密码、撤销会话。此流程不自动发送邮件。
 - 用户名限 ASCII 字母、数字、点、下划线、连字符。用户名和邮箱全局大小写无关唯一；迁移遇旧数据冲突明确失败，需管理员清理后重新部署，不能静默删除或覆盖数据。

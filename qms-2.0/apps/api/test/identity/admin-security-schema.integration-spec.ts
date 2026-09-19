@@ -186,6 +186,73 @@ describe('administrator security PostgreSQL regression', () => {
     } finally { await prisma.role.delete({ where: { id: role.id } }); await prisma.permission.delete({ where: { id: permission.id } }); }
   });
 
+  it.each(['problem', 'task', 'notification'] as const)('preserves user and business state when a %s references a requested organization transfer', async (reference) => {
+    const organizationId = actor.organizationId;
+    const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'account:users:manage' } });
+    await prisma.rolePermission.create({ data: { roleId: destination.id, permissionId: permission.id } });
+    const user = await prisma.user.create({ data: { organizationId, username: `transfer-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: 'unused-test-hash' } });
+    const role = await prisma.role.create({ data: { organizationId, code: `TRANSFER-${reference}`, name: 'Transfer fixture' } });
+    await prisma.userRole.create({ data: { userId: user.id, roleId: role.id, organizationId } });
+    await app.get(SessionService).create(user.id);
+    await prisma.passwordReset.create({ data: { userId: user.id, codeHash: '0'.repeat(64), expiresAt: new Date(Date.now() + 60_000) } });
+    let definitionId: string | undefined;
+    if (reference === 'problem') await prisma.problemIndex.create({ data: { organizationId, reportNumber: `TRANSFER-${suffix}`, domainCode: 'test', problemType: 'test', sourceType: 'test', severity: 'LOW', ownerId: user.id } });
+    if (reference === 'notification') await prisma.notification.create({ data: { organizationId, recipientUserId: user.id, channel: 'test', body: 'Transfer fixture' } });
+    if (reference === 'task') {
+      const definition = await prisma.workflowDefinition.create({ data: { organizationId, code: `TRANSFER-${suffix}`, name: 'Transfer fixture' } });
+      definitionId = definition.id;
+      const version = await prisma.workflowVersion.create({ data: { organizationId, workflowDefinitionId: definition.id, version: 1 } });
+      const node = await prisma.workflowNode.create({ data: { organizationId, workflowVersionId: version.id, nodeKey: 'start', type: 'ACTION', name: 'Start' } });
+      const instance = await prisma.workflowInstance.create({ data: { organizationId, workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: `TRANSFER-${suffix}` } });
+      await prisma.$executeRaw`INSERT INTO workflow_tasks (id, organization_id, workflow_instance_id, workflow_node_id, workflow_version_id, assignee_user_id, updated_at) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${instance.id}::uuid, ${node.id}::uuid, ${version.id}::uuid, ${user.id}::uuid, CURRENT_TIMESTAMP)`;
+    }
+    const snapshot = async () => ({
+      user: await prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
+      roles: await prisma.userRole.findMany({ where: { userId: user.id } }),
+      sessions: await prisma.session.findMany({ where: { userId: user.id } }),
+      resets: await prisma.passwordReset.findMany({ where: { userId: user.id } }),
+      problems: await prisma.problemIndex.findMany({ where: { ownerId: user.id } }),
+      tasks: await prisma.workflowTask.findMany({ where: { assigneeUserId: user.id } }),
+      notifications: await prisma.notification.findMany({ where: { recipientUserId: user.id } }),
+    });
+    const before = await snapshot();
+    const key = randomUUID();
+    try {
+      const response = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}?organizationId=${organizationId}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send({ organizationId: otherOrganizationId }).expect(409);
+      expect(response.body.code).toBe('ADMIN_USER_ORGANIZATION_IN_USE');
+      expect(await snapshot()).toEqual(before);
+      expect(await prisma.adminMutation.count({ where: { actorUserId: actor.id, key } })).toBe(0);
+      expect(await prisma.auditEvent.count({ where: { resourceId: user.id, action: 'USER_UPDATED', outcome: 'SUCCESS' } })).toBe(0);
+      expect(await prisma.auditEvent.count({ where: { traceId: response.body.traceId, action: 'ACTION_REJECTED' } })).toBe(1);
+      await expect(prisma.$executeRaw`UPDATE users SET organization_id = ${otherOrganizationId}::uuid WHERE id = ${user.id}::uuid`).rejects.toThrow();
+      expect(await snapshot()).toEqual(before);
+      const edited = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}?organizationId=${organizationId}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ organizationId, email: `transfer-${user.id}@example.test`, status: 'DISABLED' }).expect(200);
+      expect(edited.body).toMatchObject({ organizationId, status: 'DISABLED', email: `transfer-${user.id}@example.test` });
+      const afterEdit = await snapshot();
+      expect(afterEdit.problems).toEqual(before.problems);
+      expect(afterEdit.tasks).toEqual(before.tasks);
+      expect(afterEdit.notifications).toEqual(before.notifications);
+    } finally {
+      await prisma.notification.deleteMany({ where: { recipientUserId: user.id } });
+      await prisma.problemIndex.deleteMany({ where: { ownerId: user.id } });
+      await prisma.workflowTask.deleteMany({ where: { assigneeUserId: user.id } });
+      if (definitionId) {
+        await prisma.workflowInstance.deleteMany({ where: { workflowDefinitionId: definitionId } });
+        await prisma.workflowDefinition.delete({ where: { id: definitionId } });
+      }
+      await prisma.user.delete({ where: { id: user.id } });
+      await prisma.role.delete({ where: { id: role.id } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: destination.id } });
+    }
+  });
+
+  it('uses restrictive update actions for every business user organization foreign key', async () => {
+    const constraints = await prisma.$queryRaw<{ conname: string; confupdtype: string; confdeltype: string }[]>`SELECT conname, confupdtype::text, confdeltype::text FROM pg_constraint WHERE conname IN ('problem_indexes_organization_id_owner_id_fkey', 'workflow_tasks_organization_id_assignee_user_id_fkey', 'notifications_organization_id_recipient_user_id_fkey')`;
+    expect(constraints).toHaveLength(3);
+    for (const constraint of constraints) expect(constraint).toMatchObject({ confupdtype: 'r', confdeltype: 'r' });
+  });
+
   it('rejects self migration and disabling without changing the active administrator', async () => {
     for (const body of [{ status: 'DISABLED' }, { organizationId: otherOrganizationId }, { accountType: 'SUPPLIER' }]) {
       await request(app.getHttpServer()).patch(`/api/v1/admin/users/${actor.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body).expect(409);

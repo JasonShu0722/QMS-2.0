@@ -22,6 +22,8 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 写请求携带 Cookie 和 `x-csrf-token`，Web 请求使用同源 `/api/v1`。错误统一包含 `code`、`message`、`fields`、`traceId`；不对客户端暴露堆栈、SQL、口令或内部路径。CSRF、限流和组织权限错误都有稳定代码；具体 status/schema 以当前生成契约为准。
 
+管理员主组织迁移接口 `PATCH /api/v1/admin/users/:id?organizationId=源组织` 的 body.organizationId 表示目标组织。用户仍有问题负责人、流程任务办理人或通知接收人引用时返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409）；不会连带迁移业务数据，也不会清除角色、会话或重置凭证。普通邮箱编辑和停用不受此限制。
+
 从 `qms-2.0/` 执行：
 
 ```powershell

@@ -18,6 +18,9 @@ describe('admin user lifecycle service', () => {
     adminMutation: { findUnique: jest.fn(), create: jest.fn() },
     passwordReset: { updateMany: jest.fn(), create: jest.fn() },
     session: { updateMany: jest.fn() },
+    problemIndex: { count: jest.fn() },
+    workflowTask: { count: jest.fn() },
+    notification: { count: jest.fn() },
     $transaction: jest.fn(),
   };
   const passwords = { hash: jest.fn() };
@@ -33,6 +36,9 @@ describe('admin user lifecycle service', () => {
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
     prisma.organization.findUnique.mockResolvedValue({ id: 'org-a', type: 'INTERNAL', code: 'A', name: 'Org A' });
     passwords.hash.mockResolvedValue('hashed-password');
+    prisma.problemIndex.count.mockResolvedValue(0);
+    prisma.workflowTask.count.mockResolvedValue(0);
+    prisma.notification.count.mockResolvedValue(0);
   });
 
   it('lists only users inside the server-authorized organization scope', async () => {
@@ -87,5 +93,14 @@ describe('admin user lifecycle service', () => {
   it('returns a controlled not-found error for another organization', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
     await expect(service.detail(actor, 'user-b', 'org-a')).rejects.toBeInstanceOf(HttpException);
+  });
+
+  it('maps a reference created during an organization transfer to an audited conflict', async () => {
+    prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: [{ permission: { code: 'account:users:manage' } }] } }] : []);
+    prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', accountType: 'INTERNAL' });
+    prisma.user.update.mockRejectedValueOnce({ code: 'P2003' });
+    await expect(service.update(actor, 'user-2', { organizationId: 'org-b' }, 'org-a', 'trace-transfer', 'transfer-key'))
+      .rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_ORGANIZATION_IN_USE' } });
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTION_REJECTED', traceId: 'trace-transfer', metadata: expect.objectContaining({ reasonCode: 'ADMIN_USER_ORGANIZATION_IN_USE' }) }));
   });
 });

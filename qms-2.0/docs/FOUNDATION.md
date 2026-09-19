@@ -121,3 +121,14 @@ git diff --stat
 | `pnpm check:archive-isolation`；`docker compose -f deployment/docker-compose.foundation.yml config --quiet`；`git diff --check` | PASS；仅配置解析和归档/格式隔离，不冒充新容器部署或真实浏览器验收 |
 
 限制：本修复代理未实现管理员 Web 页面、未运行更新后的 `acceptance:phase-1` 或真实网关浏览器主链路；由主代理在 UI 完成后执行最终聚合验收。本节不修改或重新认定既有阶段 2 工作流运行时、Worker、MFA、对象存储和生产治理的交付状态。新 migration 遇到历史用户名格式或大小写唯一冲突会明确失败，不删除既有数据。
+
+### ABC 复审补修：主组织迁移（2026-09-19 UTC）
+
+真实 PostgreSQL 红灯复现：问题负责人和通知接收人迁移得到 200 并级联修改业务组织，流程任务办理人迁移得到 500；三个复合外键均为 CASCADE，竞态 P2003 未映射。新增迁移 `20260919010000_restrict_business_user_transfer` 改为 RESTRICT，管理事务在主组织变化时检查三种业务引用，返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409）并记录拒绝审计。
+
+- `corepack pnpm --dir qms-2.0 --filter @qms/api test:integration`：PASS，13 个迁移和 seed，3 suites / 40 tests。新增三类引用均验证用户、业务组织、角色、会话和重置凭证原样保留，无成功审计及幂等记录；直接 SQL 也无法迁移。相同主组织的邮箱编辑和停用继续成功。
+- `corepack pnpm --dir qms-2.0 --filter @qms/api test`（加载同一临时 PG）：PASS，31 suites / 223 tests；包括竞态 P2003 映射与拒绝审计回归。
+- `corepack pnpm --dir qms-2.0 contracts:generate`：PASS，API 构建及新增错误代码生成完成。
+- `corepack pnpm --dir qms-2.0 contracts:check`：PASS，新增错误代码无契约漂移；`git diff --check`：PASS。
+
+本次仍只修复账号主组织迁移安全边界，不代表管理员 UI 或 ABC 整体验收完成。测试环境沿用本节临时 PostgreSQL，最终由主代理统一销毁。

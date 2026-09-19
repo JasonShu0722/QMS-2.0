@@ -58,12 +58,24 @@ export class AdminUserService {
       await assertAdminAccess(transaction, actor, targetOrganizationId, 'account:users:manage');
       await this.assertTarget(transaction, actor, userId, identityChanged);
       await this.assertOrganizationAccountType(transaction, targetOrganizationId, targetType);
+      const organizationChanged = targetOrganizationId !== existing.organizationId;
+      if (organizationChanged) {
+        const references = await Promise.all([
+          transaction.problemIndex.count({ where: { ownerId: userId } }),
+          transaction.workflowTask.count({ where: { assigneeUserId: userId } }),
+          transaction.notification.count({ where: { recipientUserId: userId } }),
+        ]);
+        if (references.some((count) => count > 0)) adminError('ADMIN_USER_ORGANIZATION_IN_USE', 409);
+      }
       const user = await transaction.user.update({ where: { id: userId }, data: {
         ...(dto.email !== undefined ? { email: dto.email?.trim().toLowerCase() ?? null } : {}),
         ...(dto.accountType ? { accountType: dto.accountType } : {}),
         ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
         ...(dto.status ? { status: dto.status } : {}),
-      }, select: USER_SELECT });
+      }, select: USER_SELECT }).catch((error: unknown) => {
+        if (organizationChanged && (error as { code?: string }).code === 'P2003') adminError('ADMIN_USER_ORGANIZATION_IN_USE', 409);
+        throw error;
+      });
       if (identityChanged) await transaction.userRole.deleteMany({ where: { userId } });
       if (identityChanged || dto.status === 'DISABLED') {
         const now = new Date();
