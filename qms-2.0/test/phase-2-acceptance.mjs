@@ -6,5 +6,6 @@ const commands = [
   ['archive', ['--dir', 'qms-2.0', 'check:archive-isolation']],
   ['build', ['--dir', 'qms-2.0', 'build']],
 ];
-for (const [name, args] of commands) { process.stdout.write(`PHASE2 ${name}...\n`); execFileSync('corepack', ['pnpm', ...args], { cwd: root, stdio: 'inherit' }); }
+const corepack = process.platform === 'win32' ? 'corepack.cmd' : 'corepack';
+for (const [name, args] of commands) { process.stdout.write(`PHASE2 ${name}...\n`); execFileSync(corepack, ['pnpm', ...args], { cwd: root, stdio: 'inherit' }); }
 process.stdout.write('PHASE2 acceptance: PASS\n');
