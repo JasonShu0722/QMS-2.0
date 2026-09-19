@@ -11,6 +11,7 @@ import { SessionService } from '../../src/modules/identity/session.service.js';
 import { PasswordService } from '../../src/modules/identity/password.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { IdentityService } from '../../src/modules/identity/identity.service.js';
+import { RateLimitService } from '../../src/modules/identity/rate-limit.guard.js';
 
 if (!process.env.DATABASE_URL) throw new Error('PostgreSQL integration requires DATABASE_URL; no skipping.');
 
@@ -96,6 +97,104 @@ describe('administrator security PostgreSQL regression', () => {
   it('enforces global case-insensitive username uniqueness across organizations', async () => {
     const current = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
     await expect(prisma.user.create({ data: { organizationId: otherOrganizationId, username: current.username.toUpperCase(), accountType: 'INTERNAL', passwordHash: current.passwordHash }, select: { id: true } })).rejects.toMatchObject({ code: 'P2002' });
+  });
+
+  it.each(['reset', 'password change', 'disable', 'organization', 'account type'] as const)('rejects a verified login when %s commits before session creation', async (mutation) => {
+    const passwords = app.get(PasswordService);
+    const sessions = app.get(SessionService);
+    const password = 'login-race-original-password';
+    const user = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `login-race-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: await passwords.hash(password) } });
+    const current = mutation === 'password change' ? await sessions.resolve(await sessions.create(user.id)) : null;
+    const temporaryCode = randomUUID();
+    const issued = mutation === 'reset' ? await request(app.getHttpServer()).post(`/api/v1/admin/users/${user.id}/password-reset`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ temporaryCode }).expect(201) : null;
+    let signalVerified!: () => void;
+    let releaseLogin!: () => void;
+    const verified = new Promise<void>((resolve) => { signalVerified = resolve; });
+    const released = new Promise<void>((resolve) => { releaseLogin = resolve; });
+    const verify = passwords.verify.bind(passwords);
+    const paused = jest.spyOn(passwords, 'verify').mockImplementationOnce(async (hash, candidate) => {
+      const matches = await verify(hash, candidate);
+      signalVerified();
+      await released;
+      return matches;
+    });
+    const success = jest.spyOn(app.get(RateLimitService), 'recordSuccess');
+    const login = request(app.getHttpServer()).post('/api/v1/auth/login').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ identifier: user.username, password }).then((response) => response);
+    try {
+      await verified;
+      if (mutation === 'reset') {
+        await request(app.getHttpServer()).post('/api/v1/auth/password-reset/complete').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ resetId: issued!.body.resetId, temporaryCode, newPassword: 'login-race-replacement-password' }).expect(204);
+      } else if (mutation === 'password change') {
+        await app.get(IdentityService).changePassword({ userId: user.id, currentSessionId: current!.id, currentPassword: password, newPassword: 'login-race-replacement-password', traceId: randomUUID() });
+      } else if (mutation === 'disable') {
+        await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ status: 'DISABLED' }).expect(200);
+      } else {
+        await prisma.$transaction(async (transaction) => {
+          await transaction.user.update({ where: { id: user.id }, data: mutation === 'organization' ? { organizationId: otherOrganizationId } : { accountType: 'SUPPLIER' } });
+          await transaction.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        });
+      }
+      releaseLogin();
+      const response = await login;
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('AUTH_INVALID_CREDENTIALS');
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(success).not.toHaveBeenCalled();
+      expect(await prisma.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(current ? 1 : 0);
+      expect(await prisma.auditEvent.count({ where: { resourceId: user.id, action: 'LOGIN_FAILED', traceId: response.body.traceId } })).toBe(1);
+    } finally {
+      releaseLogin();
+      await login;
+      paused.mockRestore();
+      success.mockRestore();
+    }
+  });
+
+  it('revokes a login session that commits before password reset completes', async () => {
+    const password = 'login-before-reset-password';
+    const user = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `login-first-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: await app.get(PasswordService).hash(password) } });
+    const temporaryCode = randomUUID();
+    const issued = await request(app.getHttpServer()).post(`/api/v1/admin/users/${user.id}/password-reset`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ temporaryCode }).expect(201);
+    const login = await request(app.getHttpServer()).post('/api/v1/auth/login').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ identifier: user.username, password }).expect(200);
+    const sessionCookie = (login.headers['set-cookie'] as unknown as string[]).find((entry) => entry.startsWith('qms_session='))!.split(';', 1)[0];
+    await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', sessionCookie).expect(200);
+    await request(app.getHttpServer()).post('/api/v1/auth/password-reset/complete').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ resetId: issued.body.resetId, temporaryCode, newPassword: 'login-first-replacement-password' }).expect(204);
+    await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', sessionCookie).expect(401);
+    expect(await prisma.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+  });
+
+  it('holds the user lock until the verified login session is committed', async () => {
+    const password = 'login-lock-original-password';
+    const passwords = app.get(PasswordService);
+    const replacementHash = await passwords.hash('login-lock-replacement-password');
+    const user = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `login-lock-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: await passwords.hash(password) } });
+    const sessions = app.get(SessionService);
+    const create = sessions.create.bind(sessions);
+    let signalCreating!: () => void;
+    let releaseLogin!: () => void;
+    const creating = new Promise<void>((resolve) => { signalCreating = resolve; });
+    const released = new Promise<void>((resolve) => { releaseLogin = resolve; });
+    const paused = jest.spyOn(sessions, 'create').mockImplementationOnce(async (...args) => {
+      signalCreating();
+      await released;
+      return create(...args);
+    });
+    const login = request(app.getHttpServer()).post('/api/v1/auth/login').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ identifier: user.username, password }).then((response) => response);
+    try {
+      await creating;
+      await expect(prisma.$transaction(async (transaction) => {
+        await transaction.$executeRaw`SET LOCAL lock_timeout = '100ms'`;
+        await transaction.$executeRaw`UPDATE users SET password_hash = ${replacementHash} WHERE id = ${user.id}::uuid`;
+      })).rejects.toThrow('canceling statement due to lock timeout');
+      releaseLogin();
+      expect((await login).status).toBe(200);
+      expect(await prisma.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(1);
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash: replacementHash } });
+    } finally {
+      releaseLogin();
+      await login;
+      paused.mockRestore();
+    }
   });
 
   it('exposes only organizations with actual administration permissions', async () => {

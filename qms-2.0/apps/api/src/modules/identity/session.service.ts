@@ -65,9 +65,9 @@ export class SessionService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  async create(userId: string): Promise<string> {
+  async create(userId: string, transaction: Pick<PrismaService, 'session'> = this.prisma): Promise<string> {
     const token = randomBytes(32).toString('base64url');
-    await this.prisma.session.create({
+    await transaction.session.create({
       data: {
         userId,
         tokenHash: this.tokenHash(token),

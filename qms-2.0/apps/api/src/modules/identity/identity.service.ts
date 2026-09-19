@@ -45,8 +45,14 @@ export class IdentityService {
     const passwordMatches = await this.passwords.verify(user.passwordHash, password);
     if (!passwordMatches || user.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
 
+    const sessionToken = await this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
+      const current = await transaction.user.findUnique({ where: { id: user.id } });
+      if (!current || current.status !== 'ACTIVE' || current.passwordHash !== user.passwordHash || current.organizationId !== user.organizationId || current.accountType !== user.accountType) return null;
+      return this.sessions.create(current.id, transaction);
+    });
+    if (!sessionToken) return this.rejectLogin(rateKey, request, user);
     this.limits.recordSuccess(rateKey);
-    const sessionToken = await this.sessions.create(user.id);
     const response: LoginResponseDto =
       user.accountType === 'SUPPLIER'
         ? { accountType: 'SUPPLIER', landingPath: '/supplier/inbox' }

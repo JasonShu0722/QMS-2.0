@@ -40,8 +40,9 @@ describe('identity HTTP contract', () => {
   const originalRateLimitSecret = process.env.QMS_RATE_LIMIT_SECRET;
   const prisma = {
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
-    user: { findFirst: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
     session: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -69,6 +70,7 @@ describe('identity HTTP contract', () => {
     jest.clearAllMocks();
     prisma.session.create.mockResolvedValue({ id: 'database-session-id' });
     prisma.session.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.findUnique.mockImplementation(() => prisma.user.findFirst());
   });
 
   afterAll(async () => {

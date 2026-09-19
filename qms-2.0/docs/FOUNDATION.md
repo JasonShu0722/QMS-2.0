@@ -132,3 +132,18 @@ git diff --stat
 - `corepack pnpm --dir qms-2.0 contracts:check`：PASS，新增错误代码无契约漂移；`git diff --check`：PASS。
 
 本次仍只修复账号主组织迁移安全边界，不代表管理员 UI 或 ABC 整体验收完成。测试环境沿用本节临时 PostgreSQL，最终由主代理统一销毁。
+
+### ABC 复审补修：登录与安全变更竞态（2026-09-19 UTC）
+
+沿用 Windows PowerShell、Node 22.22.0、pnpm 11.19.0、临时 PostgreSQL 18.6 / 55442。环境从仓库外 XML 注入进程，不打印或提交凭据。登录在 Argon2 校验后获取用户 `FOR UPDATE` 行锁，在同一事务内重新核对 ACTIVE 状态、已验证密码哈希、主组织和账号类型并创建会话；身份已变化时返回既有 `AUTH_INVALID_CREDENTIALS`（401），记录失败审计且不清除失败限流记录。成功限流记录延后至会话事务提交。
+
+| 实际命令 / 动作 | 结果与范围 |
+| --- | --- |
+| `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/identity/admin-security-schema.integration-spec.ts --testNamePattern='verified login\|login session that commits'`（API 目录，修复前） | 有效 FAIL：暂停已完成真实密码校验的登录，完成一次性重置、A 改密、停用、主组织或类型变化后放行；五条均预期 401 实得 200。先登录提交后重置的反向顺序一条 PASS |
+| 同套件与 `test/identity/auth.e2e-spec.ts` 定向运行（修复后） | PASS：2 suites / 45 tests；五条竞态返回 401、没有新会话 Cookie、没有新增有效会话、失败审计存在且未记录登录成功 |
+| 新 `holds the user lock` 回归，临时仅移除 `FOR UPDATE` | 有效 FAIL：独立 PostgreSQL 事务可在最终身份校验后、会话插入前修改密码。恢复锁后该写入触发真实 lock timeout，会话提交后写入恢复；不以普通事务重新读取替代行锁 |
+| `corepack pnpm --filter @qms/api test:integration`（恢复锁后） | PASS：13 个迁移、seed，3 suites / 47 tests；新增七条覆盖五类身份竞态、先登录后重置撤销、锁持有至会话提交 |
+| `corepack pnpm --filter @qms/api test`（同一临时 PG） | PASS：31 suites / 223 tests |
+| `corepack pnpm --filter @qms/api build`；`git diff --check` | PASS；无 API DTO / OpenAPI 变更，无生成契约修改 |
+
+组织和账号类型并发夹具通过真实 PostgreSQL 事务写入并撤销会话；一次性重置和停用走 HTTP，A 改密走实际 IdentityService。锁测试首次断言误用了旧 Prisma 错误元数据形状，修正为实际 adapter 的 lock timeout 错误后再移除锁取得上述有效红灯。完整 Web、Compose、契约和网关浏览器聚合验收由主代理在最终源码镜像上执行，本节不将针对性修复验证视为全部 ABC 验收。
