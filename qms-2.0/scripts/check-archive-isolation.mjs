@@ -10,9 +10,20 @@ function run(command, args) {
   return execFileSync(command, args, { cwd: repository, encoding: 'utf8' });
 }
 
-function search(command, args) {
+function search(pattern) {
   try {
-    return run(command, args).trim();
+    return run('git', [
+      'grep',
+      '--line-number',
+      '--ignore-case',
+      '--extended-regexp',
+      '-I',
+      pattern,
+      '--',
+      'qms-2.0',
+      ':(exclude)qms-2.0/scripts/check-archive-isolation.mjs',
+      ':(exclude)*.md',
+    ]).trim();
   } catch (error) {
     if (error.status === 1) return '';
     throw error;
@@ -46,16 +57,9 @@ const files = [
 const contents = await Promise.all(files.map((file) => readFile(join(root, file), 'utf8')));
 const forbidden = new RegExp(`(?:archive[\\/]${frozenReleasePattern}|${frozenReleasePattern})`, 'i');
 
-const rgMatches = search('rg', [
-  '--line-number',
-  '--no-heading',
-  '--glob', '!qms-2.0/scripts/check-archive-isolation.mjs',
-  '--glob', '!*.md',
-  forbidden.source,
-  'qms-2.0',
-]).trim();
+const grepMatches = search(forbidden.source.replaceAll('(?:', '('));
 
-if (trackedArchive || rgMatches || contents.some((content) => forbidden.test(content))) {
+if (trackedArchive || grepMatches || contents.some((content) => forbidden.test(content))) {
   console.error('archive isolation: FAIL');
   process.exit(1);
 }
