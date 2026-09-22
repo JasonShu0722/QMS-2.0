@@ -85,6 +85,10 @@ export class UpdateSupplierProblemDraftDto extends SupplierProblemDraftDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
 }
 
+export class IssueSupplierProblemDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+}
+
 export class SupplierResponseContentDto {
   @ApiPropertyOptional({ maxLength: 10000 }) @IsOptional() @IsString() @MaxLength(10000) problemDescription?: string;
   @ApiPropertyOptional({ maxLength: 10000 }) @IsOptional() @IsString() @MaxLength(10000) containmentAction?: string;

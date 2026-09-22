@@ -6,9 +6,12 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
 import { IdentityService } from '../identity/identity.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
+import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { SupplierWorkflowBindingService } from './supplier-workflow-binding.service.js';
 import { assertReplyActor, validateProblemFacts, validateResponseContent } from './supplier-quality.rules.js';
 import { SupplierRuleError } from './supplier-quality.types.js';
-import type { CreateSupplierProfileDto, SaveSupplierResponseDraftDto, SupplierDirectoryQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierReferenceQueryDto, SupplierScopeQueryDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
+import type { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SupplierDirectoryQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierReferenceQueryDto, SupplierScopeQueryDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 
 const problemInclude = { profile: true, responseDraft: true } as const;
 type ProblemRecord = Prisma.SupplierQualityProblemGetPayload<{ include: typeof problemInclude }>;
@@ -19,6 +22,7 @@ export class SupplierQualityService {
     private readonly prisma: PrismaService, private readonly mutations: AdminMutationService,
     private readonly audit: AuditLogService, private readonly organizations: OrganizationService,
     private readonly identities: IdentityService, private readonly indexes: ProblemIndexService,
+    private readonly runtime: WorkflowRuntimeService, private readonly bindings: SupplierWorkflowBindingService,
   ) {}
 
   private scope(actor: AdminActor) { return actor.scopeOrganizationId ?? actor.organizationId; }
@@ -144,6 +148,44 @@ export class SupplierQualityService {
       await this.record(transaction, actor, record.ownerOrganizationId, 'SUPPLIER_PROBLEM_DRAFT_CREATED', record.id, traceId);
       return this.serialize(transaction, actor, record, granted);
     });
+  }
+
+  issueDraft(actor: AdminActor, id: string, dto: IssueSupplierProblemDto, traceId: string, key?: string) {
+    this.internal(actor);
+    const organizationId = this.scope(actor);
+    return this.prisma.$transaction(async (transaction) => {
+      await assertActiveAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, 'supplier-quality:problems:write');
+      if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
+      const record = await transaction.supplierQualityProblem.findFirst({ where: { id, ownerOrganizationId: organizationId }, include: problemInclude });
+      if (!record) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+      if (record.problemIndexId && !record.workflowBindingId) adminError('SUPPLIER_DRAFT_LOCKED', 409);
+      if (!record.problemIndexId && record.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      const binding = await this.bindings.resolve(transaction, organizationId, { severity: record.severity as never, responseForm: record.responseForm as never, replyMode: record.replyMode as never });
+      const problemIndex = await this.indexes.createFromDomain(transaction as never, {
+        organizationId, domainCode: 'supplier-quality', problemType: record.responseForm, sourceType: 'supplier-quality', sourceId: record.id,
+        severity: record.severity, responsibleParty: record.supplierOrganizationId, ownerId: actor.id,
+        dueAt: new Date(Date.now() + binding.responseSlaMinutes * 60_000), createdById: actor.id, traceId,
+      });
+      await this.runtime.startInstance({
+        organizationId, actor, problemIndexId: String(problemIndex.id), workflowDefinitionId: binding.workflowDefinitionId,
+        workflowVersionId: binding.workflowVersionId, expectedProblemVersion: record.problemIndexId ? Number(problemIndex.version) - 1 : Number(problemIndex.version), instanceKey: record.id,
+        idempotencyKey: key, traceId, commandPayload: { supplierIssueExpectedVersion: dto.expectedVersion },
+      }, transaction, undefined, async (tx, context) => {
+        const current = await tx.supplierQualityProblem.findFirst({ where: { id: record.id, ownerOrganizationId: organizationId } });
+        if (!current) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+        if (current.problemIndexId === String(problemIndex.id) && current.workflowBindingId === binding.bindingId && current.workflowBindingVersion === binding.bindingVersion) return;
+        if (context.replay || current.workflowBindingId) adminError('CONCURRENCY_CONFLICT', 409);
+        const changed = await tx.supplierQualityProblem.updateMany({ where: { id: record.id, ownerOrganizationId: organizationId, problemIndexId: null, version: dto.expectedVersion, workflowBindingId: null }, data: { problemIndexId: String(problemIndex.id), workflowBindingId: binding.bindingId, workflowBindingVersion: binding.bindingVersion, version: { increment: 1 } } });
+        if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+      });
+      const current = await transaction.supplierQualityProblem.findUniqueOrThrow({ where: { id: record.id }, include: problemInclude });
+      if (current.replyMode === 'SUPPLIER' && !current.releasedToSupplierAt) {
+        await transaction.supplierQualityProblem.update({ where: { id: record.id }, data: { releasedToSupplierAt: new Date() } });
+      }
+      if (!record.workflowBindingId) await this.record(transaction, actor, organizationId, 'SUPPLIER_PROBLEM_ISSUED', record.id, traceId);
+      return this.serialize(transaction, actor, await transaction.supplierQualityProblem.findUniqueOrThrow({ where: { id: record.id }, include: problemInclude }), ['supplier-quality:problems:write']);
+    }, { isolationLevel: 'ReadCommitted' });
   }
 
   updateDraft(actor: AdminActor, id: string, dto: UpdateSupplierProblemDraftDto, traceId: string, key?: string) {

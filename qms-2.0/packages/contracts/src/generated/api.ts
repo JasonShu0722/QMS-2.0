@@ -1391,6 +1391,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/drafts/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-quality/problems/{id}/response-draft": {
         parameters: {
             query?: never;
@@ -2727,6 +2743,9 @@ export interface components {
             replyMode: "INTERNAL" | "SUPPLIER";
             /** Format: uuid */
             internalResponderId?: string;
+            expectedVersion: number;
+        };
+        IssueSupplierProblemDto: {
             expectedVersion: number;
         };
         SaveSupplierResponseDraftDto: {
@@ -6267,6 +6286,42 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueSupplierProblemDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

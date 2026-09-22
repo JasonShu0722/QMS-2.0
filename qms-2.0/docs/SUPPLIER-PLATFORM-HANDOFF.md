@@ -6,6 +6,8 @@
 
 S4.1c 已新增 `SupplierWorkflowBindingService` 和 `/api/v1/supplier-quality/workflow-bindings`。配置键是拥有内部组织、severity、BRIEF/EIGHT_D、INTERNAL/SUPPLIER；每次写入追加版本并以 expectedVersion 做 CAS，审计和同键幂等在同一管理事务中完成。内部管理员可在显式组织授权下管理内部组织，供应商组织一律拒绝；没有默认绑定或默认 SLA。
 
+S4.1d 已新增 `POST /api/v1/supplier-quality/drafts/:id/issue`。领域入口在 ReadCommitted 事务内解析绑定、创建 `ProblemIndex`、调用 `WorkflowRuntimeService.startInstance`，再保存 `workflowBindingId/workflowBindingVersion` 和供应商释放时间；平台实例、领域记录、审计与 Outbox 任一步失败均回滚。正式入口使用 workflow mutation 做同键重放，变更请求或第二个 key 不会产生第二个编号/实例。
+
 正式发单事务应调用 `resolve(tx, organizationId, selector)`，保存返回的 bindingId/bindingVersion/workflowVersionId/replyNodeId/responseSlaMinutes，并把同一固定版本交给 `WorkflowRuntimeService.startInstance`。解析器只接受启用、精确选择、拥有组织一致且 PUBLISHED 的版本；必须存在唯一 `supplier-quality:responses:write` ACTION、正整数节点 `slaMinutes`、VERIFICATION 和所有 CLOSE 的独立验证。缺配置、禁用、退休或不合规版本均为受控 409；本批没有启动流程或提供发单成功替身。
 
 本批增加 `SupplierProblemReadAdapter`，在 `ProblemReadModule` 注册 `supplier-quality / supplier-quality` 公共读取。只接入内部公共台账与当前专业资料，要求公共和领域读权限、拥有组织授权及双向索引引用同时满足。供应商门户隔离保持独立；报告快照、领域修订审计、附件资源授权、升级和写动作尚未注册。

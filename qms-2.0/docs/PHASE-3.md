@@ -1,5 +1,15 @@
 # 阶段三供应商质量执行记录
 
+## S4.1d 正式发单事务（2026-09-22）
+
+新增 `POST /api/v1/supplier-quality/drafts/:id/issue`。内部问题发单会在同一 ReadCommitted `TransactionClient` 中解析严重度/表单/回复方式绑定，创建公共问题索引并分配编号，启动固定流程版本，再写入领域绑定快照和供应商释放时间。供应商回复模式只在流程启动成功后释放；内部回复模式不向供应商释放。绑定、索引、流程、审计和 Outbox 任一步失败都会回滚。
+
+领域问题新增 `workflowBindingId/workflowBindingVersion` 组合引用，草稿版本 CAS 保持不变；同一幂等键重放复用平台 workflow mutation，变更 payload、第二个幂等键并发发单或缺少绑定均返回受控 409。发单接口没有复制流程引擎，也没有启动 Worker 或附件上传。
+
+验证证据：一次性 PostgreSQL 18（容器 `qms-supplier-issue-20260922`，端口 51193；未使用 55440）部署 36 项迁移；正式发单真实 HTTP/PG 4/4 PASS，供应商绑定/草稿/发单联合 3 suites / 49 tests PASS。测试覆盖成功原子链、缺配置无索引残留、同键重放、变更 payload、并发发单、dueAt 和最终审计失败回滚。临时容器及仓库外测试凭据在本批验证后清理。
+
+本批仍未交付供应商回复不可变修订、证据附件与扫描、驳回重提、内部验证关闭、简报升级、业务 Worker/通知及真实浏览器主链；不构成阶段三整体完成或试点/生产放行。
+
 ## S4.1c 严重度与固定流程绑定（2026-09-22）
 
 新增 `SupplierWorkflowBinding` 不可变版本模型、迁移及 GET/PUT 配置接口。内部管理员按严重度、BRIEF/EIGHT_D、INTERNAL/SUPPLIER 精确选择平台已发布流程版本；写入复用 `configuration:manage`、近期认证、CSRF、幂等键、Serializable/CAS 和审计。供应商组织不能成为配置拥有方；内部账号只有明确组织权限才能跨内部组织管理。禁用只追加新版本，解析不回退到旧版本。

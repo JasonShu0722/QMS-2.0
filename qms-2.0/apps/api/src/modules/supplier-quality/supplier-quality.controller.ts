@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { SupplierQualityService } from './supplier-quality.service.js';
-import { CreateSupplierProfileDto, SaveSupplierResponseDraftDto, SupplierDirectoryQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
+import { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SupplierDirectoryQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -66,6 +66,11 @@ export class SupplierQualityController {
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'supplier-quality:problems:write', organizationScope: bodyScope })
   update(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSupplierProblemDraftDto) { return this.service.updateDraft(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }
+
+  @Post('drafts/:id/issue') @ApiCreatedResponse({ type: SupplierProblemDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:problems:write', organizationScope: queryScope })
+  issue(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueSupplierProblemDto) { return this.service.issueDraft(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }
 
   @Put('problems/:id/response-draft') @ApiOkResponse({ type: SupplierProblemDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

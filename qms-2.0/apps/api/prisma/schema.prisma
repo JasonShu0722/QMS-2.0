@@ -806,7 +806,10 @@ model SupplierWorkflowBinding {
   createdById String @map("created_by_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  problems SupplierQualityProblem[]
+
   @@unique([organizationId, severity, responseForm, replyMode, version], map: "supplier_workflow_bindings_selector_version_key")
+  @@unique([id, version], map: "supplier_workflow_bindings_id_version_key")
   @@index([workflowVersionId])
   @@index([createdById])
   @@map("supplier_workflow_bindings")
@@ -846,6 +849,8 @@ model SupplierQualityProblem {
   replyMode String @map("reply_mode") @db.VarChar(32)
   internalResponderId String? @map("internal_responder_id") @db.Uuid
   problemIndexId String? @unique @map("problem_index_id") @db.Uuid
+  workflowBindingId String? @map("workflow_binding_id") @db.Uuid
+  workflowBindingVersion Int? @map("workflow_binding_version")
   releasedToSupplierAt DateTime? @map("released_to_supplier_at") @db.Timestamptz(3)
   version Int @default(1)
   createdById String @map("created_by_id") @db.Uuid
@@ -855,6 +860,7 @@ model SupplierQualityProblem {
   responseDraft SupplierResponseDraft?
   revisions SupplierResponseRevision[]
   evidence SupplierEvidenceReference[]
+  workflowBinding SupplierWorkflowBinding? @relation(fields: [workflowBindingId, workflowBindingVersion], references: [id, version], onDelete: Restrict)
 
   @@index([ownerOrganizationId, updatedAt])
   @@index([supplierOrganizationId, releasedToSupplierAt])
