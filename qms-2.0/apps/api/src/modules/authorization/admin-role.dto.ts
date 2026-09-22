@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 
 export class AdminPermissionDto {
   @ApiProperty()
@@ -13,6 +13,9 @@ export class AdminPermissionDto {
 }
 
 export class AdminRoleDto {
+  @ApiProperty()
+  mfaRequired!: boolean;
+
   @ApiProperty()
   id!: string;
 
@@ -93,6 +96,11 @@ export class CopyAdminRoleDto {
 }
 
 export class CreateAdminRoleDto extends CopyAdminRoleDto {
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  mfaRequired?: boolean;
+
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
   organizationId!: string;
@@ -108,6 +116,16 @@ export class CreateAdminRoleDto extends CopyAdminRoleDto {
 }
 
 export class UpdateAdminRoleDto {
+  @ApiPropertyOptional({ description: 'Required when mfaRequired is supplied; previously read MFA policy.' })
+  @ValidateIf((object: UpdateAdminRoleDto, value) => object.mfaRequired !== undefined || value !== undefined)
+  @IsBoolean()
+  expectedMfaRequired?: boolean;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  mfaRequired?: boolean;
+
   @ApiPropertyOptional({ type: [String], maxItems: 200, description: 'Required when permissionCodes is supplied; previously read permission set.' })
   @ValidateIf((object: UpdateAdminRoleDto, value) => object.permissionCodes !== undefined || value !== undefined)
   @IsArray()

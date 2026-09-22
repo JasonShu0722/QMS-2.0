@@ -153,13 +153,13 @@ describe('problem and workflow PostgreSQL schema', () => {
       `;
       await prisma.$executeRaw`
         INSERT INTO workflow_versions (id, organization_id, workflow_definition_id, version, status, updated_at)
-        VALUES (${versionA}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, 1, 'DRAFT', CURRENT_TIMESTAMP),
+        VALUES (${versionA}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, 1, 'PUBLISHED', CURRENT_TIMESTAMP),
                (${versionA2}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, 2, 'DRAFT', CURRENT_TIMESTAMP),
                (${versionB}::uuid, ${organizationB}::uuid, ${definitionB}::uuid, 1, 'DRAFT', CURRENT_TIMESTAMP)
       `;
       await expect(prisma.$executeRaw`
         INSERT INTO workflow_versions (id, organization_id, workflow_definition_id, version, status, updated_at)
-        VALUES (${crypto.randomUUID()}::uuid, ${organizationB}::uuid, ${definitionA}::uuid, 2, 'DRAFT', CURRENT_TIMESTAMP)
+        VALUES (${crypto.randomUUID()}::uuid, ${organizationB}::uuid, ${definitionA}::uuid, 3, 'PUBLISHED', CURRENT_TIMESTAMP)
       `).rejects.toMatchObject({ code: 'P2010' });
       await prisma.$executeRaw`
         INSERT INTO workflow_nodes (id, organization_id, workflow_version_id, node_key, type, name, updated_at)
@@ -251,7 +251,7 @@ describe('problem and workflow PostgreSQL schema', () => {
         INSERT INTO workflow_instances
           (id, organization_id, workflow_definition_id, workflow_version_id, instance_key, status, version, updated_at)
         VALUES (${crypto.randomUUID()}::uuid, ${organizationA}::uuid, ${definitionA}::uuid, ${versionA}::uuid, ${`INSTANCE-2-${suffix}`}, 'RUNNING', 1, CURRENT_TIMESTAMP)
-      `).rejects.toMatchObject({ code: 'P2010' });
+      `).resolves.toBe(1);
       await expect(prisma.$executeRaw`
         INSERT INTO problem_indexes
           (id, organization_id, report_number, domain_code, problem_type, source_type, status, severity, owner_id, version, updated_at)

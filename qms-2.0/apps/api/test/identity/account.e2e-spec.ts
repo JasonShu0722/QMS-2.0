@@ -14,12 +14,16 @@ describe('account center HTTP contract', () => {
     id: '10000000-0000-4000-8000-000000000001', organizationId: '20000000-0000-4000-8000-000000000001',
     username: 'internal.admin', email: 'internal@example.test', passwordHash: 'encoded',
     accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false,
+    organization: { status: 'ACTIVE' },
   };
   const prisma = {
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
+    $queryRaw: jest.fn(),
+    userRole: { findMany: jest.fn().mockResolvedValue([]) },
+    organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn(), update: jest.fn() },
-    session: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+    session: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   };
 
   beforeAll(async () => {
@@ -33,10 +37,11 @@ describe('account center HTTP contract', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.session.findFirst.mockResolvedValue({ id: 'session-1', reauthenticatedAt: new Date() });
     prisma.session.findUnique.mockResolvedValue({
       id: 'session-1', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
     });
-    prisma.user.findUnique.mockResolvedValue({ ...user, organization: { id: user.organizationId, code: 'internal', name: 'Internal' } });
+    prisma.user.findUnique.mockResolvedValue({ ...user, organization: { id: user.organizationId, status: 'ACTIVE', code: 'internal', name: 'Internal' } });
     prisma.session.findMany.mockResolvedValue([{ id: 'session-1', createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000), revokedAt: null }]);
     prisma.session.updateMany.mockResolvedValue({ count: 1 });
   });

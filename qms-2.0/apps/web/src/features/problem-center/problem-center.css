@@ -1,0 +1,28 @@
+.problem-center { display: grid; gap: 20px; min-width: 0; color: var(--qms-text); }
+.problem-center__heading { align-items: start; display: flex; gap: 24px; justify-content: space-between; }
+.problem-center__heading .ant-typography { margin: 0 0 4px; }
+.problem-center__heading h2.ant-typography { font-size: 26px; }
+.problem-center__heading .ant-input { min-width: 260px; }
+.problem-center__view-row { align-items: end; display: flex; flex-wrap: wrap; gap: 12px; }
+.problem-center label { display: grid; gap: 8px; }
+.problem-center select,
+.problem-center input[type='datetime-local'] { background: var(--qms-surface); color: var(--qms-text); border: 1px solid var(--qms-border); border-radius: 7px; box-sizing: border-box; min-height: 36px; min-width: 0; max-width: 100%; padding: 6px 12px; font: inherit; }
+.problem-center :is(select, input):focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
+.problem-center__view-row label { min-width: 220px; }
+.problem-center__view-pages,
+.problem-center__filter-actions,
+.problem-center__counts { margin-top: 16px; }
+.problem-center__counts { color: var(--qms-muted); font-variant-numeric: tabular-nums; }
+.problem-center__filters { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
+.problem-center__filters .ant-select { width: 100%; }
+.problem-center__columns { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+.problem-center__column-option { align-items: center; border: 1px solid var(--qms-border); border-radius: 7px; display: flex; justify-content: space-between; padding: 8px 12px; background: var(--qms-surface-tint); }
+.problem-center__pagination { align-items: center; display: flex; gap: 16px; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--qms-border); }
+.problem-center .ant-table-wrapper { min-width: 0; font-variant-numeric: tabular-nums; }
+.problem-center .ant-alert + .ant-alert { margin-top: 8px; }
+@media (max-width: 760px) {
+  .problem-center__heading { align-items: stretch; flex-direction: column; gap: 16px; }
+  .problem-center__heading .ant-input { min-width: 0; }
+  .problem-center__view-row label { min-width: 0; width: 100%; }
+  .problem-center__pagination { align-items: flex-start; flex-direction: column; }
+}

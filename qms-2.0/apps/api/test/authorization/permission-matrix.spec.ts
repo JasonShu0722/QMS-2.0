@@ -5,20 +5,21 @@ import { AdminUserService } from '../../src/modules/identity/admin-user.service.
 import { ADMIN_PERMISSIONS } from '../../src/modules/authorization/permission-catalog.js';
 
 describe('granular administration permissions', () => {
-  const actor = { id: 'admin', organizationId: 'org', accountType: 'INTERNAL' as const };
+  const actor = { id: 'admin', sessionId: 'trusted-test-session', organizationId: 'org', accountType: 'INTERNAL' as const };
   const role = { id: 'role', organizationId: 'org', code: 'ROLE', name: 'Role', permissions: [] };
   let granted: string[];
   const prisma = {
-    user: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     organization: { findUnique: jest.fn() },
     userRole: { findMany: jest.fn(), count: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
     role: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     permission: { findMany: jest.fn() },
     rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
     passwordReset: { updateMany: jest.fn() },
-    session: { updateMany: jest.fn() },
+    session: { updateMany: jest.fn(), findFirst: jest.fn() },
     adminMutation: { findUnique: jest.fn(), create: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   };
   const audit = { record: jest.fn() };
   const passwords = { hash: jest.fn() };
@@ -28,13 +29,14 @@ describe('granular administration permissions', () => {
   const roles = new AdminRoleService(prisma as never, audit as never, mutations);
   beforeEach(() => {
     jest.resetAllMocks();
+    prisma.session.findFirst.mockResolvedValue({ id: actor.sessionId, mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
     granted = [];
     prisma.$transaction.mockImplementation(async (work: (transaction: typeof prisma) => Promise<unknown>) => work(prisma));
-    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE' });
+    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
     prisma.user.findFirst.mockResolvedValue({ id: 'target', organizationId: 'org', accountType: 'INTERNAL' });
     prisma.user.update.mockResolvedValue({ id: 'target' });
     prisma.user.create.mockResolvedValue({ id: 'target' });
-    prisma.organization.findUnique.mockResolvedValue({ type: 'INTERNAL' });
+    prisma.organization.findUnique.mockResolvedValue({ type: 'INTERNAL', status: 'ACTIVE' });
     prisma.userRole.findMany.mockImplementation(async ({ where }: { where: { userId: string } }) => where.userId === actor.id ? [{ role: { permissions: granted.map((code) => ({ permission: { code } })) } }] : []);
     prisma.userRole.count.mockResolvedValue(0);
     prisma.role.findFirst.mockResolvedValue(role);
@@ -97,7 +99,7 @@ describe('granular administration permissions', () => {
   it.each(ADMIN_PERMISSIONS)('preserves administrator self access to %s', async (permission) => {
     granted = [...ADMIN_PERMISSIONS];
     const assignments = (codes: string[]) => [{ role: { permissions: codes.map((code) => ({ permission: { code } })) } }];
-    prisma.userRole.findMany.mockResolvedValueOnce(assignments(granted)).mockResolvedValueOnce(assignments(granted.filter((code) => code !== permission)));
+    prisma.userRole.findMany.mockResolvedValueOnce(assignments(granted)).mockResolvedValueOnce(assignments(granted)).mockResolvedValueOnce(assignments(granted.filter((code) => code !== permission)));
     await expect(roles.update(actor, 'role', { permissionCodes: [], expectedPermissionCodes: [] }, 'trace', 'matrix-key')).rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_SELF_LOCK_FORBIDDEN' } });
   });
 

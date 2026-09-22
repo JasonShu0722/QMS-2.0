@@ -1,6 +1,209 @@
-# 底座、ABC 与分板块权限矩阵验收记录
+# 底座与阶段二平台验收记录
 
-本文件按时间保留验证历史。前半部分是阶段 1 的原始矩阵（包括当时在线镜像下载 FAIL 和缓存替代验证），不代表当前功能或最新构建状态。ABC 历史交付保留；最新证据位于文末“分板块权限矩阵补充验收”。本轮范围为 C 矩阵与账号细权限补充，D–H、批次 3 和原批次 2 深度业务门禁不在本轮完成声明内。
+本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
+
+## P6 聚合收尾记录（2026-09-20，PASS）
+
+在 `D:/WorkSpace/QMS-2.0/qms-2.0` 执行 `pnpm acceptance:phase-2`，最终完整运行退出码0，四个聚合步骤全部 PASS（含 phase-1 九步），0 skipped。权威日志为 Git 外 `D:/WorkSpace/QMS-2.0-local/main-integration-20260919/p6-final-green3.log`，完整回归1097秒，测试领域契约33秒。使用 Node22.22.0、pnpm11.19.0、临时 PostgreSQL18/55448、MinIO19048、ClamAV13348、Mailpit51026/51027、三个独立数据库及网关18098/18099/18100；未使用保留预览55440。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 全量 PostgreSQL | 20 套 404/404 PASS，32 份迁移部署及 seed PASS |
+| API 全量单测 | 36 套 381/381 PASS |
+| Web 全量单测 | 最终21文件135/135 PASS，440.39s。导航组15秒、问题中心30秒测试预算；保留真实computedStyle、全部交互与断言，独立复核PASS |
+| 真实 Worker 与浏览器 | Worker进程3/3、安全输入1/1、真实浏览器17/17 PASS（3.7分钟）；含真实附件扫描、独占领取、设计器、中性处理→审批→验证→升级、历史报告及失败队列人工重试 |
+| 契约、构建与隔离 | 冻结安装、API/Web/contracts构建、主Swagger与测试领域Swagger同步、archive隔离、foundation及scanning Compose配置全部PASS |
+| 固定版本备份恢复 | 最新 dist 真实 PG/MinIO 8/8 PASS，0 skipped；`p6-backup-acceptance.log` |
+| 密钥轮换 | 真实临时库 4/4 PASS，旧密钥回放及缺失密钥失败均验证；55440 在连接前拒绝。移除只允许55446的旧限制，必须显式 disposable；`p6-key-rotation-acceptance.log` |
+| TLS | 当前 dist 独立生产模式 API、临时 Nginx 与外部 CA，4/4 PASS：TLS1.2/1.3、308、Secure/HttpOnly/SameSite、登录登出；`p6-tls-acceptance.log`；所用独立 API/网关已清理 |
+| CI 实际依赖 | 补齐临时 MinIO/ClamAV、加密 ZIP 和版本桶；独立容器验证 versioning/ClamAV PING PASS且清理；YAML现有解析器与独立审查PASS，未运行远端CI |
+| 临时资源清理 | 核对PID/命令/端口后停止六个API/网关；核对project `qms2-main-integration` 后移除四个临时容器，12个验收端口全部释放，55440未操作；`p6-cleanup.log`。凭据、日志、证书与备份继续保留Git外 |
+
+首轮PG聚合1 FAIL/403 PASS的原因为旧测试夹具创建同一定义两个草稿，与新增单草稿约束冲突；修正夹具为已发布旧版+新草稿，跨组织故意违规改用独立版本号避免其他唯一约束掩盖外键验证。原失败日志 `p6-acceptance.log` 保留，专项6/6与全量404/404随后通过。首轮Web失败日志 `p6-acceptance-green.log` 名称不代表成功，最终结果为FAIL，必须以上表及其末尾实际状态为准。
+
+扩展中性浏览器已实际1 PASS（1.0m），覆盖处理→审批→验证、真实失败事件的治理页人工重试→真实Worker重放后任务/通知数量不变、独占领取、真实证据、升级与历史、报告状态和跨组织拒绝。测试领域固定三条专用动作端点，不开放生产通用动作接口。独立复核发现夹具报告状态错误固定为IN_PROGRESS，新增断言先得到RED，再按实际固定动作写PENDING/PENDING/RESOLVED后GREEN；升级前验证完成报告和升级后旧报告都验证RESOLVED。
+
+`p6-final-acceptance.log` 的完整聚合实际 FAIL：PG/API/Web、构建、Worker、Compose、归档隔离和主契约全部 PASS，浏览器16 PASS/1 FAIL。唯一失败为临时 Vite 网关透传伪造 X-Forwarded-For，导致预期429实际401；生产 Nginx 原有配置已覆盖该头。修正 Git 外三套验收网关为客户端连接地址后，原防绕过用例实际1 PASS（4.5s，`p6-gateway-targeted.log`），未放宽产品限流或测试断言。
+
+随后新浏览器夹具重跑 `p6-complete-acceptance.log`，PG404/API381 PASS，Web134 PASS/1 FAIL：导航静态布局用例实际5247ms，超过默认5000ms。为同组真实样式计算统一15秒预算，移除原先单例相同限时，保留全部交互、computedStyle与断言；定向5/5及最终全量PASS。
+
+`p6-verified-acceptance.log` 在宿主进程和四个Docker容器中断后没有最终结果，不能作为PASS证据。恢复自有服务并重建临时数据库/版本桶后，附件曾因桶缺失返回404；恢复桶后 `p6-final-green.log` 和 `p6-final-green2.log` 均为PG402 PASS/2 FAIL，两个即时扫描断言分别少处理一条和仍为PENDING。第三次同代码完整运行 `p6-final-green3.log` 全部PASS。独立复核发现测试以宿主时间+1秒与数据库默认availableAt比较，跨时钟边界最符合现象，但失败时没有时钟样本，未证明具体偏差；恢复后采样约0–1ms。生产Worker持续轮询，未到期事件下一轮仍可处理，未发现永久漏单证据。不将该现象声称为已证实的ClamAV启动故障。
+
+缺配置门禁已实际验证：未显式disposable、夹具位于仓库内均FAIL。日志分别为 `p6-missing-prerequisite.log`、`p6-reject-in-repository-fixture.log`。本轮日志均在 Git 外 `D:/WorkSpace/QMS-2.0-local/main-integration-20260919/`。远端CI和完整产品容器镜像/部署未执行；Compose PASS表示配置验证，开发签名库不代表生产病毒库更新策略。固定时限、人工CC确认、站内业务通知是本轮范围，严重度决策表、自动CC、多级循环升级和业务通知邮件不在本轮冻结范围。
+
+## P4/P5 开发及定向验证（2026-09-19）
+
+实现位置为 `D:/WorkSpace/QMS-2.0/qms-2.0`，主目录原有修改继续保留，没有提交、推送或部署，没有访问其他用户任务。使用内部子代理开发和独立复核；原子代理因模型不可用中断后，由可用代理接续本地成果。React 开发应用项目 Vercel React Best Practices，画布按需加载。
+
+| 范围 | 实际证据 |
+| --- | --- |
+| 设计器后端 | 定义/版本锁、编辑 CAS、同事务审计、单草稿、发布冻结、明确复制源；真实 PG 专项 24 PASS，相关四套 93 PASS；新增可编辑 5 节点/历史 8 节点 Swagger 分离及 DTO 三套 53 PASS |
+| 设计器 Web/浏览器 | 编辑/保存/发布/复制、校验定位、409 保留、403 禁写；8 个组件测试 PASS；真实双会话流程设计浏览器 1 PASS（15.1s，整体20.1s），旧版本冻结、英文及受限角色拒绝 |
+| 升级后端 | 稳定历史归属、取消旧实例/任务、显式映射、原子回滚、幂等重放复权、双向并发；独立复验 upgrade 42/42、upgrade+timing 78/78、六套 PG 176/176 PASS，source tsc PASS |
+| 问题读取与历史 | SQL 授权分页、不可变修订、报告按 mutation 回执重建历史节点、证据与修订审计成对隔离；真实 PG 10/10 PASS，包含并发同资源报告死锁 RED→GREEN |
+| 保存视图 | 本人及授权组织、严格配置、CAS、锁后撤权与会话复验、审计失败回滚；真实 PG 14/14 PASS |
+| 工作空间 Web | 权限错误不作空态、领取独立资格、历史禁写、缺失历史不回填、升级不确定结果同键重试、确定性 4xx 禁重写、卸载后旧回调隔离、审计游标、中英及证据禁下载；13/13 PASS，独立复核 PASS |
+| 问题中心 Web | 查询/统计/分页/列配置、个人视图 CRUD、组织切换旧 GET 与 mutation 隔离、同 scope 请求 generation 隔离、同步防重写、403/409；2 文件 10/10 PASS，tsc 与独立复核 PASS |
+| 领域写锁与回放 | runtime 新增领域访问钩子，在认证锁前固定领域/证据锁；成功回放也复验领域权限。真实 PG 33/33 PASS，覆盖撤会话、回放撤领域权限、读写并发锁序和钩子修改后授权失败全部回滚；runtime 独立复核 PASS |
+| 附件与通知连接 | 最新批量 readEvidence 及历史通知 problemId/organizationId 可信链接：真实 PG file+inbox 65/65 PASS；通知 Web 6/6 PASS |
+| 中性业务真实浏览器 | 1 PASS（23.3s）：检索与视图双会话 CAS409、领取、真实上传/ClamAV、专用处理与不可变修订、同编号升级 8D、报告精确字节下载、成对追溯、旧实例只读、跨组织拒绝；证据删除后原键回放原成功回执，下载仍409 |
+| 契约与构建 | 主 Swagger 重新生成 PASS；Web tsc+Vite production build PASS；测试领域 DTO 另由测试 Nest Swagger 生成，不加入生产 API；P3 最后租约修复已进入本次 dist 重建 |
+
+真实服务沿用隔离 PG55448、私有版本化 MinIO19048、ClamAV13348 与 Mailpit；浏览器使用主网关18098、独立附件网关18099，中性问题验收将使用另一独立数据库及18100网关，全部拒绝预览库55440。现有主与附件 API 已重启到本次构建，附件临时库新增迁移部署 PASS。
+
+发现并修复的真实问题：定时 Worker 批次统计包含其他聚合事件，测试错误地当作当前 fixture 数量，已以自身事件状态与副作用断言替代并增加混合批次回归；领域读 `FOR SHARE` 后附件 read 又 `FOR UPDATE`，并发报告稳定出现一方500，统一 read 共享锁后两方200；问题中心旧组织 mutation 延迟回写，通过 URL keyed scope 与同步互斥修复。后端生产领域注册表仍空，适配器锁协议记入附件及工作空间接入文档。
+
+本节保留P4/P5定向验证历史；最终P6已通过，以上方最新完整记录为准。完整命令和日志在 Git 外 `D:/WorkSpace/QMS-2.0-local/`，本轮新增主要在 `main-integration-20260919/`；设计器旧批证据为 `p4-designer-browser.log`。新 `acceptance:phase-2` 已加入真实依赖和隔离门禁，未以跳过或 mock 替代。
+
+## P3 真实附件生命周期（2026-09-19）
+
+主目录已实现隔离上传、固定S3 VersionId、真实内容验证和ClamAV扫描、同事务领域证据授权、CAS删除、60秒固定版本下载及共享附件组件。生产领域注册表默认为空，未知资源拒绝；没有将中性测试域开放到生产。新增迁移20260919200000和20260919200100部署临时库PASS。
+
+验证使用PG18端口55448、MinIO19048、真实ClamAV1.5.4端口13348及临时独立附件浏览器库；浏览器API13049/gateway18099。扫描镜像与签名固定，Compose仅验证配置，不将固定开发签名库声称为生产自动更新。日志、配置、加密无害样本及备份均位于Git外 `D:/WorkSpace/QMS-2.0-local/`。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 最终后端定向 | 3套45项PASS：真实PG/MinIO/ClamAV31、扫描协议9、策略5；0 skipped，`p3-final-backend-green.log` |
+| API全单测与相关回归 | 35套366项PASS；附件与旧数据库/Outbox另一次5套60项PASS；统计为不同运行，不相加为唯一用例数 |
+| Web组件与上传重试 | 2文件8项PASS；重试保持幂等键、完成失败不重复PUT、隔离不可下载、冲突刷新和安全trace；`p3-web-green.log` |
+| 契约/构建 | Swagger生成、API与Web build PASS；最终失败扫描租约修复后source tsc PASS，最后该修复的dist重建随P4/P5聚合执行 |
+| 真实浏览器 | 1条PASS（用例28.2秒，总34.1秒）：内部与供应商真实登录/直传、202隔离、真实Worker扫描后下载字节一致、跨组织403、删除阻止下载、EICAR测试签名隔离、英语；`p3-browser.log` |
+| 真实备份恢复 | QMSB2固定版本保存及恢复重映射，5项辅助单测与8项真实PG/MinIO验收PASS；新旧版本并存、未上传预留、隔离声明不符、缺固定版本、保留策略均覆盖；`p3-backup-acceptance.log` |
+| 扫描Compose | foundation+scanning overlay `config --quiet` PASS；未启动完整产品容器组合 |
+| 独立复核 | 规格PASS、质量PASS；备份运维另有独立质量PASS |
+
+先红后绿证据包含生产空注册表拒绝、AVAILABLE缺证据CHECK拒绝、伪造扫描事件、下载请求非法字段及失败租约。最后发现扫描失败等待文件锁超过租约仍可写ERROR，已增加锁后复验和事务末尾回滚，真实PG复现RED后45项GREEN。浏览器首次调用因外部环境脚本切换工作目录导致找不到CLI；显式切回Web后实际链路PASS，没有跳过。备份夹具首次缺新证据字段及SQL参数类型不明均已修正后真实8项PASS。
+
+P3开发与定向验收完成；P4设计器/工作空间、P5升级、P6最终聚合继续。已发签名下载在60秒内不能撤回，删除/撤权阻止新签发。遗留AVAILABLE缺实测证据迁为隔离，不猜测领域归属。详见[附件接入](ATTACHMENTS.md)和[备份恢复](DATA-PROTECTION.md)。
+
+## P2c 待办、通知与独占领取（2026-09-19）
+
+主目录实现实时授权后分页、独占领取/释放/失效重领、通知已读、锁等待后会话复验、版本CAS与原子审计。领取人失去处理资格后，其他合格人须显式重新领取；仅撤领取权限不改变原处理资格。历史通知按原固定节点实时授权，不依赖问题当前实例指针。Web接入真实生成契约、筛选分页、中英、安全trace及冲突后刷新，不开放通用完成入口。
+
+使用同一临时PG55448与gateway18098，新增迁移20260919180000和20260919181000部署PASS。验证配置和日志位于Git外 `D:/WorkSpace/QMS-2.0-local/`：
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 真实PG首次定向 | 4套125项PASS（新inbox与原runtime/projection/timing）；先观察缺失能力RED，再GREEN |
+| 最终runtime回放 | 增加换有效会话同键回放、旧撤销会话拒绝；inbox33+runtime28=61项PASS，非另加61项唯一用例 |
+| API单测 | 34套351项PASS；TypeScript编译PASS |
+| Web定向和完整单测 | 新待办6项RED→GREEN；全量13文件96项PASS，0 skipped |
+| 生成契约与构建 | Swagger生成PASS（含全部8种节点）；API build与Web build PASS |
+| 真实浏览器 | 新增1条Playwright PASS（19.2s），两个真实账号/浏览器、真实Worker生成任务通知；领取、陈旧版本409刷新、释放、原领取人撤权、重新领取、通知已读与双语刷新保留 |
+| 独立审查 | 规格PASS、质量PASS；补通知固定排序复合索引并部署/生成/构建PASS |
+
+日志：p2c-backend-green.log、p2c-final-runtime-green.log、p2c-web-all.log、p2c-web-build.log、p2c-contracts.log、p2c-browser.log及p2c-inbox-index-*.log。第一次Web GREEN运行2项失败源于AntD双字按钮自动插空格的可访问名称，明确按钮aria-label后6项通过；重复翻译键已消除。AntD List弃用和既有1278kB vendor chunk提示仍存在，不影响本次PASS。
+
+本节为P2c开发和定向验收证据，P3/P4/P5/P6及最终全平台聚合尚未完成。runtime仅对已有受信内部调用保留可不传sessionId的边界，真实领域HTTP必须传实际sessionId；新inbox入口已由认证守卫会话构造。浏览器夹具仅在明确临时本地库使用真实服务，完成后停用其独立组织/账号并取消实例，保留历史验证事实；没有生产中性域入口。没有提交、推送或部署。
+
+## 已验收平台成果整合到主目录（2026-09-19）
+
+用户明确要求整合到 `D:/WorkSpace/QMS-2.0`、保留主目录现有修改、集成验证后继续阶段二。175项已验收P1/P2a/P2b/D–H文件变更已应用到主目录；未执行Git提交、推送或生产部署。来源工作树保留，后续实现命令从主目录`qms-2.0/`执行，不操作其他用户任务或供应商工作树。
+
+主目录原有五个修改文件及迁移计划已保存到Git外 `D:/WorkSpace/QMS-2.0-local/main-integration-20260919/original`，带摘要和before/after清单。根AGENTS、QMS.code-workspace、根README和drive-migration计划逐字节保持不变；应用README保留原D盘预览/环境段落并合入平台新增，FOUNDATION完整保留原54行迁移记录。除两份合并文档外来源内容一致，auth-routing测试仅少一个末尾空白行；独立规格/质量复核均PASS，无冲突标记、秘密/环境/依赖/构建产物混入。
+
+本次新建Docker project `qms2-main-integration`，PG18临时库`qms_main_integration`端口55448，MinIO19048/19049，Mailpit51026/51027，主目录API13048、gateway18098。25个迁移从空库执行，未使用保留预览55440。配置、MFA加密缓存和日志留在Git外。原平台临时容器在本次开始时已处于Exited(255)，没有把旧验收进程当作主目录服务。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 保留与整合内容检查 | PASS；175项规范化内容与来源/合并结果一致，四份无需合并的原文件摘要不变；独立规格及质量复核PASS |
+| 主目录冻结安装和预构建 | PASS；复用缓存增加30个依赖，未复制来源node_modules；主目录API/Web/contracts构建通过 |
+| `pnpm acceptance:phase-1` | PASS，九步exit 0：frozen 1s、PG 91s、API/Web 371s、build 60s、Worker 47s、Compose 0s、archive 4s、contracts 31s、browser 123s |
+| 分层数量 | PG 14套244/244，API 34套341/341，Web 12文件90/90，真实Worker进程3/3，秘密输入诊断1/1，真实浏览器13/13，0 skipped |
+| 运行来源 | API PID22320、gateway PID27324均从主目录启动，浏览器连18098；验证的不是来源工作树旧服务 |
+| 证据与限制 | 原始日志 `D:/WorkSpace/QMS-2.0-local/main-integration-acceptance.log`；聚合NODE_ENV=development，未将本次构建描述为独立显式production环境验证。AntD vendor 1,278.31kB警告保留，未构建产品容器镜像、未执行云端CI |
+| 临时资源 | 为紧接的P2c验证保留本批临时服务与资源，最终清理另记；不是生产/持久预览发布 |
+
+首次临时MinIO创建使用了未存在的Docker Hub镜像名称而失败（exit125），随后核对既有镜像来源，改用已安装的 `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` 启动成功。失败发生在聚合前，完整聚合未跳过任何步骤。主目录成果整合完成不代表P2c、P3附件、P4工作空间、P5简报升级及完整领域浏览器链已完成；后续计划见[主目录整合与收尾](../../docs/superpowers/plans/2026-09-19-qms-2-main-integration.md)。
+
+## 阶段二 D–H 治理验收（2026-09-19）
+
+本批在 `D:/WorkSpace/QMS-2-platform-remaining/qms-2.0` 开发组织/配置、安全、审计/失败运维、数据保护、导出/保留及核心界面治理。用户授权使用内部子代理，未联系、读取或操作其他用户任务。未提交、推送、合并主仓库或部署生产。
+
+环境：Windows D 盘 NTFS、Node 22.22、pnpm 11.19、PostgreSQL 18。owned Docker project 为 `qms2-platform-remaining`，PG 55446；MinIO 19046/19047；Mailpit SMTP 51026、HTTP 51027。API 13046、Vite gateway 18096；另启动 production 模式 API 13047，独立 Nginx TLS 18446/HTTP 18097。配置、日志、临时 CA、MFA 缓存及加密备份位于 Git 外 `D:/WorkSpace/QMS-2.0-local`。未使用保留预览数据库 55440。
+
+| 命令 / 检查 | 实际结果及证据范围 |
+| --- | --- |
+| D/F 组织、字典配置、审计与失败重试 | 分别完成独立规格/质量复审；真实 PG 验证层级/跨组织/版本/幂等/历史引用、聚合归属与载荷拒绝、模板实际消费、安全审计与导出权限。已纳入最终全部 schema.integration suites |
+| E1 MFA 与近期认证 | 单次 TOTP/恢复码、挑战身份和策略绑定、认证失效、敏感写入事务再验证与拒绝审计。针对性身份/权限 20 套213 PASS，随后补拒绝/锁序及导出会话回归均 PASS；独立规格/质量复审通过 |
+| E2 实际邮件与慢 SMTP | 邮件/投递/MFA/限流/策略五套39 PASS；加强慢 SMTP 8/8 PASS，实际 TCP 在7秒截止销毁，attempts已独立提交；邮箱/用户/组织停用和securityVersion并发锁序、60秒租约恢复、最多5次、TLS拒绝均有真实用例。日志 e2-email-delivery-lease-validation.log、e2-email-delivery-deadline-validation.log；规格/质量复审 PASS |
+| G 数据库及对象备份恢复 | `node --test test/operations/data-protection.acceptance.mjs` 8/8 PASS。真实全新 qms_backup_/qms_restore_ 库和MinIO桶：匿名403、签名60秒、重复PUT412、保留期版本拒删、密文完整性、引用/摘要/迁移一致、非空/原库/错容器/URL参数/错IP地址族/仓库内..目录/仅历史版本桶拒绝。日志 platform-dh-data-protection.log |
+| G 密钥轮换 | `node --test test/operations/key-rotation.acceptance.mjs` 4/4 PASS。真实隔离库中旧key幂等回放不重复写、CLI重加密MFA当前/待注册/导出/待发邮件、去掉旧解密key后读取成功、缺key失败非零且无成功审计。幂等旧回执仍需保留旧签名key。日志 platform-dh-key-rotation.log |
+| G TLS | `node --test test/operations/tls.acceptance.mjs` 4/4 PASS。临时自签CA显式信任验证，TLS1.2/1.3、HTTP308保持路径及18446端口、HSTS/nosniff/no-referrer、production API真实密码登录Secure/HttpOnly/Lax及退出后401。Nginx仅将上游地址改到隔离宿主13047，其余使用仓库TLS模板；Compose双配置config --quiet PASS。日志 platform-dh-tls.log |
+| H Web 针对性 | 管理交互/语言/登录/治理/矩阵合计59个去重相关用例分批PASS；账号/工作标签等另有19项回归PASS。覆盖英文安全错误与trace、Outbox弹窗内部错误、受限目录、MFA策略重载、键盘菜单入口。日志 h-web-regression.log、h-web-matrix-final.log、platform-dh-web-review.log |
+| 新增真实治理浏览器 | governance-dh.spec.ts 两条PASS：系统参数/类别/部门/岗位关联、审计筛选及CSV实际下载、中英导航；新账号MFA UI注册、真实Worker→SMTP→Mailpit→UI邮箱确认、真实找回重置、保持MFA、一次性重放拒绝。日志 platform-dh-browser-governance.log |
+| 全部真实 PostgreSQL | 最终聚合14套244/244 PASS，25迁移和seed实际执行。早期243/244时旧底座“审计失败回滚会话撤销”夹具未创建完整MFA会话，已修可信测试会话标志，保持审计回滚断言 |
+| API 单元/HTTP 回归 | 最终聚合34套341/341 PASS |
+| Web 全量回归 | 最终聚合12文件90/90 PASS，其中权限矩阵27项；没有提高默认单项30秒超时或跳过用例 |
+| 完整 `pnpm acceptance:phase-1` | PASS，九步全部exit 0：frozen 1s、真实PG 88s、API/Web 353s、build 47s、真实Worker进程40s、Compose 0s、archive 3s、contracts 27s、browser 111s。Worker 3/3、秘密输入诊断1/1、真实浏览器13/13，0 skipped。日志 `D:/WorkSpace/QMS-2.0-local/platform-dh-acceptance.log` |
+| 显式 production 构建 | `NODE_ENV=production pnpm build` PASS；与上述development环境聚合构建分别记录。AntD vendor 1,060.95kB体积提示保留。日志 platform-dh-production-build.log；本批未构建/部署产品容器镜像 |
+| 负向门禁、契约与静态检查 | 缺DATABASE_URL时MFA真实集成明确失败，负向门禁PASS（platform-dh-missing-db.log）；Swagger生成契约同步、归档隔离及Compose在最终聚合PASS。`git diff --check`、9份文档44个相对链接及未跟踪文件秘密/日志扩展名检查PASS |
+| CI 前置配置 | 增加临时Mailpit、安全keyring及对象签名测试环境，构建后执行真实Worker进程验证；独立只读审查、YAML解析和所有run片段Shell语法检查PASS。未执行云端CI，未将静态检查记为云端验收 |
+| 临时资源清理 | 未完成：核对PID/端口及Docker project后，停止本批进程并移除四个容器的命令被自动审批审查拒绝，仅返回 `blocked by policy`，未执行。只读复核确认API PID 25344/13046、TLS API PID 11964/13047、gateway PID 20716/18096及 `qms2-platform-remaining-{postgres,minio,mailpit,tls}` 均仍运行；十个本批端口仍占用。后续清理必须重新核对PID/命令、project与端口，不触碰55440；配置、凭据、证书、加密备份和日志均仍留在Git外 |
+
+复审修复事实：邮件原实现在身份变化期间只锁投递且SMTP没有绝对总期限；新增失败用例后修为独立持久claim/attempt、固定身份锁序、实际socket销毁和租约恢复。G复审修复URL查询参数覆盖、Docker绑定与地址族、晚目标检查、仅历史对象判空、仓库内`..backups`路径和TLS端口。真实治理浏览器先发现隐藏tab同名表单字段导致标签关联失败，为各编辑器增加独立Form name后两条通过；旧基础浏览器适配MFA后需更新CSRF令牌及AntD按钮可访问名称，最终基础3/3通过。首次聚合Web 86/88：旧导航断言未适配中英资源分隔空格，另一个跨tab/角色/组织的长草稿用例超时；更正名称并拆成三条独立测试，保留取消/丢弃/导航断言，定向3/3及最终全量90/90通过。首次失败日志保留为platform-dh-acceptance-first-failure.log，不以跳过用例处理。
+
+生产边界：演练是隔离开发验收，不是生产证书/云IAM/真实邮件信誉/生产灾备放行。备份工具有内存上限且要求运维先停写；COMPLIANCE期间对象不可删除，部分失败恢复应换全新目标。MFA缓存只存外部加密文件，浏览器trace/截图/视频/DOM秘密快照关闭。供应商真实业务附件、跨企业授权、P2c剩余任务接口、P3及完整领域流程浏览器链仍独立交付。命令及限制详见 [DATA-PROTECTION](DATA-PROTECTION.md) 与 [EMAIL-RECOVERY](EMAIL-RECOVERY.md)。
+
+## 阶段二 P2b 时限事件与持续 Worker（2026-09-19）
+
+用户已确认：offsetMinutes 表示截止前提前分钟数；超时通知配置的升级负责人，保留当前任务，不转派。采用固定节点 SLA，尚不包含严重度映射或多级升级。
+
+| 命令 / 检查 | 实际结果和证据范围 |
+| --- | --- |
+| 时限排程与配置 RED→GREEN | 首轮 4 FAIL / 35 PASS：真实 PG 期待 4 条时限事件实际 0；发布校验漏拒绝无 SLA 的提醒、无 SLA 的升级和重复 offset。实现后定向时限/校验/P2a 67/67 PASS |
+| 归档与独立 CLOSED 状态停发 | 初始通知对 archivedAt/ARCHIVED 两项 RED 后修复；规格审查再发现索引可独立写 CLOSED 而实例仍 RUNNING，两项 RED 后同步停止初始和时限通知。最新时限套件 35/35 PASS，含退回后新轮次正向排程 |
+| 持续 Worker RED→GREEN | runner 16 项 RED 后通过；实际旧入口 2 FAIL / 1 PASS（立即退出、忽略非法轮询配置），新入口 `pnpm --filter @qms/api test:worker-process` 3/3 PASS。先构建当前 API，再真实启动 dist/worker.js，空轮询后创建事件并观察任务/通知及进程仍存活；另验 --once 与非法配置退出 |
+| 实现子代理全量后端 | API 32 suites/301 PASS（30.98s）；PG 6 suites/159 PASS（30.682s），随后新增 1 条退回新轮次用例由时限 35/35 PASS 覆盖，最终聚合总数另记 |
+| 缺数据库配置 | 删除命令进程 DATABASE_URL 后时限集成明确 FAIL，0 tests、无 skipped；未使用替代数据库 |
+| 最终 `pnpm acceptance:phase-1` | PASS，8 步 exit 0：frozen 1s、真实 PG 61s、API/Web 307s、build 49s、Compose 0s、archive 4s、contracts 24s、browser 91s。PG 6 suites/160，API 32 suites/301，Web 10 files/69，secret-input 前置 1、真实 browser 11，0 skipped。日志 `D:/WorkSpace/QMS-2.0-local/platform-p2b-acceptance.log`；浏览器仍是底座/账号链和旧登录页 smoke，不是完整供应商业务闭环 |
+| 显式 production 构建与独立复核 | `NODE_ENV=production pnpm build` PASS；现有 AntD 1,004.10kB 体积提示保留。日志在仓库外 platform-p2b-production-build.log。独立规格/质量复核均 PASS；主代理重启 13046 API 到本批产物后才运行最终聚合 |
+| 最终独立进程复验 | 主代理在完整聚合后执行 `pnpm --filter @qms/api test:worker-process`，重新构建 API，1 suite/3 PASS（15.758s），日志 `D:/WorkSpace/QMS-2.0-local/platform-p2b-worker-process.log` |
+| 临时资源清理 | PASS：核对 PID/命令后停止本批 API 13046 和网关 18096；核对 project 标签及 55446 绑定后移除 tmpfs PostgreSQL 容器，两个临时库随之销毁；三个验证端口均已释放。保留预览 55440 未操作，凭据和原始日志留在 Git 外 |
+
+真实进程在 Windows 上用强制终止清理；可中断等待和等待当前批次完成的优雅停止由 runner 单测验证，不能当作 POSIX 容器信号实测。定时事件只为新建任务排定，既有任务不自动补排。本批没有构建/部署新产品容器镜像，也没有提交、推送或合并主仓库；P2c、附件、跨企业协作和业务闭环仍有明确后续门槛。
+
+## 阶段二 P2a 任务与站内通知投影验收（2026-09-19）
+
+本批实现、独立规格/质量复核和八步聚合均已通过。只覆盖 P1 事件到待办与站内通知的事务投影；持续调度、提醒/升级、任务查询授权与人工失败重试入口分别属于 P2b/P2c。
+
+| 命令 / 检查 | 实际结果和证据范围 |
+| --- | --- |
+| 配置入口真实 PostgreSQL RED | 1/1 FAIL：启动流程后通过原 Worker 入口消费，期待 1 条 WorkflowTask，实际 0；原 handler 为 null |
+| 新迁移旧数据回填探针 | PASS：在 55446 临时 PostgreSQL 的 postgres 库内 BEGIN、创建隔离 schema、执行原迁移 SQL、断言后 ROLLBACK。同 createdAt 的旧任务按 id 得到 -1/-2；enteredAt 保持 createdAt；游标为 0；旧通知键为 legacy:id；同一节点正数轮次 1/3 可并存；重复轮次及通知键均触发 unique_violation。命令为 `docker exec -i qms2-platform-remaining-postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1`，未修改保留预览或运行中的测试库 |
+| 配置发布与消费者衔接 RED→GREEN | 新增超大 SLA、非法显式 assignment 条件及无 assignment 的 CC 共 7 FAIL / 26 PASS；发布校验统一全部约束有效、处理人 UUID、当前 CC 需处理人及 SLA 安全整数上限后，definition 单组 33/33 PASS（2.519s） |
+| Worker 租约过期 RED→GREEN | 处理跨过五分钟租约时原实现仍 processed=1；增加提交前租约检查后，全事务回滚且不消耗失败次数。最终定向 projection + outbox 两组 43 PASS（28 真实 PG + 15 旧底座，7.862s），使用独立 qms_platform_worker 临时库 |
+| 缺数据库配置负向验证 | 清除命令进程 DATABASE_URL 后投影集成明确 FAIL，包含 `Real PostgreSQL DATABASE_URL is required for workflow projection`；负向门禁 PASS，日志在仓库外 platform-p2a-missing-db.log |
+| 显式 production 构建 | `NODE_ENV=production pnpm build` PASS，API/Web/contracts 均 exit 0；AntD 1,004.10kB 的现有体积提示保留，日志在仓库外 platform-p2a-production-build.log |
+| 额外全测试 TypeScript 检查 | 子代理执行 `tsc --noEmit -p tsconfig.spec.json` FAIL，已有 @jest/globals 类型解析、旧 mock 和 validator 夹具推断问题；本批生产构建及新投影测试通过，不把未通过的全测试静态检查隐去 |
+| `pnpm acceptance:phase-1` | PASS，8 步 exit 0：frozen 1s、真实 PG 50s、API/Web 344s、build 56s、Compose 0s、archive 5s、contracts 31s、browser 119s。真实 PG 5 suites/125，API 31 suites/280，Web 10 files/69，secret-input 前置 1、真实 browser 11，0 skipped。原日志 `D:/WorkSpace/QMS-2.0-local/platform-p2a-acceptance.log`；仍是底座/账号浏览器链，没有新阶段二业务页面证据 |
+| 独立规格与质量复核 | 两个只读子代理均 PASS，未发现本批必须修复项；复核未另执行测试，实际聚合由主代理完成。无 commit/push/deploy，主工作区原 5 个修改文件及迁移计划保持不变 |
+
+上述聚合覆盖最新发布校验和 P1 后退图修复；迁移探针与真实运行时/Worker 联合测试分别记账。本批未构建或运行新的产品容器镜像。55446 临时容器及 13046/18096 本机验收服务暂留供紧接的 P2b 验证，最终清理另记。
+
+## 阶段二 P1 运行时恢复验收（2026-09-19）
+
+工作树 `D:/WorkSpace/QMS-2-platform-remaining/qms-2.0`，分支 `codex/qms-2-platform-remaining`，基线 `54621e0`。沿用已存在的隔离工作树和 P1 半成品；主仓库 5 个修改文件与迁移计划保持原样，不访问其他已有用户线程。用户随后允许当前任务内子代理，P1 分别做独立规格与质量复核。
+
+环境：Windows PowerShell、Node 22.22.0、pnpm 11.19.0、PostgreSQL 18.6、Docker 29.8.0。临时容器 `qms2-platform-remaining-postgres` 使用 tmpfs、127.0.0.1:55446，库 `qms_platform_remaining`；API 13046、Vite 代理网关 18096、独立 Chromium 上下文。凭据与原始聚合日志只在 `D:/WorkSpace/QMS-2.0-local/`，不入 Git；保留预览 55440 未用于验收。聚合为 `NODE_ENV=development`，另单独运行显式 production 构建。
+
+| 命令 / 检查 | 实际结果和证据范围 |
+| --- | --- |
+| 恢复已有 runtime PG 用例 | PASS 12/12；只说明已有半成品满足这些测试，不代表全部流程完成 |
+| 新动作边/职责分离 RED→GREEN | 初次 11 FAIL / 27 PASS；补 explicit action DTO/保存/发布/复制、受控后退边、独立关闭策略后 38/38 PASS |
+| 多实例与回执隔离 RED→GREEN | 真实 PG 复现同定义第二实例因旧 unique index 409，以及回执可跨组织更新；新增迁移修复并从全新空临时库完整应用 16 个迁移 |
+| 等待行锁期间撤权 RED→GREEN | 原动作等待中撤销 workflow:act 后仍成功；加锁后再次查权限后通过，实例版本不前进 |
+| 首次 `pnpm --filter @qms/api test:integration` | FAIL 1/92：runtime 夹具残留 53 个 Outbox 事件污染旧重试测试；新增本组 afterEach 仅清理自己实例事件，再用全新临时库验证 |
+| 首次 `pnpm test` | API 268 PASS；Web 7 FAIL（5 项超时、2 项下拉可见性），无 Web 源码改动；保留失败，不把后续重跑替代历史 |
+| `pnpm acceptance:phase-1` | PASS，8 步全部 exit 0：frozen 1s、真实 PG 42s、API/Web 301s、build 56s、Compose 1s、archive 4s、contracts 23s、browser 106s。PG 4 suites/95、API 31/268、Web 10 files/69、secret-input 前置 1、真实 browser 11，0 skipped。完整日志 `D:/WorkSpace/QMS-2.0-local/platform-p1-acceptance.log` |
+| 子代理规格复核后的隔离级别补修 | 外层 RepeatableRead/Serializable 未限制，可能使锁后授权读旧快照；两项拒绝用例先 RED，再限制仅 ReadCommitted 后 runtime 25/25 PASS。新错误码正常运行 `pnpm contracts:generate` 生成，未手改 contracts |
+| 隔离补修后全量后端与契约 | `pnpm --filter @qms/api test:integration` 4 suites/97 PASS（30.999s）；API 31 suites/269 PASS（33.309s）；`pnpm contracts:check` PASS |
+| 子代理质量复核后的后退图补修 | 隐式 RETURN/REJECT/REOPEN 被误判前向边，三项 RED；按解析后的 action 分类后定向 workflow 2 suites/50 PASS（25 definition + 25 runtime，10.434s）。规格与质量复核均关闭发现项 |
+| 缺数据库配置负向验证 | 清除当前命令的 DATABASE_URL 后 runtime 集成明确失败，包含 `Real PostgreSQL DATABASE_URL is required`；未跳过，也未用 SQLite |
+| 独立 production 构建 | `NODE_ENV=production pnpm build` PASS（隔离补修后、后退图补修前），Web 3,144 modules，AntD 1,004.10kB 超 900kB 为现有提示，不隐去；后退图最新编译由后续集成记录覆盖 |
+| `git diff --check` | PASS；CRLF 提示不构成失败。没有提交、推送、部署或合并主仓库 |
+
+P1 已有事务 callback、幂等回执、双 CAS、授权复核、真实状态转换及失败回滚证据；不开放绕过领域校验的通用动作 HTTP。关闭职责分离为 CLOSE 节点 `requireIndependentVerification: true`，供应商绑定版本必须显式启用；跨企业参与仍拒绝并待适配。HTTP 错误过滤器枚举用例覆盖新增稳定错误，浏览器 11 条仍是底座/账号链，旧 phase-2 smoke 仅登录页；不能宣称新的完整业务浏览器链。Worker、附件、业务页面、简报升级、2A D–H 和最终供应商联调仍待后续批次。没有重建本批容器产品镜像或宣称真实部署。P2a 将沿用同一可销毁 PG 容器的独立 `qms_platform_worker` 库，最终资源清理另行记录。
 
 ## 范围与执行计划
 
@@ -260,3 +463,108 @@ ABC 六条浏览器行为分别为内部个人资料/改密/其他会话撤销�
 本地预览仍由 C 盘 NTFS 工作树提供，编辑 E 盘主项目不会热更新到此预览；需保留 C 工作树和开发进程。预览辅助检查首次使用精确“账号”标签忽略了 Ant Design 必填星号而定位失败，读取实际 DOM 后按实际可访问名称修正定位，复验通过，未修改产品。此登录页与重置页可见性检查不替代一次性网关上已通过的账号授权浏览器闭环。
 
 本轮仅证明账号细权限及分组配置闭环。原批次 2 的 16 任务深度流程运行时、业务 Worker、完整业务浏览器链路仍缺；phase-2 四项回归不能替代它们。D–H 与批次 3 本轮不启动；既有可另行并行分配、供应商试点门禁及批次 4 专属领域模型要求保持，见 [PHASE-2](PHASE-2.md)。
+
+## 2026-09-19 D 盘开发环境迁移
+
+本节更新当前开发入口；前述 C/E 盘记录是历史验收证据。用户在核对清单后明确授权启动迁移，计划见 [D 盘迁移计划](../../docs/superpowers/plans/2026-09-19-qms-2.0-drive-migration.md)。本次没有业务代码变更、提交或远程推送。
+
+### 当前目录和运行状态
+
+- 主仓库：`D:\WorkSpace\QMS-2.0`；应用命令目录：`D:\WorkSpace\QMS-2.0\qms-2.0`。
+- 基线：`54621e09a8c4b469070c00497e55e58ea237da72`。独立 clone 使用 `--no-hardlinks --no-checkout`，保留 9 个本地分支、1 个标签及原有 GitHub 远程跟踪状态；不依赖 E 盘 Git 对象库，没有 alternates。
+- 稀疏检出根文件、2.0 实现、设计/计划、CI、`.agents/skills` 和 `.codex/config.toml`。1.0 归档完整保留在 Git 历史和 E 原目录，不在 D 工作区检出或执行。
+- API/Nest watch 和 Vite 从 D 盘运行，入口 `http://127.0.0.1:5173`；C 原预览进程已停止，C 工作树及 E 源码保留用于回退。E 根 AGENTS/README 增加迁移指引，E 实现文件未改。
+- `D:\WorkSpace\QMS-2.0-local` 保存本机环境、Corepack shims、启动/停止/验收脚本及日志；访问权限仅当前用户和 SYSTEM。环境 XML 使用当前 Windows 用户的 SecureString 保护，秘密未打印或提交。
+- pnpm store：`D:\.pnpm-store\v11`；Playwright 浏览器：`D:\WorkSpace\.playwright`。Prisma、Vite、argon2、Playwright 的实际模块路径均在 D 主仓库。
+- 保留 PostgreSQL 55440、MinIO 19040/19041 的原容器与原卷；未迁移 Docker Desktop 数据盘，未重建用户数据库。
+
+### 环境与命令
+
+Windows NTFS、Node 22.22.0、pnpm 11.19.0、Prisma 7.10.0、Vite 6.4.3、PostgreSQL 18 镜像、Chromium 153.0.8010.12。系统安装的 Node/Docker 和可用的 PowerShell 7 运行时仍在原安装位置。本机命令先加载：
+
+```powershell
+. D:\WorkSpace\QMS-2.0-local\Enter-Qms.ps1
+```
+
+完整验收入口为仓库外 `Invoke-Acceptance.ps1`，内部从 D 应用工作区顺序执行 `corepack pnpm acceptance:phase-1` 和 `corepack pnpm acceptance:phase-2`。临时项目 `qms2-drive-migration-validation` 使用 PostgreSQL 55446、MinIO 19046、独立 API 3001、Nginx 网关 18094。网关只读挂载 D 盘 Web 构建，转发到本机独立 API；API、种子、集成测试和真实浏览器使用同一临时数据库，绝不使用 55440 保留库。所有必填环境值已提供，同时设置 `QMS_PHASE2_BASE_URL`，浏览器测试没有跳过。
+
+| 检查 / 命令 | 实际结果 |
+| --- | --- |
+| Git 分支/标签、tree 与独立对象库 | PASS：源/目标 refs 和基线 tree 一致，初始规范化工作区 diff 为空；`git fsck --connectivity-only --no-dangling` exit 0，无 alternates |
+| 首次 `corepack pnpm install --frozen-lockfile` | PASS：934 包，53 秒，在线下载后安装成功；未复制旧 node_modules，锁文件未变 |
+| 首次 `corepack pnpm build` | PASS：API、contracts、Web；默认 production Web 构建成功，保留原 AntD 大块警告 |
+| `node apps/web/node_modules/@playwright/test/cli.js install chromium` | PASS：Chromium、headless shell、FFmpeg、Winldd 安装至 D 盘 |
+| `corepack pnpm acceptance:phase-1` | PASS / exit 0：8 阶段全部通过 |
+| phase-1 frozen install | PASS：1 秒，复用此次 D 盘已安装依赖；不声称离线/冷安装验收 |
+| phase-1 真实 PostgreSQL | PASS：14 个迁移全部部署，3 suites / 72 tests，迁移/种子/持久化和恢复阶段 37 秒 |
+| phase-1 API/Web | PASS：API 32 suites / 256 tests；Web 10 files / 69 tests；聚合阶段 326 秒 |
+| phase-1 构建、Compose、归档隔离、契约 | 全部 PASS；阶段分别为 44、0、4、23 秒；生成契约内容未变 |
+| phase-1 真实浏览器 | PASS：11/11，0 skipped；内部/供应商登录、账号治理、授权矩阵、会话、网关和秘密输入保护前置检查通过，阶段 88 秒 |
+| `corepack pnpm acceptance:phase-2` | PASS / exit 0：迁移后仓库相对路径可用；再次 API 256、Web 69，contracts、archive、build 通过 |
+| `corepack pnpm --filter @qms/api test:db-config`（无 DATABASE_URL） | PASS：migrate、seed、db push 均按预期拒绝；validate/generate 可离线执行，没有 SQLite 替代 |
+| 保留预览切换与 HTTP | PASS：5173 的登录、账号、管理、重置页及 OpenAPI 均 200；匿名 permission-catalog 401，schema 包含矩阵接口；运行 API 的命令路径确认指向 D |
+| Chromium 预览与热更新 | PASS：登录/重置页可见；临时编辑 D 的 index.html 标题后，无手动刷新自动更新，恢复标题后再次自动更新；最终源码恢复至 HEAD，无产品 diff |
+| 保留数据比较 | PASS：切换前后 users 数量、密码摘要聚合和迁移历史一致；只输出布尔结果，不输出口令/摘要 |
+| 临时资源清理 | PASS：临时 API 停止；Compose down --volumes 后按项目标签核对容器/卷/网络均为 0；保留预览 PostgreSQL/MinIO 原容器 ID 不变 |
+
+### 调整过程与限制
+
+- 初始字节级文件比较出现 CRLF/LF 差异；Git tree 相同、规范化 diff 为空，确认不是文件丢失。最终回滚热更新探针，保持所有产品源码、锁文件与生成契约不变。
+- 首次构建指定了不存在的常见 PowerShell 路径，退出 -4058；检查实际运行时后改为已安装的 PowerShell 7，后续构建与两套验收均通过。
+- pnpm 11 未读取本次尝试的 `.npmrc` 中非 registry 配置；无效文件已移除，改用仓库外 PowerShell 环境配置并验证真实 store 路径。
+- `pnpm exec playwright` 的本机 CMD shim 启动失败，读取文件头发现非 CMD 文本；未修改端点安全软件，改用项目依赖内的 Node CLI，安装及真实浏览器验收通过。
+- 应用内浏览器的旧连接提示 bridge 不可用，当前浏览器工具也无认证连接；改用项目已安装的 Chromium 执行本地验证。预览辅助检查首次精确匹配“账号”失败；实际可访问名称为“* 账号”，按 DOM 修正后通过，未改产品。一次匿名烟雾断言在 Nest watch 重启期间未通过，服务就绪后的最终独立检查返回 401；无授权逻辑变更。
+- 本次没有重新构建 API/Web Docker 镜像。证明的是 D 盘本机代码、依赖、构建、Compose 配置以及真实 Nginx/PostgreSQL 验收；不将其描述为新的镜像构建或生产部署。
+- Ant Design deprecated 和 bundle size 警告保留。Docker 存储、系统运行时安装位置、E/C 回退副本与旧历史临时文件未清理。
+- Codex 已保存的 QMS 项目和当前旧任务仍绑定 E 盘。当前可用工具不能替换项目目录或把当前任务改绑到 D；后续任务应在应用中选择/添加 `D:\WorkSpace\QMS-2.0`。E 根迁移指引确保旧任务也能明确使用 D 盘。本次未创建新任务或修改应用内部状态文件。
+
+## 2026-09-21 现有前端统一改版验证
+
+范围为现有 Web 的主题、外壳、工作标签及页面视觉迁移；登录仅改登录框。未改业务 API/DTO、数据库设计或商业模板依赖。工作区已有其他阶段未提交改动，本记录不将它们归为 UI 改版。
+
+环境：D 盘活动工作区、Windows PowerShell 7 / Node 22.22.0；独立 PostgreSQL 18 容器 `qms-ui-refresh-20260921`，标记 `qms.task=ui-refresh-20260921`，端口 55449；临时 API 3000，Vite 本地代理入口 18767。所有口令、密钥、MFA 缓存、日志均在仓库外 `D:/WorkSpace/QMS-2.0-local/ui-refresh-20260921/`。没有使用保留的 55440 数据库。
+
+| 命令 / 检查 | 实际结果 |
+| --- | --- |
+| `pnpm --filter @qms/web lint` | PASS：TypeScript 无错误 |
+| `pnpm --filter @qms/web test` | PASS：23 files / 141 tests；含主题、身份隔离、标签和未保存保护用例 |
+| `node apps/web/node_modules/vitest/vitest.mjs run --root apps/web src/features/problem-workspace/problem-workspace.test.tsx` | PASS：最后布局调整后 13 tests；受控读写和冲突保留输入回归通过 |
+| `pnpm --filter @qms/web build` | PASS：3378 modules；AntD 大块约 1069 kB 的提示保留 |
+| `pnpm --filter @qms/api test` | PASS：在一次性 PG 配置下 36 suites / 381 tests；最初缺数据库配置的尝试失败，补配置后重跑通过 |
+| `pnpm --filter @qms/api build` | PASS |
+| `pnpm check:archive-isolation` | PASS |
+| `pnpm contracts:check` | PASS；本轮无 API 契约修改 |
+| `pnpm --filter @qms/api test:integration` | FAIL：16 passed / 4 failed suites，360 passed / 2 failed tests；附件、问题读模型、升级证据缺对象存储 endpoint，邮件投递状态断言失败 |
+| `docker compose -f deployment/docker-compose.foundation.yml config --quiet` | 最初缺对象存储参数失败；以独立临时配置补齐校验参数后 PASS。仅配置检查，没有启动该 Compose 或重建镜像 |
+| `pnpm acceptance:phase-1` | FAIL：前置检查缺 `QMS_OBJECT_STORAGE_ACCESS_KEY`，9 个阶段标为未执行。独立命令结果不能替代该完整序列 |
+| Web 目录下 `node node_modules/@playwright/test/cli.js test foundation.spec.ts` | 真实内部/供应商登录、权限/会话与入口检查 3 项通过（首次与外观用例联合执行） |
+| Web 目录下 `node node_modules/@playwright/test/cli.js test ui-appearance.spec.ts` | 最终 PASS：1 综合用例，11.6 秒；等待内容加载，覆盖六主题、系统变化、刷新、标签恢复、真实页面导航和 1440/1024/390 宽度 |
+| 正式构建 / 代码边界 | 正式 dist 没有原型入口；工作台未显示假统计；保留登录背景 SVG、品牌、hero 与 stage |
+| 视觉与 diff 检查 | 已检查浅色工作台、深色管理页、移动工作台及登录框；本轮 Web diff whitespace 检查 PASS |
+
+限制与排错：本机 `pnpm exec vitest` shim 无法执行，改用同一已安装包的 Node CLI 后成功；首次外观用例对背景文件名的假设已改为检查真实背景图存在。最终用例明确等待管理页标题和加载结束，避免把加载占位当成完成。浏览器 bridge 初次不可用后使用项目 Playwright 真实浏览器，并通过可用 CUA 检查截图。没有以 mock/skip 替代真实登录。没有验收全部业务写入、所有表单未保存路径、所有控件的可访问性及统计图表。详细前端范围和后续交互边界见 FRONTEND-DESIGN.md。上述集成失败未定性为已有代码缺陷，也不由本次 UI 工作顺带修改。
+
+测试资源清理：已按任务标签移除一次性 PostgreSQL 容器及其匿名卷，标签查询无剩余容器；核对本轮 PID 后停止临时 API 和 18767 Vite 服务。没有修改保留预览环境。
+
+## 2026-09-22 UI 改版后当前整合版本完整回归
+
+本节针对 `D:/WorkSpace/QMS-2.0/qms-2.0` 当前未提交整合版本重新执行，不能由前述旧版 PASS 替代。产品源码指纹与本轮基线一致；本轮修复两处测试问题：附件集成测试使用 PostgreSQL 时间校准注入的扫描时钟，避免跨主机时钟偏差导致刚创建的事件暂未到期；邮件浏览器辅助函数按完整行提取 43 字符 base64url 凭证，替换不能识别 `-` 起始字符的单词边界正则，并加入 e2e 前置边界测试。生产 Worker、业务逻辑和业务验收断言未改动。
+
+独立环境：PostgreSQL 18（55452，主库和文件/问题浏览器夹具分别隔离）、MinIO（19052）、ClamAV（13352）、Mailpit（SMTP 51026 / HTTP 51027）；API 13052–13054、网关 18152–18154。配置、凭据、夹具与原始日志均在 Git 外 `D:/WorkSpace/QMS-2.0-local/current-regression-20260921/`。未连接、迁移、重启或测试保留的 55440 数据库。Node 22.22.0、pnpm 11.19.0；命令均从实施子目录执行。
+
+| 当前版本命令 / 检查 | 实际结果 |
+| --- | --- |
+| 邮件投递/恢复两套真实集成测试 | PASS，2 suites / 18 tests；补起真实 Mailpit 后送达断言及密文清除通过。此前缺 SMTP 服务导致 PENDING/attempts=1，属于发送失败后的预期重试行为 |
+| `pnpm acceptance:phase-1` | PASS，exit 0，九步全部通过；PG 20 suites / 404 tests、API 36 / 381、Web 23 files / 141、Worker 3 tests、真实浏览器 18/18，构建、Compose、归档隔离及主 OpenAPI 同步均通过；日志 `phase-1.log` |
+| 附件时钟校准后定向测试 | PASS，32/32；随后完整 PG 集成 404/404；日志 `file-lifecycle-targeted.log`、`integration-after-memory-cleanup.log` |
+| `pnpm acceptance:phase-2` | PASS，exit 0；`phase-2-verified.log`：真实服务前置、完整 phase-1 重跑、测试域 Swagger 同步及扫描 Compose 配置四步全部通过（完整回归 980 s，测试域契约 36 s）。最终重跑 PG 404/404、API 381/381、Web 141/141、Worker 3/3、浏览器 18/18、秘密输入/邮件解析前置 3/3，0 skipped |
+
+本轮失败尝试保留：`phase-2.log` 记录扫描事件到期断言偶发失败；`phase-2-rerun.log` 记录浏览器 17/18，原因是复用了先前 phase-1 已升级的单次问题夹具（当前实例及事件 ID 均已改变），不是新的 UI 故障。后续每次整体验收重新生成隔离浏览器库与夹具。`phase-2-final.log` 中 14 个数据库断言因 Windows 提交内存不足失败；清理本轮服务后完整 PG 404/404，用户关闭浏览器释放内存后重新运行原始 phase-2。未降低密码哈希参数、跳过测试或放宽断言。
+
+覆盖边界：当前真实浏览器覆盖内部/供应商认证和权限隔离、角色及权限矩阵、D/F/H 配置/组织/导出、E 邮箱/MFA/找回、任务独占领取与冲突、附件扫描及精确字节下载、中性问题处理/审批/验证/修订/升级/历史隔离、流程设计/发布/复制和 409 后保留输入。外观用例验证六种配色组合、系统模式、刷新恢复、页面导航、工作标签及 1440/1024/390 宽度；Web 单测补充标签关闭/溢出同步、未保存离开取消及权限草稿切换/冲突保留。该结论限定于当前可执行验收覆盖，不等于所有表单离开路径、完整可访问性或阶段三业务验收；本轮未重新构建部署容器镜像。
+
+`phase-2-supervised.log` 中 PG、API、Web、构建和 Worker 通过，浏览器 17/18，唯一失败为已送达邮件的凭证解析；实际邮件核验只输出布尔值，确认凭证以 `-` 开头而旧正则不匹配。新增纯合成边界测试在旧解析器下 2 FAIL，修复后 2 PASS（包含全部 64 种 base64url 起始字符、LF/CRLF、短/长/嵌入正文的无效值）；不使用真实秘密作测试断言输出。
+
+资源收尾：PASS，`cleanup.log`。六个自有 API/网关进程按 PID 与启动时间核对后停止；四个一次性容器按 project 标签核对后移除，连同 MinIO 匿名卷及临时 PG 数据销毁；自有标签与服务端口无残留。保留预览 PostgreSQL/MinIO 的容器 ID 和启动时间与基线一致；二者在本轮验收前已处于 exited 状态，本轮未启动、停止或连接 55440。原始日志与加密配置留在 Git 外用于复核。
+
+结论：阶段一、二当前整合版本的可执行回归均 PASS。源码指纹比对仅发现本轮已说明的两处测试修复及 e2e 前置脚本配置差异，另新增邮件解析辅助函数/边界测试及本节记录；未覆盖原有产品修改。仓库同步在本轮验收完成后另行执行。

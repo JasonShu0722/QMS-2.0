@@ -8,9 +8,14 @@ describe('account center service', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ securityVersion: 2 }),
     },
     passwordReset: { updateMany: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
+    session: { findFirst: jest.fn(), update: jest.fn() },
+    userRole: { findMany: jest.fn().mockResolvedValue([]) },
+    organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
   };
   const passwords = {
     verify: jest.fn(),
@@ -31,9 +36,13 @@ describe('account center service', () => {
     sessions as never,
     limits as never,
     audit as never,
+    {} as never,
   );
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.session.findFirst.mockResolvedValue({ id: 'session-1', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
+  });
 
   it('returns a safe profile without the password hash', async () => {
     prisma.user.findUnique.mockResolvedValue({
@@ -63,17 +72,15 @@ describe('account center service', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'user-1', passwordHash: 'encoded', organizationId: 'org-1' });
     passwords.verify.mockResolvedValue(true);
     passwords.hash.mockResolvedValue('new-encoded');
-    prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work({
-      user: { updateMany: prisma.user.updateMany },
-      passwordReset: prisma.passwordReset,
-    }));
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', passwordHash: 'encoded', organizationId: 'org-1', organization: { status: 'ACTIVE' } });
+    prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
 
     prisma.user.updateMany.mockResolvedValue({ count: 1 });
     await service.changePassword({
       userId: 'user-1', currentSessionId: 'session-1', currentPassword: 'old-password', newPassword: 'new-password-123', traceId: 'trace-1',
     });
 
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1', passwordHash: 'encoded', status: 'ACTIVE' }, data: { passwordHash: 'new-encoded' } });
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1', passwordHash: 'encoded', status: 'ACTIVE' }, data: { passwordHash: 'new-encoded', securityVersion: { increment: 1 } } });
     expect(sessions.revokeOtherSessions).toHaveBeenCalledWith('user-1', 'session-1', 'trace-1', expect.anything());
   });
 
@@ -83,15 +90,15 @@ describe('account center service', () => {
   });
 
   it('updates profile and audit through the same transaction', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', organization: { id: 'org-1', code: 'internal', name: 'Internal' } });
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', organization: { status: 'ACTIVE', id: 'org-1', code: 'internal', name: 'Internal' } });
     prisma.user.update.mockResolvedValue({ id: 'user-1', organization: { id: 'org-1', code: 'internal', name: 'Internal' } });
     prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
-    await service.updateProfile('user-1', { email: 'new@example.test' }, 'trace-1');
+    await service.updateProfile('user-1', { email: 'new@example.test' }, 'trace-1', 'session-1');
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'PROFILE_UPDATED' }), prisma);
   });
 
   it('rejects password verification superseded by another password change', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', passwordHash: 'encoded', organizationId: 'org-1' });
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', passwordHash: 'encoded', organizationId: 'org-1', organization: { status: 'ACTIVE' } });
     passwords.verify.mockResolvedValue(true);
     passwords.hash.mockResolvedValue('new-encoded');
     prisma.user.updateMany.mockResolvedValue({ count: 0 });

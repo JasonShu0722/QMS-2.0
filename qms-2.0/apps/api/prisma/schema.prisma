@@ -22,6 +22,11 @@ enum UserStatus {
   DISABLED
 }
 
+enum OrganizationStatus {
+  ACTIVE
+  DISABLED
+}
+
 enum FileStatus {
   QUARANTINED
   AVAILABLE
@@ -91,6 +96,14 @@ model Organization {
   code        String           @unique @db.VarChar(64)
   name        String           @db.VarChar(200)
   type        OrganizationType
+  parentId    String?          @map("parent_id") @db.Uuid
+  status      OrganizationStatus @default(ACTIVE)
+  version     Int              @default(1)
+  parent      Organization?    @relation("OrganizationHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Organization[]   @relation("OrganizationHierarchy")
+  departments Department[]
+  positions   Position[]
+  userPositions UserPosition[]
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   users       User[]
@@ -99,6 +112,7 @@ model Organization {
   auditEvents AuditEvent[]
   fileObjects FileObject[]
   problemIndexes ProblemIndex[]
+  problemSavedViews ProblemSavedView[]
   numberRuleVersions NumberRuleVersion[]
   numberSequences NumberSequence[]
   workflowDefinitions WorkflowDefinition[]
@@ -109,8 +123,13 @@ model Organization {
   workflowTasks WorkflowTask[]
   notifications Notification[]
   adminMutations AdminMutation[]
+  platformSettings PlatformSettings?
+  notificationRules NotificationRule[]
+  positionCategories PositionCategory[]
+  exportArtifacts ExportArtifact[]
 
   @@index([type])
+  @@index([parentId])
   @@map("organizations")
 }
 
@@ -119,10 +138,18 @@ model User {
   organizationId String      @map("organization_id") @db.Uuid
   username       String      @db.VarChar(100)
   email          String?     @db.VarChar(254)
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(3)
+  emailVerifications EmailVerification[]
   passwordHash   String      @map("password_hash") @db.VarChar(255)
   accountType    AccountType @map("account_type")
   status         UserStatus  @default(ACTIVE)
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
+  securityVersion Int @default(1) @map("security_version")
+  mfaFailures Int @default(0) @map("mfa_failures")
+  mfaBlockedUntil DateTime? @map("mfa_blocked_until") @db.Timestamptz(3)
+  mfaCredential MfaCredential?
+  mfaChallenges MfaChallenge[]
+  recoveryCodes MfaRecoveryCode[]
   createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -130,13 +157,130 @@ model User {
   userRoles      UserRole[]
   auditEvents    AuditEvent[] @relation("AuditActor")
   uploadedFiles  FileObject[] @relation("FileUploader")
+  claimedTasks WorkflowTask[] @relation("TaskClaimOwner")
+  deletedFiles FileObject[] @relation("FileDeleter")
+  fileUploadReceipts FileUploadReceipt[]
+  problemSavedViews ProblemSavedView[]
   adminMutations AdminMutation[]
   passwordResets PasswordReset[]
+  positions      UserPosition[]
+  exportArtifacts ExportArtifact[]
 
+  @@unique([organizationId, id])
   @@unique([organizationId, username])
   @@index([organizationId, accountType])
   @@index([email])
   @@map("users")
+}
+
+model EmailVerification {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  purpose String @db.VarChar(32)
+  email String @db.VarChar(254)
+  securityVersion Int @map("security_version")
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery RecoveryDelivery?
+  @@index([userId, purpose, createdAt])
+  @@map("email_verifications")
+}
+
+model RecoveryDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  verificationId String @unique @map("verification_id") @db.Uuid
+  encryptedPayload String? @map("encrypted_payload") @db.Text
+  keyId String @map("key_id") @db.VarChar(100)
+  status String @default("PENDING") @db.VarChar(20)
+  attempts Int @default(0)
+  processingAt DateTime? @map("processing_at") @db.Timestamptz(3)
+  claimId String? @map("claim_id") @db.Uuid
+  availableAt DateTime @default(now()) @map("available_at") @db.Timestamptz(3)
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(3)
+  lastError String? @map("last_error") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  verification EmailVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  @@index([status, availableAt])
+  @@index([status, processingAt])
+  @@map("recovery_deliveries")
+}
+
+model ExportArtifact {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  createdById String @map("created_by_id") @db.Uuid
+  ciphertext String? @db.Text
+  rowCount Int @map("row_count")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt])
+  @@index([organizationId, createdById, createdAt])
+  @@map("export_artifacts")
+}
+
+model Department {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  parentId String? @map("parent_id") @db.Uuid
+  code String @db.VarChar(64)
+  name String @db.VarChar(200)
+  status OrganizationStatus @default(ACTIVE)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  parent Department? @relation("DepartmentHierarchy", fields: [organizationId, parentId], references: [organizationId, id], onDelete: Restrict)
+  children Department[] @relation("DepartmentHierarchy")
+  positions Position[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, parentId])
+  @@map("departments")
+}
+
+model Position {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  departmentId String @map("department_id") @db.Uuid
+  categoryId String? @map("category_id") @db.Uuid
+  code String @db.VarChar(64)
+  name String @db.VarChar(200)
+  status OrganizationStatus @default(ACTIVE)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  department Department @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  category PositionCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
+  users UserPosition[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, categoryId])
+  @@map("positions")
+}
+
+model UserPosition {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  positionId String @map("position_id") @db.Uuid
+  startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt DateTime? @map("ended_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  position Position @relation(fields: [organizationId, positionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, userId, endedAt])
+  @@map("user_positions")
 }
 
 model Role {
@@ -145,6 +289,7 @@ model Role {
   organizationId String?          @map("organization_id") @db.Uuid
   code           String           @db.VarChar(100)
   name           String           @db.VarChar(150)
+  mfaRequired Boolean @default(false) @map("mfa_required")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   permissions    RolePermission[]
@@ -195,11 +340,51 @@ model Session {
   tokenHash String    @unique @map("token_hash") @db.VarChar(128)
   expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  securityVersion Int @default(1) @map("security_version")
+  mfaVerifiedAt DateTime? @map("mfa_verified_at") @db.Timestamptz(3)
+  reauthenticatedAt DateTime? @map("reauthenticated_at") @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
   @@map("sessions")
+}
+
+model MfaCredential {
+  userId String @id @map("user_id") @db.Uuid
+  encryptedSecret String? @map("encrypted_secret") @db.Text
+  pendingSecret String? @map("pending_secret") @db.Text
+  pendingExpiresAt DateTime? @map("pending_expires_at") @db.Timestamptz(3)
+  lastTimeStep BigInt? @map("last_time_step")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("mfa_credentials")
+}
+
+model MfaChallenge {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  securityVersion Int @map("security_version")
+  passwordDigest String @map("password_digest") @db.Char(64)
+  policyDigest String @map("policy_digest") @db.Char(64)
+  organizationId String @map("organization_id") @db.Uuid
+  enrollment Boolean
+  attempts Int @default(0)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+  @@map("mfa_challenges")
+}
+
+model MfaRecoveryCode {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  codeHash String @unique @map("code_hash") @db.Char(64)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, consumedAt])
+  @@map("mfa_recovery_codes")
 }
 
 model AdminMutation {
@@ -258,6 +443,20 @@ model FileObject {
   contentType    String       @map("content_type") @db.VarChar(150)
   sizeBytes      BigInt       @map("size_bytes")
   sha256         String       @db.Char(64)
+  verifiedSha256 String?      @map("verified_sha256") @db.Char(64)
+  objectVersionId String?     @map("object_version_id") @db.VarChar(1024)
+  verifiedContentType String? @map("verified_content_type") @db.VarChar(150)
+  verifiedSizeBytes BigInt?   @map("verified_size_bytes")
+  uploadExpiresAt DateTime    @default(now()) @map("upload_expires_at") @db.Timestamptz(3)
+  uploadCompletedAt DateTime? @map("upload_completed_at") @db.Timestamptz(3)
+  resourceVersion Int?        @map("resource_version")
+  scanStatus String          @default("WAITING_UPLOAD") @map("scan_status") @db.VarChar(24)
+  scannedAt DateTime?         @map("scanned_at") @db.Timestamptz(3)
+  scannerEngine String?       @map("scanner_engine") @db.VarChar(255)
+  scanReason String?          @map("scan_reason") @db.VarChar(64)
+  deletedAt DateTime?         @map("deleted_at") @db.Timestamptz(3)
+  deletedById String?         @map("deleted_by_id") @db.Uuid
+  retainUntil DateTime        @default(now()) @map("retain_until") @db.Timestamptz(3)
   status         FileStatus   @default(QUARANTINED)
   version        Int          @default(1)
   resourceType   String?      @map("resource_type") @db.VarChar(100)
@@ -267,10 +466,29 @@ model FileObject {
   updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   uploadedBy     User         @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  deletedBy      User?        @relation("FileDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
+  uploadReceipts FileUploadReceipt[]
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
+  @@index([organizationId, resourceType, resourceId, status], map: "file_objects_resource_scope_idx")
+  @@index([scanStatus, uploadExpiresAt])
+  @@index([deletedById])
   @@map("file_objects")
+}
+
+model FileUploadReceipt {
+  id String @id @default(uuid()) @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  key String @db.VarChar(128)
+  requestDigest String @map("request_digest") @db.Char(64)
+  fileId String @map("file_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  file FileObject @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  @@unique([actorUserId, key])
+  @@index([fileId])
+  @@map("file_upload_receipts")
 }
 
 model ProblemIndex {
@@ -296,7 +514,9 @@ model ProblemIndex {
   updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   workflowInstance   WorkflowInstance?       @relation(fields: [workflowInstanceId], references: [id], onDelete: Restrict)
+  historicalInstances WorkflowInstance[]     @relation("InstanceProblemHistory")
 
+  @@unique([organizationId, id])
   @@unique([organizationId, reportNumber])
   @@index([organizationId, status])
   @@index([organizationId, domainCode])
@@ -417,6 +637,7 @@ model WorkflowTransition {
   organizationId    String          @map("organization_id") @db.Uuid
   workflowVersionId String          @map("workflow_version_id") @db.Uuid
   transitionKey     String          @map("transition_key") @db.VarChar(100)
+  action            String?         @db.VarChar(20)
   fromNodeId        String          @map("from_node_id") @db.Uuid
   toNodeId          String          @map("to_node_id") @db.Uuid
   condition         Json            @default("{}")
@@ -440,9 +661,11 @@ model WorkflowTransition {
 model WorkflowInstance {
   id                   String                 @id @default(uuid()) @db.Uuid
   organizationId       String                 @map("organization_id") @db.Uuid
+  problemIndexId       String?                @map("problem_index_id") @db.Uuid
   workflowDefinitionId String                 @map("workflow_definition_id") @db.Uuid
   workflowVersionId    String                 @map("workflow_version_id") @db.Uuid
   instanceKey          String                 @map("instance_key") @db.VarChar(150)
+  taskProjectionVersion Int                   @default(0) @map("task_projection_version")
   status               WorkflowInstanceStatus @default(RUNNING)
   currentNodeId        String?                @map("current_node_id") @db.Uuid
   version              Int                    @default(1)
@@ -455,20 +678,73 @@ model WorkflowInstance {
   workflowVersion      WorkflowVersion      @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
   currentNode          WorkflowNode?         @relation("InstanceCurrentNode", fields: [currentNodeId], references: [id], onDelete: Restrict)
   problems             ProblemIndex[]
+  historicalProblem    ProblemIndex?         @relation("InstanceProblemHistory", fields: [organizationId, problemIndexId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
   tasks                WorkflowTask[]
 
   @@unique([organizationId, instanceKey])
+  @@unique([organizationId, problemIndexId, id], map: "workflow_instances_problem_identity_key")
+  @@index([organizationId, problemIndexId, createdAt], map: "workflow_instances_problem_history_idx")
   @@index([organizationId, status])
   @@index([organizationId, workflowDefinitionId, version])
   @@map("workflow_instances")
+}
+
+model WorkflowUpgrade {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  problemIndexId String @map("problem_index_id") @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  beforeInstanceId String @unique @map("before_instance_id") @db.Uuid
+  afterInstanceId String @unique @map("after_instance_id") @db.Uuid
+  beforeProblemVersion Int @map("before_problem_version")
+  afterProblemVersion Int @map("after_problem_version")
+  beforeDomainRevisionId String @map("before_domain_revision_id") @db.Uuid
+  afterDomainRevisionId String @map("after_domain_revision_id") @db.Uuid
+  mappingVersion String @map("mapping_version") @db.VarChar(100)
+  mappingSummary Json @map("mapping_summary")
+  reason String @db.VarChar(1000)
+  key String @db.VarChar(128)
+  requestDigest String @map("request_digest") @db.Char(64)
+  response Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, actorUserId, key])
+  @@index([organizationId, problemIndexId, createdAt], map: "workflow_upgrades_problem_history_idx")
+  @@index([actorUserId])
+  @@map("workflow_upgrades")
+}
+
+model WorkflowMutation {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  actorUserId      String   @map("actor_user_id") @db.Uuid
+  key              String   @db.VarChar(128)
+  requestDigest    String   @map("request_digest") @db.Char(64)
+  instanceId       String   @map("instance_id") @db.Uuid
+  workflowVersionId String  @map("workflow_version_id") @db.Uuid
+  instanceVersion  Int      @map("instance_version")
+  nodeId           String   @map("node_id") @db.Uuid
+  action           String   @db.VarChar(20)
+  response         Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, actorUserId, key])
+  @@unique([instanceId, instanceVersion])
+  @@map("workflow_mutations")
 }
 
 model WorkflowTask {
   id                 String        @id @default(uuid()) @db.Uuid
   organizationId     String        @map("organization_id") @db.Uuid
   workflowInstanceId String        @map("workflow_instance_id") @db.Uuid
+  workflowVersionId  String        @map("workflow_version_id") @db.Uuid
+  entryInstanceVersion Int         @default(0) @map("entry_instance_version")
+  enteredAt          DateTime      @default(now()) @map("entered_at") @db.Timestamptz(3)
   workflowNodeId     String        @map("workflow_node_id") @db.Uuid
   assigneeUserId     String?       @map("assignee_user_id") @db.Uuid
+  claimedByUserId    String?       @map("claimed_by_user_id") @db.Uuid
+  claimedAt         DateTime?     @map("claimed_at") @db.Timestamptz(3)
+  claimedBy         User?         @relation("TaskClaimOwner", fields: [claimedByUserId], references: [id], onDelete: Restrict)
   status             TaskStatus    @default(PENDING)
   dueAt              DateTime?     @map("due_at") @db.Timestamptz(3)
   completedAt        DateTime?     @map("completed_at") @db.Timestamptz(3)
@@ -482,7 +758,8 @@ model WorkflowTask {
   workflowNode       WorkflowNode  @relation(fields: [workflowNodeId], references: [id], onDelete: Restrict)
   notifications      Notification[]
 
-  @@unique([workflowInstanceId, workflowNodeId])
+  @@unique([workflowInstanceId, entryInstanceVersion])
+  @@index([claimedByUserId])
   @@index([organizationId, status])
   @@index([organizationId, dueAt])
   @@map("workflow_tasks")
@@ -490,10 +767,13 @@ model WorkflowTask {
 
 model Notification {
   id             String             @id @default(uuid()) @db.Uuid
+  deduplicationKey String            @unique @default(uuid()) @map("deduplication_key") @db.VarChar(200)
   organizationId String             @map("organization_id") @db.Uuid
   workflowTaskId String?            @map("workflow_task_id") @db.Uuid
   recipientUserId String?           @map("recipient_user_id") @db.Uuid
   channel        String             @db.VarChar(50)
+  kind           String             @default("LEGACY") @db.VarChar(32)
+  ruleVersion    Int?               @map("rule_version")
   status         NotificationStatus @default(PENDING)
   subject        String?            @db.VarChar(255)
   body           String             @db.Text
@@ -509,6 +789,7 @@ model Notification {
 
   @@index([organizationId, status])
   @@index([organizationId, recipientUserId, status])
+  @@index([organizationId, recipientUserId, status, createdAt, id], map: "notifications_organization_id_recipient_user_id_status_created_")
   @@index([workflowTaskId])
   @@map("notifications")
 }
@@ -533,4 +814,59 @@ model OutboxEvent {
   @@index([processedAt, availableAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")
+}
+
+model PlatformSettings {
+  organizationId String @id @map("organization_id") @db.Uuid
+  notificationLocale String @default("zh-CN") @map("notification_locale") @db.VarChar(10)
+  exportRetentionMinutes Int @default(1440) @map("export_retention_minutes")
+  version Int @default(1)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  @@map("platform_settings")
+}
+
+model PositionCategory {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  code String @db.VarChar(64)
+  name String @db.VarChar(200)
+  status OrganizationStatus @default(ACTIVE)
+  sortOrder Int @default(0) @map("sort_order")
+  version Int @default(1)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  positions Position[]
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@map("position_categories")
+}
+
+model NotificationRule {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  kind String @db.VarChar(32)
+  enabled Boolean @default(true)
+  subjectTemplate String @map("subject_template") @db.VarChar(255)
+  bodyTemplate String @map("body_template") @db.VarChar(2000)
+  version Int @default(1)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  @@unique([organizationId, kind])
+  @@map("notification_rules")
+}
+
+model ProblemSavedView {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  ownerUserId    String       @map("owner_user_id") @db.Uuid
+  name           String       @db.VarChar(100)
+  configuration  Json
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner          User         @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([ownerUserId, organizationId, updatedAt, id], map: "problem_saved_views_personal_order_idx")
+  @@index([organizationId])
+  @@map("problem_saved_views")
 }

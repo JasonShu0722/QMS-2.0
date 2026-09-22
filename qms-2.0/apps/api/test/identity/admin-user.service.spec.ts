@@ -17,28 +17,32 @@ describe('admin user lifecycle service', () => {
     userRole: { findMany: jest.fn(), deleteMany: jest.fn() },
     adminMutation: { findUnique: jest.fn(), create: jest.fn() },
     passwordReset: { updateMany: jest.fn(), create: jest.fn() },
-    session: { updateMany: jest.fn() },
+    session: { updateMany: jest.fn(), findFirst: jest.fn() },
     problemIndex: { count: jest.fn() },
     workflowTask: { count: jest.fn() },
     notification: { count: jest.fn() },
+    userPosition: { count: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   };
   const passwords = { hash: jest.fn() };
   const audit = { record: jest.fn() };
   const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never));
-  const actor = { id: 'admin-1', organizationId: 'org-a', accountType: 'INTERNAL' as const };
+  const actor = { id: 'admin-1', sessionId: 'session-admin', organizationId: 'org-a', accountType: 'INTERNAL' as const };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE' });
+    prisma.session.findFirst.mockResolvedValue({ id: actor.sessionId, mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
+    prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
     prisma.adminMutation.findUnique.mockResolvedValue(null);
     prisma.userRole.findMany.mockImplementation(async (args: { where: { userId: string } }) => args.where.userId === actor.id ? [{ organizationId: actor.organizationId, role: { permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }] : []);
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
-    prisma.organization.findUnique.mockResolvedValue({ id: 'org-a', type: 'INTERNAL', code: 'A', name: 'Org A' });
+    prisma.organization.findUnique.mockResolvedValue({ id: 'org-a', type: 'INTERNAL', code: 'A', name: 'Org A', status: 'ACTIVE' });
     passwords.hash.mockResolvedValue('hashed-password');
     prisma.problemIndex.count.mockResolvedValue(0);
     prisma.workflowTask.count.mockResolvedValue(0);
     prisma.notification.count.mockResolvedValue(0);
+    prisma.userPosition.count.mockResolvedValue(0);
   });
 
   it('lists only users inside the server-authorized organization scope', async () => {
@@ -48,9 +52,9 @@ describe('admin user lifecycle service', () => {
   });
 
   it('rejects a supplier actor from creating a user in another organization', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER', status: 'ACTIVE' });
+    prisma.user.findUnique.mockResolvedValue({ id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER', status: 'ACTIVE', organization: { status: 'ACTIVE' } });
     await expect(service.create(
-      { id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER' },
+      { id: 'supplier-1', sessionId: 'session-supplier', organizationId: 'supplier-a', accountType: 'SUPPLIER' },
       { organizationId: 'supplier-b', username: 'bob', accountType: 'SUPPLIER', initialPassword: 'password-1234' },
       'trace-1', 'test-key-1',
     )).rejects.toMatchObject({ response: { code: 'ORGANIZATION_SCOPE_DENIED' } });
@@ -102,5 +106,13 @@ describe('admin user lifecycle service', () => {
     await expect(service.update(actor, 'user-2', { organizationId: 'org-b' }, 'org-a', 'trace-transfer', 'transfer-key'))
       .rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_ORGANIZATION_IN_USE' } });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTION_REJECTED', traceId: 'trace-transfer', metadata: expect.objectContaining({ reasonCode: 'ADMIN_USER_ORGANIZATION_IN_USE' }) }));
+  });
+
+  it('preserves ended appointment history when an administrator attempts a user transfer', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', accountType: 'INTERNAL' });
+    prisma.userPosition.count.mockResolvedValue(1);
+    await expect(service.update(actor, 'user-2', { organizationId: 'org-b' }, 'org-a', 'trace-history', 'history-key'))
+      .rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_ORGANIZATION_IN_USE' } });
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

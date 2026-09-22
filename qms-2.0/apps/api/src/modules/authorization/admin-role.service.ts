@@ -46,7 +46,7 @@ export class AdminRoleService {
       if (dto.organizationId !== organizationId) this.fail('ORGANIZATION_SCOPE_DENIED', 403);
       const permissions = await this.resolvePermissions(transaction, dto.permissionCodes, granted);
       const role = await transaction.role.create({
-        data: { organizationId, code: dto.code, name: dto.name.trim(), permissions: { create: permissions.map((permission) => ({ permissionId: permission.id })) } },
+        data: { organizationId, code: dto.code, name: dto.name.trim(), mfaRequired: dto.mfaRequired ?? false, permissions: { create: permissions.map((permission) => ({ permissionId: permission.id })) } },
         include: ROLE_INCLUDE,
       });
       await this.record(transaction, actor, 'ROLE_CREATED', role.id, role.code, traceId);
@@ -60,7 +60,7 @@ export class AdminRoleService {
       const template = await this.role(transaction, roleId, organizationId);
       await this.resolvePermissions(transaction, template.permissions.map((entry) => entry.permission.code), granted);
       const role = await transaction.role.create({
-        data: { organizationId, code: dto.code, name: dto.name.trim(), permissions: { create: template.permissions.map((entry) => ({ permissionId: entry.permission.id })) } },
+        data: { organizationId, code: dto.code, name: dto.name.trim(), mfaRequired: template.mfaRequired, permissions: { create: template.permissions.map((entry) => ({ permissionId: entry.permission.id })) } },
         include: ROLE_INCLUDE,
       });
       await this.record(transaction, actor, 'ROLE_CREATED', role.id, role.code, traceId);
@@ -73,6 +73,10 @@ export class AdminRoleService {
     return this.mutate(actor, { action: 'ROLE_UPDATED', permission: 'account:roles:update', payload: { roleId, dto }, traceId, key }, async (transaction, granted) => {
       const existing = await this.role(transaction, roleId, organizationId);
       this.assertGranted(existing.permissions.map((entry) => entry.permission.code), granted);
+      if (dto.mfaRequired !== undefined) {
+        if (typeof dto.expectedMfaRequired !== 'boolean') this.fail('ADMIN_PERMISSION_BASELINE_REQUIRED', 400);
+        if (dto.expectedMfaRequired !== existing.mfaRequired) this.fail('CONCURRENCY_CONFLICT', 409);
+      }
       if (dto.permissionCodes !== undefined) {
         if (!Array.isArray(dto.expectedPermissionCodes)) this.fail('ADMIN_PERMISSION_BASELINE_REQUIRED', 400);
         const expected = new Set(dto.expectedPermissionCodes);
@@ -83,7 +87,10 @@ export class AdminRoleService {
         if (permissions.length) await transaction.rolePermission.createMany({ data: permissions.map((permission) => ({ roleId, permissionId: permission.id })) });
         await transaction.passwordReset.updateMany({ where: { consumedAt: null, user: { userRoles: { some: { roleId } } } }, data: { consumedAt: new Date() } });
       }
-      const role = await transaction.role.update({ where: { id: roleId }, data: dto.name === undefined ? {} : { name: dto.name.trim() }, include: ROLE_INCLUDE });
+      const role = await transaction.role.update({ where: { id: roleId }, data: { ...(dto.name === undefined ? {} : { name: dto.name.trim() }), ...(dto.mfaRequired === undefined ? {} : { mfaRequired: dto.mfaRequired }) }, include: ROLE_INCLUDE });
+      if (dto.permissionCodes !== undefined || dto.mfaRequired !== undefined) {
+        await transaction.user.updateMany({ where: { userRoles: { some: { roleId } } }, data: { securityVersion: { increment: 1 } } });
+      }
       await this.assertNotLocked(transaction, actor, granted);
       await this.record(transaction, actor, 'ROLE_UPDATED', roleId, existing.code, traceId);
       return this.serialize(role);
@@ -123,6 +130,7 @@ export class AdminRoleService {
       this.assertGranted(existing.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)), granted);
       await transaction.userRole.deleteMany({ where: { userId, organizationId } });
       if (roleIds.length) await transaction.userRole.createMany({ data: roleIds.map((roleId) => ({ userId, roleId, organizationId })) });
+      await transaction.user.update({ where: { id: userId }, data: { securityVersion: { increment: 1 } } });
       await transaction.passwordReset.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: new Date() } });
       await this.assertNotLocked(transaction, actor, granted);
       await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_ROLES_CHANGED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId } }, transaction);
@@ -180,7 +188,7 @@ export class AdminRoleService {
   }
 
   private serialize(role: RoleWithPermissions) {
-    return { id: role.id, organizationId: role.organizationId, code: role.code, name: role.name, permissions: role.permissions.map(({ permission }) => ({ id: permission.id, code: permission.code, name: permission.name })).sort((first, second) => first.code.localeCompare(second.code)) };
+    return { id: role.id, organizationId: role.organizationId, code: role.code, name: role.name, mfaRequired: role.mfaRequired, permissions: role.permissions.map(({ permission }) => ({ id: permission.id, code: permission.code, name: permission.name })).sort((first, second) => first.code.localeCompare(second.code)) };
   }
 
   private record(transaction: Transaction, actor: AdminUserActor, action: string, roleId: string, code: string, traceId: string) {

@@ -1,0 +1,200 @@
+import { ConfigProvider } from 'antd';
+import english from 'antd/locale/en_US';
+import chinese from 'antd/locale/zh_CN';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { workflowTranslations } from '../features/workflows/workflow-translations';
+import { problemWorkspaceTranslations } from '../features/problem-workspace/problem-workspace-translations';
+import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
+
+const translations: Record<string, string> = {
+"供应商协作基础入口已就绪，暂无业务数据。": "The supplier collaboration entry is ready. No business data is available yet.",
+"供应商导航": "Supplier navigation",
+"放弃修改并关闭": "Discard and close",
+  "外观": "Appearance",
+  "外观设置": "Appearance settings",
+  "显示模式": "Display mode",
+  "选择适合当前环境的界面亮度": "Choose the brightness for your environment",
+  "浅色": "Light",
+  "深色": "Dark",
+  "跟随系统": "System",
+  "品牌主色": "Accent color",
+  "调整导航、按钮与选中状态的强调色": "Adjust the accent for navigation, buttons and selection",
+  "晴空蓝": "Sky blue",
+  "湖水青": "Teal",
+  "鸢尾紫": "Iris purple",
+  "风险和完成状态保持固定含义。偏好保存在当前浏览器。": "Risk and completion states retain their meaning. Preferences are saved in this browser.",
+  "综合工作台": "Workbench",
+  "业务导航": "Business navigation",
+  "打开导航": "Open navigation",
+  "关闭导航": "Close navigation",
+  "收起业务菜单": "Collapse menu",
+  "展开业务菜单": "Expand menu",
+  "全部已打开": "All open pages",
+  "查找已打开工作页": "Find open pages",
+  "没有匹配的工作页": "No matching pages",
+  "另开": "Open separately",
+  "工作页": "Work pages",
+  "问题处理": "Problem workspace",
+  "流程编辑": "Workflow editor",
+  "从待办开始，推进每一项质量改进。": "Start with your tasks and move quality improvements forward.",
+  "处理我的待办": "Open my tasks",
+  "工作入口": "Quick access",
+  "查看任务与通知，进入关联问题继续处理。": "Review tasks and notifications, then continue in the linked problem.",
+  "查找问题并查看处理进展、报告与追溯记录。": "Find problems and review progress, reports and history.",
+  "管理个人资料、密码与登录会话。": "Manage your profile, password and sign-in sessions.",
+  "质量概览": "Quality overview",
+  "统计尚未接入，当前不展示汇总数值。请从待办或问题中心查看实际记录。": "Summary metrics are not yet available. View actual records in My tasks or Problem center.",
+  "即将逾期": "Due soon",
+  "高风险": "High risk",
+  "关键指标": "Key indicators",
+  "专注处理": "Focus mode",
+  "退出专注": "Exit focus mode",
+  ...workflowTranslations,
+  ...problemWorkspaceTranslations,
+  ...problemCenterTranslations,
+  '正在验证登录状态': 'Checking sign-in status', '登录状态验证失败': 'Sign-in status check failed', '暂时无法验证登录状态': 'Unable to verify sign-in status', '请检查网络连接后重试。': 'Check your network connection and try again.',
+  '重置凭证': 'Reset credential', '请输入完整重置凭证': 'Enter the complete reset credential.', '请输入管理员提供的重置凭证': 'Enter the reset credential provided by your administrator.', '密码须为 12–256 位': 'Use a password between 12 and 256 characters.',
+  '问题台账': 'Issue register', '复盘': 'Review', '待处理': 'Pending', '逾期': 'Overdue', '失败重试': 'Retry failures', '流程草稿': 'Workflow drafts', '发布记录': 'Publication history',
+  '准入': 'Qualification', '计划': 'Plans', '发现项': 'Findings', '报告': 'Reports', '文件库': 'Document library', '评审': 'Review', '分发': 'Distribution', '风险矩阵': 'Risk matrix', '预警规则': 'Alert rules',
+  '当前草稿尚未保存，切换组织将放弃修改。': 'This draft is not saved. Switching organizations will discard it.',
+  '组织层级关系不合法': 'Invalid organization hierarchy.', '部门、岗位或任职引用不合法': 'Invalid department, position or assignment reference.', '部门或岗位已停用': 'The department or position is disabled.',
+  '该用户仍关联业务记录，无法变更主组织': 'This user has business records and cannot change home organization.', '角色仍在使用，请先解除用户分配': 'This role is assigned to users. Remove those assignments first.',
+  '用户名或邮箱已存在': 'The username or email already exists.', '角色代码已存在': 'The role code already exists.', '请重新加载角色权限后再保存': 'Reload role permissions before saving.',
+  '全局角色只读，不能通过组织管理变更': 'Global roles are read only in organization administration.', '不能停用当前账号': 'You cannot disable your current account.',
+  '不能移除自身管理权限或变更自身身份': 'You cannot remove your own administration permissions or change your own identity.', '账号类型与主组织类型不一致': 'The account type must match the home organization type.',
+  '重置凭证无效、已使用或已过期': 'The reset credential is invalid, used or expired.', '操作过于频繁，请稍后重试': 'Too many operations. Try again later.',
+  '板块筛选': 'Area filter', '全部板块': 'All areas', '搜索权限': 'Search permissions', '搜索模块、权限名称或代码': 'Search modules, permissions or codes',
+  '无匹配权限': 'No matching permissions', '待接入': 'Planned', '全选': 'Select all', '清空': 'Clear', '预留权限': 'Reserved permission', '可授予权限': 'Grantable permissions',
+  '角色已保存': 'Role saved', '角色已不存在，请重新选择': 'Role no longer exists. Select another role.', '创建角色': 'Create role', '角色名称': 'Role name', '角色代码': 'Role code',
+  '范围': 'Scope', '全局只读': 'Global, read only', '（全局只读）': ' (global, read only)', '权限': 'Permissions', '复制模板': 'Copy template', '编辑角色': 'Edit role',
+  '角色已删除': 'Role deleted', '删除角色': 'Delete role', '权限目录（只读）': 'Permission catalog (read only)', '复制角色模板': 'Copy role template',
+  '重新加载并放弃权限修改': 'Reload and discard permission changes', '以字母开头，仅支持字母、数字、下划线和连字符': 'Start with a letter. Use letters, numbers, underscores and hyphens.',
+  '角色权限': 'Role permissions', '保存角色': 'Save role', '权限已保存': 'Permissions saved', '无角色读取权限': 'No permission to read roles', '选择角色': 'Select role',
+  '已修改': 'Changed', '项': 'items', '保存权限': 'Save permissions', '重置修改': 'Reset changes', '重新加载权限': 'Reload permissions',
+  '全局角色只读': 'Global roles are read only', '当前账号仅可查看角色权限': 'Your account can only view role permissions', '放弃未保存的权限修改？': 'Discard unsaved permission changes?',
+  '放弃修改': 'Discard changes', '继续编辑': 'Continue editing', '当前草稿尚未保存，继续将放弃修改。': 'This draft has not been saved. Continuing will discard it.',
+  '用户已保存': 'User saved', '搜索用户': 'Search users', '用户名或邮箱': 'Username or email', '用户状态': 'User status', '全部状态': 'All statuses',
+  '创建用户': 'Create user', '用户名': 'Username', '账号类型': 'Account type', '内部': 'Internal', '供应商': 'Supplier', '主组织': 'Home organization',
+  '用户已停用': 'User disabled', '用户已启用': 'User enabled', '签发重置凭证': 'Issue reset credential', '分配角色': 'Assign roles', '编辑用户': 'Edit user',
+  '仅支持字母、数字、点、下划线和连字符': 'Use letters, numbers, dots, underscores and hyphens.', '初始密码': 'Initial password', '保存用户': 'Save user', '组织角色': 'Organization roles',
+  '角色分配已保存': 'Role assignments saved', '保存角色分配': 'Save role assignments', '一次性重置凭证': 'One-time reset credential',
+  '请安全交给账号持有人，在重置密码页面兑换。关闭后不再显示。': 'Give this credential securely to the account holder for the password reset page. It will not be shown after closing.',
+  '关闭并清除': 'Close and clear', '重置凭证已签发': 'Reset credential issued', '确认签发': 'Confirm issuance',
+  '找回密码': 'Recover password', '申请找回': 'Request recovery', '账号或邮箱': 'Account or email', '组织代码（选填）': 'Organization code (optional)',
+  '发送找回邮件': 'Send recovery email', '使用邮件凭证': 'Use email credential', '邮件凭证': 'Email credential', '重置密码': 'Reset password',
+  '邮箱确认': 'Email verification', '邮箱已确认': 'Email verified', '确认邮箱后可使用自助密码找回。': 'Verify your email to enable password recovery.',
+  '确认邮件已申请，请查看邮箱。': 'Verification requested. Check your email.', '发送确认邮件': 'Send verification email', '确认邮箱': 'Verify email',
+  '如果账号绑定了已确认邮箱，将收到一次性找回凭证。': 'If the account has a verified email, a one-time recovery credential will be sent.',
+  '密码已重置，请重新登录': 'Password reset. Sign in again.', '邮件服务暂不可用，请联系管理员': 'Email service unavailable. Contact your administrator.',
+  '请先设置邮箱': 'Set your email address first.', '凭证无效、已使用或已过期': 'Credential invalid, used or expired.', '账号恢复服务暂不可用，请联系管理员': 'Account recovery unavailable. Contact your administrator.',
+  '用户名或密码错误': 'Incorrect username or password', '当前密码错误': 'Incorrect current password', '请先登录': 'Please sign in',
+  '请求过于频繁，请稍后重试': 'Too many requests. Try again later.', '密码不符合安全要求，请使用至少 12 位的强密码': 'Use a strong password with at least 12 characters.',
+  '新密码不符合安全策略': 'The new password does not meet the security policy.', '请检查填写内容': 'Check the entered values.', '安全校验失败，请重试': 'Security check failed. Try again.',
+  '导出筛选结果': 'Export filtered records', '下载 CSV': 'Download CSV', '请缩小导出筛选范围，最多 5000 条': 'Narrow the filters to at most 5,000 records.',
+  '导出已过期，请重新生成': 'Export expired. Generate it again.', '导出记录不存在': 'Export not found.',
+  '账号安全': 'Account security', '重新验证身份': 'Verify your identity', '验证': 'Verify', '验证码或恢复码': 'Authenticator or recovery code',
+  '恢复码': 'Recovery codes', '剩余恢复码': 'Remaining recovery codes', '重新生成恢复码': 'Regenerate recovery codes', '启用 MFA': 'Enable MFA', '停用 MFA 并退出': 'Disable MFA and sign out',
+  '请离线保存恢复码，每个仅可使用一次。关闭后无法再次查看。': 'Save these recovery codes offline. Each works once. They cannot be displayed again after closing.',
+  '已保存，继续': 'Saved, continue', '账号策略要求启用 MFA': 'Your account policy requires MFA', '返回登录': 'Back to sign in',
+  '使用验证器扫描二维码或手动输入密钥，然后输入验证码。': 'Scan the QR code or enter the secret in an authenticator, then enter its verification code.',
+  '验证码无效或已使用，请使用新的验证码': 'Invalid or used code. Enter a new code.', '验证已过期，请重新登录': 'Verification expired. Sign in again.',
+  '验证尝试过多，请稍后重试': 'Too many verification attempts. Try again later.', '安全服务暂不可用，请联系管理员': 'Security service unavailable. Contact your administrator.',
+  '内部领域图标导航': 'Internal navigation', '内部领域导航': 'Internal navigation', '上下文': 'Context', '上下文菜单': 'Context menu',
+  '管理权限加载失败': 'Unable to load administration permissions', '基础入口已就绪，业务功能将在后续阶段接入。': 'This area is ready for features planned in a later phase.',
+  '系统管理': 'Administration', '组织结构': 'Organizations', '部门岗位': 'Departments and positions', '平台配置': 'Platform configuration',
+  '管理审计': 'Audit log', '失败队列': 'Failed deliveries', '组织': 'Organization', '管理组织': 'Managed organization', '用户': 'Users', '角色': 'Roles', '权限矩阵': 'Permission matrix',
+  '加载中': 'Loading', '重试': 'Retry', '刷新': 'Refresh', '保存': 'Save', '取消': 'Cancel', '编辑': 'Edit', '新建': 'Create', '启用': 'Enable', '停用': 'Disable',
+  '状态': 'Status', '代码': 'Code', '名称': 'Name', '操作': 'Actions', '版本': 'Version', '父组织': 'Parent organization', '上级部门': 'Parent department',
+  '新增子组织': 'Create child organization', '部门': 'Department', '岗位': 'Position', '岗位类别': 'Position category', '任职': 'Assignments', '用户任职': 'User positions',
+  '查看任职': 'View assignments', '保存任职': 'Save assignments', '历史任职': 'Assignment history', '开始时间': 'Started', '结束时间': 'Ended', '当前': 'Current',
+  '暂无数据': 'No records', '请选择': 'Select', '无': 'None', '请输入': 'Enter a value', '操作成功': 'Saved successfully', '排序': 'Order',
+  '通知语言': 'Notification language', '导出保留时间（分钟）': 'Export retention (minutes)', '系统参数': 'System settings', '通知规则': 'Notification rules',
+  '任务分配': 'Task assignment', '时限提醒': 'Deadline reminder', '超时升级': 'Overdue escalation', '通知标题': 'Notification subject', '通知正文': 'Notification body',
+  '发送站内通知': 'Send in-app notification', '查询': 'Search', '下一页': 'Next page', '上一页': 'Previous page', '总数': 'Total',
+  '操作者 ID': 'Actor ID', '动作': 'Action', '资源类型': 'Resource type', '资源 ID': 'Resource ID', '结果': 'Outcome', '起始时间': 'From', '截止时间': 'To',
+  '追踪标识': 'Trace ID', '详情': 'Details', '时间': 'Time', '事件类型': 'Event type', '尝试次数': 'Attempts', '安全原因码': 'Reason code',
+  '重试事件': 'Retry event', '确认重试此事件？': 'Retry this event?', '提交后由后台任务重新处理。': 'The worker will process this event again.',
+  '请求失败，请重试': 'Request failed. Please retry.', '无权执行此操作': 'You do not have permission for this action.',
+  '无权访问该组织': 'You do not have access to this organization.', '此操作需要重新验证身份': 'Verify your identity again to continue.',
+  '组织已停用': 'This organization is disabled.', '记录已被其他用户更新，请刷新后重试': 'This record changed. Refresh before retrying.',
+  '请求被拒绝，请检查权限和填写内容后重试': 'Request rejected. Check permissions and entered values.',
+  '加载系统管理权限': 'Loading administration permissions', '无系统管理访问权限': 'No administration access',
+  '工作标签': 'Work tabs', '全部标签': 'All tabs', '关闭': 'Close', '跳到正文': 'Skip to content',
+  '问题中心': 'Problem center', '我的待办': 'My tasks', '流程设计': 'Workflow design', '供应商质量': 'Supplier quality', '审计管理': 'Quality audits',
+  '体系文件': 'Documents', '风险看板': 'Risk dashboard', '个人账号': 'My account', '基本信息': 'Profile', '修改密码': 'Change password', '登录会话': 'Sessions',
+  '账号登录': 'Sign in', '账号': 'Account', '密码': 'Password', '请输入账号': 'Enter your account', '请输入密码': 'Enter your password', '登录': 'Sign in',
+  '质量管理平台': 'Quality management platform', '让质量更透明': 'Make quality visible', '让协同更高效': 'Work better together',
+  '邮箱': 'Email', '请输入有效邮箱': 'Enter a valid email', '保存资料': 'Save profile', '当前密码': 'Current password', '新密码': 'New password',
+  '新密码至少 12 位': 'Use at least 12 characters', '内部账号': 'Internal account', '供应商账号': 'Supplier account',
+  'MFA 已启用': 'MFA enabled', 'MFA 未启用': 'MFA not enabled', '暂无会话': 'No sessions', '当前会话': 'Current session', '撤销': 'Revoke',
+  '资料已保存': 'Profile saved', '密码已修改，其他会话已撤销': 'Password changed. Other sessions revoked.', '会话已撤销': 'Session revoked',
+  '登录于': 'Signed in', '有效期至': 'Expires', '供应商门户': 'Supplier portal', '待办': 'Inbox', '整改': 'Corrective actions', '资料': 'Documents', '绩效': 'Performance',
+  '报告编号': 'Report number', '领域': 'Domain', '严重度': 'Severity', '只读': 'Read only',
+  '我的通知': 'My notifications', '领取': 'Claim', '重新领取': 'Reclaim', '释放': 'Release',
+  '任务状态': 'Task status', '处理中': 'In progress', '已逾期': 'Overdue',
+  '领取状态': 'Claim status', '全部领取状态': 'All claim statuses', '未领取': 'Unclaimed', '我已领取': 'Claimed by me',
+  '他人已领取': 'Claimed by others', '已由其他人领取': 'Claimed by someone else', '可重新领取': 'Available to reclaim',
+  '正在加载待办': 'Loading tasks', '暂无待办': 'No tasks', '阅读状态': 'Read status', '全部通知': 'All notifications',
+  '仅未读': 'Unread only', '仅已读': 'Read only', '正在加载通知': 'Loading notifications', '暂无通知': 'No notifications',
+  '已读': 'Read', '未读': 'Unread', '标为已读': 'Mark as read',
+  '任务状态或领取资格已变化，请刷新后重试': 'Task state or claim eligibility changed. Refresh before retrying.',
+  '附件证据': 'Evidence attachments', '选择附件': 'Choose attachment', '刷新附件': 'Refresh attachments', '重试上传': 'Retry upload', '放弃重试': 'Discard retry',
+  '附件上传后先隔离，通过安全扫描后才可下载和提交为证据。': 'Uploads remain quarantined until a successful security scan allows download and use as evidence.',
+  '附件操作被拒绝，请检查权限、状态和文件内容': 'Attachment action rejected. Check permissions, status and file contents.',
+  '附件大小须为 1 字节至 25 MiB': 'Attachment size must be between 1 byte and 25 MiB.',
+  '已删除，保留历史记录': 'Deleted; history retained', '扫描通过，可作为证据': 'Scan passed; evidence ready', '等待安全扫描': 'Awaiting security scan',
+  '等待上传完成': 'Awaiting upload completion', '上传已过期': 'Upload expired', '扫描暂不可用，附件仍隔离': 'Scan unavailable; still quarantined',
+  '扫描未通过，附件已隔离': 'Scan rejected; quarantined', '正在处理附件': 'Processing attachment', '正在加载附件': 'Loading attachments',
+  '暂无附件': 'No attachments', '下载附件': 'Download attachment', '删除附件': 'Delete attachment', '确认删除附件': 'Confirm attachment deletion',
+  '确认删除此附件？': 'Delete this attachment?', '删除后无法继续下载，历史记录和保留对象不受影响。': 'Downloads will be disabled. History and retained objects remain.', '字节': 'bytes',
+};
+
+type Locale = 'zh-CN' | 'en-US';
+const permissionTranslations: Record<string, string> = {
+  'group:platform': 'Platform features', 'group:supplier': 'Supplier quality', 'group:process': 'Process quality', 'group:customer': 'Customer quality',
+  'group:new-product': 'New product quality', 'group:audit': 'Audit management', 'group:system': 'Administration',
+  'module:workbench': 'Workbench', 'module:problem-index': 'Problem search', 'module:workflow': 'Controlled workflows',
+  'module:tasks': 'My tasks', 'module:notifications': 'My notifications',
+  'operation:task:read': 'View authorized tasks', 'operation:task:claim': 'Claim and release tasks', 'operation:notification:read': 'View and mark notifications',
+  'module:supplier-1': 'Supplier management', 'module:supplier-2': 'Supplier performance', 'module:supplier-3': 'Supplier audits', 'module:supplier-4': 'PPAP', 'module:supplier-5': 'Supplier corrective actions',
+  'module:process-1': 'Process issue management', 'module:customer-1': 'Customer issue management', 'module:new-product-1': 'New product quality management', 'module:audit-1': 'Audit management',
+  'module:organization': 'Organization directory', 'module:management-audit': 'Audit log', 'module:platform-configuration': 'Platform configuration',
+  'module:outbox-operations': 'Notification monitoring', 'module:permission-context': 'Current permissions', 'module:users': 'User management', 'module:roles': 'Role management',
+  'operation:workbench:read': 'View workbench (reserved)', 'operation:problem-index:read': 'View problem index',
+  'operation:workflow:manage': 'Create, edit, validate, publish and copy workflows', 'operation:workflow:start': 'Start workflows', 'operation:workflow:act': 'Perform authorized workflow actions',
+  'operation:organization:read': 'View organizations', 'operation:organization:manage': 'Manage organization hierarchy and status',
+  'operation:organization:structure:read': 'View departments and positions', 'operation:organization:structure:manage': 'Manage departments and positions', 'operation:organization:positions:assign': 'Assign user positions',
+  'operation:audit:read': 'View audit log', 'operation:audit:export': 'Export audit log',
+  'operation:configuration:read': 'View dictionaries and notification rules', 'operation:configuration:manage': 'Manage dictionaries and notification rules',
+  'operation:outbox:read': 'View failed events', 'operation:outbox:retry': 'Retry failed events', 'operation:system:permissions:read': 'View current permissions',
+  'operation:account:users:read': 'View users', 'operation:account:users:create': 'Create users', 'operation:account:users:update': 'Edit email',
+  'operation:account:users:status': 'Enable or disable users', 'operation:account:users:transfer': 'Change organization or account type', 'operation:account:users:reset': 'Issue reset credentials',
+  'operation:account:roles:read': 'View roles', 'operation:account:roles:create': 'Create or copy roles', 'operation:account:roles:update': 'Edit roles and permissions',
+  'operation:account:roles:delete': 'Delete roles', 'operation:account:roles:assign': 'Assign roles',
+};
+export function permissionLabel(locale: Locale, kind: 'group' | 'module' | 'operation', key: string, fallback: string) {
+  return locale === 'en-US' ? permissionTranslations[`${kind}:${key}`] ?? translations[fallback] ?? fallback : fallback;
+}
+
+const languageKey = 'qms:locale:v1';
+const translate = (locale: Locale, text: string) => locale === 'en-US' ? translations[text] ?? text : text;
+const LanguageContext = createContext({ locale: 'zh-CN' as Locale, setLocale: (_locale: Locale) => {}, t: (text: string) => text });
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocale] = useState<Locale>(() => {
+    try { return localStorage.getItem(languageKey) === 'en-US' ? 'en-US' : 'zh-CN'; } catch { return 'zh-CN'; }
+  });
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    try { localStorage.setItem(languageKey, locale); } catch {}
+  }, [locale]);
+  const value = useMemo(() => ({ locale, setLocale, t: (text: string) => translate(locale, text) }), [locale]);
+  return <LanguageContext.Provider value={value}><ConfigProvider locale={locale === 'en-US' ? english : chinese}>{children}</ConfigProvider></LanguageContext.Provider>;
+}
+
+export const useLanguage = () => useContext(LanguageContext);
+
+export function LanguageSwitcher() {
+  const { locale, setLocale } = useLanguage();
+  return <label className="language-switcher">Language / 语言 <select aria-label="Language / 语言" value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>;
+}

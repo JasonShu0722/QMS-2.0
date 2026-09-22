@@ -22,13 +22,18 @@ function fakePrisma() {
   const nodes: any[] = [];
   const transitions: any[] = [];
   const tx: any = {
+    $queryRaw: async () => [],
     workflowDefinition: {
-      create: async ({ data }: any) => { const value = { id: 'definition-1', ...data }; definitions.push(value); return value; },
+      create: async ({ data }: any) => { const value = { id: 'definition-1', version: 1, ...data }; definitions.push(value); return value; },
+      findUniqueOrThrow: async ({ where }: any) => definitions.find((value) => value.id === where.id),
+      updateMany: async ({ where }: any) => { const value = definitions.find((entry) => entry.id === where.id && entry.version === where.version); if (!value) return { count: 0 }; value.version += 1; return { count: 1 }; },
       findFirst: async ({ where, include }: any) => { const value = definitions.find((entry) => Object.entries(where).every(([key, expected]) => entry[key] === expected)); return value && include ? { ...value, versions: versions.filter((entry) => entry.workflowDefinitionId === value.id).sort((a, b) => b.version - a.version) } : value ?? null; },
       update: async ({ where, data }: any) => Object.assign(definitions.find((value) => value.id === where.id), data),
     },
     workflowVersion: {
-      create: async ({ data }: any) => { const value = { id: `version-${versions.length + 1}`, ...data }; versions.push(value); return value; },
+      create: async ({ data }: any) => { const value = { id: `version-${versions.length + 1}`, publishedAt: null, publishedById: null, changeNote: null, ...data }; versions.push(value); return value; },
+      findUniqueOrThrow: async ({ where }: any) => ({ ...versions.find((value) => value.id === where.id), nodes: nodes.filter((node) => node.workflowVersionId === where.id), transitions: transitions.filter((edge) => edge.workflowVersionId === where.id) }),
+      count: async ({ where }: any) => versions.filter((entry) => Object.entries(where).every(([key, expected]) => entry[key] === expected)).length,
       findFirst: async ({ where, include }: any) => { const value = versions.find((entry) => Object.entries(where).every(([key, expected]) => valueOrUndefined(entry, key) === expected)); if (!value) return null; return include ? { ...value, nodes: nodes.filter((node) => node.workflowVersionId === value.id), transitions: transitions.filter((entry) => entry.workflowVersionId === value.id) } : value; },
       findUnique: async ({ where }: any) => versions.find((value) => value.id === where.id) ?? null,
       update: async ({ where, data }: any) => Object.assign(versions.find((value) => value.id === where.id), data),
@@ -76,7 +81,7 @@ describe('workflow version release', () => {
     const sessions = { resolve: jest.fn().mockResolvedValue(session) };
     const scopes = { fromSession: jest.fn().mockResolvedValue('org-1') };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
-    const authorization = new AuthorizationService({ userRole: { count: jest.fn().mockResolvedValue(0) } } as never);
+    const authorization = new AuthorizationService({ organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) }, userRole: { count: jest.fn().mockResolvedValue(0) } } as never);
     const guard = new AuthenticatedGuard(new Reflector(), sessions as never, scopes as never, authorization, audit as never);
     const request = { method: 'POST', headers: { cookie: 'qms_session=session-token' } } as any;
     const context = {

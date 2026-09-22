@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { isUUID } from 'class-validator';
+import { actionAllowed, forwardAction } from './workflow-runtime-policy.js';
+import { MAX_WORKFLOW_NODES, MAX_WORKFLOW_SLA_MINUTES, MAX_WORKFLOW_TRANSITIONS, WORKFLOW_ACTIONS, WORKFLOW_CONDITION_FIELDS, WORKFLOW_CONDITION_OPERATORS, WORKFLOW_EDITABLE_NODE_TYPES } from './workflow.types.js';
 
 export const WORKFLOW_NODE_TYPES = [
   'ACTION', 'APPROVAL', 'VERIFICATION', 'CC', 'REJECT', 'RETURN', 'REOPEN', 'CLOSE',
 ] as const;
 export type WorkflowNodeType = (typeof WORKFLOW_NODE_TYPES)[number];
 
-const CONDITION_FIELDS = new Set(['status', 'severity', 'problemType', 'domainCode', 'sourceType', 'responsibleParty']);
-const CONDITION_OPERATORS = new Set(['eq', 'ne', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte']);
-const ASSIGNMENT_NODES = new Set<WorkflowNodeType>(['ACTION', 'APPROVAL', 'VERIFICATION', 'REJECT', 'RETURN', 'REOPEN', 'CLOSE']);
+const CONDITION_FIELDS = new Set<string>(WORKFLOW_CONDITION_FIELDS);
+const CONDITION_OPERATORS = new Set<string>(WORKFLOW_CONDITION_OPERATORS);
+const ASSIGNMENT_NODES = new Set<WorkflowNodeType>(WORKFLOW_NODE_TYPES);
 const SCRIPT_KEYS = new Set(['script', 'expression', 'code', 'javascript', 'sql', 'function', 'predicate']);
 
 export interface WorkflowDraftNode {
@@ -21,6 +24,7 @@ export interface WorkflowDraftTransition {
   id: string;
   from: string;
   to: string;
+  action?: string;
   condition?: Record<string, unknown>;
 }
 
@@ -36,7 +40,57 @@ export interface WorkflowValidationResult {
 
 @Injectable()
 export class WorkflowValidationService {
+  validateStructure(draft: WorkflowDraft): WorkflowValidationResult {
+    const errors: string[] = [];
+    if (!this.object(draft) || !Array.isArray(draft.nodes) || !Array.isArray(draft.transitions)) return { valid: false, errors: ['WORKFLOW_DRAFT_REQUIRED'] };
+    if (Object.keys(draft).some((key) => !['nodes', 'transitions'].includes(key))) errors.push('WORKFLOW_DRAFT_FIELD_NOT_ALLOWED');
+    if (!draft.nodes.length || draft.nodes.length > MAX_WORKFLOW_NODES || draft.transitions.length > MAX_WORKFLOW_TRANSITIONS) errors.push('WORKFLOW_GRAPH_SIZE_INVALID');
+    const ids = new Set<string>();
+    for (const node of draft.nodes) {
+      if (!this.object(node)) { errors.push('WORKFLOW_NODE_INVALID'); continue; }
+      if (!this.text(node.id, 100) || ids.has(node.id)) errors.push('WORKFLOW_NODE_ID_DUPLICATE');
+      ids.add(node.id);
+      if (Object.keys(node).some((key) => !['id', 'type', 'name', 'config'].includes(key))) errors.push(`WORKFLOW_NODE_FIELD_NOT_ALLOWED:${node.id}`);
+      if (!WORKFLOW_EDITABLE_NODE_TYPES.some((type) => type === node.type)) errors.push(`WORKFLOW_NODE_TYPE_NOT_ALLOWED:${node.type}`);
+      if (!this.text(node.name, 200)) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
+      const config = node.config ?? {};
+      if (node.config === null || !this.object(config)) { errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`); continue; }
+      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      for (const field of ['isStart', 'isEnd', 'requireIndependentVerification']) if (config[field] !== undefined && typeof config[field] !== 'boolean') errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`);
+      if (config.requireIndependentVerification !== undefined && node.type !== 'CLOSE') errors.push(`WORKFLOW_VERIFICATION_POLICY_INVALID:${node.id}`);
+      if (config.assignment !== undefined && !this.hasAssignment(config)) errors.push(`WORKFLOW_ASSIGNMENT_REQUIRED:${node.id}`);
+      if (config.editorPosition !== undefined) {
+        const position = config.editorPosition;
+        if (!this.object(position) || Object.keys(position).some((key) => !['x', 'y'].includes(key)) || ![position.x, position.y].every((value) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 100000)) errors.push(`WORKFLOW_POSITION_INVALID:${node.id}`);
+      }
+      this.validateTiming(node.id, config, errors);
+      this.rejectScript(config, `WORKFLOW_SCRIPT_NOT_ALLOWED:${node.id}`, errors);
+    }
+    const edgeIds = new Set<string>();
+    for (const edge of draft.transitions) {
+      if (!this.object(edge)) { errors.push('WORKFLOW_TRANSITION_INVALID'); continue; }
+      if (!this.text(edge.id, 100) || edgeIds.has(edge.id)) errors.push('WORKFLOW_TRANSITION_ID_DUPLICATE');
+      edgeIds.add(edge.id);
+      if (Object.keys(edge).some((key) => !['id', 'from', 'to', 'action', 'condition'].includes(key))) errors.push(`WORKFLOW_TRANSITION_FIELD_NOT_ALLOWED:${edge.id}`);
+      if (!this.text(edge.from, 100) || !this.text(edge.to, 100) || !ids.has(edge.from) || !ids.has(edge.to)) errors.push(`WORKFLOW_TRANSITION_NODE_NOT_FOUND:${edge.id}`);
+      if (edge.action !== undefined && !WORKFLOW_ACTIONS.some((action) => action === edge.action)) errors.push(`WORKFLOW_TRANSITION_ACTION_INVALID:${edge.id}`);
+      this.validateCondition(edge.condition, edge.id, errors);
+    }
+    return { valid: errors.length === 0, errors: [...new Set(errors)] };
+  }
+
+  normalizeDraft(draft: WorkflowDraft): WorkflowDraft {
+    const result = this.validateStructure(draft);
+    if (!result.valid) throw new BadRequestException({ code: 'WORKFLOW_DRAFT_INVALID', errors: result.errors });
+    return {
+      nodes: draft.nodes.map((node) => ({ ...node, config: Object.fromEntries(Object.entries(node.config ?? {}).map(([key, value]) => [key, ['assignment', 'escalation'].includes(key) && typeof value === 'string' ? { roleCode: value } : value])) })),
+      transitions: draft.transitions.map((edge) => ({ id: edge.id, from: edge.from, to: edge.to, action: edge.action ?? forwardAction(draft.nodes.find((node) => node.id === edge.from)!.type), ...(edge.condition && Object.keys(edge.condition).length ? { condition: edge.condition } : {}) })),
+    };
+  }
+
   validateDraft(draft: WorkflowDraft): WorkflowValidationResult {
+    const structure = this.validateStructure(draft);
+    if (!structure.valid) return structure;
     const errors: string[] = [];
     if (!draft || !Array.isArray(draft.nodes) || !Array.isArray(draft.transitions)) {
       return { valid: false, errors: ['WORKFLOW_DRAFT_REQUIRED'] };
@@ -52,6 +106,7 @@ export class WorkflowValidationService {
         continue;
       }
       const config = node.config ?? {};
+      if (config.requireIndependentVerification !== undefined && (node.type !== 'CLOSE' || typeof config.requireIndependentVerification !== 'boolean')) errors.push(`WORKFLOW_VERIFICATION_POLICY_INVALID:${node.id}`);
       if (!node.name?.trim()) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
       if (ASSIGNMENT_NODES.has(node.type as WorkflowNodeType) && !this.hasAssignment(config)) {
         errors.push(`WORKFLOW_ASSIGNMENT_REQUIRED:${node.id}`);
@@ -63,7 +118,9 @@ export class WorkflowValidationService {
     const starts = nodes.filter((node) => node.config?.isStart === true);
     const ends = nodes.filter((node) => node.config?.isEnd === true);
     if (starts.length !== 1) errors.push('WORKFLOW_START_REQUIRED');
+    if (starts.some((node) => node.type === 'CLOSE')) errors.push('WORKFLOW_START_CANNOT_CLOSE');
     if (ends.length !== 1) errors.push('WORKFLOW_END_REQUIRED');
+    if (ends.some((node) => node.type !== 'CLOSE')) errors.push('WORKFLOW_END_MUST_CLOSE');
     if (nodes.length === 0) errors.push('WORKFLOW_NODE_REQUIRED');
 
     const outgoing = new Map<string, string[]>();
@@ -73,6 +130,7 @@ export class WorkflowValidationService {
       incoming.set(node.id, []);
     }
     const transitionIds = new Set<string>();
+    const backward: WorkflowDraftTransition[] = [];
     for (const transition of transitions) {
       if (transitionIds.has(transition.id)) errors.push('WORKFLOW_TRANSITION_ID_DUPLICATE');
       transitionIds.add(transition.id);
@@ -81,9 +139,19 @@ export class WorkflowValidationService {
         continue;
       }
       if (transition.from === transition.to) errors.push(`WORKFLOW_SELF_LOOP:${transition.id}`);
+      const source = byId.get(transition.from)!;
+      const action = transition.action ?? forwardAction(source.type);
+      if (!WORKFLOW_ACTIONS.some((allowed) => allowed === action) || action === 'CLOSE' || !actionAllowed(source.type, action)) errors.push(`WORKFLOW_TRANSITION_ACTION_INVALID:${transition.id}`);
+      this.validateCondition(transition.condition, transition.id, errors);
+      if (['RETURN', 'REJECT', 'REOPEN'].includes(action)) {
+        backward.push(transition);
+        continue;
+      }
       outgoing.get(transition.from)!.push(transition.to);
       incoming.get(transition.to)!.push(transition.from);
-      this.validateCondition(transition.condition, transition.id, errors);
+    }
+    for (const transition of backward) {
+      if (!this.walk(transition.to, outgoing).has(transition.from)) errors.push(`WORKFLOW_BACKWARD_TARGET_INVALID:${transition.id}`);
     }
     if (this.hasCycle(outgoing)) errors.push('WORKFLOW_CYCLE_NOT_ALLOWED');
     if (starts.length === 1 && ends.length === 1) {
@@ -112,30 +180,38 @@ export class WorkflowValidationService {
 
   private hasAssignment(config: Record<string, unknown>): boolean {
     const assignment = config.assignment;
-    if (typeof assignment === 'string') return assignment.trim().length > 0;
+    if (typeof assignment === 'string') return this.text(assignment, 100);
     if (!assignment || typeof assignment !== 'object' || Array.isArray(assignment)) return false;
     const value = assignment as Record<string, unknown>;
-    return [value.roleCode, value.assigneeUserId, value.permission].some((entry) => typeof entry === 'string' && entry.trim().length > 0);
+    const constraints = [value.roleCode, value.assigneeUserId, value.permission].filter((entry) => entry !== undefined);
+    return constraints.length > 0 && Object.keys(value).every((key) => ['roleCode', 'assigneeUserId', 'permission'].includes(key))
+      && constraints.every((entry) => this.text(entry, 100))
+      && (value.assigneeUserId === undefined || isUUID(String(value.assigneeUserId)));
   }
 
   private validateTiming(id: string, config: Record<string, unknown>, errors: string[]): void {
-    if (config.slaMinutes !== undefined && (!Number.isInteger(config.slaMinutes) || Number(config.slaMinutes) <= 0)) {
+    if (config.slaMinutes !== undefined && (!Number.isSafeInteger(config.slaMinutes) || Number(config.slaMinutes) <= 0 || Number(config.slaMinutes) > MAX_WORKFLOW_SLA_MINUTES)) {
       errors.push(`WORKFLOW_SLA_INVALID:${id}`);
     }
     const reminders = config.reminders;
     if (reminders !== undefined) {
-      if (!Array.isArray(reminders)) errors.push(`WORKFLOW_REMINDER_INVALID:${id}`);
+      const offsets = new Set<unknown>();
+      if (!Array.isArray(reminders) || reminders.length > 20 || config.slaMinutes === undefined) errors.push(`WORKFLOW_REMINDER_INVALID:${id}`);
       else for (const reminder of reminders) {
+        if (!this.object(reminder) || Object.keys(reminder).some((key) => key !== 'offsetMinutes')) errors.push(`WORKFLOW_REMINDER_INVALID:${id}`);
         const offset = typeof reminder === 'object' && reminder !== null ? (reminder as Record<string, unknown>).offsetMinutes : undefined;
-        if (!Number.isInteger(offset) || Number(offset) < 0 || (Number.isInteger(config.slaMinutes) && Number(offset) > Number(config.slaMinutes))) errors.push(`WORKFLOW_REMINDER_INVALID:${id}`);
+        if (!Number.isSafeInteger(offset) || Number(offset) < 0 || Number(offset) > Number(config.slaMinutes) || offsets.has(offset)) errors.push(`WORKFLOW_REMINDER_INVALID:${id}`);
+        offsets.add(offset);
       }
     }
-    if (config.escalation !== undefined && !this.hasAssignment({ assignment: config.escalation })) errors.push(`WORKFLOW_ESCALATION_INVALID:${id}`);
+    if (config.escalation !== undefined && (config.slaMinutes === undefined || !this.hasAssignment({ assignment: config.escalation }))) errors.push(`WORKFLOW_ESCALATION_INVALID:${id}`);
   }
 
   private validateCondition(condition: Record<string, unknown> | undefined, id: string, errors: string[]): void {
-    if (condition === undefined || Object.keys(condition).length === 0) return;
-    if (typeof condition !== 'object' || Array.isArray(condition)) { errors.push(`WORKFLOW_CONDITION_INVALID:${id}`); return; }
+    if (condition === undefined) return;
+    if (!this.object(condition)) { errors.push(`WORKFLOW_CONDITION_INVALID:${id}`); return; }
+    if (Object.keys(condition).length === 0) return;
+    if (Object.keys(condition).some((key) => !['field', 'operator', 'value'].includes(key))) errors.push(`WORKFLOW_CONDITION_FIELD_NOT_ALLOWED:${id}`);
     if (this.containsScriptKey(condition)) errors.push(`WORKFLOW_SCRIPT_NOT_ALLOWED:${id}`);
     const field = condition.field;
     const operator = condition.operator;
@@ -145,13 +221,17 @@ export class WorkflowValidationService {
     if (value === undefined || (Array.isArray(value) && (value.length === 0 || value.length > 20))) errors.push(`WORKFLOW_CONDITION_VALUE_INVALID:${id}`);
     if (value !== undefined && !this.safeValue(value)) errors.push(`WORKFLOW_CONDITION_VALUE_INVALID:${id}`);
     if (['in', 'notIn'].includes(String(operator)) && !Array.isArray(value)) errors.push(`WORKFLOW_CONDITION_VALUE_INVALID:${id}`);
+    if (['eq', 'ne'].includes(String(operator)) && Array.isArray(value)) errors.push(`WORKFLOW_CONDITION_VALUE_INVALID:${id}`);
+    if (field !== 'responsibleParty' && (value === null || (Array.isArray(value) && value.includes(null)))) errors.push(`WORKFLOW_CONDITION_VALUE_INVALID:${id}`);
   }
 
   private safeValue(value: unknown): boolean {
-    if (typeof value === 'string') return value.length <= 200 && !/[;{}$()]/.test(value);
-    if (typeof value === 'number' || typeof value === 'boolean') return true;
-    return Array.isArray(value) && value.every((entry) => this.safeValue(entry));
+    const scalar = (entry: unknown) => entry === null || (typeof entry === 'string' && entry.length <= 200);
+    return scalar(value) || (Array.isArray(value) && value.every(scalar));
   }
+
+  private object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+  private text(value: unknown, max: number): value is string { return typeof value === 'string' && value.trim().length > 0 && value.length <= max; }
 
   private rejectScript(config: Record<string, unknown>, code: string, errors: string[]): void {
     if (this.containsScriptKey(config)) errors.push(code);

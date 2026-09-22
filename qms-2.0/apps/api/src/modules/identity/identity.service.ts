@@ -9,6 +9,9 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import type { AccountProfileDto, UpdateAccountProfileDto } from './dto/account.dto.js';
 import { adminError, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
+import { MfaService } from './mfa.service.js';
+import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -20,12 +23,13 @@ export class IdentityService {
     private readonly sessions: SessionService,
     private readonly limits: RateLimitService,
     private readonly audit: AuditLogService,
+    private readonly mfa: MfaService,
   ) {}
 
   async login(
     dto: LoginDto,
     request: RateLimitedRequest,
-  ): Promise<{ response: LoginResponseDto; sessionToken: string }> {
+  ): Promise<{ response: LoginResponseDto; sessionToken?: string; challengeToken?: string }> {
     const identifier = typeof dto.identifier === 'string' ? dto.identifier.trim() : '';
     const password = typeof dto.password === 'string' ? dto.password : '';
     const rateKey = request[RATE_LIMIT_KEY] ?? this.limits.key(identifier, request.ip ?? 'unknown');
@@ -34,6 +38,7 @@ export class IdentityService {
           where: {
             ...(identifier.includes('@') ? { email: { equals: identifier, mode: 'insensitive' } } : { username: { equals: identifier, mode: 'insensitive' } }),
           },
+          include: { organization: { select: { status: true } } },
         })
       : null;
 
@@ -43,21 +48,25 @@ export class IdentityService {
     }
 
     const passwordMatches = await this.passwords.verify(user.passwordHash, password);
-    if (!passwordMatches || user.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
+    if (!passwordMatches || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
 
-    const sessionToken = await this.prisma.$transaction(async (transaction) => {
+    const authentication = await this.prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
-      const current = await transaction.user.findUnique({ where: { id: user.id } });
-      if (!current || current.status !== 'ACTIVE' || current.passwordHash !== user.passwordHash || current.organizationId !== user.organizationId || current.accountType !== user.accountType) return null;
-      return this.sessions.create(current.id, transaction);
-    });
-    if (!sessionToken) return this.rejectLogin(rateKey, request, user);
+      await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;
+      const current = await transaction.user.findUnique({ where: { id: user.id }, include: { organization: { select: { status: true } } } });
+      if (!current || current.status !== 'ACTIVE' || current.organization.status !== 'ACTIVE' || current.passwordHash !== user.passwordHash || current.organizationId !== user.organizationId || current.accountType !== user.accountType) return null;
+      const challenge = await this.mfa.createChallenge(current, transaction);
+      if (challenge) return { challenge };
+      return { sessionToken: await this.sessions.create(current.id, transaction, { reauthenticated: true }) };
+    }).catch((error: unknown) => rethrowSecurityRejection(this.prisma, this.audit, error, { userId: user.id, resourceType: 'User', resourceId: user.id, traceId: requestTraceId(request), action: 'LOGIN_FAILED', outcome: 'FAILURE' }));
+    if (!authentication) return this.rejectLogin(rateKey, request, user);
     this.limits.recordSuccess(rateKey);
+    if (authentication.challenge) return { challengeToken: authentication.challenge.token, response: { accountType: user.accountType, landingPath: '/mfa', securityState: authentication.challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' } };
     const response: LoginResponseDto =
       user.accountType === 'SUPPLIER'
-        ? { accountType: 'SUPPLIER', landingPath: '/supplier/inbox' }
-        : { accountType: 'INTERNAL', landingPath: '/app/workbench' };
-    return { response, sessionToken };
+        ? { accountType: 'SUPPLIER', landingPath: '/supplier/inbox', securityState: 'AUTHENTICATED' }
+        : { accountType: 'INTERNAL', landingPath: '/app/workbench', securityState: 'AUTHENTICATED' };
+    return { response, sessionToken: authentication.sessionToken };
   }
 
   async current(sessionToken: string | undefined): Promise<SessionResponseDto> {
@@ -94,17 +103,17 @@ export class IdentityService {
     };
   }
 
-  async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string): Promise<AccountProfileDto> {
+  async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string, sessionId: string): Promise<AccountProfileDto> {
     try {
       return await this.prisma.$transaction(async (transaction) => {
+        await assertRecentAuthentication(transaction, { id: userId, sessionId });
         await transaction.user.update({ where: { id: userId }, data: dto.email === undefined ? {} : { email: dto.email?.trim().toLowerCase() ?? null } });
         const profile = await this.profile(userId, transaction);
         await this.audit.record({ actorUserId: userId, organizationId: profile.organization.id, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId }, transaction);
         return profile;
       });
     } catch (error) {
-      if ((error as { code?: string }).code === 'P2002') adminError('ADMIN_USER_DUPLICATE', 409);
-      throw error;
+      return rethrowSecurityRejection(this.prisma, this.audit, error, { userId, resourceType: 'User', resourceId: userId, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' });
     }
   }
 
@@ -115,24 +124,31 @@ export class IdentityService {
     newPassword: string;
     traceId: string;
   }): Promise<void> {
-    if (input.newPassword === input.currentPassword || input.newPassword.length < 12) {
-      throw new HttpException({ code: 'AUTH_PASSWORD_POLICY_INVALID', message: '新密码不符合安全策略' }, 400);
+    try {
+      if (input.newPassword === input.currentPassword || input.newPassword.length < 12) {
+        throw new HttpException({ code: 'AUTH_PASSWORD_POLICY_INVALID', message: '新密码不符合安全策略' }, 400);
+      }
+      const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, organizationId: true, passwordHash: true } });
+      if (!user || !(await this.passwords.verify(user.passwordHash, input.currentPassword))) {
+        throw new HttpException({ code: 'AUTH_CURRENT_PASSWORD_INVALID', message: '当前密码错误' }, 401);
+      }
+      const passwordHash = await this.passwords.hash(input.newPassword);
+      await this.prisma.$transaction(async (transaction) => {
+        await assertRecentAuthentication(transaction, { id: input.userId, sessionId: input.currentSessionId });
+        const changed = await transaction.user.updateMany({ where: { id: input.userId, passwordHash: user.passwordHash, status: 'ACTIVE' }, data: { passwordHash, securityVersion: { increment: 1 } } });
+        if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+        const current = await transaction.user.findUniqueOrThrow({ where: { id: input.userId }, select: { securityVersion: true } });
+        await transaction.session.update({ where: { id: input.currentSessionId }, data: { securityVersion: current.securityVersion } });
+        await transaction.passwordReset.updateMany({ where: { userId: input.userId, consumedAt: null }, data: { consumedAt: new Date() } });
+        await this.sessions.revokeOtherSessions(input.userId, input.currentSessionId, input.traceId, transaction);
+        await this.audit.record({
+          actorUserId: input.userId, organizationId: user.organizationId, action: 'PASSWORD_CHANGED',
+          resourceType: 'User', resourceId: input.userId, outcome: 'SUCCESS', traceId: input.traceId,
+        }, transaction);
+      });
+    } catch (error) {
+      return rethrowSecurityRejection(this.prisma, this.audit, error, { userId: input.userId, resourceType: 'User', resourceId: input.userId, traceId: input.traceId });
     }
-    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, organizationId: true, passwordHash: true } });
-    if (!user || !(await this.passwords.verify(user.passwordHash, input.currentPassword))) {
-      throw new HttpException({ code: 'AUTH_CURRENT_PASSWORD_INVALID', message: '当前密码错误' }, 401);
-    }
-    const passwordHash = await this.passwords.hash(input.newPassword);
-    await this.prisma.$transaction(async (transaction) => {
-      const changed = await transaction.user.updateMany({ where: { id: input.userId, passwordHash: user.passwordHash, status: 'ACTIVE' }, data: { passwordHash } });
-      if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
-      await transaction.passwordReset.updateMany({ where: { userId: input.userId, consumedAt: null }, data: { consumedAt: new Date() } });
-      await this.sessions.revokeOtherSessions(input.userId, input.currentSessionId, input.traceId, transaction);
-      await this.audit.record({
-        actorUserId: input.userId, organizationId: user.organizationId, action: 'PASSWORD_CHANGED',
-        resourceType: 'User', resourceId: input.userId, outcome: 'SUCCESS', traceId: input.traceId,
-      }, transaction);
-    });
   }
 
   private async rejectLogin(

@@ -4,10 +4,20 @@ x-api-environment: &api-environment
   NODE_ENV: ${NODE_ENV:-production}
   DATABASE_URL: postgresql://${POSTGRES_USER:-qms}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-qms2}
   QMS_RATE_LIMIT_SECRET: ${QMS_RATE_LIMIT_SECRET:?Set QMS_RATE_LIMIT_SECRET}
+  QMS_SECURITY_CURRENT_KEY_ID: ${QMS_SECURITY_CURRENT_KEY_ID:?Set QMS_SECURITY_CURRENT_KEY_ID}
+  QMS_SECURITY_KEYRING: ${QMS_SECURITY_KEYRING:?Set QMS_SECURITY_KEYRING}
   QMS_TRUST_PROXY_HOPS: '1'
   QMS_OBJECT_STORAGE_PROVIDER: minio
-  QMS_OBJECT_STORAGE_ENDPOINT: http://minio:9000
+  QMS_OBJECT_STORAGE_ENDPOINT: ${QMS_OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
   QMS_OBJECT_STORAGE_BUCKET: ${QMS_OBJECT_STORAGE_BUCKET:-qms-foundation}
+  QMS_OBJECT_STORAGE_ACCESS_KEY: ${QMS_OBJECT_STORAGE_ACCESS_KEY:?Set QMS_OBJECT_STORAGE_ACCESS_KEY}
+  QMS_OBJECT_STORAGE_SECRET_KEY: ${QMS_OBJECT_STORAGE_SECRET_KEY:?Set QMS_OBJECT_STORAGE_SECRET_KEY}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_FROM: ${SMTP_FROM:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
 
 services:
   postgres:
@@ -59,7 +69,13 @@ services:
   worker:
     image: qms2-foundation-api:local
     command: [node, dist/worker.js]
-    environment: *api-environment
+    restart: on-failure
+    stop_grace_period: 60s
+    environment:
+      <<: *api-environment
+      QMS_WORKER_POLL_INTERVAL_MS: ${QMS_WORKER_POLL_INTERVAL_MS:-1000}
+      QMS_WORKER_BATCH_SIZE: ${QMS_WORKER_BATCH_SIZE:-25}
+      QMS_RECOVERY_MAIL_ENABLED: ${QMS_RECOVERY_MAIL_ENABLED:-false}
     depends_on:
       api:
         condition: service_healthy

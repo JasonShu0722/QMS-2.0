@@ -40,7 +40,7 @@ it.each([200, 409])('blocks creating a user until a closed editor finishes savin
 }, 15_000);
 
 it.each([200, 409])('blocks creating a role until a closed editor finishes saving with status %s', async (status) => {
-  const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [] };
+  const role: AdminRole = { mfaRequired: false, id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [] };
   let resolveSave: ((response: Response) => void) | undefined;
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
@@ -115,7 +115,7 @@ it('retains issued reset only until closing and generates a new code for the nex
 }, 30_000);
 
 it('shows global roles as read-only and exposes loading failures', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? [] : [{ id: 'global', code: 'GLOBAL', name: 'Global Role', organizationId: null, permissions: [] }]))));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? [] : [{ mfaRequired: false, id: 'global', code: 'GLOBAL', name: 'Global Role', organizationId: null, permissions: [] }]))));
   const rendered = render(<RoleAdministration organization={organization} />);
   const row = (await screen.findByText('Global Role')).closest('tr')!;
   expect(within(row).getByText('全局只读')).toBeInTheDocument();
@@ -133,7 +133,7 @@ it.each([
   { action: 'remove permission', expected: [{ permissionCodes: ['account:roles:read'], expectedPermissionCodes: ['account:users:read', 'account:roles:read'] }] },
   { action: 'reorder permissions', expected: [] },
 ])('submits only changed role fields: $action', async ({ action, expected }) => {
-  const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: 'Read users' }, { id: 'roles-read', code: 'account:roles:read', name: 'Read roles' }] };
+  const role: AdminRole = { mfaRequired: false, id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: 'Read users' }, { id: 'roles-read', code: 'account:roles:read', name: 'Read roles' }] };
   const requests: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
@@ -198,3 +198,31 @@ it('switches permissions with organization and ignores the previous organization
   await waitFor(() => expect(screen.queryByText('alice')).not.toBeInTheDocument());
   expect(screen.queryByRole('button', { name: '创建角色' })).not.toBeInTheDocument();
 }, 15_000);
+
+it('reloads the MFA form value and comparison baseline before retrying a role edit', async () => {
+  let conflicted = false;
+  const role: AdminRole = { mfaRequired: false, id: 'role-mfa', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [] };
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (init.method === 'PATCH') {
+      writes.push(JSON.parse(String(init.body)));
+      if (!conflicted) { conflicted = true; return json({ code: 'CONCURRENCY_CONFLICT', message: 'private role details', traceId: 'trace-role-reload' }, 409); }
+      return json({ ...role, mfaRequired: true });
+    }
+    return json(path.includes('/permission-catalog') ? [] : [{ ...role, mfaRequired: conflicted }]);
+  }));
+  render(<RoleAdministration organization={organization} />);
+  await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
+  await userEvent.clear(screen.getByLabelText('角色名称'));
+  await userEvent.type(screen.getByLabelText('角色名称'), 'Renamed Role');
+  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
+  const dialog = screen.getByRole('dialog');
+  expect(await within(dialog).findByText('trace-role-reload')).toBeInTheDocument();
+  expect(within(dialog).queryByText('private role details')).not.toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('button', { name: '重新加载并放弃权限修改' }));
+  await waitFor(() => expect(within(dialog).getByRole('switch', { name: 'MFA' })).toBeChecked());
+  await userEvent.click(within(dialog).getByRole('button', { name: '保存角色' }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes[1]).toEqual({ name: 'Renamed Role' });
+}, 15000);

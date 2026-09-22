@@ -207,6 +207,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_enrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_recoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailRecoveryController_requestVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email-verification/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailRecoveryController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailRecoveryController_requestRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-recovery/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailRecoveryController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/permissions": {
         parameters: {
             query?: never;
@@ -335,6 +511,454 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_tree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OrganizationGovernanceController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OrganizationGovernanceController_update"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_departments"];
+        put?: never;
+        post: operations["OrganizationGovernanceController_createDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/departments/{departmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OrganizationGovernanceController_updateDepartment"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_positions"];
+        put?: never;
+        post: operations["OrganizationGovernanceController_createPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/positions/{positionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OrganizationGovernanceController_updatePosition"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/users/{userId}/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_userPositions"];
+        put: operations["OrganizationGovernanceController_replaceUserPositions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditQueryController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditExportController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit-exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditExportController_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlatformConfigurationController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PlatformConfigurationController_updateSettings"];
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/notification-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlatformConfigurationController_rules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/notification-rules/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PlatformConfigurationController_updateRule"];
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/position-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlatformConfigurationController_categories"];
+        put?: never;
+        post: operations["PlatformConfigurationController_createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/position-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PlatformConfigurationController_updateCategory"];
+        trace?: never;
+    };
+    "/api/v1/files/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_initialize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FileController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outbox/failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OutboxAdministrationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/outbox/failures/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OutboxAdministrationController_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaskInboxController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaskInboxController_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaskInboxController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationInboxController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationInboxController_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -431,7 +1055,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflows": {
+    "/api/v1/problem-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProblemSavedViewController_list"];
+        put?: never;
+        post: operations["ProblemSavedViewController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/problem-views/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -440,7 +1080,87 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
+        delete: operations["ProblemSavedViewController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["ProblemSavedViewController_update"];
+        trace?: never;
+    };
+    "/api/v1/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowController_list"];
+        put?: never;
         post: operations["WorkflowController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/{id}/versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowController_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowController_validateGraph"];
         delete?: never;
         options?: never;
         head?: never;
@@ -511,6 +1231,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/problem-index/{id}/upgrade-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowUpgradeController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/problem-index/{id}/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowUpgradeController_upgrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -534,7 +1286,9 @@ export interface components {
             /** @enum {string} */
             accountType: "INTERNAL" | "SUPPLIER";
             /** @enum {string} */
-            landingPath: "/app/workbench" | "/supplier/inbox";
+            landingPath: "/app/workbench" | "/supplier/inbox" | "/mfa";
+            /** @enum {string} */
+            securityState: "AUTHENTICATED" | "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
         };
         SessionUserDto: {
             id: string;
@@ -630,6 +1384,58 @@ export interface components {
             type: "INTERNAL" | "SUPPLIER";
             permissions: string[];
         };
+        SecurityStatusDto: {
+            /** Format: date-time */
+            emailVerifiedAt: string | null;
+            mfaEnabled: boolean;
+            mfaRequired: boolean;
+            /** @enum {string} */
+            securityState: "AUTHENTICATED" | "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+            recoveryCodesRemaining: number;
+            /** Format: date-time */
+            reauthenticationExpiresAt: string | null;
+        };
+        MfaEnrollmentDto: {
+            secret: string;
+            otpauthUri: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        MfaCodeDto: {
+            code: string;
+        };
+        MfaEnrollmentCompleteDto: {
+            /** @enum {string} */
+            accountType: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            landingPath: "/app/workbench" | "/supplier/inbox" | "/mfa";
+            /** @enum {string} */
+            securityState: "AUTHENTICATED" | "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+            recoveryCodes: string[];
+        };
+        ReauthenticateDto: {
+            password: string;
+            code?: string;
+        };
+        ReauthenticationResponseDto: {
+            /** Format: date-time */
+            reauthenticationExpiresAt: string;
+        };
+        RecoveryCodesDto: {
+            /** @description Shown once. Store offline; each code can be used once. */
+            recoveryCodes: string[];
+        };
+        CompleteEmailVerificationDto: {
+            token: string;
+        };
+        PasswordRecoveryDto: {
+            identifier: string;
+            organizationCode?: string;
+        };
+        CompletePasswordRecoveryDto: {
+            token: string;
+            newPassword: string;
+        };
         PermissionsResponseDto: {
             organizationId: string;
             permissions: string[];
@@ -661,6 +1467,7 @@ export interface components {
             name: string;
         };
         AdminRoleDto: {
+            mfaRequired: boolean;
             id: string;
             organizationId: string | null;
             code: string;
@@ -670,6 +1477,8 @@ export interface components {
         CreateAdminRoleDto: {
             code: string;
             name: string;
+            /** @default false */
+            mfaRequired: boolean;
             /** Format: uuid */
             organizationId: string;
             permissionCodes: string[];
@@ -679,6 +1488,9 @@ export interface components {
             name: string;
         };
         UpdateAdminRoleDto: {
+            /** @description Required when mfaRequired is supplied; previously read MFA policy. */
+            expectedMfaRequired?: boolean;
+            mfaRequired?: boolean;
             /** @description Required when permissionCodes is supplied; previously read permission set. */
             expectedPermissionCodes?: string[];
             name?: string;
@@ -699,12 +1511,346 @@ export interface components {
             name: string;
             /** @enum {string} */
             type: "INTERNAL" | "SUPPLIER";
+            parentId: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
         };
         CurrentOrganizationResponseDto: {
             organization: components["schemas"]["OrganizationDto"];
             userId: string;
         };
-        Object: Record<string, never>;
+        CreateOrganizationDto: {
+            code: string;
+            name: string;
+        };
+        UpdateOrganizationDto: {
+            expectedVersion: number;
+            name?: string;
+            /** Format: uuid */
+            parentId?: string;
+            /**
+             * Format: uuid
+             * @description Required when moving; the original parent, or null for a root organization
+             */
+            expectedParentId?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        DepartmentDto: {
+            id: string;
+            organizationId: string;
+            parentId: string | null;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+        };
+        CreateDepartmentDto: {
+            code: string;
+            name: string;
+            /** Format: uuid */
+            parentId?: string | null;
+        };
+        UpdateDepartmentDto: {
+            expectedVersion: number;
+            name?: string;
+            /** Format: uuid */
+            parentId?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        PositionDto: {
+            id: string;
+            organizationId: string;
+            departmentId: string;
+            categoryId: string | null;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+        };
+        CreatePositionDto: {
+            code: string;
+            name: string;
+            /** Format: uuid */
+            departmentId: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+        };
+        UpdatePositionDto: {
+            expectedVersion: number;
+            name?: string;
+            /** Format: uuid */
+            departmentId?: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        UserPositionDto: {
+            id: string;
+            organizationId: string;
+            userId: string;
+            positionId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+            position: components["schemas"]["PositionDto"];
+        };
+        ReplaceUserPositionsDto: {
+            positionIds: string[];
+            expectedPositionIds: string[];
+        };
+        AuditEventDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            actorUserId: string | null;
+            action: string;
+            resourceType: string;
+            resourceId: string | null;
+            outcome: string;
+            metadata: {
+                [key: string]: (string | null) | number | boolean;
+            };
+            traceId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AuditPageDto: {
+            items: components["schemas"]["AuditEventDto"][];
+            total: number;
+            nextCursor: string | null;
+        };
+        AuditExportRequestDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            actorUserId?: string;
+            action?: string;
+            resourceType?: string;
+            resourceId?: string;
+            /** @enum {string} */
+            outcome?: "SUCCESS" | "FAILURE" | "DENIED";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+        };
+        AuditExportDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            expiresAt: string;
+            rowCount: number;
+            downloadPath: string;
+        };
+        AuditExportContentDto: {
+            filename: string;
+            contentType: string;
+            content: string;
+        };
+        PlatformSettingsDto: {
+            /** @enum {string} */
+            notificationLocale: "zh-CN" | "en-US";
+            exportRetentionMinutes: number;
+            version: number;
+        };
+        UpdatePlatformSettingsDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            notificationLocale: "zh-CN" | "en-US";
+            exportRetentionMinutes: number;
+        };
+        NotificationRuleDto: {
+            /** @enum {string} */
+            kind: "TASK_ASSIGNED" | "TASK_REMINDER" | "TASK_ESCALATED";
+            enabled: boolean;
+            subjectTemplate: string;
+            bodyTemplate: string;
+            version: number;
+        };
+        UpdateNotificationRuleDto: {
+            expectedVersion: number;
+            enabled: boolean;
+            subjectTemplate: string;
+            bodyTemplate: string;
+        };
+        PositionCategoryDto: {
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            sortOrder: number;
+            version: number;
+        };
+        CreatePositionCategoryDto: {
+            code: string;
+            name: string;
+            sortOrder: number;
+        };
+        UpdatePositionCategoryDto: {
+            expectedVersion: number;
+            name?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+            sortOrder?: number;
+        };
+        InitializeFileUploadDto: {
+            resourceType: string;
+            /** Format: uuid */
+            resourceId: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+        };
+        FileDto: {
+            resourceType: string;
+            /** Format: uuid */
+            resourceId: string;
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+            /** @enum {string} */
+            status: "QUARANTINED" | "AVAILABLE" | "DELETED";
+            /** @enum {string} */
+            scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            scanReason: string | null;
+            version: number;
+            /** Format: date-time */
+            uploadExpiresAt: string;
+            /** Format: date-time */
+            scannedAt: string | null;
+            /** Format: date-time */
+            deletedAt: string | null;
+            /** Format: date-time */
+            retainUntil: string;
+        };
+        FileUploadDto: {
+            file: components["schemas"]["FileDto"];
+            uploadUrl: string;
+            headers: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            urlExpiresAt: string;
+        };
+        FileMutationDto: {
+            expectedVersion: number;
+        };
+        FileDownloadRequestDto: Record<string, never>;
+        FileDownloadDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        OutboxFailureDto: {
+            /** Format: uuid */
+            id: string;
+            eventType: string;
+            aggregateType: string;
+            aggregateId: string;
+            attempts: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            availableAt: string;
+            /** @enum {string} */
+            reasonCode: "OUTBOX_DELIVERY_FAILED";
+        };
+        OutboxFailurePageDto: {
+            items: components["schemas"]["OutboxFailureDto"][];
+            total: number;
+        };
+        OutboxRetryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "PENDING";
+        };
+        TaskDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            fixedVersion: string;
+            entryInstanceVersion: number;
+            /** Format: uuid */
+            nodeId: string;
+            name: string;
+            /** @enum {string} */
+            type: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: date-time */
+            dueAt: string | null;
+            /** @enum {string} */
+            status: "PENDING" | "IN_PROGRESS" | "OVERDUE";
+            /** Format: uuid */
+            claimedByUserId: string | null;
+            /** Format: date-time */
+            claimedAt: string | null;
+            canAct: boolean;
+            canClaim: boolean;
+            canRelease: boolean;
+        };
+        TaskPageDto: {
+            items: components["schemas"]["TaskDto"][];
+            total: number;
+        };
+        InboxMutationDto: {
+            expectedVersion: number;
+        };
+        NotificationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            problemId: string;
+            version: number;
+            /** Format: uuid */
+            taskId: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            fixedVersion: string;
+            /** Format: uuid */
+            nodeId: string;
+            nodeName: string;
+            /** @enum {string} */
+            kind: "TASK_ASSIGNED" | "TASK_REMINDER" | "TASK_ESCALATED";
+            subject: string | null;
+            body: string;
+            /** @enum {string} */
+            status: "DELIVERED";
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        NotificationPageDto: {
+            items: components["schemas"]["NotificationDto"][];
+            total: number;
+        };
+        ProblemDomainSummaryDto: {
+            title: string;
+            description: string;
+            domainUiKey: string;
+        };
         ProblemIndexResponseDto: {
             id: string;
             organizationId: string;
@@ -712,33 +1858,436 @@ export interface components {
             domainCode: string;
             problemType: string;
             sourceType: string;
-            sourceId?: string;
+            /** Format: uuid */
+            sourceId: string;
             /** @enum {string} */
             status: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
             severity: string;
-            responsibleParty?: string;
-            dueAt?: string;
+            responsibleParty: string | null;
+            /** Format: uuid */
+            ownerId: string | null;
+            /** Format: date-time */
+            dueAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             version: number;
+            summary: components["schemas"]["ProblemDomainSummaryDto"];
+        };
+        ProblemStatusCountDto: {
+            /** @enum {string} */
+            status: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+            count: number;
         };
         ProblemIndexPageResponseDto: {
             items: components["schemas"]["ProblemIndexResponseDto"][];
             total: number;
             page: number;
             pageSize: number;
+            statusCounts: components["schemas"]["ProblemStatusCountDto"][];
+        };
+        ProblemReportIdentityDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            domainCode: string;
+            sourceType: string;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        ProblemInstanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            version: number;
+            /** @enum {string} */
+            status: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "SUSPENDED";
+            /** Format: uuid */
+            currentNodeId: string | null;
+            current: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ProblemReportRevisionDto: {
+            /** Format: uuid */
+            id: string;
+            instanceVersion: number;
+            /** Format: date-time */
+            recordedAt: string;
+        };
+        ProblemReportSnapshotDto: {
+            problemType: string | null;
+            severity: string | null;
+            status: string | null;
+            responsibleParty: string | null;
+            /** Format: uuid */
+            ownerId: string | null;
+            /** Format: date-time */
+            dueAt: string | null;
+        };
+        ProblemFieldDto: {
+            key: string;
+            label: string;
+            value: string | null;
+        };
+        ProblemSectionDto: {
+            key: string;
+            title: string;
+            fields: components["schemas"]["ProblemFieldDto"][];
+        };
+        ProblemNodeFactDto: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            name: string;
+            /** @enum {string} */
+            type: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+            current: boolean;
+            visited: boolean;
+            actionCount: number;
+        };
+        ProblemWorkflowActionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            nodeId: string;
+            /** @enum {string} */
+            action: "START" | "SUBMIT" | "APPROVE" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+            instanceVersion: number;
+            /** Format: uuid */
+            actorUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        FileEvidenceDto: {
+            resourceType: string;
+            /** Format: uuid */
+            resourceId: string;
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+            /** @enum {string} */
+            status: "QUARANTINED" | "AVAILABLE" | "DELETED";
+            /** @enum {string} */
+            scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            scanReason: string | null;
+            version: number;
+            /** Format: date-time */
+            uploadExpiresAt: string;
+            /** Format: date-time */
+            scannedAt: string | null;
+            /** Format: date-time */
+            deletedAt: string | null;
+            /** Format: date-time */
+            retainUntil: string;
+            downloadable: boolean;
+        };
+        ProblemUpgradeDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            beforeInstanceId: string;
+            /** Format: uuid */
+            afterInstanceId: string;
+            /** Format: uuid */
+            actorUserId: string;
+            reason: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            beforeDomainRevisionId: string;
+            /** Format: uuid */
+            afterDomainRevisionId: string;
+            mappingVersion: string;
+        };
+        ProblemReportDto: {
+            /** Format: date-time */
+            generatedAt: string;
+            problem: components["schemas"]["ProblemReportIdentityDto"];
+            instance: components["schemas"]["ProblemInstanceDto"] | null;
+            revision: components["schemas"]["ProblemReportRevisionDto"] | null;
+            summary: components["schemas"]["ProblemDomainSummaryDto"] | null;
+            snapshot: components["schemas"]["ProblemReportSnapshotDto"] | null;
+            sections: components["schemas"]["ProblemSectionDto"][];
+            nodes: components["schemas"]["ProblemNodeFactDto"][];
+            workflowActions: components["schemas"]["ProblemWorkflowActionDto"][];
+            evidence: components["schemas"]["FileEvidenceDto"][];
+            upgrades: components["schemas"]["ProblemUpgradeDto"][];
+            /** @enum {string} */
+            dataAvailability: "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+            unavailableFields: string[];
+        };
+        ProblemAuditEventDto: {
+            /** Format: uuid */
+            id: string;
+            action: string;
+            outcome: string;
+            resourceType: string;
+            resourceId: string;
+            /** Format: uuid */
+            actorUserId: string | null;
+            actorName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            resourceVersion: number | null;
+            reasonCode: string | null;
+        };
+        ProblemAuditPageDto: {
+            items: components["schemas"]["ProblemAuditEventDto"][];
+            nextCursor: string | null;
+            domainRevisionTrailAvailable: boolean;
+        };
+        ProblemDomainWorkspaceDto: {
+            domainVersion: number;
+            /** Format: uuid */
+            revisionId: string | null;
+            summary: components["schemas"]["ProblemDomainSummaryDto"];
+            sections: components["schemas"]["ProblemSectionDto"][];
+        };
+        ProblemCapabilityDto: {
+            canAct: boolean;
+            allowedActions: ("SUBMIT" | "APPROVE" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE")[];
+            reasonCode: string | null;
+            /** Format: uuid */
+            currentNodeId: string | null;
+            /** Format: uuid */
+            taskId: string | null;
+            /** Format: uuid */
+            claimedByUserId: string | null;
+            projectionPending: boolean;
+        };
+        ProblemActionDescriptionDto: {
+            actionKey: string;
+            label: string;
+            enabled: boolean;
+            reasonCode: string | null;
+        };
+        ProblemWorkspaceDto: {
+            problem: components["schemas"]["ProblemIndexResponseDto"];
+            selectedInstance: components["schemas"]["ProblemInstanceDto"] | null;
+            instances: components["schemas"]["ProblemInstanceDto"][];
+            upgrades: components["schemas"]["ProblemUpgradeDto"][];
+            domain: components["schemas"]["ProblemDomainWorkspaceDto"] | null;
+            /** @enum {string} */
+            domainAvailability: "AVAILABLE" | "UNAVAILABLE";
+            readOnly: boolean;
+            nodes: components["schemas"]["ProblemNodeFactDto"][];
+            workflowActions: components["schemas"]["ProblemWorkflowActionDto"][];
+            capabilities: components["schemas"]["ProblemCapabilityDto"];
+            task: components["schemas"]["TaskDto"] | null;
+            actions: components["schemas"]["ProblemActionDescriptionDto"][];
+            evidence: components["schemas"]["FileEvidenceDto"][];
+        };
+        ProblemSavedViewFiltersDto: {
+            domainCode?: string;
+            problemType?: string;
+            /** @enum {string} */
+            status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+            severity?: string;
+            /** Format: uuid */
+            ownerId?: string;
+            search?: string;
+            /** Format: date-time */
+            dueFrom?: string;
+            /** Format: date-time */
+            dueTo?: string;
+            /** Format: date-time */
+            overdueAt?: string;
+        };
+        ProblemSavedViewSortDto: {
+            /** @enum {string} */
+            sortBy: "createdAt" | "updatedAt" | "dueAt" | "reportNumber" | "status" | "severity";
+            /** @enum {string} */
+            sortDirection: "asc" | "desc";
+        };
+        ProblemSavedViewConfigurationDto: {
+            /** @enum {number} */
+            schemaVersion: 1;
+            filters: components["schemas"]["ProblemSavedViewFiltersDto"];
+            sort: components["schemas"]["ProblemSavedViewSortDto"];
+            visibleColumns: ("reportNumber" | "title" | "domainCode" | "problemType" | "status" | "severity" | "responsibleParty" | "ownerId" | "dueAt" | "updatedAt")[];
+            columnOrder: ("reportNumber" | "title" | "domainCode" | "problemType" | "status" | "severity" | "responsibleParty" | "ownerId" | "dueAt" | "updatedAt")[];
+        };
+        ProblemSavedViewDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            configuration: components["schemas"]["ProblemSavedViewConfigurationDto"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProblemSavedViewPageDto: {
+            items: components["schemas"]["ProblemSavedViewDto"][];
+            total: number;
+        };
+        CreateProblemSavedViewDto: {
+            name: string;
+            configuration: components["schemas"]["ProblemSavedViewConfigurationDto"];
+        };
+        UpdateProblemSavedViewDto: {
+            name?: string;
+            configuration?: components["schemas"]["ProblemSavedViewConfigurationDto"];
+            expectedVersion: number;
+        };
+        DeleteProblemSavedViewDto: {
+            expectedVersion: number;
+        };
+        ProblemSavedViewDeletedDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {number} */
+            deleted: true;
         };
         /** @enum {string} */
-        WorkflowNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
-        WorkflowNodeDraftDto: {
+        WorkflowVersionStatus: "DRAFT" | "PUBLISHED" | "RETIRED";
+        WorkflowVersionSummaryDto: {
+            /** Format: uuid */
             id: string;
-            type: components["schemas"]["WorkflowNodeType"];
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            version: number;
+            status: components["schemas"]["WorkflowVersionStatus"];
+            /** Format: date-time */
+            publishedAt: string | null;
+            /** Format: uuid */
+            publishedById: string | null;
+            changeNote: string | null;
+        };
+        WorkflowDefinitionSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            code: string;
             name: string;
-            config?: Record<string, never>;
+            description: string | null;
+            revision: number;
+            version: components["schemas"]["WorkflowVersionSummaryDto"];
+            /** Format: uuid */
+            draftVersionId: string | null;
+        };
+        WorkflowPageDto: {
+            items: components["schemas"]["WorkflowDefinitionSummaryDto"][];
+            total: number;
+        };
+        WorkflowCodeOptionDto: {
+            code: string;
+            name: string;
+        };
+        WorkflowUserOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        WorkflowOptionsDto: {
+            roles: components["schemas"]["WorkflowCodeOptionDto"][];
+            users: components["schemas"]["WorkflowUserOptionDto"][];
+            permissions: components["schemas"]["WorkflowCodeOptionDto"][];
+        };
+        WorkflowDefinitionDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            code: string;
+            name: string;
+            description: string | null;
+            revision: number;
+            versions: components["schemas"]["WorkflowVersionSummaryDto"][];
+        };
+        /** @enum {string} */
+        WorkflowAction: "SUBMIT" | "APPROVE" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+        WorkflowConditionDto: {
+            /** @enum {string} */
+            field: "status" | "severity" | "problemType" | "domainCode" | "sourceType" | "responsibleParty";
+            /** @enum {string} */
+            operator: "eq" | "ne" | "in" | "notIn";
+            value: (string | null) | (string | null)[];
         };
         WorkflowTransitionDraftDto: {
             id: string;
             from: string;
             to: string;
-            condition?: Record<string, never>;
+            action?: components["schemas"]["WorkflowAction"];
+            condition?: components["schemas"]["WorkflowConditionDto"];
+        };
+        WorkflowAssignmentDto: {
+            roleCode?: string;
+            /** Format: uuid */
+            assigneeUserId?: string;
+            permission?: string;
+        };
+        WorkflowReminderDto: {
+            offsetMinutes: number;
+        };
+        WorkflowEditorPositionDto: {
+            x: number;
+            y: number;
+        };
+        WorkflowNodeConfigDto: {
+            assignment?: components["schemas"]["WorkflowAssignmentDto"];
+            isStart?: boolean;
+            isEnd?: boolean;
+            slaMinutes?: number;
+            reminders?: components["schemas"]["WorkflowReminderDto"][];
+            escalation?: components["schemas"]["WorkflowAssignmentDto"];
+            requireIndependentVerification?: boolean;
+            editorPosition?: components["schemas"]["WorkflowEditorPositionDto"];
+        };
+        /** @enum {string} */
+        WorkflowNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+        WorkflowNodeResponseDto: {
+            id: string;
+            name: string;
+            config?: components["schemas"]["WorkflowNodeConfigDto"];
+            type: components["schemas"]["WorkflowNodeType"];
+        };
+        WorkflowGraphResponseDto: {
+            transitions: components["schemas"]["WorkflowTransitionDraftDto"][];
+            nodes: components["schemas"]["WorkflowNodeResponseDto"][];
+        };
+        WorkflowVersionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            version: number;
+            status: components["schemas"]["WorkflowVersionStatus"];
+            /** Format: date-time */
+            publishedAt: string | null;
+            /** Format: uuid */
+            publishedById: string | null;
+            changeNote: string | null;
+            structureSnapshot: components["schemas"]["WorkflowGraphResponseDto"];
+        };
+        WorkflowDefinitionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            code: string;
+            name: string;
+            description: string | null;
+            revision: number;
+            version: components["schemas"]["WorkflowVersionResponseDto"];
+        };
+        /** @enum {string} */
+        WorkflowEditableNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "CLOSE";
+        WorkflowNodeDraftDto: {
+            id: string;
+            type: components["schemas"]["WorkflowEditableNodeType"];
+            name: string;
+            config?: components["schemas"]["WorkflowNodeConfigDto"];
         };
         CreateWorkflowDto: {
             nodes: components["schemas"]["WorkflowNodeDraftDto"][];
@@ -747,41 +2296,95 @@ export interface components {
             name: string;
             description?: string;
         };
-        /** @enum {string} */
-        WorkflowVersionStatus: "DRAFT" | "PUBLISHED" | "RETIRED";
-        WorkflowVersionResponseDto: {
-            id: string;
-            workflowDefinitionId: string;
-            version: number;
-            status: components["schemas"]["WorkflowVersionStatus"];
-            publishedAt?: string;
-            publishedById?: string;
-            changeNote?: string;
-            structureSnapshot: Record<string, never>;
-        };
-        WorkflowDefinitionResponseDto: {
-            id: string;
-            organizationId: string;
-            code: string;
-            name: string;
-            description?: string;
-            version: components["schemas"]["WorkflowVersionResponseDto"];
-        };
-        UpdateWorkflowDraftDto: {
+        WorkflowGraphDto: {
             nodes: components["schemas"]["WorkflowNodeDraftDto"][];
             transitions: components["schemas"]["WorkflowTransitionDraftDto"][];
-            description?: string;
         };
         WorkflowValidationResponseDto: {
             valid: boolean;
             errors: string[];
         };
+        UpdateWorkflowDraftDto: {
+            nodes: components["schemas"]["WorkflowNodeDraftDto"][];
+            transitions: components["schemas"]["WorkflowTransitionDraftDto"][];
+            /** Format: uuid */
+            draftVersionId: string;
+            expectedRevision: number;
+            description?: string;
+        };
         PublishWorkflowDto: {
+            /** Format: uuid */
+            draftVersionId: string;
+            expectedRevision: number;
             changeNote?: string;
         };
         CopyWorkflowDto: {
-            sourceVersionId?: string;
+            /** Format: uuid */
+            sourceVersionId: string;
+            expectedRevision: number;
             description?: string;
+        };
+        WorkflowMappingOutcomeDto: {
+            fieldId: string;
+            /** @enum {string} */
+            outcome: "COPIED" | "PRESERVED" | "UNMAPPED";
+        };
+        WorkflowUpgradePreviewDto: {
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            canUpgrade: boolean;
+            reasonCode: string | null;
+            /** Format: uuid */
+            instanceId: string | null;
+            /** Format: uuid */
+            currentNodeId: string | null;
+            expectedProblemVersion: number;
+            expectedInstanceVersion: number | null;
+            expectedDomainVersion: number | null;
+            /** Format: uuid */
+            targetVersionId: string | null;
+            targetProblemType: string | null;
+            mappingVersion: string | null;
+            mappingSummary: components["schemas"]["WorkflowMappingOutcomeDto"][];
+        };
+        WorkflowUpgradeRequestDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            currentNodeId: string;
+            expectedProblemVersion: number;
+            expectedInstanceVersion: number;
+            expectedDomainVersion: number;
+            reason: string;
+        };
+        WorkflowUpgradeResultDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            beforeInstanceId: string;
+            /** Format: uuid */
+            afterInstanceId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            /** Format: uuid */
+            currentNodeId: string;
+            problemVersion: number;
+            instanceVersion: number;
+            domainVersion: number;
+            /** Format: uuid */
+            beforeDomainRevisionId: string;
+            /** Format: uuid */
+            afterDomainRevisionId: string;
+            mappingVersion: string;
+            mappingSummary: components["schemas"]["WorkflowMappingOutcomeDto"][];
+            /** Format: date-time */
+            upgradedAt: string;
         };
         /** @enum {string} */
         ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
@@ -792,7 +2395,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "PROBLEM_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -1323,6 +2926,348 @@ export interface operations {
             };
         };
     };
+    MfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_enrollment: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentCompleteDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_verify: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponseDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_reauthenticate: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReauthenticationResponseDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_recoveryCodes: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_disable: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    EmailRecoveryController_requestVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    EmailRecoveryController_verify: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteEmailVerificationDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    EmailRecoveryController_requestRecovery: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordRecoveryDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    EmailRecoveryController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePasswordRecoveryDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     PermissionsController_permissions: {
         parameters: {
             query?: {
@@ -1722,9 +3667,13 @@ export interface operations {
             };
         };
     };
-    ReportingController_list: {
+    OrganizationGovernanceController_tree: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1735,13 +3684,1182 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OrganizationDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrganizationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_departments: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_createDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDepartmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_updateDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDepartmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_positions: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_createPosition: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePositionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_updatePosition: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePositionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_userPositions: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPositionDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_replaceUserPositions: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceUserPositionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPositionDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditQueryController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                actorUserId?: string;
+                action?: string;
+                resourceType?: string;
+                resourceId?: string;
+                outcome?: "SUCCESS" | "FAILURE" | "DENIED";
+                from?: string;
+                to?: string;
+                pageSize?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditExportController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditExportRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditExportController_download: {
+        parameters: {
+            query?: {
+                organizationId?: unknown;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExportContentDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_settings: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_updateSettings: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_rules: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRuleDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_updateRule: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationRuleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRuleDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_categories: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionCategoryDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_createCategory: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePositionCategoryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionCategoryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PlatformConfigurationController_updateCategory: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePositionCategoryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionCategoryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_initialize: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeFileUploadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileUploadDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_download: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileDownloadRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDownloadDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_remove: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OutboxAdministrationController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxFailurePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OutboxAdministrationController_retry: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxRetryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+                status?: "PENDING" | "IN_PROGRESS" | "OVERDUE";
+                claim?: "UNCLAIMED" | "MINE" | "OTHERS";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_claim: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_release: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NotificationInboxController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+                status?: "UNREAD" | "READ";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NotificationInboxController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ReportingController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                pageSize?: number;
+                domainCode?: string;
+                problemType?: string;
+                status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+                severity?: string;
+                ownerId?: string;
+                search?: string;
+                dueFrom?: string;
+                dueTo?: string;
+                overdueAt?: string;
+                sortBy?: "createdAt" | "updatedAt" | "dueAt" | "reportNumber" | "status" | "severity";
+                sortDirection?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemIndexPageResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
     ReportingController_report: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+                instanceId?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -1754,13 +4872,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
     ReportingController_audit: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                cursor?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -1773,7 +4905,17 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProblemAuditPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
@@ -1781,13 +4923,19 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string;
-                page?: components["schemas"]["Object"];
-                pageSize?: components["schemas"]["Object"];
+                page?: number;
+                pageSize?: number;
                 domainCode?: string;
                 problemType?: string;
                 status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
                 severity?: string;
+                ownerId?: string;
                 search?: string;
+                dueFrom?: string;
+                dueTo?: string;
+                overdueAt?: string;
+                sortBy?: "createdAt" | "updatedAt" | "dueAt" | "reportNumber" | "status" | "severity";
+                sortDirection?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -1846,7 +4994,10 @@ export interface operations {
     };
     ProblemIndexController_workspace: {
         parameters: {
-            query?: never;
+            query?: {
+                organizationId?: string;
+                instanceId?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -1860,7 +5011,180 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProblemIndexResponseDto"];
+                    "application/json": components["schemas"]["ProblemWorkspaceDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProblemSavedViewController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemSavedViewPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProblemSavedViewController_create: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProblemSavedViewDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemSavedViewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProblemSavedViewController_remove: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteProblemSavedViewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemSavedViewDeletedDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProblemSavedViewController_update: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProblemSavedViewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemSavedViewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowController_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                status?: "DRAFT" | "PUBLISHED" | "RETIRED";
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPageDto"];
                 };
             };
             /** @description Controlled API error */
@@ -1887,12 +5211,136 @@ export interface operations {
             };
         };
         responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionResponseDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowController_options: {
+        parameters: {
+            query?: {
+                search?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowOptionsDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionDetailDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowController_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowDefinitionResponseDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowController_validateGraph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowGraphDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowValidationResponseDto"];
                 };
             };
             /** @description Controlled API error */
@@ -1951,7 +5399,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1985,12 +5433,12 @@ export interface operations {
             };
         };
         responses: {
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowVersionResponseDto"];
+                    "application/json": components["schemas"]["WorkflowDefinitionResponseDto"];
                 };
             };
             /** @description Controlled API error */
@@ -2019,7 +5467,7 @@ export interface operations {
             };
         };
         responses: {
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2028,6 +5476,74 @@ export interface operations {
                 };
             };
             /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowUpgradeController_preview: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowUpgradePreviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowUpgradeController_upgrade: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowUpgradeRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowUpgradeResultDto"];
+                };
+            };
             default: {
                 headers: {
                     [name: string]: unknown;

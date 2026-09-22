@@ -63,7 +63,7 @@ describe('granular permission PostgreSQL migration', () => {
 describe('administrator security PostgreSQL regression', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let actor: { id: string; organizationId: string };
+  let actor: { id: string; organizationId: string; sessionId?: string };
   let target: { id: string; organizationId: string };
   let otherOrganizationId: string;
   let cookie: string;
@@ -88,7 +88,8 @@ describe('administrator security PostgreSQL regression', () => {
     const role = await prisma.role.create({ data: { organizationId: organization.id, code: 'security-admin', name: 'Security admin', permissions: { create: permissions.map((permission) => ({ permissionId: permission.id })) } } });
     const otherRole = await prisma.role.create({ data: { organizationId: other.id, code: 'security-reader', name: 'Reader' } });
     await prisma.userRole.createMany({ data: [{ userId: actor.id, organizationId: organization.id, roleId: role.id }, { userId: actor.id, organizationId: other.id, roleId: otherRole.id }] });
-    const token = await app.get(SessionService).create(actor.id);
+    const token = await app.get(SessionService).create(actor.id, prisma, { mfaVerified: true, reauthenticated: true });
+    actor.sessionId = (await app.get(SessionService).resolve(token))!.id;
     cookie = `qms_session=${token}; qms_csrf=${csrf}`;
   });
 
@@ -110,7 +111,7 @@ describe('administrator security PostgreSQL regression', () => {
     const limitedRole = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Isolated', permissions: { create: { permissionId: permission.id } } } });
     const editableRole = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Editable' } });
     await prisma.userRole.create({ data: { userId: limited.id, organizationId, roleId: limitedRole.id } });
-    const limitedCookie = `qms_session=${await app.get(SessionService).create(limited.id)}; qms_csrf=${csrf}`;
+    const limitedCookie = `qms_session=${await app.get(SessionService).create(limited.id, prisma, { mfaVerified: true, reauthenticated: true })}; qms_csrf=${csrf}`;
     const send = (method: 'post' | 'patch' | 'delete' | 'put', path: string, body: object) => request(app.getHttpServer())[method](`/api/v1/admin${path}`).set('Cookie', limitedCookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
     const actions = [
       { permission: 'users:create', status: 201, run: () => send('post', '/users', { organizationId, username: `created-${randomUUID()}`, accountType: 'INTERNAL', initialPassword: 'isolated-initial-password' }) },
@@ -148,7 +149,8 @@ describe('administrator security PostgreSQL regression', () => {
     const statusPermission = permissions.find((permission) => permission.code === 'account:users:status')!;
     const role = await prisma.role.create({ data: { organizationId, code: randomUUID(), name: 'Mixed', permissions: { create: { permissionId: updatePermission.id } } } });
     await prisma.userRole.create({ data: { userId: limited.id, roleId: role.id, organizationId } });
-    const limitedActor = { id: limited.id, organizationId, accountType: 'INTERNAL' as const };
+    const limitedSession = (await app.get(SessionService).resolve(await app.get(SessionService).create(limited.id, prisma, { mfaVerified: true, reauthenticated: true })))!;
+    const limitedActor = { id: limited.id, sessionId: limitedSession.id, organizationId, accountType: 'INTERNAL' as const };
     const service = app.get(AdminUserService);
     const body = { email: `mixed-${subject.id}@example.test`, status: 'DISABLED' as const };
     const key = randomUUID();
@@ -187,7 +189,7 @@ describe('administrator security PostgreSQL regression', () => {
     const service = app.get(AdminUserService);
     const key = randomUUID();
     const body = { organizationId: otherOrganizationId };
-    const currentActor = { ...actor, accountType: 'INTERNAL' as const };
+    const currentActor = { ...actor, sessionId: actor.sessionId!, accountType: 'INTERNAL' as const };
     try {
       await service.update(currentActor, subject.id, body, actor.organizationId, randomUUID(), key);
       await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: destination.id, permissionId: permission.id } } });
@@ -254,7 +256,7 @@ describe('administrator security PostgreSQL regression', () => {
     const sessions = app.get(SessionService);
     const password = 'login-race-original-password';
     const user = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `login-race-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: await passwords.hash(password) } });
-    const current = mutation === 'password change' ? await sessions.resolve(await sessions.create(user.id)) : null;
+    const current = mutation === 'password change' ? await sessions.resolve(await sessions.create(user.id, prisma, { reauthenticated: true })) : null;
     const temporaryCode = randomUUID();
     const issued = mutation === 'reset' ? await request(app.getHttpServer()).post(`/api/v1/admin/users/${user.id}/password-reset`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ temporaryCode }).expect(201) : null;
     let signalVerified!: () => void;
@@ -537,26 +539,28 @@ describe('administrator security PostgreSQL regression', () => {
 
   it('keeps profile unchanged when its audit fails and reports duplicate emails as conflicts', async () => {
     const identity = app.get(IdentityService);
+    const targetSession = (await app.get(SessionService).resolve(await app.get(SessionService).create(target.id, prisma, { mfaVerified: true, reauthenticated: true })))!;
     const before = await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { email: true } });
     const failure = jest.spyOn(app.get(AuditLogService), 'record').mockRejectedValueOnce(new Error('audit unavailable'));
-    try { await expect(identity.updateProfile(target.id, { email: `profile-${suffix}@example.test` }, randomUUID())).rejects.toThrow('audit unavailable'); }
+    try { await expect(identity.updateProfile(target.id, { email: `profile-${suffix}@example.test` }, randomUUID(), targetSession.id)).rejects.toThrow('audit unavailable'); }
     finally { failure.mockRestore(); }
     expect((await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { email: true } })).email).toBe(before.email);
-    await identity.updateProfile(actor.id, { email: `admin-${suffix}@example.test` }, randomUUID());
-    await expect(identity.updateProfile(target.id, { email: `ADMIN-${suffix}@example.test` }, randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_DUPLICATE' } });
+    await identity.updateProfile(actor.id, { email: `admin-${suffix}@example.test` }, randomUUID(), actor.sessionId!);
+    await expect(identity.updateProfile(target.id, { email: `ADMIN-${suffix}@example.test` }, randomUUID(), targetSession.id)).rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_DUPLICATE' } });
   });
 
   it('does not overwrite a concurrent password change after old-password verification', async () => {
     const passwords = app.get(PasswordService);
     const concurrentHash = await passwords.hash('concurrent-password');
     await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await passwords.hash('before-concurrent-password') } });
+    const targetSession = (await app.get(SessionService).resolve(await app.get(SessionService).create(target.id, prisma, { mfaVerified: true, reauthenticated: true })))!;
     const originalHash = passwords.hash.bind(passwords);
     const paused = jest.spyOn(passwords, 'hash').mockImplementationOnce(async (value: string) => {
       await prisma.user.update({ where: { id: target.id }, data: { passwordHash: concurrentHash } });
       return originalHash(value);
     });
     try {
-      await expect(app.get(IdentityService).changePassword({ userId: target.id, currentSessionId: randomUUID(), currentPassword: 'before-concurrent-password', newPassword: 'superseded-password', traceId: randomUUID() })).rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+      await expect(app.get(IdentityService).changePassword({ userId: target.id, currentSessionId: targetSession.id, currentPassword: 'before-concurrent-password', newPassword: 'superseded-password', traceId: randomUUID() })).rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
       expect(await passwords.verify((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).passwordHash, 'concurrent-password')).toBe(true);
     } finally { paused.mockRestore(); }
   });
@@ -580,8 +584,8 @@ describe('administrator security PostgreSQL regression', () => {
     const temporaryCode = randomUUID();
     const issued = await request(app.getHttpServer()).post(`/api/v1/admin/users/${target.id}/password-reset`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ temporaryCode }).expect(201);
     const sessions = app.get(SessionService);
-    const current = await sessions.resolve(await sessions.create(target.id));
-    const other = await sessions.resolve(await sessions.create(target.id));
+    const current = await sessions.resolve(await sessions.create(target.id, prisma, { mfaVerified: true, reauthenticated: true }));
+    const other = await sessions.resolve(await sessions.create(target.id, prisma, { mfaVerified: true, reauthenticated: true }));
     await prisma.session.create({ data: { userId: target.id, tokenHash: randomUUID(), expiresAt: new Date(0) } });
     await app.get(IdentityService).changePassword({ userId: target.id, currentSessionId: current!.id, currentPassword: 'before-self-change-password', newPassword: 'self-changed-password', traceId: randomUUID() });
     const active = await sessions.listForUser(target.id, current!.id);

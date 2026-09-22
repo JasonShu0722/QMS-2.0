@@ -25,6 +25,50 @@ describe('WorkflowValidationService', () => {
     expect(service.validateDraft(validDraft())).toEqual({ valid: true, errors: [] });
   });
 
+  it('accepts explicit backward actions while keeping the forward graph acyclic', () => {
+    const draft = validDraft();
+    draft.transitions.push(
+      { id: 'return', from: 'verify', to: 'start', action: 'RETURN' },
+      { id: 'reject', from: 'approval', to: 'start', action: 'REJECT' },
+      { id: 'reopen', from: 'close', to: 'start', action: 'REOPEN' },
+    );
+    expect(service.validateDraft(draft)).toEqual({ valid: true, errors: [] });
+  });
+
+  it.each(['RETURN', 'REJECT', 'REOPEN'])('rejects implicit %s edges that move forward to an unvisited close node', (type) => {
+    const draft = {
+      nodes: [
+        { id: 'start', type: 'ACTION', name: 'Start', config: { isStart: true, assignment: 'QUALITY' } },
+        { id: 'backward', type, name: 'Backward', config: { assignment: 'QUALITY' } },
+        { id: 'close', type: 'CLOSE', name: 'Close', config: { isEnd: true, assignment: 'QUALITY' } },
+      ],
+      transitions: [{ id: 'first', from: 'start', to: 'backward' }, { id: 'second', from: 'backward', to: 'close' }],
+    };
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it.each(['DELETE', 'APPROVE', 'CLOSE', 'RETURN'])('rejects invalid forward-edge action %s', (action) => {
+    const draft = validDraft();
+    Object.assign(draft.transitions[0]!, { action });
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it('rejects non-boolean verification policy and non-close end nodes', () => {
+    const draft = validDraft();
+    Object.assign(draft.nodes[3]!.config, { requireIndependentVerification: 'true' });
+    expect(service.validateDraft(draft).valid).toBe(false);
+    draft.nodes[3]!.config = { isEnd: true, assignment: { roleCode: 'QUALITY' } };
+    draft.nodes[3]!.type = 'ACTION';
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it('describes and validates explicit transition actions at the transport boundary', async () => {
+    const draft = validDraft();
+    Object.assign(draft.transitions[0]!, { action: 'DELETE' });
+    const dto = plainToInstance(CreateWorkflowDto, { code: 'QMS', name: 'QMS', ...draft });
+    expect(JSON.stringify(await validate(dto))).toMatch(/isIn/);
+  });
+
   it.each([
     ['missing start', (draft: ReturnType<typeof validDraft>) => { draft.nodes[0]!.config = { assignment: { roleCode: 'QUALITY' } }; }],
     ['missing end', (draft: ReturnType<typeof validDraft>) => { draft.nodes[3]!.config = { assignment: { roleCode: 'QUALITY' } }; }],
@@ -90,6 +134,52 @@ describe('WorkflowValidationService', () => {
     }
   });
 
+  it.each([2_147_483_648, Number.MAX_SAFE_INTEGER, 1e20])('rejects SLA duration %s outside the supported integer range', (slaMinutes) => {
+    const draft = validDraft();
+    draft.nodes[0]!.config.slaMinutes = slaMinutes;
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_SLA_INVALID:start');
+  });
+
+  it('accepts the maximum supported SLA duration', () => {
+    const draft = validDraft();
+    draft.nodes[0]!.config.slaMinutes = 2_147_483_647;
+    expect(service.validateDraft(draft).valid).toBe(true);
+  });
+
+  it.each([
+    { reminders: [{ offsetMinutes: 0 }] },
+    { escalation: 'MANAGER' },
+    { slaMinutes: 60, reminders: [{ offsetMinutes: 10 }, { offsetMinutes: 10 }] },
+    { slaMinutes: 60, reminders: [{ offsetMinutes: Number.MAX_SAFE_INTEGER + 1 }] },
+  ])('rejects timing without SLA or deterministic unique offsets: %j', (timing) => {
+    const draft = validDraft();
+    draft.nodes[0]!.config = { isStart: true, assignment: { roleCode: 'QUALITY' }, ...timing };
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it('accepts deadline reminders and escalation with fixed SLA', () => {
+    const draft = validDraft();
+    Object.assign(draft.nodes[0]!.config, { reminders: [{ offsetMinutes: 0 }, { offsetMinutes: 60 }], escalation: 'MANAGER' });
+    expect(service.validateDraft(draft).valid).toBe(true);
+  });
+
+  it.each([
+    { roleCode: 'QUALITY', permission: '' },
+    { roleCode: 'QUALITY', assigneeUserId: 'not-a-user-id' },
+    { roleCode: 42, permission: 'workflow:act' },
+  ])('rejects assignments with an invalid explicit constraint: %j', (assignment) => {
+    const draft = validDraft();
+    Object.assign(draft.nodes[0]!.config, { assignment });
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_ASSIGNMENT_REQUIRED:start');
+  });
+
+  it('requires an assignment for CC nodes handled by the current manual runtime', () => {
+    const draft = validDraft();
+    draft.nodes[1]!.type = 'CC';
+    draft.nodes[1]!.config = {};
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_ASSIGNMENT_REQUIRED:approval');
+  });
+
   it('validates node enums and required graph arrays at the transport boundary', async () => {
     const dto = plainToInstance(CreateWorkflowDto, {
       code: 'QMS', name: 'QMS', nodes: [{ id: 'start', type: 'SCRIPT', name: '脚本' }], transitions: [{ id: 't', from: 'start', to: 'start' }],
@@ -97,7 +187,7 @@ describe('WorkflowValidationService', () => {
     const errors = await validate(dto);
     const messages = JSON.stringify(errors);
     expect(messages).toMatch(/isIn/);
-    const missingGraph = plainToInstance(CreateWorkflowDto, { code: 'QMS', name: 'QMS', nodes: [], transitions: [] });
+    const missingGraph = plainToInstance(CreateWorkflowDto, { code: 'QMS', name: 'QMS', nodes: [] });
     await expect(validate(missingGraph)).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({ property: 'nodes' }),
       expect.objectContaining({ property: 'transitions' }),

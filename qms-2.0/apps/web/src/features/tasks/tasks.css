@@ -1,0 +1,17 @@
+.task-inbox { display: grid; gap: 20px; min-width: 0; color: var(--qms-text); }
+.task-inbox > h2.ant-typography { margin: 0; font-size: 26px; }
+.task-inbox > .ant-tabs { min-width: 0; padding: 8px 24px 24px; border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
+.task-inbox__filters { padding: 8px 0; align-items: end; }
+.task-inbox__filters label { display: grid; gap: 8px; color: var(--qms-muted); }
+.task-inbox select { font: inherit; color: var(--qms-text); min-height: 36px; padding: 6px 12px; background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 7px; }
+.task-inbox select:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
+.task-inbox .ant-list-item { padding: 20px 0; }
+.task-inbox .ant-list-item-meta { min-width: 0; }
+.task-inbox .ant-list-item-meta-title { font-size: 16px; }
+.task-inbox .ant-list-item-meta-description, .task-inbox .ant-card-head-title { overflow-wrap: anywhere; }
+.task-inbox .ant-pagination { padding-top: 16px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .task-inbox > .ant-tabs { padding: 8px 16px 16px; }
+  .task-inbox .ant-list-item { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .task-inbox .ant-list-item-action { margin-left: 0; }
+}

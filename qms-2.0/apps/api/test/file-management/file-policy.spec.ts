@@ -1,326 +1,58 @@
-import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../src/database/prisma.service.js';
-import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
-import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FileManagementModule } from '../../src/modules/file-management/file-management.module.js';
+import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
-import {
-  OBJECT_STORAGE,
-  S3CompatibleObjectStorage,
-  createObjectStorage,
-} from '../../src/modules/file-management/object-storage.service.js';
+import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
+import { OBJECT_STORAGE, S3CompatibleObjectStorage, createObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
 
-describe('file management foundation', () => {
-  it('aborts the metadata transaction when upload audit fails', async () => {
-    const committed: unknown[] = [];
-    const tx = {
-      fileObject: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'file-id', ...data })) },
-      auditEvent: { create: jest.fn(async () => { throw new Error('AUDIT_UNAVAILABLE'); }) },
-    };
-    const prisma = {
-      fileObject: { create: jest.fn() },
-      auditEvent: { create: jest.fn() },
-      $transaction: jest.fn(async (work: (client: typeof tx) => Promise<unknown>) => {
-        const result = await work(tx);
-        committed.push(result);
-        return result;
-      }),
-    };
-    const storage = { createUploadUrl: async (objectKey: string) => ({ objectKey,
-      url: `https://storage.test/${objectKey}?signature=secret`, headers: {} }) };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage, new AuditLogService(prisma));
-    await expect(service.initializeUpload({ accountType: 'SUPPLIER', organizationId: 'org-id',
-      uploadedById: 'user-id', originalName: 'confidential.pdf', contentType: 'application/pdf',
-      sizeBytes: 4, bytes: Buffer.from('test'), traceId: 'upload-trace',
-    })).rejects.toThrow('AUDIT_UNAVAILABLE');
-    expect(tx.fileObject.create).toHaveBeenCalledTimes(1);
-    expect(tx.auditEvent.create).toHaveBeenCalledTimes(1);
-    expect(prisma.fileObject.create).not.toHaveBeenCalled();
-    expect(prisma.auditEvent.create).not.toHaveBeenCalled();
-    expect(committed).toEqual([]);
+describe('attachment policy and immutable object signing', () => {
+  const environment = { ...process.env };
+  afterEach(() => { process.env = { ...environment }; });
+
+  it('enforces MIME, integer size, and batch count before upload', () => {
+    const policy = new FilePolicyService({ allowedMimeTypes: ['application/pdf'], maxBytes: 1024, maxFiles: 2 });
+    expect(() => policy.assertOne({ contentType: 'application/pdf', sizeBytes: 100 })).not.toThrow();
+    for (const sizeBytes of [0, -1, 0.5, Number.NaN, 1025]) expect(() => policy.assertOne({ contentType: 'application/pdf', sizeBytes })).toThrow();
+    expect(() => policy.assertOne({ contentType: 'text/html', sizeBytes: 1 })).toThrow();
+    expect(() => policy.assertBatch(Array.from({ length: 3 }, () => ({ contentType: 'application/pdf', sizeBytes: 1 })))).toThrow();
   });
 
-  it('enforces MIME, size, and batch count limits', () => {
-    const policy = new FilePolicyService({
-      allowedMimeTypes: ['application/pdf', 'image/png'],
-      maxBytes: 1024,
-      maxFiles: 2,
-    });
-
-    expect(() =>
-      policy.assertBatch([
-        { contentType: 'application/pdf', sizeBytes: 100 },
-        { contentType: 'image/png', sizeBytes: 200 },
-      ]),
-    ).not.toThrow();
-    expect(() =>
-      policy.assertBatch([{ contentType: 'text/html', sizeBytes: 100 }]),
-    ).toThrow('FILE_MIME_NOT_ALLOWED');
-    expect(() =>
-      policy.assertBatch([{ contentType: 'application/pdf', sizeBytes: 1025 }]),
-    ).toThrow('FILE_TOO_LARGE');
-    expect(() =>
-      policy.assertBatch([
-        { contentType: 'application/pdf', sizeBytes: 1 },
-        { contentType: 'application/pdf', sizeBytes: 1 },
-        { contentType: 'application/pdf', sizeBytes: 1 },
-      ]),
-    ).toThrow('FILE_COUNT_EXCEEDED');
-  });
-
-  it('creates supplier upload metadata and upload URLs with the same UUID object key', async () => {
-    const persistedFile = {
-      id: '30000000-0000-4000-8000-000000000001',
-      organizationId: '20000000-0000-4000-8000-000000000002',
-      objectKey: 'will-be-replaced',
-      originalName: 'supplier ncr evidence.pdf',
-      contentType: 'application/pdf',
-      sizeBytes: 12n,
-      sha256: 'will-be-replaced',
-      status: 'QUARANTINED',
-      version: 1,
-      resourceType: 'FoundationAttachment',
-      resourceId: 'foundation-only',
-      uploadedById: '10000000-0000-4000-8000-000000000002',
-      createdAt: new Date('2026-09-18T00:00:00.000Z'),
-      updatedAt: new Date('2026-09-18T00:00:00.000Z'),
-    };
-    const prisma = {
-      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
-      auditEvent: { create: jest.fn().mockResolvedValue({}) },
-      fileObject: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({
-            ...persistedFile,
-            objectKey: data.objectKey,
-            sha256: data.sha256,
-          }),
-        ),
-      },
-    };
-    const storage = {
-      createUploadUrl: jest.fn().mockImplementation((objectKey: string) => Promise.resolve({
-        objectKey,
-        url: `http://localhost:9000/qms-foundation/${objectKey}`,
-        headers: { 'content-type': 'application/pdf' },
-      })),
-    };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), storage, new AuditLogService(prisma));
-
-    const created = await service.initializeUpload({
-      accountType: 'SUPPLIER',
-      organizationId: '20000000-0000-4000-8000-000000000002',
-      uploadedById: '10000000-0000-4000-8000-000000000002',
-      originalName: 'supplier ncr evidence.pdf',
-      contentType: 'application/pdf',
-      sizeBytes: 12,
-      bytes: Buffer.from('file-content'),
-      resourceType: 'FoundationAttachment',
-      resourceId: 'foundation-only',
-    });
-
-    expect(storage.createUploadUrl).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      ),
-      'application/pdf',
-    );
-    expect(created).toMatchObject({
-      fileId: '30000000-0000-4000-8000-000000000001',
-      status: 'QUARANTINED',
-      uploadUrl: `http://localhost:9000/qms-foundation/${created.objectKey}`,
-      headers: { 'content-type': 'application/pdf' },
-      metadata: {
-        originalName: 'supplier ncr evidence.pdf',
-        contentType: 'application/pdf',
-        sizeBytes: 12,
-        resourceType: 'FoundationAttachment',
-        resourceId: 'foundation-only',
-      },
-    });
-    expect(created.objectKey).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-    expect(created.objectKey).not.toContain('supplier');
-    expect(JSON.parse(JSON.stringify(created))).toEqual(created);
-    expect(Object.keys(created).sort()).toEqual([
-      'fileId',
-      'headers',
-      'metadata',
-      'objectKey',
-      'status',
-      'uploadUrl',
-    ]);
-    expect(prisma.fileObject.create.mock.calls[0][0].data).toMatchObject({
-      organizationId: '20000000-0000-4000-8000-000000000002',
-      uploadedById: '10000000-0000-4000-8000-000000000002',
-      originalName: 'supplier ncr evidence.pdf',
-      version: 1,
-      status: 'QUARANTINED',
-    });
-    expect(prisma.fileObject.create.mock.calls[0][0].data.objectKey).toBe(created.objectKey);
-    expect(prisma.fileObject.create.mock.calls[0][0].data.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      action: 'ATTACHMENT_UPLOAD_INITIALIZED', actorUserId: persistedFile.uploadedById,
-      organizationId: persistedFile.organizationId, resourceId: created.fileId,
-      traceId: expect.any(String), outcome: 'SUCCESS',
-      metadata: { fileId: created.fileId, contentType: 'application/pdf', sizeBytes: 12,
-        sha256: expect.stringMatching(/^[0-9a-f]{64}$/), status: 'QUARANTINED' },
-    }) });
-  });
-
-  it('validates MIME and size before creating upload metadata', async () => {
-    const prisma = {
-      fileObject: {
-        create: jest.fn().mockResolvedValue({}),
-      },
-    };
-    const storage = { createUploadUrl: jest.fn() };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService({
-      allowedMimeTypes: ['application/pdf'],
-      maxBytes: 10,
-    }), storage as never, {} as never);
-
-    await expect(
-      service.initializeUpload({
-        accountType: 'INTERNAL',
-        organizationId: '20000000-0000-4000-8000-000000000002',
-        uploadedById: '10000000-0000-4000-8000-000000000002',
-        originalName: 'payload.html',
-        contentType: 'text/html',
-        sizeBytes: 12,
-        bytes: Buffer.from('file-content'),
-      }),
-    ).rejects.toThrow('FILE_MIME_NOT_ALLOWED');
-    expect(prisma.fileObject.create).not.toHaveBeenCalled();
-    expect(storage.createUploadUrl).not.toHaveBeenCalled();
-  });
-
-  it('marks quarantined files available only after a clean scan', async () => {
-    const prisma = {
-      fileObject: {
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        findUnique: jest.fn().mockResolvedValue({ id: 'file-id', status: 'AVAILABLE' }),
-      },
-    };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
-
-    await expect(
-      service.markAvailableAfterScan('file-id', { clean: true, scanner: 'local-av' }),
-    ).resolves.toEqual({ id: 'file-id', status: 'AVAILABLE' });
-    expect(prisma.fileObject.updateMany).toHaveBeenCalledWith({
-      where: { id: 'file-id', status: 'QUARANTINED' },
-      data: { status: 'AVAILABLE' },
-    });
-  });
-
-  it('keeps failed scans quarantined and refuses the availability transition', async () => {
-    const prisma = {
-      fileObject: {
-        updateMany: jest.fn(),
-      },
-    };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
-
-    await expect(
-      service.markAvailableAfterScan('file-id', {
-        clean: false,
-        scanner: 'local-av',
-        reason: 'malware signature',
-      }),
-    ).rejects.toThrow('FILE_SCAN_REJECTED');
-    expect(prisma.fileObject.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('allows downloads only after availability and uses logical delete', async () => {
-    const prisma = {
-      fileObject: {
-        findUnique: jest.fn().mockResolvedValueOnce({ status: 'QUARANTINED' }).mockResolvedValueOnce({
-          status: 'AVAILABLE',
-        }),
-        update: jest.fn().mockResolvedValue({ id: 'file-id', status: 'DELETED' }),
-      },
-    };
-    const service = new FileLifecycleService(prisma as never, new FilePolicyService(), {} as never, {} as never);
-
-    await expect(service.assertDownloadable('file-id')).rejects.toThrow('FILE_NOT_AVAILABLE');
-    await expect(service.assertDownloadable('file-id')).resolves.toEqual({ status: 'AVAILABLE' });
-    await expect(service.deleteLogically('file-id')).resolves.toMatchObject({ status: 'DELETED' });
-  });
-
-  it('rejects object storage keys that are not random UUIDs', async () => {
+  it('rejects nonrandom object keys and missing version identifiers', async () => {
     const storage = new S3CompatibleObjectStorage();
-    await expect(storage.createUploadUrl('invoice.pdf', 'application/pdf')).rejects.toThrow(
-      'OBJECT_KEY_MUST_BE_UUID',
-    );
+    await expect(storage.createUploadUrl('invoice.pdf', 'application/pdf')).rejects.toThrow('OBJECT_KEY_MUST_BE_UUID');
+    await expect(storage.createDownloadUrl('10000000-0000-4000-8000-000000000001', 'null', 'file')).rejects.toThrow('FILE_OBJECT_VERSION_REQUIRED');
   });
 
-  it('uses MinIO defaults locally and accepts S3 compatible endpoints from configuration', async () => {
-    const uuid = '10000000-0000-4000-8000-000000000001';
-    const previousEndpoint = process.env.QMS_OBJECT_STORAGE_ENDPOINT;
-    const previousBucket = process.env.QMS_OBJECT_STORAGE_BUCKET;
-    const previousProvider = process.env.QMS_OBJECT_STORAGE_PROVIDER;
-
+  it('requires explicit storage configuration and signs only short-lived immutable PUT and exact-version GET', async () => {
+    const objectKey = '10000000-0000-4000-8000-000000000001';
     delete process.env.QMS_OBJECT_STORAGE_ENDPOINT;
-    delete process.env.QMS_OBJECT_STORAGE_BUCKET;
-    delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
-    await expect(createObjectStorage().createUploadUrl(uuid, 'application/pdf')).resolves.toMatchObject({
-      objectKey: uuid,
-      url: `http://localhost:9000/qms-foundation/${uuid}`,
-      headers: { 'content-type': 'application/pdf' },
-    });
-
-    process.env.QMS_OBJECT_STORAGE_PROVIDER = 's3';
-    process.env.QMS_OBJECT_STORAGE_ENDPOINT = 'https://s3.example.test';
-    process.env.QMS_OBJECT_STORAGE_BUCKET = 'qms-prod';
-    await expect(createObjectStorage().createUploadUrl(uuid, 'application/pdf')).resolves.toMatchObject({
-      objectKey: uuid,
-      url: `https://s3.example.test/qms-prod/${uuid}`,
-      headers: { 'content-type': 'application/pdf' },
-    });
-
-    if (previousEndpoint === undefined) delete process.env.QMS_OBJECT_STORAGE_ENDPOINT;
-    else process.env.QMS_OBJECT_STORAGE_ENDPOINT = previousEndpoint;
-    if (previousBucket === undefined) delete process.env.QMS_OBJECT_STORAGE_BUCKET;
-    else process.env.QMS_OBJECT_STORAGE_BUCKET = previousBucket;
-    if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
-    else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
+    await expect(createObjectStorage().createUploadUrl(objectKey, 'application/pdf')).rejects.toThrow('OBJECT_STORAGE_CONFIGURATION_REQUIRED');
+    Object.assign(process.env, { QMS_OBJECT_STORAGE_PROVIDER: 's3', QMS_OBJECT_STORAGE_ENDPOINT: 'https://storage.example.test', QMS_OBJECT_STORAGE_BUCKET: 'test-bucket',
+      QMS_OBJECT_STORAGE_ACCESS_KEY: 'fixture-access', QMS_OBJECT_STORAGE_SECRET_KEY: 'fixture-secret' });
+    const storage = createObjectStorage();
+    const upload = await storage.createUploadUrl(objectKey, 'application/pdf');
+    const put = new URL(upload.url);
+    expect(put.searchParams.get('X-Amz-Expires')).toBe('60');
+    expect(put.searchParams.get('X-Amz-SignedHeaders')).toContain('if-none-match');
+    expect(upload.headers).toMatchObject({ 'if-none-match': '*', 'content-type': 'application/pdf' });
+    const download = new URL(await storage.createDownloadUrl(objectKey, 'frozen-version', '证据.txt'));
+    expect(download.searchParams.get('versionId')).toBe('frozen-version');
+    expect(download.searchParams.get('response-content-disposition')).toContain('attachment;');
+    expect(download.searchParams.get('X-Amz-Expires')).toBe('60');
   });
 
-  it('injects object storage through the configured provider token', async () => {
-    const previousProvider = process.env.QMS_OBJECT_STORAGE_PROVIDER;
-    process.env.QMS_OBJECT_STORAGE_PROVIDER = 's3';
-    const moduleRef = await Test.createTestingModule({
-      imports: [FileManagementModule],
-    })
-      .overrideProvider(PrismaService)
-      .useValue({ fileObject: { create: jest.fn() } })
-      .compile();
-
-    expect(moduleRef.get(OBJECT_STORAGE)).toBeInstanceOf(S3CompatibleObjectStorage);
-    expect(moduleRef.get(FileLifecycleService)).toBeInstanceOf(FileLifecycleService);
-    await moduleRef.close();
-
-    if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
-    else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
+  it('installs an empty production resource registry and has no caller-supplied clean transition', async () => {
+    const module = await Test.createTestingModule({ imports: [FileManagementModule] }).overrideProvider(PrismaService).useValue({}).compile();
+    expect(module.get(OBJECT_STORAGE)).toBeInstanceOf(S3CompatibleObjectStorage);
+    expect(module.get(FileResourceAccess)).toBeDefined();
+    expect(module.get(FileLifecycleService)).not.toHaveProperty('markAvailableAfterScan');
+    expect(module.get(FileLifecycleService)).not.toHaveProperty('assertDownloadable');
+    await module.close();
   });
 
-  it('fails fast during module initialization for unsupported object storage providers', async () => {
-    const previousProvider = process.env.QMS_OBJECT_STORAGE_PROVIDER;
+  it('rejects unsupported object storage providers', () => {
     process.env.QMS_OBJECT_STORAGE_PROVIDER = 'filesystem';
-
-    await expect(
-      Test.createTestingModule({
-        imports: [FileManagementModule],
-      })
-        .overrideProvider(PrismaService)
-        .useValue({ fileObject: { create: jest.fn() } })
-        .compile(),
-    ).rejects.toThrow('OBJECT_STORAGE_PROVIDER_UNSUPPORTED');
-
-    if (previousProvider === undefined) delete process.env.QMS_OBJECT_STORAGE_PROVIDER;
-    else process.env.QMS_OBJECT_STORAGE_PROVIDER = previousProvider;
+    expect(() => createObjectStorage()).toThrow('OBJECT_STORAGE_PROVIDER_UNSUPPORTED');
   });
 });

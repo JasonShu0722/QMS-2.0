@@ -45,6 +45,13 @@ export class AuthorizationService {
     organizationId: string,
     featurePermission: string,
   ): Promise<void> {
+    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { status: true } });
+    if (!organization || (organization.status !== 'ACTIVE' && !['organization:read', 'organization:manage'].includes(featurePermission))) {
+      throw new HttpException({ code: 'ORGANIZATION_DISABLED', message: '组织已停用' }, 403);
+    }
+    if (organization.status !== 'ACTIVE' && featurePermission === 'organization:read') {
+      await this.assertFeature(userId, organizationId, 'organization:manage');
+    }
     const count = await this.prisma.userRole.count({
       where: {
         userId,

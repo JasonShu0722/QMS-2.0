@@ -64,8 +64,9 @@ export class AdminUserService {
       if (organizationChanged) {
         const references = await Promise.all([
           transaction.problemIndex.count({ where: { ownerId: userId } }),
-          transaction.workflowTask.count({ where: { assigneeUserId: userId } }),
+          transaction.workflowTask.count({ where: { OR: [{ assigneeUserId: userId }, { claimedByUserId: userId }] } }),
           transaction.notification.count({ where: { recipientUserId: userId } }),
+          transaction.userPosition.count({ where: { userId } }),
         ]);
         if (references.some((count) => count > 0)) adminError('ADMIN_USER_ORGANIZATION_IN_USE', 409);
       }
@@ -74,6 +75,7 @@ export class AdminUserService {
         ...(dto.accountType ? { accountType: dto.accountType } : {}),
         ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
         ...(dto.status ? { status: dto.status } : {}),
+        ...(identityChanged || dto.status === 'DISABLED' ? { securityVersion: { increment: 1 } } : {}),
       }, select: USER_SELECT }).catch((error: unknown) => {
         if (organizationChanged && (error as { code?: string }).code === 'P2003') adminError('ADMIN_USER_ORGANIZATION_IN_USE', 409);
         throw error;

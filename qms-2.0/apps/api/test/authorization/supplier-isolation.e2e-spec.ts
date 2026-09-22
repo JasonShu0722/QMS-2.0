@@ -121,6 +121,7 @@ describe('supplier isolation HTTP guard', () => {
       findMany: jest.fn(),
     },
     organization: {
+      findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
     },
   };
@@ -151,7 +152,7 @@ describe('supplier isolation HTTP guard', () => {
         tokenHash: where.tokenHash,
         expiresAt: new Date(Date.now() + 60_000),
         revokedAt: null,
-        user,
+        user: { ...user, organization: { status: 'ACTIVE' } },
       };
     });
     prisma.userRole.count.mockImplementation(async ({ where }: { where: { userId: string; organizationId: string; role: { permissions: { some: { permission: { code: string } } } } } }) =>
@@ -176,6 +177,7 @@ describe('supplier isolation HTTP guard', () => {
       if (!organization) throw new Error('not found');
       return organization;
     });
+    prisma.organization.findUnique.mockResolvedValue({ status: 'ACTIVE' });
   });
 
   afterAll(async () => {

@@ -1,7 +1,9 @@
 :root {
-  color: #182235;
-  background: #eef2f6;
-  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  color: var(--qms-text);
+  background: var(--qms-background);
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-synthesis: none;
 }
 
 body {
@@ -130,11 +132,11 @@ a {
   width: 100%;
   max-width: 420px;
   padding: 28px;
-  border: 1px solid rgb(255 255 255 / 72%);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgb(255 255 255 / 98%), rgb(242 249 255 / 94%));
-  box-shadow: 0 34px 78px rgb(5 57 116 / 22%), 0 1px 0 rgb(255 255 255 / 84%) inset;
-  backdrop-filter: blur(14px);
+  color: var(--qms-text);
+  border: 1px solid var(--qms-border);
+  border-radius: 10px;
+  background: var(--qms-surface);
+  box-shadow: 0 20px 56px rgb(5 57 116 / 16%);
 }
 
 .login-panel-head {
@@ -143,17 +145,18 @@ a {
 
 .login-panel-head p {
   margin: 0 0 8px;
-  color: #748da3;
+  color: var(--qms-muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: .06em;
 }
 
 .login-panel-head h1 {
   margin: 0;
-  color: #0d2b51;
+  color: var(--qms-text);
   font-size: 28px;
-  line-height: 1.15;
-  font-weight: 800;
+  line-height: 1.25;
+  font-weight: 650;
 }
 
 .login-form {
@@ -161,15 +164,15 @@ a {
 }
 
 .login-form .ant-form-item-label > label {
-  color: #244468;
-  font-weight: 600;
+  color: var(--qms-text);
+  font-weight: 500;
 }
 
 .login-form .ant-input,
 .login-form .ant-input-affix-wrapper {
-  border-color: rgb(30 91 150 / 14%);
+  border-color: var(--qms-border);
   border-radius: 8px;
-  background: rgb(255 255 255 / 98%);
+  background: var(--qms-surface);
 }
 
 .login-form .ant-input-affix-wrapper {
@@ -179,16 +182,13 @@ a {
 .login-form .ant-input:focus,
 .login-form .ant-input-affix-wrapper:focus,
 .login-form .ant-input-affix-wrapper-focused {
-  border-color: rgb(39 137 231 / 42%);
-  box-shadow: 0 0 0 4px rgb(39 137 231 / 12%);
+  border-color: var(--qms-accent);
+  box-shadow: 0 0 0 3px var(--qms-accent-soft);
 }
 
 .login-form .ant-btn-primary {
   min-height: 46px;
-  border: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #156fc8, #2f9af0);
-  box-shadow: 0 18px 34px rgb(16 100 197 / 24%), 0 1px 0 rgb(255 255 255 / 24%) inset;
+  border-radius: 7px;
   font-weight: 600;
 }
 
@@ -196,7 +196,7 @@ a {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #f5f7fa;
+  background: var(--qms-background);
 }
 
 @media (max-width: 1100px) {
@@ -245,11 +245,11 @@ a {
 
 .app-shell {
   min-height: 100vh;
-  background: #eef2f6;
+  background: var(--qms-background);
 }
 
 .account-center {
-  padding: 34px clamp(24px, 4vw, 64px);
+  padding: 0;
 }
 
 .account-grid {
@@ -277,11 +277,11 @@ a {
 
 .domain-sider {
   padding: 18px 12px;
-  background: #142235 !important;
+  background: var(--qms-surface) !important;
 }
 
 .domain-sider.supplier {
-  background: #233126 !important;
+  background: var(--qms-surface) !important;
 }
 
 .brand {
@@ -289,7 +289,7 @@ a {
   align-items: center;
   height: 44px;
   padding: 0 12px;
-  color: #fff;
+  color: var(--qms-surface);
   font-size: 17px;
   font-weight: 700;
 }
@@ -312,7 +312,7 @@ a {
 
 .nav-item.active,
 .nav-item:hover {
-  color: #fff;
+  color: var(--qms-surface);
   background: rgb(255 255 255 / 12%);
 }
 
@@ -330,9 +330,9 @@ a {
 .metric-tile,
 .empty-domain,
 .context-panel {
-  border: 1px solid #dce3ea;
+  border: 1px solid var(--qms-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--qms-surface);
 }
 
 .metric-tile {
@@ -342,7 +342,7 @@ a {
 }
 
 .metric-tile span {
-  color: #617084;
+  color: var(--qms-muted);
 }
 
 .metric-tile strong {
@@ -363,7 +363,7 @@ a {
 
 .context-panel a {
   padding: 6px 12px;
-  border: 1px solid #d4dce5;
+  border: 1px solid var(--qms-border);
   border-radius: 6px;
 }
 
@@ -383,9 +383,9 @@ a {
   height: 34px;
   max-width: 220px;
   padding: 0 4px 0 12px;
-  border: 1px solid #d4dce5;
+  border: 1px solid var(--qms-border);
   border-radius: 6px;
-  background: #f8fafc;
+  background: var(--qms-surface-tint);
 }
 
 .work-tab a {
@@ -395,14 +395,14 @@ a {
 }
 
 .work-tab.active {
-  background: #fff;
-  border-color: #59728f;
+  background: var(--qms-surface);
+  border-color: var(--qms-accent);
 }
 
-.admin-page { padding: 24px; background: #fff; border: 1px solid #dce3ea; border-radius: 8px; }
+.admin-page { padding: 24px; background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 8px; }
 .admin-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
 .admin-heading h2 { margin: 0; }
-.admin-heading label { display: flex; align-items: center; gap: 12px; color: #617084; }
+.admin-heading label { display: flex; align-items: center; gap: 12px; color: var(--qms-muted); }
 .admin-heading .ant-select { min-width: 250px; }
 .admin-toolbar { margin: 16px 0; }
 .admin-toolbar .ant-select { min-width: 130px; }
@@ -410,13 +410,13 @@ a {
 .admin-form-stack { width: 100%; }
 .admin-form-stack .ant-select { width: 100%; }
 .permission-directory { margin-top: 20px; }
-.permission-directory summary { cursor: pointer; margin-bottom: 12px; color: #425b76; }
+.permission-directory summary { cursor: pointer; margin-bottom: 12px; color: var(--qms-muted); }
 .permission-group { margin: 24px 0; }
-.permission-module { margin: 12px 0; padding: 16px; border: 1px solid #dce3ea; border-radius: 8px; }
+.permission-module { margin: 12px 0; padding: 16px; border: 1px solid var(--qms-border); border-radius: 8px; }
 .permission-module header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .permission-operations { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-top: 16px; }
 .permission-operation { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.permission-operation code { width: 100%; overflow-wrap: anywhere; color: #617084; font-size: 12px; }
+.permission-operation code { width: 100%; overflow-wrap: anywhere; color: var(--qms-muted); font-size: 12px; }
 .permission-selector .admin-toolbar .ant-select { min-width: 160px; }
 .reset-page { max-width: 480px; margin: 10vh auto; padding: 20px; }
 .reset-page .ant-form { margin: 24px 0; }
@@ -425,3 +425,59 @@ a {
 .account-center .ant-alert { margin-bottom: 12px; }
 @media (max-width: 640px) { .admin-page { padding: 12px; } .admin-heading .ant-select { min-width: 180px; } }
 
+ .language-switcher { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--qms-surface); color: var(--qms-muted); border: 1px solid var(--qms-border); border-radius: 7px; font-size: 12px; }
+ .governance-panel { display: grid; gap: 16px; padding-block: 12px; }
+ .governance-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+ .governance-panel table { width: 100%; }
+ .governance-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+ .skip-link { position: fixed; top: -100px; left: 16px; z-index: 1200; background: var(--qms-surface); padding: 12px; }
+ .skip-link:focus { top: 12px; }
+ :focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 3px; }
+.security-page { max-width: 720px; margin: 72px auto; padding: 24px; }
+.recovery-codes { user-select: all; padding: 16px; background: var(--qms-surface-tint); line-height: 1.8; }
+
+/* Shared business-page surfaces; the login composition remains unchanged. */
+body { color: var(--qms-text); background: var(--qms-background); }
+.login-container { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; }
+.login-panel-shell { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+.login-panel-shell > a { display: inline-block; color: var(--qms-accent); margin-top: 20px; font-size: 14px; }
+.auth-language-switcher { position: fixed; top: 12px; right: 20px; z-index: 1100; }
+.auth-language-switcher .language-switcher { background: #fff; color: #293b50; border-color: #e1e7ef; color-scheme: light; }
+.language-switcher select { min-height: 24px; max-width: 130px; background: transparent; color: inherit; border: 0; font: inherit; }
+.language-switcher select option { background: var(--qms-surface); color: var(--qms-text); }
+.admin-page { padding: 24px; box-shadow: var(--qms-shadow); min-width: 0; }
+.admin-heading { margin-bottom: 24px; }
+.admin-heading h2, .account-center h2 { font-size: 26px; letter-spacing: -.3px; }
+.admin-page > .ant-tabs > .ant-tabs-nav { margin-bottom: 24px; }
+.admin-toolbar { display: flex; flex-wrap: wrap; gap: 12px; }
+.admin-page .ant-table-wrapper, .account-sessions .ant-list, .governance-panel .ant-table-wrapper { max-width: 100%; overflow-x: auto; }
+.account-center { padding: 0; min-width: 0; }
+.account-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.account-summary .ant-descriptions { overflow-x: auto; }
+.account-center .ant-card { border-color: var(--qms-border); box-shadow: var(--qms-shadow); }
+.account-center .ant-card-head { background: var(--qms-surface-tint); }
+.permission-module { background: var(--qms-surface-tint); }
+.permission-module header { flex-wrap: wrap; }
+.permission-operations { grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+.governance-panel { min-width: 0; }
+.governance-toolbar { padding: 16px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface-tint); }
+.governance-panel .ant-form-inline { gap: 12px; }
+.governance-panel pre { padding: 16px; background: var(--qms-surface-tint); border-radius: 7px; }
+.reset-page, .security-page { box-sizing: border-box; width: calc(100% - 32px); background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 10px; padding: 32px; box-shadow: var(--qms-shadow); }
+.reset-page h2, .security-page h2 { font-size: 26px; }
+.recovery-codes { color: var(--qms-text); border: 1px solid var(--qms-border); border-radius: 7px; overflow-wrap: anywhere; }
+.ant-modal-body pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ant-table { font-variant-numeric: tabular-nums; }
+@media(max-width: 760px) {
+  .account-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .admin-page { padding: 16px; }
+  .admin-heading { gap: 12px; margin-bottom: 16px; }
+  .admin-heading label { flex-wrap: wrap; width: 100%; }
+  .admin-heading .ant-select { min-width: 0; width: 100%; }
+  .admin-toolbar > *, .governance-toolbar > * { max-width: 100%; }
+  .governance-toolbar { padding: 12px; }
+  .reset-page, .security-page { margin-top: 72px; padding: 24px; }
+}
+@media(prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

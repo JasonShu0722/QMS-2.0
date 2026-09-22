@@ -106,8 +106,9 @@ describe('work tabs store', () => {
     );
 
     const overflowTab = useWorkTabsStore.getState().overflowTabs[0];
-    await userEvent.click(screen.getByRole('button', { name: '全部标签' }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: overflowTab.title }));
+    screen.getByRole('button', { name: '全部标签' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(await screen.findByRole('button', { name: overflowTab.title }));
 
     const state = useWorkTabsStore.getState();
     expect(screen.getByLabelText('current path')).toHaveTextContent(overflowTab.path);

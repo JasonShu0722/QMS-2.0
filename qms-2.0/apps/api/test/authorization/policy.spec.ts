@@ -24,6 +24,7 @@ const internalSession = {
 describe('authorization policy', () => {
   it('asserts feature permission through role assignments in the scoped organization', async () => {
     const prisma = {
+      organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
       userRole: {
         count: jest.fn().mockResolvedValue(1),
       },
@@ -49,6 +50,7 @@ describe('authorization policy', () => {
 
   it('rejects missing feature permission with a stable public code', async () => {
     const prisma = {
+      organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
       userRole: {
         count: jest.fn().mockResolvedValue(0),
       },

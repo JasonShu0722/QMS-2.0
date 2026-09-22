@@ -18,13 +18,21 @@ permissions:
 jobs:
   foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
+    services:
+      mailpit:
+        image: axllent/mailpit:v1.27.8
+        ports:
+          - 51026:1025
+          - 51027:8025
     defaults:
       run:
         working-directory: qms-2.0
     env:
       CI: 'true'
       PG_CONTAINER: qms2-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      MINIO_CONTAINER: qms2-ci-minio-${{ github.run_id }}-${{ github.run_attempt }}
+      CLAMAV_CONTAINER: qms2-ci-clamav-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +48,7 @@ jobs:
         run: corepack pnpm run contracts:check
       - name: Web and API unit tests
         run: corepack pnpm test
-      - name: Create ephemeral PostgreSQL 18
+      - name: Create ephemeral integration services
         run: |
           POSTGRES_PASSWORD=$(openssl rand -hex 24)
           export POSTGRES_PASSWORD
@@ -56,20 +64,77 @@ jobs:
           DATABASE_URL="postgresql://qms:$POSTGRES_PASSWORD@127.0.0.1:$PG_PORT/qms2"
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
-          for name in QMS_SEED_INTERNAL_PASSWORD QMS_SEED_SUPPLIER_PASSWORD QMS_RATE_LIMIT_SECRET MINIO_ROOT_PASSWORD; do
+          for name in QMS_SEED_INTERNAL_PASSWORD QMS_SEED_SUPPLIER_PASSWORD QMS_RATE_LIMIT_SECRET; do
             value=$(openssl rand -hex 24)
             echo "::add-mask::$value"
             echo "$name=$value" >> "$GITHUB_ENV"
           done
+          STORAGE_SECRET=$(openssl rand -hex 24)
+          echo "::add-mask::$STORAGE_SECRET"
+          echo "MINIO_ROOT_PASSWORD=$STORAGE_SECRET" >> "$GITHUB_ENV"
           echo "MINIO_ROOT_USER=qms-ci" >> "$GITHUB_ENV"
+          echo "QMS_OBJECT_STORAGE_ACCESS_KEY=qms-ci" >> "$GITHUB_ENV"
+          echo "QMS_OBJECT_STORAGE_SECRET_KEY=$STORAGE_SECRET" >> "$GITHUB_ENV"
+          docker run --detach --name "$MINIO_CONTAINER" \
+            -e MINIO_ROOT_USER=qms-ci -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET" \
+            -p 127.0.0.1::9000 quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          MINIO_PORT=$(docker port "$MINIO_CONTAINER" 9000/tcp | cut -d: -f2)
+          for attempt in {1..60}; do
+            if curl --fail --silent "http://127.0.0.1:$MINIO_PORT/minio/health/ready" >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent "http://127.0.0.1:$MINIO_PORT/minio/health/ready" >/dev/null
+          echo "QMS_OBJECT_STORAGE_ENDPOINT=http://127.0.0.1:$MINIO_PORT" >> "$GITHUB_ENV"
+          echo "QMS_OBJECT_STORAGE_BUCKET=qms-ci-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
+          docker run --detach --name "$CLAMAV_CONTAINER" --entrypoint clamd --user clamav \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true --memory 4g --cpus 2 \
+            --tmpfs /tmp:size=134217728,mode=1777 \
+            --volume "$PWD/deployment/clamd.conf:/etc/clamav/clamd.conf:ro" \
+            -p 127.0.0.1::3310 \
+            clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4 \
+            --config-file=/etc/clamav/clamd.conf
+          for attempt in {1..90}; do
+            if docker exec "$CLAMAV_CONTAINER" clamdscan --config-file=/etc/clamav/clamd.conf --ping=1; then break; fi
+            sleep 2
+          done
+          docker exec "$CLAMAV_CONTAINER" clamdscan --config-file=/etc/clamav/clamd.conf --ping=1
+          CLAMAV_PORT=$(docker port "$CLAMAV_CONTAINER" 3310/tcp | cut -d: -f2)
+          echo "QMS_FILE_SCANNER_HOST=127.0.0.1" >> "$GITHUB_ENV"
+          echo "QMS_FILE_SCANNER_PORT=$CLAMAV_PORT" >> "$GITHUB_ENV"
+          SECURITY_KEY=$(openssl rand -base64 32)
+          echo "::add-mask::$SECURITY_KEY"
+          KEYRING="{\"ci\":\"$SECURITY_KEY\"}"
+          echo "::add-mask::$KEYRING"
+          echo "QMS_SECURITY_CURRENT_KEY_ID=ci" >> "$GITHUB_ENV"
+          echo "QMS_SECURITY_KEYRING=$KEYRING" >> "$GITHUB_ENV"
+          echo "SMTP_HOST=127.0.0.1" >> "$GITHUB_ENV"
+          echo "SMTP_PORT=51026" >> "$GITHUB_ENV"
+          echo "SMTP_SECURE=false" >> "$GITHUB_ENV"
+          echo "SMTP_FROM=qms@example.test" >> "$GITHUB_ENV"
+      - name: Prepare real object storage and scan fixture
+        run: |
+          command -v zip
+          FIXTURE_DIRECTORY="$RUNNER_TEMP/qms-ci-file-fixture"
+          mkdir -p "$FIXTURE_DIRECTORY"
+          printf 'QMS harmless encrypted archive fixture\n' > "$FIXTURE_DIRECTORY/content.txt"
+          zip -q -j -P qms-ci-fixture "$FIXTURE_DIRECTORY/encrypted.zip" "$FIXTURE_DIRECTORY/content.txt"
+          echo "QMS_FILE_TEST_ENCRYPTED_PATH=$FIXTURE_DIRECTORY/encrypted.zip" >> "$GITHUB_ENV"
+          node apps/api/test/fixtures/prepare-ci-object-storage.mjs
       - name: Real PostgreSQL integration tests
         env:
           NODE_ENV: development
         run: corepack pnpm --filter @qms/api test:integration
       - name: Build Web and API
         run: corepack pnpm build
+      - name: Real worker process lifecycle
+        env:
+          NODE_ENV: development
+        run: corepack pnpm --filter @qms/api test:worker-process
       - name: Validate foundation Compose
         run: docker compose -f deployment/docker-compose.foundation.yml config --quiet
-      - name: Destroy ephemeral database
+      - name: Destroy ephemeral integration services
         if: always()
-        run: docker rm --force --volumes "$PG_CONTAINER" || true
+        run: |
+          for container in "$PG_CONTAINER" "$MINIO_CONTAINER" "$CLAMAV_CONTAINER"; do
+            docker rm --force --volumes "$container" || true
+          done

@@ -25,9 +25,9 @@ const catalog: components['schemas']['PermissionCatalogGroupDto'][] = [
 ];
 const originalCodes = ['workbench:read', 'account:users:reset'];
 const roles: AdminRole[] = [
-  { id: 'role-a', code: 'FIRST', name: '第一角色', organizationId: organization.id, permissions: originalCodes.map((code) => ({ id: code, code, name: code })) },
-  { id: 'role-b', code: 'SECOND', name: '第二角色', organizationId: organization.id, permissions: [] },
-  { id: 'global', code: 'GLOBAL', name: '全局角色', organizationId: null, permissions: [] },
+  { mfaRequired: false, id: 'role-a', code: 'FIRST', name: '第一角色', organizationId: organization.id, permissions: originalCodes.map((code) => ({ id: code, code, name: code })) },
+  { mfaRequired: false, id: 'role-b', code: 'SECOND', name: '第二角色', organizationId: organization.id, permissions: [] },
+  { mfaRequired: false, id: 'global', code: 'GLOBAL', name: '全局角色', organizationId: null, permissions: [] },
 ];
 const account: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -120,7 +120,7 @@ it('limits module bulk selection to visible assignable operations and saves only
   const requests: unknown[] = []; server((init) => { requests.push(JSON.parse(String(init.body))); return json(roles[0]); });
   await openMatrix(); await select('板块筛选', '系统管理目录');
   await interaction.type(screen.getByRole('textbox', { name: '搜索权限' }), '新建');
-  await interaction.click(screen.getByRole('button', { name: '用户管理全选' }));
+  await interaction.click(screen.getByRole('button', { name: '用户管理 全选' }));
   expect(screen.getByText('已修改 1 项')).toBeVisible();
   await interaction.click(screen.getByRole('button', { name: '保存权限' }));
   await screen.findByText('权限已保存');
@@ -129,8 +129,8 @@ it('limits module bulk selection to visible assignable operations and saves only
 
 it('preserves hidden and disabled grants on module clear and resets the draft without writes', async () => {
   const fetch = server(); await openMatrix();
-  await interaction.click(screen.getByRole('button', { name: '用户管理全选' }));
-  await interaction.click(screen.getByRole('button', { name: '用户管理清空' }));
+  await interaction.click(screen.getByRole('button', { name: '用户管理 全选' }));
+  await interaction.click(screen.getByRole('button', { name: '用户管理 清空' }));
   expect(screen.getByRole('checkbox', { name: '用户管理 · 重置密码' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: '工作台 · 查看' })).toBeChecked();
   expect(screen.getByRole('button', { name: '保存权限' })).toBeDisabled();
@@ -140,18 +140,18 @@ it('preserves hidden and disabled grants on module clear and resets the draft wi
   expect(fetch.mock.calls.filter(([, init]) => init.method === 'PATCH')).toHaveLength(0);
 });
 
-it('keeps dirty drafts across tabs and confirms before switching role or organization', async () => {
-  server(); await openMatrix(organization.permissions, [{ ...organization, id: 'org-b', code: 'b', name: '乙组织' }]);
+it('keeps dirty drafts when switching away from and back to the matrix tab', async () => {
+  server(); await openMatrix();
   await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await interaction.click(screen.getByRole('tab', { name: '角色' }));
   await interaction.click(screen.getByRole('tab', { name: '权限矩阵' }));
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
+});
+
+it('keeps the role draft on cancellation and discards it only after confirmation', async () => {
+  server(); await openMatrix();
+  await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await select('选择角色', '第二角色');
-  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
-  await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
-  await select('管理组织', '乙组织 · b');
   await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
   await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -160,17 +160,27 @@ it('keeps dirty drafts across tabs and confirms before switching role or organiz
   await interaction.click(screen.getByRole('button', { name: '放弃修改' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(screen.getByRole('checkbox', { name: '工作台 · 查看' })).not.toBeChecked());
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).not.toBeChecked();
+});
+
+it('keeps the organization draft on cancellation and discards it only after confirmation', async () => {
+  server(); await openMatrix(organization.permissions, [{ ...organization, id: 'org-b', code: 'b', name: '乙组织' }]);
   await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
+  await select('管理组织', '乙组织 · b');
+  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
+  await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
   await select('管理组织', '乙组织 · b');
   await interaction.click(screen.getByRole('button', { name: '放弃修改' }));
   await waitFor(() => expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).not.toBeChecked());
-}, 45_000);
+});
 
 it.each([['account:roles:read'], ['account:roles:read', 'account:roles:create']])('keeps matrix read-only without update: %s', async (...permissions) => {
   server(); await openMatrix(permissions);
   expect(screen.getByRole('checkbox', { name: '用户管理 · 可授予权限' })).toBeDisabled();
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: '用户管理全选' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '用户管理 全选' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '保存权限' })).toBeDisabled();
 });
 
@@ -184,7 +194,7 @@ it('retains conflicting draft and retry key until explicit reload', async () => 
   const requests: RequestInit[] = []; server((init) => { requests.push(init); return json({ code: 'CONCURRENCY_CONFLICT', message: 'private detail' }, 409); });
   await openMatrix(); await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await interaction.click(screen.getByRole('button', { name: '保存权限' }));
-  expect(await screen.findByText('权限已被其他人修改，请重新加载后再编辑')).toBeVisible();
+  expect(await screen.findByText('记录已被其他用户更新，请刷新后重试')).toBeVisible();
   expect(screen.queryByText('private detail')).not.toBeInTheDocument();
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
   await interaction.click(screen.getByRole('button', { name: '保存权限' }));
@@ -247,7 +257,7 @@ it('retains a role editor conflict draft and explicitly reloads its permission b
   const dialog = within(screen.getByRole('dialog'));
   await interaction.click(dialog.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await interaction.click(dialog.getByRole('button', { name: '保存角色' }));
-  await dialog.findByText('权限已被其他人修改，请重新加载后再编辑');
+  await dialog.findByText('记录已被其他用户更新，请刷新后重试');
   expect(dialog.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
   await interaction.click(dialog.getByRole('button', { name: '重新加载并放弃权限修改' }));
   await waitFor(() => expect(dialog.getByRole('checkbox', { name: '用户管理 · 新建' })).toBeChecked());
@@ -270,7 +280,7 @@ it.each(['new', 'copy'])('uses the grouped role form and the correct %s request 
   } else expect(dialog.queryByRole('checkbox')).not.toBeInTheDocument();
   await interaction.click(dialog.getByRole('button', { name: '保存角色' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(requests).toEqual([mode === 'new' ? { code: 'NEW_ROLE', name: '新角色', permissionCodes: ['account:users:read'], organizationId: organization.id } : { code: 'NEW_ROLE', name: '新角色' }]);
+  expect(requests).toEqual([mode === 'new' ? { code: 'NEW_ROLE', name: '新角色', permissionCodes: ['account:users:read'], organizationId: organization.id, mfaRequired: false } : { code: 'NEW_ROLE', name: '新角色' }]);
 });
 
 it('does not infer role read permission from any write grant', async () => {

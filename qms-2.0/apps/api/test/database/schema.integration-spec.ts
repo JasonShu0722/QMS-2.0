@@ -5,6 +5,7 @@ import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.j
 import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
 import { S3CompatibleObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
+import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
 import { OutboxWorkerService } from '../../src/modules/task-notification/outbox-worker.service.js';
 import 'reflect-metadata';
@@ -81,7 +82,7 @@ describe('PostgreSQL schema', () => {
     const sessions = moduleRef.get(SessionService);
     const audit = moduleRef.get(AuditLogService);
     const user = await prisma.user.findFirstOrThrow({ where: { username: 'local.internal' } });
-    const token = await sessions.create(user.id);
+    const token = await sessions.create(user.id, prisma, { mfaVerified: true, reauthenticated: true });
     const session = await sessions.resolve(token);
     const before = await prisma.auditEvent.findMany({ where: { actorUserId: user.id, action: 'SESSION_REVOKED' }, select: { id: true } });
     const failure = jest.spyOn(audit, 'record').mockRejectedValueOnce(new Error('acceptance audit unavailable'));
@@ -108,39 +109,14 @@ describe('PostgreSQL schema', () => {
     }
   });
 
-  it('persists supplier quarantine, scan transitions, logical deletion and upload audit', async () => {
+  it('denies unregistered attachment resources instead of accepting caller scan verdicts', async () => {
     const supplier = await prisma.user.findFirstOrThrow({ where: { username: 'local.supplier' } });
-    const traceId = crypto.randomUUID();
     const files = new FileLifecycleService(prisma as never, new FilePolicyService(),
-      new S3CompatibleObjectStorage(), new AuditLogService(prisma as never));
-    let fileId: string | undefined;
-    try {
-      const result = await files.initializeUpload({
-        accountType: 'SUPPLIER', organizationId: supplier.organizationId, uploadedById: supplier.id,
-        originalName: 'acceptance.txt', contentType: 'text/plain', sizeBytes: 8,
-        bytes: Buffer.from('evidence'), traceId,
-      });
-      fileId = result.fileId;
-      expect(result.status).toBe('QUARANTINED');
-      expect(result.objectKey).not.toContain('acceptance');
-      await expect(files.assertDownloadable(fileId)).rejects.toThrow('FILE_NOT_AVAILABLE');
-      await expect(files.markAvailableAfterScan(fileId, { clean: false, scanner: 'acceptance' }))
-        .rejects.toThrow('FILE_SCAN_REJECTED');
-      expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: fileId } })).status).toBe('QUARANTINED');
-      await files.markAvailableAfterScan(fileId, { clean: true, scanner: 'acceptance' });
-      await expect(files.assertDownloadable(fileId)).resolves.toMatchObject({ status: 'AVAILABLE' });
-      await files.deleteLogically(fileId);
-      await expect(files.assertDownloadable(fileId)).rejects.toThrow('FILE_NOT_AVAILABLE');
-      expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: fileId } })).status).toBe('DELETED');
-      const audit = await prisma.auditEvent.findFirstOrThrow({ where: { traceId } });
-      expect(audit).toMatchObject({ action: 'ATTACHMENT_UPLOAD_INITIALIZED',
-        actorUserId: supplier.id, organizationId: supplier.organizationId, resourceId: fileId, outcome: 'SUCCESS' });
-      expect(audit.metadata).toMatchObject({ fileId, status: 'QUARANTINED', sizeBytes: 8 });
-      expect(audit.metadata).not.toHaveProperty('originalName');
-    } finally {
-      await prisma.auditEvent.deleteMany({ where: { traceId } });
-      if (fileId) await prisma.fileObject.delete({ where: { id: fileId } });
-    }
+      new S3CompatibleObjectStorage(), new AuditLogService(prisma as never), new FileResourceAccess([]));
+    await expect(files.initializeUpload({ id: supplier.id, organizationId: supplier.organizationId, accountType: 'SUPPLIER', sessionId: crypto.randomUUID() }, {
+      resourceType: 'FoundationAttachment', resourceId: crypto.randomUUID(), originalName: 'acceptance.txt', contentType: 'text/plain', sizeBytes: 8, sha256: 'a'.repeat(64),
+    }, crypto.randomUUID(), crypto.randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_RESOURCE_DENIED' } });
+    expect(files).not.toHaveProperty('markAvailableAfterScan');
   });
 
   it('rolls back audit and Outbox writes in the caller transaction', async () => {

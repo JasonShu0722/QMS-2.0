@@ -1,0 +1,13 @@
+.qms-work-tabs { display: flex; align-items: center; gap: 4px; height: 36px; min-width: 0; padding: 0 12px; background: var(--qms-surface); border-bottom: 1px solid var(--qms-border); box-sizing: border-box; }
+.qms-visible-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; overflow: hidden; }
+.qms-work-tab { display: flex; flex: 0 1 176px; align-items: center; gap: 4px; height: 30px; min-width: 0; color: var(--qms-muted); border: 1px solid transparent; border-radius: 6px; box-sizing: border-box; }
+.qms-work-tab > a { flex: 1; min-width: 0; padding: 5px 4px 5px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.qms-work-tab.active { background: var(--qms-accent-soft); color: var(--qms-accent); border-color: var(--qms-accent-border); }
+.qms-work-tab .ant-btn { flex-shrink: 0; }
+.qms-all-tabs.ant-btn { flex-shrink: 0; gap: 6px; height: 30px; font-size: 12px; color: var(--qms-muted); }
+.qms-opened-list { margin-top: 16px; display: grid; gap: 8px; }
+.qms-opened-list > div { display: flex; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--qms-border); border-radius: 7px; }
+.qms-opened-list > .active { background: var(--qms-accent-soft); border-color: var(--qms-accent-border); }
+.qms-opened-list .qms-opened-activate { flex: 1; min-width: 0; min-height: 36px; text-align: left; padding: 6px 8px; background: none; border: 0; color: var(--qms-text); font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.qms-opened-list a { display: grid; place-items: center; width: 36px; height: 36px; color: var(--qms-muted); }
+@media (max-width: 760px) { .qms-work-tabs { padding: 0 4px; } .qms-work-tab-manager .qms-all-tabs span:not(.ant-btn-icon) { display: none; } .qms-opened-list .ant-btn, .qms-opened-list a { min-width: 44px; min-height: 44px; } }

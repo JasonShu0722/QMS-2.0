@@ -1,0 +1,119 @@
+import 'reflect-metadata';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { jest } from '@jest/globals';
+import { Test } from '@nestjs/testing';
+import { ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { PrismaService } from '../../src/database/prisma.service.js';
+import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
+import { AuditExportService } from '../../src/modules/audit-log/audit-export.service.js';
+import { AppModule } from '../../src/app.module.js';
+import { SessionService } from '../../src/modules/identity/session.service.js';
+import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
+
+if (!process.env.DATABASE_URL) throw new Error('PostgreSQL integration requires DATABASE_URL');
+
+describe('controlled audit exports', () => {
+  const prisma = new PrismaService(process.env.DATABASE_URL!);
+  const organizationId = randomUUID();
+  const userId = randomUUID();
+  const actor = { id: userId, organizationId, sessionId: randomUUID(), accountType: 'INTERNAL' as const };
+  const audit = new AuditLogService(prisma);
+  const service = new AuditExportService(prisma, audit);
+  const originalKey = process.env.QMS_SECURITY_CURRENT_KEY_ID;
+  const originalKeyring = process.env.QMS_SECURITY_KEYRING;
+  let roleId: string;
+  let exportPermissionId: string;
+  beforeAll(async () => {
+    process.env.QMS_SECURITY_CURRENT_KEY_ID = 'export-test';
+    process.env.QMS_SECURITY_KEYRING = JSON.stringify({ 'export-test': randomBytes(32).toString('base64') });
+    await prisma.$connect();
+    await prisma.organization.create({ data: { id: organizationId, code: organizationId, name: 'Exports', type: 'INTERNAL' } });
+    await prisma.user.create({ data: { id: userId, organizationId, username: userId, passwordHash: 'unused', accountType: 'INTERNAL' } });
+    roleId = (await prisma.role.create({ data: { organizationId, code: 'EXPORTER', name: 'Exporter' } })).id;
+    for (const code of ['audit:read', 'audit:export']) {
+      const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
+      await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
+      if (code === 'audit:export') exportPermissionId = permission.id;
+    }
+    await prisma.userRole.create({ data: { organizationId, userId, roleId } });
+    await prisma.session.create({ data: { id: actor.sessionId, userId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() } });
+    await prisma.platformSettings.create({ data: { organizationId, exportRetentionMinutes: 5 } });
+    await prisma.auditEvent.create({ data: { organizationId, actorUserId: userId, action: '=FORMULA()', resourceType: 'Test', resourceId: '@SUM(1,1)', outcome: 'SUCCESS', traceId: 'export-safe', metadata: { token: 'never-export-secret' } } });
+  });
+  afterAll(async () => {
+    if (originalKey === undefined) delete process.env.QMS_SECURITY_CURRENT_KEY_ID; else process.env.QMS_SECURITY_CURRENT_KEY_ID = originalKey;
+    if (originalKeyring === undefined) delete process.env.QMS_SECURITY_KEYRING; else process.env.QMS_SECURITY_KEYRING = originalKeyring;
+    await prisma.$disconnect();
+  });
+
+  it('uses retention settings, encrypts content and prevents spreadsheet formula execution', async () => {
+    const artifact = await service.create(actor, { action: '=FORMULA()' }, 'export-test');
+    expect(artifact.rowCount).toBe(1);
+    expect(new Date(artifact.expiresAt).getTime() - Date.now()).toBeGreaterThan(290000);
+    expect(new Date(artifact.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(300000);
+    const persisted = await prisma.exportArtifact.findUniqueOrThrow({ where: { id: artifact.id } });
+    expect(persisted.ciphertext).not.toContain('FORMULA');
+    const result = await service.download(actor, organizationId, artifact.id, 'export-test');
+    expect(result.content).toContain('"\'=FORMULA()"');
+    expect(result.content).toContain('"\'@SUM(1,1)"');
+    expect(result.content).not.toContain('never-export-secret');
+    expect(await prisma.auditEvent.count({ where: { resourceId: artifact.id, action: { in: ['AUDIT_EXPORT_CREATED', 'AUDIT_EXPORT_DOWNLOADED'] } } })).toBe(2);
+  });
+
+  it('rechecks permissions for download and audits denied access without leaking foreign IDs', async () => {
+    const artifact = await service.create(actor, {}, 'export-test');
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId: exportPermissionId } } });
+    try { await expect(service.download(actor, organizationId, artifact.id, 'denied-export')).rejects.toMatchObject({ status: 403 }); }
+    finally { await prisma.rolePermission.create({ data: { roleId, permissionId: exportPermissionId } }); }
+    await expect(service.download(actor, randomUUID(), artifact.id, 'denied-export')).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.auditEvent.count({ where: { organizationId, action: 'AUDIT_EXPORT_DENIED', traceId: 'denied-export' } })).toBe(2);
+  });
+
+  it('expires downloads and cleans ciphertext without deleting source audit', async () => {
+    const artifact = await service.create(actor, {}, 'export-test');
+    const before = await prisma.auditEvent.count({ where: { organizationId } });
+    await prisma.exportArtifact.update({ where: { id: artifact.id }, data: { createdAt: new Date(Date.now() - 600000), expiresAt: new Date(Date.now() - 1) } });
+    await expect(service.download(actor, organizationId, artifact.id, 'expired-export')).rejects.toMatchObject({ status: 410 });
+    await service.purgeExpired();
+    expect((await prisma.exportArtifact.findUniqueOrThrow({ where: { id: artifact.id } })).ciphertext).toBeNull();
+    expect(await prisma.auditEvent.count({ where: { organizationId } })).toBeGreaterThanOrEqual(before);
+  });
+
+  it('revalidates the session in the download transaction after an HTTP guard could have accepted it', async () => {
+    const artifact = await service.create(actor, {}, 'export-session');
+    await prisma.session.update({ where: { id: actor.sessionId }, data: { revokedAt: new Date() } });
+    try { await expect(service.download(actor, organizationId, artifact.id, 'export-revoked')).rejects.toMatchObject({ status: 401 }); }
+    finally { await prisma.session.update({ where: { id: actor.sessionId }, data: { revokedAt: null } }); }
+    await prisma.user.update({ where: { id: userId }, data: { securityVersion: { increment: 1 } } });
+    try { await expect(service.download(actor, organizationId, artifact.id, 'export-stale')).rejects.toMatchObject({ status: 401 }); }
+    finally {
+      const current = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+      await prisma.session.update({ where: { id: actor.sessionId }, data: { securityVersion: current.securityVersion } });
+    }
+    expect(await prisma.auditEvent.count({ where: { resourceId: artifact.id, action: 'AUDIT_EXPORT_DOWNLOADED' } })).toBe(0);
+  });
+
+  it('rolls back artifact creation if its audit cannot be persisted', async () => {
+    const before = await prisma.exportArtifact.count({ where: { organizationId } });
+    const failing = new AuditExportService(prisma, { record: jest.fn(async () => { throw new Error('audit unavailable'); }) } as never);
+    await expect(failing.create(actor, {}, 'export-test')).rejects.toThrow();
+    expect(await prisma.exportArtifact.count({ where: { organizationId } })).toBe(before);
+  });
+
+  it('enforces HTTP authentication, CSRF, strict filters and no-store downloads', async () => {
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(prisma).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter()); await app.init();
+    try {
+      const token = await app.get(SessionService).create(userId, prisma, { mfaVerified: true, reauthenticated: true });
+      const csrf = randomUUID(); const cookie = `qms_session=${token}; qms_csrf=${csrf}`;
+      await request(app.getHttpServer()).post('/api/v1/admin/audit-exports').send({}).expect(403);
+      await request(app.getHttpServer()).post('/api/v1/admin/audit-exports').set('Cookie', cookie).set('x-csrf-token', csrf).send({ pageSize: 10000 }).expect(400);
+      const result = await request(app.getHttpServer()).post('/api/v1/admin/audit-exports').set('Cookie', cookie).set('x-csrf-token', csrf).send({ action: '=FORMULA()' }).expect(201);
+      const content = await request(app.getHttpServer()).get(result.body.downloadPath).set('Cookie', cookie).expect(200);
+      expect(content.headers['cache-control']).toBe('no-store');
+      expect(content.body.filename).toMatch(/^qms-audit-.*\.csv$/);
+    } finally { await app.close(); }
+  });
+});

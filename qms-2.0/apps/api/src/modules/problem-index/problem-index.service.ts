@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma, ProblemIndex } from '../../generated/prisma/client.js';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -75,6 +76,26 @@ export class ProblemIndexService {
     private readonly audit: AuditLogService,
     private readonly outbox: OutboxService,
   ) {}
+
+  async lockForWorkflow(transaction: Prisma.TransactionClient, organizationId: string, id: string): Promise<ProblemIndex> {
+    await transaction.$queryRaw`SELECT id FROM problem_indexes WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
+    const problem = await transaction.problemIndex.findFirst({ where: { organizationId, id, archivedAt: null } });
+    if (!problem) throw new HttpException({ code: 'PROBLEM_NOT_FOUND' }, 404);
+    return problem;
+  }
+
+  async applyWorkflowState(transaction: Prisma.TransactionClient, input: {
+    organizationId: string; id: string; expectedVersion: number; expectedInstanceId: string | null;
+    instanceId: string; status: 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED'; actorUserId: string;
+    problemType?: string;
+  }): Promise<number> {
+    const updated = await transaction.problemIndex.updateMany({
+      where: { id: input.id, organizationId: input.organizationId, version: input.expectedVersion, workflowInstanceId: input.expectedInstanceId, archivedAt: null },
+      data: { workflowInstanceId: input.instanceId, status: input.status, ...(input.problemType ? { problemType: input.problemType } : {}), closedAt: input.status === 'CLOSED' ? new Date() : null, version: { increment: 1 }, updatedById: input.actorUserId },
+    });
+    if (updated.count !== 1) throw new HttpException({ code: 'CONCURRENCY_CONFLICT' }, 409);
+    return input.expectedVersion + 1;
+  }
 
   async createFromDomain(
     transaction: ProblemIndexClient,

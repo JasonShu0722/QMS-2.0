@@ -6,6 +6,11 @@ import {
 
 describe('platform error contract', () => {
   const requiredCodes: PlatformErrorCode[] = [
+    'TASK_NOT_FOUND',
+    'TASK_NOT_CLAIMED',
+    'TASK_CLAIM_OWNER_REQUIRED',
+    'TASK_ALREADY_CLAIMED',
+    'NOTIFICATION_NOT_FOUND',
     'PROBLEM_NOT_FOUND',
     'NUMBERING_CONFLICT',
     'WORKFLOW_VERSION_IMMUTABLE',

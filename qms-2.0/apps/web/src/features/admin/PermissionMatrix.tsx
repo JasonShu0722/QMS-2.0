@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useLanguage } from '../../i18n/Language';
 import { Alert, Button, Modal, Select, Space, Spin, Typography } from 'antd';
-import { apiRequest, createAdminMutation, safeAccountError } from '../../api/client';
+import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../../api/client';
 import { allows, permissionChanges, scopePath, type AdminOrganization, type AdminRole, type PermissionCatalogGroup } from './admin';
 import { GroupedPermissionSelector } from './GroupedPermissionSelector';
 
@@ -9,6 +11,7 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
+  const { t } = useLanguage();
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogGroup[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
@@ -18,6 +21,9 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [traceId, setTraceId] = useState<string>();
+  function setFailure(cause: unknown) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); }
+  const errorDescription = traceId ? <span>{t('追踪标识')}: <code>{traceId}</code></span> : undefined;
   const [success, setSuccess] = useState<string>();
   const [revision, setRevision] = useState(0);
   const [pending, setPending] = useState<{ roleId: string } | { reload: true }>();
@@ -27,6 +33,7 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
   scope.current = organization.id;
   const selectedRole = roles.find((role) => role.id === selectedId);
   const changes = permissionChanges(original, draft);
+  useUnsavedChanges(changes > 0);
   const canRead = allows(organization, 'roles:read');
   const readOnly = !canRead || !allows(organization, 'roles:update') || !selectedRole || selectedRole.organizationId === null;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -50,7 +57,7 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
       selectedRoleId.current = role?.id;
       setSelectedId(role?.id); setOriginal(codes); setDraft(codes);
       mutate.current = createAdminMutation();
-    }).catch((cause) => { if (current) setError(safeAccountError(cause)); }).finally(() => { if (current) setLoading(false); });
+    }).catch((cause) => { if (current) setFailure(cause); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [organization.id, revision, canRead]);
   function switchRole(roleId: string) {
@@ -69,24 +76,24 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
         setOriginal(draft); setRoles((current) => current.map((role) => role.id === selectedRole.id ? savedRole : role));
         setSuccess('权限已保存');
       }
-    } catch (cause) { if (alive.current && scope.current === organizationId) setError(safeAccountError(cause)); }
+    } catch (cause) { if (alive.current && scope.current === organizationId) setFailure(cause); }
     finally { if (alive.current && scope.current === organizationId) setBusy(false); }
   }
-  if (!canRead) return <Alert type="warning" title="无角色读取权限" />;
+  if (!canRead) return <Alert type="warning" title={t('无角色读取权限')} />;
   return <>
-    {error && <Alert type="error" title={error} showIcon />}
-    {success && <Alert type="success" title={success} showIcon />}
+    {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
+    {success && <Alert type="success" title={t(success)} showIcon />}
     <div className="admin-toolbar"><Space wrap>
-      <Select aria-label="选择角色" placeholder="选择角色" value={selectedId} loading={loading} disabled={busy || loading} options={roles.map((role) => ({ value: role.id, label: `${role.name}${role.organizationId === null ? '（全局只读）' : ''}` }))} onChange={(roleId) => { if (roleId !== selectedId) { if (changes) setPending({ roleId }); else switchRole(roleId); } }} />
-      <Typography.Text>已修改 {changes} 项</Typography.Text>
-      <Button type="primary" loading={busy} disabled={readOnly || loading || !changes} onClick={() => void save()}>保存权限</Button>
-      <Button disabled={busy || loading || !changes} onClick={() => { setDraft(original); setError(undefined); setSuccess(undefined); mutate.current = createAdminMutation(); }}>重置修改</Button>
-      <Button disabled={busy || loading} onClick={() => { if (changes) setPending({ reload: true }); else reload(); }}>重新加载权限</Button>
+      <Select aria-label={t('选择角色')} placeholder={t('选择角色')} value={selectedId} loading={loading} disabled={busy || loading} options={roles.map((role) => ({ value: role.id, label: `${role.name}${role.organizationId === null ? t('（全局只读）') : ''}` }))} onChange={(roleId) => { if (roleId !== selectedId) { if (changes) setPending({ roleId }); else switchRole(roleId); } }} />
+      <Typography.Text>{t('已修改')} {changes} {t('项')}</Typography.Text>
+      <Button type="primary" loading={busy} disabled={readOnly || loading || !changes} onClick={() => void save()}>{t('保存权限')}</Button>
+      <Button disabled={busy || loading || !changes} onClick={() => { setDraft(original); setError(undefined); setSuccess(undefined); mutate.current = createAdminMutation(); }}>{t('重置修改')}</Button>
+      <Button disabled={busy || loading} onClick={() => { if (changes) setPending({ reload: true }); else reload(); }}>{t('重新加载权限')}</Button>
     </Space></div>
-    {readOnly && selectedRole && <Alert type="info" title={selectedRole.organizationId === null ? '全局角色只读' : '当前账号仅可查看角色权限'} />}
+    {readOnly && selectedRole && <Alert type="info" title={selectedRole.organizationId === null ? t('全局角色只读') : t('当前账号仅可查看角色权限')} />}
     {loading ? <Spin /> : <GroupedPermissionSelector catalog={catalog} value={draft} onChange={setDraft} disabled={readOnly || busy} />}
-    <Modal title="放弃未保存的权限修改？" open={!!pending} okText="放弃修改" cancelText="继续编辑" onCancel={() => setPending(undefined)} onOk={() => { if (pending && 'roleId' in pending) { switchRole(pending.roleId); setPending(undefined); } else reload(); }}>
-      当前草稿尚未保存，继续将放弃修改。
+    <Modal title={t('放弃未保存的权限修改？')} open={!!pending} okText={t('放弃修改')} cancelText={t('继续编辑')} onCancel={() => setPending(undefined)} onOk={() => { if (pending && 'roleId' in pending) { switchRole(pending.roleId); setPending(undefined); } else reload(); }}>
+      {t('当前草稿尚未保存，继续将放弃修改。')}
     </Modal>
   </>;
 }

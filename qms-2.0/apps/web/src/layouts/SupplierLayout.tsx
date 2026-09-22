@@ -1,54 +1,34 @@
-import { Layout, Typography } from 'antd';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Drawer, Typography } from 'antd';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { supplierNavigation } from '../features/navigation/navigation';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
+import { WorkTabs } from '../work-tabs/WorkTabs';
 import { AccountCenterPage } from '../features/account/AccountCenterPage';
+import { useLanguage } from '../i18n/Language';
+import { ShellHeader } from './ShellHeader';
+import { UnsavedChangesProvider } from './UnsavedChanges';
+import './shell.css';
 
-const { Content, Sider } = Layout;
-
-export function SupplierLayout() {
+export function SupplierLayout() { return <UnsavedChangesProvider><SupplierShell /></UnsavedChangesProvider>; }
+function SupplierShell() {
+  const { t } = useLanguage();
   const location = useLocation();
-  const navigate = useNavigate();
-  const openTab = useWorkTabsStore((state) => state.openTab);
-  const active = supplierNavigation.find((item) => location.pathname.startsWith(item.path)) ?? supplierNavigation[0];
-
-  function openNavigationTab(item: { label: string; path: string }) {
-    openTab({ id: item.path, title: item.label, path: item.path });
-    navigate(item.path);
-  }
-
-  return (
-    <Layout className="app-shell supplier-shell">
-      <Sider className="domain-sider supplier" width={212}>
-        <Link className="brand" to="/supplier/inbox">
-          供应商门户
-        </Link>
-        <nav aria-label="供应商导航" className="domain-nav">
-          {supplierNavigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                className={item.path === active.path ? 'nav-item active' : 'nav-item'}
-                key={item.path}
-                onClick={(event) => {
-                  event.preventDefault();
-                  openNavigationTab(item);
-                }}
-                to={item.path}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      </Sider>
-      <Content className="content-shell">
-        {location.pathname.startsWith('/supplier/account') ? <AccountCenterPage /> : <section className="empty-domain">
-          <Typography.Title level={2}>{active.label}</Typography.Title>
-          <Typography.Paragraph type="secondary">供应商协作基础入口已就绪，暂无业务数据。</Typography.Paragraph>
-        </section>}
-      </Content>
-    </Layout>
-  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const active = supplierNavigation.find(item => location.pathname.startsWith(item.path)) ?? supplierNavigation[0]!;
+  useEffect(() => {
+    setMobileOpen(false);
+    useWorkTabsStore.getState().openTab({ id: active.path, title: active.label, path: active.path });
+  }, [active]);
+  const navigation = <><Link className="qms-brand" to="/supplier/inbox">QMS <small>{t('供应商门户')}</small></Link><nav className="qms-domain-nav" aria-label={t('供应商导航')}>
+    {supplierNavigation.map(item => <Link key={item.path} className={'qms-nav-item' + (item.path === active.path ? ' active' : '')} to={item.path} aria-current={item.path === active.path ? 'page' : undefined}><item.icon size={19} /><span>{t(item.label)}</span></Link>)}
+  </nav></>;
+  return <div className="qms-shell supplier-shell">
+    <a className="skip-link" href="#main-content">{t('跳到正文')}</a>
+    <aside className="qms-navigation"><div className="qms-primary-navigation">{navigation}</div></aside>
+    <div className="qms-main"><ShellHeader title={active.label} onOpenNavigation={() => setMobileOpen(true)} supplier /><WorkTabs mode="strip" homePath="/supplier/inbox" />
+      <main className="qms-content" id="main-content" tabIndex={-1}>{location.pathname.startsWith('/supplier/account') ? <AccountCenterPage /> : <section className="empty-domain"><Typography.Title level={2}>{t(active.label)}</Typography.Title><Typography.Paragraph type="secondary">{t('供应商协作基础入口已就绪，暂无业务数据。')}</Typography.Paragraph></section>}</main>
+    </div>
+    <Drawer title={t('供应商导航')} open={mobileOpen} placement="left" size={280} onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation">{navigation}</div></Drawer>
+  </div>;
 }

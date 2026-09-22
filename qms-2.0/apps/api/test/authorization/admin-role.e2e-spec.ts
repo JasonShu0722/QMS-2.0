@@ -11,15 +11,17 @@ describe('administrator role HTTP contract', () => {
   let app: INestApplication;
   const organizationId = '20000000-0000-4000-8000-000000000001';
   const roleId = '30000000-0000-4000-8000-000000000001';
-  const user = { id: '10000000-0000-4000-8000-000000000001', organizationId, accountType: 'INTERNAL', status: 'ACTIVE' };
+  const user = { id: '10000000-0000-4000-8000-000000000001', organizationId, accountType: 'INTERNAL', status: 'ACTIVE', organization: { status: 'ACTIVE' } };
   const prisma = {
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
+    $queryRaw: jest.fn(),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     role: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     permission: { findMany: jest.fn() },
     user: { findUnique: jest.fn() },
+    organization: { findUnique: jest.fn() },
     adminMutation: { findUnique: jest.fn(), create: jest.fn() },
-    session: { findUnique: jest.fn() },
+    session: { findUnique: jest.fn(), findFirst: jest.fn() },
     userRole: { count: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
   };
   const cookies = 'qms_session=browser-token; qms_csrf=csrf-token';
@@ -35,8 +37,10 @@ describe('administrator role HTTP contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue(user);
+    prisma.organization.findUnique.mockResolvedValue({ status: 'ACTIVE' });
     prisma.adminMutation.findUnique.mockResolvedValue(null);
-    prisma.session.findUnique.mockResolvedValue({ id: 'session', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user });
+    prisma.session.findUnique.mockResolvedValue({ id: 'session', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date(), expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user });
+    prisma.session.findFirst.mockResolvedValue({ id: 'session', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
     prisma.userRole.count.mockResolvedValue(1);
     prisma.userRole.findFirst.mockResolvedValue({ organizationId });
     prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'].map((code) => ({ permission: { code } })) } }]);

@@ -11,6 +11,7 @@ const steps = [
   ['PostgreSQL migration, seed, persistence and recovery', ['--filter', '@qms/api', 'test:integration']],
   ['API and Web behavior', ['test']],
   ['Production builds', ['build']],
+  ['Real worker process lifecycle', ['--filter', '@qms/api', 'test:worker-process']],
   ['Compose configuration', null],
   ['Archive isolation', ['check:archive-isolation']],
   ['OpenAPI synchronization', ['contracts:check']],
@@ -24,11 +25,13 @@ try {
   for (const name of [
     'DATABASE_URL', 'QMS_SEED_INTERNAL_PASSWORD', 'QMS_SEED_SUPPLIER_PASSWORD',
     'POSTGRES_PASSWORD', 'MINIO_ROOT_USER', 'MINIO_ROOT_PASSWORD',
-    'QMS_RATE_LIMIT_SECRET', 'QMS_ACCEPTANCE_BASE_URL',
+    'QMS_RATE_LIMIT_SECRET', 'QMS_ACCEPTANCE_BASE_URL', 'QMS_SECURITY_CURRENT_KEY_ID', 'QMS_SECURITY_KEYRING',
+    'QMS_OBJECT_STORAGE_ACCESS_KEY', 'QMS_OBJECT_STORAGE_SECRET_KEY', 'QMS_ACCEPTANCE_MFA_CACHE_FILE', 'QMS_BACKUP_KEY',
   ]) assert.ok(process.env[name]?.trim(), `Required environment variable missing: ${name}`);
   assert.equal(process.env.NODE_ENV, 'development', 'Acceptance requires disposable development services');
   const database = new URL(process.env.DATABASE_URL);
   assert.ok(['postgres:', 'postgresql:'].includes(database.protocol), 'Real PostgreSQL is required');
+  assert.notEqual(database.port, '55440', 'The preserved preview database is forbidden');
   assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(database.hostname), 'Use a disposable loopback PostgreSQL database');
   const gateway = new URL(process.env.QMS_ACCEPTANCE_BASE_URL);
   assert.ok(['http:', 'https:'].includes(gateway.protocol), 'Use an HTTP(S) gateway');

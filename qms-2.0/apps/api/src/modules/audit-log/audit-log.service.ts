@@ -13,7 +13,7 @@ export const SECURITY_AUDIT_ACTIONS = [
 
 type AuditOutcome = 'SUCCESS' | 'FAILURE' | 'DENIED';
 
-type AuditMetadata = Record<string, Prisma.InputJsonValue | undefined>;
+type AuditMetadata = Record<string, Prisma.InputJsonValue | null | undefined>;
 
 export interface RecordAuditEventInput {
   organizationId?: string | null;
@@ -45,6 +45,8 @@ const SAFE_METADATA_KEYS = new Set([
   'status',
   'targetRoleCode',
   'targetUserId',
+  'previousClaimedByUserId',
+  'claimedByUserId',
 ]);
 
 @Injectable()
@@ -75,7 +77,7 @@ export class AuditLogService {
     ) as Prisma.InputJsonObject;
   }
 
-  private isSafeValue(value: Prisma.InputJsonValue | undefined): boolean {
+  private isSafeValue(value: Prisma.InputJsonValue | null | undefined): boolean {
     if (value === null) return true;
     if (['string', 'number', 'boolean'].includes(typeof value)) return true;
     return false;

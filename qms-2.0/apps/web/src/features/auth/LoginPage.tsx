@@ -1,7 +1,8 @@
 import { Alert, Button, Form, Input, Typography } from 'antd';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ApiError, login } from '../../api/client';
+import { Link, useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../i18n/Language';
+import { ApiError, login, safeAccountError } from '../../api/client';
 
 type LoginValues = {
   identifier: string;
@@ -10,6 +11,7 @@ type LoginValues = {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +32,7 @@ export function LoginPage() {
     }
   }
 
-  const fieldMessages = Object.values(error?.fields ?? {}).flat();
+  const invalidFields = error?.code === 'VALIDATION_FAILED' ? ['identifier', 'password'].filter((field) => error.fields[field]?.length) : [];
 
   return (
     <main className="login-container">
@@ -41,7 +43,7 @@ export function LoginPage() {
         </div>
         <div className="entry-note" aria-hidden="true">
           <span className="entry-note__line" />
-          <span>质量管理平台</span>
+          <span>{t('质量管理平台')}</span>
         </div>
       </header>
 
@@ -49,7 +51,7 @@ export function LoginPage() {
         <div className="hero-panel">
           <div className="hero-copy">
             <p className="hero-kicker">Quality Management System</p>
-            <h1>让质量更透明<br />让协同更高效</h1>
+            <h1>{t('让质量更透明')}<br />{t('让协同更高效')}</h1>
           </div>
         </div>
 
@@ -57,17 +59,17 @@ export function LoginPage() {
           <div className="login-panel-shell">
             <div className="login-panel-head">
               <p>QMS Access</p>
-              <Typography.Title id="login-title" level={1}>账号登录</Typography.Title>
+              <Typography.Title id="login-title" level={1}>{t('账号登录')}</Typography.Title>
             </div>
             {error ? (
               <Alert
                 showIcon
                 type="error"
-                title={error.message}
+                title={t(safeAccountError(error))} role="alert"
                 description={
                   <div>
-                    {fieldMessages.map((message) => (
-                      <div key={message}>{message}</div>
+                    {invalidFields.map((field) => (
+                      <div key={field}>{t(field === 'identifier' ? '账号' : '密码')}: {t('请检查填写内容')}</div>
                     ))}
                     {error.traceId ? <code>{error.traceId}</code> : null}
                   </div>
@@ -75,16 +77,17 @@ export function LoginPage() {
               />
             ) : null}
             <Form layout="vertical" onFinish={submit} className="login-form">
-              <Form.Item label="账号" name="identifier" rules={[{ required: true, message: '请输入账号' }]}>
+              <Form.Item label={t('账号')} name="identifier" rules={[{ required: true, message: t('请输入账号') }]}>
                 <Input autoComplete="username" size="large" />
               </Form.Item>
-              <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}>
+              <Form.Item label={t('密码')} name="password" rules={[{ required: true, message: t('请输入密码') }]}>
                 <Input.Password autoComplete="current-password" size="large" />
               </Form.Item>
-              <Button aria-label="登录" block type="primary" htmlType="submit" loading={loading} size="large">
-                登录
+              <Button aria-label={t('登录')} block type="primary" htmlType="submit" loading={loading} size="large">
+                {t('登录')}
               </Button>
             </Form>
+            <Link to="/password-recovery">{t('找回密码')}</Link>
           </div>
         </section>
       </section>

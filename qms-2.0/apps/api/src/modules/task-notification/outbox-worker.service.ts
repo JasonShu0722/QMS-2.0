@@ -7,14 +7,23 @@ const BASE_BACKOFF_MS = 1_000;
 export const OUTBOX_LEASE_MS = 5 * 60_000;
 export const OUTBOX_CLOCK = 'QMS_OUTBOX_CLOCK';
 export const OUTBOX_HANDLER = 'QMS_OUTBOX_HANDLER';
-export type OutboxHandler = (event: OutboxEvent) => Promise<void>;
+export type OutboxHandler = ((event: OutboxEvent) => Promise<void>) | AtomicOutboxHandler;
 
-interface OutboxEvent {
+export interface OutboxEvent {
   id: string;
   attempts: number;
   payload: unknown;
   eventType: string;
   processingAt: Date;
+  eventKey: string;
+  aggregateType: string;
+  aggregateId: string;
+  createdAt: Date;
+}
+
+export interface AtomicOutboxHandler {
+  readonly eventTypes: readonly string[];
+  handle(transaction: Prisma.TransactionClient, event: OutboxEvent): Promise<'deferred' | void>;
 }
 
 interface OutboxClient {
@@ -36,9 +45,9 @@ export async function runConfiguredWorker(
   worker: OutboxWorkerService,
   handler: OutboxHandler | null,
 ): Promise<void> {
-  // Phase 1 has no business handlers. Do not claim pending events until configured.
-  if (typeof handler !== 'function') return;
-  await worker.processDue(25, handler);
+  if (!handler) return;
+  if (typeof handler === 'function') await worker.processDue(25, handler);
+  else await worker.processAtomicDue(25, handler);
 }
 
 @Injectable()
@@ -49,6 +58,41 @@ export class OutboxWorkerService {
     @Inject(OUTBOX_CLOCK)
     private readonly now: () => Date = () => new Date(),
   ) {}
+
+  async processAtomicDue(limit: number, handler: AtomicOutboxHandler): Promise<OutboxProcessResult> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !handler.eventTypes.length) {
+      throw new Error('OUTBOX_LIMIT_INVALID');
+    }
+    const client = this.prisma as PrismaService;
+    const events = await client.$transaction((tx) => this.claimDue(tx as unknown as OutboxClient, limit, this.now(), handler.eventTypes));
+    const result: OutboxProcessResult = { processed: 0, failed: 0, retried: 0 };
+    for (const event of events) {
+      try {
+        const processed = await client.$transaction(async (tx) => {
+          const [lease] = await tx.$queryRaw<{ status: string; processingAt: Date | null }[]>`
+            SELECT status, processing_at AS "processingAt" FROM outbox_events WHERE id = ${event.id}::uuid FOR UPDATE
+          `;
+          if (lease?.status !== 'PROCESSING' || lease.processingAt?.getTime() !== event.processingAt.getTime()
+            || event.processingAt.getTime() <= this.now().getTime() - OUTBOX_LEASE_MS) return false;
+          const outcome = await handler.handle(tx, event);
+          if (event.processingAt.getTime() <= this.now().getTime() - OUTBOX_LEASE_MS) throw new Error('OUTBOX_LEASE_EXPIRED');
+          const completion = await tx.outboxEvent.updateMany({
+            where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
+            data: outcome === 'deferred'
+              ? { status: 'PENDING', processingAt: null, availableAt: new Date(this.now().getTime() + BASE_BACKOFF_MS) }
+              : { status: 'PROCESSED', processingAt: null, processedAt: this.now(), lastError: null },
+          });
+          if (completion.count !== 1) throw new Error('OUTBOX_LEASE_LOST');
+          return outcome !== 'deferred';
+        });
+        if (processed) result.processed += 1;
+      } catch (error) {
+        if (event.processingAt.getTime() <= this.now().getTime() - OUTBOX_LEASE_MS) continue;
+        await this.recordFailure(event, error, result);
+      }
+    }
+    return result;
+  }
 
   async processDue(
     limit: number,
@@ -66,22 +110,7 @@ export class OutboxWorkerService {
       try {
         await handler(event);
       } catch (error) {
-        const nextAttempts = event.attempts + 1;
-        const failed = nextAttempts >= MAX_ATTEMPTS;
-        const completion = await client.outboxEvent.updateMany({
-          where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
-          data: {
-            processingAt: null,
-            attempts: { increment: 1 },
-            status: failed ? 'FAILED' : 'PENDING',
-            availableAt: failed ? this.now() : this.nextAttemptAt(nextAttempts),
-            lastError: errorMessage(error),
-          },
-        });
-        if (completion.count === 1) {
-          if (failed) result.failed += 1;
-          else result.retried += 1;
-        }
+        await this.recordFailure(event, error, result);
         continue;
       }
       // Completion failures are infrastructure errors, not handler failures.
@@ -124,16 +153,36 @@ export class OutboxWorkerService {
     return new Date(this.now().getTime() + delay);
   }
 
-  private claimDue(client: OutboxClient, limit: number, now: Date): Promise<OutboxEvent[]> {
+  private async recordFailure(event: OutboxEvent, error: unknown, result: OutboxProcessResult): Promise<void> {
+    const nextAttempts = event.attempts + 1;
+    const failed = nextAttempts >= MAX_ATTEMPTS;
+    const completion = await this.prisma.outboxEvent.updateMany({
+      where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
+      data: {
+        processingAt: null,
+        attempts: { increment: 1 },
+        status: failed ? 'FAILED' : 'PENDING',
+        availableAt: failed ? this.now() : this.nextAttemptAt(nextAttempts),
+        lastError: errorMessage(error),
+      },
+    });
+    if (completion.count === 1) {
+      if (failed) result.failed += 1;
+      else result.retried += 1;
+    }
+  }
+
+  private claimDue(client: OutboxClient, limit: number, now: Date, eventTypes?: readonly string[]): Promise<OutboxEvent[]> {
     return client.$queryRaw<OutboxEvent[]>(Prisma.sql`
       UPDATE "outbox_events"
       SET "status" = 'PROCESSING'::"OutboxStatus", "processing_at" = ${now}
       WHERE "id" IN (
         SELECT "id"
         FROM "outbox_events"
-        WHERE ("status" = 'PENDING'::"OutboxStatus" AND "available_at" <= ${now})
+        WHERE (("status" = 'PENDING'::"OutboxStatus" AND "available_at" <= ${now})
           OR ("status" = 'PROCESSING'::"OutboxStatus"
-            AND "processing_at" <= ${new Date(now.getTime() - OUTBOX_LEASE_MS)})
+            AND "processing_at" <= ${new Date(now.getTime() - OUTBOX_LEASE_MS)}))
+        ${eventTypes ? Prisma.sql`AND "event_type" IN (${Prisma.join([...eventTypes])})` : Prisma.empty}
         ORDER BY "created_at" ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
@@ -143,6 +192,10 @@ export class OutboxWorkerService {
         "attempts",
         "processing_at" AS "processingAt",
         "payload",
+        "event_key" AS "eventKey",
+        "aggregate_type" AS "aggregateType",
+        "aggregate_id" AS "aggregateId",
+        "created_at" AS "createdAt",
         "event_type" AS "eventType"
     `);
   }

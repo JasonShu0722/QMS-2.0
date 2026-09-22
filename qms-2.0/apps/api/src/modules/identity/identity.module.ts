@@ -14,21 +14,29 @@ import { AdminUserService } from './admin-user.service.js';
 import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { AdminOrganizationController } from './admin-organization.controller.js';
+import { MfaService } from './mfa.service.js';
+import { MfaController } from './mfa.controller.js';
+import { EmailRecoveryController } from './email-recovery.controller.js';
+import { EmailRecoveryService } from './email-recovery.service.js';
+import { RecoveryMailService } from './recovery-mail.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule],
-  controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController],
+  controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
     PasswordHasherService,
     PasswordService,
     SessionService,
     IdentityService,
+    MfaService,
+    EmailRecoveryService,
+    RecoveryMailService,
     AdminUserService,
     PasswordResetService,
     RateLimitService,
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService],
 })
 export class IdentityModule {}

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { fillSecret } from './secret-input';
+import { completeMfa } from './mfa-login';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 if (!baseURL || !process.env.QMS_SEED_INTERNAL_PASSWORD || !process.env.QMS_SEED_SUPPLIER_PASSWORD) {
@@ -25,10 +26,13 @@ test.beforeAll(async ({ playwright }) => {
         headers: { 'x-csrf-token': csrfToken }, data: { identifier: account.identifier, password: account.password },
       });
       expect(response.status()).toBe(200);
+      await completeMfa(client, response, account.identifier);
       const session = await client.get('/api/v1/auth/session');
       expect(session.status()).toBe(200);
       organizationIds.set(account.type, (await session.json()).user.organizationId);
-      expect((await client.post('/api/v1/auth/logout', { headers: { 'x-csrf-token': csrfToken } })).status()).toBe(204);
+      const logoutProtection = await client.get('/api/v1/auth/csrf');
+      expect(logoutProtection.status()).toBe(200);
+      expect((await client.post('/api/v1/auth/logout', { headers: { 'x-csrf-token': (await logoutProtection.json()).csrfToken } })).status()).toBe(204);
     }
   } finally {
     await client.dispose();
@@ -45,7 +49,7 @@ for (const account of accounts) {
     await page.getByRole('button', { name: '登录', exact: true }).click();
     const response = await loginResponse;
     expect(response.status()).toBe(200);
-    expect(await response.json()).toEqual({ accountType: account.type, landingPath: account.landing });
+    expect(await completeMfa(context.request, response, account.identifier, page)).toMatchObject({ accountType: account.type, landingPath: account.landing, securityState: 'AUTHENTICATED' });
     await expect(page).toHaveURL(new URL(account.landing, baseURL!).href);
     await expect(page.getByRole('navigation', { name: account.navigation, exact: true })).toBeVisible();
     await page.reload();

@@ -14,6 +14,7 @@ describe('administrator user lifecycle HTTP contract', () => {
     id: '10000000-0000-4000-8000-000000000001', organizationId: '20000000-0000-4000-8000-000000000001',
     username: 'internal.admin', email: 'internal@example.test', passwordHash: 'encoded',
     accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false,
+    organization: { status: 'ACTIVE' },
   };
   const prisma = {
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
@@ -36,9 +37,10 @@ describe('administrator user lifecycle HTTP contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue(user);
+    prisma.organization.findUnique.mockResolvedValue({ status: 'ACTIVE' });
     prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }]);
     prisma.session.findUnique.mockResolvedValue({
-      id: 'session-1', expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
+      id: 'session-1', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date(), expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
     });
     prisma.userRole.count.mockResolvedValue(1);
     prisma.userRole.findFirst.mockResolvedValue({ organizationId: user.organizationId });

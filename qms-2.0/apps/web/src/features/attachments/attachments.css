@@ -1,0 +1,12 @@
+.attachment-panel { min-width: 0; }
+.attachment-panel .ant-space-item { min-width: 0; max-width: 100%; }
+.attachment-panel__picker { display: grid; gap: 8px; color: var(--qms-muted); }
+.attachment-panel input[type='file'] { width: 100%; max-width: 100%; min-width: 0; font: inherit; color: var(--qms-text); }
+.attachment-panel input::file-selector-button { min-height: 36px; margin-right: 12px; padding: 6px 12px; border: 1px solid var(--qms-border); border-radius: 7px; background: var(--qms-surface); color: var(--qms-text); font: inherit; cursor: pointer; }
+.attachment-panel input::file-selector-button:hover { border-color: var(--qms-accent); color: var(--qms-accent); }
+.attachment-panel input:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
+.attachment-panel input:disabled::file-selector-button { cursor: not-allowed; color: var(--qms-muted); background: var(--qms-surface-tint); }
+.attachment-panel__file { background: var(--qms-surface-tint); }
+.attachment-panel__file .ant-card-head-title { overflow-wrap: anywhere; white-space: normal; padding: 4px 0; }
+.attachment-panel .ant-tag { white-space: normal; }
+@media (max-width: 760px) { .attachment-panel > .ant-card-body { padding: 16px; } }

@@ -1,12 +1,13 @@
 import { HttpException, Injectable, Module } from '@nestjs/common';
-import { createHmac } from 'node:crypto';
+import { adminMutationDigests } from './security-keyring.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogModule } from '../../modules/audit-log/audit-log.module.js';
 import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
 import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/platform-error.js';
+import { assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
 
-export type AdminActor = { id: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
+export type AdminActor = { id: string; sessionId: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
 export type AdminTransaction = Prisma.TransactionClient;
 export { ADMIN_PERMISSIONS } from '../../modules/authorization/permission-catalog.js';
 
@@ -20,11 +21,15 @@ export async function adminPermissions(transaction: AdminTransaction, userId: st
 }
 
 export async function assertAdminAccess(transaction: AdminTransaction, actor: AdminActor, organizationId: string, permission: string | string[]): Promise<string[]> {
-  const current = await transaction.user.findUnique({ where: { id: actor.id }, select: { status: true, accountType: true, organizationId: true } });
+  const current = await transaction.user.findUnique({ where: { id: actor.id }, select: { status: true, accountType: true, organizationId: true, organization: { select: { status: true } } } });
   if (!current || current.status !== 'ACTIVE' || current.accountType !== actor.accountType || current.organizationId !== actor.organizationId) adminError('AUTH_SESSION_REQUIRED', 401);
+  if (current.organization.status !== 'ACTIVE') adminError('ORGANIZATION_DISABLED', 403);
   if (current.accountType === 'SUPPLIER' && organizationId !== current.organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
   const granted = await adminPermissions(transaction, actor.id, organizationId);
   if ((Array.isArray(permission) ? permission : [permission]).some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
+  const target = await transaction.organization.findUnique({ where: { id: organizationId }, select: { status: true } });
+  if (!target) adminError('ORGANIZATION_NOT_FOUND', 404);
+  if (target.status !== 'ACTIVE' && !(Array.isArray(permission) ? permission : [permission]).every((code) => ['organization:manage', 'organization:read'].includes(code)) ) adminError('ORGANIZATION_DISABLED', 403);
   return granted;
 }
 
@@ -48,14 +53,16 @@ export class AdminMutationService {
     try {
       if (!input.key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(input.key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       const key = input.key;
-      const requestDigest = createHmac('sha256', this.secret).update('qms:admin-mutation:v1\0').update(canonical(input.payload)).digest('hex');
+      const requestDigests = adminMutationDigests(canonical(input.payload), this.secret);
+      const requestDigest = requestDigests[0]!;
       return await this.prisma.$transaction(async (transaction) => {
+        await assertRecentAuthentication(transaction, input.actor);
         const granted = await assertAdminAccess(transaction, input.actor, input.organizationId, input.permission);
         for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);
         const identity = { actorUserId: input.actor.id, organizationId: input.organizationId, key };
         const existing = await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
         if (existing) {
-          if (existing.action !== input.action || existing.requestDigest !== requestDigest) adminError('IDEMPOTENCY_REPLAY', 409);
+          if (existing.action !== input.action || !requestDigests.includes(existing.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
           return (existing.response as { value: Result }).value;
         }
         const result = await work(transaction, granted);
@@ -65,9 +72,9 @@ export class AdminMutationService {
       }, { isolationLevel: 'Serializable' });
     } catch (error) {
       const code = (error as { code?: string }).code;
-      const mappedCode = code === 'P2034' ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
+      const mappedCode = isSecurityConcurrencyConflict(error) ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
       const rejection = mappedCode ? new HttpException({ code: mappedCode, message: PLATFORM_ERROR_MESSAGES[mappedCode] }, 409) : error;
-      if (rejection instanceof HttpException && [400, 403, 404, 409].includes(rejection.getStatus())) {
+      if (rejection instanceof HttpException && [400, 401, 403, 404, 409].includes(rejection.getStatus())) {
         await this.audit.record({ actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED', traceId: input.traceId, metadata: { permissionCode: Array.isArray(input.permission) ? input.permission.join(',') : input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } });
       }
       throw rejection;

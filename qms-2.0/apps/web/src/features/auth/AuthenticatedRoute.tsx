@@ -1,8 +1,10 @@
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { Alert, Button, Spin } from 'antd';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { ApiError, getSession, type AccountType, type SessionView } from '../../api/client';
+import { useLanguage } from '../../i18n/Language';
 
 type AuthenticatedRouteProps = {
   accountType: AccountType;
@@ -10,13 +12,14 @@ type AuthenticatedRouteProps = {
 };
 
 export function AuthenticatedRoute({ accountType, children }: AuthenticatedRouteProps) {
+  const { t } = useLanguage();
   const location = useLocation();
   const [retryCount, setRetryCount] = useState(0);
   const [state, setState] = useState<
     | { status: 'loading' }
     | { status: 'authenticated'; session: SessionView }
     | { status: 'unauthenticated' }
-    | { status: 'error' }
+    | { status: 'error'; traceId?: string }
   >({ status: 'loading' });
 
   useEffect(() => {
@@ -24,14 +27,14 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
     setState({ status: 'loading' });
     getSession()
       .then((session) => {
-        if (active) setState({ status: 'authenticated', session });
+        if (active) { useWorkTabsStore.getState().bindSession(`${session.accountType}:${session.organizationId}:${session.userId}`); setState({ status: 'authenticated', session }); }
       })
       .catch((error: unknown) => {
         if (!active) return;
         if (error instanceof ApiError && (error.code === 'HTTP_401' || error.code === 'AUTH_SESSION_REQUIRED')) {
-          setState({ status: 'unauthenticated' });
+          useWorkTabsStore.getState().reset(); setState({ status: 'unauthenticated' });
         } else {
-          setState({ status: 'error' });
+          setState({ status: 'error', traceId: error instanceof ApiError ? error.traceId : undefined });
         }
       });
     return () => {
@@ -41,7 +44,7 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
 
   if (state.status === 'loading') {
     return (
-      <main className="route-loading" aria-label="正在验证登录状态">
+      <main className="route-loading" aria-label={t('正在验证登录状态')}>
         <Spin size="large" />
       </main>
     );
@@ -49,15 +52,15 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
 
   if (state.status === 'error') {
     return (
-      <main className="route-error" aria-label="登录状态验证失败">
+      <main className="route-error" aria-label={t('登录状态验证失败')}>
         <Alert
           type="error"
           showIcon
-          title="暂时无法验证登录状态"
-          description="请检查网络连接后重试。"
+          title={t('暂时无法验证登录状态')}
+          description={<><div>{t('请检查网络连接后重试。')}</div>{state.traceId && <span>{t('追踪标识')}: <code>{state.traceId}</code></span>}</>}
           action={
             <Button type="primary" onClick={() => setRetryCount((count) => count + 1)}>
-              重试
+              {t('重试')}
             </Button>
           }
         />

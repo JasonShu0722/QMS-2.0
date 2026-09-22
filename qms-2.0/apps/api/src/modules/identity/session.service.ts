@@ -5,6 +5,8 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { HttpException } from '@nestjs/common';
+import { assertRecentAuthentication, mfaPolicy } from '../../common/security/session-security.js';
+import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
@@ -65,11 +67,15 @@ export class SessionService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  async create(userId: string, transaction: Pick<PrismaService, 'session'> = this.prisma): Promise<string> {
+  async create(userId: string, transaction: Pick<PrismaService, 'session' | 'user'> = this.prisma, verified: { mfaVerified?: boolean; reauthenticated?: boolean } = {}): Promise<string> {
     const token = randomBytes(32).toString('base64url');
+    const user = await transaction.user.findUniqueOrThrow({ where: { id: userId }, select: { securityVersion: true } });
     await transaction.session.create({
       data: {
         userId,
+        securityVersion: user.securityVersion,
+        mfaVerifiedAt: verified.mfaVerified ? new Date() : null,
+        reauthenticatedAt: verified.reauthenticated ? new Date() : null,
         tokenHash: this.tokenHash(token),
         expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS),
       },
@@ -80,10 +86,13 @@ export class SessionService {
   async resolve(token: string) {
     const session = await this.prisma.session.findUnique({
       where: { tokenHash: this.tokenHash(token) },
-      include: { user: true },
+      include: { user: { include: { organization: { select: { status: true } } } } },
     });
     if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
-    if (session.user.status !== 'ACTIVE') return null;
+    if (session.user.status !== 'ACTIVE' || session.user.organization.status !== 'ACTIVE') return null;
+    if (session.securityVersion !== session.user.securityVersion) return null;
+    const policy = await mfaPolicy(this.prisma, session.user.id);
+    if ((session.user.mfaEnabled || policy.required) && !session.mfaVerifiedAt) return null;
     return session;
   }
 
@@ -148,27 +157,27 @@ export class SessionService {
     currentSessionId: string,
     traceId = requestTraceId(),
   ): Promise<void> {
-    if (sessionId === currentSessionId) {
-      throw new HttpException({ code: 'AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN', message: '当前会话请使用退出登录' }, 409);
-    }
-    await this.prisma.$transaction(async (transaction) => {
-      const changed = await transaction.session.updateMany({
-        where: { id: sessionId, userId, revokedAt: null },
-        data: { revokedAt: new Date() },
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        const { user } = await assertRecentAuthentication(transaction, { id: userId, sessionId: currentSessionId });
+        if (sessionId === currentSessionId) {
+          throw new HttpException({ code: 'AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN', message: '当前会话请使用退出登录' }, 409);
+        }
+        const changed = await transaction.session.updateMany({
+          where: { id: sessionId, userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        if (changed.count !== 1) {
+          throw new HttpException({ code: 'AUTH_SESSION_NOT_FOUND', message: '会话不存在或已撤销' }, 404);
+        }
+        await this.audit.record({
+          actorUserId: userId, organizationId: user.organizationId,
+          action: 'SESSION_REVOKED', resourceType: 'Session', resourceId: sessionId,
+          outcome: 'SUCCESS', traceId,
+        }, transaction);
       });
-      if (changed.count !== 1) {
-        throw new HttpException({ code: 'AUTH_SESSION_NOT_FOUND', message: '会话不存在或已撤销' }, 404);
-      }
-      const user = await transaction.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
-      await this.audit.record({
-        actorUserId: userId,
-        organizationId: user?.organizationId,
-        action: 'SESSION_REVOKED',
-        resourceType: 'Session',
-        resourceId: sessionId,
-        outcome: 'SUCCESS',
-        traceId,
-      }, transaction);
-    });
+    } catch (error) {
+      return rethrowSecurityRejection(this.prisma, this.audit, error, { userId, resourceType: 'Session', resourceId: sessionId, traceId });
+    }
   }
 }

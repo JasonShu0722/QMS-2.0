@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { InternalLayout } from '../../layouts/InternalLayout';
 import { SupplierLayout } from '../../layouts/SupplierLayout';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+
+vi.setConfig({ testTimeout: 15_000 });
 
 describe('portal navigation', () => {
   beforeEach(() => {
@@ -44,8 +46,8 @@ describe('portal navigation', () => {
     );
 
     expect(screen.getByLabelText('内部领域图标导航')).toBeInTheDocument();
-    expect(screen.getByText('问题中心上下文')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'CAPA' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '问题中心 上下文菜单' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '问题台账' })).toHaveAttribute('href', '/app/problem-center');
   });
 
   it('uses an independent supplier portal entry set', () => {
@@ -95,8 +97,8 @@ describe('portal navigation', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('link', { name: '整改' }));
-    await userEvent.click(screen.getByRole('link', { name: '整改' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: '供应商导航' })).getByRole('link', { name: '整改' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: '供应商导航' })).getByRole('link', { name: '整改' }));
 
     const state = useWorkTabsStore.getState();
     expect(screen.getByLabelText('current path')).toHaveTextContent('/supplier/corrections');

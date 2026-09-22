@@ -100,6 +100,6 @@ export class AdminRoleController {
     const authorized = request as AuthorizedRequest;
     const session = authorized[AUTHENTICATED_SESSION];
     if (!session) throw new Error('Authenticated session guard did not attach a session');
-    return { ...session.user, scopeOrganizationId: authorized.authorizedOrganizationId };
+    return { ...session.user, sessionId: session.id, scopeOrganizationId: authorized.authorizedOrganizationId };
   }
 }

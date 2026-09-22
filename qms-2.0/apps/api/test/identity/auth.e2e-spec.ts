@@ -16,6 +16,7 @@ const INTERNAL_USER = {
   email: 'internal@example.test',
   accountType: 'INTERNAL',
   status: 'ACTIVE',
+  organization: { status: 'ACTIVE' },
 };
 
 const SUPPLIER_USER = {
@@ -25,6 +26,7 @@ const SUPPLIER_USER = {
   email: 'supplier@example.test',
   accountType: 'SUPPLIER',
   status: 'ACTIVE',
+  organization: { status: 'ACTIVE' },
 };
 
 function cookieValue(cookies: string[], name: string): string {
@@ -42,7 +44,8 @@ describe('identity HTTP contract', () => {
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     $queryRaw: jest.fn().mockResolvedValue([]),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
-    user: { findFirst: jest.fn(), findUnique: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue({ securityVersion: 1 }) },
+    userRole: { findMany: jest.fn().mockResolvedValue([]) },
     session: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -106,7 +109,7 @@ describe('identity HTTP contract', () => {
       .send({ identifier: user.username, password: 'Correct horse battery staple!' })
       .expect(200);
 
-    expect(response.body).toEqual({ accountType: user.accountType, landingPath });
+    expect(response.body).toEqual({ accountType: user.accountType, landingPath, securityState: 'AUTHENTICATED' });
     expect(JSON.stringify(response.body)).not.toMatch(/token|session|password|stack/i);
     const cookies = response.headers['set-cookie'] as unknown as string[];
     const sessionCookie = cookies.find((entry) => entry.startsWith('qms_session='));

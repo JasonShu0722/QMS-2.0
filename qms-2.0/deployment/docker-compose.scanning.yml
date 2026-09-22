@@ -1,0 +1,35 @@
+services:
+  clamav:
+    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
+    entrypoint: [clamd, --config-file=/etc/clamav/clamd.conf]
+    user: clamav
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 4g
+    cpus: 2
+    tmpfs:
+      - /tmp:size=134217728,mode=1777
+    volumes:
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
+    networks: [file-scanning]
+    healthcheck:
+      test: [CMD, clamdscan, --config-file=/etc/clamav/clamd.conf, --ping=1]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
+
+  worker:
+    environment:
+      QMS_FILE_SCANNER_HOST: clamav
+      QMS_FILE_SCANNER_PORT: '3310'
+      QMS_FILE_SCANNER_TIMEOUT_MS: '30000'
+    networks: [default, file-scanning]
+    depends_on:
+      clamav:
+        condition: service_healthy
+
+networks:
+  file-scanning:
+    internal: true

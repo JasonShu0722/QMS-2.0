@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
 import { fillSecret } from './secret-input';
+import { completeMfa } from './mfa-login';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
@@ -28,7 +29,7 @@ async function uiLogin(page: Page, identifier: string, secret: string) {
   await fillSecret(page.getByLabel('密码', { exact: true }), secret);
   const response = page.waitForResponse((entry) => entry.url().endsWith('/api/v1/auth/login'));
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  expect((await response).status()).toBe(200);
+  await completeMfa(page.request, await response, identifier, page);
   await expect(page).toHaveURL(/\/app\/workbench$/);
 }
 
@@ -65,7 +66,7 @@ test('grouped matrix grants only selected user operations and revokes them on li
   let role: Role | undefined;
   let organizationId: string | undefined;
   try {
-    expect((await write(client, '/api/v1/auth/login', 'POST', { identifier: 'local.internal', password: internalPassword! })).status()).toBe(200);
+    await completeMfa(client, await write(client, '/api/v1/auth/login', 'POST', { identifier: 'local.internal', password: internalPassword! }), 'local.internal');
     const directory = await client.get('/api/v1/admin/organizations');
     expect(directory.status()).toBe(200);
     const organizations = await directory.json() as Schema['AdminOrganizationDto'][];
@@ -114,7 +115,9 @@ test('grouped matrix grants only selected user operations and revokes them on li
     const createPermissions = ['account:users:read', 'account:users:create'];
     await savePermissions(page, role, [], createPermissions);
 
-    await restrictedPage.reload();
+    expect((await restricted.request.get('/api/v1/me')).status()).toBe(401);
+    await uiLogin(restrictedPage, actor.username, secret);
+    await restrictedPage.goto('/app/admin');
     await restrictedPage.getByRole('button', { name: '创建用户', exact: true }).click();
     const dialog = restrictedPage.getByRole('dialog');
     const username = unique('matrix_created');
@@ -139,7 +142,9 @@ test('grouped matrix grants only selected user operations and revokes them on li
     await update.check();
     const updatePermissions = [...createPermissions, 'account:users:update'];
     await savePermissions(page, role, createPermissions, updatePermissions);
-    await restrictedPage.reload();
+    expect((await restricted.request.get('/api/v1/me')).status()).toBe(401);
+    await uiLogin(restrictedPage, actor.username, secret);
+    await restrictedPage.goto('/app/admin');
     await (await searchUser(restrictedPage, username)).getByRole('button', { name: /^编\s*辑$/ }).click();
     const editor = restrictedPage.getByRole('dialog');
     await expect(editor.getByLabel('主组织', { exact: true })).toHaveCount(0);
@@ -160,8 +165,10 @@ test('grouped matrix grants only selected user operations and revokes them on li
 
     await update.uncheck();
     await savePermissions(page, role, updatePermissions, createPermissions);
+    expect((await write(restricted.request, scope(`users/${target.id}`, organizationId), 'PATCH', { email: 'revoked@example.test' })).status()).toBe(401);
+    await uiLogin(restrictedPage, actor.username, secret);
     expect((await write(restricted.request, scope(`users/${target.id}`, organizationId), 'PATCH', { email: 'revoked@example.test' })).status()).toBe(403);
-    await restrictedPage.reload();
+    await restrictedPage.goto('/app/admin');
     const afterRevocation = await searchUser(restrictedPage, username);
     await expect(afterRevocation.getByRole('button', { name: /^编\s*辑$/ })).toHaveCount(0);
     await expect(afterRevocation.getByText(email, { exact: true })).toBeVisible();

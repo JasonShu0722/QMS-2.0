@@ -11,12 +11,13 @@
     "dev": "node node_modules/vite/bin/vite.js",
     "build": "node node_modules/typescript/bin/tsc -b && node node_modules/vite/bin/vite.js build",
     "test": "node node_modules/vitest/vitest.mjs run",
-    "test:e2e": "node --test playwright-security/secret-input.test.mjs && node node_modules/@playwright/test/cli.js test",
+    "test:e2e": "node --test playwright-security/secret-input.test.mjs playwright-security/mail-credential.test.mjs && node node_modules/@playwright/test/cli.js test",
     "lint": "node node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {
     "@qms/contracts": "workspace:*",
     "@tanstack/react-query": "^5.74.9",
+    "@xyflow/react": "12.11.6",
     "antd": "^6.6.4",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",

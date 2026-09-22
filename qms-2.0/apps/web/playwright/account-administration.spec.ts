@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
 import { fillSecret } from './secret-input';
+import { completeMfa } from './mfa-login';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
@@ -24,7 +25,9 @@ async function write(client: APIRequestContext, path: string, method: string, da
   return client.fetch(path, { method, headers: { 'x-csrf-token': token.csrfToken, 'Idempotency-Key': randomUUID() }, data });
 }
 async function apiLogin(client: APIRequestContext, identifier: string, secret: string) {
-  return write(client, '/api/v1/auth/login', 'POST', { identifier, password: secret });
+  const response = await write(client, '/api/v1/auth/login', 'POST', { identifier, password: secret });
+  if (response.status() === 200) await completeMfa(client, response, identifier);
+  return response;
 }
 async function uiLogin(page: Page, identifier: string, secret: string) {
   await page.goto('/login');
@@ -32,7 +35,7 @@ async function uiLogin(page: Page, identifier: string, secret: string) {
   await fillSecret(page.getByLabel('密码', { exact: true }), secret);
   const response = page.waitForResponse((entry) => entry.url().endsWith('/api/v1/auth/login'));
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  expect((await response).status()).toBe(200);
+  await completeMfa(page.request, await response, identifier, page);
   await expect(page).toHaveURL(/\/(app\/workbench|supplier\/inbox)$/);
 }
 async function searchUser(page: Page, username: string) {

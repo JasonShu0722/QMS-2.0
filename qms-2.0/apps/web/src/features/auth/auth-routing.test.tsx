@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './LoginPage';
+import { LanguageProvider } from '../../i18n/Language';
 
 function mockJsonResponse(body: unknown, status = 200) {
   return Promise.resolve({
@@ -28,6 +29,7 @@ describe('authenticated routing', () => {
     window.localStorage.setItem = originalLocalStorage;
     window.sessionStorage.setItem = originalSessionStorage;
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it.each([
@@ -95,9 +97,35 @@ describe('authenticated routing', () => {
     await userEvent.type(screen.getByLabelText('密码'), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: '登录' }));
 
-    expect(await screen.findByText('账号或密码错误')).toBeInTheDocument();
+    expect(await screen.findByText('用户名或密码错误')).toBeInTheDocument();
     expect(screen.getByText('trace-123')).toBeInTheDocument();
-    expect(screen.getByText('账号不存在或密码错误')).toBeInTheDocument();
+    expect(screen.queryByText('账号不存在或密码错误')).not.toBeInTheDocument();
   });
-});
 
+  it.each([
+    ['AUTH_INVALID_CREDENTIALS', 'Incorrect username or password'],
+    ['FEATURE_PERMISSION_DENIED', 'You do not have permission for this action.'],
+    ['AUTH_MFA_CODE_INVALID', 'Invalid or used code. Enter a new code.'],
+  ])('localizes %s login errors without rendering backend messages or fields', async (code, message) => {
+    localStorage.setItem('qms:locale:v1', 'en-US');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code, message: 'raw authentication internals', fields: { identifier: ['raw secret field'] }, traceId: 'trace-login-en' }, 401));
+    render(<LanguageProvider><MemoryRouter><LoginPage /></MemoryRouter></LanguageProvider>);
+    await userEvent.type(screen.getByLabelText('Account'), 'alice');
+    await userEvent.type(screen.getByLabelText('Password'), 'bad-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByText('trace-login-en')).toBeInTheDocument();
+    expect(screen.queryByText(/raw authentication internals|raw secret field/)).not.toBeInTheDocument();
+  }, 15000);
+
+  it('keeps validation field locations with controlled translated messages', async () => {
+    localStorage.setItem('qms:locale:v1', 'en-US');
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code: 'VALIDATION_FAILED', message: 'raw validation internals', fields: { identifier: ['private field rule'], arbitrary: ['another private rule'] } }, 400));
+    render(<LanguageProvider><MemoryRouter><LoginPage /></MemoryRouter></LanguageProvider>);
+    await userEvent.type(screen.getByLabelText('Account'), 'alice');
+    await userEvent.type(screen.getByLabelText('Password'), 'password');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Account: Check the entered values.')).toBeInTheDocument();
+    expect(screen.queryByText(/raw validation internals|private field rule|another private rule/)).not.toBeInTheDocument();
+  }, 15000);
+});

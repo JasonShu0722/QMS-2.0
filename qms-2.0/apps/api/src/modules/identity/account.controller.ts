@@ -27,7 +27,7 @@ export class AccountController {
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AccountProfileDto })
   update(@Body() dto: UpdateAccountProfileDto, @Req() request: Request) {
-    return this.identity.updateProfile(this.session(request).user.id, dto, requestTraceId(request));
+    return this.identity.updateProfile(this.session(request).user.id, dto, requestTraceId(request), this.session(request).id);
   }
 
   @Post('password')

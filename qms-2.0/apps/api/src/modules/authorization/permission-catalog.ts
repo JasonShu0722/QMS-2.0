@@ -1,4 +1,7 @@
 export const ADMIN_PERMISSIONS = [
+  'configuration:read', 'configuration:manage', 'audit:export',
+  'outbox:read', 'outbox:retry',
+  'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign', 'audit:read',
   'account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset',
   'account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign',
 ];
@@ -13,7 +16,9 @@ export const PERMISSION_CATALOG: Group[] = [
   { key: 'platform', name: '平台功能', status: 'active', modules: [
     { key: 'workbench', name: '工作台', status: 'active', operations: [operation('workbench:read', '查看工作台（预留标识）', 'reserved')] },
     { key: 'problem-index', name: '问题查询', status: 'active', operations: [operation('problem-index:read', '查看问题索引')] },
-    { key: 'workflow', name: '受控流程', status: 'active', operations: [operation('workflow:manage', '管理（创建、编辑、校验、发布、复制）')] },
+    { key: 'tasks', name: '我的任务', status: 'active', operations: [operation('task:read', '查看授权任务'), operation('task:claim', '领取和释放任务')] },
+    { key: 'notifications', name: '我的通知', status: 'active', operations: [operation('notification:read', '查看和标记通知')] },
+    { key: 'workflow', name: '受控流程', status: 'active', operations: [operation('workflow:manage', '管理（创建、编辑、校验、发布、复制）'), operation('workflow:start', '启动流程'), operation('workflow:act', '执行被授权的流程节点')] },
   ] },
   planned('supplier', '供应商质量', ['供应商管理', '供应商绩效', '供应商审核', 'PPAP', '供应商整改']),
   planned('process', '制程质量', ['制程问题管理']),
@@ -21,7 +26,10 @@ export const PERMISSION_CATALOG: Group[] = [
   planned('new-product', '新品质量', ['新品质量管理']),
   planned('audit', '审核管理', ['审核管理']),
   { key: 'system', name: '系统管理', status: 'active', modules: [
-    { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织')] },
+    { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },
+    { key: 'management-audit', name: '管理审计', status: 'active', operations: [operation('audit:read', '查询管理审计'), operation('audit:export', '导出管理审计')] },
+    { key: 'platform-configuration', name: '平台配置', status: 'active', operations: [operation('configuration:read', '查看配置字典和通知规则'), operation('configuration:manage', '维护配置字典和通知规则')] },
+    { key: 'outbox-operations', name: '通知运行监控', status: 'active', operations: [operation('outbox:read', '查看失败事件'), operation('outbox:retry', '重试失败事件')] },
     { key: 'permission-context', name: '当前权限上下文', status: 'active', operations: [operation('system:permissions:read', '查看当前权限')] },
     { key: 'users', name: '用户管理', status: 'active', operations: [
       operation('account:users:read', '查看用户'), operation('account:users:create', '创建用户'), operation('account:users:update', '编辑邮箱'),

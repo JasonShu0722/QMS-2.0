@@ -8,6 +8,11 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./testing/problem-browser": {
+      "types": "./src/generated/testing/problem-browser.ts",
+      "import": "./src/generated/testing/problem-browser.ts",
+      "default": "./src/generated/testing/problem-browser.ts"
     }
   },
   "engines": {
@@ -17,7 +22,9 @@
   "scripts": {
     "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
     "test": "node --test",
-    "lint": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json"
+    "lint": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+    "testing:problem-browser:generate": "node scripts/generate-problem-browser.mjs",
+    "testing:problem-browser:check": "node scripts/generate-problem-browser.mjs --check"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

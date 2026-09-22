@@ -1,0 +1,10 @@
+services:
+  web:
+    environment:
+      QMS_HTTPS_PORT: ${HTTPS_PORT:-8443}
+      NGINX_ENVSUBST_FILTER: ^QMS_HTTPS_PORT$
+    ports:
+      - 127.0.0.1:${HTTPS_PORT:-8443}:443
+    volumes:
+      - ./nginx.tls.conf:/etc/nginx/templates/default.conf.template:ro
+      - ${QMS_TLS_DIRECTORY:?Set QMS_TLS_DIRECTORY outside Git}:/etc/qms-tls:ro

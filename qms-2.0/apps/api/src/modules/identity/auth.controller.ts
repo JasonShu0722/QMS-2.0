@@ -18,6 +18,7 @@ import { RateLimitGuard } from './rate-limit.guard.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { CompletePasswordResetDto } from './dto/admin-user.dto.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
+import { MFA_CHALLENGE_COOKIE, MfaService } from './mfa.service.js';
 import {
   clearSessionCookieOptions,
   csrfCookieOptions,
@@ -35,6 +36,7 @@ export class AuthController {
     private readonly identity: IdentityService,
     private readonly sessions: SessionService,
     private readonly resets: PasswordResetService,
+    private readonly mfa: MfaService,
   ) {}
 
   @Get('csrf')
@@ -56,7 +58,10 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.identity.login(dto, request);
-    response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
+    if (result.sessionToken) response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
+    else response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
+    if (result.challengeToken) response.cookie(MFA_CHALLENGE_COOKIE, result.challengeToken, { ...sessionCookieOptions(), maxAge: 300_000 });
+    else response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
     return result.response;
   }
 
@@ -88,6 +93,8 @@ export class AuthController {
   ): Promise<void> {
     const token = parseCookie(request.headers.cookie, SESSION_COOKIE);
     if (token) await this.sessions.revoke(token, requestTraceId(request));
+    await this.mfa.cancelChallenge(parseCookie(request.headers.cookie, MFA_CHALLENGE_COOKIE));
     response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
+    response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
   }
 }

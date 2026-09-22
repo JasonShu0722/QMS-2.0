@@ -5,7 +5,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 | 当前端点 | 行为 |
 | --- | --- |
 | `GET /api/v1/auth/csrf` | 返回 `csrfToken` 并设置可供客户端读取的 CSRF Cookie |
-| `POST /api/v1/auth/login` | 接受 `identifier`、`password`；设置 HttpOnly Session Cookie；返回账号类型与服务端 landingPath |
+| `POST /api/v1/auth/login` | 接受 `identifier`、`password`；返回账号类型、服务端landingPath及securityState，MFA挑战完成后才发完整业务Session |
 | `GET /api/v1/auth/session` | 解析会话并返回 user 的 id、organizationId、accountType |
 | `POST /api/v1/auth/logout` | CSRF 校验后撤销会话、清除 Session Cookie，返回 204 |
 | `POST /api/v1/auth/password-reset/complete` | 匿名 CSRF 和限流保护的一次性重置兑换，成功返回 204；精确契约见下文 |
@@ -29,7 +29,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 | 方法与路径 | 参数 / body | 返回与所需权限 |
 | --- | --- | --- |
-| `GET /organizations` | 无组织选择参数 | 200 `AdminOrganizationDto[]`：`id/code/name/type/permissions`；仅列当前账号持有下述 11 个账号权限中至少一项的组织，均未持有时为空数组；写权限不自动包含读取权限 |
+| `GET /organizations` | 无组织选择参数 | 200 `AdminOrganizationDto[]`：`id/code/name/type/permissions`；仅列当前账号持有账号或新增治理目录权限中至少一项的组织，均未持有时为空数组；写权限不自动包含读取权限 |
 | `GET /users` | query：`organizationId`、`status=ACTIVE\|DISABLED`、`accountType=INTERNAL\|SUPPLIER`、`search`（最多 100 字符，按用户名/邮箱不区分大小写包含匹配）；不分页 | 200 `AdminUserDto[]`；`account:users:read` |
 | `GET /users/:userId` | query：`organizationId` | 200 `AdminUserDto`；`account:users:read` |
 | `POST /users` | `CreateAdminUserDto`：`username`、`initialPassword`、`accountType`、`organizationId`，可选 `email`（可为 null） | 201 `AdminUserDto`；`account:users:create` |
@@ -39,14 +39,14 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 | `GET /permission-catalog` | query：`organizationId`（可选 UUID） | 200 `PermissionCatalogGroupDto[]`；`account:roles:read` 和所选组织范围；分组目录、状态与可授予标记见下文 |
 | `GET /roles` | query：`organizationId` | 200 `AdminRoleDto[]`；`account:roles:read`，只列所选组织角色 |
 | `GET /roles/:roleId` | query：`organizationId` | 200 `AdminRoleDto`；`account:roles:read` |
-| `POST /roles` | `CreateAdminRoleDto`：`organizationId/code/name/permissionCodes` | 201 `AdminRoleDto`；`account:roles:create` |
+| `POST /roles` | `CreateAdminRoleDto`：`organizationId/code/name/permissionCodes`，可选 `mfaRequired` | 201 `AdminRoleDto`；`account:roles:create` |
 | `POST /roles/:roleId/copy` | query：`organizationId`；`CopyAdminRoleDto`：`code/name` | 201 `AdminRoleDto`；`account:roles:create`，复制同组织角色及其权限 |
-| `PATCH /roles/:roleId` | query：`organizationId`；`UpdateAdminRoleDto` 可选 `name/permissionCodes/expectedPermissionCodes` | 200 `AdminRoleDto`；`account:roles:update`；提交权限时必须带读取基线；省略权限字段保留权限，空数组清空权限 |
+| `PATCH /roles/:roleId` | query：`organizationId`；`UpdateAdminRoleDto` 可选 `name/permissionCodes/expectedPermissionCodes/mfaRequired/expectedMfaRequired` | 200 `AdminRoleDto`；`account:roles:update`；提交权限或MFA策略时须带对应读取基线；省略权限字段保留权限，空数组清空权限 |
 | `DELETE /roles/:roleId` | query：`organizationId`；无 body | 204；`account:roles:delete`，仍有成员返回 `ADMIN_ROLE_IN_USE`（409） |
 | `GET /users/:userId/roles` | query：`organizationId` | 200 `AdminUserRolesDto`：`userId/organizationId/roles/permissions`；`account:roles:read` |
 | `PUT /users/:userId/roles` | query：`organizationId`；`AssignAdminRolesDto`：`roleIds`（最多 100 个不同 UUID，空数组清空） | 200 `AdminUserRolesDto`；`account:roles:assign`，替换该组织角色分配 |
 
-所有管理员 POST/PATCH/PUT/DELETE 必须携带 `Idempotency-Key` 和 `x-csrf-token`。key 为 8–128 字符，限字母、数字、点、下划线、冒号、连字符；同一操作者、组织、key 的同动作同内容重试复用原安全响应，不重复写业务或成功审计；异内容/异动作复用返回 409。记录保存用途隔离的 HMAC 请求摘要，不保存原始请求秘密。授权在 Serializable 写事务内重新检查，不能以幂等重放绕过已撤销权限；序列化冲突返回受控 409。
+账号、角色、组织及受控配置的管理 POST/PATCH/PUT/DELETE 必须携带 `Idempotency-Key` 和 `x-csrf-token`。key 为 8–128 字符，限字母、数字、点、下划线、冒号、连字符；同一操作者、组织、key 的同动作同内容重试复用原安全响应，不重复写业务或成功审计；异内容/异动作复用返回 409。记录保存用途隔离的 HMAC 请求摘要，不保存原始请求秘密。授权在 Serializable 写事务内重新检查，不能以幂等重放绕过已撤销权限；序列化冲突返回受控 409。
 
 用户 username 为 1–100 个 ASCII 字母、数字、点、下划线或连字符；邮箱最多 254 字符；新密码/初始密码为 12–256 字符。username/email 全局去首尾空格、大小写无关唯一。用户响应包含标识、邮箱、类型、状态、MFA 状态、组织摘要和创建/更新时间，绝不返回密码哈希、Session 或重置代码。账号类型必须与目标组织类型一致。
 
@@ -54,7 +54,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 主组织迁移的 query.organizationId 是源组织，body.organizationId 是目标组织。管理员必须在两端都有 `account:users:transfer`，并覆盖目标用户各已分配组织的既有权限；目标端 transfer 撤销后，旧成功请求也不能重放。禁止自停用、自迁移/自类型变更及携全局角色身份迁移。成功身份变更清除旧角色、撤销会话和未消费的重置凭证。用户仍有问题负责人、流程任务办理人或通知接收人引用时返回 `ADMIN_USER_ORGANIZATION_IN_USE`（409），保留业务归属及全部角色、会话、重置凭证；数据库外键同样禁止级联迁移。普通邮箱编辑和停用不受该引用限制。
 
-角色 code 为 1–100 字符、字母开头且仅含字母/数字/下划线/连字符；name 为 1–150 字符且不得全空白；permissionCodes 最多 200 个不同代码。角色响应为 `id/organizationId/code/name/permissions`。创建、复制、修改及分配只能使用当前组织中操作者已有权限，不能管理更高权限角色。组织接口不提供全局角色 CRUD，分配接口也不能移除既有全局角色；自锁保护覆盖下述全部 11 个账号权限。矩阵读取 catalog 和角色结果，保存仍走角色 PATCH，无独立批量写入入口。
+角色 code 为 1–100 字符、字母开头且仅含字母/数字/下划线/连字符；name 为 1–150 字符且不得全空白；permissionCodes 最多 200 个不同代码。角色响应为 `id/organizationId/code/name/permissions/mfaRequired`；修改MFA策略须带expectedMfaRequired基线。创建、复制、修改及分配只能使用当前组织中操作者已有权限，不能管理更高权限角色。组织接口不提供全局角色 CRUD，分配接口也不能移除既有全局角色；自锁保护覆盖账号及新增治理管理权限。矩阵读取 catalog 和角色结果，保存仍走角色 PATCH，无独立批量写入入口。
 
 ### 分组目录与权限基线
 
@@ -89,9 +89,9 @@ corepack pnpm contracts:check
 
 `test/common/openapi.spec.ts` 验证真实 Nest HTTP schema 发布、登录请求响应、组织参数、权限响应和错误必填字段；使用持久层替身，不冒充真实数据库登录。Playwright 另行验证运行网关的真实登录、CSRF、组织隔离与会话撤销。
 
-附件上传/下载、Outbox 运维和编号分配目前没有公开 HTTP 契约；流程草稿/校验/发布/复制和问题查询已有表中接口。接口存在不等于完整流程运行、业务 Worker 或平台浏览器主链路已验收；后续公开接口仍须先在 API 定义 DTO、权限与 OpenAPI，再生成前端契约。
+附件上传/下载和编号分配目前没有公开 HTTP 契约；Outbox 运维已公开 `/api/v1/outbox/failures` 与 `/:id/retry`，带组织参数及独立权限。流程草稿/校验/发布/复制和问题查询已有表中接口。接口存在不等于完整领域业务浏览器主链路已验收；后续公开接口仍须先在 API 定义 DTO、权限与 OpenAPI，再生成前端契约。
 
-管理员用户与组织角色治理已有上述接口和 `/app/admin` 页面；组织目录为只读选择器，不是组织树维护。组织/部门/岗位 CRUD、系统配置、通知规则、审计查询导出、失败队列监控、MFA 和自助邮件找回属于 D–H 后续工作，本轮不启动。
+D–H已新增组织树/部门/岗位/任职、系统配置与通知规则、审计查询/导出、失败队列、MFA与自助邮件找回契约。完整路径与行为见 [PLATFORM-HANDOFF](PLATFORM-HANDOFF.md)、[EMAIL-RECOVERY](EMAIL-RECOVERY.md) 及当前 `/api/v1/openapi.json`；本页既有端点表不是完整目录。治理敏感写入还要求有效完整会话和近期认证；审计导出、MFA、邮件等专用接口按Swagger声明使用CSRF，不借用旧管理员幂等回执存放秘密。
 
 批次 2 任务 2 使用 `PlatformTypesDto` 作为 Swagger extra model 暴露平台枚举，不新增业务 HTTP 入口。枚举和固定错误消息由 API 持有，contracts 只导出生成 schema 的派生类型。领域码为领域服务拥有的稳定 string，中性测试域使用 `neutral-test`；平台不预设业务分类。
 
