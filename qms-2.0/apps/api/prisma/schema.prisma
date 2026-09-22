@@ -794,6 +794,94 @@ model Notification {
   @@map("notifications")
 }
 
+model SupplierBusinessProfile {
+  id String @id @default(uuid()) @db.Uuid
+  ownerOrganizationId String @map("owner_organization_id") @db.Uuid
+  supplierOrganizationId String @map("supplier_organization_id") @db.Uuid
+  businessCode String @map("business_code") @db.VarChar(100)
+  displayName String @map("display_name") @db.VarChar(200)
+  contactName String? @map("contact_name") @db.VarChar(100)
+  contactEmail String? @map("contact_email") @db.VarChar(254)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  problems SupplierQualityProblem[]
+
+  @@unique([ownerOrganizationId, supplierOrganizationId])
+  @@unique([ownerOrganizationId, businessCode])
+  @@unique([id, ownerOrganizationId, supplierOrganizationId])
+  @@map("supplier_business_profiles")
+}
+
+model SupplierQualityProblem {
+  id String @id @default(uuid()) @db.Uuid
+  ownerOrganizationId String @map("owner_organization_id") @db.Uuid
+  supplierOrganizationId String @map("supplier_organization_id") @db.Uuid
+  profileId String @map("profile_id") @db.Uuid
+  title String @db.VarChar(500)
+  materialCode String @map("material_code") @db.VarChar(100)
+  materialCategory String? @map("material_category") @db.VarChar(32)
+  defectDescription String @map("defect_description") @db.Text
+  defectQuantity Int @map("defect_quantity")
+  severity String @db.VarChar(32)
+  responseForm String @map("response_form") @db.VarChar(32)
+  replyMode String @map("reply_mode") @db.VarChar(32)
+  internalResponderId String? @map("internal_responder_id") @db.Uuid
+  problemIndexId String? @unique @map("problem_index_id") @db.Uuid
+  releasedToSupplierAt DateTime? @map("released_to_supplier_at") @db.Timestamptz(3)
+  version Int @default(1)
+  createdById String @map("created_by_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile SupplierBusinessProfile @relation(fields: [profileId, ownerOrganizationId, supplierOrganizationId], references: [id, ownerOrganizationId, supplierOrganizationId], onDelete: Restrict)
+  responseDraft SupplierResponseDraft?
+  revisions SupplierResponseRevision[]
+  evidence SupplierEvidenceReference[]
+
+  @@index([ownerOrganizationId, updatedAt])
+  @@index([supplierOrganizationId, releasedToSupplierAt])
+  @@map("supplier_quality_problems")
+}
+
+model SupplierResponseDraft {
+  problemId String @id @map("problem_id") @db.Uuid
+  content Json @default("{}")
+  updatedById String @map("updated_by_id") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@map("supplier_response_drafts")
+}
+
+model SupplierResponseRevision {
+  id String @id @default(uuid()) @db.Uuid
+  problemId String @map("problem_id") @db.Uuid
+  revision Int
+  content Json
+  submittedById String @map("submitted_by_id") @db.Uuid
+  workflowInstanceId String @map("workflow_instance_id") @db.Uuid
+  workflowVersion Int @map("workflow_version")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  evidence SupplierEvidenceReference[]
+
+  @@unique([problemId, revision])
+  @@unique([id, problemId])
+  @@map("supplier_response_revisions")
+}
+
+model SupplierEvidenceReference {
+  problemId String @map("problem_id") @db.Uuid
+  fileId String @map("file_id") @db.Uuid
+  revisionId String? @map("revision_id") @db.Uuid
+  purpose String @db.VarChar(100)
+  problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  revision SupplierResponseRevision? @relation(fields: [revisionId, problemId], references: [id, problemId], onDelete: Restrict)
+
+  @@id([problemId, fileId])
+  @@map("supplier_evidence_references")
+}
+
 model OutboxEvent {
   id            String    @id @default(uuid()) @db.Uuid
   eventKey      String    @unique @map("event_key") @db.VarChar(150)

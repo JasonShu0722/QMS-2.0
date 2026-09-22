@@ -1263,6 +1263,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_profiles"];
+        put?: never;
+        post: operations["SupplierQualityController_createProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_profile"];
+        put: operations["SupplierQualityController_updateProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/supplier-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_supplierOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/reference-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/problems/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/drafts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierQualityController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/problems/{id}/response-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierQualityController_response"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/problems/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/problems/{id}/response-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierPortalController_response"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2386,6 +2578,145 @@ export interface components {
             /** Format: date-time */
             upgradedAt: string;
         };
+        Object: Record<string, never>;
+        SupplierProfileDto: {
+            id: string;
+            version: number;
+            supplierOrganizationId: string;
+            businessCode: string;
+            displayName: string;
+            contactName?: string;
+            contactEmail?: string;
+        };
+        SupplierProfilePageDto: {
+            items: components["schemas"]["SupplierProfileDto"][];
+            total: number;
+            canManage: boolean;
+        };
+        UpdateSupplierProfileDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            businessCode: string;
+            /** @description 省略或空白表示清除 */
+            contactName?: string;
+            /** @description 省略表示清除 */
+            contactEmail?: string;
+        };
+        SupplierReferenceOptionDto: {
+            id: string;
+            label: string;
+        };
+        SupplierReferenceOptionsDto: {
+            items: components["schemas"]["SupplierReferenceOptionDto"][];
+            total: number;
+        };
+        CreateSupplierProfileDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            businessCode: string;
+            contactName?: string;
+            contactEmail?: string;
+        };
+        SupplierResponseContentDto: {
+            problemDescription?: string;
+            containmentAction?: string;
+            interimAction?: string;
+            rootCause?: string;
+            correctiveAction?: string;
+            preventiveAction?: string;
+            verificationResult?: string;
+            /** @description 包含时区的完成时间 */
+            completionTime?: string;
+        };
+        SupplierProblemDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            profileId: string;
+            title: string;
+            materialCode: string;
+            /** @enum {string} */
+            materialCategory?: "STRUCTURE" | "ELECTRONIC";
+            defectDescription: string;
+            defectQuantity: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            replyMode: "INTERNAL" | "SUPPLIER";
+            /** Format: uuid */
+            internalResponderId?: string;
+            id: string;
+            supplierOrganizationId: string;
+            supplierName: string;
+            version: number;
+            /** @enum {string} */
+            stage: "DRAFT" | "ISSUED";
+            reportNumber?: string;
+            /** @enum {string} */
+            problemStatus?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+            /** Format: date-time */
+            dueAt?: string;
+            /** Format: date-time */
+            updatedAt: string;
+            canEditFacts: boolean;
+            canEditResponse: boolean;
+            responseDraft: components["schemas"]["SupplierResponseContentDto"];
+        };
+        SupplierProblemPageDto: {
+            items: components["schemas"]["SupplierProblemDto"][];
+            total: number;
+            canCreateDraft: boolean;
+        };
+        SupplierProblemDraftDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            profileId: string;
+            title: string;
+            materialCode: string;
+            /** @enum {string} */
+            materialCategory?: "STRUCTURE" | "ELECTRONIC";
+            defectDescription: string;
+            defectQuantity: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            replyMode: "INTERNAL" | "SUPPLIER";
+            /** Format: uuid */
+            internalResponderId?: string;
+        };
+        UpdateSupplierProblemDraftDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            profileId: string;
+            title: string;
+            materialCode: string;
+            /** @enum {string} */
+            materialCategory?: "STRUCTURE" | "ELECTRONIC";
+            defectDescription: string;
+            defectQuantity: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            replyMode: "INTERNAL" | "SUPPLIER";
+            /** Format: uuid */
+            internalResponderId?: string;
+            expectedVersion: number;
+        };
+        SaveSupplierResponseDraftDto: {
+            expectedVersion: number;
+            content: components["schemas"]["SupplierResponseContentDto"];
+        };
         /** @enum {string} */
         ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
         /** @enum {string} */
@@ -2395,7 +2726,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "SUPPLIER_INPUT_INVALID" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -5542,6 +5873,499 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowUpgradeResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_profiles: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProfilePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_createProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierProfileDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProfileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_profile: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProfileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_updateProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierProfileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProfileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_supplierOptions: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                selectedId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierReferenceOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_options: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                selectedId?: string;
+                kind?: "profiles" | "responders";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierReferenceOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+                responseForm?: "BRIEF" | "EIGHT_D";
+                stage?: "DRAFT" | "ISSUED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierProblemDraftDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierProblemDraftDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_response: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSupplierResponseDraftDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+                responseForm?: "BRIEF" | "EIGHT_D";
+                stage?: "DRAFT" | "ISSUED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalController_response: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSupplierResponseDraftDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
                 };
             };
             default: {

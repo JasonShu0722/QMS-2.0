@@ -51,10 +51,13 @@ describe('administrator role HTTP contract', () => {
 
   afterAll(async () => app.close());
 
-  it('returns ordered module groups with no grantable codes in planned modules', async () => {
+  it('returns ordered module groups with supplier-quality grantable codes', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', cookies).expect(200);
     expect(response.body.map((group: { key: string }) => group.key)).toEqual(['platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'system']);
-    for (const group of response.body.slice(1, 6)) {
+    const supplier = response.body[1];
+    expect(supplier.status).toBe('active');
+    expect(supplier.modules.find((module: { key: string }) => module.key === 'supplier-problems').operations.map((operation: { code: string }) => operation.code)).toEqual(['supplier-quality:problems:read', 'supplier-quality:problems:write']);
+    for (const group of response.body.slice(2, 6)) {
       expect(group.status).toBe('planned');
       expect(group.modules.length).toBeGreaterThan(0);
       for (const module of group.modules) expect(module.operations).toEqual([]);

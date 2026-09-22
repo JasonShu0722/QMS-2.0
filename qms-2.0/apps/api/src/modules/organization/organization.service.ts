@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, ReplaceUserPositionsDto } from './organization.dto.js';
@@ -12,6 +13,19 @@ const positionSelect = { id: true, organizationId: true, code: true, name: true,
 @Injectable()
 export class OrganizationService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
+
+  lookup(id: string, transaction: Prisma.TransactionClient = this.prisma) {
+    return transaction.organization.findUnique({ where: { id }, select: { id: true, name: true, code: true, type: true } });
+  }
+
+  async supplierDirectory(query: { search?: string; selectedId?: string; page: number; pageSize: number }, transaction: Prisma.TransactionClient = this.prisma) {
+    const where: Prisma.OrganizationWhereInput = { type: 'SUPPLIER', ...(query.selectedId ? { id: query.selectedId } : { OR: [{ name: { contains: query.search ?? '', mode: 'insensitive' } }, { code: { contains: query.search ?? '', mode: 'insensitive' } }] }) };
+    const [items, total] = await Promise.all([
+      transaction.organization.findMany({ where, select: { id: true, name: true, code: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], skip: query.selectedId ? 0 : (query.page - 1) * query.pageSize, take: query.pageSize }),
+      transaction.organization.count({ where }),
+    ]);
+    return { items, total };
+  }
 
   async current(userId: string, organizationId: string) {
     const organization = await this.prisma.organization.findUniqueOrThrow({

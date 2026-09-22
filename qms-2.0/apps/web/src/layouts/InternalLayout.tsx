@@ -13,6 +13,7 @@ import { WorkflowListPage } from '../features/workflows/WorkflowListPage';
 import { ProblemWorkspacePage } from '../features/problem-workspace/ProblemWorkspacePage';
 import { AccountCenterPage } from '../features/account/AccountCenterPage';
 import { AdminPage } from '../features/admin/AdminPage';
+import { SupplierQualityPage } from '../features/supplier-quality/SupplierQualityPage';
 import { getAdminOrganizations, type AdminOrganization } from '../features/admin/admin';
 import { ApiError, safeAccountError } from '../api/client';
 import { useLanguage } from '../i18n/Language';
@@ -40,7 +41,7 @@ function InternalShell() {
   const isAdmin = location.pathname.startsWith('/app/admin');
   const workflowRoute = /^\/app\/workflow-designer\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
-  const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin'].some((path) => location.pathname.startsWith(path));
+  const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin', '/app/supplier-quality'].some((path) => location.pathname.startsWith(path));
   useEffect(() => {
     let current = true;
     void getAdminOrganizations().then((result) => { if (current) { setOrganizations(result); setAdminError(undefined); setAdminTraceId(undefined); } }).catch((cause) => { if (current) { setAdminError(safeAccountError(cause)); setAdminTraceId(cause instanceof ApiError ? cause.traceId : undefined); } });
@@ -92,6 +93,7 @@ function InternalShell() {
         {location.pathname.startsWith('/app/workflow-designer') ? workflowRoute ? <WorkflowDesignerPage definitionId={workflowRoute[1]!} versionId={workflowRoute[2]!} /> : <WorkflowListPage /> : null}
         {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage key={problemRoute?.[1]} problemId={problemRoute?.[1]} /> : null}
         {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
+        {location.pathname.startsWith('/app/supplier-quality') ? <SupplierQualityPage /> : null}
         {isAdmin ? <AdminPage organizations={organizations} error={adminError} traceId={adminTraceId} onDirectoryChange={() => setDirectoryRevision((value) => value + 1)} /> : null}
       </main>
     </div>

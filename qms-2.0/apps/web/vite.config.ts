@@ -16,7 +16,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: { '/api/': 'http://127.0.0.1:3000' },
+    proxy: { '/api/': process.env.QMS_DEV_API_URL ?? 'http://127.0.0.1:3000' },
   },
   test: {
     maxWorkers: 2,

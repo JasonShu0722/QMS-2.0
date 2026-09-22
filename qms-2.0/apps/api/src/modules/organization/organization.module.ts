@@ -10,6 +10,6 @@ import { AuditLogModule } from '../audit-log/audit-log.module.js';
   imports: [AdminMutationModule, AuditLogModule],
   controllers: [OrganizationController, OrganizationGovernanceController],
   providers: [OrganizationScopeService, OrganizationService],
-  exports: [OrganizationScopeService],
+  exports: [OrganizationScopeService, OrganizationService],
 })
 export class OrganizationModule {}

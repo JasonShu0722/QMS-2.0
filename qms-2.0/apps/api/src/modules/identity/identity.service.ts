@@ -17,6 +17,18 @@ type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
 @Injectable()
 export class IdentityService {
+  async internalResponders(organizationId: string, query: { search?: string; selectedId?: string; page: number; pageSize: number }, transaction: AdminTransaction = this.prisma) {
+    const where = { organizationId, accountType: 'INTERNAL' as const, status: 'ACTIVE' as const, ...(query.selectedId ? { id: query.selectedId } : { username: { contains: query.search ?? '', mode: 'insensitive' as const } }) };
+    const [items, total] = await Promise.all([
+      transaction.user.findMany({ where, select: { id: true, username: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], skip: query.selectedId ? 0 : (query.page - 1) * query.pageSize, take: query.pageSize }),
+      transaction.user.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  async isInternalResponder(userId: string, organizationId: string, transaction: AdminTransaction) {
+    return (await transaction.user.count({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } })) === 1;
+  }
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
