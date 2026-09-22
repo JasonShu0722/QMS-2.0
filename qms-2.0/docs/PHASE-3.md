@@ -1,5 +1,35 @@
 # 阶段三供应商质量执行记录
 
+## S4.1a 公共问题读取接入（2026-09-22）
+
+当前基于主目录 `main` 的 `1b94d14` 继续开发；该提交已包含首批供应商草稿整合。本批未提交、推送或部署。
+
+新增 `SupplierProblemReadAdapter` 并在平台 `ProblemReadModule` 注册。公共问题中心/台账可以聚合有正确双向索引引用的供应商记录，当前工作空间展示供应商专业资料；分页、总数及状态统计先按领域范围过滤。要求公共 `problem-index:read` 与拥有组织的 `supplier-quality:problems:read` 同时满足，支持内部显式跨组织授权，拒绝供应商进入内部公共范围及撤权后继续读取。
+
+公共摘要最多 200 字符，完整 500 字符问题标题在专业资料区保留。未提交回复、联系人邮箱不进入公共投影；历史实例没有不可变快照就返回领域不可用，报告返回 `UNAVAILABLE`，领域修订审计标记 false。未提供附件引用或领域写动作。
+
+验证证据：一次性 PostgreSQL 18，容器 `qms-supplier-read-deece497a5`，端口 `54027`，全新数据库部署已有 34 项迁移。没有使用 55440。日志在仓库外 `D:/WorkSpace/QMS-2.0-local/supplier-read-20260922/`。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| HTTP/PG 初次红灯 | 原 9 项中 6 FAIL / 3 PASS，合法记录列表为空、详情 404，证明缺少生产注册 |
+| 接入首轮 | UUID/text 比较错误导致 500；直接 PostgreSQL 查询复现 `operator does not exist: text = uuid`，修正为 UUID 同类型比较 |
+| 新增 HTTP/PG 用例 | 11/11 PASS；补充夹具 Outbox 清理后最终重跑 11/11 PASS |
+| PostgreSQL 定向回归 | 草稿、公共读取、运行时、问题/流程模型共 4 suites / 80 tests PASS |
+| API 单元回归 | 35 suites / 433 tests PASS |
+| Web 定向回归 | 供应商、问题中心、工作空间共 6 files / 29 tests PASS |
+| API 构建、Swagger 契约、归档隔离、结构/契约包检查 | PASS；无 DTO 变更，契约重新生成校验后无差异 |
+| Web 构建 | PASS；保留既有 Ant Design 大包体积提示 |
+| Foundation 及 scanning/TLS Compose 静态校验 | 首次缺 MinIO 必填环境变量失败；补齐本次临时验证变量后两种配置均 PASS，未启动或部署 Compose |
+
+实际命令：在 `apps/api` 使用 `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand` 执行 `test/supplier-quality/supplier-problem-read-schema.integration-spec.ts`，并与 `supplier-quality-schema.integration-spec.ts`、`test/workflow/workflow-runtime-schema.integration-spec.ts`、`test/database/problem-workflow-schema.integration-spec.ts` 合并回归；API 单元测试使用 `pnpm --filter @qms/api test`。Web 使用 `node node_modules/vitest/vitest.mjs run src/features/problem-center/problem-center.test.tsx src/features/problem-workspace/problem-workspace.test.tsx src/features/supplier-quality`。构建、契约、归档检查沿用工作区脚本。测试数据库配置由仓库外临时会话提供。
+
+验证完成后已核对容器名称及 `qms.task=supplier-read-20260922` 所有权标签，销毁本批 PostgreSQL 容器及匿名卷，删除临时数据库凭据文件；验证日志保留在仓库外。未修改其他数据库或服务。
+
+本批完成本地代码审查；独立审查子代理两次因模型容量不足未启动，不记录为独立审查通过。未运行全量阶段一/二验收、真实浏览器、附件扫描或业务 Worker 验收。索引绑定及历史实例使用明确的读取测试夹具；其中平台 runtime 的独立启动用于验证工作空间选择边界，不代表供应商发单接口已实现。
+
+下一步仍是 S4.1 正式发单：先落实跨企业节点/任务参与授权与严重度 SLA/固定流程配置，随后验证领域、编号、索引、流程、审计和 Outbox 的同事务提交、幂等重放、撤权、CAS 及故障回滚。之后按 S4.2–S4.4 接回复修订、证据、验证关闭和升级主链。阶段三整体与真实试点仍未完成。
+
 ## 当前主目录整合状态（2026-09-22）
 
 阶段三首批供应商增量已接入 `D:/WorkSpace/QMS-2.0/qms-2.0` 当前主目录，保留平台阶段一、二实现和界面改版。已接入供应商 Prisma 模型与两项迁移、API 模块、权限目录、生成契约、内部台账/供应商门户入口及供应商测试夹具；共享平台代码仅补充供应商所需的目录查询、资源授权回调和会话适配。未提交、推送或生产部署。

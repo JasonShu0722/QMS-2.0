@@ -6,7 +6,7 @@
 
 ## 已有能力与使用约束
 
-阶段二后续接入协议已补充：[流程设计器](WORKFLOW-DESIGNER.md)、[问题工作空间/历史报告/个人视图/升级](PROBLEM-WORKSPACE.md)、[真实附件](ATTACHMENTS.md)。这些能力已在主目录实现；生产领域注册仍显式留空，供应商域需按协议注册自己的读模型、字段映射、资源授权与专业 HTTP 表单。中性测试入口和测试专属契约不得引入生产。最终聚合状态以 FOUNDATION 最新证据为准。
+阶段二后续接入协议已补充：[流程设计器](WORKFLOW-DESIGNER.md)、[问题工作空间/历史报告/个人视图/升级](PROBLEM-WORKSPACE.md)、[真实附件](ATTACHMENTS.md)。这些能力已在主目录实现。2026-09-22 阶段三已注册供应商内部公共读模型，要求公共与领域读权限同时满足；附件资源授权、历史报告快照、升级映射和专业写动作仍待领域接入。中性测试入口和测试专属契约不得引入生产。最终聚合状态以 FOUNDATION 和 PHASE-3 最新证据为准。
 
 - `ProblemIndexService.createFromDomain(tx, input)` 在调用方事务中编号、索引、审计、Outbox。以 organizationId/sourceType/sourceId 去重；领域 sourceId 必须稳定 UUID，领域自行校验事实并保护创建请求幂等。编号永久不变，不能解析编号作权限或状态判断。
 - 领域拥有自己的记录、附件证据关系及专业字段。平台索引只保存公共状态、责任引用、领域与来源引用。
