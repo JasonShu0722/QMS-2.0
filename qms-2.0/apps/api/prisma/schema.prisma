@@ -794,6 +794,24 @@ model Notification {
   @@map("notifications")
 }
 
+model SupplierWorkflowBinding {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  severity String @db.VarChar(32)
+  responseForm String @map("response_form") @db.VarChar(32)
+  replyMode String @map("reply_mode") @db.VarChar(32)
+  version Int
+  workflowVersionId String @map("workflow_version_id") @db.Uuid
+  enabled Boolean
+  createdById String @map("created_by_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, severity, responseForm, replyMode, version], map: "supplier_workflow_bindings_selector_version_key")
+  @@index([workflowVersionId])
+  @@index([createdById])
+  @@map("supplier_workflow_bindings")
+}
+
 model SupplierBusinessProfile {
   id String @id @default(uuid()) @db.Uuid
   ownerOrganizationId String @map("owner_organization_id") @db.Uuid

@@ -1,5 +1,15 @@
 # 阶段三供应商质量执行记录
 
+## S4.1c 严重度与固定流程绑定（2026-09-22）
+
+新增 `SupplierWorkflowBinding` 不可变版本模型、迁移及 GET/PUT 配置接口。内部管理员按严重度、BRIEF/EIGHT_D、INTERNAL/SUPPLIER 精确选择平台已发布流程版本；写入复用 `configuration:manage`、近期认证、CSRF、幂等键、Serializable/CAS 和审计。供应商组织不能成为配置拥有方；内部账号只有明确组织权限才能跨内部组织管理。禁用只追加新版本，解析不回退到旧版本。
+
+解析器是后续正式发单的事务前置条件，不启动流程、不分配编号，也不提供默认时限。它要求当前精确选择存在且启用，流程版本属于拥有组织并为 PUBLISHED，恰好一个 `supplier-quality:responses:write` 回复节点有正整数 `slaMinutes`，存在 VERIFICATION，所有 CLOSE 节点启用独立验证；缺配置或流程不合规返回受控 409。时限继续来自平台发布版本，不在供应商领域硬编码分钟数。
+
+验证证据：全新 PostgreSQL 18 临时数据库（容器 `qms-supplier-binding-final-20260922`，端口 51732；未使用 55440）部署全部 35 项迁移；真实 HTTP/PG 配置用例 15/15 PASS，覆盖默认缺失、不合规流程、精确选择、禁用无回退、发布版本失效、内部跨组织授权、供应商组织拒绝、撤权、CSRF、近期认证、幂等、CAS、审计失败回滚、数据库约束和不可变历史。API 单元 35 suites / 435 tests PASS，API lint/build、Swagger `contracts:generate`/`contracts:check`、归档隔离均 PASS。临时容器与仓库外测试凭据在验证后清理。
+
+本批仍未完成正式发单、业务 Worker/通知、回复修订、附件证据、驳回重提、内部验证关闭、简报升级或真实浏览器主链；不构成阶段三完成、供应商试点或生产发布证据。
+
 ## S4.1b 供应商运行时参与授权（2026-09-22）
 
 基于主目录 `main` 的 `8e50ca1`，完成 `WorkflowParticipantAccess` 服务端回调和领域 `SupplierWorkflowAccess`，没有增加 HTTP 流程推进入口、客户端能力按钮或数据库迁移。本批未提交、推送或部署。
