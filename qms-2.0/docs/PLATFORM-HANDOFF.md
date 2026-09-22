@@ -37,10 +37,12 @@
 
 ```typescript
 startInstance(input: StartWorkflowInstanceInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess)
-submitAction(input: WorkflowActionInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess)
+submitAction(input: WorkflowActionInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess, participant?: WorkflowParticipantAccess)
 ```
 
 真实领域写入必须提供 `domainAccess(tx, { replay })`，在公共 problem → instance → 当前 task 锁之后、用户/会话锁之前取得全部领域与证据锁，并验证资源授权。正常请求可以在此校验领域版本和通过 `FileLifecycleService.assertAttachable` 校验证据；幂等回放也会调用此入口，但不能用已成功操作前的领域版本拒绝合法回放。`mutate` 只修改已预锁的业务记录和创建本次不可变修订，不再申请新的既有领域锁。回调只允许事务内数据库操作，不可发送邮件、网络调用或其他无法回滚的副作用。旧内部纯平台调用保留可省略该参数的兼容边界；它不是省略领域授权的 HTTP 接口。
+
+2026-09-22 增加 `WorkflowParticipantAccess`，仅可信领域服务可以传入：`authorize(tx, command, node?)` 在锁前、锁后及原节点重放时重新校验领域参与关系；`lock(tx, command)` 在公共行锁之后、`domainAccess` 和会话锁之前获取领域行锁。传入参与策略时 sessionId 必须存在且通过真实会话校验。供应商的功能权限与 assignment 在真实本企业组织中校验；内部仍使用问题拥有组织。此参数不是 HTTP DTO 或客户端 actor 声明，未新增通用流程推进 HTTP 路由。
 
 - 共同输入：`organizationId`（问题拥有组织）、`actor`（服务端会话用户的 id/organizationId/accountType）、`problemIndexId`、`workflowVersionId`、`expectedProblemVersion`、`idempotencyKey`、`traceId`、可选 `commandPayload`。
 - start 额外输入 `workflowDefinitionId`、`instanceKey`；只接受该拥有组织下的已发布版本，索引不得已有实例或已关闭。允许多个问题同时使用同一已发布定义。
@@ -60,7 +62,7 @@ start/action 提供可加入 `Prisma.TransactionClient` 的服务边界；动作
 - `WorkflowTransitionDraftDto.action` 由 Swagger 生成至 contracts，并在草稿保存、发布快照及版本复制中保留。显式 RETURN/REJECT/REOPEN 只能返回前向图上的祖先，且运行时要求该节点实际访问过；前向图仍禁止环路。分支零命中或多命中一律 409 `WORKFLOW_TRANSITION_AMBIGUOUS`，不执行领域 callback。
 - 默认动作也按相同的前进/后退规则校验，不能省略 action 绕过祖先校验。P1 的退回/驳回是处理节点上的动作，重开是已完成 CLOSE 节点上的动作；独立 RETURN/REJECT/REOPEN 节点的编辑器语义尚未交付，不能用它们连接未访问节点或构造不可关闭的定义。
 - CLOSE 节点配置 `requireIndependentVerification: true` 时，必须存在有效 VERIFY 且验证人不同于关闭人，否则 403 `WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED`。RETURN/REJECT/REOPEN 后旧验证失效，后续跳过验证的分支不能借历史验证关闭。供应商领域绑定的版本必须显式开启该策略；通用流程不默认强加供应商规则。
-- 当前供应商只能操作自己组织范围，跨内部拥有组织调用明确 403，不能伪装内部组织。内部用户需持有目标组织的授权角色。跨企业参与、动态领域处理人和资源授权由阶段三独立适配并验证允许/拒绝；不拆复合外键绕过隔离。本轮 CC 为人工确认节点，SLA 为固定节点时限；自动抄送和严重度时限决策表不属于本轮冻结范围。
+- 未传入服务端参与策略时，供应商跨内部拥有组织调用仍返回 403；跨组织 START 不开放。阶段三 `SupplierWorkflowAccess` 已支持相关企业在已释放问题的显式回复节点参与，保留真实供应商 actor 和内部拥有组织，内部节点仍拒绝供应商。功能、assignment 和领域范围取交集；不拆复合外键绕过隔离。供应商 HTTP 提交、Worker/通知参与、严重度 SLA 及完整联调仍未接通。本轮 CC 为人工确认节点，SLA 为固定节点时限。
 - 发布校验与当前人工运行时保持一致：assignment 的每个显式约束都必须有效，assigneeUserId 必须是 UUID；CC 需要 assignment 并由授权人员 SUBMIT。slaMinutes 为 1–2,147,483,647 的安全整数，该技术上限用于防止日期溢出，不是供应商业务时限策略。
 
 事件约定 v1：`WORKFLOW_STARTED` / `WORKFLOW_ACTION_COMPLETED`，包含 schemaVersion、organizationId、problemIndexId、instanceId、workflowVersionId、instanceVersion、previousNodeId、currentNodeId、action、status；eventKey 使用实例 ID + 版本。P2 消费方必须防重复/乱序，不能仅按当前节点唯一键丢失重入记录。

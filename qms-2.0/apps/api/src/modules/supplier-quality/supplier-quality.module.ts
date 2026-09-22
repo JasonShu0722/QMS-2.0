@@ -6,6 +6,7 @@ import { OrganizationModule } from '../organization/organization.module.js';
 import { ProblemIndexModule } from '../problem-index/problem-index.module.js';
 import { SupplierPortalController, SupplierQualityController } from './supplier-quality.controller.js';
 import { SupplierQualityService } from './supplier-quality.service.js';
+import { SupplierWorkflowAccess } from './supplier-workflow-access.js';
 
-@Module({ imports: [AdminMutationModule, AuditLogModule, IdentityModule, OrganizationModule, ProblemIndexModule], controllers: [SupplierQualityController, SupplierPortalController], providers: [SupplierQualityService], exports: [SupplierQualityService] })
+@Module({ imports: [AdminMutationModule, AuditLogModule, IdentityModule, OrganizationModule, ProblemIndexModule], controllers: [SupplierQualityController, SupplierPortalController], providers: [SupplierQualityService, SupplierWorkflowAccess], exports: [SupplierQualityService, SupplierWorkflowAccess] })
 export class SupplierQualityModule {}

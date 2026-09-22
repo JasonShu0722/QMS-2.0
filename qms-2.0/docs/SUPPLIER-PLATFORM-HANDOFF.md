@@ -8,6 +8,8 @@
 
 正式发单仍不能宣称已接通。后续先落实跨企业 runtime/Worker 参与授权，以及严重度到 SLA/固定流程版本的有效配置，再以平台 ReadCommitted 事务完成编号、索引、启动、领域事实、审计和 Outbox 的原子提交。不得复用草稿 Serializable 事务、冒充内部 actor、放宽公共组织范围，或伪造默认时长。详细证据见 `PHASE-3.md`。
 
+后续 S4.1b 已接入 runtime 服务端 `WorkflowParticipantAccess` 和领域 `SupplierWorkflowAccess`。调用 `submitAction(..., domainAccess, supplierAccess)` 时，回复节点必须为 ACTION 且 assignment.permission 为 `supplier-quality:responses:write`；内外回复身份由领域记录决定，角色/指定人约束继续由平台按权限组织校验。非回复节点只允许内部身份，CLOSE 必须启用平台独立验证。领域版本/证据 CAS 仍由正式业务 `domainAccess` 与 `mutate` 实现；不得把该参与策略当作回复内容提交校验。新增接口是服务边界，没有启用门户正式动作。草稿保存与运行时仍存在相反锁顺序；数据库选择死锁受害者时回滚并返回 409，客户端保留输入后重试，后续正式入口需继续覆盖该恢复行为。
+
 日期：2026-09-19。通过本地文件人工协调；跨任务工具交互已按用户反馈停止。
 
 ## 任务位置

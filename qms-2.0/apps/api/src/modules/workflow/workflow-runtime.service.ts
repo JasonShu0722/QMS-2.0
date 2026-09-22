@@ -9,7 +9,7 @@ import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { actionAllowed, canonical, forwardAction, jsonObject, matchesCondition, workflowError } from './workflow-runtime-policy.js';
 import type { WorkflowAction } from './workflow.types.js';
 import { assertWorkflowFeature, canProcessWorkflowNode } from './workflow-access-policy.js';
-import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { createWorkflowStart, persistWorkflowMutation, workflowProblemStatus } from './workflow-start.js';
 
 export interface WorkflowCommand {
@@ -47,6 +47,12 @@ export interface WorkflowActionResult {
 export type WorkflowDomainMutation = (transaction: Prisma.TransactionClient) => Promise<void>;
 export type WorkflowDomainAccess = (transaction: Prisma.TransactionClient, context: { replay: boolean }) => Promise<void>;
 
+/** Trusted server-side domain policy; never accepted as command payload or actor claims. */
+export interface WorkflowParticipantAccess {
+  authorize(transaction: Prisma.TransactionClient, input: WorkflowCommand, node?: WorkflowNode): Promise<void>;
+  lock(transaction: Prisma.TransactionClient, input: WorkflowCommand): Promise<void>;
+}
+
 @Injectable()
 export class WorkflowRuntimeService {
   constructor(
@@ -71,17 +77,17 @@ export class WorkflowRuntimeService {
     });
   }
 
-  async submitAction(input: WorkflowActionInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess): Promise<WorkflowActionResult> {
+  async submitAction(input: WorkflowActionInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess, participant?: WorkflowParticipantAccess): Promise<WorkflowActionResult> {
     return this.inTransaction(transaction, async (tx) => {
-      await this.authorize(tx, input, 'workflow:act');
+      await this.authorize(tx, input, 'workflow:act', false, participant);
       const digest = await this.lockCommand(tx, input, input.action);
-      await this.authorize(tx, input, 'workflow:act');
-      const replay = await this.replay(tx, input, digest, true, domainAccess);
+      await this.authorize(tx, input, 'workflow:act', false, participant);
+      const replay = await this.replay(tx, input, digest, true, domainAccess, participant);
       if (replay) return replay;
       const problem = await this.problems.lockForWorkflow(tx, input.organizationId, input.problemIndexId);
-      await this.authorize(tx, input, 'workflow:act');
+      await this.authorize(tx, input, 'workflow:act', false, participant);
       await tx.$queryRaw`SELECT id FROM workflow_instances WHERE id = ${input.instanceId}::uuid AND organization_id = ${input.organizationId}::uuid FOR UPDATE`;
-      await this.authorize(tx, input, 'workflow:act');
+      await this.authorize(tx, input, 'workflow:act', false, participant);
       const instance = await tx.workflowInstance.findFirst({ where: { id: input.instanceId, organizationId: input.organizationId }, include: { currentNode: true } });
       if (!instance || instance.problemIndexId !== problem.id || problem.workflowInstanceId !== instance.id) workflowError('WORKFLOW_INSTANCE_NOT_FOUND', 404);
       if (instance.workflowVersionId !== input.workflowVersionId) workflowError('WORKFLOW_VERSION_MISMATCH', 409);
@@ -93,9 +99,10 @@ export class WorkflowRuntimeService {
         WHERE organization_id = ${input.organizationId}::uuid AND workflow_instance_id = ${instance.id}::uuid
           AND workflow_version_id = ${instance.workflowVersionId}::uuid AND workflow_node_id = ${node.id}::uuid
           AND entry_instance_version = ${instance.version} AND status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') FOR UPDATE`;
+      await participant?.lock(tx, input);
       await domainAccess?.(tx, { replay: false });
-      await this.authorize(tx, input, 'workflow:act', true);
-      await this.authorizeNode(tx, input, node);
+      await this.authorize(tx, input, 'workflow:act', true, participant);
+      await this.authorizeNode(tx, input, node, participant);
       if (input.action !== 'REOPEN' && task?.claimed_by_user_id && task.claimed_by_user_id !== input.actor.id) workflowError('TASK_CLAIM_OWNER_REQUIRED', 403);
       if (!actionAllowed(node.type, input.action)) workflowError('WORKFLOW_ACTION_INVALID', 409);
       if (input.action === 'REOPEN' ? instance.status !== 'COMPLETED' : instance.status !== 'RUNNING') workflowError('WORKFLOW_ACTION_INVALID', 409);
@@ -145,18 +152,23 @@ export class WorkflowRuntimeService {
     try {
       return transaction ? await checkedWork(transaction) : await this.prisma.$transaction(checkedWork, { isolationLevel: 'ReadCommitted' });
     } catch (error) {
-      if (['P2002', 'P2034'].includes(String((error as { code?: string }).code))) workflowError('CONCURRENCY_CONFLICT', 409);
+      if ((error as { code?: string }).code === 'P2002' || isSecurityConcurrencyConflict(error)) workflowError('CONCURRENCY_CONFLICT', 409);
       throw error;
     }
   }
 
-  private async authorize(tx: Prisma.TransactionClient, input: WorkflowCommand, permission: string, authenticate = false): Promise<void> {
+  private async authorize(tx: Prisma.TransactionClient, input: WorkflowCommand, permission: string, authenticate = false, participant?: WorkflowParticipantAccess): Promise<void> {
+    if (participant && !input.actor.sessionId) workflowError('AUTH_SESSION_REQUIRED', 401);
     if (authenticate && input.actor.sessionId) await assertActiveAuthentication(tx, { id: input.actor.id, sessionId: input.actor.sessionId });
-    await assertWorkflowFeature(tx, input.actor, input.organizationId, permission);
+    const permissionOrganizationId = participant && input.actor.accountType === 'SUPPLIER' ? input.actor.organizationId : input.organizationId;
+    await assertWorkflowFeature(tx, input.actor, permissionOrganizationId, permission);
+    await participant?.authorize(tx, input);
   }
 
-  private async authorizeNode(tx: Prisma.TransactionClient, input: WorkflowCommand, node: WorkflowNode): Promise<void> {
-    if (!await canProcessWorkflowNode(tx, input.actor.id, input.organizationId, jsonObject(node.config).assignment)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+  private async authorizeNode(tx: Prisma.TransactionClient, input: WorkflowCommand, node: WorkflowNode, participant?: WorkflowParticipantAccess): Promise<void> {
+    await participant?.authorize(tx, input, node);
+    const permissionOrganizationId = participant && input.actor.accountType === 'SUPPLIER' ? input.actor.organizationId : input.organizationId;
+    if (!await canProcessWorkflowNode(tx, input.actor.id, permissionOrganizationId, jsonObject(node.config).assignment)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
   }
 
   private async lockCommand(tx: Prisma.TransactionClient, input: WorkflowCommand, action: string): Promise<string> {
@@ -169,24 +181,25 @@ export class WorkflowRuntimeService {
     return digest;
   }
 
-  private async replay(tx: Prisma.TransactionClient, input: WorkflowCommand, digest: string, checkNode: boolean, domainAccess?: WorkflowDomainAccess): Promise<WorkflowActionResult | null> {
+  private async replay(tx: Prisma.TransactionClient, input: WorkflowCommand, digest: string, checkNode: boolean, domainAccess?: WorkflowDomainAccess, participant?: WorkflowParticipantAccess): Promise<WorkflowActionResult | null> {
     const existing = await tx.workflowMutation.findUnique({ where: { organizationId_actorUserId_key: { organizationId: input.organizationId, actorUserId: input.actor.id, key: input.idempotencyKey } } });
     if (!existing) return null;
     const instance = await tx.workflowInstance.findUnique({ where: { id: existing.instanceId } });
     if (!instance || instance.problemIndexId !== input.problemIndexId) workflowError('WORKFLOW_INSTANCE_NOT_FOUND', 404);
-    if (domainAccess) {
+    if (domainAccess || participant) {
       await this.problems.lockForWorkflow(tx, input.organizationId, input.problemIndexId);
       await tx.$queryRaw`SELECT id FROM workflow_instances WHERE id = ${instance.id}::uuid AND organization_id = ${input.organizationId}::uuid FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM workflow_tasks WHERE workflow_instance_id = ${instance.id}::uuid AND organization_id = ${input.organizationId}::uuid
         AND status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') ORDER BY id FOR UPDATE`;
-      await domainAccess(tx, { replay: true });
+      await participant?.lock(tx, input);
+      await domainAccess?.(tx, { replay: true });
     }
-    await this.authorize(tx, input, checkNode ? 'workflow:act' : 'workflow:start', true);
+    await this.authorize(tx, input, checkNode ? 'workflow:act' : 'workflow:start', true, participant);
     if (existing.requestDigest !== digest) workflowError('IDEMPOTENCY_REPLAY', 409);
     if (checkNode) {
       const node = await tx.workflowNode.findFirst({ where: { id: existing.nodeId, organizationId: input.organizationId } });
       if (!node) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
-      await this.authorizeNode(tx, input, node);
+      await this.authorizeNode(tx, input, node, participant);
     }
     return existing.response as unknown as WorkflowActionResult;
   }
