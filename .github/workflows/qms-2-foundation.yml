@@ -4,12 +4,16 @@ on:
   push:
     paths:
       - 'qms-2.0/**'
+      - 'docs/superpowers/**'
       - 'AGENTS.md'
+      - 'README.md'
       - '.github/workflows/qms-2-foundation.yml'
   pull_request:
     paths:
       - 'qms-2.0/**'
+      - 'docs/superpowers/**'
       - 'AGENTS.md'
+      - 'README.md'
       - '.github/workflows/qms-2-foundation.yml'
 
 permissions:
@@ -44,6 +48,8 @@ jobs:
           corepack pnpm install --frozen-lockfile
       - name: Check archive isolation
         run: corepack pnpm run check:archive-isolation
+      - name: Check QMS development governance
+        run: corepack pnpm run check:governance
       - name: Check generated OpenAPI contract
         run: corepack pnpm run contracts:check
       - name: Web and API unit tests

@@ -1,0 +1,511 @@
+{
+  "version": 1,
+  "canonicalLanguage": "zh-CN",
+  "technicalIdentifiersLanguage": "en",
+  "reviewPolicy": {
+    "newDocumentMustBeIndexed": true,
+    "oneCanonicalSourcePerTopic": true,
+    "historicalRecordsMustDeclareScope": true,
+    "freshnessTopics": [
+      "domain-glossary",
+      "architecture-decisions",
+      "change-impact",
+      "operations-runbook",
+      "documentation-maintenance",
+      "engineering-tools",
+      "validation-impact",
+      "maintenance-register",
+      "operability-readiness",
+      "skill-feature-delivery",
+      "skill-permission-review",
+      "skill-incident-diagnosis"
+    ]
+  },
+  "agents": [
+    {
+      "path": "AGENTS.md",
+      "scope": ".",
+      "topic": "workspace"
+    },
+    {
+      "path": "apps/AGENTS.md",
+      "scope": "apps/",
+      "topic": "applications"
+    },
+    {
+      "path": "apps/api/AGENTS.md",
+      "scope": "apps/api/",
+      "topic": "api"
+    },
+    {
+      "path": "apps/web/AGENTS.md",
+      "scope": "apps/web/",
+      "topic": "web"
+    },
+    {
+      "path": "packages/AGENTS.md",
+      "scope": "packages/",
+      "topic": "shared-packages"
+    },
+    {
+      "path": "packages/contracts/AGENTS.md",
+      "scope": "packages/contracts/",
+      "topic": "contracts"
+    },
+    {
+      "path": "docs/AGENTS.md",
+      "scope": "docs/",
+      "topic": "documentation"
+    },
+    {
+      "path": "test/AGENTS.md",
+      "scope": "test/",
+      "topic": "testing"
+    },
+    {
+      "path": "deployment/AGENTS.md",
+      "scope": "deployment/",
+      "topic": "deployment"
+    },
+    {
+      "path": "governance/AGENTS.md",
+      "scope": "governance/",
+      "topic": "governance-assets"
+    },
+    {
+      "path": "scripts/AGENTS.md",
+      "scope": "scripts/",
+      "topic": "automation"
+    }
+  ],
+  "documents": [
+    {
+      "path": "docs/DOMAIN-GLOSSARY.md",
+      "topic": "domain-glossary",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "从总体与平台设计提取术语，仅解释定义，不替代领域交接或验收状态。",
+        "sources": [
+          {
+            "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
+            "sha256": "b9487cf4dec1881fc6057471f7e69130ac7e2b9c20c85d2afb8e6c4067128832"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-batch-2-platform-design.md",
+            "sha256": "7469eb10fd9927fcf93a6fd1491a47ba0dc76d89e85899be5c24d0ea735e5090"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/ARCHITECTURE-DECISIONS.md",
+      "topic": "architecture-decisions",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。",
+        "sources": [
+          {
+            "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
+            "sha256": "b9487cf4dec1881fc6057471f7e69130ac7e2b9c20c85d2afb8e6c4067128832"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-batch-2-platform-design.md",
+            "sha256": "7469eb10fd9927fcf93a6fd1491a47ba0dc76d89e85899be5c24d0ea735e5090"
+          },
+          {
+            "path": "docs/OPENAPI.md",
+            "sha256": "ed6a6469818aa666d0af3a853a3debbb40639487fd1d3c284aab24805a0d0eda"
+          },
+          {
+            "path": "docs/PLATFORM-HANDOFF.md",
+            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+          },
+          {
+            "path": "docs/ATTACHMENTS.md",
+            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/CHANGE-IMPACT.md",
+      "topic": "change-impact",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "扩展现有任务模板，引用原分层门禁与事务边界，不改变阶段完成定义。",
+        "sources": [
+          {
+            "path": "docs/DEVELOPMENT-GOVERNANCE.md",
+            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+          },
+          {
+            "path": "docs/PLATFORM-HANDOFF.md",
+            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/OPERATIONS-RUNBOOK.md",
+      "topic": "operations-runbook",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 30,
+        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。",
+        "sources": [
+          {
+            "path": "package.json",
+            "sha256": "c2a7d3b91fdbf5788f97475e072c30416d27a0ef5786eb417fd479af82b3eb78"
+          },
+          {
+            "path": "docs/DATA-PROTECTION.md",
+            "sha256": "9c10d78a12da1d8c7d862b779b8682400b3452df2bdc000458d12f6e50ddcd8a"
+          },
+          {
+            "path": "docs/EMAIL-RECOVERY.md",
+            "sha256": "5f7727ed5eb78be6b7f5d91ff257bc6cf84ea0625a4ea67813a039bbab1c4aaf"
+          },
+          {
+            "path": "docs/PLATFORM-HANDOFF.md",
+            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+          },
+          {
+            "path": "docs/ATTACHMENTS.md",
+            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/DOCUMENTATION-MAINTENANCE.md",
+      "topic": "documentation-maintenance",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "P2 增加 AGENTS 自动发现、作用范围及工程 Skill 漏登检查，已同步说明与反例测试。",
+        "sources": [
+          {
+            "path": "scripts/check-documentation.mjs",
+            "sha256": "914e1da9e6000efaf44d43fe091084cc8f09b118ccc894fca24a54b77526b517"
+          }
+        ]
+      }
+    },
+    {
+      "path": "README.md",
+      "topic": "workspace-entry",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/README.md",
+      "topic": "documentation-index",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/DEVELOPMENT-GOVERNANCE.md",
+      "topic": "development-governance",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/CAPABILITY-STATUS.md",
+      "topic": "capability-status",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/ACCOUNT-ADMINISTRATION.md",
+      "topic": "account-administration",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/ATTACHMENTS.md",
+      "topic": "attachments",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/DATA-PROTECTION.md",
+      "topic": "data-protection",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/EMAIL-RECOVERY.md",
+      "topic": "email-recovery",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/FOUNDATION.md",
+      "topic": "foundation-acceptance",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/FRONTEND-DESIGN.md",
+      "topic": "frontend-design",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/OPENAPI.md",
+      "topic": "openapi",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/PHASE-2.md",
+      "topic": "phase-2",
+      "canonical": true,
+      "status": "historical-and-current"
+    },
+    {
+      "path": "docs/PHASE-3.md",
+      "topic": "phase-3",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/PLATFORM-HANDOFF.md",
+      "topic": "platform-handoff",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/PROBLEM-WORKSPACE.md",
+      "topic": "problem-workspace",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "topic": "security",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
+      "topic": "supplier-platform-handoff",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/WORKFLOW-DESIGNER.md",
+      "topic": "workflow-designer",
+      "canonical": true,
+      "status": "active"
+    },
+    {
+      "path": "docs/ENGINEERING-TOOLS.md",
+      "topic": "engineering-tools",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "P2 新增入口，核对引用来源、实际脚本及适用边界；不替代业务验收或用户授权。",
+        "sources": [
+          {
+            "path": "scripts/engineering-report.mjs",
+            "sha256": "cba275f6d50fe22e5a9e782562c6ae7b8c3f11aef8551ceebefc27575ab690dd"
+          },
+          {
+            "path": "scripts/create-handoff.mjs",
+            "sha256": "5e9dd00398cb8c33c1c3aa70617ecf2915d9697993d3bbf9b4440e6be3065841"
+          },
+          {
+            "path": "scripts/collect-evidence.mjs",
+            "sha256": "781c40e1021055a795d01aa9c0a4e78ceffc6b991511de0bf60a7a325c004bee"
+          },
+          {
+            "path": "scripts/check-module-boundaries.mjs",
+            "sha256": "aab06c1470e42a4f33c017a257ecbd9e12127309648cbbc2a8650c54216ae891"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/VALIDATION-IMPACT.md",
+      "topic": "validation-impact",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 90,
+        "reason": "P2-04 新增路径规则推荐，核对实际命令、未知路径兜底与不代替验收的边界。",
+        "sources": [
+          {
+            "path": "governance/validation-impact.json",
+            "sha256": "1609a8d4372e16a45750294958644ab81f4ee159122961320b039a2aa1d0be76"
+          },
+          {
+            "path": "scripts/recommend-validation.mjs",
+            "sha256": "00404cca5e600ceb211e43de85be06d42f926e4ae7a021545d5bfb01522a5b51"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/MAINTENANCE-REGISTER.md",
+      "topic": "maintenance-register",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 90,
+        "reason": "P2-05 新增开放事项台账和期限、来源、关闭证据检查，核对真实来源与不代替运行告警的边界。",
+        "sources": [
+          {
+            "path": "governance/maintenance-items.json",
+            "sha256": "edae9d1421657623dea6bbe68cf210bdded81fc62273cf5afd6dac424ba017c7"
+          },
+          {
+            "path": "scripts/check-maintenance.mjs",
+            "sha256": "805cc6ff2ff1849dc032e9b204b951291a71e212a352daf15a64c6a0498d394e"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/OPERABILITY-READINESS.md",
+      "topic": "operability-readiness",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 90,
+        "reason": "P2-06 对照只读采样脚本、原始备份恢复验收和一次性环境前置条件，明确生产告警尚未交付。",
+        "sources": [
+          {
+            "path": "apps/api/package.json",
+            "sha256": "ddba810ced17f0d56743c880af8a4b65fc87688419feded2598ffe32f5f04eb1"
+          },
+          {
+            "path": "apps/api/scripts/operations-snapshot.mjs",
+            "sha256": "f5d6e5d3f55c0f307ad669256e33c840ec5fd4207ad3f57a5f16b63e663be5e1"
+          },
+          {
+            "path": "apps/api/test/operations/data-protection.acceptance.mjs",
+            "sha256": "0d21eeab6e1612fa09fd73cd4d6c5b82c8ddc1c77b545bad5bc7d9af7638eaf9"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".agents/skills/qms-feature-delivery/SKILL.md",
+      "topic": "skill-feature-delivery",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 90,
+        "reason": "P2-04 复核变更影响指南新增推荐工具后，本 Skill 仍以原任务模板和真实验收为准。",
+        "sources": [
+          {
+            "path": "docs/CHANGE-IMPACT.md",
+            "sha256": "7e7d57bf213f72d423d928ff5a170426d406f5daa5f0e1dbe1b250af6ca68ccb"
+          },
+          {
+            "path": "docs/DEVELOPMENT-GOVERNANCE.md",
+            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+          },
+          {
+            "path": "docs/ENGINEERING-TOOLS.md",
+            "sha256": "fc058ee22453f5200022add3029cb98886d43d6d13150a1f0757fe16762d143e"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".agents/skills/qms-permission-review/SKILL.md",
+      "topic": "skill-permission-review",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-22",
+        "maxAgeDays": 90,
+        "reason": "P2 新增入口，核对引用来源、实际脚本及适用边界；不替代业务验收或用户授权。",
+        "sources": [
+          {
+            "path": "docs/DEVELOPMENT-GOVERNANCE.md",
+            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+          },
+          {
+            "path": "docs/PLATFORM-HANDOFF.md",
+            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+          },
+          {
+            "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
+            "sha256": "75f569ef0c6a0005b6aa6dffcb695f9bccc7ae7e25586704c4101d4ebda37b81"
+          },
+          {
+            "path": "docs/ATTACHMENTS.md",
+            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+          },
+          {
+            "path": "docs/ENGINEERING-TOOLS.md",
+            "sha256": "fc058ee22453f5200022add3029cb98886d43d6d13150a1f0757fe16762d143e"
+          }
+        ]
+      }
+    },
+    {
+      "path": ".agents/skills/qms-incident-diagnosis/SKILL.md",
+      "topic": "skill-incident-diagnosis",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-09-23",
+        "maxAgeDays": 90,
+        "reason": "P2-05 复核运维手册增加维护台账入口后，故障定位 Skill 仍以原诊断和真实恢复证据为准。",
+        "sources": [
+          {
+            "path": "docs/OPERATIONS-RUNBOOK.md",
+            "sha256": "78bc5114ff53a00fe55b5f1444b3e0e6f1fe9b6876afab78bc5deb847158c241"
+          },
+          {
+            "path": "docs/DATA-PROTECTION.md",
+            "sha256": "9c10d78a12da1d8c7d862b779b8682400b3452df2bdc000458d12f6e50ddcd8a"
+          },
+          {
+            "path": "docs/EMAIL-RECOVERY.md",
+            "sha256": "5f7727ed5eb78be6b7f5d91ff257bc6cf84ea0625a4ea67813a039bbab1c4aaf"
+          },
+          {
+            "path": "docs/ENGINEERING-TOOLS.md",
+            "sha256": "fc058ee22453f5200022add3029cb98886d43d6d13150a1f0757fe16762d143e"
+          }
+        ]
+      }
+    }
+  ]
+}

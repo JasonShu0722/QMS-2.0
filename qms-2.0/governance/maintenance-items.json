@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "MAINT-001",
+      "category": "deprecation",
+      "status": "open",
+      "owner": "QMS Web 维护者",
+      "fact": "2026-09-23 默认 Web 测试出现 Ant Design List 与 Space 属性弃用提示；账号中心仍使用相应组件和属性。",
+      "impact": "未来升级 Ant Design 时可能产生兼容性改动；当前测试通过，不据此判断生产故障。",
+      "trigger": "升级 Ant Design 前，或弃用提示升级为构建/测试失败时处理。",
+      "nextAction": "核对官方迁移说明，替换账号中心弃用用法，运行相关 Web 测试与浏览器回归。",
+      "reviewedOn": "2026-09-23",
+      "reviewDue": "2026-10-23",
+      "sources": [
+        {
+          "path": "apps/web/src/features/account/AccountCenterPage.tsx",
+          "sha256": "212f636719df8cdb74233f0d308d74ce6a26310cd6c7001588d0cab9b9fddb26"
+        }
+      ]
+    },
+    {
+      "id": "MAINT-002",
+      "category": "capacity",
+      "status": "open",
+      "owner": "QMS 平台维护者",
+      "fact": "当前备份工具对 dump 与对象累计设置 256 MiB 上限，对序列化包设置 512 MiB 上限。",
+      "impact": "数据量接近上限时备份会失败；该工具不是大容量在线备份方案。",
+      "trigger": "试点容量规划或实际备份接近上限时评估替代方案。",
+      "nextAction": "测量隔离环境数据规模，设计有界扩展或分段备份，并以真实 PostgreSQL/对象存储恢复验证。",
+      "reviewedOn": "2026-09-23",
+      "reviewDue": "2026-10-23",
+      "sources": [
+        {
+          "path": "apps/api/scripts/data-protection.mjs",
+          "sha256": "20d663ade8212d4e37b987cd3a1c89a726f2b2423edaa3e78a7cee1c84ff4899"
+        }
+      ]
+    },
+    {
+      "id": "MAINT-003",
+      "category": "operability",
+      "status": "open",
+      "owner": "QMS 平台与运维维护者",
+      "fact": "当前仓库提供一次性数据库聚合快照和隔离恢复演练，尚未部署生产指标采集、告警阈值或通知渠道。",
+      "impact": "试点环境若发生关键操作失败、Worker 积压或扫描滞留，缺少持续自动发现与通知证据。",
+      "trigger": "供应商试点准备或目标环境运行架构确定时，必须完成观测与故障注入验证。",
+      "nextAction": "确定指标出口、只读授权、采样频率、阈值、责任人和通知渠道；验证关键操作失败与积压场景能触发告警并在恢复后消退。",
+      "reviewedOn": "2026-09-23",
+      "reviewDue": "2026-10-23",
+      "sources": [
+        {
+          "path": "docs/OPERATIONS-RUNBOOK.md",
+          "sha256": "78bc5114ff53a00fe55b5f1444b3e0e6f1fe9b6876afab78bc5deb847158c241"
+        }
+      ]
+    }
+  ]
+}

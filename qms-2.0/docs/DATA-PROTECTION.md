@@ -27,7 +27,7 @@ docker compose -f deployment/docker-compose.foundation.yml -f deployment/docker-
 
 配置 `QMS_OBJECT_STORAGE_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY`，可选 `REGION`（默认 us-east-1）及 `PROVIDER=s3`。运行 `pnpm --filter @qms/api data:protect init-storage`：启用版本管理、Object Lock、默认 COMPLIANCE 保留和显式删除拒绝策略；AWS S3 同时设置 Block Public Access。`QMS_OBJECT_RETENTION_DAYS` 默认 7，范围 1–3650。COMPLIANCE 期间版本无法删除，初始化前须确定目标桶和保留政策。
 
-上传适配器生成 UUID 对象键，使用 60 秒签名 URL，签名绑定 Content-Type 和 `If-None-Match: *`，阻止同键覆盖。桶匿名读取被拒绝。此适配器不等于附件业务已完成：资源级授权、上传完成校验、真实扫描及下载闭环仍属 P3。
+上传适配器生成 UUID 对象键，使用 60 秒签名 URL，签名绑定 Content-Type 和 `If-None-Match: *`，阻止同键覆盖。桶匿名读取被拒绝。此处仅说明对象保护边界；P3 已交付的资源级授权、上传完成校验、扫描及下载行为见[附件生命周期](ATTACHMENTS.md)，具体领域证据接入仍须单独验收。
 
 备份/恢复使用本地 Docker 中的 PostgreSQL 工具，要求 `QMS_BACKUP_POSTGRES_CONTAINER` 对应 `DATABASE_URL` 的 **同一精确 loopback 地址及端口**。只接受 127.0.0.1 或 [::1]，拒绝歧义 localhost、URL 查询参数/fragment 和 55440。检查在连接与对象写入前完成。
 
