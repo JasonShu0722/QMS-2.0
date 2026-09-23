@@ -138,8 +138,13 @@ describe('PostgreSQL schema', () => {
   });
 
   it('retries real PostgreSQL Outbox failures, reaches the limit and recovers manually', async () => {
-    expect(await prisma.outboxEvent.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } })).toBe(0);
-    let now = new Date();
+    const existing = await prisma.outboxEvent.findMany({
+      where: { status: { in: ['PENDING', 'PROCESSING'] } },
+      select: { availableAt: true, processingAt: true },
+    });
+    const earliest = Math.min(Date.now(), ...existing.flatMap(({ availableAt, processingAt }) =>
+      [availableAt.getTime(), processingAt?.getTime()].filter((value): value is number => value !== undefined)));
+    let now = new Date(earliest - 60_000);
     const worker = new OutboxWorkerService(prisma as never, () => now);
     const event = await prisma.outboxEvent.create({ data: {
       eventKey: `acceptance-${crypto.randomUUID()}`, aggregateType: 'Foundation',

@@ -16,6 +16,7 @@
     "lint": "node node_modules/prisma/build/index.js generate && node node_modules/typescript/bin/tsc --noEmit",
     "security:reencrypt": "node dist/rotate-security-keys.js --reencrypt",
     "data:protect": "node scripts/data-protection.mjs",
+    "operations:snapshot": "node scripts/operations-snapshot.mjs",
     "db:validate": "node node_modules/prisma/build/index.js validate",
     "test:db-config": "node scripts/check-prisma-config.mjs",
     "db:generate": "node node_modules/prisma/build/index.js generate",

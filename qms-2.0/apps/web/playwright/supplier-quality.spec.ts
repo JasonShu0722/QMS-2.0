@@ -55,7 +55,9 @@ async function login(page: Page, index: number) {
 }
 
 async function select(page: Page, label: string, option: string) {
-  await page.getByLabel(label, { exact: true }).click();
+  const input = page.getByLabel(label, { exact: true });
+  await input.click();
+  if (label === '供应商企业' || label === '责任供应商') await input.fill(option);
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({ hasText: option }).click();
 }
 

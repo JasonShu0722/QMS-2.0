@@ -14,6 +14,10 @@ import { decryptSecret } from '../../src/common/security/security-keyring.js';
 import { digest } from '../../src/common/security/session-security.js';
 
 if (!process.env.DATABASE_URL) throw new Error('PostgreSQL integration requires DATABASE_URL; no skipping.');
+const smtpPort = process.env.SMTP_PORT;
+if (!smtpPort) throw new Error('Email recovery integration requires a real SMTP_PORT; no skipping.');
+const mailpitUrl = process.env.QMS_ACCEPTANCE_MAILPIT_URL;
+if (!mailpitUrl) throw new Error('Email recovery integration requires a real Mailpit URL; no skipping.');
 
 describe('Email recovery PostgreSQL boundaries', () => {
   let app: INestApplication;
@@ -48,7 +52,7 @@ describe('Email recovery PostgreSQL boundaries', () => {
   });
   beforeEach(() => {
     process.env.SMTP_HOST = '127.0.0.1';
-    process.env.SMTP_PORT = '51026';
+    process.env.SMTP_PORT = smtpPort;
     process.env.SMTP_SECURE = 'false';
     process.env.SMTP_FROM = 'qms@example.test';
     delete process.env.SMTP_USER;
@@ -114,10 +118,10 @@ describe('Email recovery PostgreSQL boundaries', () => {
     await mail.dispatchPending();
     const delivery = await prisma.recoveryDelivery.findUniqueOrThrow({ where: { id: record.delivery!.id } });
     expect(delivery).toMatchObject({ status: 'SENT', attempts: 1, encryptedPayload: null });
-    const messages = await fetch('http://127.0.0.1:51027/api/v1/messages').then((response) => response.json()) as { messages: { ID: string; To: { Address: string }[] }[] };
+    const messages = await fetch(new URL('/api/v1/messages', mailpitUrl)).then((response) => response.json()) as { messages: { ID: string; To: { Address: string }[] }[] };
     const message = messages.messages.find((entry) => entry.To.some((recipient) => recipient.Address === user.email));
     expect(message).toBeDefined();
-    const body = await fetch(`http://127.0.0.1:51027/api/v1/message/${message!.ID}`).then((response) => response.json()) as { Text: string };
+    const body = await fetch(new URL(`/api/v1/message/${message!.ID}`, mailpitUrl)).then((response) => response.json()) as { Text: string };
     expect(body.Text).toContain(token);
     const audits = await prisma.auditEvent.findMany({ where: { organizationId } });
     expect(JSON.stringify(audits)).not.toContain(token);

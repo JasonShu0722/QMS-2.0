@@ -1,27 +1,27 @@
-# QMS 2.0
+# QMS 2.0 工程与本地开发
 
-QMS 2.0 is the only active implementation home. This independent pnpm workspace contains React 19 / Ant Design 6 Web, the NestJS 11 modular API and Worker, Prisma 7 / PostgreSQL 18, and the generated API contract. The frozen earlier release is outside every workspace and Docker build context.
+`qms-2.0/` 是 QMS 2.0 唯一的活动实现目录，包含 React 19 / Ant Design 6 Web、NestJS 11 模块化 API 与 Worker、Prisma 7 / PostgreSQL 18，以及由 API 生成的前端契约。早期版本位于活动工作区之外的只读归档中。
 
-## Frontend design baseline
+开始工作前阅读 `AGENTS.md`、相关子目录 `AGENTS.md`、适用的设计规格和阶段计划。项目规则和文档入口由 `governance/documentation-index.json` 管理。
 
-Frontend work follows the [unified design standard](../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md) and [reference code, migration and acceptance guide](docs/FRONTEND-DESIGN.md). The approved UI V2 prototype is a design reference; production adoption is tracked separately. Read [Web instructions](apps/web/AGENTS.md) before Web changes.
+## 前端设计基线
 
-## Current local preview
+前端工作遵循[前端统一设计规范](../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)和[实施及参考代码指南](docs/FRONTEND-DESIGN.md)。UI V2 原型只作为设计参考，不代表生产页面已经迁移；正式 Web 变更前必须阅读 [Web 目录规则](apps/web/AGENTS.md)。
 
-The local preview entry is `http://127.0.0.1:5173`, served from `D:\WorkSpace\QMS-2.0\qms-2.0` on NTFS. **Edit this D-drive checkout for hot reload.** The independent repository preserves the original branches, tags and history at migration baseline `54621e0`; the former E-drive checkout and C-drive worktrees are rollback copies. The old API/Vite processes have been stopped. PostgreSQL on 55440 and MinIO on 19040/19041 retain their original Docker containers and volumes. User/password-hash and migration-history comparisons pass after the switch. Migration acceptance and environment limitations are recorded in [FOUNDATION](docs/FOUNDATION.md).
+## 本地预览
 
-Windows setup, protected local configuration, launchers and logs are outside Git at `D:\WorkSpace\QMS-2.0-local`. To start the preview when ports 3000 and 5173 are free:
+本地预览入口是 `http://127.0.0.1:5173`，从 `D:\WorkSpace\QMS-2.0\qms-2.0` 提供热更新。Windows 配置、启动器、凭据和日志位于仓库外的 `D:\WorkSpace\QMS-2.0-local`。
 
 ```powershell
 . D:\WorkSpace\QMS-2.0-local\Enter-Qms.ps1
 & D:\WorkSpace\QMS-2.0-local\Start-Preview.ps1
 ```
 
-Use `Stop-Preview.ps1` in the same directory to stop only the recorded development processes. It preserves database and object-storage services. Do not run acceptance against the retained preview database.
+使用同目录的 `Stop-Preview.ps1` 停止由启动器记录的进程。不要对保留的预览数据库 `55440` 运行验收；验收必须使用一次性 PostgreSQL、对象存储、扫描服务和邮件接收器。
 
-## Local development
+## 本地开发
 
-Use Node.js `22.22.x`, pnpm `11.19.x`, PostgreSQL 18, and Docker Compose. Commands below run from `qms-2.0/` unless noted otherwise.
+使用 Node.js `22.22.x`、pnpm `11.19.x`、PostgreSQL 18 和 Docker Compose。命令从本目录执行：
 
 ```powershell
 corepack enable
@@ -29,98 +29,72 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
 
-On this Windows machine, first dot-source `D:\WorkSpace\QMS-2.0-local\Enter-Qms.ps1`. It selects Node 22, Corepack PowerShell shims, the installed PowerShell 7 script shell, `D:\.pnpm-store` and `D:\WorkSpace\.playwright`. pnpm 11 uses the default isolated layout on NTFS; the first D-drive frozen installation downloaded dependencies and completed successfully. With the lockfile unchanged, use existing dependencies during iteration; frozen installation remains part of acceptance.
+API 使用服务端会话、`HttpOnly` Cookie 和 CSRF 保护；浏览器不得保存 Session ID、JWT 或刷新令牌。`DATABASE_URL` 和 `NODE_ENV=development` 由仓库外环境提供。
 
-Some generated CMD shims on this machine cannot execute as text commands. The installed PowerShell shims and explicit Node CLI commands work. Install the browser with `node apps/web/node_modules/@playwright/test/cli.js install chromium` from this workspace after loading the local environment. Historical E-drive exFAT installation failures remain in [FOUNDATION](docs/FOUNDATION.md); they are not the D-drive environment's status.
+账号 MFA、邮件找回、TLS、密钥轮换、私有对象存储和备份恢复分别见 [账号管理](docs/ACCOUNT-ADMINISTRATION.md)、[邮件恢复](docs/EMAIL-RECOVERY.md) 和 [数据保护](docs/DATA-PROTECTION.md)。生产密钥、SMTP、对象存储凭据和证书不得进入仓库。
 
-Set `DATABASE_URL` to your local PostgreSQL URL and `NODE_ENV=development` in the shell before starting the API. Vite serves port 5173 and proxies `/api/` to the API on port 3000, so browser requests and cookies stay on the same origin. Authentication uses server sessions, HttpOnly cookies and CSRF headers; no browser token storage is used.
+## 开发治理
 
-Governance administrators now require MFA. Configure `QMS_SECURITY_CURRENT_KEY_ID` and `QMS_SECURITY_KEYRING` outside Git before enrolling them; complete `/mfa` after password login. Email confirmation and self-service recovery require SMTP and the recovery Worker switch described in [EMAIL-RECOVERY](docs/EMAIL-RECOVERY.md). TLS, application key rotation, private object storage, and disposable backup/restore commands are documented in [DATA-PROTECTION](docs/DATA-PROTECTION.md). Current D–H scope and integration constraints are in [ACCOUNT-ADMINISTRATION](docs/ACCOUNT-ADMINISTRATION.md) and [PLATFORM-HANDOFF](docs/PLATFORM-HANDOFF.md).
+任务模板、交付证据矩阵、分层质量门禁、独立审查和模块边界见[开发治理](docs/DEVELOPMENT-GOVERNANCE.md)。当前能力状态见[能力状态总账](docs/CAPABILITY-STATUS.md)，完整文档入口见[文档导航](docs/README.md)。每次完成变更前运行：
 
-Full browser acceptance uses an encrypted external MFA recovery cache (`QMS_ACCEPTANCE_MFA_CACHE_FILE`, protected by `QMS_BACKUP_KEY`) and a real isolated mail receiver (`QMS_ACCEPTANCE_MAILPIT_URL`). The supplied mail integration fixtures use SMTP 51026 and receiver HTTP 51027. Test secrets never belong in browser storage, source control or terminal output. Missing PostgreSQL, gateway, keyring or mail prerequisites fail acceptance; no SQLite or skipped browser substitute is supported.
+```powershell
+corepack pnpm check:governance
+```
 
-## OpenAPI contract
+## OpenAPI 契约
 
-The API publishes `/api/v1/openapi.json`. API DTOs and Swagger annotations are the source of truth for request bodies, response bodies, parameters and error shapes. After changing them:
+API DTO 和 Swagger 注解是请求体、响应体、参数和错误结构的唯一来源。修改 API 后运行：
 
 ```powershell
 corepack pnpm contracts:generate
 corepack pnpm contracts:check
 ```
 
-Commit `packages/contracts/src/generated/api.ts` with the API change. `contracts:generate` builds the API, exports the same Swagger document without initializing the application or connecting to PostgreSQL, and runs `openapi-typescript`. It needs neither a running API nor database credentials. `contracts:check` regenerates to a temporary directory and compares bytes; it fails with regeneration instructions without overwriting the committed file. Generated output uses LF on every platform.
-
-Web request clients import API types from `@qms/contracts` only. Convenience aliases and UI view types must derive from the generated types; do not repeat API DTO shapes by hand. The API does not import the contracts package, avoiding a generation dependency cycle.
+提交 `packages/contracts/src/generated/api.ts`。该文件禁止手工编辑；Web 请求客户端只能从 `@qms/contracts` 导入生成类型，不得重复定义 API DTO。
 
 ## Foundation Compose
 
-`deployment/docker-compose.foundation.yml` defines exactly `postgres`, `minio`, `api`, `worker`, and `web`. API and Worker use the same image with `dist/main.js` and `dist/worker.js` commands. Nginx serves the static Web build, proxies `/api/` unchanged, and falls back to `index.html` for SPA routes.
-
-The direct API defaults to ignoring forwarded client IP headers. Compose explicitly sets `QMS_TRUST_PROXY_HOPS=1` for its private API behind Nginx. Nginx replaces `X-Forwarded-For` with its connection's `$remote_addr`, so client-supplied headers cannot choose the account/IP rate-limit key. Keep the API port private and route external traffic through this gateway. Only the exact value `1` enables trust; other values, including `true`, leave it disabled. Do not add a shorter route to the API or enable unlimited proxy trust.
-
-Docker excludes dependency trees, generated Prisma sources, build/test output, environment files, uploads, logs and backups at every directory depth. The committed generated OpenAPI types and environment templates remain available to the build; Prisma is regenerated inside the Linux image.
-
-Supply secrets through the shell or an untracked environment file. This PowerShell example creates disposable local values rather than storing credentials in the repository:
+`deployment/docker-compose.foundation.yml` 定义 `postgres`、`minio`、`api`、`worker` 和 `web`。API 与 Worker 使用同一镜像和不同启动命令，Nginx 提供静态 Web 和 `/api/` 代理。Compose 配置检查不等于镜像构建、部署或生产验收。
 
 ```powershell
-$env:POSTGRES_PASSWORD = node -e "console.log(require('node:crypto').randomBytes(24).toString('hex'))"
-$env:QMS_RATE_LIMIT_SECRET = node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-$env:MINIO_ROOT_USER = 'qms-local'
-$env:MINIO_ROOT_PASSWORD = node -e "console.log(require('node:crypto').randomBytes(24).toString('hex'))"
-$env:QMS_SECURITY_CURRENT_KEY_ID = 'local-development'
-$developmentSecurityKey = node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
-$env:QMS_SECURITY_KEYRING = @{ 'local-development' = $developmentSecurityKey } | ConvertTo-Json -Compress
-$env:QMS_OBJECT_STORAGE_ACCESS_KEY = $env:MINIO_ROOT_USER
-$env:QMS_OBJECT_STORAGE_SECRET_KEY = $env:MINIO_ROOT_PASSWORD
-$env:NODE_ENV = 'development'
 docker compose -f deployment/docker-compose.foundation.yml config --quiet
-docker compose -f deployment/docker-compose.foundation.yml build api web
-docker compose -f deployment/docker-compose.foundation.yml up -d postgres minio
-docker compose -f deployment/docker-compose.foundation.yml run --rm --no-deps api node node_modules/prisma/build/index.js migrate deploy
-docker compose -f deployment/docker-compose.foundation.yml up -d api worker web
 ```
 
-The Web entry is `http://localhost:8080`; PostgreSQL and MinIO bind to loopback ports 5432 and 9000 (console 9001). Override `WEB_PORT`, `POSTGRES_PORT`, `MINIO_PORT`, and `MINIO_CONSOLE_PORT` to avoid conflicts. Generated hexadecimal database passwords are URI safe; encode reserved characters when supplying other passwords. `POSTGRES_USER` and `POSTGRES_DB` default to `qms` and `qms2`.
+密钥通过环境变量或仓库外配置注入。Docker 构建上下文必须在 `qms-2.0/` 内；依赖目录、生成源码、测试输出、环境文件、上传文件、日志和备份不得进入镜像上下文。
 
-Compose defaults to production mode when `NODE_ENV` is unset. Production session and CSRF cookies remain `Secure`: configure HTTPS termination at the Web gateway for real deployment. An additional ingress before Nginx requires a separately reviewed real-IP configuration that trusts only that ingress's addresses; otherwise Nginx sees the ingress as the client. This foundation does not trust arbitrary upstream forwarding chains. The explicit `development` setting above is for loopback HTTP development only. Do not weaken production cookie settings to make HTTP login work.
+Worker 持续轮询流程、任务时限和附件扫描事件，支持有限重试、失败队列、租约恢复和 `--once` 单批运行。无效配置、缺失处理器和必需前置条件必须显式失败。
 
-The platform Worker polls continuously for supported workflow, task timing and attachment scanning events. `QMS_WORKER_POLL_INTERVAL_MS` defaults to 1000 (range 100–60000), and `QMS_WORKER_BATCH_SIZE` defaults to 25 (range 1–100). Use `node dist/worker.js --once` from the built API directory for one batch. Invalid configuration or a missing handler fails explicitly. SIGINT/SIGTERM stops further polling and waits for the current batch; Compose allows 60 seconds before forced termination and restarts failures. Expired leases recover interrupted work. Unknown event types remain untouched. The implemented attachment lifecycle uses fixed object versions, real content verification and ClamAV; see [attachments](docs/ATTACHMENTS.md) for scanner configuration and domain resource authorization.
+## 验证与 CI
 
-To create local demo accounts, set `DATABASE_URL` to the loopback database, `NODE_ENV=development`, and distinct `QMS_SEED_INTERNAL_PASSWORD` / `QMS_SEED_SUPPLIER_PASSWORD` values of at least 16 characters, then run `corepack pnpm --filter @qms/api db:seed`. Demo seed refuses non-loopback or production targets and preserves existing passwords. No demo users are created automatically by Compose.
+默认测试包含治理检查、结构测试、契约包测试以及 API/Web 测试：
 
-For disposable environments, destroy containers, networks and volumes when finished:
+```powershell
+corepack pnpm test
+corepack pnpm build
+corepack pnpm --filter @qms/api test:integration
+corepack pnpm --filter @qms/api test:worker-process
+```
+
+基础阶段完整验收：
+
+```powershell
+corepack pnpm acceptance:phase-1
+```
+
+阶段二平台验收会重跑阶段一，并追加测试域 Swagger、扫描 Compose 和完整浏览器链路：
+
+```powershell
+corepack pnpm acceptance:phase-2
+```
+
+缺少 PostgreSQL、网关、浏览器、密钥、邮件或对象存储前置条件时必须失败；不得使用 SQLite、Mock、Skip 或旧日志替代真实证据。实际命令、环境、PASS/FAIL、失败原因和限制统一记录在 [FOUNDATION](docs/FOUNDATION.md)，供应商领域边界记录在 [阶段三](docs/PHASE-3.md)。
+
+## 临时环境清理
+
+验收使用一次性资源，完成后销毁容器、网络、卷、进程和临时数据库：
 
 ```powershell
 docker compose -f deployment/docker-compose.foundation.yml down --volumes --remove-orphans
 ```
 
-## Verification and CI
-
-The batch 2 platform acceptance entry is `corepack pnpm acceptance:phase-2`. It validates real service prerequisites, runs the full phase 1 sequence (frozen installation, PostgreSQL migration/seed/integration, API/Web tests, builds, real Worker processes, Compose configuration, archive isolation, contracts and all browser tests), checks the test-domain Swagger contract, and validates the scanning Compose overlay. The current results are recorded in [FOUNDATION](docs/FOUNDATION.md). Supplier-specific authorization, forms and end-to-end acceptance belong to the supplier domain.
-
-Batch 2A account governance is tracked in [account administration](docs/ACCOUNT-ADMINISTRATION.md). A provides email editing, password changes and active-session revocation at `/app/account` and `/supplier/account`. B/C provide organization-scoped user creation/editing/activation, controlled identity transfers, one-time password-reset issuance, organization role CRUD/copy/assignment, and a configurable permission matrix at `/app/admin`. Anonymous reset redemption is at `/reset-password`. All Web API types derive from the generated contract; all administrator writes require CSRF and an idempotency key. ABC acceptance and the subsequent matrix evidence are recorded in [FOUNDATION](docs/FOUNDATION.md), separately from historical E: installation and temporary-file cleanup failures.
-
-The matrix selects a role, groups permissions by business area, module and operation, and supports search, module checkboxes, local select/clear, change counts, save and reset. Role forms reuse the grouped selector. Saving submits the original permission set as a concurrency baseline; a conflict retains the draft and offers reload. Read-only users, global roles and permissions the administrator cannot grant remain protected. Planned business modules have no assignable codes. `workbench:read` remains explicitly reserved; the existing `workflow:manage` operation covers its implemented workflow-definition endpoints. User and role writes now use nine separate operation permissions plus the two existing read permissions. The database migration expands and removes legacy manage grants without adding read grants; there is no runtime legacy fallback. See [OpenAPI](docs/OPENAPI.md) for exact codes and conditional request rules.
-
-The D–H batch implements organization trees, configuration, MFA and email recovery, audit operations, data protection, controlled export and core interface governance. Subsequent platform work adds exclusive task claims, real attachments, the [workflow designer](docs/WORKFLOW-DESIGNER.md), and the [problem workspace, saved views, immutable reports and upgrades](docs/PROBLEM-WORKSPACE.md). Actual acceptance evidence is recorded in FOUNDATION. The user separately arranged non-production supplier development; this task does not interact with it. A supplier pilot still requires its own cross-enterprise resource adapters, complete business browser flow and production deployment validation.
-
-`corepack pnpm acceptance:phase-1` remains the shared regression sequence used by phase 2. Configure `QMS_ACCEPTANCE_DISPOSABLE_DATABASE=true`, a disposable database, seed passwords, Compose variables and a running loopback gateway in `QMS_ACCEPTANCE_BASE_URL`. Attachment and neutral-domain browser tests additionally require their own isolated PostgreSQL databases, running gateways, external fixture files and credentials under `QMS_FILE_BROWSER_*` and `QMS_PROBLEM_BROWSER_*`. Phase 2 requires all three databases to be distinct, rejects preserved preview port 55440, and checks real MinIO, ClamAV and Mailpit prerequisites. Required configuration fails instead of skipping. Install Chromium first with `corepack pnpm --filter @qms/web exec playwright install chromium`. Keep fixture credentials and generated validation files outside Git; the neutral module is never registered in the production application.
-
-For the continuous Worker process check, also run `corepack pnpm --filter @qms/api test:worker-process` against disposable PostgreSQL. It builds the current API before starting the actual Worker and creating events after startup. The ordinary database integration suite does not depend on pre-existing compiled files. On Windows, process cleanup is forced termination; graceful abort behavior is separately covered by runner tests. See [PLATFORM-HANDOFF](docs/PLATFORM-HANDOFF.md) for task timing semantics and the remaining authorization interfaces.
-
-See [foundation acceptance and handoff](docs/FOUNDATION.md) for the behavior matrix, environment and actual execution results, [OpenAPI](docs/OPENAPI.md) for the contract workflow, and [security boundaries](docs/SECURITY.md) for implemented protections and remaining deployment work. A passing configuration check is not a container build or deployment result; each evidence level is recorded separately.
-
-```powershell
-corepack pnpm check:archive-isolation
-corepack pnpm contracts:check
-corepack pnpm test
-corepack pnpm --filter @qms/api test:integration
-corepack pnpm build
-docker compose -f deployment/docker-compose.foundation.yml config --quiet
-```
-
-Integration requires a disposable PostgreSQL 18 database, `DATABASE_URL`, `NODE_ENV=development`, and the two seed passwords described above. It deploys migrations, seeds local identities, and verifies real persistence and constraints. Missing database configuration fails; tests never silently skip or fall back to SQLite.
-
-The foundation workflow runs only for this workspace, the root `AGENTS.md`, or its own workflow file. It performs unit tests, integration, builds and configuration checks with disposable PostgreSQL, Mailpit, versioned MinIO and ClamAV. It creates random credentials and an external encrypted test archive, and removes temporary service containers and volumes even on failure. Browser and TLS/backup/key-rotation operational evidence is recorded separately in FOUNDATION. The workflow does not deploy a persistent preview; Compose configuration validation is separate from container image builds and deployment smoke tests.
-
-All implementation follows the approved QMS 2.0 design and phase plan in the repository-level `docs/superpowers/` directory. Secrets, environment files, uploads, logs and database backups must remain outside Git.
+备份、日志、凭据、证书和测试夹具必须保留在仓库外指定目录，便于复核但不会进入 Git。

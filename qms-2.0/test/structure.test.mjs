@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,9 +38,18 @@ for (const directory of ['apps', 'apps/api', 'apps/web', 'packages', 'packages/c
   assert.equal(await exists(directory), true, `${directory} must exist`);
 }
 
-const workspacePackages = await readdir(join(root, 'apps'));
+async function directories(relativePath) {
+  const entries = await readdir(join(root, relativePath));
+  const result = [];
+  for (const entry of entries) {
+    if ((await stat(join(root, relativePath, entry))).isDirectory()) result.push(entry);
+  }
+  return result;
+}
+
+const workspacePackages = await directories('apps');
 assert.deepEqual(workspacePackages.sort(), ['api', 'web']);
-const sharedPackages = await readdir(join(root, 'packages'));
+const sharedPackages = await directories('packages');
 assert.deepEqual(sharedPackages.sort(), ['contracts']);
 
 const archiveDirectory = ['archive', ['qms', '1.0'].join('-')].join('/');

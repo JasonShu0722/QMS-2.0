@@ -568,3 +568,25 @@ Windows NTFS、Node 22.22.0、pnpm 11.19.0、Prisma 7.10.0、Vite 6.4.3、Postgr
 资源收尾：PASS，`cleanup.log`。六个自有 API/网关进程按 PID 与启动时间核对后停止；四个一次性容器按 project 标签核对后移除，连同 MinIO 匿名卷及临时 PG 数据销毁；自有标签与服务端口无残留。保留预览 PostgreSQL/MinIO 的容器 ID 和启动时间与基线一致；二者在本轮验收前已处于 exited 状态，本轮未启动、停止或连接 55440。原始日志与加密配置留在 Git 外用于复核。
 
 结论：阶段一、二当前整合版本的可执行回归均 PASS。源码指纹比对仅发现本轮已说明的两处测试修复及 e2e 前置脚本配置差异，另新增邮件解析辅助函数/边界测试及本节记录；未覆盖原有产品修改。仓库同步在本轮验收完成后另行执行。
+
+## 2026-09-23 P2 工程优化后的阶段整合验收
+
+本节针对活动 `qms-2.0/` 工作区的当前未提交整合版本。验收使用 Node `v22.22.0`、pnpm `11.19.0`；证据采集时 HEAD 为 `becf49440e8bca87f28cb68a8c24cc6a5f3379be`，源码指纹为 `aef7d4619f6aabbdf6cf92294c7bff6f367eade95f69c87cba4332294a203f4a`，起止相同、排除文件为 0。本节记录本身在 PASS 后写入，故会改变后续文档源码指纹；原 PASS 仅对应上面的冻结快照，不自动覆盖之后的修改。
+
+隔离环境 `qms-p2-stage-acceptance-20260923-f` 使用一次性 PostgreSQL 18（55462，主库、文件与问题浏览器库分别隔离）、MinIO（19067）、ClamAV（13362）、Mailpit（51046/51047）、三个 API（13072–13074）和浏览器网关（18172–18174）。主库名包含 `supplier` 并显式标记为一次性数据库，以满足新增供应商浏览器验收。凭据、夹具、原始日志和 `evidence-phase-2/evidence.md`、`evidence.json` 均保存在 Git 外的 `D:/WorkSpace/QMS-2.0-local/p2-stage-acceptance-20260923-f/`。
+
+| 本轮命令与检查 | 实际结果 |
+| --- | --- |
+| `corepack pnpm evidence:collect --profile phase-2` | PASS，原 `acceptance:phase-2` exit 0；源码起止指纹相同 |
+| 阶段一真实 PostgreSQL 集成 | 27 suites / 494 tests PASS；36 个迁移，无待应用迁移 |
+| 阶段一默认 API/Web 测试 | API 35 suites / 435 tests、Web 27 files / 150 tests PASS |
+| 阶段一构建、Worker、Compose、归档隔离、OpenAPI | 全部 PASS；Worker 3/3 |
+| 阶段一真实浏览器 | 20/20 PASS，包含供应商资料/问题与回复草稿、冲突和组织隔离 |
+| 阶段二测试域 Swagger 同步与扫描 Compose 配置 | 均 PASS；阶段二完整入口 PASS |
+| 自有资源清理 | PASS：按 PID 与启动时间停止 6 个自有进程；按项目标签移除 4 个容器及临时数据，预览容器身份不变，未连接 55440；Git 外 `cleanup-postcheck.json` 再次核对自有进程、容器和监听端口均为 0 |
+
+诊断过程保留在同一 Git 外父目录的 `p2-stage-acceptance-20260923` 至 `-e` 各轮日志与 FAIL 报告：首次 Docker 中断及 MinIO 就绪时序；邮件集成测试写死旧 Mailpit 端口；重复使用主库和测试的全局 Outbox 空队列假设；浏览器环境缺少供应商一次性标记；权限矩阵仍把已激活的供应商质量看作纯待接入；供应商目录第一页只有 20 项，测试没有搜索新建企业。修正仅涉及测试读取当前 SMTP/Mailpit 配置、隔离 Outbox 测试时钟，以及浏览器断言和选择器；保留原业务断言，定向邮件 10/10、Outbox 9/9、浏览器 3/3 通过后才使用全新主库做上述完整回归。失败报告不作为 PASS。
+
+本轮证明一次性服务上的阶段一、二可执行回归，不包含阶段三全部业务闭环、生产监控告警、生产备份容量、正式发布或 Docker 应用镜像构建。P2 运维差距仍按 `MAINT-003` 跟踪。
+
+独立复核结论：无阻断项。变更范围只有四处验收测试与本记录，没有新增越权入口、生产 DTO 或迁移；Outbox 失败重试、人工恢复和并发消费断言仍保留，生产事务路径未改。复核提出的建议是为资源清理补独立记录，已由 Git 外 cleanup-postcheck.json 关闭：六个原进程均非当前存活拥有者、自有容器与端口均无残留，预览容器身份未变。复核依据包括定向测试、完整 phase-2 证据及 check:governance；历史业务数据影响限定为一次性数据库。

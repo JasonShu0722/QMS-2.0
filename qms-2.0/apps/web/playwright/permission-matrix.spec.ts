@@ -94,7 +94,12 @@ test('grouped matrix grants only selected user operations and revokes them on li
     await page.getByLabel('选择角色', { exact: true }).click();
     await page.locator('.ant-select-item-option').filter({ hasText: role.name }).click();
     await expect(page.getByRole('button', { name: '保存权限', exact: true })).toBeDisabled();
-    for (const groupName of ['供应商质量', '制程质量', '客户质量', '新品质量', '审核管理']) {
+    await page.getByLabel('板块筛选', { exact: true }).click();
+    await page.locator('.ant-select-item-option').filter({ hasText: '供应商质量' }).click();
+    await expect(matrix.getByRole('heading', { name: '供应商质量', exact: true })).toBeVisible();
+    await expect(matrix.getByRole('checkbox', { name: '供应商资料 · 查看业务资料', exact: true })).toBeVisible();
+    await expect(matrix.getByText('待接入', { exact: true }).first()).toBeVisible();
+    for (const groupName of ['制程质量', '客户质量', '新品质量', '审核管理']) {
       await page.getByLabel('板块筛选', { exact: true }).click();
       await page.locator('.ant-select-item-option').filter({ hasText: groupName }).click();
       await expect(matrix.getByRole('heading', { name: groupName, exact: true })).toBeVisible();

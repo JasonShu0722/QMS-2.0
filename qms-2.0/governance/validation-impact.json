@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "baseline": ["governance", "diff-check"],
+  "unknown": ["governance", "diff-check", "lint", "test", "build", "contracts", "archive", "phase-1", "phase-2"],
+  "commands": {
+    "governance": { "command": "corepack pnpm check:governance", "script": "check:governance" },
+    "diff-check": { "command": "git diff --check" },
+    "test-governance": { "command": "corepack pnpm test:governance", "script": "test:governance" },
+    "lint": { "command": "corepack pnpm lint", "script": "lint" },
+    "test": { "command": "corepack pnpm test", "script": "test" },
+    "build": { "command": "corepack pnpm build", "script": "build" },
+    "contracts": { "command": "corepack pnpm contracts:check", "script": "contracts:check" },
+    "archive": { "command": "corepack pnpm check:archive-isolation", "script": "check:archive-isolation" },
+    "api-unit": { "command": "corepack pnpm --filter @qms/api test", "workspace": "apps/api", "script": "test" },
+    "api-integration": { "command": "corepack pnpm --filter @qms/api test:integration", "workspace": "apps/api", "script": "test:integration" },
+    "web-unit": { "command": "corepack pnpm --filter @qms/web test", "workspace": "apps/web", "script": "test" },
+    "phase-1": { "command": "corepack pnpm acceptance:phase-1", "script": "acceptance:phase-1" },
+    "phase-2": { "command": "corepack pnpm acceptance:phase-2", "script": "acceptance:phase-2" }
+  },
+  "rules": [
+    {
+      "id": "documentation",
+      "prefixes": ["docs/superpowers/", "qms-2.0/docs/", "qms-2.0/.agents/skills/"],
+      "files": ["AGENTS.md", "README.md", "qms-2.0/AGENTS.md", "qms-2.0/README.md", "qms-2.0/apps/AGENTS.md", "qms-2.0/packages/AGENTS.md", "qms-2.0/test/AGENTS.md"],
+      "checks": ["test-governance"],
+      "documents": ["docs/README.md", "docs/DOCUMENTATION-MAINTENANCE.md"]
+    },
+    {
+      "id": "governance-code",
+      "prefixes": ["qms-2.0/governance/", "qms-2.0/scripts/", "qms-2.0/test/"],
+      "files": [],
+      "checks": ["test-governance", "archive"],
+      "documents": ["docs/DEVELOPMENT-GOVERNANCE.md", "docs/ENGINEERING-TOOLS.md"]
+    },
+    {
+      "id": "api",
+      "prefixes": ["qms-2.0/apps/api/"],
+      "files": [],
+      "checks": ["api-unit", "contracts", "build"],
+      "documents": ["docs/OPENAPI.md", "docs/PLATFORM-HANDOFF.md"]
+    },
+    {
+      "id": "web",
+      "prefixes": ["qms-2.0/apps/web/"],
+      "files": [],
+      "checks": ["web-unit", "build"],
+      "documents": ["docs/FRONTEND-DESIGN.md"]
+    },
+    {
+      "id": "contracts",
+      "prefixes": ["qms-2.0/packages/contracts/"],
+      "files": ["qms-2.0/scripts/generate-contracts.mjs", "qms-2.0/scripts/check-openapi-sync.mjs"],
+      "checks": ["contracts", "api-unit", "web-unit", "build"],
+      "documents": ["docs/OPENAPI.md"]
+    },
+    {
+      "id": "authorization",
+      "prefixes": ["qms-2.0/apps/api/src/modules/authorization/", "qms-2.0/apps/api/src/modules/identity/", "qms-2.0/apps/api/src/modules/organization/", "qms-2.0/apps/api/src/common/security/"],
+      "files": [],
+      "checks": ["api-integration", "web-unit", "phase-1", "phase-2"],
+      "documents": ["docs/ACCOUNT-ADMINISTRATION.md", "docs/SECURITY.md", "docs/PLATFORM-HANDOFF.md"]
+    },
+    {
+      "id": "migration",
+      "prefixes": ["qms-2.0/apps/api/prisma/"],
+      "files": [],
+      "checks": ["api-integration", "phase-1", "phase-2"],
+      "documents": ["docs/DATA-PROTECTION.md", "docs/PLATFORM-HANDOFF.md"]
+    },
+    {
+      "id": "data-protection",
+      "prefixes": [],
+      "files": ["qms-2.0/apps/api/scripts/data-protection.mjs", "qms-2.0/apps/api/scripts/data-protection-objects.mjs", "qms-2.0/apps/api/test/operations/data-protection.acceptance.mjs"],
+      "checks": ["api-integration", "phase-1", "phase-2"],
+      "documents": ["docs/DATA-PROTECTION.md", "docs/OPERATIONS-RUNBOOK.md"]
+    },
+    {
+      "id": "workflow",
+      "prefixes": ["qms-2.0/apps/api/src/modules/workflow/", "qms-2.0/apps/web/src/features/workflows/"],
+      "files": [],
+      "checks": ["api-integration", "web-unit", "phase-2"],
+      "documents": ["docs/WORKFLOW-DESIGNER.md", "docs/PROBLEM-WORKSPACE.md"]
+    },
+    {
+      "id": "async-and-files",
+      "prefixes": ["qms-2.0/apps/api/src/modules/task-notification/", "qms-2.0/apps/api/src/modules/file-management/", "qms-2.0/apps/api/src/modules/audit-log/"],
+      "files": ["qms-2.0/apps/api/src/worker.ts", "qms-2.0/apps/api/src/worker-runner.ts"],
+      "checks": ["api-integration", "phase-1", "phase-2"],
+      "documents": ["docs/ATTACHMENTS.md", "docs/OPERATIONS-RUNBOOK.md", "docs/PLATFORM-HANDOFF.md"]
+    },
+    {
+      "id": "supplier-quality",
+      "prefixes": ["qms-2.0/apps/api/src/modules/supplier-quality/", "qms-2.0/apps/web/src/features/supplier-quality/"],
+      "files": [],
+      "checks": ["api-integration", "web-unit", "phase-2"],
+      "documents": ["docs/PHASE-3.md", "docs/SUPPLIER-PLATFORM-HANDOFF.md"]
+    },
+    {
+      "id": "deployment",
+      "prefixes": ["qms-2.0/deployment/", ".github/workflows/"],
+      "files": [],
+      "checks": ["lint", "test", "build", "archive", "phase-1", "phase-2"],
+      "documents": ["docs/OPERATIONS-RUNBOOK.md", "docs/DATA-PROTECTION.md"]
+    },
+    {
+      "id": "dependencies",
+      "prefixes": [],
+      "files": ["qms-2.0/package.json", "qms-2.0/pnpm-lock.yaml", "qms-2.0/apps/api/package.json", "qms-2.0/apps/web/package.json", "qms-2.0/packages/contracts/package.json"],
+      "checks": ["lint", "test", "build", "contracts"],
+      "documents": ["docs/ARCHITECTURE-DECISIONS.md", "docs/OPERATIONS-RUNBOOK.md"]
+    }
+  ]
+}
