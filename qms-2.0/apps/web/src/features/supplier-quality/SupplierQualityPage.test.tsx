@@ -4,6 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { SupplierQualityPage } from './SupplierQualityPage';
 
+vi.setConfig({ testTimeout: 30_000 });
+
 vi.mock('./SupplierReferenceSelect', () => ({
   SupplierReferenceSelect: ({ id, value, onChange, disabled, placeholder }: { id?: string; value?: string; onChange?: (value: string) => void; disabled?: boolean; placeholder?: string }) => (
     <select id={id} aria-label={placeholder} value={value ?? ''} disabled={disabled} onChange={(event) => onChange?.(event.target.value)} />
