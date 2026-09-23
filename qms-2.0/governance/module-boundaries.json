@@ -29,6 +29,7 @@
     "reporting -> workflow",
     "supplier-quality -> audit-log",
     "supplier-quality -> authorization",
+    "supplier-quality -> file-management",
     "supplier-quality -> identity",
     "supplier-quality -> organization",
     "supplier-quality -> problem-index",

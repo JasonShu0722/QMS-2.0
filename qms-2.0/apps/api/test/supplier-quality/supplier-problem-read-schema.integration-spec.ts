@@ -166,6 +166,86 @@ describe('registered supplier domain reads through real HTTP and PostgreSQL', ()
     expect(report.body).toMatchObject({ dataAvailability: 'UNAVAILABLE', summary: null, sections: [] });
   });
 
+  it('reads each upgraded instance from its own immutable response revision and evidence without exposing drafts or foreign data', async () => {
+    const context = await fixture();
+    const definitions = app.get(WorkflowDefinitionService);
+    const definition = await definitions.createDraft({ organizationId: context.owner.organization.id, userId: context.owner.user.id,
+      code: randomUUID(), name: 'Historical supplier read flow', draft: {
+        nodes: [
+          { id: 'reply', type: 'ACTION', name: '回复', config: { isStart: true, assignment: { assigneeUserId: context.owner.user.id } } },
+          { id: 'close', type: 'CLOSE', name: '关闭', config: { isEnd: true, assignment: { assigneeUserId: context.owner.user.id }, requireIndependentVerification: true } },
+        ], transitions: [{ id: 'next', from: 'reply', to: 'close', action: 'SUBMIT' }],
+      } });
+    const version = await definitions.publishVersion({ organizationId: context.owner.organization.id, userId: context.owner.user.id, definitionId: definition.id });
+    const node = await prisma.workflowNode.findFirstOrThrow({ where: { workflowVersionId: version.id, type: 'ACTION' } });
+    const before = await prisma.workflowInstance.create({ data: { organizationId: context.owner.organization.id, problemIndexId: context.index.id,
+      workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: randomUUID(), currentNodeId: node.id, status: 'CANCELLED', version: 3 } });
+    const after = await prisma.workflowInstance.create({ data: { organizationId: context.owner.organization.id, problemIndexId: context.index.id,
+      workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: randomUUID(), currentNodeId: node.id } });
+    await prisma.problemIndex.update({ where: { id: context.index.id }, data: { workflowInstanceId: after.id, problemType: 'EIGHT_D', version: 3 } });
+    await prisma.supplierQualityProblem.update({ where: { id: context.record.id }, data: { responseForm: 'EIGHT_D', version: 4, releasedToSupplierAt: new Date() } });
+    const brief = await prisma.supplierResponseRevision.create({ data: { problemId: context.record.id, revision: 1,
+      content: { rootCause: '简报原因', correctiveAction: '简报措施' }, submittedById: context.supplier.user.id, workflowInstanceId: before.id, workflowVersion: version.version } });
+    const eightD = await prisma.supplierResponseRevision.create({ data: { problemId: context.record.id, revision: 2,
+      content: { rootCause: '8D 原因', correctiveAction: '人工修订措施', preventiveAction: '新增预防措施' },
+      submittedById: context.owner.user.id, workflowInstanceId: after.id, workflowVersion: version.version } });
+    await prisma.workflowUpgrade.create({ data: { organizationId: context.owner.organization.id, problemIndexId: context.index.id,
+      actorUserId: context.owner.user.id, beforeInstanceId: before.id, afterInstanceId: after.id, beforeProblemVersion: 2,
+      afterProblemVersion: 3, beforeDomainRevisionId: brief.id, afterDomainRevisionId: eightD.id, mappingVersion: 'supplier-brief-eight-d-v1',
+      mappingSummary: [], reason: '升级 8D', key: randomUUID(), requestDigest: 'a'.repeat(64), response: { domainVersion: 4 } } });
+    const file = await prisma.fileObject.create({ data: { organizationId: context.supplier.organization.id, objectKey: randomUUID(),
+      originalName: 'history.pdf', contentType: 'application/pdf', sizeBytes: 12, sha256: 'a'.repeat(64), verifiedSha256: 'a'.repeat(64),
+      verifiedContentType: 'application/pdf', verifiedSizeBytes: 12, objectVersionId: 'historical-read-version', uploadCompletedAt: new Date(),
+      uploadExpiresAt: new Date(Date.now() + 60_000), scannedAt: new Date(), scannerEngine: 'ClamAV test', scanStatus: 'CLEAN', status: 'AVAILABLE',
+      resourceType: 'supplier-quality', resourceId: context.record.id, resourceVersion: 3, uploadedById: context.supplier.user.id,
+      retainUntil: new Date(Date.now() + 86_400_000) } });
+    await prisma.supplierEvidenceReference.createMany({ data: [brief.id, eightD.id].map((revisionId) => ({ problemId: context.record.id,
+      revisionId, fileId: file.id, purpose: 'RESPONSE' })) });
+    const newerFile = await prisma.fileObject.create({ data: { organizationId: context.supplier.organization.id, objectKey: randomUUID(),
+      originalName: 'eight-d.pdf', contentType: 'application/pdf', sizeBytes: 14, sha256: 'b'.repeat(64), verifiedSha256: 'b'.repeat(64),
+      verifiedContentType: 'application/pdf', verifiedSizeBytes: 14, objectVersionId: 'eight-d-read-version', uploadCompletedAt: new Date(),
+      uploadExpiresAt: new Date(Date.now() + 60_000), scannedAt: new Date(), scannerEngine: 'ClamAV test', scanStatus: 'CLEAN', status: 'AVAILABLE',
+      resourceType: 'supplier-quality', resourceId: context.record.id, resourceVersion: 4, uploadedById: context.supplier.user.id,
+      retainUntil: new Date(Date.now() + 86_400_000) } });
+    await prisma.supplierEvidenceReference.create({ data: { problemId: context.record.id, revisionId: eightD.id,
+      fileId: newerFile.id, purpose: 'EIGHT_D_RESPONSE' } });
+    await prisma.supplierResponseDraft.create({ data: { problemId: context.record.id, updatedById: context.supplier.user.id,
+      content: { rootCause: '未提交的供应商秘密' } } });
+
+    const current = await get(context.owner.cookie, `problem-index/${context.index.id}/workspace`).expect(200);
+    expect(current.body).toMatchObject({ domainAvailability: 'AVAILABLE', selectedInstance: { id: after.id },
+      domain: { domainVersion: 4, revisionId: eightD.id, sections: expect.arrayContaining([expect.objectContaining({ key: 'supplierResponse', fields: expect.arrayContaining([
+        { key: 'responseForm', label: '回复形式', value: '8D' }, { key: 'rootCause', label: '根本原因', value: '8D 原因' },
+        { key: 'correctiveAction', label: '纠正措施', value: '人工修订措施' },
+      ]) })]) }, evidence: expect.arrayContaining([expect.objectContaining({ id: file.id }), expect.objectContaining({ id: newerFile.id })]) });
+    const historical = await get(context.owner.cookie, `problem-index/${context.index.id}/workspace?instanceId=${before.id}`).expect(200);
+    expect(historical.body).toMatchObject({ domainAvailability: 'AVAILABLE', selectedInstance: { id: before.id }, readOnly: true, actions: [],
+      domain: { domainVersion: 3, revisionId: brief.id, sections: [expect.objectContaining({ key: 'supplierResponse', fields: expect.arrayContaining([
+        { key: 'responseForm', label: '回复形式', value: '简报' }, { key: 'rootCause', label: '根本原因', value: '简报原因' },
+        { key: 'correctiveAction', label: '纠正措施', value: '简报措施' },
+      ]) })] }, evidence: [{ id: file.id }] });
+    expect(JSON.stringify(historical.body)).not.toMatch(/8D 原因|人工修订措施|未提交的供应商秘密|private@example.invalid/);
+    expect(JSON.stringify(historical.body)).not.toContain(newerFile.id);
+    expect(JSON.stringify(current.body)).not.toContain('未提交的供应商秘密');
+    const unlinked = await prisma.workflowInstance.create({ data: { organizationId: context.owner.organization.id, problemIndexId: context.index.id,
+      workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: randomUUID(), currentNodeId: node.id } });
+    await prisma.supplierResponseRevision.create({ data: { problemId: context.record.id, revision: 3,
+      content: { rootCause: '不关联实例的内容' }, submittedById: context.owner.user.id, workflowInstanceId: unlinked.id, workflowVersion: version.version } });
+    const unavailable = await get(context.owner.cookie, `problem-index/${context.index.id}/workspace?instanceId=${unlinked.id}`).expect(200);
+    expect(unavailable.body).toMatchObject({ domainAvailability: 'UNAVAILABLE', domain: null, evidence: [] });
+    const currentAgain = await get(context.owner.cookie, `problem-index/${context.index.id}/workspace`).expect(200);
+    expect(JSON.stringify(currentAgain.body)).not.toContain('不关联实例的内容');
+    const historicalReport = await get(context.owner.cookie, `reports/problems/${context.index.id}?instanceId=${before.id}`).expect(200);
+    expect(historicalReport.body).toMatchObject({ dataAvailability: 'UNAVAILABLE', revision: null, evidence: [] });
+    const outsider = await identity();
+    for (const actor of [context.supplier, outsider]) {
+      await get(actor.cookie, `problem-index/${context.index.id}/workspace?instanceId=${before.id}`).expect(404);
+    }
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'supplier-quality:problems:read' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: context.owner.role.id, permissionId: permission.id } } });
+    await get(context.owner.cookie, `problem-index/${context.index.id}/workspace?instanceId=${before.id}`).expect(404);
+  });
+
   it('allows an internal reader explicitly granted both permissions in the owning organization', async () => {
     const context = await fixture();
     const remote = await identity();

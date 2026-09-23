@@ -3,6 +3,7 @@ import type { Prisma, WorkflowTask } from '../../generated/prisma/client.js';
 import type { OutboxEvent } from './outbox-worker.service.js';
 import { eligibleWorkflowRecipients, workflowObject } from './workflow-recipients.js';
 import { notificationContent } from '../platform-configuration/notification-content.js';
+import { projectSupplierNotification } from './supplier-portal-notification.js';
 
 export const WORKFLOW_TIMING_EVENTS = ['WORKFLOW_TASK_REMINDER', 'WORKFLOW_TASK_OVERDUE', 'WORKFLOW_TASK_ESCALATION'] as const;
 
@@ -68,6 +69,7 @@ export async function handleWorkflowTiming(tx: Prisma.TransactionClient, event: 
     return;
   }
   const escalation = event.eventType === 'WORKFLOW_TASK_ESCALATION';
+  if (!escalation && await projectSupplierNotification(tx, problem, node, task, event.eventKey, 'TASK_REMINDER', event.processingAt)) return;
   const recipients = await eligibleWorkflowRecipients(tx, task.organizationId, escalation ? config.escalation : config.assignment, escalation ? 'problem-index:read' : 'workflow:act');
   const content = await notificationContent(tx, task.organizationId, escalation ? 'TASK_ESCALATED' : 'TASK_REMINDER', { reportNumber: problem.reportNumber, nodeName: node.name, dueAt: task.dueAt!.toISOString() });
   if (!content) return;

@@ -15,8 +15,16 @@ export const FILE_RESOURCE_ADAPTERS = Symbol('FILE_RESOURCE_ADAPTERS');
 
 @Injectable()
 export class FileResourceAccess {
-  constructor(@Inject(FILE_RESOURCE_ADAPTERS) private readonly adapters: readonly FileResourceAccessAdapter[]) {
+  private readonly adapters: FileResourceAccessAdapter[];
+
+  constructor(@Inject(FILE_RESOURCE_ADAPTERS) adapters: readonly FileResourceAccessAdapter[]) {
+    this.adapters = [...adapters];
     if (new Set(adapters.map((adapter) => adapter.resourceType)).size !== adapters.length) throw new Error('FILE_RESOURCE_ADAPTER_DUPLICATE');
+  }
+
+  register(adapter: FileResourceAccessAdapter): void {
+    if (!adapter.resourceType || this.adapters.some((candidate) => candidate.resourceType === adapter.resourceType)) throw new Error('FILE_RESOURCE_ADAPTER_DUPLICATE');
+    this.adapters.push(adapter);
   }
 
   async authorizeAndLock(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant> {

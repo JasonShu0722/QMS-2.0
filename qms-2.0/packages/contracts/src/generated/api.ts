@@ -959,6 +959,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-portal/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalNotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalNotificationController_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -1423,6 +1455,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/problems/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityController_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/problems/{id}/workflow-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityController_workflowAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-portal/problems": {
         parameters: {
             query?: never;
@@ -1465,6 +1529,22 @@ export interface paths {
         get?: never;
         put: operations["SupplierPortalController_response"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/problems/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalController_action"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2070,6 +2150,29 @@ export interface components {
             items: components["schemas"]["NotificationDto"][];
             total: number;
         };
+        SupplierPortalNotificationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            problemId: string;
+            /** Format: uuid */
+            taskId: string;
+            reportNumber: string;
+            nodeName: string;
+            /** @enum {string} */
+            kind: "TASK_ASSIGNED" | "TASK_REMINDER";
+            subject: string | null;
+            body: string;
+            version: number;
+            /** Format: date-time */
+            readAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierPortalNotificationPageDto: {
+            items: components["schemas"]["SupplierPortalNotificationDto"][];
+            total: number;
+        };
         ProblemDomainSummaryDto: {
             title: string;
             description: string;
@@ -2663,6 +2766,57 @@ export interface components {
             /** @description 包含时区的完成时间 */
             completionTime?: string;
         };
+        SupplierResponseEvidenceDto: {
+            /** Format: uuid */
+            fileId: string;
+            purpose: string;
+            originalName: string;
+            /** @enum {string} */
+            status: "QUARANTINED" | "AVAILABLE" | "DELETED";
+            /** @enum {string} */
+            scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            downloadable: boolean;
+        };
+        SupplierResponseRevisionDto: {
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            content: components["schemas"]["SupplierResponseContentDto"];
+            /** Format: date-time */
+            submittedAt: string;
+            evidence: components["schemas"]["SupplierResponseEvidenceDto"][];
+        };
+        SupplierResponseRevisionPageDto: {
+            /** @description 修订号降序；通过 revisionPage 翻页 */
+            items: components["schemas"]["SupplierResponseRevisionDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        SupplierCurrentVerificationDto: {
+            /** @enum {string} */
+            status: "NOT_VERIFIED" | "ACCEPTED" | "INVALIDATED";
+            /** Format: uuid */
+            revisionId?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            /**
+             * Format: uuid
+             * @description 仅内部详情返回
+             */
+            verifierId?: string;
+        };
+        SupplierWorkflowNodeDto: {
+            /** @enum {string} */
+            type: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+            /**
+             * Format: uuid
+             * @description 仅内部详情返回
+             */
+            id?: string;
+            /** @description 仅内部详情返回 */
+            name?: string;
+        };
         SupplierProblemDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -2688,6 +2842,11 @@ export interface components {
             version: number;
             /** @enum {string} */
             stage: "DRAFT" | "ISSUED";
+            /**
+             * Format: uuid
+             * @description 仅内部详情返回；平台工作台使用的问题索引 ID
+             */
+            problemIndexId?: string;
             reportNumber?: string;
             /** @enum {string} */
             problemStatus?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
@@ -2698,6 +2857,18 @@ export interface components {
             canEditFacts: boolean;
             canEditResponse: boolean;
             responseDraft: components["schemas"]["SupplierResponseContentDto"];
+            /** @description 详情中的最新已提交修订，草稿阶段省略 */
+            latestResponseRevision?: components["schemas"]["SupplierResponseRevisionDto"];
+            /** @description 详情中的全部修订分页，按修订号降序 */
+            responseHistory?: components["schemas"]["SupplierResponseRevisionPageDto"];
+            /** @description 详情中针对最新修订的当前验证状态 */
+            currentVerification?: components["schemas"]["SupplierCurrentVerificationDto"];
+            /** @description 详情中的当前流程节点，未发单时省略 */
+            currentWorkflowNode?: components["schemas"]["SupplierWorkflowNodeDto"];
+            /** @description 详情中按当前会话、节点和领域规则派生的候选动作；提交时仍由服务端重新授权 */
+            availableActions?: ("SUBMIT" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE")[];
+            /** @description 详情中无可执行动作时的原因代码；有动作时为 null */
+            actionUnavailableReason?: string | null;
         };
         SupplierProblemPageDto: {
             items: components["schemas"]["SupplierProblemDto"][];
@@ -2751,6 +2922,20 @@ export interface components {
         SaveSupplierResponseDraftDto: {
             expectedVersion: number;
             content: components["schemas"]["SupplierResponseContentDto"];
+        };
+        SubmitSupplierResponseDto: {
+            expectedContentVersion: number;
+            content: components["schemas"]["SupplierResponseContentDto"];
+            evidenceFileIds?: string[];
+            /** @default RESPONSE */
+            evidencePurpose: string;
+        };
+        SupplierWorkflowActionDto: {
+            /** @enum {string} */
+            action: "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+            expectedContentVersion: number;
+            /** @default true */
+            accepted: boolean;
         };
         SupplierWorkflowBindingDto: {
             /** @enum {string} */
@@ -5219,6 +5404,71 @@ export interface operations {
             };
         };
     };
+    SupplierPortalNotificationController_list: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPortalNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalNotificationController_read: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPortalNotificationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ReportingController_list: {
         parameters: {
             query?: {
@@ -6203,9 +6453,8 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string;
-                page?: components["schemas"]["Object"];
-                pageSize?: components["schemas"]["Object"];
-                search?: string;
+                revisionPage?: components["schemas"]["Object"];
+                revisionPageSize?: components["schemas"]["Object"];
             };
             header?: never;
             path: {
@@ -6380,6 +6629,78 @@ export interface operations {
             };
         };
     };
+    SupplierQualityController_action: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSupplierResponseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_workflowAction: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierWorkflowActionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     SupplierPortalController_list: {
         parameters: {
             query?: {
@@ -6419,9 +6740,8 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string;
-                page?: components["schemas"]["Object"];
-                pageSize?: components["schemas"]["Object"];
-                search?: string;
+                revisionPage?: components["schemas"]["Object"];
+                revisionPageSize?: components["schemas"]["Object"];
             };
             header?: never;
             path: {
@@ -6473,6 +6793,42 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalController_action: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSupplierResponseDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
