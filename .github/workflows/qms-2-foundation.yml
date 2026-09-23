@@ -117,6 +117,7 @@ jobs:
           echo "SMTP_PORT=51026" >> "$GITHUB_ENV"
           echo "SMTP_SECURE=false" >> "$GITHUB_ENV"
           echo "SMTP_FROM=qms@example.test" >> "$GITHUB_ENV"
+          echo "QMS_ACCEPTANCE_MAILPIT_URL=http://127.0.0.1:51027" >> "$GITHUB_ENV"
       - name: Prepare real object storage and scan fixture
         run: |
           command -v zip
