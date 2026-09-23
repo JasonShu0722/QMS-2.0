@@ -21,7 +21,9 @@
     "test:db-config": "node scripts/check-prisma-config.mjs",
     "db:generate": "node node_modules/prisma/build/index.js generate",
     "db:migrate:deploy": "node node_modules/prisma/build/index.js migrate deploy",
-    "db:seed": "node node_modules/prisma/build/index.js db seed"
+    "db:seed": "node node_modules/prisma/build/index.js db seed",
+    "operations:alerts": "node ../../scripts/operations-alerts.mjs --stdin",
+    "test:operations-alerts": "node --test test/operations/operations-alerts.acceptance.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1136.0",

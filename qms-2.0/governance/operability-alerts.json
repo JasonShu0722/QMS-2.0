@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "observationVersion": 1,
+  "severityOrder": [
+    "CLEAR",
+    "WARN",
+    "CRITICAL"
+  ],
+  "requiredMetrics": [
+    "outbox.duePending",
+    "outbox.failed",
+    "outbox.oldestDueSeconds",
+    "scan.pending",
+    "scan.error",
+    "scan.oldestPendingSeconds"
+  ],
+  "rules": [
+    {
+      "id": "outbox-failed",
+      "metric": "outbox.failed",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 1,
+      "message": "Outbox 存在失败事件"
+    },
+    {
+      "id": "outbox-due-pending-warn",
+      "metric": "outbox.duePending",
+      "severity": "WARN",
+      "operator": ">=",
+      "threshold": 1,
+      "message": "Outbox 存在已到期未处理事件"
+    },
+    {
+      "id": "outbox-due-pending-critical",
+      "metric": "outbox.duePending",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 10,
+      "message": "Outbox 已到期未处理事件达到严重阈值"
+    },
+    {
+      "id": "outbox-oldest-due-warn",
+      "metric": "outbox.oldestDueSeconds",
+      "severity": "WARN",
+      "operator": ">=",
+      "threshold": 300,
+      "message": "Outbox 最老到期事件滞留超过 5 分钟"
+    },
+    {
+      "id": "outbox-oldest-due-critical",
+      "metric": "outbox.oldestDueSeconds",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 900,
+      "message": "Outbox 最老到期事件滞留超过 15 分钟"
+    },
+    {
+      "id": "scan-error",
+      "metric": "scan.error",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 1,
+      "message": "附件扫描存在错误"
+    },
+    {
+      "id": "scan-pending-warn",
+      "metric": "scan.pending",
+      "severity": "WARN",
+      "operator": ">=",
+      "threshold": 10,
+      "message": "待扫描附件达到预警阈值"
+    },
+    {
+      "id": "scan-pending-critical",
+      "metric": "scan.pending",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 50,
+      "message": "待扫描附件达到严重阈值"
+    },
+    {
+      "id": "scan-oldest-pending-warn",
+      "metric": "scan.oldestPendingSeconds",
+      "severity": "WARN",
+      "operator": ">=",
+      "threshold": 900,
+      "message": "最老待扫描附件滞留超过 15 分钟"
+    },
+    {
+      "id": "scan-oldest-pending-critical",
+      "metric": "scan.oldestPendingSeconds",
+      "severity": "CRITICAL",
+      "operator": ">=",
+      "threshold": 3600,
+      "message": "最老待扫描附件滞留超过 1 小时"
+    }
+  ]
+}
