@@ -18,6 +18,8 @@ describe('supplier quality real HTTP and PostgreSQL', () => {
   const suffix = randomUUID();
   const csrf = randomUUID();
   const organizations: string[] = [];
+  const workflowInstances: string[] = [];
+  const workflowDefinitions: string[] = [];
   const users: { id: string; organizationId: string; cookie: string }[] = [];
   const permissions = ['supplier-quality:profiles:read', 'supplier-quality:profiles:write', 'supplier-quality:problems:read', 'supplier-quality:problems:write', 'supplier-quality:responses:read', 'supplier-quality:responses:write'];
 
@@ -44,6 +46,11 @@ describe('supplier quality real HTTP and PostgreSQL', () => {
 
   afterAll(async () => {
     if (prisma) {
+      await prisma.workflowMutation.deleteMany({ where: { instanceId: { in: workflowInstances } } });
+      await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: workflowInstances } } });
+      await prisma.problemIndex.updateMany({ where: { workflowInstanceId: { in: workflowInstances } }, data: { workflowInstanceId: null } });
+      await prisma.workflowInstance.deleteMany({ where: { id: { in: workflowInstances } } });
+      await prisma.workflowDefinition.deleteMany({ where: { id: { in: workflowDefinitions } } });
       await prisma.supplierQualityProblem.deleteMany({ where: { ownerOrganizationId: { in: organizations } } });
       await prisma.supplierBusinessProfile.deleteMany({ where: { ownerOrganizationId: { in: organizations } } });
       await prisma.problemIndex.deleteMany({ where: { organizationId: { in: organizations } } });
@@ -77,6 +84,13 @@ describe('supplier quality real HTTP and PostgreSQL', () => {
   async function released() {
     const record = await draft();
     const index = await prisma.problemIndex.create({ data: { organizationId: organizations[0]!, reportNumber: `TEST-${randomUUID()}`, domainCode: 'supplier-quality', problemType: 'MATERIAL', sourceType: 'supplier-quality', sourceId: record.id, severity: 'HIGH' } });
+    const definition = await prisma.workflowDefinition.create({ data: { organizationId: organizations[0]!, code: `SQ-${randomUUID()}`, name: 'Supplier quality response fixture', createdById: users[0]!.id, updatedById: users[0]!.id } });
+    workflowDefinitions.push(definition.id);
+    const version = await prisma.workflowVersion.create({ data: { organizationId: organizations[0]!, workflowDefinitionId: definition.id, version: 1, status: 'PUBLISHED', publishedAt: new Date(), publishedById: users[0]!.id, structureSnapshot: {} } });
+    const node = await prisma.workflowNode.create({ data: { organizationId: organizations[0]!, workflowVersionId: version.id, nodeKey: 'reply', type: 'ACTION', name: 'Reply', config: { assignment: { permission: 'supplier-quality:responses:write' } } } });
+    const instance = await prisma.workflowInstance.create({ data: { organizationId: organizations[0]!, problemIndexId: index.id, workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: `SQ-${randomUUID()}`, currentNodeId: node.id, createdById: users[0]!.id, updatedById: users[0]!.id } });
+    workflowInstances.push(instance.id);
+    await prisma.problemIndex.update({ where: { id: index.id }, data: { workflowInstanceId: instance.id, status: 'IN_PROGRESS' } });
     await prisma.supplierQualityProblem.update({ where: { id: record.id }, data: { problemIndexId: index.id, releasedToSupplierAt: new Date() } });
     return record;
   }

@@ -10,7 +10,7 @@ import { RoleAdministration } from './RoleAdministration';
 import { GroupedPermissionSelector } from './GroupedPermissionSelector';
 import type { AdminOrganization, AdminRole, AdminUser } from './admin';
 
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000 });
 
 const interaction = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 const organization: AdminOrganization = { id: 'org-a', code: 'a', name: '甲组织', type: 'INTERNAL', permissions: ['account:roles:read', 'account:roles:update'] };

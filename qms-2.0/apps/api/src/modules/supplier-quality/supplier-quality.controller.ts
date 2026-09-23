@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { SupplierQualityService } from './supplier-quality.service.js';
-import { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SupplierDirectoryQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
+import { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -55,7 +55,7 @@ export class SupplierQualityController {
 
   @Get('problems/:id') @ApiOkResponse({ type: SupplierProblemDto })
   @RequireAccess({ featurePermission: 'supplier-quality:problems:read', organizationScope: queryScope })
-  detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: SupplierScopeQueryDto) { return this.service.detail(actor(request), id, false); }
+  detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: SupplierProblemDetailQueryDto) { return this.service.detail(actor(request), id, false, query); }
 
   @Post('drafts') @ApiCreatedResponse({ type: SupplierProblemDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
@@ -76,6 +76,17 @@ export class SupplierQualityController {
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: queryScope })
   response(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveSupplierResponseDraftDto, @Query() _query: SupplierScopeQueryDto) { return this.service.saveResponse(actor(request), id, dto, requestTraceId(request), false, request.get('Idempotency-Key')); }
+
+  @Post('problems/:id/actions') @ApiCreatedResponse({ type: SupplierProblemDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: queryScope })
+  action(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmitSupplierResponseDto) { return this.service.submitResponse(actor(request), id, dto, requestTraceId(request), false, request.get('Idempotency-Key')); }
+
+  @Post('problems/:id/workflow-actions') @ApiOkResponse({ type: SupplierProblemDto })
+  @HttpCode(HttpStatus.OK)
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:problems:write', organizationScope: queryScope })
+  workflowAction(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SupplierWorkflowActionDto) { return this.service.submitWorkflowAction(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }
 }
 
 @Controller('api/v1/supplier-portal')
@@ -90,10 +101,15 @@ export class SupplierPortalController {
 
   @Get('problems/:id') @ApiOkResponse({ type: SupplierProblemDto })
   @RequireAccess({ featurePermission: 'supplier-quality:responses:read', organizationScope: queryScope })
-  detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: SupplierScopeQueryDto) { return this.service.detail(actor(request), id, true); }
+  detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: SupplierProblemDetailQueryDto) { return this.service.detail(actor(request), id, true, query); }
 
   @Put('problems/:id/response-draft') @ApiOkResponse({ type: SupplierProblemDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: queryScope })
   response(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveSupplierResponseDraftDto, @Query() _query: SupplierScopeQueryDto) { return this.service.saveResponse(actor(request), id, dto, requestTraceId(request), true, request.get('Idempotency-Key')); }
+
+  @Post('problems/:id/actions') @ApiCreatedResponse({ type: SupplierProblemDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: queryScope })
+  action(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SubmitSupplierResponseDto) { return this.service.submitResponse(actor(request), id, dto, requestTraceId(request), true, request.get('Idempotency-Key')); }
 }

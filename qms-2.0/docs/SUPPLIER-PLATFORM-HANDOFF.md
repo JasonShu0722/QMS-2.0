@@ -1,6 +1,6 @@
 # 供应商质量 → 公共平台交接
 
-## 当前主目录增量（2026-09-22）
+## 当前主目录增量（2026-09-23）
 
 早期供应商增量已由提交 `1b94d14` 整合到 `D:/WorkSpace/QMS-2.0/qms-2.0` 的 `main`；后续继续在用户指定主目录工作。下文旧工作树位置和“待提供”接口表为历史背景，当前可调用接口以 `PLATFORM-HANDOFF.md` 及实际代码为准。
 
@@ -8,13 +8,17 @@ S4.1c 已新增 `SupplierWorkflowBindingService` 和 `/api/v1/supplier-quality/w
 
 S4.1d 已新增 `POST /api/v1/supplier-quality/drafts/:id/issue`。领域入口在 ReadCommitted 事务内解析绑定、创建 `ProblemIndex`、调用 `WorkflowRuntimeService.startInstance`，再保存 `workflowBindingId/workflowBindingVersion` 和供应商释放时间；平台实例、领域记录、审计与 Outbox 任一步失败均回滚。正式入口使用 workflow mutation 做同键重放，变更请求或第二个 key 不会产生第二个编号/实例。
 
+S4.2 已新增内部 `POST /api/v1/supplier-quality/problems/:id/actions` 和供应商门户 `POST /api/v1/supplier-portal/problems/:id/actions`。正式回复入口必须在同一 ReadCommitted 事务中调用 `WorkflowRuntimeService.submitAction` 与 `SupplierWorkflowAccess`，由平台校验当前节点/参与资格，领域校验当前问题版本并写入不可变 `SupplierResponseRevision`、删除草稿、递增内容版本和记录审计。回复节点推进后不得继续保存回复草稿；同键同内容只返回原结果，同键内容变化返回 409。`supplier-quality` 文件资源授权已注册，提交时复验可用文件并绑定当前修订；真实对象存储/ClamAV 纵向验收仍沿用附件平台门禁。
+
+S4.3 已新增内部 `POST /api/v1/supplier-quality/problems/:id/workflow-actions`。`VERIFY`、`CLOSE` 等内部动作继续复用平台 action/runtime；验证写入按问题和当前回复修订关联的不可变 `SupplierVerification`，关闭在同一 ReadCommitted 事务中调用 `assertInternalClosure`，要求有效验证人与关闭人不同。供应商企业无内部动作路由，流程参与适配器仍拒绝供应商验证/关闭；RETURN/REJECT/REOPEN 后的重提、修订历史读模型和 Web 内部动作已完成真实 PG 回归。
+
 正式发单事务应调用 `resolve(tx, organizationId, selector)`，保存返回的 bindingId/bindingVersion/workflowVersionId/replyNodeId/responseSlaMinutes，并把同一固定版本交给 `WorkflowRuntimeService.startInstance`。解析器只接受启用、精确选择、拥有组织一致且 PUBLISHED 的版本；必须存在唯一 `supplier-quality:responses:write` ACTION、正整数节点 `slaMinutes`、VERIFICATION 和所有 CLOSE 的独立验证。缺配置、禁用、退休或不合规版本均为受控 409；本批没有启动流程或提供发单成功替身。
 
-本批增加 `SupplierProblemReadAdapter`，在 `ProblemReadModule` 注册 `supplier-quality / supplier-quality` 公共读取。只接入内部公共台账与当前专业资料，要求公共和领域读权限、拥有组织授权及双向索引引用同时满足。供应商门户隔离保持独立；报告快照、领域修订审计、附件资源授权、升级和写动作尚未注册。
+本批增加 `SupplierProblemReadAdapter`，在 `ProblemReadModule` 注册 `supplier-quality / supplier-quality` 公共读取。只接入内部公共台账与当前专业资料，要求公共和领域读权限、拥有组织授权及双向索引引用同时满足；当前及升级前回复修订的证据引用可按修订读取。供应商门户隔离保持独立；回复写动作、附件资源授权、平台升级适配器和修订历史读模型已接入，历史报表仍不伪造缺少不可变快照的状态/时限。
 
-正式发单仍不能宣称已接通。后续先落实跨企业 runtime/Worker 参与授权，以及严重度到 SLA/固定流程版本的有效配置，再以平台 ReadCommitted 事务完成编号、索引、启动、领域事实、审计和 Outbox 的原子提交。不得复用草稿 Serializable 事务、冒充内部 actor、放宽公共组织范围，或伪造默认时长。详细证据见 `PHASE-3.md`。
+正式发单、供应商回复、验证关闭、驳回重提、平台升级和供应商门户通知投影已接通。通知使用独立跨组织投影表，不放宽原有同组织任务/通知外键；Worker/门户真实回归已通过。一次性 PostgreSQL/MinIO/ClamAV/API/Worker/Web/Chromium 环境已完成发单→上传扫描→回复→验证→独立关闭纵向验收，供应商质量浏览器规格全量 2/2 PASS；阶段三开发收尾标记 PASS。该结论不等同于提交、部署或生产/试点放行，后者仍受阶段二 D–H 治理清单和发布审批约束。不得复用草稿 Serializable 事务、冒充内部 actor、放宽公共组织范围，或伪造默认时长。详细证据见 `PHASE-3.md`。
 
-后续 S4.1b 已接入 runtime 服务端 `WorkflowParticipantAccess` 和领域 `SupplierWorkflowAccess`。调用 `submitAction(..., domainAccess, supplierAccess)` 时，回复节点必须为 ACTION 且 assignment.permission 为 `supplier-quality:responses:write`；内外回复身份由领域记录决定，角色/指定人约束继续由平台按权限组织校验。非回复节点只允许内部身份，CLOSE 必须启用平台独立验证。领域版本/证据 CAS 仍由正式业务 `domainAccess` 与 `mutate` 实现；不得把该参与策略当作回复内容提交校验。新增接口是服务边界，没有启用门户正式动作。草稿保存与运行时仍存在相反锁顺序；数据库选择死锁受害者时回滚并返回 409，客户端保留输入后重试，后续正式入口需继续覆盖该恢复行为。
+后续 S4.1b 已接入 runtime 服务端 `WorkflowParticipantAccess` 和领域 `SupplierWorkflowAccess`。调用 `submitAction(..., domainAccess, supplierAccess)` 时，回复节点必须为 ACTION 且 assignment.permission 为 `supplier-quality:responses:write`；内外回复身份由领域记录决定，角色/指定人约束继续由平台按权限组织校验。非回复节点只允许内部身份，CLOSE 必须启用平台独立验证。领域版本/证据 CAS 仍由正式业务 `domainAccess` 与 `mutate` 实现；不得把该参与策略当作回复内容提交校验。S4.2 已将该参与策略接入正式内部与门户回复动作。草稿保存与运行时仍存在相反锁顺序；数据库选择死锁受害者时回滚并返回 409，客户端保留输入后重试。
 
 日期：2026-09-19。通过本地文件人工协调；跨任务工具交互已按用户反馈停止。
 
@@ -76,7 +80,7 @@ S1 规则完成，S2/S3 的非生产草稿子集已实现并验证；正式业�
 | API package.json | test:integration 纳入供应商真实 PG 用例 |
 | generated/api.ts | Swagger 生成；集成后必须重新 contracts:generate / contracts:check |
 
-现有端点：内部 `profiles` GET/POST、`profiles/:id` GET/PUT、`supplier-options` GET、`reference-options` GET、`problems` GET、`problems/:id` GET、`drafts` POST、`drafts/:id` PUT、`problems/:id/response-draft` PUT；门户 `problems` GET、`problems/:id` GET、`problems/:id/response-draft` PUT。写请求均需 CSRF 与 Idempotency-Key，问题/回复更新需领域 expectedVersion，资料更新需资料自身 expectedVersion。
+现有端点：内部 `profiles` GET/POST、`profiles/:id` GET/PUT、`supplier-options` GET、`reference-options` GET、`problems` GET、`problems/:id` GET、`drafts` POST、`drafts/:id` PUT、`problems/:id/response-draft` PUT、`problems/:id/actions` POST；门户 `problems` GET、`problems/:id` GET、`problems/:id/response-draft` PUT、`problems/:id/actions` POST。写请求均需 CSRF 与 Idempotency-Key，问题/回复更新需领域 expectedVersion，资料更新需资料自身 expectedVersion。
 
 并行完善批次新增约定：SupplierProfileDto 返回 version；PUT profiles/:id 仅接受业务编码/联系资料及版本，省略可选联系资料表示清除，不允许变更企业归属。目录统一返回 `{ items, total }`，支持 page/pageSize/search/selectedId；reference-options 通过 kind=profiles（默认）或 responders 指定目录。此响应替换首批开发期组合数组契约，未发布兼容接口。问题列表增加 severity/responseForm/stage；筛选与领域授权用 AND 组合。Web 和生成契约同批更新，不可只摘取前端或 DTO。
 

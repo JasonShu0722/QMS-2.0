@@ -38,6 +38,13 @@ describe('workflow task projection on PostgreSQL', () => {
     runtime = new WorkflowRuntimeService(prisma, audit, outbox, problems);
   });
   afterAll(async () => module?.close());
+  beforeEach(async () => {
+    if (!handler || typeof handler === 'function') return;
+    await prisma.outboxEvent.updateMany({
+      where: { status: 'PENDING', eventType: { in: handler.eventTypes }, availableAt: { lte: new Date() } },
+      data: { availableAt: new Date(Date.now() + 86_400_000) },
+    });
+  });
   afterEach(async () => {
     const instances = await prisma.workflowInstance.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } });
     const tasks = await prisma.workflowTask.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } });

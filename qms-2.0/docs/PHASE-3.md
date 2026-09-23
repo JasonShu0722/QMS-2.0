@@ -1,5 +1,33 @@
 # 阶段三供应商质量执行记录
 
+## S4.2～S4.4 并行收敛批次（2026-09-23）
+
+本批在活动主目录 `D:/WorkSpace/QMS-2.0/qms-2.0`、分支 `codex/phase-3-response-revisions` 上由互不重叠的开发线推进，尚未提交、推送或部署。S4.2 已接入正式发单、供应商/内部回复提交和修订级证据选择页面；S4.3 已补充 RETURN/REJECT/REOPEN 的新修订及旧验证失效、按服务端授权派生的当前节点/动作、分页修订历史与内部验证/关闭入口；S4.4 已注册 BRIEF→EIGHT_D 平台升级适配器，保留旧实例和证据历史，内部详情接入公共问题工作空间的升级预览与确认入口。严重度时限继续来自已发布流程的固定绑定版本，不设置领域默认分钟数。
+
+供应商通知不能写入原有同组织 `notifications` 表。本批新增单独的供应商门户通知投影，原 Workflow Outbox/Worker 在任务投影事务内写入；供应商用户和拥有组织任务分别受组合外键约束，门户读取时再次检查问题释放、真实关联企业、当前任务、会话及权限。原全局任务/通知边界未放宽。
+
+已核对证据：S4.3 回复/驳回/重开真实 HTTP/PostgreSQL 6/6；详情读模型 7/7；S4.4 升级适配 3/3、历史专业资料 12/12；供应商门户通知真实 HTTP/PostgreSQL/Worker（含编译后进程）11/11，通知页面定向 3/3。API 单元 36 suites / 437 tests、API lint/build、Swagger `contracts:generate`/`contracts:check` 和治理检查通过。独立 PostgreSQL/MinIO/ClamAV 附件生命周期按项目 `deployment/clamd.conf` 通过 32/32；这证明平台真实上传、对象版本、扫描和授权生命周期。临时资源均已清理，未连接保留预览端口 `55440`。
+
+### 阶段三开发收尾门禁（2026-09-24）
+
+最终一次性环境使用 PostgreSQL 18（端口 55471）、MinIO（端口 59011）、ClamAV（端口 53312，挂载项目 `deployment/clamd.conf`）、编译后的 API/Worker、Vite Web 和真实 Chromium；未连接 `55440`，验收结束后已清理临时资源。真实浏览器规格 `supplier-quality.spec.ts` 全量 2/2 PASS（42.3 秒），其中主链覆盖内部发单→供应商隔离读取→回复草稿与 CAS 409→真实对象存储上传→ClamAV 扫描通过→证据提交→内部验证→独立内部人员关闭，并在 PostgreSQL 断言证据为 `AVAILABLE/CLEAN`、索引为 `CLOSED`；第二条规格覆盖资料冲突恢复、内部 8D 和台账筛选。完整 Web 30 文件/164 测试继续 PASS。
+
+至此 S4.2、S4.3、S4.4 的开发、定向回归、真实资源和浏览器组合门禁完成，阶段三开发状态标记为 PASS。该结论不等同于提交、部署或生产/试点放行；当前工作树仍未提交，后续仍须按阶段二 D–H 治理清单和发布审批执行。
+
+## S4.3 内部验证与关闭（2026-09-23）
+
+新增内部 `POST /api/v1/supplier-quality/problems/:id/workflow-actions`，仅接受 `VERIFY`、`REJECT`、`RETURN`、`REOPEN` 和 `CLOSE`，动作仍由 `WorkflowRuntimeService.submitAction` 驱动，不另建供应商状态机。`VERIFY` 在当前 `SupplierResponseRevision` 上追加不可变 `SupplierVerification`；`CLOSE` 在同一 ReadCommitted 事务中调用 `assertInternalClosure`，要求当前修订存在已接受验证且验证人与关闭人不同，再由平台统一提交流程状态、审计和 Outbox。供应商门户没有内部动作入口，`SupplierWorkflowAccess` 继续拒绝供应商执行验证/关闭。
+
+验证证据：一次性 PostgreSQL 18（端口 55452；未使用 55440）部署全部 37 项迁移；真实 HTTP/PG 集成 1 suite / 3 tests PASS，覆盖验证持久化、同一验证人关闭拒绝、不同内部人员关闭成功、验证动作同键重放与变更拒绝。临时容器及仓库外凭据已清理。RETURN/REJECT/REOPEN 后重提新修订、真实对象存储/ClamAV 纵向验收、Web 正式动作按钮、升级、Worker/通知和浏览器主链仍未完成。
+
+## S4.2 供应商回复不可变修订（2026-09-23）
+
+新增内部 `POST /api/v1/supplier-quality/problems/:id/actions` 与供应商门户 `POST /api/v1/supplier-portal/problems/:id/actions`。两个入口均要求 CSRF、`Idempotency-Key` 和 `supplier-quality:responses:write`，服务端在同一 ReadCommitted 事务中调用 `WorkflowRuntimeService.submitAction`，由 `SupplierWorkflowAccess` 校验供应商企业、问题索引、释放状态及回复节点参与资格，再执行领域版本 CAS。
+
+提交成功后递增问题内容版本，写入带流程实例/流程版本快照和提交身份的 `SupplierResponseRevision`，删除回复草稿并记录审计；回复节点推进后禁止继续保存该问题的回复草稿。相同幂等键且内容一致时返回原结果，不创建第二条修订；内容变化返回受控 409。证据文件通过平台注册的 `supplier-quality` 资源授权和 `assertAttachable` 复验后，绑定当前回复修订；本批不复制上传/扫描生命周期，内部验证与关闭已在 S4.3 接续实现。
+
+验证证据：一次性 PostgreSQL 18（容器 `qms2-supplier-evidence-postgres`，端口 55450；未使用 55440）部署 36 项迁移；真实 HTTP/PG 集成 1 suite / 2 tests PASS，覆盖提交、可用文件资源授权、修订级证据引用、草稿删除、流程推进、同键重放、同键内容变更拒绝及节点推进后的草稿拒绝。API 全量回归、lint、build，Web build，Swagger `contracts:generate`/`contracts:check`，文档/治理检查均 PASS；Web 构建保留既有 Ant Design 大 chunk 警告。临时容器及仓库外凭据已清理。该段仅记录 S4.2 批次证据。
+
 ## S4.1d 正式发单事务（2026-09-22）
 
 新增 `POST /api/v1/supplier-quality/drafts/:id/issue`。内部问题发单会在同一 ReadCommitted `TransactionClient` 中解析严重度/表单/回复方式绑定，创建公共问题索引并分配编号，启动固定流程版本，再写入领域绑定快照和供应商释放时间。供应商回复模式只在流程启动成功后释放；内部回复模式不向供应商释放。绑定、索引、流程、审计和 Outbox 任一步失败都会回滚。
@@ -8,7 +36,7 @@
 
 验证证据：一次性 PostgreSQL 18（容器 `qms-supplier-issue-20260922`，端口 51193；未使用 55440）部署 36 项迁移；正式发单真实 HTTP/PG 4/4 PASS，供应商绑定/草稿/发单联合 3 suites / 49 tests PASS。测试覆盖成功原子链、缺配置无索引残留、同键重放、变更 payload、并发发单、dueAt 和最终审计失败回滚。临时容器及仓库外测试凭据在本批验证后清理。
 
-本批仍未交付供应商回复不可变修订、证据附件与扫描、驳回重提、内部验证关闭、简报升级、业务 Worker/通知及真实浏览器主链；不构成阶段三整体完成或试点/生产放行。
+本批仍未交付驳回重提、简报升级、业务 Worker/通知及真实浏览器主链；不构成阶段三整体完成或试点/生产放行。
 
 ## S4.1c 严重度与固定流程绑定（2026-09-22）
 
@@ -68,7 +96,7 @@ API 35 suites / 433 tests PASS，Web 工作空间及供应商定向 5 files / 22
 
 本批完成本地代码审查；独立审查子代理两次因模型容量不足未启动，不记录为独立审查通过。未运行全量阶段一/二验收、真实浏览器、附件扫描或业务 Worker 验收。索引绑定及历史实例使用明确的读取测试夹具；其中平台 runtime 的独立启动用于验证工作空间选择边界，不代表供应商发单接口已实现。
 
-下一步仍是 S4.1 正式发单：先落实跨企业节点/任务参与授权与严重度 SLA/固定流程配置，随后验证领域、编号、索引、流程、审计和 Outbox 的同事务提交、幂等重放、撤权、CAS 及故障回滚。之后按 S4.2–S4.4 接回复修订、证据、验证关闭和升级主链。阶段三整体与真实试点仍未完成。
+下一步进入 S4.3 的 RETURN/REJECT/REOPEN 重提回归，再补齐升级、Worker/通知和真实浏览器主链。阶段三整体与真实试点仍未完成。
 
 ## 当前主目录整合状态（2026-09-22）
 
@@ -138,9 +166,9 @@ API 35 suites / 433 tests PASS，Web 工作空间及供应商定向 5 files / 22
 
 ### 待平台交付与本轮限制
 
-正式发单/编号/公共索引聚合、跨组织流程节点授权、最终回复提交、驳回重提、内部验证/关闭归档、简报升级 8D、严重度 SLA 配置、附件上传扫描、业务 Worker 和失败恢复均未完成业务联调。草稿版本 `expectedVersion` 不是未来公共流程版本。专业规则的验证人与关闭人分离已有单元测试，尚无实际关闭入口。
+正式发单/编号/公共索引聚合、跨组织流程节点授权、最终回复提交、修订级证据引用以及内部验证/关闭入口已接入；驳回重提后的新修订回归、简报升级 8D、严重度 SLA 配置、附件真实纵向验收、业务 Worker 和失败恢复仍未完成业务联调。草稿版本 `expectedVersion` 不是未来公共流程版本。
 
-本段为上轮限制，联系人维护与目录分页/搜索已在最新批次完成。回复修订及证据引用模型仍需在正式平台接口交付后补齐修订级关联、不可变性和授权验证，不能据此宣称证据提交能力已交付。
+本段为上轮限制，联系人维护与目录分页/搜索已在最新批次完成；回复修订及证据引用已补齐修订级关联、不可变性和授权验证，但真实对象存储/ClamAV/浏览器纵向证据仍需单独验收。
 
 共享增量见 `SUPPLIER-PLATFORM-HANDOFF.md`。本轮没有跨任务工具调用、合并、提交、推送或部署；主仓库未提交迁移资料保持原状。
 
@@ -160,7 +188,7 @@ API 35 suites / 433 tests PASS，Web 工作空间及供应商定向 5 files / 22
 
 这些纯规则没有注册到 HTTP 或公共权限目录，不能作为真实 API 授权、数据库隔离或流程可用的证据。没有新增供应商持久化模型/迁移、生成 API 契约、页面、真实附件上传或业务 Worker。首批类型是 API 内部领域类型，Web 不导入它们。
 
-平台同事务 start/action/upgrade、跨组织资源及节点参与、当前验证失效、SLA 配置、授权文件解析及业务 Worker 仍依赖平台交付。公共 Prisma、catalog、AppModule、导航与契约合入批次尚未确认。对方任务发生工具调用配对错误后，本任务按用户反馈停止所有跨任务交互，以 [本地交接文件](SUPPLIER-PLATFORM-HANDOFF.md) 人工协调。
+平台同事务 start/action/upgrade、跨组织资源及节点参与、当前验证失效、SLA 配置、授权文件解析及业务 Worker 的进一步联调仍依赖平台交付；供应商回复、验证和关闭已在当前主目录接入。公共 Prisma、catalog、AppModule、导航与契约合入批次尚未确认。对方任务发生工具调用配对错误后，本任务按用户反馈停止所有跨任务交互，以 [本地交接文件](SUPPLIER-PLATFORM-HANDOFF.md) 人工协调。
 
 ## 验证环境
 

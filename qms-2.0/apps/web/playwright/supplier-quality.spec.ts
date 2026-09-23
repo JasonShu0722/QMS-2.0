@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { expect, test, type Page } from '@playwright/test';
+import { completeMfa } from './mfa-login';
 import { fillSecret } from './secret-input';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -18,6 +19,8 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: data
 const suffix = randomUUID();
 const organizations: string[] = [];
 const usernames: string[] = [];
+let ownerUserId: string;
+let verifierUsername: string;
 
 test.beforeAll(async () => {
   const passwordHash = await hash(password);
@@ -27,31 +30,37 @@ test.beforeAll(async () => {
     const username = `sq-browser-${index}-${suffix}`;
     usernames.push(username);
     const user = await prisma.user.create({ data: { username, passwordHash, accountType: type, organizationId: organization.id } });
+    if (index === 0) ownerUserId = user.id;
     const role = await prisma.role.create({ data: { code: 'SQ_BROWSER', name: '供应商浏览器验证', organizationId: organization.id } });
-    const grants = await prisma.permission.findMany({ where: { code: { startsWith: 'supplier-quality:' } } });
-    expect(grants).toHaveLength(6);
+    const grants = await prisma.permission.findMany({ where: { code: { in: index === 0
+      ? ['supplier-quality:profiles:read', 'supplier-quality:profiles:write', 'supplier-quality:problems:read', 'supplier-quality:problems:write', 'supplier-quality:responses:read', 'supplier-quality:responses:write', 'configuration:read', 'configuration:manage', 'workflow:manage', 'workflow:start', 'workflow:act']
+      : ['supplier-quality:responses:read', 'supplier-quality:responses:write', 'workflow:act'] } } });
+    expect(grants).toHaveLength(index === 0 ? 11 : 3);
     await prisma.rolePermission.createMany({ data: grants.map((permission) => ({ roleId: role.id, permissionId: permission.id })) });
     await prisma.userRole.create({ data: { userId: user.id, roleId: role.id, organizationId: organization.id } });
+    if (index === 0) {
+      verifierUsername = `sq-verifier-${suffix}`;
+      const verifier = await prisma.user.create({ data: { username: verifierUsername, passwordHash, accountType: 'INTERNAL', organizationId: organization.id } });
+      await prisma.userRole.create({ data: { userId: verifier.id, roleId: role.id, organizationId: organization.id } });
+    }
   }
+  await prisma.numberRuleVersion.create({ data: { organizationId: organizations[0]!, ruleCode: 'PROBLEM', version: 1, pattern: '{CODE}-{YYMM}-{SEQ3}', active: true, createdById: ownerUserId! } });
 });
 
-test.afterAll(async () => {
-  try {
-    await prisma.supplierQualityProblem.deleteMany({ where: { ownerOrganizationId: { in: organizations } } });
-    await prisma.supplierBusinessProfile.deleteMany({ where: { ownerOrganizationId: { in: organizations } } });
-    await prisma.problemIndex.deleteMany({ where: { organizationId: { in: organizations } } });
-    await prisma.auditEvent.deleteMany({ where: { organizationId: { in: organizations } } });
-    await prisma.user.deleteMany({ where: { organizationId: { in: organizations } } });
-    await prisma.organization.deleteMany({ where: { id: { in: organizations } } });
-  } finally { await prisma.$disconnect(); }
-});
+test.afterAll(async () => prisma.$disconnect());
 
 async function login(page: Page, index: number) {
+  await loginAs(page, usernames[index]!, index === 0 ? '/app/workbench$' : '/supplier/inbox$');
+}
+
+async function loginAs(page: Page, username: string, expectedPath: string) {
   await page.goto('/login');
-  await page.getByLabel('账号', { exact: true }).fill(usernames[index]!);
+  await page.getByLabel('账号', { exact: true }).fill(username);
   await fillSecret(page.getByLabel('密码', { exact: true }), password!);
+  const response = page.waitForResponse((entry) => entry.url().endsWith('/auth/login'));
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(index === 0 ? '/app/workbench$' : '/supplier/inbox$'));
+  await completeMfa(page.request, await response, username, page);
+  await expect(page).toHaveURL(new RegExp(expectedPath));
 }
 
 async function select(page: Page, label: string, option: string) {
@@ -61,9 +70,33 @@ async function select(page: Page, label: string, option: string) {
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({ hasText: option }).click();
 }
 
-test('internal draft forms and supplier replies use live HTTP with isolated fixture release', async ({ page, browser }) => {
+async function configureSupplierWorkflow(page: Page) {
+  const protection = await page.request.get('/api/v1/auth/csrf');
+  expect(protection.status()).toBe(200);
+  const csrfToken = (await protection.json()).csrfToken as string;
+  const headers = { 'x-csrf-token': csrfToken };
+  const created = await page.request.post('/api/v1/workflows', { headers, data: {
+    code: `SQ_BROWSER_${suffix}`, name: '供应商浏览器回复流程', nodes: [
+      { id: 'reply', name: '供应商回复', type: 'ACTION', config: { isStart: true, slaMinutes: 90, assignment: { permission: 'supplier-quality:responses:write' } } },
+      { id: 'verify', name: '内部验证', type: 'VERIFICATION', config: { assignment: { permission: 'supplier-quality:problems:write' } } },
+      { id: 'close', name: '关闭', type: 'CLOSE', config: { isEnd: true, requireIndependentVerification: true, assignment: { permission: 'supplier-quality:problems:write' } } },
+    ], transitions: [
+      { id: 'submit', from: 'reply', to: 'verify', action: 'SUBMIT' },
+      { id: 'verify', from: 'verify', to: 'close', action: 'VERIFY' },
+    ],
+  } });
+  expect(created.status(), await created.text()).toBe(201);
+  const draft = await created.json() as { id: string; revision: number; version: { id: string } };
+  const published = await page.request.post(`/api/v1/workflows/${draft.id}/publish`, { headers, data: { draftVersionId: draft.version.id, expectedRevision: draft.revision } });
+  expect(published.status(), await published.text()).toBe(201);
+  const binding = await page.request.put('/api/v1/supplier-quality/workflow-bindings', { headers: { ...headers, 'Idempotency-Key': randomUUID() }, data: { severity: 'HIGH', responseForm: 'BRIEF', replyMode: 'SUPPLIER', expectedVersion: 0, workflowVersionId: draft.version.id, enabled: true } });
+  expect(binding.status(), await binding.text()).toBe(200);
+}
+
+test('internal issue and supplier submission use live HTTP with isolated PostgreSQL', async ({ page, browser }) => {
   test.setTimeout(120000);
   await login(page, 0);
+  await configureSupplierWorkflow(page);
   await page.goto('/app/supplier-quality/profiles');
   await select(page, '供应商企业', `BROWSER-1-${suffix}`);
   await page.getByLabel('业务编码', { exact: true }).fill('SQ-BROWSER-001');
@@ -81,8 +114,9 @@ test('internal draft forms and supplier replies use live HTTP with isolated fixt
   await page.getByRole('button', { name: '保存问题草稿', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/supplier-quality\/problems\/[0-9a-f-]+$/);
   const problemId = new URL(page.url()).pathname.split('/').at(-1)!;
-  await expect(page.getByRole('button', { name: '正式发单暂未开放' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '正式发单', exact: true })).toBeEnabled();
   await page.getByLabel('问题标题', { exact: true }).fill('浏览器来料质量验证（已修改）');
+  await expect(page.getByRole('button', { name: '正式发单', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '保存问题草稿', exact: true }).click();
   await expect(page.getByText('草稿已保存', { exact: true })).toBeVisible();
   await page.reload();
@@ -91,22 +125,27 @@ test('internal draft forms and supplier replies use live HTTP with isolated fixt
 
   const supplierContext = await browser.newContext({ baseURL });
   const otherContext = await browser.newContext({ baseURL });
+  const verifierContext = await browser.newContext({ baseURL });
   try {
     const supplierPage = await supplierContext.newPage();
     await login(supplierPage, 1);
     await supplierPage.goto('/supplier/corrections');
     await expect(supplierPage.getByText('尚未收到问题单', { exact: true })).toBeVisible();
-    const index = await prisma.problemIndex.create({ data: { organizationId: organizations[0]!, reportNumber: `FIXTURE-${suffix}`, domainCode: 'supplier-quality', problemType: 'MATERIAL', sourceType: 'supplier-quality', sourceId: problemId, severity: 'HIGH' } });
-    await prisma.supplierQualityProblem.update({ where: { id: problemId }, data: { problemIndexId: index.id, releasedToSupplierAt: new Date() } });
+    const issuing = page.waitForResponse((response) => response.url().endsWith(`/drafts/${problemId}/issue`) && response.request().method() === 'POST');
+    await page.getByRole('button', { name: '正式发单', exact: true }).click();
+    expect((await issuing).status()).toBe(201);
+    await expect(page.getByText('正式发单成功', { exact: true })).toBeVisible();
+    const index = await prisma.problemIndex.findFirstOrThrow({ where: { sourceId: problemId } });
+    expect(index.workflowInstanceId).toBeTruthy();
+    expect((await prisma.supplierQualityProblem.findUniqueOrThrow({ where: { id: problemId } })).releasedToSupplierAt).not.toBeNull();
     await supplierPage.reload();
     await supplierPage.getByRole('link', { name: '浏览器来料质量验证（已修改）' }).click();
-    await expect(supplierPage.getByRole('button', { name: '提交回复暂未开放' })).toBeDisabled();
-    await expect(supplierPage.getByRole('button', { name: '证据上传暂未开放' })).toBeDisabled();
+    await expect(supplierPage.getByRole('button', { name: '正式提交回复', exact: true })).toBeEnabled();
     await supplierPage.getByLabel('根本原因', { exact: true }).fill('测试夹具：包装密封不足');
     await supplierPage.getByLabel('纠正措施', { exact: true }).fill('测试夹具：更换密封包装');
     await supplierPage.getByLabel('完成时间', { exact: true }).fill('2026-09-21T17:30');
     await supplierPage.getByRole('button', { name: '保存回复草稿', exact: true }).click();
-    await expect(supplierPage.getByText('草稿已保存', { exact: true })).toBeVisible();
+    await expect(supplierPage.getByText('回复草稿已保存', { exact: true })).toBeVisible();
     await supplierPage.reload();
     await expect(supplierPage.getByLabel('根本原因', { exact: true })).toHaveValue('测试夹具：包装密封不足');
     await expect(supplierPage.getByLabel('完成时间', { exact: true })).toHaveValue(/^2026-09-21T17:30/);
@@ -117,7 +156,7 @@ test('internal draft forms and supplier replies use live HTTP with isolated fixt
     await expect(secondPage.getByLabel('根本原因', { exact: true })).toHaveValue('测试夹具：包装密封不足');
     await supplierPage.getByLabel('根本原因', { exact: true }).fill('先保存的版本');
     await supplierPage.getByRole('button', { name: '保存回复草稿', exact: true }).click();
-    await expect(supplierPage.getByText('草稿已保存', { exact: true })).toBeVisible();
+    await expect(supplierPage.getByText('回复草稿已保存', { exact: true })).toBeVisible();
     await secondPage.getByLabel('根本原因', { exact: true }).fill('需要保留的冲突输入');
     await secondPage.getByRole('button', { name: '保存回复草稿', exact: true }).click();
     await expect(secondPage.getByText(/内容已被其他人修改/)).toBeVisible();
@@ -126,10 +165,42 @@ test('internal draft forms and supplier replies use live HTTP with isolated fixt
     await login(otherPage, 2);
     await otherPage.goto(supplierPage.url());
     await expect(otherPage.getByText('记录不存在或当前账号无权查看', { exact: true })).toBeVisible();
+    await supplierPage.getByLabel('选择附件').setInputFiles({ name: 'supplier-response-evidence.txt', mimeType: 'text/plain', buffer: Buffer.from('真实供应商回复证据') });
+    await expect(supplierPage.getByText('等待安全扫描', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(supplierPage.getByText('扫描通过，可作为证据', { exact: true })).toBeVisible({ timeout: 60000 });
+    await expect(supplierPage.getByText('已选 1 个可提交证据；等待扫描或扫描未通过的附件不会加入本次提交。未提交附件在离开或刷新页面后不能自动恢复，请保持当前页面直到扫描完成。', { exact: true })).toBeVisible();
+    const submitting = supplierPage.waitForResponse((response) => response.url().endsWith(`/problems/${problemId}/actions`) && response.request().method() === 'POST');
+    await supplierPage.getByRole('button', { name: '正式提交回复', exact: true }).click();
+    expect((await submitting).status()).toBe(201);
+    await expect(supplierPage.getByText('回复已提交，当前节点不可再编辑', { exact: true })).toBeVisible();
+    expect(await prisma.supplierResponseRevision.count({ where: { problemId } })).toBe(1);
+    const revisedIndex = await prisma.problemIndex.findFirstOrThrow({ where: { sourceId: problemId } });
+    expect(revisedIndex.workflowInstanceId).toBe(index.workflowInstanceId);
+    expect((await prisma.workflowInstance.findUniqueOrThrow({ where: { id: revisedIndex.workflowInstanceId! }, include: { currentNode: true } })).currentNode?.type).toBe('VERIFICATION');
+    const revision = await prisma.supplierResponseRevision.findFirstOrThrow({ where: { problemId }, include: { evidence: true } });
+    expect(revision.evidence).toHaveLength(1);
+    const evidenceFile = await prisma.fileObject.findUniqueOrThrow({ where: { id: revision.evidence[0]!.fileId } });
+    expect(evidenceFile.status).toBe('AVAILABLE');
+    expect(evidenceFile.scanStatus).toBe('CLEAN');
     await page.reload();
-    await expect(page.getByLabel('根本原因', { exact: true })).toHaveValue('先保存的版本');
+    await expect(page.getByRole('button', { name: '验证通过' })).toBeVisible();
+    await page.getByRole('button', { name: '验证通过' }).click();
+    await page.getByRole('button', { name: '确认执行' }).click();
+    await expect(page.getByText('验证通过成功', { exact: true })).toBeVisible();
+    const verifierPage = await verifierContext.newPage();
+    await loginAs(verifierPage, verifierUsername!, '/app/workbench$');
+    await verifierPage.goto(page.url());
+    await expect(verifierPage.getByRole('button', { name: '关闭问题' })).toBeVisible();
+    await verifierPage.getByRole('button', { name: '关闭问题' }).click();
+    await verifierPage.getByRole('button', { name: '确认执行' }).click();
+    await expect(verifierPage.getByText('关闭问题成功', { exact: true })).toBeVisible();
+    const closedIndex = await prisma.problemIndex.findFirstOrThrow({ where: { sourceId: problemId } });
+    expect(closedIndex.status).toBe('CLOSED');
+    expect((await prisma.workflowInstance.findUniqueOrThrow({ where: { id: closedIndex.workflowInstanceId! }, include: { currentNode: true } })).currentNode?.type).toBe('CLOSE');
+    await page.reload();
+    await expect(page.getByText('当前节点不可编辑回复', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '保存回复草稿', exact: true })).toHaveCount(0);
-  } finally { await supplierContext.close(); await otherContext.close(); }
+  } finally { await supplierContext.close(); await otherContext.close(); await verifierContext.close(); }
 });
 
 test('profile conflict recovery, internal 8D and ledger filters preserve editable content', async ({ page }) => {

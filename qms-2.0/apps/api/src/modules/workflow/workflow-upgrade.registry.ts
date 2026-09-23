@@ -35,9 +35,18 @@ export const WORKFLOW_UPGRADE_ADAPTERS = Symbol('WORKFLOW_UPGRADE_ADAPTERS');
 
 @Injectable()
 export class WorkflowUpgradeRegistry {
-  constructor(@Inject(WORKFLOW_UPGRADE_ADAPTERS) private readonly adapters: readonly WorkflowUpgradeDomainAdapter[]) {
-    const keys = adapters.map((adapter) => `${adapter.domainCode}\0${adapter.sourceType}`);
-    if (new Set(keys).size !== keys.length) throw new Error('WORKFLOW_UPGRADE_ADAPTER_DUPLICATE');
+  private readonly adapters: WorkflowUpgradeDomainAdapter[];
+
+  constructor(@Inject(WORKFLOW_UPGRADE_ADAPTERS) adapters: readonly WorkflowUpgradeDomainAdapter[]) {
+    this.adapters = [];
+    adapters.forEach((adapter) => this.register(adapter));
+  }
+
+  register(adapter: WorkflowUpgradeDomainAdapter): void {
+    if (this.adapters.some((candidate) => candidate.domainCode === adapter.domainCode && candidate.sourceType === adapter.sourceType)) {
+      throw new Error('WORKFLOW_UPGRADE_ADAPTER_DUPLICATE');
+    }
+    this.adapters.push(adapter);
   }
 
   forProblem(problem: ProblemIndex): WorkflowUpgradeDomainAdapter {

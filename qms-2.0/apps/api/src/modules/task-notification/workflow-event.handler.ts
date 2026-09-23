@@ -6,6 +6,7 @@ import { MAX_WORKFLOW_SLA_MINUTES } from '../workflow/workflow.types.js';
 import { eligibleWorkflowRecipients, workflowObject as object } from './workflow-recipients.js';
 import { handleWorkflowTiming, scheduleWorkflowTiming, WORKFLOW_TIMING_EVENTS } from './workflow-timing.js';
 import { notificationContent } from '../platform-configuration/notification-content.js';
+import { projectSupplierNotification } from './supplier-portal-notification.js';
 
 interface WorkflowEventPayload {
   schemaVersion: 1;
@@ -59,14 +60,16 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
       const activeProblem = problem.archivedAt === null && !['ARCHIVED', 'CLOSED'].includes(problem.status);
       if (activeProblem) await scheduleWorkflowTiming(tx, task, problem.id, config);
       if (activeProblem && instance.version === payload.instanceVersion && instance.currentNodeId === node.id && instance.status === payload.status) {
-        const recipients = await eligibleWorkflowRecipients(tx, payload.organizationId, config.assignment);
-        const content = await notificationContent(tx, payload.organizationId, 'TASK_ASSIGNED', { reportNumber: problem.reportNumber, nodeName: node.name, dueAt: task.dueAt?.toISOString() ?? '' });
-        if (content) await tx.notification.createMany({ data: recipients.map((recipient) => ({
-          organizationId: payload.organizationId, workflowTaskId: task.id, recipientUserId: recipient.id,
-          deduplicationKey: `workflow-task:${instance.id}:${payload.instanceVersion}:${recipient.id}`,
-          channel: 'IN_APP', status: 'DELIVERED', sentAt: new Date(),
-          ...content,
-        })) });
+        if (!(await projectSupplierNotification(tx, problem, node, task, event.eventKey, 'TASK_ASSIGNED', event.processingAt))) {
+          const recipients = await eligibleWorkflowRecipients(tx, payload.organizationId, config.assignment);
+          const content = await notificationContent(tx, payload.organizationId, 'TASK_ASSIGNED', { reportNumber: problem.reportNumber, nodeName: node.name, dueAt: task.dueAt?.toISOString() ?? '' });
+          if (content) await tx.notification.createMany({ data: recipients.map((recipient) => ({
+            organizationId: payload.organizationId, workflowTaskId: task.id, recipientUserId: recipient.id,
+            deduplicationKey: `workflow-task:${instance.id}:${payload.instanceVersion}:${recipient.id}`,
+            channel: 'IN_APP', status: 'DELIVERED', sentAt: new Date(),
+            ...content,
+          })) });
+        }
       }
     }
     await tx.workflowInstance.update({ where: { id: instance.id }, data: { taskProjectionVersion: payload.instanceVersion } });

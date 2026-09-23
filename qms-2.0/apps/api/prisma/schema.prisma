@@ -158,6 +158,7 @@ model User {
   auditEvents    AuditEvent[] @relation("AuditActor")
   uploadedFiles  FileObject[] @relation("FileUploader")
   claimedTasks WorkflowTask[] @relation("TaskClaimOwner")
+  supplierPortalNotifications SupplierPortalNotification[]
   deletedFiles FileObject[] @relation("FileDeleter")
   fileUploadReceipts FileUploadReceipt[]
   problemSavedViews ProblemSavedView[]
@@ -757,8 +758,10 @@ model WorkflowTask {
   workflowInstance   WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
   workflowNode       WorkflowNode  @relation(fields: [workflowNodeId], references: [id], onDelete: Restrict)
   notifications      Notification[]
+  supplierPortalNotifications SupplierPortalNotification[]
 
   @@unique([workflowInstanceId, entryInstanceVersion])
+  @@unique([organizationId, id])
   @@index([claimedByUserId])
   @@index([organizationId, status])
   @@index([organizationId, dueAt])
@@ -792,6 +795,32 @@ model Notification {
   @@index([organizationId, recipientUserId, status, createdAt, id], map: "notifications_organization_id_recipient_user_id_status_created_")
   @@index([workflowTaskId])
   @@map("notifications")
+}
+
+model SupplierPortalNotification {
+  id String @id @default(uuid()) @db.Uuid
+  eventKey String @map("event_key") @db.VarChar(200)
+  supplierOrganizationId String @map("supplier_organization_id") @db.Uuid
+  recipientUserId String @map("recipient_user_id") @db.Uuid
+  ownerOrganizationId String @map("owner_organization_id") @db.Uuid
+  workflowTaskId String @map("workflow_task_id") @db.Uuid
+  supplierProblemId String @map("supplier_problem_id") @db.Uuid
+  kind String @db.VarChar(32)
+  ruleVersion Int? @map("rule_version")
+  subject String? @db.VarChar(255)
+  body String @db.Text
+  readAt DateTime? @map("read_at") @db.Timestamptz(3)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  recipient User @relation(fields: [supplierOrganizationId, recipientUserId], references: [organizationId, id], onDelete: Restrict, map: "supplier_portal_notifications_recipient_fkey")
+  workflowTask WorkflowTask @relation(fields: [ownerOrganizationId, workflowTaskId], references: [organizationId, id], onDelete: Cascade, map: "supplier_portal_notifications_task_fkey")
+  supplierProblem SupplierQualityProblem @relation(fields: [supplierProblemId], references: [id], onDelete: Restrict, map: "supplier_portal_notifications_problem_fkey")
+
+  @@unique([eventKey, recipientUserId], map: "supplier_portal_notifications_event_recipient_key")
+  @@index([supplierOrganizationId, recipientUserId, createdAt], map: "supplier_portal_notifications_recipient_created_idx")
+  @@index([ownerOrganizationId, workflowTaskId], map: "supplier_portal_notifications_task_idx")
+  @@index([supplierProblemId], map: "supplier_portal_notifications_problem_idx")
+  @@map("supplier_portal_notifications")
 }
 
 model SupplierWorkflowBinding {
@@ -859,7 +888,9 @@ model SupplierQualityProblem {
   profile SupplierBusinessProfile @relation(fields: [profileId, ownerOrganizationId, supplierOrganizationId], references: [id, ownerOrganizationId, supplierOrganizationId], onDelete: Restrict)
   responseDraft SupplierResponseDraft?
   revisions SupplierResponseRevision[]
+  verifications SupplierVerification[]
   evidence SupplierEvidenceReference[]
+  portalNotifications SupplierPortalNotification[]
   workflowBinding SupplierWorkflowBinding? @relation(fields: [workflowBindingId, workflowBindingVersion], references: [id, version], onDelete: Restrict)
 
   @@index([ownerOrganizationId, updatedAt])
@@ -888,13 +919,31 @@ model SupplierResponseRevision {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Restrict)
   evidence SupplierEvidenceReference[]
+  verifications SupplierVerification[]
 
   @@unique([problemId, revision])
   @@unique([id, problemId])
   @@map("supplier_response_revisions")
 }
 
+model SupplierVerification {
+  id String @id @default(uuid()) @db.Uuid
+  problemId String @map("problem_id") @db.Uuid
+  revisionId String @map("revision_id") @db.Uuid
+  verifierId String @map("verifier_id") @db.Uuid
+  contentVersion Int @map("content_version")
+  accepted Boolean
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  revision SupplierResponseRevision @relation(fields: [revisionId, problemId], references: [id, problemId], onDelete: Restrict)
+
+  @@index([problemId, revisionId, createdAt])
+  @@index([problemId, createdAt])
+  @@map("supplier_verifications")
+}
+
 model SupplierEvidenceReference {
+  id String @id @default(uuid()) @db.Uuid
   problemId String @map("problem_id") @db.Uuid
   fileId String @map("file_id") @db.Uuid
   revisionId String? @map("revision_id") @db.Uuid
@@ -902,7 +951,7 @@ model SupplierEvidenceReference {
   problem SupplierQualityProblem @relation(fields: [problemId], references: [id], onDelete: Restrict)
   revision SupplierResponseRevision? @relation(fields: [revisionId, problemId], references: [id, problemId], onDelete: Restrict)
 
-  @@id([problemId, fileId])
+  @@unique([problemId, revisionId, fileId])
   @@map("supplier_evidence_references")
 }
 
