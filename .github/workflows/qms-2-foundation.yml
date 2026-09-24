@@ -70,6 +70,7 @@ jobs:
           DATABASE_URL="postgresql://qms:$POSTGRES_PASSWORD@127.0.0.1:$PG_PORT/qms2"
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "QMS_DISPOSABLE_TEST_DB=true" >> "$GITHUB_ENV"
           for name in QMS_SEED_INTERNAL_PASSWORD QMS_SEED_SUPPLIER_PASSWORD QMS_RATE_LIMIT_SECRET; do
             value=$(openssl rand -hex 24)
             echo "::add-mask::$value"
