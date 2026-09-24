@@ -68,9 +68,9 @@ describe('customer complaint issue workflow on PostgreSQL', () => {
 
   afterAll(async () => prisma.$disconnect());
 
-  async function complaint(physicalAnalysisRequired = false) {
+  async function complaint(physicalAnalysisRequired = false, approvalLevel?: string) {
     return ledger.createComplaint(actor, { customerId, complaintType: 'ZERO_KM', defectDescription: '异响', physicalAnalysisRequired,
-      severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+      severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2', ...(approvalLevel ? { approvalLevel } : {}) } }, randomUUID(), randomUUID());
   }
 
   function input(sources: Array<{ id: string; version: number }>) {
@@ -170,10 +170,10 @@ describe('customer complaint issue workflow on PostgreSQL', () => {
     expect(await prisma.problemIndex.count({ where: { organizationId, sourceId: source.id } })).toBe(0);
   });
 
-  it('uses the response form workflow binding for 8D issuance', async () => {
-    const source = await complaint();
+  it('requires a workflow approval node when the severity policy declares an 8D approval level', async () => {
+    const source = await complaint(false, 'L2');
     const definitions = new WorkflowDefinitionService(prisma, new WorkflowValidationService(), audit);
-    const draft = await definitions.createDraft({ organizationId, userId, code: 'CUSTOMER_8D', name: 'Customer 8D', draft: {
+    const draft = await definitions.createDraft({ organizationId, userId, code: 'CUSTOMER_8D', name: 'Customer 8D approval', draft: {
       nodes: [
         { id: 'd1', type: 'ACTION', name: 'D1', config: { isStart: true, assignment: { roleCode: 'CUSTOMER_HANDLER' } } },
         { id: 'verify', type: 'VERIFICATION', name: 'Verify', config: { assignment: { roleCode: 'CUSTOMER_HANDLER' } } },
@@ -181,8 +181,15 @@ describe('customer complaint issue workflow on PostgreSQL', () => {
       ], transitions: [{ id: 'submit', from: 'd1', to: 'verify' }, { id: 'verify', from: 'verify', to: 'close' }],
     } });
     const version = await definitions.publishVersion({ organizationId, userId, definitionId: draft.id });
+    await expect(service.issue(actor, { ...input([source]), responseForm: 'EIGHT_D', workflowBinding: { workflowDefinitionId: draft.id, workflowVersionId: version.id, instanceKey: randomUUID() } }, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'CUSTOMER_8D_APPROVAL_CONFIGURATION_REQUIRED' } });
+  }, 15000);
+
+  it('uses the response form workflow binding for 8D issuance', async () => {
+    const source = await complaint();
+    const definition = await prisma.workflowDefinition.findUniqueOrThrow({ where: { organizationId_code: { organizationId, code: 'CUSTOMER_8D' } }, include: { versions: { where: { status: 'PUBLISHED' }, orderBy: { version: 'desc' }, take: 1 } } });
+    const version = definition.versions[0]!;
     const request = input([source]);
-    const issued = await service.issue(actor, { ...request, responseForm: 'EIGHT_D', workflowBinding: { workflowDefinitionId: draft.id, workflowVersionId: version.id, instanceKey: randomUUID() } }, randomUUID(), randomUUID());
+    const issued = await service.issue(actor, { ...request, responseForm: 'EIGHT_D', workflowBinding: { workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: randomUUID() } }, randomUUID(), randomUUID());
     expect(issued.problem.id).toBeTruthy();
   });
 

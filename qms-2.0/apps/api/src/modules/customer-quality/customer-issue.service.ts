@@ -80,6 +80,16 @@ export class CustomerIssueService {
         const version = await tx.workflowVersion.findFirst({ where: { organizationId, workflowDefinitionId: definition.id, status: 'PUBLISHED' }, orderBy: { version: 'desc' }, include: { nodes: true } });
         const closes = version?.nodes.filter((node) => node.type === 'CLOSE') ?? [];
         if (!version || version.id !== command.workflowBinding.workflowVersionId || !version.nodes.some((node) => node.type === 'VERIFICATION') || closes.length !== 1 || jsonObject(closes[0]!.config).requireIndependentVerification !== true) reject(workflowConfigurationError, 409);
+        if (input.responseForm === 'EIGHT_D') {
+          const approvalLevels = [...new Set(references.map((reference) => {
+            const snapshot = reference.sourceSnapshot.severitySnapshot;
+            const level = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? (snapshot as Prisma.InputJsonObject).approvalLevel : undefined;
+            return typeof level === 'string' && level.trim() ? level.trim() : null;
+          }).filter((level): level is string => level !== null))];
+          if (approvalLevels.length > 1) reject('CUSTOMER_8D_APPROVAL_LEVEL_CONFLICT', 409);
+          const approvalLevel = approvalLevels[0];
+          if (approvalLevel && !version.nodes.some((node) => node.type === 'APPROVAL' && jsonObject(node.config).approvalLevel === approvalLevel)) reject('CUSTOMER_8D_APPROVAL_CONFIGURATION_REQUIRED', 409);
+        }
         if (input.ownerId) {
           const owner = await tx.user.findFirst({ where: { id: input.ownerId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } });
           if (!owner) reject('CUSTOMER_ISSUE_OWNER_INVALID', 400);
