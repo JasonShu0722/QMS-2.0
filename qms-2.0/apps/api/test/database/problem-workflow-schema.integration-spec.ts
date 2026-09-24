@@ -113,15 +113,15 @@ describe('problem and workflow PostgreSQL schema', () => {
       VALUES (${organizationId}::uuid, ${`SOURCE-${suffix}`}, 'Source test', 'INTERNAL', CURRENT_TIMESTAMP)
     `;
     try {
-      const insert = (id: string, source: string | null) => prisma.$executeRaw`
+      const insert = (id: string, source: string | null, sourceType = 'supplier-quality') => prisma.$executeRaw`
         INSERT INTO problem_indexes
           (id, organization_id, report_number, domain_code, problem_type, source_type, source_id, status, severity, version, updated_at)
-        VALUES (${id}::uuid, ${organizationId}::uuid, ${`PR-${id}`}, 'TEST', 'TEST', 'DOMAIN', ${source}::uuid, 'OPEN', 'LOW', 1, CURRENT_TIMESTAMP)
+        VALUES (${id}::uuid, ${organizationId}::uuid, ${`PR-${id}`}, 'TEST', 'TEST', ${sourceType}, ${source}::uuid, 'OPEN', 'LOW', 1, CURRENT_TIMESTAMP)
       `;
       await insert(crypto.randomUUID(), sourceId);
       await expect(insert(crypto.randomUUID(), sourceId)).rejects.toMatchObject({ code: 'P2010' });
-      await insert(crypto.randomUUID(), null);
-      await insert(crypto.randomUUID(), null);
+      await insert(crypto.randomUUID(), null, 'DOMAIN');
+      await insert(crypto.randomUUID(), null, 'DOMAIN');
     } finally {
       await prisma.$executeRaw`DELETE FROM problem_indexes WHERE organization_id = ${organizationId}::uuid`;
       await prisma.$executeRaw`DELETE FROM organizations WHERE id = ${organizationId}::uuid`;
