@@ -1,0 +1,8 @@
+.audit-management-page { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.audit-management-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.audit-management-heading h1 { margin: 4px 0 0; }
+.audit-management-heading p { margin-bottom: 0; max-width: 680px; }
+.audit-management-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
+.audit-management-lookup { width: min(100%, 620px); }
+.audit-management-loading { display: grid; min-height: 220px; place-items: center; }
+@media (max-width: 720px) { .audit-management-page { padding: 16px; } .audit-management-heading { flex-direction: column; } .audit-management-card { padding: 16px; } .audit-management-lookup { width: 100%; } }

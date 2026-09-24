@@ -24,6 +24,8 @@
 
 交接与证据工具使用 `docs/ENGINEERING-TOOLS.md`。功能开发、权限专项审查和故障定位分别按需读取 `.agents/skills/qms-feature-delivery/SKILL.md`、`.agents/skills/qms-permission-review/SKILL.md`、`.agents/skills/qms-incident-diagnosis/SKILL.md`；它们不替代这里及根目录的规则。
 
+所有会改变行为、契约、数据、权限、流程或验收证据的任务，先读取 `.agents/skills/qms-superpowers-zh/SKILL.md`，再按其路由加载对应的 `superpowers-zh` 子技能。该项目级入口不替代领域交接技能。
+
 ## 验证命令
 
 ```powershell

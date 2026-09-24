@@ -25,6 +25,11 @@
 - 规则和文档入口由 `qms-2.0/governance/documentation-index.json` 维护；运行 `corepack pnpm --dir qms-2.0 check:governance` 检查一致性。
 - 业务描述、设计、计划、交接、验收和运维 Markdown 以中文为权威版本；命令、路径、API 路径、代码标识和第三方产品名保留英文。
 
+## QMS 开发流程技能
+
+- 涉及 QMS 2.0 行为、契约、数据、权限、流程或验收证据的任务，必须先使用项目级 `qms-superpowers-zh`：`qms-2.0/.agents/skills/qms-superpowers-zh/SKILL.md`。
+- 项目级技能负责路由 `superpowers-zh` 的设计、计划、隔离、TDD、子代理、审查、验证和收尾流程；它不替代领域技能和本文件的仓库边界。
+
 ## 前端与 API 契约
 
 - 前端工作遵循 `docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md` 和 `qms-2.0/docs/FRONTEND-DESIGN.md`。

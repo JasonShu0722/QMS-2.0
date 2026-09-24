@@ -33,6 +33,7 @@
 | [OpenAPI](OPENAPI.md) | API 契约生成与同步 |
 | [阶段二](PHASE-2.md) | 平台实施和验收记录 |
 | [阶段三](PHASE-3.md) | 供应商质量实施和未完成边界 |
+| [阶段四](PHASE-4.md) | 制程、客户、新品和审核业务域策划入口 |
 | [问题工作空间](PROBLEM-WORKSPACE.md) | 问题读取、处理、历史和报告 |
 | [安全](SECURITY.md) | 安全边界与已实现保护 |
 | [流程设计器](WORKFLOW-DESIGNER.md) | 流程定义、版本和设计器行为 |

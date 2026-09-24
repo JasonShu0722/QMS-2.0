@@ -49,8 +49,9 @@ Git 清单覆盖活动 `qms-2.0/`、根 `docs/superpowers/`、根 AGENTS/README 
 | [功能交付](../.agents/skills/qms-feature-delivery/SKILL.md) | 领域开发、缺陷与跨层变更，连接影响分析和验收 |
 | [权限审查](../.agents/skills/qms-permission-review/SKILL.md) | 账号、组织/供应商、节点和附件授权的专项复核 |
 | [故障诊断](../.agents/skills/qms-incident-diagnosis/SKILL.md) | 依据现象逐层查证，修复后验证防复发 |
+| [QMS Superpowers 工作流](../.agents/skills/qms-superpowers-zh/SKILL.md) | QMS 功能、计划、子代理、审查和真实验收的流程路由 |
 
-三个入口是中文短指南，不复制权威规则，也不授权部署或生产修改。它们位于工程内 `.agents/skills/`；从工程 AGENTS 可直接定位。客户端扫描该工程目录后才可能加入自动发现列表，本轮不修改全局 Skill 配置，不声称当前会话已热加载。
+四个入口是中文短指南，不复制权威规则，也不授权部署或生产修改。它们位于工程内 `.agents/skills/`；从工程 AGENTS 可直接定位。客户端扫描该工程目录后才可能加入自动发现列表，本轮不修改全局 Skill 配置，不声称当前会话已热加载。
 
 ## 治理补强
 

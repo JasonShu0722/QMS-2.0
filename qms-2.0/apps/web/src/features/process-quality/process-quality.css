@@ -1,0 +1,11 @@
+.process-quality-page { max-width: 1260px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.process-quality-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.process-quality-heading h1 { margin: 4px 0 0; }
+.process-quality-heading p { margin-bottom: 0; max-width: 680px; }
+.process-quality-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
+.process-quality-toolbar { margin-bottom: 16px; }
+.process-quality-toolbar .ant-input-search { width: min(100%, 320px); }
+.process-quality-detail-link { padding: 0; height: auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.process-quality-loading { min-height: 180px; display: grid; place-items: center; }
+.process-quality-issue-error { margin-bottom: 16px; }
+@media (max-width: 720px) { .process-quality-page { padding: 16px; } .process-quality-heading { flex-direction: column; } .process-quality-card { padding: 16px; } }

@@ -12,6 +12,10 @@ import { ProblemIndexModule } from './modules/problem-index/problem-index.module
 import { ProblemSavedViewModule } from './modules/problem-index/problem-saved-view.module.js';
 import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
+import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
+import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
+import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
+import { NewProductQualityModule } from './modules/new-product-quality/new-product-quality.module.js';
 
 @Module({
   imports: [
@@ -28,6 +32,10 @@ import { SupplierQualityModule } from './modules/supplier-quality/supplier-quali
     ProblemSavedViewModule,
     WorkflowModule,
     SupplierQualityModule,
+    ProcessQualityModule,
+    CustomerQualityModule,
+    AuditManagementModule,
+    NewProductQualityModule,
   ],
 })
 export class AppModule {}

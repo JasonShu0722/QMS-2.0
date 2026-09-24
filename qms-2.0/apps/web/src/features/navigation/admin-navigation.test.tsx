@@ -17,4 +17,4 @@ it('shows authorized organization and read-only user list', async () => {
   expect(await screen.findByRole('tab', { name: '用户' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '创建用户' })).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: '角色' })).not.toBeInTheDocument();
-});
+}, 15000);

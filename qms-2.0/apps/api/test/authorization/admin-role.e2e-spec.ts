@@ -57,11 +57,18 @@ describe('administrator role HTTP contract', () => {
     const supplier = response.body[1];
     expect(supplier.status).toBe('active');
     expect(supplier.modules.find((module: { key: string }) => module.key === 'supplier-problems').operations.map((operation: { code: string }) => operation.code)).toEqual(['supplier-quality:problems:read', 'supplier-quality:problems:write']);
-    for (const group of response.body.slice(2, 6)) {
-      expect(group.status).toBe('planned');
-      expect(group.modules.length).toBeGreaterThan(0);
-      for (const module of group.modules) expect(module.operations).toEqual([]);
-    }
+    const process = response.body[2];
+    expect(process.status).toBe('active');
+    expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write']);
+    const customer = response.body[3];
+    expect(customer.status).toBe('active');
+    expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write']);
+    const newProduct = response.body[4];
+    expect(newProduct.status).toBe('planned');
+    expect(newProduct.modules.every((module: { operations: unknown[] }) => module.operations.length === 0)).toBe(true);
+    const audit = response.body[5];
+    expect(audit.status).toBe('active');
+    expect(audit.modules.find((module: { key: string }) => module.key === 'audit-core').operations.map((operation: { code: string }) => operation.code)).toEqual(['audit-management:read', 'audit-management:write']);
   });
 
   it('requires authentication and feature permission for directory and roles', async () => {
