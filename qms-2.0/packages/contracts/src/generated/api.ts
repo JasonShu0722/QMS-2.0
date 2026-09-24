@@ -1567,6 +1567,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/defect-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_types"];
+        put?: never;
+        post: operations["ProcessQualityController_createType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/defect-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_updateType"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/defects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_list"];
+        put?: never;
+        post: operations["ProcessQualityController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/defects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_detail"];
+        put: operations["ProcessQualityController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/defects/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_archive"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2977,6 +3057,128 @@ export interface components {
             /** Format: uuid */
             workflowVersionId: string;
             enabled: boolean;
+        };
+        CreateProcessDefectTypeDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            code: string;
+            name: string;
+        };
+        ProcessDefectTypeDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            active: boolean;
+            version: number;
+        };
+        UpdateProcessDefectTypeDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            name: string;
+            active: boolean;
+        };
+        CreateProcessDefectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            defectTypeCode: string;
+            description: string;
+            defectQuantity: number;
+            /** Format: date-time */
+            occurredAt: string;
+            batchCode?: string;
+            workOrderCode?: string;
+            operationCode?: string;
+            lineCode?: string;
+            projectCode?: string;
+            productCode?: string;
+            materialCode?: string;
+            /** Format: uuid */
+            supplierOrganizationId?: string;
+            /** @enum {string} */
+            responsibilityCategory: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
+            /**
+             * @description 人工登记的外部来源标识；接口尚未启用
+             * @enum {string}
+             */
+            externalSourceSystem?: "MES" | "IMS";
+            externalRecordKey?: string;
+            /** Format: date-time */
+            sourceObservedAt?: string;
+        };
+        ProcessDefectEvidenceDto: {
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            scanStatus: string;
+            status: string;
+        };
+        ProcessDefectDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            defectTypeCode: string;
+            description: string;
+            defectQuantity: number;
+            /** Format: date-time */
+            occurredAt: string;
+            batchCode?: string | null;
+            workOrderCode?: string | null;
+            operationCode?: string | null;
+            lineCode?: string | null;
+            projectCode?: string | null;
+            productCode?: string | null;
+            materialCode?: string | null;
+            /** Format: uuid */
+            supplierOrganizationId?: string | null;
+            /** @enum {string} */
+            responsibilityCategory: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
+            /** @enum {string} */
+            sourceKind: "MANUAL";
+            externalSourceSystem?: string | null;
+            externalRecordKey?: string | null;
+            /** Format: date-time */
+            sourceObservedAt?: string | null;
+            /** @enum {string|null} */
+            ingestionStatus?: "PENDING_VERIFICATION" | null;
+            version: number;
+            /** Format: date-time */
+            archivedAt?: string | null;
+            evidence?: components["schemas"]["ProcessDefectEvidenceDto"][];
+        };
+        ProcessDefectPageDto: {
+            items: components["schemas"]["ProcessDefectDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        UpdateProcessDefectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            defectTypeCode?: string;
+            description?: string;
+            defectQuantity?: number;
+            /** Format: date-time */
+            occurredAt?: string;
+            batchCode?: string;
+            workOrderCode?: string;
+            operationCode?: string;
+            lineCode?: string;
+            projectCode?: string;
+            productCode?: string;
+            materialCode?: string;
+            /** Format: uuid */
+            supplierOrganizationId?: string;
+            /** @enum {string} */
+            responsibilityCategory?: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
+        };
+        ArchiveProcessDefectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
         };
         /** @enum {string} */
         ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
@@ -6899,6 +7101,289 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierWorkflowBindingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_types: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectTypeDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_createType: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProcessDefectTypeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectTypeDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_updateType: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessDefectTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectTypeDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                defectTypeCode?: string;
+                batchCode?: string;
+                workOrderCode?: string;
+                operationCode?: string;
+                lineCode?: string;
+                projectCode?: string;
+                productCode?: string;
+                materialCode?: string;
+                responsibilityCategory?: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProcessDefectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessDefectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_archive: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveProcessDefectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessDefectDto"];
                 };
             };
             default: {

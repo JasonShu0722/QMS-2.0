@@ -12,6 +12,7 @@ import { ProblemIndexModule } from './modules/problem-index/problem-index.module
 import { ProblemSavedViewModule } from './modules/problem-index/problem-saved-view.module.js';
 import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
+import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SupplierQualityModule } from './modules/supplier-quality/supplier-quali
     ProblemSavedViewModule,
     WorkflowModule,
     SupplierQualityModule,
+    ProcessQualityModule,
   ],
 })
 export class AppModule {}

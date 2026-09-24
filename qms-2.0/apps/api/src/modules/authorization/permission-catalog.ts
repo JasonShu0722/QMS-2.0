@@ -28,7 +28,13 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'supplier-3', name: '供应商审核', status: 'planned', operations: [] },
     { key: 'supplier-4', name: 'PPAP', status: 'planned', operations: [] },
   ] },
-  planned('process', '制程质量', ['制程问题管理']),
+  { key: 'process', name: '制程质量', status: 'active', modules: [
+    { key: 'process-defects', name: '制程不良品台账', status: 'active', operations: [
+      operation('process-quality:defects:read', '查看制程不良品台账'),
+      operation('process-quality:defects:write', '维护制程不良品台账'),
+    ] },
+    { key: 'process-issues', name: '制程问题管理', status: 'planned', operations: [] },
+  ] },
   planned('customer', '客户质量', ['客户问题管理']),
   planned('new-product', '新品质量', ['新品质量管理']),
   planned('audit', '审核管理', ['审核管理']),

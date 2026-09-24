@@ -116,36 +116,8 @@ export class ProblemIndexService {
       : null;
     if (existing) return existing;
 
-    const allocated = await this.numbering.allocateReportNumber(transaction as never, {
-      organizationId: input.organizationId,
-      ruleCode: 'PROBLEM',
-      classificationCode: codeForNumbering(input.domainCode),
-      createdById: input.createdById,
-    });
     try {
-      const created = await transaction.problemIndex.create({
-        data: {
-          id: randomUUID(), organizationId: input.organizationId, reportNumber: allocated.reportNumber,
-          domainCode: input.domainCode.trim(), problemType: input.problemType.trim(),
-          sourceType: input.sourceType.trim(), sourceId: input.sourceId ?? null,
-          severity: input.severity.trim(), responsibleParty: input.responsibleParty?.trim() ?? null,
-          ownerId: input.ownerId ?? null, dueAt: input.dueAt ?? null,
-          status: 'OPEN', version: 1, createdById: input.createdById ?? null, updatedById: input.createdById ?? null,
-        },
-      });
-      const traceId = input.traceId ?? randomUUID();
-      await this.audit.record({
-        organizationId: input.organizationId, actorUserId: input.createdById, action: 'PROBLEM_INDEX_CREATED',
-        resourceType: 'ProblemIndex', resourceId: String(created.id), outcome: 'SUCCESS', traceId,
-        metadata: { organizationId: input.organizationId, status: 'OPEN' },
-      }, transaction as never);
-      await this.outbox.enqueue({
-        eventKey: `problem-index:${created.id}:created`, aggregateType: 'ProblemIndex', aggregateId: String(created.id),
-        eventType: 'PROBLEM_INDEX_CREATED', payload: {
-          organizationId: input.organizationId, problemIndexId: String(created.id), reportNumber: String(created.reportNumber),
-        },
-      }, transaction as never);
-      return created;
+      return await this.insertDomainProblem(transaction, input);
     } catch (error) {
       if (!isUniqueViolation(error) || !input.sourceId) throw error;
       const duplicate = await transaction.problemIndex.findFirst({
@@ -154,6 +126,43 @@ export class ProblemIndexService {
       if (duplicate) return duplicate;
       throw error;
     }
+  }
+
+  async createForDomainSourceIssue(transaction: ProblemIndexClient, input: CreateProblemIndexInput): Promise<Record<string, unknown>> {
+    this.assertCreateInput(input);
+    return this.insertDomainProblem(transaction, input);
+  }
+
+  private async insertDomainProblem(transaction: ProblemIndexClient, input: CreateProblemIndexInput): Promise<Record<string, unknown>> {
+    const allocated = await this.numbering.allocateReportNumber(transaction as never, {
+      organizationId: input.organizationId,
+      ruleCode: 'PROBLEM',
+      classificationCode: codeForNumbering(input.domainCode),
+      createdById: input.createdById,
+    });
+    const created = await transaction.problemIndex.create({
+      data: {
+        id: randomUUID(), organizationId: input.organizationId, reportNumber: allocated.reportNumber,
+        domainCode: input.domainCode.trim(), problemType: input.problemType.trim(),
+        sourceType: input.sourceType.trim(), sourceId: input.sourceId ?? null,
+        severity: input.severity.trim(), responsibleParty: input.responsibleParty?.trim() ?? null,
+        ownerId: input.ownerId ?? null, dueAt: input.dueAt ?? null,
+        status: 'OPEN', version: 1, createdById: input.createdById ?? null, updatedById: input.createdById ?? null,
+      },
+    });
+    const traceId = input.traceId ?? randomUUID();
+    await this.audit.record({
+      organizationId: input.organizationId, actorUserId: input.createdById, action: 'PROBLEM_INDEX_CREATED',
+      resourceType: 'ProblemIndex', resourceId: String(created.id), outcome: 'SUCCESS', traceId,
+      metadata: { organizationId: input.organizationId, status: 'OPEN' },
+    }, transaction as never);
+    await this.outbox.enqueue({
+      eventKey: `problem-index:${created.id}:created`, aggregateType: 'ProblemIndex', aggregateId: String(created.id),
+      eventType: 'PROBLEM_INDEX_CREATED', payload: {
+        organizationId: input.organizationId, problemIndexId: String(created.id), reportNumber: String(created.reportNumber),
+      },
+    }, transaction as never);
+    return created;
   }
 
   async updateDomainSummary(

@@ -516,6 +516,7 @@ model ProblemIndex {
   organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   workflowInstance   WorkflowInstance?       @relation(fields: [workflowInstanceId], references: [id], onDelete: Restrict)
   historicalInstances WorkflowInstance[]     @relation("InstanceProblemHistory")
+  domainSourceLinks DomainSourceIssueLink[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reportNumber])
@@ -524,6 +525,91 @@ model ProblemIndex {
   @@index([organizationId, dueAt])
   @@index([workflowInstanceId])
   @@map("problem_indexes")
+}
+
+model DomainSourceIssueLink {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  problemIndexId String       @map("problem_index_id") @db.Uuid
+  sourceDomain   String       @map("source_domain") @db.VarChar(100)
+  sourceType     String       @map("source_type") @db.VarChar(100)
+  sourceId       String       @map("source_id") @db.Uuid
+  sourceVersion  Int          @map("source_version")
+  sourceSnapshot Json         @map("source_snapshot")
+  createdBy      String       @map("created_by") @db.VarChar(128)
+  linkedAt       DateTime     @default(now()) @map("linked_at") @db.Timestamptz(3)
+  problem        ProblemIndex @relation(fields: [organizationId, problemIndexId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, problemIndexId, sourceDomain, sourceType, sourceId], map: "domain_source_issue_links_problem_source_key")
+  @@index([organizationId, sourceDomain, sourceType, sourceId], map: "domain_source_issue_links_source_lookup_idx")
+  @@map("domain_source_issue_links")
+}
+
+model ProcessDefectType {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(64)
+  name           String   @db.VarChar(200)
+  active         Boolean  @default(true)
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@map("process_defect_types")
+}
+
+model ProcessDefect {
+  id                     String    @id @default(uuid()) @db.Uuid
+  organizationId         String    @map("organization_id") @db.Uuid
+  defectTypeCode         String    @map("defect_type_code") @db.VarChar(64)
+  description            String    @db.Text
+  defectQuantity         Int       @map("defect_quantity")
+  occurredAt             DateTime  @map("occurred_at") @db.Timestamptz(3)
+  batchCode              String?   @map("batch_code") @db.VarChar(100)
+  workOrderCode          String?   @map("work_order_code") @db.VarChar(100)
+  operationCode          String?   @map("operation_code") @db.VarChar(100)
+  lineCode               String?   @map("line_code") @db.VarChar(100)
+  projectCode            String?   @map("project_code") @db.VarChar(100)
+  productCode            String?   @map("product_code") @db.VarChar(100)
+  materialCode           String?   @map("material_code") @db.VarChar(100)
+  supplierOrganizationId String?   @map("supplier_organization_id") @db.Uuid
+  responsibilityCategory String    @map("responsibility_category") @db.VarChar(32)
+  sourceKind             String    @default("MANUAL") @map("source_kind") @db.VarChar(32)
+  externalSourceSystem   String?   @map("external_source_system") @db.VarChar(64)
+  externalRecordKey      String?   @map("external_record_key") @db.VarChar(200)
+  sourceObservedAt       DateTime? @map("source_observed_at") @db.Timestamptz(3)
+  ingestionStatus        String?   @map("ingestion_status") @db.VarChar(32)
+  version                Int       @default(1)
+  createdById            String    @map("created_by_id") @db.Uuid
+  updatedById            String    @map("updated_by_id") @db.Uuid
+  archivedAt             DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, externalSourceSystem, externalRecordKey], map: "process_defects_external_key")
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt, occurredAt])
+  @@index([organizationId, batchCode, workOrderCode])
+  @@index([organizationId, projectCode, productCode])
+  @@map("process_defects")
+}
+
+model ProcessDefectIngestionAudit {
+  id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @map("organization_id") @db.Uuid
+  defectId             String    @map("defect_id") @db.Uuid
+  externalSourceSystem String    @map("external_source_system") @db.VarChar(64)
+  externalRecordKey    String    @map("external_record_key") @db.VarChar(200)
+  status               String    @db.VarChar(32)
+  observedAt           DateTime? @map("observed_at") @db.Timestamptz(3)
+  recordedById         String    @map("recorded_by_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([organizationId, defectId, createdAt])
+  @@map("process_defect_ingestion_audits")
 }
 
 model NumberRuleVersion {
