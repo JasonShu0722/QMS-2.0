@@ -35,9 +35,21 @@ export const PERMISSION_CATALOG: Group[] = [
     ] },
     { key: 'process-issues', name: '制程问题管理', status: 'planned', operations: [] },
   ] },
-  planned('customer', '客户质量', ['客户问题管理']),
+  { key: 'customer', name: '客户质量', status: 'active', modules: [
+    { key: 'customer-complaints', name: '客户客诉台账', status: 'active', operations: [
+      operation('customer-quality:complaints:read', '查看客户客诉台账'),
+      operation('customer-quality:complaints:write', '维护客户客诉台账'),
+    ] },
+    { key: 'customer-issues', name: '客户问题管理', status: 'planned', operations: [] },
+  ] },
   planned('new-product', '新品质量', ['新品质量管理']),
-  planned('audit', '审核管理', ['审核管理']),
+  { key: 'audit', name: '审核管理', status: 'active', modules: [
+    { key: 'audit-core', name: '审核计划与整改', status: 'active', operations: [
+      operation('audit-management:read', '查看审核管理'),
+      operation('audit-management:write', '维护审核管理'),
+    ] },
+    { key: 'audit-issues', name: '审核问题发单', status: 'planned', operations: [] },
+  ] },
   { key: 'system', name: '系统管理', status: 'active', modules: [
     { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },
     { key: 'management-audit', name: '管理审计', status: 'active', operations: [operation('audit:read', '查询管理审计'), operation('audit:export', '导出管理审计')] },

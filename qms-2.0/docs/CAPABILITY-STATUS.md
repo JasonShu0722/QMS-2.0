@@ -22,7 +22,9 @@
 | 供应商质量领域开发 | 已验收 / 受限可用 | `PHASE-3.md`（2026-09-24 阶段三开发收尾门禁）、`SUPPLIER-PLATFORM-HANDOFF.md` | 阶段三开发与真实资源/浏览器主链已 PASS；真实供应商试点和生产发布仍需另行审批 |
 | 供应商正式试点 | 未开始 | `PHASE-3.md` | 必须完成阶段三主链和试点门槛 |
 | 制程不良品台账 | 进行中 | `PHASE-4.md`、`apps/api/src/modules/process-quality/`、真实 PostgreSQL 定向测试 | 正式问题发单、Worker/浏览器闭环和 MES/IMS 接入尚未完成 |
-| 客户质量、新品质量、审核管理 | 未开始 | `PHASE-4.md`、阶段四规格与计划 | 已完成策划和来源契约边界，领域实现尚未交付 |
+| 客户质量 | 进行中 | `PHASE-4.md`、`apps/api/src/modules/customer-quality/`、真实 PostgreSQL 定向测试 | 客诉发单、简报/8D、实物状态闭环、响应 DTO 与浏览器验收未完成 |
+| 审核管理 | 进行中 | `PHASE-4.md`、`apps/api/src/modules/audit-management/`、真实 PostgreSQL 定向测试 | 模板检查项校验、NC 责任分离与期限政策、问题索引及浏览器验收未完成 |
+| 新品质量 | 未开始 | `PHASE-4.md`、阶段四规格与计划 | 仅完成策划与跨域来源契约，尚无领域实现 |
 | 生产发布 | 未开始 | `FOUNDATION.md`、`DATA-PROTECTION.md` | 尚未完成正式部署批准和生产灾备演练 |
 
 更新本表时必须写明日期、对应源码范围、命令和实际结果。历史 PASS 不得覆盖当前较新代码的失败或未覆盖范围。

@@ -13,6 +13,8 @@ import { ProblemSavedViewModule } from './modules/problem-index/problem-saved-vi
 import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
+import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
+import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { ProcessQualityModule } from './modules/process-quality/process-quality.
     WorkflowModule,
     SupplierQualityModule,
     ProcessQualityModule,
+    CustomerQualityModule,
+    AuditManagementModule,
   ],
 })
 export class AppModule {}

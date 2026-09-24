@@ -1117,3 +1117,237 @@ model ProblemSavedView {
   @@index([organizationId])
   @@map("problem_saved_views")
 }
+
+model CustomerQualityCustomer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(100)
+  name           String   @db.VarChar(200)
+  active         Boolean  @default(true)
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  updatedById    String   @map("updated_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, code])
+  @@map("customer_quality_customers")
+}
+
+model CustomerQualityComplaint {
+  id                    String    @id @default(uuid()) @db.Uuid
+  organizationId        String    @map("organization_id") @db.Uuid
+  complaintNumber       String    @map("complaint_number") @db.VarChar(80)
+  customerId            String    @map("customer_id") @db.Uuid
+  complaintType         String    @map("complaint_type") @db.VarChar(20)
+  terminalCustomerName  String?   @map("terminal_customer_name") @db.VarChar(200)
+  productCode           String?   @map("product_code") @db.VarChar(100)
+  productModel          String?   @map("product_model") @db.VarChar(100)
+  defectDescription     String    @map("defect_description") @db.Text
+  vin                   String?   @db.VarChar(100)
+  mileage               Int?
+  purchaseDate          DateTime? @map("purchase_date") @db.Date
+  returnRequired        Boolean   @default(false) @map("return_required")
+  physicalAnalysisRequired Boolean @default(false) @map("physical_analysis_required")
+  severity              String    @db.VarChar(32)
+  severityPolicyVersion String    @map("severity_policy_version") @db.VarChar(100)
+  severitySnapshot      Json      @map("severity_snapshot")
+  status                String    @default("OPEN") @db.VarChar(32)
+  externalSourceSystem  String?   @map("external_source_system") @db.VarChar(32)
+  externalRecordKey     String?   @map("external_record_key") @db.VarChar(200)
+  sourceObservedAt      DateTime? @map("source_observed_at") @db.Timestamptz(3)
+  ingestionStatus       String?   @map("ingestion_status") @db.VarChar(32)
+  problemIndexId        String?   @map("problem_index_id") @db.Uuid
+  version               Int       @default(1)
+  createdById           String    @map("created_by_id") @db.Uuid
+  updatedById           String    @map("updated_by_id") @db.Uuid
+  archivedAt            DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, complaintNumber])
+  @@index([organizationId, status, createdAt])
+  @@map("customer_quality_complaints")
+}
+
+model CustomerQualityIngestionAudit {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  complaintId          String   @map("complaint_id") @db.Uuid
+  externalSourceSystem String   @map("external_source_system") @db.VarChar(32)
+  externalRecordKey    String   @map("external_record_key") @db.VarChar(200)
+  status               String   @db.VarChar(32)
+  observedAt           DateTime @map("observed_at") @db.Timestamptz(3)
+  recordedById         String   @map("recorded_by_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([organizationId, complaintId, createdAt])
+  @@map("customer_quality_ingestion_audits")
+}
+
+model CustomerQualityPhysicalDisposition {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  complaintId    String   @map("complaint_id") @db.Uuid
+  action         String   @db.VarChar(32)
+  status         String   @db.VarChar(32)
+  responsibility String?  @db.VarChar(200)
+  notes          String?  @db.Text
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([organizationId, complaintId])
+  @@map("customer_quality_physical_dispositions")
+}
+
+model CustomerQualityPhysicalAnalysis {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  complaintId    String   @map("complaint_id") @db.Uuid
+  summary        String   @db.Text
+  status         String   @db.VarChar(32)
+  evidenceSummary String? @map("evidence_summary") @db.Text
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([organizationId, complaintId])
+  @@map("customer_quality_physical_analyses")
+}
+
+model AuditPlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  year           Int
+  title          String   @db.VarChar(300)
+  auditType      String   @map("audit_type") @db.VarChar(32)
+  plannedStart   DateTime @map("planned_start") @db.Timestamptz(3)
+  plannedEnd     DateTime @map("planned_end") @db.Timestamptz(3)
+  status         String   @default("PLANNED") @db.VarChar(24)
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  updatedById    String   @map("updated_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([organizationId, year, plannedStart])
+  @@map("audit_plans")
+}
+
+model AuditPostponement {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  planId         String   @map("plan_id") @db.Uuid
+  originalStart  DateTime @map("original_start") @db.Timestamptz(3)
+  originalEnd    DateTime @map("original_end") @db.Timestamptz(3)
+  proposedStart  DateTime @map("proposed_start") @db.Timestamptz(3)
+  proposedEnd    DateTime @map("proposed_end") @db.Timestamptz(3)
+  reason         String   @db.VarChar(2000)
+  status         String   @default("PENDING") @db.VarChar(20)
+  planVersion    Int      @map("plan_version")
+  requestedById  String   @map("requested_by_id") @db.Uuid
+  decidedById    String?  @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz(3)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("audit_postponements")
+}
+
+model AuditTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(300)
+  auditType      String   @map("audit_type") @db.VarChar(32)
+  status         String   @default("DRAFT") @db.VarChar(16)
+  draftDefinition Json    @map("draft_definition")
+  version        Int      @default(1)
+  createdById    String   @map("created_by_id") @db.Uuid
+  updatedById    String   @map("updated_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("audit_templates")
+}
+
+model AuditTemplateVersion {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  templateId     String   @map("template_id") @db.Uuid
+  version        Int
+  definition     Json
+  publishedById  String   @map("published_by_id") @db.Uuid
+  publishedAt    DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, templateId, version])
+  @@map("audit_template_versions")
+}
+
+model AuditExecution {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  planId           String   @map("plan_id") @db.Uuid
+  templateVersionId String  @map("template_version_id") @db.Uuid
+  status           String   @default("OPEN") @db.VarChar(20)
+  version          Int      @default(1)
+  startedAt        DateTime @default(now()) @map("started_at") @db.Timestamptz(3)
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(3)
+  createdById      String   @map("created_by_id") @db.Uuid
+
+  @@map("audit_executions")
+}
+
+model AuditChecklistResult {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  executionId    String   @map("execution_id") @db.Uuid
+  itemKey        String   @map("item_key") @db.VarChar(120)
+  result         String   @db.VarChar(8)
+  note           String?  @db.VarChar(5000)
+  evidenceFileIds Json    @map("evidence_file_ids")
+  version        Int      @default(1)
+  recordedById   String   @map("recorded_by_id") @db.Uuid
+  recordedAt     DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, executionId, itemKey])
+  @@map("audit_checklist_results")
+}
+
+model AuditNc {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  executionId      String   @map("execution_id") @db.Uuid
+  checklistResultId String  @map("checklist_result_id") @db.Uuid
+  severity         String   @db.VarChar(16)
+  dueAt            DateTime @map("due_at") @db.Timestamptz(3)
+  status           String   @default("OPEN") @db.VarChar(16)
+  assigneeUserId   String?  @map("assignee_user_id") @db.Uuid
+  response         String?  @db.VarChar(10000)
+  verificationNote String?  @map("verification_note") @db.VarChar(5000)
+  version          Int      @default(1)
+  createdById      String   @map("created_by_id") @db.Uuid
+  verifiedById     String?  @map("verified_by_id") @db.Uuid
+  closedById       String?  @map("closed_by_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, checklistResultId])
+  @@map("audit_ncs")
+}
+
+model AuditImportRow {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  sourceSystem   String   @map("source_system") @db.VarChar(32)
+  externalKey    String   @map("external_key") @db.VarChar(200)
+  payload        Json
+  status         String   @default("PENDING_REVIEW") @db.VarChar(24)
+  importedById   String   @map("imported_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([organizationId, sourceSystem, externalKey])
+  @@map("audit_import_rows")
+}
