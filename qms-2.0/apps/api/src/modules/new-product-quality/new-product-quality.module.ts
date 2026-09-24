@@ -7,11 +7,12 @@ import { NewProductQualityController } from './new-product-quality.controller.js
 import { NewProductQualityService } from './new-product-quality.service.js';
 import { ProblemIndexModule } from '../problem-index/problem-index.module.js';
 import { WorkflowModule } from '../workflow/workflow.module.js';
+import { NewProductQualityUpgradeAdapter } from './new-product-quality-upgrade.adapter.js';
 
 @Module({
   imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule],
   controllers: [NewProductQualityController],
-  providers: [NewProductQualityService, NewProductFileResourceAdapter],
+  providers: [NewProductQualityService, NewProductFileResourceAdapter, NewProductQualityUpgradeAdapter],
   exports: [NewProductQualityService],
 })
 export class NewProductQualityModule {}

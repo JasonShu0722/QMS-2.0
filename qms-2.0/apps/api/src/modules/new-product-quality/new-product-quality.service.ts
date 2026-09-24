@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
+import { WorkflowUpgradeService } from '../workflow/workflow-upgrade.service.js';
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
 
 export type TrialMetricCode = 'INPUT' | 'OUTPUT' | 'FIRST_PASS' | 'DEFECT' | 'CPK' | 'DIMENSION_PASS_RATE';
@@ -33,7 +34,7 @@ function mapUnique(error: unknown): never {
 
 @Injectable()
 export class NewProductQualityService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService, @Optional() private readonly upgrades?: WorkflowUpgradeService) {}
 
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
@@ -267,7 +268,8 @@ export class NewProductQualityService {
           const workflowVersion = await tx.workflowVersion.findFirst({ where: { organizationId, workflowDefinitionId: definition.id, status: 'PUBLISHED' }, orderBy: { version: 'desc' }, include: { nodes: true } });
           const closes = workflowVersion?.nodes.filter((node) => node.type === 'CLOSE') ?? [];
           if (!workflowVersion || workflowVersion.id !== binding.workflowVersionId || !workflowVersion.nodes.some((node) => node.type === 'VERIFICATION') || closes.length !== 1 || jsonObject(closes[0]!.config).requireIndependentVerification !== true) fail('NEW_PRODUCT_WORKFLOW_CONFIGURATION_REQUIRED', 409);
-          await this.runtime.startInstance({ organizationId, actor, problemIndexId: String(problem.id), workflowDefinitionId: binding.workflowDefinitionId, workflowVersionId: binding.workflowVersionId, expectedProblemVersion: Number(problem.version), instanceKey: binding.instanceKey, idempotencyKey: key ?? randomUUID(), traceId }, tx);
+          const started = await this.runtime.startInstance({ organizationId, actor, problemIndexId: String(problem.id), workflowDefinitionId: binding.workflowDefinitionId, workflowVersionId: binding.workflowVersionId, expectedProblemVersion: Number(problem.version), instanceKey: binding.instanceKey, idempotencyKey: key ?? randomUUID(), traceId }, tx);
+          await tx.$executeRaw(Prisma.sql`INSERT INTO new_product_issue_revisions(id, organization_id, issue_id, revision, response_form, workflow_instance_id, workflow_version_id, created_by_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, 1, ${form}, ${started.instanceId}::uuid, ${started.workflowVersionId}::uuid, ${actor.id}::uuid)`);
         }
       } else {
         [issue] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_issues WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`);
@@ -278,6 +280,24 @@ export class NewProductQualityService {
 
   async escalateIssue(actor: AdminActor, issueId: string, input: { expectedVersion: number }, traceId: string, key?: string) {
     const organizationId = this.scope(actor); const id = uuid(issueId); const expectedVersion = version(input.expectedVersion);
+    if (this.upgrades && this.problems && this.runtime) {
+      const context = await this.prisma.$transaction(async (tx) => {
+        const [issue] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, problem_index_id, version FROM new_product_issues WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`);
+        if (!issue?.problem_index_id) fail('CONCURRENCY_CONFLICT', 409);
+        const [problem] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, version, workflow_instance_id FROM problem_indexes WHERE id = ${issue.problem_index_id}::uuid AND organization_id = ${organizationId}::uuid`);
+        if (!problem?.workflow_instance_id) fail('NEW_PRODUCT_WORKFLOW_UPGRADE_REQUIRED', 409);
+        const instance = await tx.workflowInstance.findFirst({ where: { id: problem.workflow_instance_id, organizationId, problemIndexId: problem.id }, include: { currentNode: true } });
+        if (!instance?.currentNode) fail('NEW_PRODUCT_WORKFLOW_UPGRADE_REQUIRED', 409);
+        return { problemId: problem.id, problemVersion: Number(problem.version), instanceId: instance.id, instanceVersion: instance.version, currentNodeId: instance.currentNode.id };
+      });
+      const upgrade = await this.upgrades.upgrade(actor, context.problemId, {
+        organizationId, instanceId: context.instanceId, currentNodeId: context.currentNodeId,
+        expectedProblemVersion: context.problemVersion, expectedInstanceVersion: context.instanceVersion,
+        expectedDomainVersion: expectedVersion, reason: '新品质量问题升级为 8D 响应',
+      }, key ?? '', traceId);
+      const [row] = await this.prisma.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_issues WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`);
+      return { ...row, workflowUpgrade: upgrade };
+    }
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'NEW_PRODUCT_ISSUE_ESCALATED', payload: { id, expectedVersion }, permission: WRITE }, async (tx) => {
       const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE new_product_issues SET complexity = 'COMPLEX', response_form = 'EIGHT_D', status = 'ESCALATED', version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${expectedVersion} AND status = 'OPEN' RETURNING *`);
       if (!row) fail('CONCURRENCY_CONFLICT', 409); await this.record(tx, actor, organizationId, 'NEW_PRODUCT_ISSUE_ESCALATED', 'NewProductIssue', id, traceId); return row;
