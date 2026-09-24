@@ -10,6 +10,7 @@
     "audit-management -> audit-log",
     "audit-management -> authorization",
     "audit-management -> problem-index",
+    "audit-management -> workflow",
     "file-management -> audit-log",
     "file-management -> authorization",
     "file-management -> workflow",

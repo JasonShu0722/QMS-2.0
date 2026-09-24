@@ -4,10 +4,18 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
+import { calculateAuditDueDate, type AuditBusinessCalendar } from './audit-deadline.js';
+import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 
 export type AuditType = 'SYSTEM' | 'PROCESS' | 'PRODUCT' | 'SECOND_PARTY' | 'CUSTOMER';
 export type ChecklistResult = 'OK' | 'NG' | 'NA';
 export type NcSeverity = 'MINOR' | 'MAJOR' | 'CRITICAL';
+export interface AuditDeadlinePolicyInput extends AuditBusinessCalendar {
+  policyVersion: string;
+  calendarVersion: string;
+  severityDays: Record<NcSeverity, number>;
+}
+export interface AuditWorkflowBinding { workflowDefinitionId: string; workflowVersionId: string; instanceKey: string }
 export interface AuditImportAdapter<ExternalRecord = unknown> { readonly sourceSystem: 'CUSTOMER' | 'SECOND_PARTY'; map(record: ExternalRecord): { externalKey: string; payload: Record<string, unknown> }; }
 
 type Row = Record<string, any>;
@@ -19,6 +27,20 @@ function fail(code: string, status: number): never { throw new HttpException({ c
 function uuid(value: string, code = 'AUDIT_INPUT_INVALID'): string { if (!/^[0-9a-f-]{36}$/i.test(value)) fail(code, 400); return value; }
 function text(value: string, max: number): string { const result = value?.trim(); if (!result || result.length > max) fail('AUDIT_INPUT_INVALID', 400); return result; }
 function iso(value: string): Date { const result = new Date(value); if (Number.isNaN(result.getTime())) fail('AUDIT_INPUT_INVALID', 400); return result; }
+function deadlinePolicy(input: AuditDeadlinePolicyInput): AuditDeadlinePolicyInput {
+  const policyVersion = text(input.policyVersion, 100);
+  const calendarVersion = text(input.calendarVersion, 100);
+  const timeZone = text(input.timeZone, 100);
+  try { new Intl.DateTimeFormat('en', { timeZone }); } catch { fail('AUDIT_CALENDAR_INVALID', 400); }
+  if (!Array.isArray(input.workingWeekdays) || input.workingWeekdays.length === 0
+    || new Set(input.workingWeekdays).size !== input.workingWeekdays.length
+    || input.workingWeekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)
+    || !input.exceptions || typeof input.exceptions !== 'object' || Array.isArray(input.exceptions)
+    || Object.entries(input.exceptions).some(([date, working]) => !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || typeof working !== 'boolean')
+    || !input.severityDays || Object.keys(input.severityDays).sort().join(',') !== 'CRITICAL,MAJOR,MINOR'
+    || Object.values(input.severityDays).some((days) => !Number.isInteger(days) || days < 1 || days > 366)) fail('AUDIT_CALENDAR_INVALID', 400);
+  return { ...input, policyVersion, calendarVersion, timeZone };
+}
 function templateItemKeys(definition: unknown): Set<string> {
   if (!definition || typeof definition !== 'object' || Array.isArray(definition)) fail('AUDIT_TEMPLATE_DEFINITION_INVALID', 400);
   const items = (definition as Record<string, unknown>).items;
@@ -38,7 +60,7 @@ function templateItemKeys(definition: unknown): Set<string> {
 
 @Injectable()
 export class AuditManagementService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService) {}
 
   private scope(actor: AdminActor): string { if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403); return actor.scopeOrganizationId ?? actor.organizationId; }
 
@@ -112,7 +134,60 @@ export class AuditManagementService {
 
   recordChecklistResult(actor: AdminActor, executionId: string, input: { itemKey: string; result: ChecklistResult; note?: string }, traceId: string, key?: string) { const organizationId = this.scope(actor); if (!['OK', 'NG', 'NA'].includes(input.result)) fail('AUDIT_INPUT_INVALID', 400); const itemKey = text(input.itemKey, 120); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_CHECKLIST_RECORDED', permission: WRITE, payload: input }, async (tx) => { const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, status, template_version_id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`); if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404); if (execution.status !== 'OPEN') fail('AUDIT_EXECUTION_LOCKED', 409); const [templateVersion] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT definition FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND id = ${execution.template_version_id}::uuid`); if (!templateVersion || !templateItemKeys(templateVersion.definition).has(itemKey)) fail('AUDIT_CHECKLIST_ITEM_NOT_FOUND', 400); const [linkedNc] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT n.id FROM audit_ncs n JOIN audit_checklist_results r ON r.id = n.checklist_result_id AND r.organization_id = n.organization_id WHERE r.organization_id = ${organizationId}::uuid AND r.execution_id = ${uuid(executionId)}::uuid AND r.item_key = ${itemKey}`); if (linkedNc) fail('AUDIT_CHECKLIST_NC_LOCKED', 409); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_checklist_results(organization_id, execution_id, item_key, result, note, recorded_by_id) VALUES (${organizationId}::uuid, ${uuid(executionId)}::uuid, ${itemKey}, ${input.result}, ${input.note ?? null}, ${actor.id}::uuid) ON CONFLICT (organization_id, execution_id, item_key) DO UPDATE SET result = EXCLUDED.result, note = EXCLUDED.note, version = audit_checklist_results.version + 1, recorded_by_id = EXCLUDED.recorded_by_id RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_CHECKLIST_RECORDED', row.id, traceId); return row; }); }
 
-  async createNcFromNg(actor: AdminActor, executionId: string, resultId: string, input: { severity: NcSeverity; dueAt: string; duePolicyVersion: string; calendarVersion: string; dueBusinessDays: number }, traceId: string, key?: string) { const organizationId = this.scope(actor); const duePolicyVersion = text(input.duePolicyVersion, 100); const calendarVersion = text(input.calendarVersion, 100); if (!['MINOR', 'MAJOR', 'CRITICAL'].includes(input.severity) || !Number.isInteger(input.dueBusinessDays) || input.dueBusinessDays < 1) fail('AUDIT_INPUT_INVALID', 400); const dueAt = iso(input.dueAt); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_NC_CREATED', permission: WRITE, payload: { ...input, dueAt: dueAt.toISOString(), duePolicyVersion, calendarVersion } }, async (tx) => { const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`); if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404); if (!['OPEN', 'SUBMITTED'].includes(execution.status)) fail('AUDIT_EXECUTION_LOCKED', 409); const [result] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_checklist_results WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid AND id = ${uuid(resultId)}::uuid FOR UPDATE`); if (!result) fail('AUDIT_CHECKLIST_RESULT_NOT_FOUND', 404); if (result.result !== 'NG') fail('AUDIT_NG_REQUIRED', 409); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_ncs(organization_id, execution_id, checklist_result_id, severity, due_at, due_policy_version, calendar_version, due_business_days, created_by_id) VALUES (${organizationId}::uuid, ${uuid(executionId)}::uuid, ${uuid(resultId)}::uuid, ${input.severity}, ${dueAt}, ${duePolicyVersion}, ${calendarVersion}, ${input.dueBusinessDays}, ${actor.id}::uuid) ON CONFLICT (organization_id, checklist_result_id) DO NOTHING RETURNING *`); if (!row) fail('AUDIT_NC_ALREADY_EXISTS', 409); if (this.problems) { const problem = await this.problems.createForDomainSourceIssue(tx as never, { organizationId, domainCode: 'audit-management', problemType: 'AUDIT_NC', sourceType: 'audit-nc', sourceId: row.id, severity: input.severity, responsibleParty: 'audit-management', dueAt, createdById: actor.id, traceId }); await tx.$executeRaw(Prisma.sql`UPDATE audit_ncs SET problem_index_id = ${String(problem.id)}::uuid WHERE organization_id = ${organizationId}::uuid AND id = ${row.id}::uuid`); row.problem_index_id = String(problem.id); } await this.record(tx, actor, organizationId, 'AUDIT_NC_CREATED', row.id, traceId); return row; }); }
+  registerDeadlinePolicy(actor: AdminActor, input: AuditDeadlinePolicyInput, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const policy = deadlinePolicy(input);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_NC_DEADLINE_POLICY_REGISTERED', permission: WRITE, payload: policy }, async (tx) => {
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_nc_deadline_policies(organization_id, policy_version, calendar_version, time_zone, working_weekdays, exceptions, severity_days, created_by_id) VALUES (${organizationId}::uuid, ${policy.policyVersion}, ${policy.calendarVersion}, ${policy.timeZone}, ${JSON.stringify(policy.workingWeekdays)}::jsonb, ${JSON.stringify(policy.exceptions)}::jsonb, ${JSON.stringify(policy.severityDays)}::jsonb, ${actor.id}::uuid) ON CONFLICT DO NOTHING RETURNING *`);
+      if (!row) fail('AUDIT_NC_DEADLINE_POLICY_EXISTS', 409);
+      await this.record(tx, actor, organizationId, 'AUDIT_NC_DEADLINE_POLICY_REGISTERED', row.id, traceId);
+      return row;
+    });
+  }
+
+  async createNcFromNg(actor: AdminActor, executionId: string, resultId: string, input: { severity: NcSeverity; dueAt?: string; duePolicyVersion: string; calendarVersion: string; dueBusinessDays: number; workflowBinding?: AuditWorkflowBinding }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const duePolicyVersion = text(input.duePolicyVersion, 100);
+    const calendarVersion = text(input.calendarVersion, 100);
+    if (!['MINOR', 'MAJOR', 'CRITICAL'].includes(input.severity) || !Number.isInteger(input.dueBusinessDays) || input.dueBusinessDays < 1) fail('AUDIT_INPUT_INVALID', 400);
+    if (this.runtime && (!input.workflowBinding || Object.values(input.workflowBinding).some((value) => typeof value !== 'string' || !value.trim()))) fail('AUDIT_WORKFLOW_BINDING_REQUIRED', 400);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_NC_CREATED', permission: WRITE, payload: { ...input, duePolicyVersion, calendarVersion } }, async (tx) => {
+      const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`);
+      if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404);
+      if (!['OPEN', 'SUBMITTED'].includes(execution.status)) fail('AUDIT_EXECUTION_LOCKED', 409);
+      const [result] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_checklist_results WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid AND id = ${uuid(resultId)}::uuid FOR UPDATE`);
+      if (!result) fail('AUDIT_CHECKLIST_RESULT_NOT_FOUND', 404);
+      if (result.result !== 'NG') fail('AUDIT_NG_REQUIRED', 409);
+      const [policy] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_nc_deadline_policies WHERE organization_id = ${organizationId}::uuid AND policy_version = ${duePolicyVersion} AND calendar_version = ${calendarVersion}`);
+      if (!policy) fail('AUDIT_NC_DEADLINE_POLICY_NOT_FOUND', 409);
+      if (policy.severity_days[input.severity] !== input.dueBusinessDays) fail('AUDIT_NC_DEADLINE_POLICY_MISMATCH', 409);
+      const [clock] = await tx.$queryRaw<{ started_at: Date }[]>(Prisma.sql`SELECT CURRENT_TIMESTAMP AS started_at`);
+      const date = calculateAuditDueDate(clock!.started_at, input.dueBusinessDays, { timeZone: policy.time_zone, workingWeekdays: policy.working_weekdays, exceptions: policy.exceptions });
+      const [deadline] = await tx.$queryRaw<{ due_at: Date }[]>(Prisma.sql`SELECT (${date}::date + TIME '17:00') AT TIME ZONE ${policy.time_zone} AS due_at`);
+      const dueAt = deadline!.due_at;
+      if (input.dueAt && iso(input.dueAt).getTime() !== dueAt.getTime()) fail('AUDIT_NC_DEADLINE_MISMATCH', 409);
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_ncs(organization_id, execution_id, checklist_result_id, severity, due_at, due_policy_version, calendar_version, due_business_days, created_by_id) VALUES (${organizationId}::uuid, ${uuid(executionId)}::uuid, ${uuid(resultId)}::uuid, ${input.severity}, ${dueAt}, ${duePolicyVersion}, ${calendarVersion}, ${input.dueBusinessDays}, ${actor.id}::uuid) ON CONFLICT (organization_id, checklist_result_id) DO NOTHING RETURNING *`);
+      if (!row) fail('AUDIT_NC_ALREADY_EXISTS', 409);
+      if (this.problems) {
+        const problem = await this.problems.createForDomainSourceIssue(tx as never, { organizationId, domainCode: 'audit-management', problemType: 'AUDIT_NC', sourceType: 'audit-nc', sourceId: row.id, severity: input.severity, responsibleParty: 'audit-management', dueAt, createdById: actor.id, traceId });
+        await tx.$executeRaw(Prisma.sql`UPDATE audit_ncs SET problem_index_id = ${String(problem.id)}::uuid WHERE organization_id = ${organizationId}::uuid AND id = ${row.id}::uuid`);
+        await tx.$executeRaw(Prisma.sql`INSERT INTO domain_source_issue_links(id, organization_id, problem_index_id, source_domain, source_type, source_id, source_version, source_snapshot, created_by) VALUES (gen_random_uuid(), ${organizationId}::uuid, ${String(problem.id)}::uuid, 'audit-management', 'audit-nc', ${row.id}::uuid, 1, ${JSON.stringify({ executionId, checklistResultId: result.id, severity: input.severity, dueAt: dueAt.toISOString(), duePolicyVersion, calendarVersion })}::jsonb, ${actor.id}) ON CONFLICT DO NOTHING`);
+        row.problem_index_id = String(problem.id);
+        if (this.runtime) {
+          const binding = input.workflowBinding!;
+          const definition = await tx.workflowDefinition.findUnique({ where: { organizationId_code: { organizationId, code: 'AUDIT_NC' } } });
+          if (!definition || definition.id !== binding.workflowDefinitionId) fail('AUDIT_WORKFLOW_CONFIGURATION_REQUIRED', 409);
+          const version = await tx.workflowVersion.findFirst({ where: { organizationId, workflowDefinitionId: definition.id, status: 'PUBLISHED' }, orderBy: { version: 'desc' }, include: { nodes: true } });
+          const closeNodes = version?.nodes.filter((node) => node.type === 'CLOSE') ?? [];
+          if (!version || version.id !== binding.workflowVersionId || !version.nodes.some((node) => node.type === 'VERIFICATION') || closeNodes.length !== 1
+            || (closeNodes[0]!.config as Record<string, unknown>).requireIndependentVerification !== true) fail('AUDIT_WORKFLOW_CONFIGURATION_REQUIRED', 409);
+          await this.runtime.startInstance({ organizationId, actor, problemIndexId: String(problem.id), workflowDefinitionId: binding.workflowDefinitionId, workflowVersionId: binding.workflowVersionId, expectedProblemVersion: Number(problem.version), instanceKey: binding.instanceKey, idempotencyKey: key!, traceId }, tx);
+        }
+      }
+      await this.record(tx, actor, organizationId, 'AUDIT_NC_CREATED', row.id, traceId);
+      return row;
+    });
+  }
 
   assignNc(actor: AdminActor, id: string, assigneeUserId: string, expectedVersion: number, traceId: string, key?: string) { return this.ncUpdate(actor, id, expectedVersion, 'ASSIGNED', { assigneeUserId: uuid(assigneeUserId) }, traceId, key); }
   respondNc(actor: AdminActor, id: string, input: { expectedVersion: number; response: string }, traceId: string, key?: string) { return this.ncUpdate(actor, id, input.expectedVersion, 'RESPONDED', { response: text(input.response, 10000) }, traceId, key); }

@@ -5,6 +5,7 @@ export const internalNavigation: NavigationItem[] = [
   { label: '我的待办', path: '/app/my-tasks', icon: ClipboardCheck, context: [{ label: '待处理', path: '/app/my-tasks' }] },
   { label: '流程设计', path: '/app/workflow-designer', icon: GitBranch, context: [{ label: '流程草稿', path: '/app/workflow-designer' }] },
   { label: '供应商质量', path: '/app/supplier-quality', icon: Users },
+  { label: '制程质量', path: '/app/process-quality', icon: Target, context: [{ label: '不良品台账', path: '/app/process-quality' }] },
   { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, context: [{ label: '客诉台账', path: '/app/customer-quality' }] },
   { label: '审计管理', path: '/app/audits', icon: ClipboardCheck, context: [{ label: '审核计划', path: '/app/audits' }] },
   { label: '新品质量', path: '/app/new-product-quality', icon: Target, context: [{ label: '项目质量台账', path: '/app/new-product-quality' }] },

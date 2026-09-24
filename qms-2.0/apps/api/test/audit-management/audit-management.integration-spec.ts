@@ -40,9 +40,19 @@ describe('audit management PostgreSQL invariants', () => {
     }
     await prisma.userRole.create({ data: { userId, organizationId, roleId } });
     await prisma.userRole.create({ data: { userId: reviewerId, organizationId, roleId } });
+    await service.registerDeadlinePolicy(actor, { policyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', timeZone: 'Asia/Shanghai', workingWeekdays: [1, 2, 3, 4, 5], exceptions: {}, severityDays: { MINOR: 30, MAJOR: 30, CRITICAL: 7 } }, randomUUID(), randomUUID());
   });
 
   afterAll(async () => prisma.$disconnect());
+
+  it('refuses an NC deadline without a registered immutable calendar policy', async () => {
+    const template = await service.createTemplate(actor, { name: '期限政策', auditType: 'PRODUCT', definition: { items: [{ key: 'P1', text: '符合' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2026, title: '期限政策计划', auditType: 'PRODUCT', plannedStart: '2026-10-01T00:00:00.000Z', plannedEnd: '2026-10-31T00:00:00.000Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG' }, randomUUID(), randomUUID());
+    await expect(service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', dueAt: '2026-12-01T00:00:00.000Z', duePolicyVersion: 'UNKNOWN', calendarVersion: 'UNKNOWN', dueBusinessDays: 30 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  });
 
   it('keeps a published template version immutable and fixes execution to it', async () => {
     const template = await service.createTemplate(actor, { name: 'IATF过程审核', auditType: 'PROCESS', definition: { items: [{ key: 'P1', text: '过程受控' }] } }, randomUUID(), randomUUID());
@@ -59,7 +69,8 @@ describe('audit management PostgreSQL invariants', () => {
     const plan = await service.createPlan(actor, { year: 2026, title: '产品计划', auditType: 'PRODUCT', plannedStart: '2026-11-01T00:00:00.000Z', plannedEnd: '2026-11-30T00:00:00.000Z' }, randomUUID(), randomUUID());
     const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
     const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG', note: '缺少记录' }, randomUUID(), randomUUID());
-    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', dueAt: '2026-12-01T00:00:00.000Z', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
+    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
+    expect(typeof nc.due_at).toBe('string');
     await expect(service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'OK' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await expect(service.closeNc(actor, nc.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await service.assignNc(actor, nc.id, userId, 1, randomUUID(), randomUUID());
@@ -98,9 +109,9 @@ describe('audit management PostgreSQL invariants', () => {
     const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
     const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG' }, randomUUID(), randomUUID());
     await prisma.$executeRaw`UPDATE audit_executions SET status = 'CANCELLED' WHERE id = ${execution.id}::uuid`;
-    await expect(service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', dueAt: '2026-12-01T00:00:00.000Z', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await prisma.$executeRaw`UPDATE audit_executions SET status = 'COMPLETED' WHERE id = ${execution.id}::uuid`;
-    await expect(service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', dueAt: '2026-12-01T00:00:00.000Z', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
   });
 
   it('rejects an assignee from another organization', async () => {
@@ -113,7 +124,7 @@ describe('audit management PostgreSQL invariants', () => {
     const plan = await service.createPlan(actor, { year: 2026, title: '指派范围计划', auditType: 'PRODUCT', plannedStart: '2026-11-01T00:00:00.000Z', plannedEnd: '2026-11-30T00:00:00.000Z' }, randomUUID(), randomUUID());
     const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
     const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG' }, randomUUID(), randomUUID());
-    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MINOR', dueAt: '2026-12-01T00:00:00.000Z', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
+    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MINOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
     await expect(service.assignNc(actor, nc.id, otherUserId, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
   });
 

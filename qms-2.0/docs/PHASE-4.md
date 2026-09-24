@@ -10,8 +10,24 @@
 - 制程不良品台账：进行中范围已通过。已交付人工录入、类型字典、字段校验、列表/详情/归档、CAS、幂等、组织隔离、文件资源端口和 MES/IMS 外部标识预留；真实 PostgreSQL 迁移与 10 个定向测试通过。
 - 客户质量已实现客户主数据、客诉台账、实物处置/解析历史、简报与 8D 工作流绑定、来源快照和动态关联；审核已实现模板项匹配、期限政策/工作日历版本记录、整改分派/回复/验证职责分离。新品已实现制程不良遴选、来源快照、问题升级、遗留问题、带病量产审批和发布 Workflow 绑定。审计 NC 与新品问题均写入统一 `problem_index`。四条领域链在一次性 PostgreSQL 上通过 9 个套件、54 个测试；编译 Worker 生命周期通过 3 个测试；Compose 配置通过。
 - Web 已交付客户质量台账，以及审核管理和新品质量按 ID 查询的入口，并覆盖加载、错误、权限拒绝、空数据状态；契约、治理、API/Web lint、测试和构建均通过。浏览器安全前置测试通过 3 个用例；完整浏览器验收需在部署环境提供一次性 gateway、对象存储、邮件和夹具数据库后运行。
-- 尚未交付：制程完整 Web 发单/闭环入口、四条业务链真实浏览器联动、附件扫描与失败恢复、审核 NC 的 Workflow 动作和到期提醒、客户 8D 工作日历计算及分级审批门槛。阶段四计划中的这些验收项保持未完成状态。
+- 尚未交付：四条业务链真实浏览器联动、附件扫描与失败恢复、客户 8D 分级审批门槛。审核 NC 已增加版本化工作日历、服务端到期计算、Workflow 绑定和通用提醒事件；制程 Web 台账与 BRIEF 发单入口已交付。阶段四计划中的外部系统真实接入仍保持未完成状态。
 - 外部 MES/IMS/ERP/SAP 仍只有字段、适配器端口和待核实状态，没有真实连接或集成 PASS；按阶段边界保留为后续接入项。
+
+## 验收记录（2026-09-24）
+
+| 项目 | 环境和命令 | 结果 |
+| --- | --- | --- |
+| 迁移与种子 | 一次性 `postgres:18`，本机 `55442`，独立 `qms_phase4`；在 `apps/api` 执行 `prisma migrate deploy`、`prisma db seed` | PASS：47 个迁移及种子 |
+| 四域数据库集成 | 同一一次性 PostgreSQL，`QMS_DISPOSABLE_TEST_DB=true`；Jest `--testPathPatterns='(process-quality\|customer-quality\|new-product-quality\|audit-management).*integration-spec.ts'` | PASS：9 套件、54 用例 |
+| 编译 Worker 生命周期 | `corepack pnpm --dir qms-2.0 --filter @qms/api test:worker-process` | PASS：3 用例 |
+| Web 行为和构建 | `corepack pnpm --dir qms-2.0 --filter @qms/web test`、`build` | PASS：32 文件、170 用例；构建通过 |
+| 契约与治理 | `contracts:check`、`check:governance`、`check:archive-isolation` | PASS |
+| Compose 配置 | 一次性环境变量下 `docker compose -f deployment/docker-compose.foundation.yml config --quiet` | PASS |
+| 浏览器联合验收 | 需要一次性 API/Web gateway、MinIO、ClamAV、Mailpit 与隔离夹具库 | 未运行；不得视为 PASS |
+| 审核期限与 NC 流程 | 独立 PostgreSQL `55444`，审核集成及期限单测 | PASS：审核集成 10/10、期限单测 3/3 |
+| 全量 API 集成 | 直接运行 `test:integration` 时缺少 `QMS_OBJECT_STORAGE_ENDPOINT`，且并发容器复用导致连接中断 | FAIL；领域定向套件已独立重跑通过，全量套件仍待隔离资源复验 |
+
+当前终端使用 Node.js `v24.19.0`，与仓库要求的 Node.js 22 不符。完整阶段验收需切换受支持运行时，并按阶段一、二的脚本要求提供一次性资源；任何保留预览数据库 `55440` 均禁止用于验收。
 
 ## 业务主线
 

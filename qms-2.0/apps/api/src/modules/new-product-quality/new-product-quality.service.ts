@@ -236,7 +236,7 @@ export class NewProductQualityService {
     const organizationId = this.scope(actor); const project = uuid(projectId); const selectionIds = input.selectionIds.map(uuid); const severity = text(input.severity, 64);
     if (!selectionIds.length || new Set(selectionIds).size !== selectionIds.length || !['SIMPLE', 'COMPLEX'].includes(input.complexity)) fail('NEW_PRODUCT_INPUT_INVALID', 400);
     const trialBatch = input.trialBatchId ? uuid(input.trialBatchId) : null;
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'NEW_PRODUCT_ISSUE_CREATED', payload: { project, selectionIds, trialBatch, severity, complexity: input.complexity }, permission: WRITE }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'NEW_PRODUCT_ISSUE_CREATED', payload: { project, selectionIds, trialBatch, severity, complexity: input.complexity, workflowBinding: input.workflowBinding }, permission: WRITE, isolationLevel: 'ReadCommitted' }, async (tx) => {
       const [projectRow] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status FROM new_product_projects WHERE id = ${project}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`);
       if (!projectRow) fail('NEW_PRODUCT_PROJECT_NOT_FOUND', 404); if (projectRow.status !== 'ACTIVE') fail('NEW_PRODUCT_PROJECT_ARCHIVED', 409);
       if (trialBatch) { const [batch] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM new_product_trial_batches WHERE id = ${trialBatch}::uuid AND project_id = ${project}::uuid AND organization_id = ${organizationId}::uuid`); if (!batch) fail('NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND', 404); }

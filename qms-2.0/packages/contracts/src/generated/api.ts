@@ -2031,6 +2031,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-management/nc-deadline-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_registerDeadlinePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-management/executions/{executionId}/checklist/{resultId}/nc": {
         parameters: {
             query?: never;
@@ -4354,18 +4370,53 @@ export interface components {
             note?: string | null;
             version: number;
         };
+        RegisterAuditDeadlinePolicyDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            policyVersion: string;
+            calendarVersion: string;
+            timeZone: string;
+            workingWeekdays: number[];
+            exceptions: Record<string, never>;
+            severityDays: Record<string, never>;
+        };
+        AuditDeadlinePolicyResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            policy_version: string;
+            calendar_version: string;
+            time_zone: string;
+            working_weekdays: number[];
+            exceptions: Record<string, never>;
+            severity_days: Record<string, never>;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditWorkflowBindingDto: {
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceKey: string;
+        };
         CreateNcDto: {
             /** Format: uuid */
             organizationId?: string;
             /** @enum {string} */
             severity: "MINOR" | "MAJOR" | "CRITICAL";
-            /** Format: date-time */
-            dueAt: string;
+            /**
+             * Format: date-time
+             * @description 可选；如提供，必须等于服务端按登记日历计算的期限
+             */
+            dueAt?: string;
             /** @description 整改期限政策版本 */
             duePolicyVersion: string;
             /** @description 工作日历版本 */
             calendarVersion: string;
             dueBusinessDays: number;
+            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
         };
         AuditNcResponseDto: {
             /** Format: uuid */
@@ -9783,6 +9834,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditChecklistResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_registerDeadlinePolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterAuditDeadlinePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditDeadlinePolicyResponseDto"];
                 };
             };
             default: {
