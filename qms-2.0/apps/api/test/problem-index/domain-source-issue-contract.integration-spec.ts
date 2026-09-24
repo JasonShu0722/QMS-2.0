@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../src/generated/prisma/client.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
+import { assertAdminAccess } from '../../src/common/security/admin-mutation.service.js';
 import { NumberingService } from '../../src/modules/problem-index/numbering.service.js';
 import { ProblemIndexService } from '../../src/modules/problem-index/problem-index.service.js';
 import {
   DomainSourceIssueService, type DomainSourceIssueAdapters, type DomainSourceIssueCommand,
 } from '../../src/modules/problem-index/domain-source-issue.service.js';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
+import { DomainSourceLinkService } from '../../src/modules/problem-index/domain-source-link.service.js';
 import { WorkflowRuntimeService } from '../../src/modules/workflow/workflow-runtime.service.js';
 import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
 import { WorkflowValidationService } from '../../src/modules/workflow/workflow-validation.service.js';
@@ -26,6 +28,7 @@ describe('PostgreSQL domain source to issue contract', () => {
   const runtime = new WorkflowRuntimeService(prisma, audit, outbox, problems);
   const definitions = new WorkflowDefinitionService(prisma, new WorkflowValidationService(), audit);
   const service = new DomainSourceIssueService(prisma, problems, outbox);
+  const links = new DomainSourceLinkService(prisma, audit, outbox);
   const sourceTable = `test_domain_source_${randomUUID().replaceAll('-', '')}`;
   let organizationId: string;
   let actorUserId: string;
@@ -86,6 +89,7 @@ describe('PostgreSQL domain source to issue contract', () => {
         await prisma.workflowTask.deleteMany({ where: { organizationId } });
         await prisma.workflowMutation.deleteMany({ where: { organizationId } });
         await prisma.domainSourceIssueLink.deleteMany({ where: { organizationId } });
+        await prisma.domainSourceIssueLinkHistory.deleteMany({ where: { organizationId } });
         await prisma.problemIndex.updateMany({ where: { organizationId }, data: { workflowInstanceId: null } });
         await prisma.workflowInstance.deleteMany({ where: { organizationId } });
         await prisma.problemIndex.deleteMany({ where: { organizationId } });
@@ -168,6 +172,7 @@ describe('PostgreSQL domain source to issue contract', () => {
     expect(link).toMatchObject({ sourceDomain: source.sourceDomain, sourceType: source.sourceType, sourceId: source.sourceId, sourceVersion: 3, sourceSnapshot: source.sourceSnapshot, createdBy: source.createdBy });
     expect(instance).toMatchObject({ problemIndexId: problem.id, workflowVersionId });
     expect(await prisma.outboxEvent.count({ where: { aggregateId: problem.id, aggregateType: 'DomainSourceIssue' } })).toBe(1);
+    expect((await prisma.domainSourceIssueLinkHistory.findMany({ where: { problemIndexId: problem.id } })).map(({ action }) => action).sort()).toEqual(['LINKED', 'PRIMARY_SELECTED']);
     await prisma.$executeRawUnsafe(`DELETE FROM "${sourceTable}" WHERE id = $1::uuid`, source.sourceId);
     expect(await prisma.domainSourceIssueLink.findFirst({ where: { problemIndexId: problem.id } })).not.toBeNull();
     expect(await prisma.problemIndex.findUnique({ where: { id: problem.id } })).not.toBeNull();
@@ -182,6 +187,104 @@ describe('PostgreSQL domain source to issue contract', () => {
     expect(await prisma.domainSourceIssueLink.count({ where: { sourceId: first.sourceId } })).toBe(2);
     expect(await prisma.domainSourceIssueLink.count({ where: { problemIndexId: String(issuedA.problem.id) } })).toBe(2);
     expect(await prisma.problemIndex.findUniqueOrThrow({ where: { id: String(issuedB.problem.id) } })).toMatchObject({ sourceType: first.sourceType, sourceId: first.sourceId });
+  });
+
+  it('adds and removes sources with history, CAS and last-source protection', async () => {
+    const first = await createSource();
+    const second = await createSource();
+    const issued = await service.issue(command(first), adapters());
+    const problemId = String(issued.problem.id);
+    const authorization = async () => undefined;
+    const added = await links.change({ organizationId, problemIndexId: problemId, actor: command(first).actor, expectedProblemVersion: 2,
+      add: [second], remove: [], primary: second, idempotencyKey: randomUUID(), traceId: randomUUID() }, { authorize: authorization, lockAndResolve });
+    expect(added.version).toBe(3);
+    expect(added.sourceId).toBe(second.sourceId);
+    const removalKey = randomUUID();
+    const removal = { organizationId, problemIndexId: problemId, actor: command(first).actor, expectedProblemVersion: 3,
+      add: [], remove: [{ sourceDomain: first.sourceDomain, sourceType: first.sourceType, sourceId: first.sourceId }],
+      idempotencyKey: removalKey, traceId: randomUUID() };
+    const removed = await links.change(removal, { authorize: authorization, lockAndResolve });
+    expect(removed.version).toBe(4);
+    expect(await prisma.domainSourceIssueLink.count({ where: { problemIndexId: problemId, removedAt: { not: null } } })).toBe(1);
+    const history = await prisma.domainSourceIssueLinkHistory.findMany({ where: { problemIndexId: problemId } });
+    expect(history.filter(({ action }) => action === 'LINKED')).toHaveLength(2);
+    expect(history.filter(({ action }) => action === 'UNLINKED')).toHaveLength(1);
+    expect(history.filter(({ action }) => action === 'PRIMARY_SELECTED')).toHaveLength(2);
+    await expect(links.change({ ...removal, expectedProblemVersion: 4, remove: [{ sourceDomain: second.sourceDomain, sourceType: second.sourceType, sourceId: second.sourceId }], idempotencyKey: randomUUID() }, { authorize: authorization, lockAndResolve }))
+      .rejects.toMatchObject({ status: 409, response: { code: 'SOURCE_LAST_LINK_REQUIRED' } });
+  });
+
+  it('replays source changes and rejects stale or cross-organization additions', async () => {
+    const first = await createSource();
+    const second = await createSource();
+    const foreign = await createSource({ organizationId: randomUUID() });
+    const issued = await service.issue(command(first), adapters());
+    const problemIndexId = String(issued.problem.id);
+    const request = { organizationId, problemIndexId, actor: command(first).actor, expectedProblemVersion: 2,
+      add: [second], remove: [], idempotencyKey: randomUUID(), traceId: randomUUID() };
+    const authorization = async () => undefined;
+    const added = await links.change(request, { authorize: authorization, lockAndResolve });
+    const replay = await links.change(request, { authorize: authorization, lockAndResolve });
+    expect(replay).toEqual(added);
+    await expect(links.change({ ...request, add: [foreign], idempotencyKey: randomUUID() }, { authorize: authorization, lockAndResolve }))
+      .rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    await expect(links.change({ ...request, expectedProblemVersion: 3, add: [foreign], idempotencyKey: randomUUID() }, { authorize: authorization, lockAndResolve }))
+      .rejects.toMatchObject({ status: 403, response: { code: 'SOURCE_ORGANIZATION_FORBIDDEN' } });
+    await expect(links.change({ ...request, add: [foreign] }, { authorize: authorization, lockAndResolve }))
+      .rejects.toMatchObject({ status: 409, response: { code: 'IDEMPOTENCY_REPLAY' } });
+  });
+
+  it('allows only one concurrent change for one problem version', async () => {
+    const first = await createSource();
+    const second = await createSource();
+    const third = await createSource();
+    const issued = await service.issue(command(first), adapters());
+    const problemIndexId = String(issued.problem.id);
+    const base = { organizationId, problemIndexId, actor: command(first).actor, expectedProblemVersion: 2, remove: [], traceId: randomUUID() };
+    const authorization = async () => undefined;
+    const changes = await Promise.allSettled([
+      links.change({ ...base, add: [second], idempotencyKey: randomUUID() }, { authorize: authorization, lockAndResolve }),
+      links.change({ ...base, add: [third], idempotencyKey: randomUUID() }, { authorize: authorization, lockAndResolve }),
+    ]);
+    expect(changes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(changes.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(await prisma.domainSourceIssueLink.count({ where: { problemIndexId, removedAt: null } })).toBe(2);
+  });
+
+  it('records a primary-only switch and rolls back when Outbox fails', async () => {
+    const first = await createSource();
+    const second = await createSource();
+    const issued = await service.issue(command(first, { additionalSources: [second] }), adapters());
+    const problemIndexId = String(issued.problem.id);
+    const authorization = async () => undefined;
+    const request = { organizationId, problemIndexId, actor: command(first).actor, expectedProblemVersion: 2,
+      add: [], remove: [], primary: second, idempotencyKey: randomUUID(), traceId: randomUUID() };
+    const failing = new DomainSourceLinkService(prisma, audit, { enqueue: async () => { throw new Error('LINK_OUTBOX_FAILED'); } } as never);
+    await expect(failing.change(request, { authorize: authorization, lockAndResolve })).rejects.toThrow('LINK_OUTBOX_FAILED');
+    expect((await prisma.problemIndex.findUniqueOrThrow({ where: { id: problemIndexId } })).sourceId).toBe(first.sourceId);
+    expect(await prisma.domainSourceIssueLinkHistory.count({ where: { problemIndexId, action: 'PRIMARY_SELECTED' } })).toBe(1);
+    const changed = await links.change(request, { authorize: authorization, lockAndResolve });
+    expect(changed.sourceId).toBe(second.sourceId);
+    expect(await prisma.domainSourceIssueLinkHistory.count({ where: { problemIndexId, action: 'PRIMARY_SELECTED' } })).toBe(2);
+  });
+
+  it('rejects source changes after permission revocation', async () => {
+    const first = await createSource();
+    const second = await createSource();
+    const issued = await service.issue(command(first), adapters());
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:create' } });
+    const authorization = async (tx: Prisma.TransactionClient, requested: { actor: { id: string }; organizationId: string }) => {
+      await assertAdminAccess(tx, requested.actor as never, requested.organizationId, 'process-quality:issues:create');
+    };
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId: permission.id } } });
+    try {
+      await expect(links.change({ organizationId, problemIndexId: String(issued.problem.id), actor: command(first).actor,
+        expectedProblemVersion: 2, add: [second], remove: [], idempotencyKey: randomUUID(), traceId: randomUUID() },
+      { authorize: authorization, lockAndResolve })).rejects.toMatchObject({ status: 403 });
+      expect(await prisma.domainSourceIssueLink.count({ where: { problemIndexId: String(issued.problem.id) } })).toBe(1);
+    } finally {
+      await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
+    }
   });
 
   it('locks opposite source selections in the same stable order under concurrent issuance', async () => {

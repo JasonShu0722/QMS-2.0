@@ -7,11 +7,12 @@ import { ProblemIndexController } from './problem-index.controller.js';
 import { ProblemIndexService } from './problem-index.service.js';
 import { ProblemReadModule } from './problem-read.module.js';
 import { DomainSourceIssueService } from './domain-source-issue.service.js';
+import { DomainSourceLinkService } from './domain-source-link.service.js';
 
 @Module({
   imports: [DatabaseModule, AuditLogModule, TaskNotificationModule, ProblemReadModule],
   controllers: [ProblemIndexController],
-  providers: [NumberingService, ProblemIndexService, DomainSourceIssueService],
-  exports: [NumberingService, ProblemIndexService, DomainSourceIssueService],
+  providers: [NumberingService, ProblemIndexService, DomainSourceIssueService, DomainSourceLinkService],
+  exports: [NumberingService, ProblemIndexService, DomainSourceIssueService, DomainSourceLinkService],
 })
 export class ProblemIndexModule {}

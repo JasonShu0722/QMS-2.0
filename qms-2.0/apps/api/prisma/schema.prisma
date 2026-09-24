@@ -538,11 +538,30 @@ model DomainSourceIssueLink {
   sourceSnapshot Json         @map("source_snapshot")
   createdBy      String       @map("created_by") @db.VarChar(128)
   linkedAt       DateTime     @default(now()) @map("linked_at") @db.Timestamptz(3)
+  removedAt      DateTime?    @map("removed_at") @db.Timestamptz(3)
+  removedBy      String?      @map("removed_by") @db.Uuid
   problem        ProblemIndex @relation(fields: [organizationId, problemIndexId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, problemIndexId, sourceDomain, sourceType, sourceId], map: "domain_source_issue_links_problem_source_key")
   @@index([organizationId, sourceDomain, sourceType, sourceId], map: "domain_source_issue_links_source_lookup_idx")
   @@map("domain_source_issue_links")
+}
+
+model DomainSourceIssueLinkHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  problemIndexId String   @map("problem_index_id") @db.Uuid
+  sourceDomain   String   @map("source_domain") @db.VarChar(100)
+  sourceType     String   @map("source_type") @db.VarChar(100)
+  sourceId       String   @map("source_id") @db.Uuid
+  action         String   @db.VarChar(16)
+  sourceVersion  Int      @map("source_version")
+  sourceSnapshot Json     @map("source_snapshot")
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  changedAt      DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  @@index([organizationId, problemIndexId, changedAt], map: "domain_source_link_history_problem_idx")
+  @@map("domain_source_issue_link_history")
 }
 
 model ProcessDefectType {
@@ -1331,6 +1350,12 @@ model AuditNc {
   createdById      String   @map("created_by_id") @db.Uuid
   verifiedById     String?  @map("verified_by_id") @db.Uuid
   closedById       String?  @map("closed_by_id") @db.Uuid
+  duePolicyVersion String?  @map("due_policy_version") @db.VarChar(100)
+  calendarVersion  String?  @map("calendar_version") @db.VarChar(100)
+  dueBusinessDays  Int?     @map("due_business_days")
+  assignedById     String?  @map("assigned_by_id") @db.Uuid
+  respondedById    String?  @map("responded_by_id") @db.Uuid
+  problemIndexId   String?  @map("problem_index_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

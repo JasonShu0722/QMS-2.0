@@ -1,0 +1,9 @@
+.customer-quality-page { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.customer-quality-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.customer-quality-heading h1 { margin: 4px 0 0; }
+.customer-quality-heading p { margin-bottom: 0; max-width: 640px; }
+.customer-quality-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
+.customer-quality-toolbar { margin-bottom: 16px; }
+.customer-quality-toolbar .ant-input-search { max-width: 380px; }
+.customer-quality-loading { display: grid; min-height: 220px; place-items: center; }
+@media (max-width: 720px) { .customer-quality-page { padding: 16px; } .customer-quality-heading { flex-direction: column; } .customer-quality-card { padding: 16px; } }

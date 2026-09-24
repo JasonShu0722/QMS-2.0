@@ -3,9 +3,10 @@ import { AdminMutationModule } from '../../common/security/admin-mutation.servic
 import { AuditLogModule } from '../audit-log/audit-log.module.js';
 import { AuditManagementService } from './audit-management.service.js';
 import { AuditManagementController } from './audit-management.controller.js';
+import { ProblemIndexModule } from '../problem-index/problem-index.module.js';
 
 @Module({
-  imports: [AdminMutationModule, AuditLogModule],
+  imports: [AdminMutationModule, AuditLogModule, ProblemIndexModule],
   controllers: [AuditManagementController],
   providers: [AuditManagementService],
   exports: [AuditManagementService],

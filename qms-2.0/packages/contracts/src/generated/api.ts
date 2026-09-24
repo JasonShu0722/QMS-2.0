@@ -1647,6 +1647,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcessQualityController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/defects/{id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_linkedIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/customers": {
         parameters: {
             query?: never;
@@ -1727,6 +1759,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/complaints/{id}/dispositions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_dispositionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/complaints/{id}/disposition": {
         parameters: {
             query?: never;
@@ -1743,6 +1791,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/complaints/{id}/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_analysisHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/complaints/{id}/analysis": {
         parameters: {
             query?: never;
@@ -1753,6 +1817,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["CustomerQualityController_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerQualityController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_linkedIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/issues/{id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_changeIssueSources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/issue-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_linkedIssueHistory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1977,6 +2105,278 @@ export interface paths {
         get?: never;
         put: operations["AuditManagementController_close"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_project"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/stages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_addStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/stages/{id}/deliverables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_addDeliverable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/deliverables/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_submitDeliverable"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_createLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{projectId}/lessons/{lessonId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_attachLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/lesson-checks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_confirmLesson"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/stages/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_reviewStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/trial-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_createTrialBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_recordMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_trialReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/defect-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_selectedDefects"];
+        put?: never;
+        post: operations["NewProductQualityController_selectDefect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_issueDefects"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/issues/{id}/escalate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_escalateIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/legacy-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_legacyIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/mass-production-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_massProductionApproval"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3516,6 +3916,55 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
         };
+        ProcessIssueSourceDto: {
+            /** Format: uuid */
+            defectId: string;
+            expectedVersion: number;
+        };
+        ProcessIssueWorkflowBindingDto: {
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceKey: string;
+        };
+        IssueProcessDefectsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            sources: components["schemas"]["ProcessIssueSourceDto"][];
+            problemType: string;
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            responsibleScope: string;
+            severity: string;
+            /** Format: uuid */
+            ownerId?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            workflowBinding: components["schemas"]["ProcessIssueWorkflowBindingDto"];
+        };
+        ProcessIssueProblemDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowInstanceId: string;
+            version: number;
+        };
+        ProcessIssueResultDto: {
+            problem: components["schemas"]["ProcessIssueProblemDto"];
+            replayed: boolean;
+        };
+        CustomerMasterDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            code: string;
+            name: string;
+            active: boolean;
+            version: number;
+        };
         CreateCustomerDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3528,6 +3977,112 @@ export interface components {
             expectedVersion: number;
             name?: string;
             active?: boolean;
+        };
+        CustomerComplaintDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            complaint_number: string;
+            /** Format: uuid */
+            customer_id: string;
+            /** @enum {string} */
+            complaint_type: "ZERO_KM" | "AFTER_SALES";
+            terminal_customer_name?: string | null;
+            product_code?: string | null;
+            product_model?: string | null;
+            defect_description: string;
+            vin?: string | null;
+            mileage?: number | null;
+            /** Format: date */
+            purchase_date?: string | null;
+            return_required: boolean;
+            physical_analysis_required: boolean;
+            severity: string;
+            severity_policy_version: string;
+            severity_snapshot: Record<string, never>;
+            /** @enum {string} */
+            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "ARCHIVED";
+            external_source_system?: string | null;
+            external_record_key?: string | null;
+            /** Format: date-time */
+            source_observed_at?: string | null;
+            ingestion_status?: string | null;
+            /** Format: uuid */
+            problem_index_id?: string | null;
+            version: number;
+            /** Format: date-time */
+            archived_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerPhysicalDispositionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            complaint_id: string;
+            /** @enum {string} */
+            action: "RETURN" | "REPAIR" | "SCRAP" | "NO_RETURN" | "OTHER";
+            /** @enum {string} */
+            status: "PENDING" | "RECEIVED" | "REPAIRED" | "SCRAPPED" | "CLOSED";
+            responsibility?: string | null;
+            notes?: string | null;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerPhysicalAnalysisDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            complaint_id: string;
+            summary: string;
+            /** @enum {string} */
+            status: "MISSING" | "IN_PROGRESS" | "COMPLETED";
+            evidence_summary?: string | null;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerComplaintDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            complaint_number: string;
+            /** Format: uuid */
+            customer_id: string;
+            /** @enum {string} */
+            complaint_type: "ZERO_KM" | "AFTER_SALES";
+            terminal_customer_name?: string | null;
+            product_code?: string | null;
+            product_model?: string | null;
+            defect_description: string;
+            vin?: string | null;
+            mileage?: number | null;
+            /** Format: date */
+            purchase_date?: string | null;
+            return_required: boolean;
+            physical_analysis_required: boolean;
+            severity: string;
+            severity_policy_version: string;
+            severity_snapshot: Record<string, never>;
+            /** @enum {string} */
+            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "ARCHIVED";
+            external_source_system?: string | null;
+            external_record_key?: string | null;
+            /** Format: date-time */
+            source_observed_at?: string | null;
+            ingestion_status?: string | null;
+            /** Format: uuid */
+            problem_index_id?: string | null;
+            version: number;
+            /** Format: date-time */
+            archived_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            currentDisposition?: components["schemas"]["CustomerPhysicalDispositionDto"] | null;
+            currentAnalysis?: components["schemas"]["CustomerPhysicalAnalysisDto"] | null;
         };
         CreateComplaintDto: {
             /** Format: uuid */
@@ -3587,6 +4142,86 @@ export interface components {
             status: "MISSING" | "IN_PROGRESS" | "COMPLETED";
             evidenceSummary?: string;
         };
+        CustomerIssueSourceDto: {
+            /** Format: uuid */
+            complaintId: string;
+            expectedVersion: number;
+        };
+        CustomerIssueWorkflowBindingDto: {
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceKey: string;
+        };
+        IssueCustomerComplaintsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            sources: components["schemas"]["CustomerIssueSourceDto"][];
+            problemType: string;
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            responsibleScope: string;
+            /** Format: uuid */
+            ownerId?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            workflowBinding: components["schemas"]["CustomerIssueWorkflowBindingDto"];
+        };
+        CustomerIssueProblemDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowInstanceId: string;
+            version: number;
+        };
+        CustomerIssueResultDto: {
+            problem: components["schemas"]["CustomerIssueProblemDto"];
+            replayed: boolean;
+        };
+        ChangeCustomerIssueSourcesDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedProblemVersion: number;
+            add: components["schemas"]["CustomerIssueSourceDto"][];
+            remove: string[];
+            /** Format: uuid */
+            primaryComplaintId?: string;
+        };
+        CustomerIssueLinkHistoryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            problemIndexId: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            action: "LINKED" | "UNLINKED" | "PRIMARY_SELECTED";
+            sourceVersion: number;
+            sourceSnapshot: Record<string, never>;
+            /** Format: uuid */
+            actorUserId?: string | null;
+            /** Format: date-time */
+            changedAt: string;
+        };
+        AuditPlanResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            year: number;
+            title: string;
+            /** @enum {string} */
+            audit_type: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            /** Format: date-time */
+            planned_start: string;
+            /** Format: date-time */
+            planned_end: string;
+            /** @enum {string} */
+            status: "PLANNED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+            version: number;
+        };
         CreateAuditPlanDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3621,6 +4256,20 @@ export interface components {
             proposedEnd: string;
             reason: string;
         };
+        AuditPostponementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            plan_id: string;
+            /** @enum {string} */
+            status: "PENDING" | "APPROVED" | "REJECTED";
+            plan_version: number;
+            version: number;
+            /** Format: date-time */
+            proposed_start: string;
+            /** Format: date-time */
+            proposed_end: string;
+        };
         DecisionDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3635,6 +4284,15 @@ export interface components {
             auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
             definition: Record<string, never>;
         };
+        AuditTemplateResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            draft_definition: Record<string, never>;
+        };
         UpdateAuditTemplateDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3646,6 +4304,18 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
         };
+        PublishedAuditTemplateResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            draft_definition: Record<string, never>;
+            /** Format: uuid */
+            versionId: string;
+            publishedVersion: number;
+        };
         CreateAuditExecutionDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3653,6 +4323,17 @@ export interface components {
             planId: string;
             /** Format: uuid */
             templateVersionId: string;
+        };
+        AuditExecutionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            plan_id: string;
+            /** Format: uuid */
+            template_version_id: string;
+            /** @enum {string} */
+            status: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
+            version: number;
         };
         ChecklistResultDto: {
             /** Format: uuid */
@@ -3662,6 +4343,17 @@ export interface components {
             result: "OK" | "NG" | "NA";
             note?: string;
         };
+        AuditChecklistResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            execution_id: string;
+            item_key: string;
+            /** @enum {string} */
+            result: "OK" | "NG" | "NA";
+            note?: string | null;
+            version: number;
+        };
         CreateNcDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3669,6 +4361,34 @@ export interface components {
             severity: "MINOR" | "MAJOR" | "CRITICAL";
             /** Format: date-time */
             dueAt: string;
+            /** @description 整改期限政策版本 */
+            duePolicyVersion: string;
+            /** @description 工作日历版本 */
+            calendarVersion: string;
+            dueBusinessDays: number;
+        };
+        AuditNcResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            execution_id: string;
+            /** Format: uuid */
+            checklist_result_id: string;
+            /** @enum {string} */
+            severity: "MINOR" | "MAJOR" | "CRITICAL";
+            /** @enum {string} */
+            status: "OPEN" | "ASSIGNED" | "RESPONDED" | "VERIFIED" | "REJECTED" | "CLOSED";
+            /** Format: date-time */
+            due_at: string;
+            due_policy_version?: Record<string, never> | null;
+            calendar_version?: Record<string, never> | null;
+            due_business_days?: Record<string, never> | null;
+            /** Format: uuid */
+            assignee_user_id?: string | null;
+            response?: string | null;
+            /** Format: uuid */
+            verified_by_id?: string | null;
+            version: number;
         };
         AssignNcDto: {
             /** Format: uuid */
@@ -3693,6 +4413,233 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             expectedVersion: number;
+        };
+        CreateNewProductProjectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            code: string;
+            name: string;
+            productCode: string;
+        };
+        NewProductProjectDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            code: string;
+            name: string;
+            product_code: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "ARCHIVED";
+            version: number;
+        };
+        NewProductStageDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "OPEN" | "PASSED" | "REJECTED";
+            version: number;
+        };
+        NewProductLessonCheckDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            lesson_id: string;
+            avoided?: boolean | null;
+            reason?: string | null;
+            /** Format: uuid */
+            evidence_object_id?: string | null;
+            version: number;
+        };
+        NewProductTrialBatchDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            code: string;
+            work_order_code?: string | null;
+            version: number;
+        };
+        NewProductProjectDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            code: string;
+            name: string;
+            product_code: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "ARCHIVED";
+            version: number;
+            stages: components["schemas"]["NewProductStageDto"][];
+            lessons: components["schemas"]["NewProductLessonCheckDto"][];
+            batches: components["schemas"]["NewProductTrialBatchDto"][];
+            selected_defects: Record<string, never>[];
+        };
+        CreateNewProductStageDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            code: string;
+            name: string;
+        };
+        CreateNewProductDeliverableDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            code: string;
+            name: string;
+            required: boolean;
+        };
+        NewProductDeliverableDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            stage_id: string;
+            code: string;
+            name: string;
+            required: boolean;
+            /** Format: uuid */
+            evidence_object_id?: string | null;
+            version: number;
+        };
+        SubmitNewProductDeliverableDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            evidenceObjectId: string;
+        };
+        CreateNewProductLessonDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            title: string;
+            lesson: string;
+            productCode?: string;
+        };
+        NewProductLessonDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            lesson: string;
+            product_code?: string | null;
+            /** @enum {string} */
+            source_kind: "MANUAL";
+        };
+        NewProductScopeDto: {
+            /** Format: uuid */
+            organizationId?: string;
+        };
+        ConfirmNewProductLessonDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            evidenceObjectId: string;
+            avoided: boolean;
+            reason?: string;
+        };
+        ReviewNewProductStageDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "PASS" | "REJECT";
+        };
+        CreateNewProductTrialBatchDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            code: string;
+            workOrderCode?: string;
+        };
+        RecordNewProductMetricDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            code: "INPUT" | "OUTPUT" | "FIRST_PASS" | "DEFECT" | "CPK" | "DIMENSION_PASS_RATE";
+            target: number;
+            actual: number;
+            /** @enum {string} */
+            comparison: "GTE" | "LTE";
+            /** @enum {string} */
+            source: "MANUAL";
+        };
+        NewProductTrialMetricDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            batch_id: string;
+            /** @enum {string} */
+            code: "INPUT" | "OUTPUT" | "FIRST_PASS" | "DEFECT" | "CPK" | "DIMENSION_PASS_RATE";
+            target: number;
+            actual: number;
+            /** @enum {string} */
+            comparison: "GTE" | "LTE";
+            /** @enum {string} */
+            source: "MANUAL";
+            /** @enum {string} */
+            signal?: "GREEN" | "RED";
+        };
+        NewProductTrialReportDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            code: string;
+            work_order_code?: string | null;
+            version: number;
+            metrics: components["schemas"]["NewProductTrialMetricDto"][];
+        };
+        SelectNewProductDefectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            defectId: string;
+            expectedVersion: number;
+            reason?: string;
+        };
+        NewProductWorkflowBindingDto: {
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceKey: string;
+        };
+        IssueNewProductDefectsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            selectionIds: string[];
+            /** Format: uuid */
+            trialBatchId?: string;
+            severity: string;
+            /** @enum {string} */
+            complexity: "SIMPLE" | "COMPLEX";
+            workflowBinding: components["schemas"]["NewProductWorkflowBindingDto"];
+        };
+        EscalateNewProductIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        CreateNewProductLegacyIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            description: string;
+            /** @enum {string} */
+            riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+        };
+        ApproveNewProductMassProductionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            riskStatement: string;
+            /** Format: uuid */
+            evidenceObjectId: string;
         };
         /** @enum {string} */
         ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
@@ -7910,6 +8857,72 @@ export interface operations {
             };
         };
     };
+    ProcessQualityController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueProcessDefectsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessIssueResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_linkedIssues: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessIssueProblemDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     CustomerQualityController_customers: {
         parameters: {
             query?: {
@@ -7925,7 +8938,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerMasterDto"][];
+                };
             };
             default: {
                 headers: {
@@ -7957,7 +8972,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerMasterDto"];
+                };
             };
             default: {
                 headers: {
@@ -7991,7 +9008,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerMasterDto"];
+                };
             };
             default: {
                 headers: {
@@ -8016,7 +9035,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"][];
+                };
             };
             default: {
                 headers: {
@@ -8048,7 +9069,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
             };
             default: {
                 headers: {
@@ -8075,7 +9098,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDetailDto"];
+                };
             };
             default: {
                 headers: {
@@ -8109,7 +9134,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
             };
             default: {
                 headers: {
@@ -8143,7 +9170,38 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_dispositionHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPhysicalDispositionDto"][];
+                };
             };
             default: {
                 headers: {
@@ -8177,7 +9235,38 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerPhysicalDispositionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_analysisHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPhysicalAnalysisDto"][];
+                };
             };
             default: {
                 headers: {
@@ -8211,7 +9300,141 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CustomerPhysicalAnalysisDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCustomerComplaintsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerIssueResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_linkedIssues: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerIssueProblemDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_changeIssueSources: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeCustomerIssueSourcesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerIssueProblemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_linkedIssueHistory: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerIssueLinkHistoryDto"][];
+                };
             };
             default: {
                 headers: {
@@ -8240,7 +9463,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8274,7 +9499,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8306,7 +9533,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8340,7 +9569,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8374,7 +9605,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8406,7 +9639,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8440,7 +9675,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8474,7 +9711,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PublishedAuditTemplateResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8506,7 +9745,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8540,7 +9781,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditChecklistResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8575,7 +9818,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8609,7 +9854,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8643,7 +9890,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8677,7 +9926,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
             };
             default: {
                 headers: {
@@ -8711,7 +9962,639 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_createProject: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductProjectDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_project: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductProjectDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_addStage: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductStageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductStageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_addDeliverable: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductDeliverableDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductDeliverableDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_submitDeliverable: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitNewProductDeliverableDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductDeliverableDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_createLesson: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductLessonDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductLessonDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_attachLesson: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                projectId: string;
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductScopeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductLessonCheckDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_confirmLesson: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmNewProductLessonDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductLessonCheckDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_reviewStage: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewNewProductStageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductStageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_createTrialBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductTrialBatchDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialBatchDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_recordMetric: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordNewProductMetricDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialMetricDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_trialReport: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_selectedDefects: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_selectDefect: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectNewProductDefectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_issueDefects: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueNewProductDefectsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_escalateIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EscalateNewProductIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_legacyIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductLegacyIssueDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_massProductionApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveNewProductMassProductionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
             };
             default: {
                 headers: {

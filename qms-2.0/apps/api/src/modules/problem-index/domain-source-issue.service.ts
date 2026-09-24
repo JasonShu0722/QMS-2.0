@@ -59,7 +59,7 @@ export interface DomainSourceIssueWorkflowBinding {
 }
 
 export interface DomainSourceIssueAdapters {
-  authorize(transaction: Prisma.TransactionClient, command: DomainSourceIssueCommand): Promise<void>;
+  authorize(transaction: Prisma.TransactionClient, command: DomainSourceIssueCommand, replay: boolean): Promise<void>;
   lockAndResolve(transaction: Prisma.TransactionClient, source: DomainSourceReference): Promise<DomainSourceRecord | null>;
   bindWorkflow(transaction: Prisma.TransactionClient, binding: DomainSourceIssueWorkflowBinding): Promise<{ instanceId: string }>;
 }
@@ -86,7 +86,8 @@ function stable(value: unknown): unknown {
 function digestCommand(command: DomainSourceIssueCommand): string {
   const { idempotencyKey: _key, traceId: _trace, ...payload } = command;
   const { sessionId: _session, ...actor } = payload.actor;
-  return createHash('sha256').update(JSON.stringify(stable({ ...payload, actor }))).digest('hex');
+  const reference = ({ sourceDomain, sourceType, sourceId, sourceVersion, sourceSnapshot, createdBy }: DomainSourceReference) => ({ sourceDomain, sourceType, sourceId, sourceVersion, sourceSnapshot, createdBy });
+  return createHash('sha256').update(JSON.stringify(stable({ ...payload, actor, source: reference(payload.source), additionalSources: payload.additionalSources?.map(reference) }))).digest('hex');
 }
 
 function eventKey(command: DomainSourceIssueCommand): string {
@@ -142,8 +143,8 @@ export class DomainSourceIssueService {
       const key = eventKey(command);
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
       await assertActiveAuthentication(tx, command.actor);
-      await adapters.authorize(tx, command);
       const existing = await tx.outboxEvent.findUnique({ where: { eventKey: key } });
+      await adapters.authorize(tx, command, Boolean(existing));
       const digest = digestCommand(command);
       if (existing) {
         const payload = existing.payload as Record<string, unknown>;
@@ -186,7 +187,17 @@ export class DomainSourceIssueService {
           sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: reference.sourceVersion,
           sourceSnapshot: reference.sourceSnapshot, createdBy: reference.createdBy,
         } });
+        await tx.domainSourceIssueLinkHistory.create({ data: {
+          organizationId: command.organizationId, problemIndexId: String(problem.id), sourceDomain: reference.sourceDomain,
+          sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: reference.sourceVersion,
+          sourceSnapshot: reference.sourceSnapshot, action: 'LINKED', actorUserId: command.actor.id,
+        } });
       }
+      await tx.domainSourceIssueLinkHistory.create({ data: {
+        organizationId: command.organizationId, problemIndexId: String(problem.id), sourceDomain: command.source.sourceDomain,
+        sourceType: command.source.sourceType, sourceId: command.source.sourceId, sourceVersion: command.source.sourceVersion,
+        sourceSnapshot: command.source.sourceSnapshot, action: 'PRIMARY_SELECTED', actorUserId: command.actor.id,
+      } });
       const workflow = await adapters.bindWorkflow(tx, {
         problemIndexId: String(problem.id), organizationId: command.organizationId, actor: command.actor,
         expectedProblemVersion: Number(problem.version), idempotencyKey: command.idempotencyKey, traceId: command.traceId ?? randomUUID(),

@@ -15,6 +15,7 @@ import { SupplierQualityModule } from './modules/supplier-quality/supplier-quali
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
 import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
+import { NewProductQualityModule } from './modules/new-product-quality/new-product-quality.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AuditManagementModule } from './modules/audit-management/audit-manageme
     ProcessQualityModule,
     CustomerQualityModule,
     AuditManagementModule,
+    NewProductQualityModule,
   ],
 })
 export class AppModule {}

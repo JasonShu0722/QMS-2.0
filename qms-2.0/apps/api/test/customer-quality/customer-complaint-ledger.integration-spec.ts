@@ -94,6 +94,51 @@ describe('customer complaint ledger on PostgreSQL', () => {
     expect(count).toBe(0);
   });
 
+  it('keeps disposition history, exposes the current record, and rejects changes after closure', async () => {
+    const record = await customer();
+    const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '退件维修', returnRequired: true, severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+    const received = await service.recordPhysicalDisposition(actor, complaint.id, { action: 'REPAIR', status: 'RECEIVED' }, randomUUID(), randomUUID());
+    const closed = await service.recordPhysicalDisposition(actor, complaint.id, { action: 'REPAIR', status: 'CLOSED', notes: '维修完成' }, randomUUID(), randomUUID());
+    const detail = await service.detailComplaint(actor, complaint.id);
+    expect(detail.currentDisposition.id).toBe(closed.id);
+    expect(detail.version).toBe(3);
+    expect((await service.dispositionHistory(actor, complaint.id)).map((item: { id: string }) => item.id)).toEqual([received.id, closed.id]);
+    await expect(service.recordPhysicalDisposition(actor, complaint.id, { action: 'REPAIR', status: 'PENDING' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('tracks received returns through repair or scrap with consistent action and status', async () => {
+    const record = await customer();
+    const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '退件后返修', returnRequired: true, severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+    await service.recordPhysicalDisposition(actor, complaint.id, { action: 'RETURN', status: 'RECEIVED' }, randomUUID(), randomUUID());
+    await expect(service.recordPhysicalDisposition(actor, complaint.id, { action: 'SCRAP', status: 'REPAIRED' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 400 });
+    const repaired = await service.recordPhysicalDisposition(actor, complaint.id, { action: 'REPAIR', status: 'REPAIRED', responsibility: '返修责任人' }, randomUUID(), randomUUID());
+    expect(repaired.version).toBe(2);
+    expect((await service.detailComplaint(actor, complaint.id)).currentDisposition.action).toBe('REPAIR');
+  });
+
+  it('routes analysis only when required and preserves current and historical states', async () => {
+    const record = await customer();
+    const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '需实物解析', physicalAnalysisRequired: true, severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+    const pending = await service.recordPhysicalAnalysis(actor, complaint.id, { summary: '待收到退件', status: 'MISSING' }, randomUUID(), randomUUID());
+    const completed = await service.recordPhysicalAnalysis(actor, complaint.id, { summary: '焊点开裂', status: 'COMPLETED', evidenceSummary: '显微照片' }, randomUUID(), randomUUID());
+    const detail = await service.detailComplaint(actor, complaint.id);
+    expect(detail.currentAnalysis.id).toBe(completed.id);
+    expect(detail.version).toBe(3);
+    expect((await service.analysisHistory(actor, complaint.id)).map((item: { id: string }) => item.id)).toEqual([pending.id, completed.id]);
+    await expect(service.recordPhysicalAnalysis(actor, complaint.id, { summary: '再次待件', status: 'MISSING' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    const direct = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '无需解析', severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+    await expect(service.recordPhysicalAnalysis(actor, direct.id, { summary: '不应进入解析', status: 'IN_PROGRESS' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('binds severity and policy version into the snapshot and rejects contradictions', async () => {
+    const record = await customer();
+    await expect(service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '错误等级', severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L3' } }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 400 });
+    const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '等级快照', severity: 'L2', severityPolicyVersion: 'policy-2', severitySnapshot: { level: 'L2' } }, randomUUID(), randomUUID());
+    expect(complaint.severity_snapshot).toMatchObject({ level: 'L2', policyVersion: 'policy-2' });
+    await expect(service.updateComplaint(actor, complaint.id, { expectedVersion: 1, severity: 'L1', severityPolicyVersion: 'policy-3', severitySnapshot: { level: 'L1', policyVersion: 'policy-2' } }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 400 });
+    expect((await service.detailComplaint(actor, complaint.id)).version).toBe(1);
+  });
+
   it('denies reads after permission revocation and retains archived history', async () => {
     const record = await customer();
     const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '归档历史', severity: 'LOW', severityPolicyVersion: 'policy-1', severitySnapshot: { level: 'LOW' } }, randomUUID(), randomUUID());

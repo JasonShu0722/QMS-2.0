@@ -60,4 +60,8 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     await request(app.getHttpServer()).post('/api/v1/process-quality/defects').set('Cookie', cookie).set('Idempotency-Key', randomUUID()).send({}).expect(403);
     await request(app.getHttpServer()).get(`/api/v1/process-quality/defects?organizationId=${randomUUID()}`).set('Cookie', cookie).expect(403);
   });
+
+  it('exposes protected formal issue creation with validated source selection', async () => {
+    await send('post', 'issues', { sources: [] }).expect(400);
+  });
 });

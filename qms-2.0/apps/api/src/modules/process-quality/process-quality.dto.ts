@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
 
 export class ProcessScopeDto {
@@ -120,4 +120,38 @@ export class ProcessDefectPageDto {
   @ApiProperty() total!: number;
   @ApiProperty() page!: number;
   @ApiProperty() pageSize!: number;
+}
+
+export class ProcessIssueSourceDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() defectId!: string;
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+}
+
+export class ProcessIssueWorkflowBindingDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() workflowDefinitionId!: string;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() workflowVersionId!: string;
+  @ApiProperty({ minLength: 1, maxLength: 128 }) @IsString() @MaxLength(128) instanceKey!: string;
+}
+
+export class IssueProcessDefectsDto extends ProcessScopeDto {
+  @ApiProperty({ type: [ProcessIssueSourceDto], minItems: 1, maxItems: 100 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ProcessIssueSourceDto) sources!: ProcessIssueSourceDto[];
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) problemType!: string;
+  @ApiProperty({ enum: ['BRIEF', 'EIGHT_D'] }) @IsIn(['BRIEF', 'EIGHT_D']) responseForm!: 'BRIEF' | 'EIGHT_D';
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) responsibleScope!: string;
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) severity!: string;
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() ownerId?: string;
+  @ApiPropertyOptional({ format: 'date-time' }) @IsOptional() @Type(() => Date) @IsDate() dueAt?: Date;
+  @ApiProperty({ type: ProcessIssueWorkflowBindingDto }) @ValidateNested() @Type(() => ProcessIssueWorkflowBindingDto) workflowBinding!: ProcessIssueWorkflowBindingDto;
+}
+
+export class ProcessIssueProblemDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() reportNumber!: string;
+  @ApiProperty({ format: 'uuid' }) workflowInstanceId!: string;
+  @ApiProperty() version!: number;
+}
+
+export class ProcessIssueResultDto {
+  @ApiProperty({ type: ProcessIssueProblemDto }) problem!: ProcessIssueProblemDto;
+  @ApiProperty() replayed!: boolean;
 }

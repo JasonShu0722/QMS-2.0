@@ -186,6 +186,18 @@ export class ProcessDefectLedgerService {
     });
   }
 
+  async sourceReference(actor: AdminActor, id: string): Promise<DomainSourceReference> {
+    const organizationId = this.scope(actor);
+    return this.prisma.$transaction(async (tx) => {
+      await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
+      const record = await this.find(tx, organizationId, id);
+      return {
+        sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: record.id,
+        sourceVersion: record.version, sourceSnapshot: this.snapshot(record), createdBy: record.createdById,
+      };
+    });
+  }
+
   async lockAndResolve(tx: AdminTransaction, source: DomainSourceReference): Promise<DomainSourceRecord | null> {
     if (source.sourceDomain !== 'process-quality' || source.sourceType !== 'process-defect') return null;
     await tx.$queryRaw`SELECT id FROM process_defects WHERE id = ${source.sourceId}::uuid FOR UPDATE`;
