@@ -12,6 +12,12 @@ import { OutboxService } from '../../src/modules/task-notification/outbox.servic
 import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
 import { WorkflowValidationService } from '../../src/modules/workflow/workflow-validation.service.js';
 import { WorkflowRuntimeService } from '../../src/modules/workflow/workflow-runtime.service.js';
+import { ProcessProductionService } from '../../src/modules/process-quality/process-production.service.js';
+import { ProcessShipmentReportService } from '../../src/modules/process-quality/process-shipment-report.service.js';
+import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
+import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
+import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
+import { S3CompatibleObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || new URL(databaseUrl).port === '55440') {
@@ -28,6 +34,9 @@ describe('process defect issue workflow on PostgreSQL', () => {
   const domainIssues = new DomainSourceIssueService(prisma, problems, outbox);
   const ledger = new ProcessDefectLedgerService(prisma, new AdminMutationService(prisma, audit), audit);
   const service = new ProcessIssueService(prisma, ledger, domainIssues, runtime);
+  const production = new ProcessProductionService(prisma, new AdminMutationService(prisma, audit), audit);
+  const files = new FileLifecycleService(prisma, new FilePolicyService(), new S3CompatibleObjectStorage(), audit, new FileResourceAccess([]));
+  const reports = new ProcessShipmentReportService(prisma, new AdminMutationService(prisma, audit), audit, production, files);
   const organizationId = randomUUID();
   const otherOrganizationId = randomUUID();
   const userId = randomUUID();
@@ -98,6 +107,21 @@ describe('process defect issue workflow on PostgreSQL', () => {
     await ledger.archive(actor, first.id, first.version, randomUUID(), randomUUID());
     expect(await service.problemsForDefect(actor, first.id)).toEqual(expect.arrayContaining([expect.objectContaining({ id: problemId })]));
     expect((await prisma.domainSourceIssueLink.findFirstOrThrow({ where: { sourceId: first.id, problemIndexId: problemId } })).sourceSnapshot).toMatchObject({ description: '端子氧化' });
+  });
+
+  it('links a formal process issue to a shipment report and reads its current status', async () => {
+    const source = await defect();
+    const issued = await service.issue(actor, input([source]), randomUUID(), randomUUID());
+    const problemId = String(issued.problem.id);
+    const periodStart = new Date('2026-09-24T00:00:00Z');
+    const periodEnd = new Date('2026-09-25T00:00:00Z');
+    const batch = await production.create(actor, { batchCode: `D7-${randomUUID().slice(0, 8)}`, workOrderCode: 'D7-WO', operationCode: 'ASSEMBLY', productCode: 'D7-P', periodStart, periodEnd, totalQuantity: 10, goodQuantity: 9, firstPassQuantity: 8 }, randomUUID(), randomUUID());
+    const report = await reports.create(actor, { periodStart, periodEnd, batchIds: [batch.id] }, randomUUID(), randomUUID());
+    const version = Number((await prisma.problemIndex.findUniqueOrThrow({ where: { id: problemId } })).version);
+    const linked = await reports.linkIssue(actor, report.id, { problemId, expectedVersion: 1, expectedProblemVersion: version }, randomUUID(), randomUUID());
+    expect(linked.issues).toEqual([expect.objectContaining({ id: problemId, version })]);
+    expect((await reports.detail(actor, report.id)).issues).toHaveLength(1);
+    await expect(reports.linkIssue(actor, report.id, { problemId, expectedVersion: 1, expectedProblemVersion: version }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
   });
 
   it('replays one command without duplicate problem or workflow', async () => {

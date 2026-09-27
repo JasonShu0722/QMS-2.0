@@ -1,0 +1,11 @@
+.supplier-concession-page { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.supplier-concession-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.supplier-concession-heading h1 { margin: 4px 0 0; }
+.supplier-concession-heading p { max-width: 790px; margin-bottom: 0; }
+.supplier-concession-card { min-width: 0; padding: 20px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); }
+.supplier-concession-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.supplier-concession-loading { display: grid; min-height: 180px; place-items: center; }
+.supplier-concession-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.supplier-concession-form-grid .ant-input-number { width: 100%; }
+.supplier-concession-detail { display: grid; gap: 24px; overflow-wrap: anywhere; }
+@media (max-width: 720px) { .supplier-concession-page { padding: 16px; } .supplier-concession-heading { flex-direction: column; } .supplier-concession-card { padding: 16px; } .supplier-concession-form-grid { grid-template-columns: 1fr; } }

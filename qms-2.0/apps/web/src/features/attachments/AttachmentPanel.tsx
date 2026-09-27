@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Empty, Popconfirm, Space, Spin, Tag, Typography } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
-import { attachmentDownload, createUploadAttempt, deleteAttachment, readAttachment, type Attachment, type FileResource } from './attachments';
+import { attachmentDownload, createUploadAttempt, deleteAttachment, readAttachment, retryScanAttachment, type Attachment, type FileResource } from './attachments';
 
 import './attachments.css';
 
@@ -11,6 +11,7 @@ interface Props {
   fileIds: string[];
   readOnly?: boolean;
   onReady?: (file: Attachment) => void;
+  onFilesChanged?: (files: Attachment[]) => void;
   onRemoved?: (id: string) => void;
 }
 
@@ -18,7 +19,7 @@ export function AttachmentPanel(props: Props) {
   return <AttachmentContent key={`${props.resource.resourceType}:${props.resource.resourceId}`} {...props} />;
 }
 
-function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onRemoved }: Props) {
+function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFilesChanged, onRemoved }: Props) {
   const { t, locale } = useLanguage();
   const [localIds, setLocalIds] = useState<string[]>([]);
   const [files, setFiles] = useState<Record<string, Attachment>>({});
@@ -34,6 +35,8 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onRem
   const announced = useRef(new Set<string>());
   const readyCallback = useRef(onReady);
   readyCallback.current = onReady;
+  const filesChangedCallback = useRef(onFilesChanged);
+  filesChangedCallback.current = onFilesChanged;
   const idsKey = [...new Set([...fileIds, ...localIds])].sort().join(',');
   const ids = idsKey ? idsKey.split(',') : [];
   const visible = ids.flatMap((id) => files[id] ? [files[id]!] : []);
@@ -58,6 +61,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onRem
         const existing = current[requested[index]!];
         return [[file.id, existing && existing.version > file.version ? existing : file]];
       })));
+      filesChangedCallback.current?.(results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []));
       setLoading(false);
     });
     return () => controller.abort();
@@ -95,13 +99,15 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onRem
       if (!lifetime.current.signal.aborted) { setBusy(false); refresh(); }
     }
   }
-  async function operate(file: Attachment, action: 'download' | 'delete') {
+  async function operate(file: Attachment, action: 'download' | 'delete' | 'retry-scan') {
     if (actionLock.current) return;
     actionLock.current = true; setBusy(true); setActionError(undefined);
     try {
       if (action === 'delete') {
         await deleteAttachment(file);
         if (!lifetime.current.signal.aborted) onRemoved?.(file.id);
+      } else if (action === 'retry-scan') {
+        observe(await retryScanAttachment(file));
       } else {
         const url = await attachmentDownload(file.id);
         if (!lifetime.current.signal.aborted) {
@@ -138,6 +144,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onRem
           <Tag color={file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' ? 'green' : 'orange'}>{t(status(file))}</Tag>
           <span>{new Intl.NumberFormat(locale).format(file.sizeBytes)} {t('字节')}</span>
           {file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' && <Button aria-label={t('下载附件')} disabled={busy} onClick={() => void operate(file, 'download')}>{t('下载附件')}</Button>}
+          {!readOnly && file.status === 'QUARANTINED' && file.scanStatus === 'ERROR' && <Button aria-label={t('重试安全扫描')} disabled={busy} onClick={() => void operate(file, 'retry-scan')}>{t('重试安全扫描')}</Button>}
           {!readOnly && file.status !== 'DELETED' && <Popconfirm title={t('确认删除此附件？')} description={t('删除后无法继续下载，历史记录和保留对象不受影响。')} okText={t('确认删除附件')} cancelText={t('取消')} onConfirm={() => operate(file, 'delete')}>
             <Button aria-label={t('删除附件')} disabled={busy} danger>{t('删除附件')}</Button>
           </Popconfirm>}

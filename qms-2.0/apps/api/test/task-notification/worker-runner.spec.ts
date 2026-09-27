@@ -78,4 +78,11 @@ describe('continuous worker runner', () => {
     await runWorkerLoop(worker as unknown as OutboxWorkerService, (async () => {}) as OutboxHandler, parseWorkerOptions([], {}), stop.signal);
     expect(worker.processDue).not.toHaveBeenCalled();
   });
+
+  it('reports each completed cycle to the optional observer', async () => {
+    const cycles: unknown[] = [];
+    const worker = { processAtomicDue: jest.fn(async () => ({ processed: 2, retried: 1, failed: 0 })) };
+    await runWorkerLoop(worker as unknown as OutboxWorkerService, { eventTypes: ['TEST'], handle: async () => {} }, { once: true, pollIntervalMs: 100, batchSize: 10 }, new AbortController().signal, undefined, (result) => { cycles.push(result); });
+    expect(cycles).toEqual([{ processed: 2, retried: 1, failed: 0 }]);
+  });
 });

@@ -64,4 +64,20 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
   it('exposes protected formal issue creation with validated source selection', async () => {
     await send('post', 'issues', { sources: [] }).expect(400);
   });
+
+  it('creates and corrects a production fact through protected batch and summary routes', async () => {
+    const batchCode = `HTTP-P-${randomUUID().slice(0, 8)}`;
+    const created = await send('post', 'production-batches', {
+      batchCode, workOrderCode: 'WO-01', operationCode: 'ASSEMBLY', productCode: 'P-01',
+      periodStart: '2026-09-24T00:00:00Z', periodEnd: '2026-09-25T00:00:00Z',
+      totalQuantity: 100, goodQuantity: 90, firstPassQuantity: 80,
+    }).expect(201);
+    expect(created.body).toMatchObject({ batchCode, sourceKind: 'MANUAL', yieldRate: 0.9, firstPassRate: 0.8 });
+    const summary = await request(app.getHttpServer()).get('/api/v1/process-quality/production-batches/summary?periodStart=2026-09-24T00:00:00Z&periodEnd=2026-09-25T00:00:00Z').set('Cookie', cookie).expect(200);
+    expect(summary.body.totalQuantity).toBeGreaterThanOrEqual(100);
+    const corrected = await send('put', `production-batches/${created.body.id}/correct`, { expectedVersion: 1, goodQuantity: 95, firstPassQuantity: 85, reason: '复核' }).expect(200);
+    expect(corrected.body.version).toBe(2);
+    const detail = await request(app.getHttpServer()).get(`/api/v1/process-quality/production-batches/${created.body.id}`).set('Cookie', cookie).expect(200);
+    expect(detail.body.revisions).toHaveLength(2);
+  });
 });

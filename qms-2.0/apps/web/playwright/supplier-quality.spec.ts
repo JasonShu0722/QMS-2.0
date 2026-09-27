@@ -8,7 +8,9 @@ const databaseUrl = process.env.DATABASE_URL;
 const password = process.env.QMS_SEED_INTERNAL_PASSWORD;
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 if (!databaseUrl || !password || !baseURL || process.env.QMS_SUPPLIER_E2E_DISPOSABLE !== 'true'
-  || new URL(databaseUrl).port === '55440' || !new URL(databaseUrl).pathname.includes('supplier')) {
+  || process.env.QMS_ACCEPTANCE_DISPOSABLE_DATABASE !== 'true'
+  || !['127.0.0.1', 'localhost', '[::1]', '::1'].includes(new URL(databaseUrl).hostname)
+  || new URL(databaseUrl).port === '55440') {
   throw new Error('Supplier browser tests require an explicitly disposable supplier PostgreSQL database, a live URL and a password; skipping is forbidden.');
 }
 const requireApi = createRequire(new URL('../../api/package.json', import.meta.url));

@@ -76,7 +76,7 @@ try {
     ]);
     const storage = new URL(required('QMS_OBJECT_STORAGE_ENDPOINT'));
     assert.ok(loopback(storage.hostname), 'Use disposable loopback object storage');
-    assert.equal((await fetch(new URL('/minio/health/ready', storage), { signal: AbortSignal.timeout(10000) })).status, 200, 'Real object storage must be ready');
+    assert.equal((await fetch(new URL('/health', storage), { signal: AbortSignal.timeout(10000) })).status, 200, 'Real object storage must be ready');
     required('QMS_ACCEPTANCE_MAILPIT_URL');
   });
   await step('Full foundation and phase 2 regression', () => execFileSync(process.execPath, [process.env.npm_execpath, 'acceptance:phase-1'], { cwd: root, stdio: 'inherit', env: process.env }));

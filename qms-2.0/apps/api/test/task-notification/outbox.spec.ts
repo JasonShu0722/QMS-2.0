@@ -84,6 +84,21 @@ describe('transactional outbox foundation', () => {
     });
   });
 
+  it('records a safe structured failure receipt for each failed delivery', async () => {
+    const now = new Date('2026-09-18T00:00:00.000Z');
+    const event = { id: 'event-1', attempts: 4, payload: {}, eventType: 'FOUNDATION_EVENT', processingAt: now };
+    const prisma = {
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+      $queryRaw: jest.fn().mockResolvedValue([event]),
+      outboxEvent: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      outboxDeliveryAttempt: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const worker = new OutboxWorkerService(prisma as never, () => now);
+    await worker.processDue(1, async () => { throw new Error('secret transport detail'); });
+    expect(prisma.outboxDeliveryAttempt.create).toHaveBeenCalledWith({ data: expect.objectContaining({ outboxEventId: 'event-1', attemptNumber: 5, outcome: 'FAILED', reasonCode: 'OUTBOX_HANDLER_ERROR' }) });
+    expect(JSON.stringify(prisma.outboxDeliveryAttempt.create.mock.calls)).not.toContain('secret transport detail');
+  });
+
   it('does not run handlers twice when workers claim due events concurrently', async () => {
     const now = new Date('2026-09-18T00:00:00.000Z');
     const pending = [

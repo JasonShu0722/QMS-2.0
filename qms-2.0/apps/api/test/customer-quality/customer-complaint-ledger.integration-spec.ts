@@ -3,7 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
-import { CustomerQualityService } from '../../src/modules/customer-quality/customer-quality.service.js';
+import { CustomerQualityService, type CustomerComplaintImportRow } from '../../src/modules/customer-quality/customer-quality.service.js';
+import { CustomerComplaintProcessingService } from '../../src/modules/customer-quality/customer-complaint-processing.service.js';
+import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
+import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
+import { createObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
+import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
+import { CustomerComplaintFileResourceAdapter } from '../../src/modules/customer-quality/customer-complaint-file-resource.adapter.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || new URL(databaseUrl).port === '55440') {
@@ -15,6 +21,10 @@ describe('customer complaint ledger on PostgreSQL', () => {
   const audit = new AuditLogService(prisma);
   const mutations = new AdminMutationService(prisma, audit);
   const service = new CustomerQualityService(prisma, mutations, audit);
+  const resources = new FileResourceAccess([]);
+  new CustomerComplaintFileResourceAdapter(resources).onModuleInit();
+  const files = new FileLifecycleService(prisma, new FilePolicyService(), createObjectStorage(), audit, resources);
+  const processing = new CustomerComplaintProcessingService(prisma, mutations, audit, files);
   const organizationId = randomUUID();
   const otherOrganizationId = randomUUID();
   const userId = randomUUID();
@@ -53,6 +63,24 @@ describe('customer complaint ledger on PostgreSQL', () => {
     const replay = await service.createCustomer(actor, { code: 'C-001', name: '客户甲' }, randomUUID(), key);
     expect(replay.id).toBe(first.id);
     await expect(service.createCustomer(actor, { code: 'C-001', name: '客户乙' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('imports complaint rows independently and classifies duplicates', async () => {
+    const record = await customer();
+    const firstExternalKey = `IMS-${randomUUID()}`;
+    const batchKey = randomUUID();
+    const input: CustomerComplaintImportRow[] = [
+      { rowNumber: 2, customerId: record.id, complaintType: 'ZERO_KM' as const, defectDescription: '批量导入', severity: 'LOW', severityPolicyVersion: 'policy-1', severitySnapshot: { level: 'LOW' }, externalSourceSystem: 'IMS' as const, externalRecordKey: firstExternalKey, sourceObservedAt: new Date() },
+      { rowNumber: 3, customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '重复导入', severity: 'LOW', severityPolicyVersion: 'policy-1', severitySnapshot: { level: 'LOW' }, externalSourceSystem: 'IMS', externalRecordKey: 'same-key', sourceObservedAt: new Date() },
+      { rowNumber: 4, customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '重复导入二', severity: 'LOW', severityPolicyVersion: 'policy-1', severitySnapshot: { level: 'LOW' }, externalSourceSystem: 'IMS', externalRecordKey: 'same-key', sourceObservedAt: new Date() },
+    ];
+    const rows = await service.importComplaints(actor, input, randomUUID(), batchKey);
+    expect(rows.created).toBe(2);
+    expect(rows.duplicates).toBe(1);
+    expect(rows.rejected).toBe(0);
+    const replay = await service.importComplaints(actor, input, randomUUID(), batchKey);
+    expect(replay.created).toBe(2);
+    expect(replay.duplicates).toBe(1);
   });
 
   it('prevents new complaints for inactive customers but preserves existing history', async () => {
@@ -142,10 +170,19 @@ describe('customer complaint ledger on PostgreSQL', () => {
   it('denies reads after permission revocation and retains archived history', async () => {
     const record = await customer();
     const complaint = await service.createComplaint(actor, { customerId: record.id, complaintType: 'ZERO_KM', defectDescription: '归档历史', severity: 'LOW', severityPolicyVersion: 'policy-1', severitySnapshot: { level: 'LOW' } }, randomUUID(), randomUUID());
-    const archived = await service.archiveComplaint(actor, complaint.id, 1, randomUUID(), randomUUID());
+    await expect(service.archiveComplaint(actor, complaint.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    const department = await prisma.department.create({ data: { organizationId, code: 'ARCHIVE-QE', name: '质量部' } });
+    const reviewerId = randomUUID(); const reviewerSessionId = randomUUID();
+    await prisma.user.create({ data: { id: reviewerId, organizationId, username: `cqe-${reviewerId.slice(0, 8)}`, accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    await prisma.session.create({ data: { id: reviewerSessionId, userId: reviewerId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), reauthenticatedAt: new Date() } });
+    await prisma.userRole.create({ data: { userId: reviewerId, organizationId, roleId } });
+    await processing.triage(actor, complaint.id, { expectedVersion: 1, category: 'PRODUCT_QUALITY', responsibleDepartmentId: department.id, ownerUserId: userId, note: '质量部接收' }, randomUUID(), randomUUID());
+    await processing.resolve(actor, complaint.id, { expectedVersion: 2, resolutionSummary: '换件完成' }, randomUUID(), randomUUID());
+    await processing.close({ id: reviewerId, organizationId, accountType: 'INTERNAL', sessionId: reviewerSessionId }, complaint.id, { expectedVersion: 3, note: '独立复核' }, randomUUID(), randomUUID());
+    const archived = await service.archiveComplaint(actor, complaint.id, 4, randomUUID(), randomUUID());
     expect(archived.archived_at).toBeTruthy();
     expect((await service.detailComplaint(actor, complaint.id)).id).toBe(complaint.id);
-    await expect(service.updateComplaint(actor, complaint.id, { expectedVersion: 2, defectDescription: '非法修改' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(service.updateComplaint(actor, complaint.id, { expectedVersion: 5, defectDescription: '非法修改' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'customer-quality:complaints:read' } });
     await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId: permission.id } } });
     await expect(service.detailComplaint(actor, complaint.id)).rejects.toMatchObject({ status: 403 });

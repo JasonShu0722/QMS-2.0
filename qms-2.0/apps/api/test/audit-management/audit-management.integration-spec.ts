@@ -71,14 +71,16 @@ describe('audit management PostgreSQL invariants', () => {
     const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG', note: '缺少记录' }, randomUUID(), randomUUID());
     const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
     expect(typeof nc.due_at).toBe('string');
+    expect(await service.listNcsForExecution(actor, execution.id)).toEqual([expect.objectContaining({ id: nc.id, checklist_result_id: result.id, status: 'OPEN' })]);
     await expect(service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'OK' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await expect(service.closeNc(actor, nc.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await service.assignNc(actor, nc.id, userId, 1, randomUUID(), randomUUID());
     await service.respondNc(actor, nc.id, { expectedVersion: 2, response: '已补充记录' }, randomUUID(), randomUUID());
     await expect(service.verifyNc(actor, nc.id, 3, true, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
-    await service.verifyNc(reviewer, nc.id, 3, true, randomUUID(), randomUUID());
+    await service.verifyNc(reviewer, nc.id, 3, true, randomUUID(), randomUUID(), '复测记录符合要求');
     const closed = await service.closeNc(reviewer, nc.id, 4, randomUUID(), randomUUID());
     expect(closed.status).toBe('CLOSED');
+    expect(await service.listNcsForExecution(actor, execution.id)).toEqual([expect.objectContaining({ status: 'CLOSED', verification_note: '复测记录符合要求', closed_by_id: reviewerId })]);
   });
 
   it('accepts checklist keys only from the fixed published template', async () => {
@@ -132,6 +134,14 @@ describe('audit management PostgreSQL invariants', () => {
     expect(() => service.importCustomerOrSecondPartyRow(actor, { sourceSystem: 'UNKNOWN' as 'CUSTOMER', map: () => ({ externalKey: 'X1', payload: {} }) }, {}, randomUUID(), randomUUID())).toThrow();
   });
 
+  it('records customer and second-party imports idempotently within the organization', async () => {
+    const externalKey = `CUST-${randomUUID()}`;
+    const adapter = { sourceSystem: 'CUSTOMER' as const, map: (record: unknown) => ({ externalKey, payload: record as Record<string, unknown> }) };
+    const imported = await service.importCustomerOrSecondPartyRow(actor, adapter, { plan: '2026-Q4', findingCount: 2 }, randomUUID(), randomUUID());
+    expect(imported).toMatchObject({ organization_id: organizationId, source_system: 'CUSTOMER', external_key: externalKey, status: 'PENDING_REVIEW', payload: { plan: '2026-Q4', findingCount: 2 } });
+    await expect(service.importCustomerOrSecondPartyRow(actor, adapter, { plan: '2026-Q4' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'AUDIT_IMPORT_DUPLICATE' } });
+  });
+
   it('rolls back a rejected postponement and honors plan CAS', async () => {
     const plan = await service.createPlan(actor, { year: 2027, title: '审核计划', auditType: 'SYSTEM', plannedStart: '2027-01-01T00:00:00.000Z', plannedEnd: '2027-01-31T00:00:00.000Z' }, randomUUID(), randomUUID());
     const updated = await service.updatePlan(actor, plan.id, { expectedVersion: 1, title: '新计划' }, randomUUID(), randomUUID());
@@ -141,5 +151,43 @@ describe('audit management PostgreSQL invariants', () => {
     await service.approvePostponement(actor, request.id, false, 1, randomUUID(), randomUUID());
     const current = await service.getPlan(actor, plan.id);
     expect(current.planned_start.toISOString()).toContain('2027-01-01');
+  });
+
+  it('rejects stale mobile edits and replays the same command without another write', async () => {
+    const template = await service.createTemplate(actor, { name: '草稿并发', auditType: 'PROCESS', definition: { items: [{ key: 'P1', text: '过程受控' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2027, title: '草稿并发', auditType: 'PROCESS', plannedStart: '2027-01-01T00:00:00Z', plannedEnd: '2027-01-31T00:00:00Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    const input = { itemKey: 'P1', result: 'NG' as const, note: '原始记录', expectedVersion: 0 };
+    const key = randomUUID();
+    const recorded = await service.recordChecklistResult(actor, execution.id, input, randomUUID(), key);
+    expect(await service.recordChecklistResult(actor, execution.id, input, randomUUID(), key)).toEqual(recorded);
+    await expect(service.recordChecklistResult(actor, execution.id, { ...input, result: 'OK' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    expect((await service.getExecution(actor, execution.id)).checklist[0]).toMatchObject({ note: '原始记录', version: 1 });
+    const other = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    await expect(service.recordChecklistResult(actor, other.id, input, randomUUID(), key)).rejects.toMatchObject({ status: 409 });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'audit-management:write' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId: permission.id } } });
+    try {
+      await expect(service.recordChecklistResult(actor, execution.id, input, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+      await expect(service.submitExecution(actor, execution.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    } finally { await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } }); }
+  });
+
+  it('returns a resumable execution snapshot and submits with a version guard', async () => {
+    const template = await service.createTemplate(actor, { name: '移动审核', auditType: 'PROCESS', definition: { items: [{ key: 'P1', text: '过程受控' }, { key: 'P2', text: '记录完整' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2027, title: '移动执行', auditType: 'PROCESS', plannedStart: '2027-01-01T00:00:00.000Z', plannedEnd: '2027-01-31T00:00:00.000Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'OK' }, randomUUID(), randomUUID());
+    const snapshot = await service.getExecution(actor, execution.id);
+    expect(snapshot.execution).toMatchObject({ id: execution.id, status: 'OPEN', version: 1 });
+    expect(snapshot.items).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'P1', text: '过程受控' }), expect.objectContaining({ key: 'P2', text: '记录完整' })]));
+    expect(snapshot.checklist).toEqual(expect.arrayContaining([expect.objectContaining({ item_key: 'P1', result: 'OK' })]));
+    await expect(service.submitExecution(actor, execution.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await service.recordChecklistResult(actor, execution.id, { itemKey: 'P2', result: 'NA' }, randomUUID(), randomUUID());
+    const submitted = await service.submitExecution(actor, execution.id, 1, randomUUID(), randomUUID());
+    expect(submitted).toMatchObject({ status: 'SUBMITTED', version: 2 });
+    await expect(service.submitExecution(actor, execution.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
   });
 });

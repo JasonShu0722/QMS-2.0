@@ -35,13 +35,13 @@ jobs:
     env:
       CI: 'true'
       PG_CONTAINER: qms2-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      MINIO_CONTAINER: qms2-ci-minio-${{ github.run_id }}-${{ github.run_attempt }}
+      RUSTFS_CONTAINER: qms2-ci-rustfs-${{ github.run_id }}-${{ github.run_attempt }}
       CLAMAV_CONTAINER: qms2-ci-clamav-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.22.0'
+          node-version: '24.21.0'
       - name: Install independent workspace
         run: |
           corepack enable
@@ -78,20 +78,23 @@ jobs:
           done
           STORAGE_SECRET=$(openssl rand -hex 24)
           echo "::add-mask::$STORAGE_SECRET"
-          echo "MINIO_ROOT_PASSWORD=$STORAGE_SECRET" >> "$GITHUB_ENV"
-          echo "MINIO_ROOT_USER=qms-ci" >> "$GITHUB_ENV"
+          echo "RUSTFS_ACCESS_KEY=qms-ci" >> "$GITHUB_ENV"
+          echo "RUSTFS_SECRET_KEY=$STORAGE_SECRET" >> "$GITHUB_ENV"
+          echo "QMS_OBJECT_STORAGE_PROVIDER=rustfs" >> "$GITHUB_ENV"
           echo "QMS_OBJECT_STORAGE_ACCESS_KEY=qms-ci" >> "$GITHUB_ENV"
           echo "QMS_OBJECT_STORAGE_SECRET_KEY=$STORAGE_SECRET" >> "$GITHUB_ENV"
-          docker run --detach --name "$MINIO_CONTAINER" \
-            -e MINIO_ROOT_USER=qms-ci -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET" \
-            -p 127.0.0.1::9000 quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
-          MINIO_PORT=$(docker port "$MINIO_CONTAINER" 9000/tcp | cut -d: -f2)
+          docker run --detach --name "$RUSTFS_CONTAINER" \
+            -e RUSTFS_VOLUMES=/data -e RUSTFS_ADDRESS=0.0.0.0:9000 \
+            -e RUSTFS_ACCESS_KEY=qms-ci -e RUSTFS_SECRET_KEY="$STORAGE_SECRET" \
+            -e RUSTFS_UNSAFE_BYPASS_DISK_CHECK=true \
+            -p 127.0.0.1::9000 rustfs/rustfs:1.0.0
+          RUSTFS_PORT=$(docker port "$RUSTFS_CONTAINER" 9000/tcp | cut -d: -f2)
           for attempt in {1..60}; do
-            if curl --fail --silent "http://127.0.0.1:$MINIO_PORT/minio/health/ready" >/dev/null; then break; fi
+            if curl --fail --silent "http://127.0.0.1:$RUSTFS_PORT/health" >/dev/null; then break; fi
             sleep 2
           done
-          curl --fail --silent "http://127.0.0.1:$MINIO_PORT/minio/health/ready" >/dev/null
-          echo "QMS_OBJECT_STORAGE_ENDPOINT=http://127.0.0.1:$MINIO_PORT" >> "$GITHUB_ENV"
+          curl --fail --silent "http://127.0.0.1:$RUSTFS_PORT/health" >/dev/null
+          echo "QMS_OBJECT_STORAGE_ENDPOINT=http://127.0.0.1:$RUSTFS_PORT" >> "$GITHUB_ENV"
           echo "QMS_OBJECT_STORAGE_BUCKET=qms-ci-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
           docker run --detach --name "$CLAMAV_CONTAINER" --entrypoint clamd --user clamav \
             --read-only --cap-drop ALL --security-opt no-new-privileges:true --memory 4g --cpus 2 \
@@ -131,6 +134,7 @@ jobs:
       - name: Real PostgreSQL integration tests
         env:
           NODE_ENV: development
+          NODE_OPTIONS: --max-old-space-size=4096
         run: corepack pnpm --filter @qms/api test:integration
       - name: Build Web and API
         run: corepack pnpm build
@@ -143,6 +147,6 @@ jobs:
       - name: Destroy ephemeral integration services
         if: always()
         run: |
-          for container in "$PG_CONTAINER" "$MINIO_CONTAINER" "$CLAMAV_CONTAINER"; do
+          for container in "$PG_CONTAINER" "$RUSTFS_CONTAINER" "$CLAMAV_CONTAINER"; do
             docker rm --force --volumes "$container" || true
           done

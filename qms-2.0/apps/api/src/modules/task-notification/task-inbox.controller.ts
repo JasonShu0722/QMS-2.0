@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -6,7 +6,8 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { TaskService } from './task.service.js';
 import { NotificationService } from './notification.service.js';
-import { InboxMutationDto, InboxScopeDto, NotificationDto, NotificationPageDto, NotificationQueryDto, TaskDto, TaskPageDto, TaskQueryDto } from './task-inbox.dto.js';
+import { InboxMutationDto, InboxScopeDto, NotificationDto, NotificationPageDto, NotificationQueryDto, TaskDto, TaskPageDto, TaskQueryDto, TaskStatisticsDto, TaskTransferDto, TaskTransferResultDto } from './task-inbox.dto.js';
+import { TaskTransferService } from './task-transfer.service.js';
 
 function actor(request: AuthorizedRequest) {
   const session = request[AUTHENTICATED_SESSION]!;
@@ -17,13 +18,29 @@ function actor(request: AuthorizedRequest) {
 @ApiCookieAuth('qms_session')
 @ApiResponse({ status: 'default', type: ErrorResponse })
 export class TaskInboxController {
-  constructor(private readonly tasks: TaskService) {}
+  constructor(private readonly tasks: TaskService, private readonly transfers: TaskTransferService) {}
 
   @Get()
   @RequireAccess({ featurePermission: 'task:read', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   @ApiOkResponse({ type: TaskPageDto })
   list(@Query() query: TaskQueryDto, @Req() request: AuthorizedRequest) {
     return this.tasks.list(actor(request), query);
+  }
+
+  @Get('statistics')
+  @RequireAccess({ featurePermission: 'task:read', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @ApiOkResponse({ type: TaskStatisticsDto })
+  statistics(@Query() query: InboxScopeDto, @Req() request: AuthorizedRequest) {
+    return this.tasks.statistics(actor(request), query);
+  }
+
+  @Post('transfer')
+  @RequireAccess({ featurePermission: 'task:transfer', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiResponse({ status: 201, type: TaskTransferResultDto, isArray: true })
+  transfer(@Query() scope: InboxScopeDto, @Body() body: TaskTransferDto, @Req() request: AuthorizedRequest, @Headers('idempotency-key') key?: string) {
+    const organizationId = request.authorizedOrganizationId ?? scope.organizationId ?? actor(request).organizationId;
+    return this.transfers.transfer(actor(request), organizationId, body, requestTraceId(request), key);
   }
 
   @Post(':id/claim')
@@ -40,6 +57,14 @@ export class TaskInboxController {
   @ApiResponse({ status: 201, type: TaskDto })
   release(@Param('id', ParseUUIDPipe) id: string, @Query() _query: InboxScopeDto, @Body() body: InboxMutationDto, @Req() request: AuthorizedRequest) {
     return this.tasks.release(actor(request), id, request.authorizedOrganizationId!, body.expectedVersion, requestTraceId(request));
+  }
+
+  @Post(':id/retry')
+  @RequireAccess({ featurePermission: 'task:claim', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiResponse({ status: 201, type: TaskDto })
+  retry(@Param('id', ParseUUIDPipe) id: string, @Query() _query: InboxScopeDto, @Body() body: InboxMutationDto, @Req() request: AuthorizedRequest) {
+    return this.tasks.retry(actor(request), id, request.authorizedOrganizationId!, body.expectedVersion, requestTraceId(request));
   }
 }
 

@@ -16,17 +16,28 @@ export const PERMISSION_CATALOG: Group[] = [
   { key: 'platform', name: '平台功能', status: 'active', modules: [
     { key: 'workbench', name: '工作台', status: 'active', operations: [operation('workbench:read', '查看工作台（预留标识）', 'reserved')] },
     { key: 'problem-index', name: '问题查询', status: 'active', operations: [operation('problem-index:read', '查看问题索引')] },
-    { key: 'tasks', name: '我的任务', status: 'active', operations: [operation('task:read', '查看授权任务'), operation('task:claim', '领取和释放任务')] },
+    { key: 'tasks', name: '我的任务', status: 'active', operations: [operation('task:read', '查看授权任务'), operation('task:claim', '领取和释放任务'), operation('task:transfer', '批量转派任务')] },
     { key: 'notifications', name: '我的通知', status: 'active', operations: [operation('notification:read', '查看和标记通知')] },
+    { key: 'announcements', name: '公告管理', status: 'active', operations: [operation('announcement:read', '查看公告'), operation('announcement:manage', '管理公告'), operation('announcement:audit:read', '查看公告阅读审计')] },
     { key: 'workflow', name: '受控流程', status: 'active', operations: [operation('workflow:manage', '管理（创建、编辑、校验、发布、复制）'), operation('workflow:start', '启动流程'), operation('workflow:act', '执行被授权的流程节点')] },
   ] },
   { key: 'supplier', name: '供应商质量', status: 'active', modules: [
     { key: 'supplier-profiles', name: '供应商资料', status: 'active', operations: [operation('supplier-quality:profiles:read', '查看业务资料'), operation('supplier-quality:profiles:write', '维护业务资料')] },
     { key: 'supplier-problems', name: '供应商问题', status: 'active', operations: [operation('supplier-quality:problems:read', '查看问题'), operation('supplier-quality:problems:write', '维护问题草稿')] },
     { key: 'supplier-responses', name: '整改回复', status: 'active', operations: [operation('supplier-quality:responses:read', '查看本企业问题'), operation('supplier-quality:responses:write', '保存回复草稿')] },
-    { key: 'supplier-2', name: '供应商绩效', status: 'planned', operations: [] },
-    { key: 'supplier-3', name: '供应商审核', status: 'planned', operations: [] },
-    { key: 'supplier-4', name: 'PPAP', status: 'planned', operations: [] },
+    { key: 'supplier-incoming', name: '来料检验', status: 'active', operations: [operation('supplier-incoming:inspections:read', '查看来料检验'), operation('supplier-incoming:inspections:write', '维护来料检验')] },
+    { key: 'supplier-admission', name: '供应商质量资料', status: 'active', operations: [operation('supplier-admission:documents:read', '查看供应商质量资料'), operation('supplier-admission:documents:review', '审核供应商质量资料'), operation('supplier-admission:submissions:read', '查看本企业质量资料'), operation('supplier-admission:submissions:write', '提交本企业质量资料')] },
+    { key: 'supplier-concession', name: '特采管理', status: 'active', operations: [operation('supplier-concession:requests:read', '查看特采申请'), operation('supplier-concession:requests:write', '提交特采申请'), operation('supplier-concession:requests:approve', '审批特采申请'), operation('supplier-concession:requests:release', '登记特采放行')] },
+    { key: 'supplier-performance', name: '供应商绩效', status: 'active', operations: [operation('supplier-performance:cards:read', '查看供应商绩效'), operation('supplier-performance:cards:write', '维护供应商绩效'), operation('supplier-performance:cards:publish', '发布供应商绩效'), operation('supplier-performance:appeals:read', '查看供应商绩效申诉'), operation('supplier-performance:appeals:write', '提交供应商绩效申诉'), operation('supplier-performance:appeals:review', '复核供应商绩效申诉'), operation('supplier-performance:portal:cards:read', '查看本企业已发布绩效'), operation('supplier-performance:portal:appeals:read', '查看本企业绩效申诉'), operation('supplier-performance:portal:appeals:write', '提交本企业绩效申诉')] },
+    { key: 'supplier-audit', name: '供应商审核', status: 'active', operations: [operation('supplier-audit:plans:read', '查看供应商审核计划'), operation('supplier-audit:plans:write', '维护供应商审核计划'), operation('supplier-audit:records:read', '查看供应商审核记录'), operation('supplier-audit:records:write', '维护供应商审核记录'), operation('supplier-audit:records:close', '关闭供应商审核记录')] },
+    { key: 'supplier-targets', name: '供应商质量目标', status: 'active', operations: [operation('supplier-quality:targets:read', '查看供应商质量目标'), operation('supplier-quality:targets:write', '维护供应商质量目标'), operation('supplier-quality:targets:approve', '审批供应商质量目标'), operation('supplier-quality:targets:publish', '发布供应商质量目标')] },
+    { key: 'supplier-meetings', name: '供应商会议', status: 'active', operations: [operation('supplier-meetings:read', '查看供应商会议'), operation('supplier-meetings:write', '维护供应商会议'), operation('supplier-meetings:conclude', '完成供应商会议议题'), operation('supplier-meetings:actions', '维护供应商会议行动项')] },
+    { key: 'supplier-4', name: 'PPAP', status: 'active', operations: [operation('supplier-ppap:read', '查看供应商 PPAP'), operation('supplier-ppap:write', '维护供应商 PPAP'), operation('supplier-ppap:review', '审核供应商 PPAP')] },
+    { key: 'supplier-inspection-standards', name: '供应商检验规范', status: 'active', operations: [operation('supplier-inspection-standards:read', '查看供应商检验规范'), operation('supplier-inspection-standards:write', '维护供应商检验规范'), operation('supplier-inspection-standards:publish', '发布供应商检验规范')] },
+    { key: 'supplier-barcode', name: '供应商条码', status: 'active', operations: [operation('supplier-barcode:read', '查看供应商条码规则'), operation('supplier-barcode:write', '维护供应商条码规则'), operation('supplier-barcode:publish', '发布供应商条码规则'), operation('supplier-barcode:scan', '扫描供应商条码')] },
+    { key: 'supplier-asn', name: '供应商 ASN', status: 'active', operations: [operation('supplier-asn:read', '查看供应商 ASN'), operation('supplier-asn:write', '维护供应商 ASN'), operation('supplier-asn:submit', '提交供应商 ASN')] },
+    { key: 'supplier-portal', name: '供应商门户扩展', status: 'planned', operations: [] },
+    { key: 'supplier-pcn', name: '供应商 PCN', status: 'active', operations: [operation('supplier-pcn:requests:read', '查看供应商 PCN'), operation('supplier-pcn:requests:approve', '审批供应商 PCN'), operation('supplier-pcn:submissions:read', '查看本企业 PCN'), operation('supplier-pcn:submissions:write', '提交本企业 PCN')] },
   ] },
   { key: 'process', name: '制程质量', status: 'active', modules: [
     { key: 'process-defects', name: '制程不良品台账', status: 'active', operations: [
@@ -42,13 +53,41 @@ export const PERMISSION_CATALOG: Group[] = [
     ] },
     { key: 'customer-issues', name: '客户问题管理', status: 'planned', operations: [] },
   ] },
-  planned('new-product', '新品质量', ['新品质量管理']),
+  { key: 'new-product', name: '新品质量', status: 'active', modules: [
+    { key: 'new-product-quality', name: '新品质量管理', status: 'active', operations: [
+      operation('new-product-quality:projects:read', '查看新品质量项目'),
+      operation('new-product-quality:projects:write', '维护新品质量项目'),
+    ] },
+    { key: 'new-product-early-flow', name: '试产与初期流动', status: 'planned', operations: [] },
+  ] },
   { key: 'audit', name: '审核管理', status: 'active', modules: [
     { key: 'audit-core', name: '审核计划与整改', status: 'active', operations: [
       operation('audit-management:read', '查看审核管理'),
       operation('audit-management:write', '维护审核管理'),
     ] },
     { key: 'audit-issues', name: '审核问题发单', status: 'planned', operations: [] },
+  ] },
+  { key: 'quality-data', name: '质量数据', status: 'planned', modules: [
+    { key: 'quality-metrics', name: '质量指标与趋势', status: 'planned', operations: [
+      operation('quality-data:metrics:read', '查看质量指标与趋势'),
+      operation('quality-data:metrics:write', '维护质量指标与事实'),
+    ] },
+  ] },
+  { key: 'coordinate-inspection', name: '三坐标检测', status: 'active', modules: [
+    { key: 'coordinate-requests', name: '检测申请', status: 'active', operations: [
+      operation('coordinate-inspection:read', '查看三坐标检测申请'),
+      operation('coordinate-inspection:write', '维护三坐标检测申请'),
+      operation('coordinate-inspection:approve', '审批三坐标检测申请'),
+      operation('coordinate-inspection:schedule', '安排三坐标检测'),
+    ] },
+  ] },
+  { key: 'e-signature', name: '电子签名', status: 'active', modules: [
+    { key: 'e-signature-core', name: '电子签名与审批签章', status: 'active', operations: [
+      operation('e-signature:signatures:read', '查看本人电子签名'),
+      operation('e-signature:signatures:write', '注册和撤销电子签名'),
+      operation('e-signature:approvals:read', '查看审批签章'),
+      operation('e-signature:approvals:sign', '引用电子签名完成审批签章'),
+    ] },
   ] },
   { key: 'system', name: '系统管理', status: 'active', modules: [
     { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },

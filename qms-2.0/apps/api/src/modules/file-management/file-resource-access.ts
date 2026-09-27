@@ -28,6 +28,8 @@ export class FileResourceAccess {
   }
 
   async authorizeAndLock(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant> {
+    const current = await transaction.user.findUnique({ where: { id: actor.id }, select: { organizationId: true, accountType: true, status: true } });
+    if (!current || current.status !== 'ACTIVE' || current.organizationId !== actor.organizationId || current.accountType !== actor.accountType) workflowError('FILE_RESOURCE_DENIED', 403);
     const adapter = this.adapters.find((candidate) => candidate.resourceType === resource.resourceType);
     if (!adapter) workflowError('FILE_RESOURCE_DENIED', 403);
     const grant = await adapter.authorizeAndLock(transaction, actor, resource, action);

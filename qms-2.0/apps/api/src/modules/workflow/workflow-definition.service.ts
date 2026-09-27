@@ -174,7 +174,7 @@ export class WorkflowDefinitionService {
   }
 
   async options(actor: WorkflowActor, query: WorkflowOptionsQueryDto): Promise<WorkflowOptionsDto> {
-    const limit = query.limit ?? 50;
+    const limit = query.limit ?? 100;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new BadRequestException();
     this.checkOptionalText(query.search, 100);
     return this.transaction(async (tx) => {
@@ -184,7 +184,7 @@ export class WorkflowDefinitionService {
       const [roles, users, permissions] = await Promise.all([
         tx.role.findMany({ where: { AND: [{ OR: [{ organizationId: actor.organizationId }, { organizationId: null }] }, textFilter] }, select: { code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: limit }),
         tx.user.findMany({ where: { organizationId: actor.organizationId, status: 'ACTIVE', ...(search ? { username: { contains: search, mode: 'insensitive' as const } } : {}) }, select: { id: true, username: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], take: limit }),
-        tx.permission.findMany({ where: { code: { in: ACTIVE_PERMISSION_CODES }, ...textFilter }, select: { code: true, name: true }, orderBy: { code: 'asc' }, take: limit }),
+        tx.permission.findMany({ where: { code: { in: ACTIVE_PERMISSION_CODES }, ...textFilter }, select: { code: true, name: true }, orderBy: { code: 'asc' } }),
       ]);
       return { roles, users: users.map((user) => ({ id: user.id, name: user.username })), permissions };
     }, 'RepeatableRead');

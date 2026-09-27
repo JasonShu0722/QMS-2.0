@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.22.0 <23",
+    "node": ">=24.21.0 <25",
     "pnpm": ">=11.19.0 <12"
   },
   "scripts": {
@@ -19,6 +19,7 @@
     "@tanstack/react-query": "^5.74.9",
     "@xyflow/react": "12.11.6",
     "antd": "^6.6.4",
+    "exceljs": "4.4.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

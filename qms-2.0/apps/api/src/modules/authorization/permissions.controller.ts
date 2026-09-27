@@ -4,7 +4,7 @@ import { ApiCookieAuth, ApiOkResponse, ApiQuery, ApiResponse } from '@nestjs/swa
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { PermissionsResponseDto } from './permissions.dto.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
-import { RequireAccess } from './access.decorator.js';
+import { RequireAccess, RequireAuthenticated } from './access.decorator.js';
 import { AuthorizationService } from './authorization.service.js';
 
 @Controller('api/v1/system')
@@ -12,6 +12,15 @@ import { AuthorizationService } from './authorization.service.js';
 @ApiResponse({ status: 'default', type: ErrorResponse, description: 'Controlled API error' })
 export class PermissionsController {
   constructor(private readonly authorization: AuthorizationService) {}
+
+  @Get('my-permissions')
+  @ApiOkResponse({ type: PermissionsResponseDto })
+  @RequireAuthenticated()
+  myPermissions(@Req() request: Request) {
+    const session = (request as AuthorizedRequest)[AUTHENTICATED_SESSION]!;
+    return this.authorization.permissionsForContext(session.user.id, session.user.organizationId)
+      .then((permissions) => ({ organizationId: session.user.organizationId, permissions }));
+  }
 
   @Get('permissions')
   @ApiOkResponse({ type: PermissionsResponseDto })

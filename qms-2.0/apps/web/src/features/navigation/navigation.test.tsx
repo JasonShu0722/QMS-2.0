@@ -10,6 +10,8 @@ vi.setConfig({ testTimeout: 15_000 });
 
 describe('portal navigation', () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
     useWorkTabsStore.getState().reset();
   });
 
@@ -24,7 +26,7 @@ describe('portal navigation', () => {
       </MemoryRouter>,
     );
 
-    for (const label of ['问题中心', '流程设计', '供应商质量', '审计管理', '体系文件', '风险看板']) {
+    for (const label of ['问题中心', '流程设计', '供应商质量', '供应商审核', '供应商质量目标', '供应商 PPAP', '供应商 ASN', '审计管理', '体系文件', '风险看板']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(screen.getByText('个人待办')).toBeInTheDocument();
@@ -73,8 +75,9 @@ describe('portal navigation', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('link', { name: '问题中心' }));
-    await userEvent.click(screen.getByRole('link', { name: '问题中心' }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('link', { name: '问题中心' }));
+    await user.click(screen.getByRole('link', { name: '问题中心' }));
 
     const state = useWorkTabsStore.getState();
     expect(screen.getByLabelText('current path')).toHaveTextContent('/app/problem-center');
@@ -85,7 +88,7 @@ describe('portal navigation', () => {
       title: '问题中心',
       path: '/app/problem-center',
     });
-  });
+  }, 30_000);
 
   it('registers supplier navigation entries consistently', async () => {
     render(

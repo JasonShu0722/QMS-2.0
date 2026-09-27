@@ -10,11 +10,13 @@ import { OutboxAdministrationController } from './outbox-administration.controll
 import { TaskInboxController, NotificationInboxController } from './task-inbox.controller.js';
 import { SupplierPortalNotificationController } from './supplier-portal-notification.controller.js';
 import { SupplierPortalNotificationService } from './supplier-portal-notification.service.js';
+import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
+import { TaskTransferService } from './task-transfer.service.js';
 
 @Module({
-  imports: [AuditLogModule],
+  imports: [AuditLogModule, AdminMutationModule],
   controllers: [OutboxAdministrationController, TaskInboxController, NotificationInboxController, SupplierPortalNotificationController],
-  providers: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, { provide: OUTBOX_HANDLER, useExisting: WorkflowEventHandler }],
+  providers: [OutboxService, OutboxWorkerService, TaskService, TaskTransferService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, { provide: OUTBOX_HANDLER, useExisting: WorkflowEventHandler }],
   exports: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService],
 })
 export class TaskNotificationModule {}
