@@ -101,8 +101,8 @@ export class S3CompatibleObjectStorage implements ObjectStorage {
 export const LocalMinioObjectStorage = S3CompatibleObjectStorage;
 
 export function createObjectStorage(): ObjectStorage {
-  const provider = process.env.QMS_OBJECT_STORAGE_PROVIDER ?? 'minio';
-  if (provider !== 'minio' && provider !== 's3') {
+  const provider = process.env.QMS_OBJECT_STORAGE_PROVIDER ?? 'rustfs';
+  if (provider !== 'rustfs' && provider !== 'minio' && provider !== 's3') {
     throw new Error('OBJECT_STORAGE_PROVIDER_UNSUPPORTED');
   }
   return new S3CompatibleObjectStorage();
