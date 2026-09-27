@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createUploadAttempt } from './attachments';
+import { createUploadAttempt, retryScanAttachment } from './attachments';
 
 const resource = { resourceType: 'test-evidence', resourceId: 'resource-id' };
 const fileRecord = { id: 'file-id', version: 1, status: 'QUARANTINED', scanStatus: 'WAITING_UPLOAD', ...resource };
@@ -77,4 +77,17 @@ it('rejects non-HTTP upload URLs before sending file bytes', async () => {
   vi.stubGlobal('fetch', fetchMock);
   await expect(createUploadAttempt(resource, sample()).run()).rejects.toThrow('FILE_URL_INVALID');
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('retries a terminal scan failure with the current version and idempotency key', async () => {
+  vi.stubGlobal('crypto', { ...webcrypto, randomUUID: () => 'retry-key' });
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    return json({ ...fileRecord, version: 1, scanStatus: 'PENDING' }, 202);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(retryScanAttachment({ ...fileRecord, scanStatus: 'ERROR' } as never)).resolves.toMatchObject({ scanStatus: 'PENDING' });
+  const retry = fetchMock.mock.calls.find(([path]) => path.endsWith('/retry-scan'))!;
+  expect(retry[1]).toMatchObject({ method: 'POST', headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': 'retry-key' } });
+  expect(JSON.parse(retry[1]!.body as string)).toEqual({ expectedVersion: 1 });
 });

@@ -97,7 +97,8 @@ describe('customer complaint issue workflow on PostgreSQL', () => {
     expect(replay.problem.id).toBe(problemId);
     await ledger.updateComplaint(actor, second.id, { expectedVersion: second.version, defectDescription: '客户补充描述' }, randomUUID(), randomUUID());
     expect((await service.issue(actor, request, randomUUID(), key)).replayed).toBe(true);
-    await ledger.archiveComplaint(actor, first.id, first.version, randomUUID(), randomUUID());
+    const currentFirst = await ledger.detailComplaint(actor, first.id);
+    await expect(ledger.archiveComplaint(actor, first.id, currentFirst.version, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await service.issue(actor, request, randomUUID(), key)).replayed).toBe(true);
     expect((await service.problemsForComplaint(actor, first.id)).map((problem) => problem.id)).toContain(problemId);
     await prisma.domainSourceIssueLink.updateMany({ where: { problemIndexId: problemId, sourceId: first.id }, data: { removedAt: new Date(), removedBy: userId } });
@@ -135,7 +136,8 @@ describe('customer complaint issue workflow on PostgreSQL', () => {
     expect((await service.problemsForComplaint(actor, second.id)).map((problem) => problem.id)).toContain(problemId);
     await ledger.updateComplaint(actor, second.id, { expectedVersion: second.version, defectDescription: '补充事实' }, randomUUID(), randomUUID());
     expect((await service.changeSources(actor, problemId, addRequest, randomUUID(), addKey)).version).toBe(added.version);
-    await ledger.archiveComplaint(actor, second.id, second.version + 1, randomUUID(), randomUUID());
+    const currentSecond = await ledger.detailComplaint(actor, second.id);
+    await expect(ledger.archiveComplaint(actor, second.id, currentSecond.version, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await service.changeSources(actor, problemId, addRequest, randomUUID(), addKey)).version).toBe(added.version);
     const removed = await service.changeSources(actor, problemId, { expectedProblemVersion: Number(added.version), add: [], remove: [second.id] }, randomUUID(), randomUUID());
     expect(removed.version).toBe(Number(added.version) + 1);

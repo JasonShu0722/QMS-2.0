@@ -170,7 +170,7 @@
         "sources": [
           {
             "path": "package.json",
-            "sha256": "b21d3281056eca19f1ef9c8282114203c443254e8dd12c3ed08f05cc2ea2078d"
+            "sha256": "f1f7516c354b5341c8e05763e920133379c3e0356d8f1b394f2aabf31d59966f"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
@@ -310,6 +310,60 @@
       }
     },
     {
+      "path": "docs/PHASE-5.md",
+      "topic": "phase-5",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（阶段五总规划）",
+        "reviewedOn": "2026-09-24",
+        "maxAgeDays": 90,
+        "reason": "对照 QMS 1.0 规格、功能需求和 QMS 2.0 当前阶段状态，建立阶段五的覆盖补齐与分析增强入口。",
+        "sources": [
+          {
+            "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-5-coverage-and-enhancement-design.md",
+            "sha256": "30b6d4b8133e43b80ab5c5a3d5aff35b89306c6f95f799c16608ef6879523204"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-09-24-qms-2.0-phase-5-coverage-and-enhancement.md",
+            "sha256": "63123853f3d262220d86207cc41b3b8ea6d3fe3dacfde80a8d18c1b275202137"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-26-qms-2.0-phase-5-d2-customer-complaint-design.md",
+            "sha256": "8b499ead07fafc65929f30cf812dc400188cb17755f940776cc160721dc22464"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-09-26-qms-2.0-phase-5-d2-customer-complaint.md",
+            "sha256": "e9609060f008998e15bb3fe1542530ba4a92e2dd695dfe5bea0bab3fef2dfbb0"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-25-qms-2.0-e1-report-design.md",
+            "sha256": "57391623aac8735957a3f9ba1f19dec18984f6e582bd56fc74897dd8e2d85cff"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-09-25-qms-2.0-e1-report.md",
+            "sha256": "071a1f0cea904db8cd0d3c204bb0abb79e1e9377f847a31bdb62515a39db95d6"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-26-qms-2.0-f4-audit-excel-import-design.md",
+            "sha256": "32f97c3266d4c65386c61c20561db21fcc19bc5f459e1ba14c8a23e89f0a89e3"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-09-26-qms-2.0-f4-audit-excel-import.md",
+            "sha256": "ac9b52bf53ad3a04ef29993bd1f5a5b3aa407b50e177afa3caa19145422a9135"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-09-26-qms-2.0-c6-supplier-pcn-design.md",
+            "sha256": "16072409b4eb99865f095c1d32b4d18d44c97f111a693d15e8bc2c8f99e9423c"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-09-26-qms-2.0-c6-supplier-pcn.md",
+            "sha256": "8e9d9f86c9272ed9495796b3289adfd13b5f6abf3751b5af9542253002f9a073"
+          }
+        ]
+      }
+    },
+    {
       "path": "docs/PLATFORM-HANDOFF.md",
       "topic": "platform-handoff",
       "canonical": true,
@@ -404,7 +458,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "29c8f5f8f6ef5a0ca4d63332adfd947e790696ed900e4d328922f3c4e44f0ee3"
+            "sha256": "ec4e9c9f8f0a48b237e8cb6fe4ae7b16d151b812353f2b6a8061c2df38c7ae80"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -430,11 +484,11 @@
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
         "reviewedOn": "2026-09-23",
         "maxAgeDays": 90,
-        "reason": "MAINT-003 复核只读采样、版本化告警判定、一次性触发/恢复验收和备份恢复边界，明确生产告警尚未交付。",
+        "reason": "复核 E1 报告新增依赖后 operations 脚本入口未变；MAINT-003 仍限定只读采样、告警判定、一次性演练与备份恢复，生产告警尚未交付。",
         "sources": [
           {
             "path": "apps/api/package.json",
-            "sha256": "69a40bba0ba3b3d0f5fdd7b465866b37050b62ca2af4e96f29cef0fb6e5183c0"
+            "sha256": "c1f42309bda4fea77fdc72114427b5b6f74ae72f75c7bf54b107fb351ee69d48"
           },
           {
             "path": "apps/api/scripts/operations-snapshot.mjs",
@@ -454,7 +508,7 @@
           },
           {
             "path": "package.json",
-            "sha256": "b21d3281056eca19f1ef9c8282114203c443254e8dd12c3ed08f05cc2ea2078d"
+            "sha256": "f1f7516c354b5341c8e05763e920133379c3e0356d8f1b394f2aabf31d59966f"
           },
           {
             "path": "scripts/operations-alerts.mjs",
@@ -536,7 +590,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "78bc5114ff53a00fe55b5f1444b3e0e6f1fe9b6876afab78bc5deb847158c241"
+            "sha256": "377829a834dde4ade29495cc808dc1d47f6ad33a98978093c496a0e05d6a3cf4"
           },
           {
             "path": "docs/DATA-PROTECTION.md",

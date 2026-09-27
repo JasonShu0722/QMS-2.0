@@ -16,6 +16,23 @@ import { ProcessQualityModule } from './modules/process-quality/process-quality.
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
 import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
 import { NewProductQualityModule } from './modules/new-product-quality/new-product-quality.module.js';
+import { QualityDataModule } from './modules/quality-data/quality-data.module.js';
+import { SupplierIncomingModule } from './modules/supplier-incoming/supplier-incoming.module.js';
+import { CoordinateInspectionModule } from './modules/coordinate-inspection/coordinate-inspection.module.js';
+import { SupplierPerformanceModule } from './modules/supplier-performance/supplier-performance.module.js';
+import { SupplierConcessionModule } from './modules/supplier-concession/supplier-concession.module.js';
+import { AnnouncementModule } from './modules/announcements/announcement.module.js';
+import { AuditStandardsModule } from './modules/audit-standards/audit-standards.module.js';
+import { SupplierAdmissionModule } from './modules/supplier-admission/supplier-admission.module.js';
+import { ESignatureModule } from './modules/e-signature/e-signature.module.js';
+import { SupplierAuditModule } from './modules/supplier-audit/supplier-audit.module.js';
+import { SupplierQualityTargetsModule } from './modules/supplier-quality-targets/supplier-quality-targets.module.js';
+import { SupplierMeetingsModule } from './modules/supplier-meetings/supplier-meetings.module.js';
+import { SupplierPpapModule } from './modules/supplier-ppap/supplier-ppap.module.js';
+import { SupplierInspectionStandardsModule } from './modules/supplier-inspection-standards/supplier-inspection-standards.module.js';
+import { SupplierBarcodeModule } from './modules/supplier-barcode/supplier-barcode.module.js';
+import { SupplierAsnModule } from './modules/supplier-asn/supplier-asn.module.js';
+import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js';
 
 @Module({
   imports: [
@@ -36,6 +53,23 @@ import { NewProductQualityModule } from './modules/new-product-quality/new-produ
     CustomerQualityModule,
     AuditManagementModule,
     NewProductQualityModule,
+    QualityDataModule,
+    SupplierIncomingModule,
+    CoordinateInspectionModule,
+    SupplierPerformanceModule,
+    SupplierConcessionModule,
+    AnnouncementModule,
+    AuditStandardsModule,
+    SupplierAdmissionModule,
+    ESignatureModule,
+    SupplierAuditModule,
+    SupplierQualityTargetsModule,
+    SupplierMeetingsModule,
+    SupplierPpapModule,
+    SupplierInspectionStandardsModule,
+    SupplierBarcodeModule,
+    SupplierAsnModule,
+    SupplierPcnModule,
   ],
 })
 export class AppModule {}

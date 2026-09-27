@@ -2,6 +2,8 @@ import type { OutboxHandler, OutboxWorkerService } from './modules/task-notifica
 import { setTimeout as delay } from 'node:timers/promises';
 
 export interface WorkerOptions { once: boolean; pollIntervalMs: number; batchSize: number }
+export interface WorkerCycleResult { processed: number; failed: number; retried: number }
+export type WorkerCycleObserver = (result: WorkerCycleResult) => void | Promise<void>;
 
 export function parseWorkerOptions(args: string[], environment: Record<string, string | undefined>): WorkerOptions {
   if (args.some((argument) => argument !== '--once') || args.length > 1) throw new Error('WORKER_CONFIGURATION_INVALID');
@@ -12,12 +14,14 @@ export function parseWorkerOptions(args: string[], environment: Record<string, s
   };
 }
 
-export async function runWorkerLoop(worker: OutboxWorkerService, handler: OutboxHandler | null, options: WorkerOptions, signal: AbortSignal, maintenance?: () => Promise<void>): Promise<void> {
+export async function runWorkerLoop(worker: OutboxWorkerService, handler: OutboxHandler | null, options: WorkerOptions, signal: AbortSignal, maintenance?: () => Promise<void>, observeCycle?: WorkerCycleObserver): Promise<void> {
   if (!handler) throw new Error('WORKER_HANDLER_REQUIRED');
   while (!signal.aborted) {
     await maintenance?.();
-    if (typeof handler === 'function') await worker.processDue(options.batchSize, handler);
-    else await worker.processAtomicDue(options.batchSize, handler);
+    const result = typeof handler === 'function'
+      ? await worker.processDue(options.batchSize, handler)
+      : await worker.processAtomicDue(options.batchSize, handler);
+    await observeCycle?.(result);
     if (options.once || signal.aborted) return;
     try { await delay(options.pollIntervalMs, undefined, { signal }); }
     catch (error) { if (!signal.aborted) throw error; }

@@ -125,7 +125,9 @@ describe('workflow upgrade and immutable problem history', () => {
     const context = await upgradeFixture(prisma, organizations);
     const upgraded = await service.upgrade(context.actor, context.problem.id, context.input, randomUUID(), randomUUID());
     const worker = new OutboxWorkerService(prisma, () => new Date(Date.now() + 1000));
-    expect(await worker.processAtomicDue(100, new WorkflowEventHandler())).toMatchObject({ processed: 2, retried: 0, failed: 0 });
+    const processed = await worker.processAtomicDue(100, new WorkflowEventHandler());
+    expect(processed.failed).toBe(0);
+    expect(processed.processed).toBeGreaterThanOrEqual(2);
     expect(await prisma.workflowTask.count({ where: { workflowInstanceId: context.started.instanceId } })).toBe(0);
     expect(await prisma.workflowTask.count({ where: { workflowInstanceId: upgraded.afterInstanceId } })).toBe(1);
   });

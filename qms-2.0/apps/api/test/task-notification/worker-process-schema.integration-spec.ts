@@ -79,4 +79,31 @@ describe('actual compiled worker process', () => {
     const child = start([], { QMS_WORKER_POLL_INTERVAL_MS: '0' });
     expect(await exited(child)).toBe(1);
   }, 20_000);
+
+  it('emits a structured cycle result when operational logging is enabled', async () => {
+    const child = start(['--once'], { QMS_WORKER_LOG_CYCLES: 'true' });
+    let output = '';
+    child.stdout!.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    expect(await exited(child)).toBe(0);
+    expect(output).toMatch(/QMS_WORKER_READY/);
+    const line = output.split(/\r?\n/).find((entry) => entry.startsWith('QMS_WORKER_CYCLE '));
+    expect(line).toBeDefined();
+    expect(JSON.parse(line!.slice('QMS_WORKER_CYCLE '.length))).toEqual(expect.objectContaining({ processed: expect.any(Number), retried: expect.any(Number), failed: expect.any(Number), observedAt: expect.any(String) }));
+  }, 20_000);
+
+  it('does not emit cycle results by default', async () => {
+    const child = start(['--once'], { QMS_WORKER_LOG_CYCLES: 'false' });
+    let output = '';
+    child.stdout!.on('data', (chunk: Buffer) => { output += chunk.toString(); });
+    expect(await exited(child)).toBe(0);
+    expect(output).not.toContain('QMS_WORKER_CYCLE ');
+  }, 20_000);
+
+  it.each(['', 'TRUE', '1'])('rejects invalid cycle logging setting %j', async (value) => {
+    const child = start(['--once'], { QMS_WORKER_LOG_CYCLES: value });
+    let errorOutput = '';
+    child.stderr!.on('data', (chunk: Buffer) => { errorOutput += chunk.toString(); });
+    expect(await exited(child)).toBe(1);
+    expect(errorOutput).toContain('WORKER_CONFIGURATION_INVALID');
+  }, 20_000);
 });

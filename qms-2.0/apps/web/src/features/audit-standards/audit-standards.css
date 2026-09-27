@@ -1,0 +1,13 @@
+.audit-standards-page { display: grid; gap: 20px; padding: 24px; min-width: 0; }
+.audit-standards-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.audit-standards-heading h1 { margin: 4px 0 8px; }
+.audit-standards-card { background: var(--surface, #fff); border: 1px solid var(--border, #dbe4ed); border-radius: 12px; padding: 20px; min-width: 0; }
+.audit-standards-filters { margin-bottom: 16px; }
+.audit-standards-type { min-width: 150px; }
+.audit-standards-loading { min-height: 160px; display: grid; place-items: center; }
+.audit-standards-column, .audit-standards-version { width: 100%; }
+.audit-standards-item-editor { width: 100%; align-items: start; }
+.audit-standards-item-editor .ant-form-item:first-child { flex: 0 0 130px; }
+.audit-standards-item-editor .ant-form-item:nth-child(2) { flex: 1 1 0; }
+.audit-standards-submit { margin-top: 24px; }
+@media (max-width: 640px) { .audit-standards-page { padding: 16px; } .audit-standards-heading { flex-direction: column; } .audit-standards-item-editor { flex-wrap: wrap; } }

@@ -41,8 +41,12 @@ describe('workflow task projection on PostgreSQL', () => {
   beforeEach(async () => {
     if (!handler || typeof handler === 'function') return;
     await prisma.outboxEvent.updateMany({
-      where: { status: 'PENDING', eventType: { in: handler.eventTypes }, availableAt: { lte: new Date() } },
+      where: { status: 'PENDING', eventType: { in: handler.eventTypes } },
       data: { availableAt: new Date(Date.now() + 86_400_000) },
+    });
+    await prisma.outboxEvent.updateMany({
+      where: { status: 'PROCESSING', eventType: { in: handler.eventTypes } },
+      data: { processingAt: new Date(Date.now() + 86_400_000) },
     });
   });
   afterEach(async () => {

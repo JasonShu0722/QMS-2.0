@@ -83,6 +83,7 @@ export class OutboxWorkerService {
               : { status: 'PROCESSED', processingAt: null, processedAt: this.now(), lastError: null },
           });
           if (completion.count !== 1) throw new Error('OUTBOX_LEASE_LOST');
+          await recordAttempt(tx, event, outcome === 'deferred' ? 'DEFERRED' : 'PROCESSED', undefined, outcome === 'deferred' ? new Date(this.now().getTime() + BASE_BACKOFF_MS) : undefined);
           return outcome !== 'deferred';
         });
         if (processed) result.processed += 1;
@@ -120,7 +121,10 @@ export class OutboxWorkerService {
           where: { id: event.id, status: 'PROCESSING', processingAt: event.processingAt },
           data: { status: 'PROCESSED', processedAt: this.now(), processingAt: null, lastError: null },
         });
-        if (completion.count === 1) result.processed += 1;
+        if (completion.count === 1) {
+          await recordAttempt(client, event, 'PROCESSED');
+          result.processed += 1;
+        }
       } catch (error) {
         throw new Error('OUTBOX_COMPLETION_UPDATE_FAILED', { cause: error });
       }
@@ -167,6 +171,7 @@ export class OutboxWorkerService {
       },
     });
     if (completion.count === 1) {
+      await recordAttempt(this.prisma, event, 'FAILED', reasonCode(error), failed ? undefined : this.nextAttemptAt(nextAttempts));
       if (failed) result.failed += 1;
       else result.retried += 1;
     }
@@ -199,6 +204,30 @@ export class OutboxWorkerService {
         "event_type" AS "eventType"
     `);
   }
+}
+
+type AttemptWriter = {
+  outboxDeliveryAttempt?: { create(args: { data: { outboxEventId: string; attemptNumber: number; outcome: string; reasonCode?: string; occurredAt?: Date; retryAt?: Date } }): Promise<unknown> };
+};
+
+async function recordAttempt(writer: unknown, event: OutboxEvent, outcome: 'FAILED' | 'PROCESSED' | 'DEFERRED', failureReason?: string, retryAt?: Date): Promise<void> {
+  const attemptWriter = writer as AttemptWriter;
+  if (!attemptWriter.outboxDeliveryAttempt) return;
+  await attemptWriter.outboxDeliveryAttempt.create({
+    data: {
+      outboxEventId: event.id,
+      attemptNumber: event.attempts + 1,
+      outcome,
+      ...(failureReason ? { reasonCode: failureReason } : {}),
+      occurredAt: new Date(),
+      ...(retryAt ? { retryAt } : {}),
+    },
+  });
+}
+
+export function reasonCode(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined;
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'OUTBOX_HANDLER_ERROR';
 }
 
 function errorMessage(error: unknown): string {

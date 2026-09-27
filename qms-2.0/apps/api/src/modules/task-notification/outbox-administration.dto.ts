@@ -25,6 +25,8 @@ export class OutboxFailureDto {
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
   @ApiProperty({ format: 'date-time' }) availableAt!: string;
   @ApiProperty({ enum: ['OUTBOX_DELIVERY_FAILED'] }) reasonCode!: 'OUTBOX_DELIVERY_FAILED';
+  @ApiProperty({ example: 'OUTBOX_HANDLER_ERROR' }) failureReasonCode!: string;
+  @ApiPropertyOptional({ format: 'date-time' }) lastFailureAt?: string;
 }
 
 export class OutboxFailurePageDto {
@@ -35,4 +37,18 @@ export class OutboxFailurePageDto {
 export class OutboxRetryDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ enum: ['PENDING'] }) status!: 'PENDING';
+}
+
+export class OutboxAttemptDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() attemptNumber!: number;
+  @ApiProperty({ enum: ['FAILED', 'PROCESSED', 'DEFERRED', 'RETRY_REQUESTED'] })
+  outcome!: 'FAILED' | 'PROCESSED' | 'DEFERRED' | 'RETRY_REQUESTED';
+  @ApiPropertyOptional({ example: 'OUTBOX_HANDLER_ERROR' }) reasonCode?: string;
+  @ApiProperty({ format: 'date-time' }) occurredAt!: string;
+  @ApiPropertyOptional({ format: 'date-time' }) retryAt?: string;
+}
+
+export class OutboxAttemptPageDto {
+  @ApiProperty({ type: [OutboxAttemptDto] }) items!: OutboxAttemptDto[];
 }

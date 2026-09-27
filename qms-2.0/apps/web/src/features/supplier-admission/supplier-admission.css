@@ -1,0 +1,4 @@
+.supplier-admission-page { display: grid; gap: 20px; padding: 28px; }
+.supplier-admission-page > header { display: grid; gap: 8px; }
+.supplier-admission-page > section { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: 16px; }
+@media (max-width: 760px) { .supplier-admission-page { padding: 16px; } }

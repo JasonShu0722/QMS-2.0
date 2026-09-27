@@ -96,6 +96,7 @@ export class ProblemWorkspaceService {
       nodeId: task.workflowNodeId, name: task.workflowNode.name, type: task.workflowNode.type, problemId, reportNumber, dueAt: task.dueAt?.toISOString() ?? null,
       status: task.status, claimedByUserId: task.claimedByUserId, claimedAt: task.claimedAt?.toISOString() ?? null,
       canAct: !task.claimedByUserId || task.claimedByUserId === actor.id,
-      canClaim: access.claim && (!task.claimedByUserId || task.claimedByUserId !== actor.id && !ownerEligible), canRelease: access.claim && task.claimedByUserId === actor.id };
+      canClaim: access.claim && (!task.claimedByUserId || task.claimedByUserId !== actor.id && !ownerEligible), canRelease: access.claim && task.claimedByUserId === actor.id,
+      canRetry: access.claim && task.status === 'FAILED' };
   }
 }

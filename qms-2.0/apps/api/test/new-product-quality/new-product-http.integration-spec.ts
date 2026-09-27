@@ -52,7 +52,44 @@ describe('new product HTTP adapter on PostgreSQL', () => {
     expect(typeof metric.body.target).toBe('number');
     const report = await request(app.getHttpServer()).get(`/api/v1/new-product-quality/trial-batches/${batch.body.id}/report`).expect(200);
     expect(report.body.metrics[0]).toMatchObject({ target: 1.33, actual: 1.41, signal: 'GREEN' });
+    const exported = await request(app.getHttpServer()).get(`/api/v1/new-product-quality/trial-batches/${batch.body.id}/report/export`).expect(200);
+    expect(exported.headers['content-type']).toMatch(/text\/csv/);
+    expect(exported.headers['content-disposition']).toMatch(/^attachment; filename="qms-trial-report-[0-9a-f-]+\.csv"$/);
+    expect(exported.text).toContain('batchId,batchCode,workOrderCode,metricSetSha256,exportedAt,metricId,metricCode,target,actual,comparison,signal,source,recordedAt');
+    expect(exported.text).toMatch(/[a-f0-9]{64}/);
+    expect(exported.text).toContain(`"${batch.body.id}"`);
+    expect(exported.text).toContain(`"${metric.body.id}"`);
+    expect(exported.text).toContain('"CPK"');
+    expect(exported.text).toContain('"MANUAL"');
+    expect(exported.text).toContain('"GREEN"');
+    expect(exported.headers['cache-control']).toBe('no-store');
     const detail = await request(app.getHttpServer()).get(`/api/v1/new-product-quality/projects/${created.body.id}`).expect(200);
     expect(detail.body.stages).toHaveLength(1);
+    await request(app.getHttpServer()).post(`/api/v1/new-product-quality/projects/${created.body.id}/handover`).set('Idempotency-Key', randomUUID()).send({ expectedVersion: 0, riskStatement: '' }).expect(400);
+    const incomplete = await request(app.getHttpServer()).post(`/api/v1/new-product-quality/projects/${created.body.id}/handover`).set('Idempotency-Key', randomUUID()).send({ expectedVersion: 1, riskStatement: '量产前风险确认' }).expect(409);
+    expect(incomplete.body.code).toBe('NEW_PRODUCT_HANDOVER_STAGES_INCOMPLETE');
+
+    await request(app.getHttpServer()).post(`/api/v1/new-product-quality/projects/${created.body.id}/early-flow`).set('Idempotency-Key', randomUUID()).send({ monitoringWindowDays: 30, plan: '每日首件确认' }).expect(400);
+    const earlyFlow = await request(app.getHttpServer()).post(`/api/v1/new-product-quality/projects/${created.body.id}/early-flow`).set('Idempotency-Key', randomUUID()).send({ monitoringWindowDays: 30, monitoringFrequency: '每日', plan: '每日首件确认并记录关键尺寸趋势', exitCriteria: '连续三批符合尺寸目标且无未关闭缺陷' }).expect(201);
+    expect(earlyFlow.body).toMatchObject({ status: 'DRAFT', monitoringWindowDays: 30, monitoringFrequency: '每日', exitCriteria: '连续三批符合尺寸目标且无未关闭缺陷', version: 1 });
+    const submittedFlow = await request(app.getHttpServer()).put(`/api/v1/new-product-quality/early-flows/${earlyFlow.body.id}/submit`).set('Idempotency-Key', randomUUID()).send({ expectedVersion: 1 }).expect(200);
+    expect(submittedFlow.body.status).toBe('SUBMITTED');
+    const approvedFlow = await request(app.getHttpServer()).put(`/api/v1/new-product-quality/early-flows/${earlyFlow.body.id}/approve`).set('Idempotency-Key', randomUUID()).send({ expectedVersion: submittedFlow.body.version, decision: 'APPROVE', note: '首批监控方案已确认' }).expect(200);
+    expect(approvedFlow.body).toMatchObject({ status: 'APPROVED', approvalNote: '首批监控方案已确认' });
+  });
+
+  it('escapes spreadsheet formulas and preserves the batch row without metrics', async () => {
+    const created = await request(app.getHttpServer()).post('/api/v1/new-product-quality/projects').set('Idempotency-Key', randomUUID()).send({ code: `EXPORT-${randomUUID().slice(0, 8)}`, name: '导出项目', productCode: 'P-002' }).expect(201);
+    const batch = await request(app.getHttpServer()).post(`/api/v1/new-product-quality/projects/${created.body.id}/trial-batches`).set('Idempotency-Key', randomUUID()).send({ code: '=HYPERLINK("https://example.test")', workOrderCode: '+SUM(1,1)' }).expect(201);
+    const path = `/api/v1/new-product-quality/trial-batches/${batch.body.id}/report/export`;
+    const empty = await request(app.getHttpServer()).get(path).expect(200);
+    expect(empty.text).toContain('metricCode,target,actual');
+    expect(empty.text).toContain(`"${batch.body.id}"`);
+    expect(empty.text).toContain('"\'=HYPERLINK(""HTTPS://EXAMPLE.TEST"")"');
+    await request(app.getHttpServer()).post(`/api/v1/new-product-quality/trial-batches/${batch.body.id}/metrics`).set('Idempotency-Key', randomUUID()).send({ code: 'DEFECT', target: 2, actual: 1, comparison: 'LTE', source: 'MANUAL' }).expect(201);
+    const exported = await request(app.getHttpServer()).get(path).expect(200);
+    expect(exported.text).toContain('"\'=HYPERLINK(""HTTPS://EXAMPLE.TEST"")"');
+    expect(exported.text).toContain('"\'+SUM(1,1)"');
+    await request(app.getHttpServer()).get(`/api/v1/new-product-quality/trial-batches/${randomUUID()}/report/export`).expect(404);
   });
 });

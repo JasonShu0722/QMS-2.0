@@ -383,6 +383,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/my-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PermissionsController_myPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/permissions": {
         parameters: {
             query?: never;
@@ -799,6 +815,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/{id}/retry-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_retryScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}": {
         parameters: {
             query?: never;
@@ -863,6 +895,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/outbox/failures/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OutboxAdministrationController_attempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/outbox/failures/{id}/retry": {
         parameters: {
             query?: never;
@@ -895,6 +943,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaskInboxController_statistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaskInboxController_transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{id}/claim": {
         parameters: {
             query?: never;
@@ -921,6 +1001,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["TaskInboxController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaskInboxController_retry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1567,6 +1663,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/production-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_productionBatches"];
+        put?: never;
+        post: operations["ProcessQualityController_createProduction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/production-batches/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_productionSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/production-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_productionDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/production-batches/{id}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_correctProduction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_shipmentReportList"];
+        put?: never;
+        post: operations["ProcessQualityController_createShipmentReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessQualityController_shipmentReportDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_archiveShipmentReport"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_updateShipmentReportEvidence"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports/{id}/customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ProcessQualityController_associateShipmentReportCustomer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/shipment-reports/{id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcessQualityController_linkShipmentReportIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/process-quality/defect-types": {
         parameters: {
             query?: never;
@@ -1711,6 +1967,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/customers/{id}/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_customerRelations"];
+        put?: never;
+        post: operations["CustomerQualityController_createCustomerRelation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/customer-relations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_updateCustomerRelation"];
+        post?: never;
+        delete: operations["CustomerQualityController_deleteCustomerRelation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/complaints": {
         parameters: {
             query?: never;
@@ -1721,6 +2009,38 @@ export interface paths {
         get: operations["CustomerQualityController_complaints"];
         put?: never;
         post: operations["CustomerQualityController_createComplaint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_complaintAssignees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerQualityController_importComplaints"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1752,6 +2072,182 @@ export interface paths {
         };
         get?: never;
         put: operations["CustomerQualityController_archive"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_complaintEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/8d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_complaintEightD"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/8d/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_saveComplaintEightD"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/8d/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerQualityController_submitComplaintEightD"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/8d/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_approveComplaintEightD"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerQualityController_complaintAttachments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_triageComplaint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerQualityController_progressComplaint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_resolveComplaint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_closeComplaint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/complaints/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerQualityController_reopenComplaint"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2015,6 +2511,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-management/executions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_execution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/ncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_executionNcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_executionReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/plans/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_planReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-management/executions/{id}/checklist": {
         parameters: {
             query?: never;
@@ -2025,6 +2585,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["AuditManagementController_checklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2121,6 +2697,54 @@ export interface paths {
         get?: never;
         put: operations["AuditManagementController_close"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_imports"];
+        put?: never;
+        post: operations["AuditManagementController_importRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_reviewImport"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_issueImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2319,6 +2943,214 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/new-product-quality/trial-batches/{id}/report/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_exportTrialReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_trialSummary"];
+        put?: never;
+        post: operations["NewProductQualityController_createTrialSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_trialSummaryRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary/export/{format}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_exportTrialSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_reviseTrialSummary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_submitTrialSummary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/trial-batches/{id}/summary/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_decideTrialSummary"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/early-flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_earlyFlow"];
+        put?: never;
+        post: operations["NewProductQualityController_createEarlyFlow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/early-flows/{id}/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_reviseEarlyFlow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/early-flows/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_submitEarlyFlow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/early-flows/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_approveEarlyFlow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/early-flows/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_decideEarlyFlowRelease"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/early-flows/{id}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductQualityController_releases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/new-product-quality/projects/{id}/defect-selections": {
         parameters: {
             query?: never;
@@ -2342,7 +3174,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["NewProductQualityController_issues"];
         put?: never;
         post: operations["NewProductQualityController_issueDefects"];
         delete?: never;
@@ -2361,6 +3193,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["NewProductQualityController_escalateIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/issues/{id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_assignIssue"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/issues/{id}/measure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_recordIssueMeasure"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/issues/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_verifyIssue"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/issues/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductQualityController_closeIssue"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2393,6 +3289,1782 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["NewProductQualityController_massProductionApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/projects/{id}/handover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductQualityController_handover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_metrics"];
+        put?: never;
+        post: operations["QualityDataController_createMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["QualityDataController_recordFact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["QualityDataController_snapshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/snapshots/internal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["QualityDataController_internalSnapshot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/snapshots/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_snapshotDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/facts/{id}/drilldown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_factDrilldown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_trend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_insights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality-data/management-report/export/{format}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["QualityDataController_managementReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierIncomingController_list"];
+        put?: never;
+        post: operations["SupplierIncomingController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierIncomingController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierIncomingController_source"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierIncomingController_complete"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierIncomingController_correct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}/problem-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierIncomingController_linkProblem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-incoming/inspections/{id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierIncomingController_attachPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CoordinateInspectionController_list"];
+        put?: never;
+        post: operations["CoordinateInspectionController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CoordinateInspectionController_detail"];
+        put: operations["CoordinateInspectionController_revise"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CoordinateInspectionController_submit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CoordinateInspectionController_approve"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CoordinateInspectionController_schedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coordinate-inspection/requests/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CoordinateInspectionController_progress"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-performance/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPerformanceController_list"];
+        put?: never;
+        post: operations["SupplierPerformanceController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-performance/cards/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierPerformanceController_publish"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-performance/appeals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPerformanceAppealController_list"];
+        put?: never;
+        post: operations["SupplierPerformanceAppealController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-performance/appeals/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierPerformanceAppealController_submit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-performance/appeals/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierPerformanceAppealController_review"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/performance/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPerformancePortalCardController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/performance/appeals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPerformancePortalAppealController_list"];
+        put?: never;
+        post: operations["SupplierPerformancePortalAppealController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/performance/appeals/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierPerformancePortalAppealController_submit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierConcessionController_list"];
+        put?: never;
+        post: operations["SupplierConcessionController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierConcessionController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierConcessionController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierConcessionController_withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierConcessionController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierConcessionController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-concessions/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierConcessionController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnnouncementController_mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/manage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnnouncementController_manage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/audience-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnnouncementController_audienceUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnnouncementController_receipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnnouncementController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AnnouncementController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnnouncementController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnnouncementController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnnouncementController_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-standards/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditStandardsController_list"];
+        put?: never;
+        post: operations["AuditStandardsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-standards/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditStandardsController_detail"];
+        put: operations["AuditStandardsController_updateDraft"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-standards/templates/{id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditStandardsController_revise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-standards/templates/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditStandardsController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-admission/quality-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAdmissionController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-admission/quality-documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAdmissionController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-admission/quality-documents/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierAdmissionController_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/quality-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAdmissionPortalController_list"];
+        put?: never;
+        post: operations["SupplierAdmissionPortalController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/quality-documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAdmissionPortalController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/quality-documents/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierAdmissionPortalController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ESignatureController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ESignatureController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_approvals"];
+        put?: never;
+        post: operations["ESignatureController_signApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAuditController_listPlans"];
+        put?: never;
+        post: operations["SupplierAuditController_createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/plans/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierAuditController_submitPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAuditController_listRecords"];
+        put?: never;
+        post: operations["SupplierAuditController_createRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/records/{id}/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAuditController_getChecklist"];
+        put: operations["SupplierAuditController_updateChecklist"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/records/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierAuditController_submitRecord"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-audit/records/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierAuditController_closeRecord"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityTargetsController_list"];
+        put?: never;
+        post: operations["SupplierQualityTargetsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityTargetsController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityTargetsController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityTargetsController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets/{id}/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityTargetsController_revise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality-targets/{id}/actuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierQualityTargetsController_actualHistory"];
+        put?: never;
+        post: operations["SupplierQualityTargetsController_recordActual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierMeetingsController_list"];
+        put?: never;
+        post: operations["SupplierMeetingsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierMeetingsController_start"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierMeetingsController_complete"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierMeetingsController_createTopic"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/topics/{topicId}/conclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierMeetingsController_concludeTopic"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierMeetingsController_createAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-meetings/{id}/actions/{actionId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierMeetingsController_completeAction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPpapController_list"];
+        put?: never;
+        post: operations["SupplierPpapController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPpapController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_addItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/items/{itemId}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_bindEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/items/{itemId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_reviewItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-ppap/{id}/requalify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPpapController_requalify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-inspection-standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierInspectionStandardsController_list"];
+        put?: never;
+        post: operations["SupplierInspectionStandardsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-inspection-standards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierInspectionStandardsController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-inspection-standards/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierInspectionStandardsController_addItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-inspection-standards/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierInspectionStandardsController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-barcode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierBarcodeController_list"];
+        put?: never;
+        post: operations["SupplierBarcodeController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-barcode/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierBarcodeController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-barcode/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierBarcodeController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-barcode/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierBarcodeController_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-asn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAsnController_list"];
+        put?: never;
+        post: operations["SupplierAsnController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-asn/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierAsnController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-asn/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierAsnController_updateEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-asn/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierAsnController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-pcn/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPcnController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-pcn/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPcnController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-pcn/requests/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPcnController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-pcn/requests/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPcnController_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPcnPortalController_list"];
+        put?: never;
+        post: operations["SupplierPcnPortalController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPcnPortalController_profiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPcnPortalController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns/{id}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPcnPortalController_update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPcnPortalController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/pcns/{id}/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPcnPortalController_advance"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2903,10 +5575,30 @@ export interface components {
             availableAt: string;
             /** @enum {string} */
             reasonCode: "OUTBOX_DELIVERY_FAILED";
+            /** @example OUTBOX_HANDLER_ERROR */
+            failureReasonCode: string;
+            /** Format: date-time */
+            lastFailureAt?: string;
         };
         OutboxFailurePageDto: {
             items: components["schemas"]["OutboxFailureDto"][];
             total: number;
+        };
+        OutboxAttemptDto: {
+            /** Format: uuid */
+            id: string;
+            attemptNumber: number;
+            /** @enum {string} */
+            outcome: "FAILED" | "PROCESSED" | "DEFERRED" | "RETRY_REQUESTED";
+            /** @example OUTBOX_HANDLER_ERROR */
+            reasonCode?: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: date-time */
+            retryAt?: string;
+        };
+        OutboxAttemptPageDto: {
+            items: components["schemas"]["OutboxAttemptDto"][];
         };
         OutboxRetryDto: {
             /** Format: uuid */
@@ -2934,7 +5626,7 @@ export interface components {
             /** Format: date-time */
             dueAt: string | null;
             /** @enum {string} */
-            status: "PENDING" | "IN_PROGRESS" | "OVERDUE";
+            status: "PENDING" | "IN_PROGRESS" | "OVERDUE" | "FAILED";
             /** Format: uuid */
             claimedByUserId: string | null;
             /** Format: date-time */
@@ -2942,10 +5634,41 @@ export interface components {
             canAct: boolean;
             canClaim: boolean;
             canRelease: boolean;
+            canRetry: boolean;
         };
         TaskPageDto: {
             items: components["schemas"]["TaskDto"][];
             total: number;
+        };
+        TaskStatisticsDto: {
+            total: number;
+            pending: number;
+            inProgress: number;
+            overdue: number;
+            unclaimed: number;
+            mine: number;
+            dueToday: number;
+            dueThisWeek: number;
+            failed: number;
+        };
+        TaskTransferItemDto: {
+            /** Format: uuid */
+            id: string;
+            expectedVersion: number;
+        };
+        TaskTransferDto: {
+            /** Format: uuid */
+            assigneeUserId: string;
+            items: components["schemas"]["TaskTransferItemDto"][];
+        };
+        TaskTransferResultDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** @enum {string} */
+            status: "PENDING" | "IN_PROGRESS" | "OVERDUE";
         };
         InboxMutationDto: {
             expectedVersion: number;
@@ -3810,6 +6533,241 @@ export interface components {
             workflowVersionId: string;
             enabled: boolean;
         };
+        CreateProcessProductionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            batchCode: string;
+            workOrderCode: string;
+            operationCode: string;
+            productCode: string;
+            lineCode?: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            totalQuantity: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+        };
+        ProcessProductionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            batchCode: string;
+            workOrderCode: string;
+            operationCode: string;
+            productCode: string;
+            lineCode?: string | null;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            totalQuantity: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+            /** @enum {string} */
+            sourceKind: "MANUAL";
+            yieldRate: number;
+            firstPassRate: number;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProcessProductionPageDto: {
+            items: components["schemas"]["ProcessProductionDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ProcessProductionSummaryDto: {
+            batchCount: number;
+            totalQuantity: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+            yieldRate?: number | null;
+            firstPassRate?: number | null;
+        };
+        ProcessDefectEvidenceDto: {
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            scanStatus: string;
+            status: string;
+        };
+        ProcessDefectDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            defectTypeCode: string;
+            description: string;
+            defectQuantity: number;
+            /** Format: date-time */
+            occurredAt: string;
+            batchCode?: string | null;
+            workOrderCode?: string | null;
+            operationCode?: string | null;
+            lineCode?: string | null;
+            projectCode?: string | null;
+            productCode?: string | null;
+            materialCode?: string | null;
+            /** Format: uuid */
+            supplierOrganizationId?: string | null;
+            /** @enum {string} */
+            responsibilityCategory: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
+            /** @enum {string} */
+            sourceKind: "MANUAL";
+            externalSourceSystem?: string | null;
+            externalRecordKey?: string | null;
+            /** Format: date-time */
+            sourceObservedAt?: string | null;
+            /** @enum {string|null} */
+            ingestionStatus?: "PENDING_VERIFICATION" | null;
+            version: number;
+            /** Format: date-time */
+            archivedAt?: string | null;
+            evidence?: components["schemas"]["ProcessDefectEvidenceDto"][];
+        };
+        ProcessProductionDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            batchCode: string;
+            workOrderCode: string;
+            operationCode: string;
+            productCode: string;
+            lineCode?: string | null;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            totalQuantity: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+            /** @enum {string} */
+            sourceKind: "MANUAL";
+            yieldRate: number;
+            firstPassRate: number;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            revisions: Record<string, never>[];
+            defects: components["schemas"]["ProcessDefectDto"][];
+            defectQuantity: number;
+        };
+        CorrectProcessProductionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            totalQuantity?: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+            reason: string;
+        };
+        CreateProcessShipmentReportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            reportNumber?: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            productCode?: string;
+            batchIds: string[];
+        };
+        ProcessShipmentReportEvidenceDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileVersion: number;
+            sha256: string;
+            /** Format: date-time */
+            scannedAt: string;
+            position: number;
+        };
+        ProcessShipmentReportCustomerDto: {
+            /** Format: uuid */
+            customerId: string;
+            customerVersion: number;
+            customerCode: string;
+            customerName: string;
+        };
+        ProcessShipmentReportIssueDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            status: string;
+            version: number;
+        };
+        ProcessShipmentReportDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            reportNumber: string;
+            /** @enum {string} */
+            status: "DRAFT" | "ARCHIVED";
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            productCode?: string | null;
+            batchCount: number;
+            totalQuantity: number;
+            goodQuantity: number;
+            firstPassQuantity: number;
+            defectQuantity: number;
+            yieldRate?: number | null;
+            firstPassRate?: number | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            archivedAt?: Record<string, never> | null;
+            snapshot: Record<string, never>;
+            evidence: components["schemas"]["ProcessShipmentReportEvidenceDto"][];
+            customers: components["schemas"]["ProcessShipmentReportCustomerDto"][];
+            issues: components["schemas"]["ProcessShipmentReportIssueDto"][];
+        };
+        ProcessShipmentReportPageDto: {
+            items: components["schemas"]["ProcessShipmentReportDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ArchiveProcessShipmentReportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        UpdateProcessShipmentReportEvidenceDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            fileIds: string[];
+        };
+        AssociateProcessShipmentReportCustomerDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            customerId: string;
+        };
+        LinkProcessShipmentReportIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            problemId: string;
+            expectedProblemVersion: number;
+        };
         CreateProcessDefectTypeDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -3858,47 +6816,6 @@ export interface components {
             externalRecordKey?: string;
             /** Format: date-time */
             sourceObservedAt?: string;
-        };
-        ProcessDefectEvidenceDto: {
-            /** Format: uuid */
-            id: string;
-            originalName: string;
-            scanStatus: string;
-            status: string;
-        };
-        ProcessDefectDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organizationId: string;
-            defectTypeCode: string;
-            description: string;
-            defectQuantity: number;
-            /** Format: date-time */
-            occurredAt: string;
-            batchCode?: string | null;
-            workOrderCode?: string | null;
-            operationCode?: string | null;
-            lineCode?: string | null;
-            projectCode?: string | null;
-            productCode?: string | null;
-            materialCode?: string | null;
-            /** Format: uuid */
-            supplierOrganizationId?: string | null;
-            /** @enum {string} */
-            responsibilityCategory: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN";
-            /** @enum {string} */
-            sourceKind: "MANUAL";
-            externalSourceSystem?: string | null;
-            externalRecordKey?: string | null;
-            /** Format: date-time */
-            sourceObservedAt?: string | null;
-            /** @enum {string|null} */
-            ingestionStatus?: "PENDING_VERIFICATION" | null;
-            version: number;
-            /** Format: date-time */
-            archivedAt?: string | null;
-            evidence?: components["schemas"]["ProcessDefectEvidenceDto"][];
         };
         ProcessDefectPageDto: {
             items: components["schemas"]["ProcessDefectDto"][];
@@ -3994,6 +6911,40 @@ export interface components {
             name?: string;
             active?: boolean;
         };
+        CustomerRelationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            customer_id: string;
+            /** @enum {string} */
+            relation_type: "CUSTOMER_PARENT" | "VEHICLE_MODEL" | "PROJECT" | "PRODUCT";
+            /** Format: uuid */
+            related_customer_id?: Record<string, never> | null;
+            related_code?: Record<string, never> | null;
+            related_name?: Record<string, never> | null;
+            version: number;
+        };
+        CreateCustomerRelationDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            relationType: "CUSTOMER_PARENT" | "VEHICLE_MODEL" | "PROJECT" | "PRODUCT";
+            /** Format: uuid */
+            relatedCustomerId?: string;
+            relatedCode?: string;
+            relatedName?: string;
+        };
+        UpdateCustomerRelationDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            relatedCustomerId?: string;
+            relatedCode?: string;
+            relatedName?: string;
+        };
         CustomerComplaintDto: {
             /** Format: uuid */
             id: string;
@@ -4018,7 +6969,16 @@ export interface components {
             severity_policy_version: string;
             severity_snapshot: Record<string, never>;
             /** @enum {string} */
-            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "ARCHIVED";
+            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+            /** @enum {string|null} */
+            category?: "PRODUCT_QUALITY" | "DELIVERY" | "SERVICE" | "OTHER" | null;
+            category_note?: Record<string, never> | null;
+            /** Format: uuid */
+            responsible_department_id?: Record<string, never> | null;
+            /** Format: uuid */
+            owner_user_id?: Record<string, never> | null;
+            resolution_summary?: Record<string, never> | null;
+            closure_note?: Record<string, never> | null;
             external_source_system?: string | null;
             external_record_key?: string | null;
             /** Format: date-time */
@@ -4031,6 +6991,67 @@ export interface components {
             archived_at?: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        CustomerComplaintDepartmentDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        CustomerComplaintUserDto: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+        };
+        CustomerComplaintAssigneesDto: {
+            departments: components["schemas"]["CustomerComplaintDepartmentDto"][];
+            users: components["schemas"]["CustomerComplaintUserDto"][];
+        };
+        CustomerComplaintImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            customerId: string;
+            /** @enum {string} */
+            complaintType: "ZERO_KM" | "AFTER_SALES";
+            defectDescription: string;
+            terminalCustomerName?: string;
+            productCode?: string;
+            productModel?: string;
+            vin?: string;
+            mileage?: number;
+            /** Format: date-time */
+            purchaseDate?: string;
+            returnRequired?: boolean;
+            physicalAnalysisRequired?: boolean;
+            severity: string;
+            severityPolicyVersion: string;
+            severitySnapshot: Record<string, never>;
+            /** @enum {string} */
+            externalSourceSystem?: "ERP" | "SAP" | "IMS";
+            externalRecordKey?: string;
+            /** Format: date-time */
+            sourceObservedAt?: string;
+            rowNumber: number;
+        };
+        ImportCustomerComplaintsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            rows: components["schemas"]["CustomerComplaintImportRowDto"][];
+        };
+        CustomerComplaintImportItemDto: {
+            rowNumber: number;
+            /** @enum {string} */
+            status: "CREATED" | "DUPLICATE" | "REJECTED";
+            /** Format: uuid */
+            complaintId?: Record<string, never> | null;
+            complaintNumber?: Record<string, never> | null;
+            errorCode?: Record<string, never> | null;
+        };
+        CustomerComplaintImportResultDto: {
+            created: number;
+            duplicates: number;
+            rejected: number;
+            items: components["schemas"]["CustomerComplaintImportItemDto"][];
         };
         CustomerPhysicalDispositionDto: {
             /** Format: uuid */
@@ -4084,7 +7105,16 @@ export interface components {
             severity_policy_version: string;
             severity_snapshot: Record<string, never>;
             /** @enum {string} */
-            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "ARCHIVED";
+            status: "OPEN" | "IN_ANALYSIS" | "RESOLVED" | "CLOSED" | "ARCHIVED";
+            /** @enum {string|null} */
+            category?: "PRODUCT_QUALITY" | "DELIVERY" | "SERVICE" | "OTHER" | null;
+            category_note?: Record<string, never> | null;
+            /** Format: uuid */
+            responsible_department_id?: Record<string, never> | null;
+            /** Format: uuid */
+            owner_user_id?: Record<string, never> | null;
+            resolution_summary?: Record<string, never> | null;
+            closure_note?: Record<string, never> | null;
             external_source_system?: string | null;
             external_record_key?: string | null;
             /** Format: date-time */
@@ -4139,6 +7169,120 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             expectedVersion: number;
+        };
+        CustomerComplaintEventDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            complaint_id: string;
+            seq: number;
+            /** @enum {string} */
+            event_type: "TRIAGED" | "REASSIGNED" | "PROGRESS_RECORDED" | "RESOLVED" | "CLOSED" | "REOPENED" | "ARCHIVED";
+            from_status: string;
+            to_status: string;
+            note: string;
+            /** Format: uuid */
+            evidence_file_object_id: string | null;
+            /** Format: uuid */
+            actor_user_id: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CustomerComplaintEightDDto: {
+            what: string;
+            why: string;
+            where: string;
+            when: string;
+            who: string;
+            how: string;
+            howMuch: string;
+            containment: string;
+            rootCause: string;
+            verification: string;
+            preventiveAction: string;
+            horizontalDeployment: string;
+            lessonsLearned: string;
+            verificationEvidenceFileIds: string[];
+            archiveChecklist: string[];
+            /** Format: uuid */
+            complaintId: string;
+            version: number;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED";
+            /** @enum {string|null} */
+            approvalLevel?: "L1" | "L2" | "L3" | null;
+            /** Format: date-time */
+            submittedAt?: Record<string, never> | null;
+            /** Format: date-time */
+            approvedAt?: Record<string, never> | null;
+        };
+        CustomerComplaintEightDContentDto: {
+            what: string;
+            why: string;
+            where: string;
+            when: string;
+            who: string;
+            how: string;
+            howMuch: string;
+            containment: string;
+            rootCause: string;
+            verification: string;
+            preventiveAction: string;
+            horizontalDeployment: string;
+            lessonsLearned: string;
+            verificationEvidenceFileIds: string[];
+            archiveChecklist: string[];
+        };
+        SaveCustomerComplaintEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            content: components["schemas"]["CustomerComplaintEightDContentDto"];
+        };
+        SubmitCustomerComplaintEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            content: components["schemas"]["CustomerComplaintEightDContentDto"];
+        };
+        ApproveCustomerComplaintEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            note: string;
+        };
+        TriageCustomerComplaintDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            category: "PRODUCT_QUALITY" | "DELIVERY" | "SERVICE" | "OTHER";
+            categoryNote?: string;
+            /** Format: uuid */
+            responsibleDepartmentId: string;
+            /** Format: uuid */
+            ownerUserId: string;
+            note: string;
+        };
+        ProgressCustomerComplaintDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            note: string;
+            /** Format: uuid */
+            evidenceFileObjectId?: string;
+        };
+        ResolveCustomerComplaintDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            resolutionSummary: string;
+        };
+        NoteCustomerComplaintDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            note: string;
         };
         PhysicalDispositionDto: {
             /** Format: uuid */
@@ -4351,13 +7495,9 @@ export interface components {
             status: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
             version: number;
         };
-        ChecklistResultDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            itemKey: string;
-            /** @enum {string} */
-            result: "OK" | "NG" | "NA";
-            note?: string;
+        AuditExecutionItemDto: {
+            key: string;
+            text: string;
         };
         AuditChecklistResponseDto: {
             /** Format: uuid */
@@ -4369,6 +7509,63 @@ export interface components {
             result: "OK" | "NG" | "NA";
             note?: string | null;
             version: number;
+        };
+        AuditExecutionSnapshotDto: {
+            execution: components["schemas"]["AuditExecutionResponseDto"];
+            items: components["schemas"]["AuditExecutionItemDto"][];
+            checklist: components["schemas"]["AuditChecklistResponseDto"][];
+        };
+        AuditNcResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            execution_id: string;
+            /** Format: uuid */
+            checklist_result_id: string;
+            /** @enum {string} */
+            severity: "MINOR" | "MAJOR" | "CRITICAL";
+            /** @enum {string} */
+            status: "OPEN" | "ASSIGNED" | "RESPONDED" | "VERIFIED" | "REJECTED" | "CLOSED";
+            /** Format: date-time */
+            due_at: string;
+            due_policy_version?: Record<string, never> | null;
+            calendar_version?: Record<string, never> | null;
+            due_business_days?: Record<string, never> | null;
+            /** Format: uuid */
+            assignee_user_id?: string | null;
+            response?: string | null;
+            verification_note?: string | null;
+            /** Format: uuid */
+            verified_by_id?: string | null;
+            /** Format: uuid */
+            closed_by_id?: string | null;
+            /** Format: uuid */
+            problem_index_id?: string | null;
+            version: number;
+        };
+        AuditExecutionReportDto: {
+            execution: components["schemas"]["AuditExecutionResponseDto"];
+            checklist: components["schemas"]["AuditChecklistResponseDto"][];
+            summary: Record<string, never>;
+        };
+        AuditPlanReportDto: {
+            plan: components["schemas"]["AuditPlanResponseDto"];
+            executions: components["schemas"]["AuditExecutionResponseDto"][];
+            overdueNcCount: number;
+        };
+        ChecklistResultDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion?: number;
+            itemKey: string;
+            /** @enum {string} */
+            result: "OK" | "NG" | "NA";
+            note?: string;
+        };
+        SubmitAuditExecutionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
         };
         RegisterAuditDeadlinePolicyDto: {
             /** Format: uuid */
@@ -4418,29 +7615,6 @@ export interface components {
             dueBusinessDays: number;
             workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
         };
-        AuditNcResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            execution_id: string;
-            /** Format: uuid */
-            checklist_result_id: string;
-            /** @enum {string} */
-            severity: "MINOR" | "MAJOR" | "CRITICAL";
-            /** @enum {string} */
-            status: "OPEN" | "ASSIGNED" | "RESPONDED" | "VERIFIED" | "REJECTED" | "CLOSED";
-            /** Format: date-time */
-            due_at: string;
-            due_policy_version?: Record<string, never> | null;
-            calendar_version?: Record<string, never> | null;
-            due_business_days?: Record<string, never> | null;
-            /** Format: uuid */
-            assignee_user_id?: string | null;
-            response?: string | null;
-            /** Format: uuid */
-            verified_by_id?: string | null;
-            version: number;
-        };
         AssignNcDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -4459,11 +7633,91 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
             accepted: boolean;
+            verificationNote: string;
         };
         CloseNcDto: {
             /** Format: uuid */
             organizationId?: string;
             expectedVersion: number;
+        };
+        ImportAuditRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            sourceSystem: "CUSTOMER" | "SECOND_PARTY";
+            externalKey: string;
+            payload: Record<string, never>;
+        };
+        AuditImportRowResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** @enum {string} */
+            source_system: "CUSTOMER" | "SECOND_PARTY";
+            external_key: string;
+            payload: Record<string, never>;
+            /** @enum {string} */
+            status: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
+            version: number;
+            review_note?: Record<string, never> | null;
+            /** Format: uuid */
+            problem_index_id?: Record<string, never> | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditImportRowPageDto: {
+            items: components["schemas"]["AuditImportRowResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ReviewAuditImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "ACCEPTED" | "REJECTED";
+            note?: string;
+        };
+        IssueAuditImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            problemType: string;
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            responsibleScope: string;
+            severity: string;
+            /** Format: uuid */
+            ownerId?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
+        };
+        AuditImportIssueProblemDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowInstanceId: string;
+            version: number;
+        };
+        AuditImportIssueSourceDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            createdBy: string;
+            sourceVersion: number;
+            sourceSnapshot: Record<string, never>;
+            /** Format: date-time */
+            archivedAt?: string | null;
+        };
+        AuditImportIssueResultDto: {
+            problem: components["schemas"]["AuditImportIssueProblemDto"];
+            source: components["schemas"]["AuditImportIssueSourceDto"];
+            sources: components["schemas"]["AuditImportIssueSourceDto"][];
+            replayed: boolean;
         };
         CreateNewProductProjectDto: {
             /** Format: uuid */
@@ -4517,6 +7771,64 @@ export interface components {
             work_order_code?: string | null;
             version: number;
         };
+        NewProductHandoverDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            project_version: number;
+            risk_statement: string;
+            /** Format: uuid */
+            mass_production_approval_id?: string | null;
+            stage_snapshot: Record<string, never>[];
+            trial_snapshot: Record<string, never>[];
+            open_issue_count: number;
+            /** Format: uuid */
+            handed_over_by_id: string;
+            /** Format: date-time */
+            handed_over_at: string;
+        };
+        NewProductEarlyFlowReleaseDto: {
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            note?: string | null;
+            /** Format: uuid */
+            evidenceObjectId: string;
+            /** Format: uuid */
+            decidedById: string;
+            /** Format: date-time */
+            decidedAt: string;
+            flowVersion: number;
+        };
+        NewProductEarlyFlowDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            projectId: string;
+            monitoringWindowDays: number;
+            monitoringFrequency: string;
+            plan: string;
+            exitCriteria: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
+            approvalNote?: string | null;
+            releaseDecision?: components["schemas"]["NewProductEarlyFlowReleaseDto"] | null;
+            version: number;
+            /** Format: uuid */
+            submittedById?: Record<string, never> | null;
+            /** Format: date-time */
+            submittedAt?: string | null;
+            /** Format: uuid */
+            approvedById?: Record<string, never> | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         NewProductProjectDetailDto: {
             /** Format: uuid */
             id: string;
@@ -4532,6 +7844,9 @@ export interface components {
             lessons: components["schemas"]["NewProductLessonCheckDto"][];
             batches: components["schemas"]["NewProductTrialBatchDto"][];
             selected_defects: Record<string, never>[];
+            handover?: components["schemas"]["NewProductHandoverDto"] | null;
+            early_flow?: components["schemas"]["NewProductEarlyFlowDto"] | null;
+            issues?: Record<string, never>;
         };
         CreateNewProductStageDto: {
             /** Format: uuid */
@@ -4645,6 +7960,114 @@ export interface components {
             version: number;
             metrics: components["schemas"]["NewProductTrialMetricDto"][];
         };
+        CreateNewProductTrialSummaryDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            conclusion: string;
+        };
+        NewProductTrialSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            batchId: string;
+            /** Format: uuid */
+            projectId: string;
+            conclusion: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
+            metricSnapshot: Record<string, never>[];
+            issueSnapshot: Record<string, never>[];
+            sourceSha256?: string | null;
+            version: number;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: uuid */
+            submittedById?: string | null;
+            /** Format: date-time */
+            submittedAt?: string | null;
+            /** Format: uuid */
+            approvedById?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            approvalNote?: string | null;
+        };
+        NewProductTrialSummaryRevisionDto: {
+            revision: number;
+            conclusion: string;
+            metricSnapshot: Record<string, never>[];
+            issueSnapshot: Record<string, never>[];
+            sourceSha256: string;
+            /** Format: uuid */
+            submittedById: string;
+            /** Format: date-time */
+            submittedAt: string;
+            /** @enum {string|null} */
+            decision?: "APPROVE" | "REJECT" | null;
+            /** Format: uuid */
+            decidedById?: string | null;
+            /** Format: date-time */
+            decidedAt?: string | null;
+            decisionNote?: string | null;
+        };
+        ReviseNewProductTrialSummaryDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            conclusion: string;
+        };
+        SubmitNewProductTrialSummaryDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        DecideNewProductTrialSummaryDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            note?: string;
+        };
+        CreateNewProductEarlyFlowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            monitoringWindowDays: number;
+            monitoringFrequency: string;
+            plan: string;
+            exitCriteria: string;
+        };
+        ReviseNewProductEarlyFlowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            monitoringWindowDays: number;
+            monitoringFrequency: string;
+            plan: string;
+            exitCriteria: string;
+            expectedVersion: number;
+        };
+        SubmitNewProductEarlyFlowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        ApproveNewProductEarlyFlowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            note?: string;
+        };
+        DecideNewProductEarlyFlowReleaseDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            /** Format: uuid */
+            evidenceObjectId: string;
+            note?: string;
+        };
         SelectNewProductDefectDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -4676,6 +8099,79 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
         };
+        NewProductIssueDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            trial_batch_id?: string | null;
+            /** @enum {string} */
+            response_form: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            complexity: "SIMPLE" | "COMPLEX";
+            severity: string;
+            /** @enum {string} */
+            status: "OPEN" | "ESCALATED" | "IN_PROGRESS" | "VERIFIED" | "CLOSED";
+            version: number;
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            owner_username?: string | null;
+            measure_plan?: string | null;
+            /** Format: date-time */
+            measure_due_at?: string | null;
+            verification_summary?: string | null;
+            /** Format: uuid */
+            verification_evidence_object_id?: string | null;
+            /** Format: uuid */
+            verified_by_id?: string | null;
+            /** Format: date-time */
+            verified_at?: string | null;
+            /** Format: date-time */
+            closed_at?: string | null;
+            closure_note?: string | null;
+        };
+        NewProductIssueStatsDto: {
+            total: number;
+            open: number;
+            escalated: number;
+            in_progress: number;
+            verified: number;
+            closed: number;
+        };
+        NewProductIssueListDto: {
+            items: components["schemas"]["NewProductIssueDto"][];
+            stats: components["schemas"]["NewProductIssueStatsDto"];
+        };
+        AssignNewProductIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            assigneeUserId: string;
+        };
+        RecordNewProductMeasureDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            measurePlan: string;
+            /** Format: date-time */
+            measureDueAt?: string;
+        };
+        VerifyNewProductIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            verificationSummary: string;
+            /** Format: uuid */
+            evidenceObjectId?: string;
+        };
+        CloseNewProductIssueDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            closureNote: string;
+        };
         CreateNewProductLegacyIssueDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -4692,6 +8188,1673 @@ export interface components {
             /** Format: uuid */
             evidenceObjectId: string;
         };
+        HandoverNewProductProjectDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            riskStatement: string;
+        };
+        MetricDefinitionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            domain?: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT";
+            code: string;
+            name: string;
+            unit: string;
+            numeratorLabel: string;
+            denominatorLabel: string;
+            formulaVersion: string;
+            /** @description 标准公式编码，如 INCOMING_ACCEPTANCE_RATE、PPM、PROCESS_DEFECT_RATE、FIRST_PASS_YIELD */
+            formulaCode?: string;
+            /** @enum {string} */
+            thresholdDirection?: "GTE" | "LTE";
+            greenThreshold?: number;
+            yellowThreshold?: number;
+            /** @default 1 */
+            abnormalPeriodLimit: number;
+            /** Format: uuid */
+            id: string;
+            active: boolean;
+            version: number;
+            resolvedFormulaCode: string;
+            /** @enum {string} */
+            resolvedThresholdDirection: "GTE" | "LTE";
+            resolvedGreenThreshold: number | null;
+            resolvedYellowThreshold: number | null;
+            resolvedAbnormalPeriodLimit: number;
+        };
+        CreateMetricDefinitionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            domain?: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT";
+            code: string;
+            name: string;
+            unit: string;
+            numeratorLabel: string;
+            denominatorLabel: string;
+            formulaVersion: string;
+            /** @description 标准公式编码，如 INCOMING_ACCEPTANCE_RATE、PPM、PROCESS_DEFECT_RATE、FIRST_PASS_YIELD */
+            formulaCode?: string;
+            /** @enum {string} */
+            thresholdDirection?: "GTE" | "LTE";
+            greenThreshold?: number;
+            yellowThreshold?: number;
+            /** @default 1 */
+            abnormalPeriodLimit: number;
+        };
+        RecordMetricFactDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            metricDefinitionId: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            numerator: number;
+            denominator: number;
+            /**
+             * @default MANUAL
+             * @enum {string}
+             */
+            sourceSystem: "MANUAL" | "INTERNAL" | "IMS" | "MES" | "ERP" | "SAP";
+            sourceRecordKey?: string;
+            /** Format: uuid */
+            sourceSnapshotId?: string;
+            dimensions?: Record<string, never>;
+        };
+        MetricFactDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            metricDefinitionId: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            numerator: number;
+            denominator: number;
+            value: number;
+            sourceSystem: string;
+            sourceRecordKey?: Record<string, never> | null;
+        };
+        CreateQualitySnapshotDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            sourceSystem: "IMS" | "MES" | "ERP" | "SAP";
+            externalRecordKey: string;
+            /** Format: date-time */
+            observedAt: string;
+            payload: Record<string, never>;
+        };
+        QualitySnapshotDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            sourceSystem: "MANUAL" | "INTERNAL" | "IMS" | "MES" | "ERP" | "SAP";
+            externalRecordKey: string;
+            /** Format: date-time */
+            observedAt: string;
+            status: string;
+            /** Format: uuid */
+            problemIndexId?: Record<string, never> | null;
+            problemVersion?: Record<string, never> | null;
+        };
+        CreateInternalQualitySnapshotDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            metricDefinitionId: string;
+            expectedMetricVersion: number;
+            /** Format: uuid */
+            problemIndexId: string;
+            expectedProblemVersion: number;
+            /** Format: date-time */
+            observedAt: string;
+        };
+        QualitySnapshotDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            sourceSystem: "MANUAL" | "INTERNAL" | "IMS" | "MES" | "ERP" | "SAP";
+            externalRecordKey: string;
+            /** Format: date-time */
+            observedAt: string;
+            status: string;
+            /** Format: uuid */
+            problemIndexId?: Record<string, never> | null;
+            problemVersion?: Record<string, never> | null;
+            payload: Record<string, never>;
+        };
+        QualityInternalSourceDto: {
+            /** @enum {string} */
+            type: "PROBLEM_INDEX";
+            /** Format: uuid */
+            id: string;
+            version: number;
+            domainCode: string;
+            domainSourceType: string;
+            /** Format: uuid */
+            domainSourceId: string;
+        };
+        QualityFactDrilldownDto: {
+            fact: components["schemas"]["MetricFactDto"];
+            snapshot: components["schemas"]["QualitySnapshotDto"] | null;
+            source: components["schemas"]["QualityInternalSourceDto"] | null;
+            reason: string | null;
+        };
+        QualityDashboardDomainSummaryDto: {
+            /** @enum {string} */
+            domain: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT" | "UNSPECIFIED";
+            label: string;
+            factCount: number;
+            metricCount: number;
+        };
+        QualityDashboardCardDto: {
+            /** @enum {string} */
+            domain: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT" | "UNSPECIFIED";
+            metricCode: string;
+            metricName: string;
+            unit: string;
+            /** @enum {string} */
+            status: "AVAILABLE" | "MANUAL" | "PENDING_REVIEW" | "NO_DATA";
+            latestValue: number | null;
+            numerator: number | null;
+            denominator: number | null;
+            sourceSystem: Record<string, never> | null;
+            sourceRecordKey: Record<string, never> | null;
+            /** Format: date-time */
+            periodStart: Record<string, never> | null;
+            /** Format: date-time */
+            periodEnd: Record<string, never> | null;
+            /** @enum {string} */
+            signal: "GREEN" | "YELLOW" | "RED" | "NO_DATA";
+            abnormalPeriods: number;
+            consecutiveRedPeriods: number;
+            alert: boolean;
+        };
+        QualityDashboardDto: {
+            metrics: components["schemas"]["MetricDefinitionDto"][];
+            latestFacts: components["schemas"]["MetricFactDto"][];
+            generatedAt: string;
+            /** Format: date-time */
+            from?: Record<string, never> | null;
+            /** Format: date-time */
+            to?: Record<string, never> | null;
+            domains: components["schemas"]["QualityDashboardDomainSummaryDto"][];
+            cards: components["schemas"]["QualityDashboardCardDto"][];
+        };
+        QualityInsightDto: {
+            /** Format: uuid */
+            metricDefinitionId: string;
+            metricCode: string;
+            metricName: string;
+            /** @enum {string} */
+            signal: "STABLE" | "RISING" | "FALLING" | "INSUFFICIENT_DATA";
+            summary: string;
+            evidence: string[];
+            /** @enum {string} */
+            generatedBy: "RULE_BASED";
+        };
+        IncomingItemDto: {
+            order: number;
+            name: string;
+            measuredValue?: string;
+            /** @enum {string} */
+            result: "PASS" | "NG" | "NA";
+        };
+        CreateIncomingInspectionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            profileId: string;
+            materialCode: string;
+            incomingBatch: string;
+            receivedQuantity: number;
+            sampledQuantity: number;
+            /**
+             * @default MANUAL
+             * @enum {string}
+             */
+            sourceSystem: "MANUAL" | "MES";
+            externalRecordKey?: string;
+            externalBatchKey?: string;
+            /** Format: date-time */
+            observedAt?: string;
+            items?: components["schemas"]["IncomingItemDto"][];
+        };
+        CompleteIncomingInspectionDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            conclusion: "PASS" | "NG";
+        };
+        CorrectIncomingInspectionDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            conclusion: "PASS" | "NG";
+            reason: string;
+        };
+        LinkIncomingProblemDto: {
+            expectedVersion: number;
+            title: string;
+            defectDescription: string;
+            defectQuantity: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            replyMode: "SUPPLIER" | "INTERNAL";
+            /** Format: uuid */
+            internalResponderId?: string;
+        };
+        AttachIncomingPhotoDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            fileId: string;
+            expectedVersion: number;
+        };
+        CoordinateInspectionRequestDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            requestNumber: string;
+            partNumber: string;
+            partName: string;
+            drawingRevision?: string | null;
+            batchNumber?: string | null;
+            sampleQuantity: number;
+            purpose: string;
+            priority: string;
+            /** Format: date-time */
+            requestedDueAt?: string | null;
+            status: string;
+            approvalNote?: string | null;
+            /** Format: uuid */
+            approvedById?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            scheduledAt?: string | null;
+            /** Format: uuid */
+            scheduledById?: string | null;
+            /** Format: uuid */
+            assignedToId?: string | null;
+            progressPercent: number;
+            progressNote?: string | null;
+            version: number;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CoordinateInspectionPageDto: {
+            items: components["schemas"]["CoordinateInspectionRequestDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateCoordinateInspectionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            partNumber: string;
+            partName: string;
+            drawingRevision?: string;
+            batchNumber?: string;
+            sampleQuantity: number;
+            /** @enum {string} */
+            purpose: "INCOMING" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT" | "OTHER";
+            /**
+             * @default NORMAL
+             * @enum {string}
+             */
+            priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+            /** Format: date-time */
+            requestedDueAt?: string;
+        };
+        UpdateCoordinateInspectionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            partNumber?: string;
+            partName?: string;
+            drawingRevision?: string;
+            batchNumber?: string;
+            sampleQuantity?: number;
+            /** @enum {string} */
+            purpose?: "INCOMING" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT" | "OTHER";
+            /** @enum {string} */
+            priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+            /** Format: date-time */
+            requestedDueAt?: string;
+        };
+        SubmitCoordinateInspectionDto: {
+            expectedVersion: number;
+        };
+        ApproveCoordinateInspectionDto: {
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            expectedVersion: number;
+            note?: string;
+        };
+        ScheduleCoordinateInspectionDto: {
+            expectedVersion: number;
+            /** Format: date-time */
+            scheduledAt: string;
+            /** Format: uuid */
+            assignedToId: string;
+        };
+        ProgressCoordinateInspectionDto: {
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "COMPLETED";
+            progressPercent: number;
+            expectedVersion: number;
+            note?: string;
+        };
+        SupplierPerformanceSourceDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @enum {string} */
+            conclusion: "PASS" | "NG";
+        };
+        SupplierPerformanceCardDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            supplierName: string;
+            /** @example 2026-09 */
+            month: string;
+            inspectionCount: number;
+            passCount: number;
+            incomingScore: number;
+            cooperationScore: number;
+            incomingWeight: number;
+            cooperationWeight: number;
+            cooperationNote: string;
+            totalScore: number;
+            sourceInspections: components["schemas"]["SupplierPerformanceSourceDto"][];
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierPerformancePageDto: {
+            items: components["schemas"]["SupplierPerformanceCardDto"][];
+            total: number;
+        };
+        CreateSupplierPerformanceCardDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            profileId: string;
+            /** @example 2026-09 */
+            month: string;
+            cooperationScore: number;
+            cooperationNote: string;
+            incomingWeight: number;
+            cooperationWeight: number;
+        };
+        PublishSupplierPerformanceCardDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        SupplierPerformanceAppealDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            cardId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "ACCEPTED" | "REJECTED";
+            reason: string;
+            decisionNote?: string | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierPerformanceAppealPageDto: {
+            items: components["schemas"]["SupplierPerformanceAppealDto"][];
+            total: number;
+        };
+        CreateSupplierPerformanceAppealDto: {
+            /** Format: uuid */
+            cardId: string;
+            reason: string;
+        };
+        SupplierPerformanceAppealTransitionDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            decision?: "ACCEPTED" | "REJECTED";
+            note?: string;
+        };
+        ConcessionRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            inspectionId: string;
+            inspectionVersion: number;
+            /** Format: uuid */
+            profileId: string;
+            supplierName: string;
+            materialCode: string;
+            incomingBatch: string;
+            receivedQuantity: number;
+            quantity: number;
+            reason: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "RELEASED" | "WITHDRAWN";
+            version: number;
+            /** Format: uuid */
+            requestedById: string;
+            /** Format: uuid */
+            approvedById?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            releasedAt?: string | null;
+            decisionNote?: string | null;
+            releaseNote?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            canSubmit?: boolean;
+            canWithdraw?: boolean;
+            canApprove?: boolean;
+            canRelease?: boolean;
+        };
+        ConcessionPageDto: {
+            items: components["schemas"]["ConcessionRecordDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            canCreate: boolean;
+        };
+        ConcessionEventDto: {
+            /** @enum {string} */
+            eventType: "CREATED" | "SUBMITTED" | "APPROVED" | "REJECTED" | "RELEASED" | "WITHDRAWN";
+            requestVersion: number;
+            /** Format: uuid */
+            actorUserId: string;
+            note?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ConcessionDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            inspectionId: string;
+            inspectionVersion: number;
+            /** Format: uuid */
+            profileId: string;
+            supplierName: string;
+            materialCode: string;
+            incomingBatch: string;
+            receivedQuantity: number;
+            quantity: number;
+            reason: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "RELEASED" | "WITHDRAWN";
+            version: number;
+            /** Format: uuid */
+            requestedById: string;
+            /** Format: uuid */
+            approvedById?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            releasedAt?: string | null;
+            decisionNote?: string | null;
+            releaseNote?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            canSubmit?: boolean;
+            canWithdraw?: boolean;
+            canApprove?: boolean;
+            canRelease?: boolean;
+            events: components["schemas"]["ConcessionEventDto"][];
+        };
+        CreateConcessionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            inspectionId: string;
+            quantity: number;
+            reason: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ConcessionVersionDto: {
+            expectedVersion: number;
+        };
+        DecideConcessionDto: {
+            expectedVersion: number;
+            note: string;
+        };
+        AnnouncementMineItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            title: string;
+            content: string;
+            /** @enum {string} */
+            importance: "NORMAL" | "IMPORTANT";
+            mustRead: boolean;
+            /** @enum {string} */
+            audience: "ALL" | "SELECTED";
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            recipientCount: number;
+            version: number;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            readAt?: string | null;
+        };
+        AnnouncementMinePageDto: {
+            items: components["schemas"]["AnnouncementMineItemDto"][];
+            unreadMustReadCount: number;
+        };
+        AnnouncementManageItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            title: string;
+            content: string;
+            /** @enum {string} */
+            importance: "NORMAL" | "IMPORTANT";
+            mustRead: boolean;
+            /** @enum {string} */
+            audience: "ALL" | "SELECTED";
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            recipientCount: number;
+            version: number;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            readCount: number;
+            recipientUserIds: string[];
+        };
+        AnnouncementManagePageDto: {
+            items: components["schemas"]["AnnouncementManageItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        AnnouncementAudienceUserDto: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+        };
+        AnnouncementAudienceUsersDto: {
+            items: components["schemas"]["AnnouncementAudienceUserDto"][];
+            total: number;
+        };
+        AnnouncementReceiptDto: {
+            /** Format: uuid */
+            userId: string;
+            /** Format: date-time */
+            readAt?: string | null;
+            /** Format: uuid */
+            readSessionId?: string | null;
+            readTraceId?: string | null;
+        };
+        AnnouncementInputDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            title: string;
+            content: string;
+            /** @enum {string} */
+            importance: "NORMAL" | "IMPORTANT";
+            mustRead: boolean;
+            /** @enum {string} */
+            audience: "ALL" | "SELECTED";
+            recipientUserIds: string[];
+        };
+        AnnouncementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            title: string;
+            content: string;
+            /** @enum {string} */
+            importance: "NORMAL" | "IMPORTANT";
+            mustRead: boolean;
+            /** @enum {string} */
+            audience: "ALL" | "SELECTED";
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            recipientCount: number;
+            version: number;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        UpdateAnnouncementDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            title: string;
+            content: string;
+            /** @enum {string} */
+            importance: "NORMAL" | "IMPORTANT";
+            mustRead: boolean;
+            /** @enum {string} */
+            audience: "ALL" | "SELECTED";
+            recipientUserIds: string[];
+            expectedVersion: number;
+        };
+        AnnouncementVersionDto: {
+            expectedVersion: number;
+        };
+        AnnouncementReadDto: {
+            /** Format: uuid */
+            announcementId: string;
+            /** Format: uuid */
+            userId: string;
+            /** Format: date-time */
+            readAt: string;
+        };
+        AuditStandardItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            /** @enum {string} */
+            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            latestVersion: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AuditStandardPageDto: {
+            items: components["schemas"]["AuditStandardItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        AuditStandardCheckItemDto: {
+            key: string;
+            text: string;
+        };
+        AuditStandardDefinitionDto: {
+            items: components["schemas"]["AuditStandardCheckItemDto"][];
+        };
+        AuditStandardVersionDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            definition: components["schemas"]["AuditStandardDefinitionDto"];
+            /** Format: date-time */
+            publishedAt: string;
+            /** Format: uuid */
+            publishedById: string;
+        };
+        AuditStandardDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            /** @enum {string} */
+            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            latestVersion: number;
+            draftDefinition: components["schemas"]["AuditStandardDefinitionDto"];
+            versions: components["schemas"]["AuditStandardVersionDto"][];
+        };
+        CreateAuditStandardDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            name: string;
+            /** @enum {string} */
+            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            definition: components["schemas"]["AuditStandardDefinitionDto"];
+        };
+        UpdateAuditStandardDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            definition: components["schemas"]["AuditStandardDefinitionDto"];
+        };
+        SupplierAdmissionDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** @enum {string} */
+            documentType: "QUALITY_MANUAL" | "CERTIFICATE" | "PROCESS_CONTROL" | "PPAP" | "OTHER";
+            title: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "ACCEPTED";
+            version: number;
+            /** Format: uuid */
+            fileId?: Record<string, never> | null;
+            reviewNote?: Record<string, never> | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierAdmissionPageDto: {
+            items: components["schemas"]["SupplierAdmissionDocumentDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        SupplierAdmissionEventDto: {
+            eventType: string;
+            documentVersion: number;
+            /** Format: uuid */
+            actorUserId: string;
+            /** Format: uuid */
+            fileId?: Record<string, never> | null;
+            note?: Record<string, never> | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierAdmissionDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** @enum {string} */
+            documentType: "QUALITY_MANUAL" | "CERTIFICATE" | "PROCESS_CONTROL" | "PPAP" | "OTHER";
+            title: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "ACCEPTED";
+            version: number;
+            /** Format: uuid */
+            fileId?: Record<string, never> | null;
+            reviewNote?: Record<string, never> | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            events: components["schemas"]["SupplierAdmissionEventDto"][];
+        };
+        ReviewSupplierAdmissionDocumentDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "NEEDS_CHANGES" | "ACCEPTED";
+            note: string;
+        };
+        CreateSupplierAdmissionDocumentDto: {
+            /** Format: uuid */
+            profileId: string;
+            /** @enum {string} */
+            documentType: "QUALITY_MANUAL" | "CERTIFICATE" | "PROCESS_CONTROL" | "PPAP" | "OTHER";
+            title: string;
+        };
+        SubmitSupplierAdmissionDocumentDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            fileId: string;
+        };
+        ESignatureDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            userId: string;
+            label: string;
+            fingerprint: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        ESignaturePageDto: {
+            items: components["schemas"]["ESignatureDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RegisterESignatureDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            label: string;
+            /** @description 签名原文或签名图像编码，仅用于即时生成指纹，不会持久化 */
+            signatureData: string;
+        };
+        RevokeESignatureDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        ApprovalSignatureDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            signatureId: string;
+            /** Format: uuid */
+            signerUserId: string;
+            resourceType: string;
+            resourceId: string;
+            resourceVersion: number;
+            signatureFingerprint: string;
+            signedDigest: string;
+            note?: string | null;
+            /** Format: date-time */
+            signedAt: string;
+        };
+        SignApprovalDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            signatureId: string;
+            resourceType: string;
+            resourceId: string;
+            resourceVersion: number;
+            note?: string;
+        };
+        SupplierAuditPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            auditYear: number;
+            /** @enum {string} */
+            auditType: "ANNUAL" | "SPECIAL";
+            title: string;
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+            /** @enum {string} */
+            status: "PLANNED" | "SUBMITTED" | "CLOSED" | "CANCELLED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierAuditPlanPageDto: {
+            items: components["schemas"]["SupplierAuditPlanDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierAuditPlanDto: {
+            /** Format: uuid */
+            profileId: string;
+            auditYear: number;
+            /** @enum {string} */
+            auditType: "ANNUAL" | "SPECIAL";
+            title: string;
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+        };
+        SupplierAuditTransitionDto: {
+            expectedVersion: number;
+        };
+        SupplierAuditRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            planId: string;
+            /** Format: date */
+            auditDate: string;
+            auditor: string;
+            summary: string;
+            findings: Record<string, never>;
+            /** @enum {string|null} */
+            conclusion?: "PASS" | "CONDITIONAL" | "FAIL" | null;
+            closeNote?: Record<string, never> | null;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "CLOSED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierAuditRecordPageDto: {
+            items: components["schemas"]["SupplierAuditRecordDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierAuditRecordDto: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: date */
+            auditDate: string;
+            auditor: string;
+            summary: string;
+            findings?: Record<string, never>;
+        };
+        SupplierAuditChecklistItemDto: {
+            code: string;
+            title: string;
+            /** @enum {string} */
+            result: "PASS" | "MINOR_NC" | "MAJOR_NC" | "NA";
+            note?: Record<string, never> | null;
+            evidenceFileIds: string[];
+        };
+        SupplierAuditChecklistDto: {
+            /** Format: uuid */
+            recordId: string;
+            recordVersion: number;
+            items: components["schemas"]["SupplierAuditChecklistItemDto"][];
+        };
+        SupplierAuditChecklistItemInputDto: {
+            code: string;
+            title: string;
+            /** @enum {string} */
+            result: "PASS" | "MINOR_NC" | "MAJOR_NC" | "NA";
+            note?: string;
+            evidenceFileIds: string[];
+        };
+        UpdateSupplierAuditChecklistDto: {
+            expectedVersion: number;
+            items: components["schemas"]["SupplierAuditChecklistItemInputDto"][];
+        };
+        CloseSupplierAuditRecordDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            conclusion: "PASS" | "CONDITIONAL" | "FAIL";
+            closeNote: string;
+        };
+        SupplierQualityTargetDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            /** @enum {string} */
+            periodType: "ANNUAL" | "MONTHLY";
+            targetYear: number;
+            targetMonth?: Record<string, never> | null;
+            revision: number;
+            title: string;
+            metrics: Record<string, never>;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "PUBLISHED" | "RETIRED";
+            version: number;
+            /** Format: date */
+            effectiveFrom?: Record<string, never> | null;
+            /** Format: date */
+            effectiveTo?: Record<string, never> | null;
+            /** Format: uuid */
+            approvalSignatureId?: Record<string, never> | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierQualityTargetPageDto: {
+            items: components["schemas"]["SupplierQualityTargetDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierQualityTargetDto: {
+            /** Format: uuid */
+            profileId: string;
+            /** @enum {string} */
+            periodType: "ANNUAL" | "MONTHLY";
+            targetYear: number;
+            targetMonth?: number;
+            title: string;
+            metrics: Record<string, never>;
+        };
+        SupplierQualityTargetTransitionDto: {
+            expectedVersion: number;
+        };
+        ApproveSupplierQualityTargetDto: {
+            expectedVersion: number;
+            /**
+             * Format: uuid
+             * @description 已完成的电子签章记录 ID
+             */
+            approvalSignatureId?: string;
+            note?: string;
+        };
+        PublishSupplierQualityTargetDto: {
+            expectedVersion: number;
+            /** Format: date */
+            effectiveFrom?: string;
+            /** Format: date */
+            effectiveTo?: string;
+        };
+        ReviseSupplierQualityTargetDto: {
+            /** Format: uuid */
+            profileId: string;
+            /** @enum {string} */
+            periodType: "ANNUAL" | "MONTHLY";
+            targetYear: number;
+            targetMonth?: number;
+            title: string;
+            metrics: Record<string, never>;
+            expectedVersion: number;
+        };
+        SupplierQualityTargetActualDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            targetId: string;
+            version: number;
+            targetVersion: number;
+            metrics: Record<string, never>;
+            targetMetrics: Record<string, never>;
+            /** @description 实际值减目标值；正负本身不表示达标 */
+            deviations: Record<string, never>;
+            note?: Record<string, never> | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierQualityTargetActualHistoryDto: {
+            /** Format: uuid */
+            targetId: string;
+            latestVersion: number;
+            total: number;
+            page: number;
+            pageSize: number;
+            items: components["schemas"]["SupplierQualityTargetActualDto"][];
+        };
+        RecordSupplierQualityTargetActualDto: {
+            /** @description 当前实际值版本；首次写入为 0 */
+            expectedVersion: number;
+            /** @description 指标名与实际数值；指标必须已在目标版本中定义为数值 */
+            metrics: Record<string, never>;
+            note?: string;
+        };
+        SupplierMeetingDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            title: string;
+            /** Format: date-time */
+            scheduledStart: string;
+            /** Format: date-time */
+            scheduledEnd: string;
+            location?: Record<string, never> | null;
+            /** @enum {string} */
+            status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierMeetingPageDto: {
+            items: components["schemas"]["SupplierMeetingDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierMeetingDto: {
+            /** Format: uuid */
+            profileId: string;
+            title: string;
+            /** Format: date-time */
+            scheduledStart: string;
+            /** Format: date-time */
+            scheduledEnd: string;
+            location?: string;
+        };
+        SupplierMeetingTransitionDto: {
+            expectedVersion: number;
+        };
+        CreateSupplierMeetingTopicDto: {
+            title: string;
+            sequence?: number;
+        };
+        SupplierMeetingTopicDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            meetingId: string;
+            sequence: number;
+            title: string;
+            conclusion?: Record<string, never> | null;
+            /** @enum {string} */
+            status: "OPEN" | "CONCLUDED";
+            version: number;
+        };
+        ConcludeSupplierMeetingTopicDto: {
+            expectedVersion: number;
+            conclusion: string;
+        };
+        CreateSupplierMeetingActionDto: {
+            title: string;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** Format: date */
+            dueDate: string;
+        };
+        SupplierMeetingActionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            meetingId: string;
+            title: string;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** Format: date */
+            dueDate: string;
+            /** @enum {string} */
+            status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+            version: number;
+        };
+        CompleteSupplierMeetingActionDto: {
+            expectedVersion: number;
+        };
+        SupplierPpapItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            packageId: string;
+            itemCode: string;
+            title: string;
+            description?: Record<string, never> | null;
+            required: boolean;
+            /** @enum {string} */
+            status: "PENDING" | "PROVIDED" | "ACCEPTED" | "REJECTED";
+            content: Record<string, never>;
+            evidenceFileIds: string[];
+            reviewNote?: string | null;
+            /** Format: date-time */
+            reviewedAt?: string | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierPpapDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            level: number;
+            title: string;
+            partNumber: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
+            version: number;
+            reviewNote?: string | null;
+            /** Format: date-time */
+            requalificationDueAt?: string | null;
+            /** Format: date-time */
+            lastRequalifiedAt?: string | null;
+            requalificationNote?: string | null;
+            items: components["schemas"]["SupplierPpapItemDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierPpapPageDto: {
+            items: components["schemas"]["SupplierPpapDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierPpapDto: {
+            /** Format: uuid */
+            profileId: string;
+            level: number;
+            title: string;
+            partNumber: string;
+        };
+        CreateSupplierPpapItemDto: {
+            itemCode: string;
+            title: string;
+            description?: string;
+            /** @default true */
+            required: Record<string, never>;
+            /** @default {} */
+            content: Record<string, never>;
+        };
+        SupplierPpapEvidenceDto: {
+            expectedVersion: number;
+            evidenceFileIds: string[];
+        };
+        ReviewSupplierPpapItemDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "ACCEPTED" | "REJECTED";
+            note: string;
+        };
+        SupplierPpapTransitionDto: {
+            expectedVersion: number;
+        };
+        ReviewSupplierPpapDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "APPROVED" | "REJECTED";
+            note: string;
+        };
+        RequalifySupplierPpapDto: {
+            expectedVersion: number;
+            note: string;
+        };
+        SupplierInspectionStandardItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            standardId: string;
+            itemOrder: number;
+            itemName: string;
+            characteristic?: Record<string, never> | null;
+            method?: Record<string, never> | null;
+            lowerLimit?: Record<string, never> | null;
+            upperLimit?: Record<string, never> | null;
+            unit?: Record<string, never> | null;
+            required: boolean;
+            version: number;
+        };
+        SupplierInspectionStandardDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            materialCode: string;
+            title: string;
+            revision: number;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "RETIRED";
+            version: number;
+            effectiveFrom?: Record<string, never> | null;
+            effectiveTo?: Record<string, never> | null;
+            items: components["schemas"]["SupplierInspectionStandardItemDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierInspectionStandardPageDto: {
+            items: components["schemas"]["SupplierInspectionStandardDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierInspectionStandardDto: {
+            /** Format: uuid */
+            profileId: string;
+            materialCode: string;
+            title: string;
+            /** @default 1 */
+            revision: Record<string, never>;
+        };
+        CreateSupplierInspectionStandardItemDto: {
+            itemOrder: number;
+            itemName: string;
+            characteristic?: string;
+            method?: string;
+            lowerLimit?: string;
+            upperLimit?: string;
+            unit?: string;
+            /** @default true */
+            required: Record<string, never>;
+        };
+        SupplierInspectionStandardTransitionDto: {
+            expectedVersion: number;
+            /** Format: date */
+            effectiveFrom?: string;
+        };
+        SupplierBarcodeRuleDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            materialCode: string;
+            title: string;
+            prefix: string;
+            codeLength: number;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "RETIRED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierBarcodeRulePageDto: {
+            items: components["schemas"]["SupplierBarcodeRuleDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierBarcodeRuleDto: {
+            /** Format: uuid */
+            profileId: string;
+            materialCode: string;
+            title: string;
+            prefix: string;
+            codeLength: number;
+        };
+        SupplierBarcodeTransitionDto: {
+            expectedVersion: number;
+        };
+        ScanSupplierBarcodeDto: {
+            /** Format: uuid */
+            ruleId: string;
+            barcode: string;
+            batchCode?: string;
+        };
+        SupplierBarcodeScanDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ruleId: string;
+            barcode: string;
+            batchCode?: Record<string, never> | null;
+            /** Format: date-time */
+            scannedAt: string;
+        };
+        SupplierAsnEvidenceDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileVersion: number;
+            sha256: string;
+            /** Format: date-time */
+            scannedAt: string;
+        };
+        SupplierAsnDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            /** Format: uuid */
+            profileId: string;
+            asnNumber: string;
+            materialCode: string;
+            /** Format: date */
+            plannedArrivalDate: string;
+            quantity: number;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "RECEIVED" | "CANCELLED";
+            version: number;
+            evidence: components["schemas"]["SupplierAsnEvidenceDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierAsnPageDto: {
+            items: components["schemas"]["SupplierAsnDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateSupplierAsnDto: {
+            /** Format: uuid */
+            profileId: string;
+            asnNumber: string;
+            materialCode: string;
+            /** Format: date */
+            plannedArrivalDate: string;
+            quantity: number;
+        };
+        UpdateSupplierAsnEvidenceDto: {
+            expectedVersion: number;
+            fileIds: string[];
+        };
+        SupplierAsnTransitionDto: {
+            expectedVersion: number;
+        };
+        SupplierPcnDto: {
+            /** @enum {string} */
+            changeType: "MATERIAL" | "PROCESS" | "EQUIPMENT" | "SITE";
+            title: string;
+            materialCode: string;
+            beforeChange: string;
+            afterChange: string;
+            reason: string;
+            riskControl: string;
+            /** Format: date */
+            plannedDate: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            supplierName: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "APPROVED" | "CLOSED";
+            version: number;
+            /** Format: uuid */
+            fileId?: string | null;
+            /** Format: uuid */
+            problemIndexId?: string | null;
+            reviewNote?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SupplierPcnPageDto: {
+            items: components["schemas"]["SupplierPcnDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        SupplierPcnEventDto: {
+            eventType: string;
+            pcnVersion: number;
+            /** Format: uuid */
+            actorUserId: string;
+            snapshot: components["schemas"]["SupplierPcnDto"];
+            note?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierPcnWorkflowDto: {
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            currentNodeId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            version: number;
+            problemVersion: number;
+            status: string;
+            nodeType: string;
+        };
+        SupplierPcnDetailDto: {
+            /** @enum {string} */
+            changeType: "MATERIAL" | "PROCESS" | "EQUIPMENT" | "SITE";
+            title: string;
+            materialCode: string;
+            beforeChange: string;
+            afterChange: string;
+            reason: string;
+            riskControl: string;
+            /** Format: date */
+            plannedDate: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            supplierName: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "APPROVED" | "CLOSED";
+            version: number;
+            /** Format: uuid */
+            fileId?: string | null;
+            /** Format: uuid */
+            problemIndexId?: string | null;
+            reviewNote?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            events: components["schemas"]["SupplierPcnEventDto"][];
+            workflow?: components["schemas"]["SupplierPcnWorkflowDto"] | null;
+        };
+        StartSupplierPcnWorkflowDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+        };
+        ReviewSupplierPcnDto: {
+            expectedVersion: number;
+            /** @enum {string} */
+            action: "APPROVE" | "RETURN" | "CLOSE";
+            note: string;
+            expectedWorkflowVersion: number;
+            expectedProblemVersion: number;
+            /** Format: uuid */
+            currentNodeId: string;
+        };
+        SupplierPcnProfileDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ownerOrganizationId: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            displayName: string;
+        };
+        SupplierPcnProfilesDto: {
+            items: components["schemas"]["SupplierPcnProfileDto"][];
+        };
+        CreateSupplierPcnDto: {
+            /** @enum {string} */
+            changeType: "MATERIAL" | "PROCESS" | "EQUIPMENT" | "SITE";
+            title: string;
+            materialCode: string;
+            beforeChange: string;
+            afterChange: string;
+            reason: string;
+            riskControl: string;
+            /** Format: date */
+            plannedDate: string;
+            /** Format: uuid */
+            profileId: string;
+        };
+        UpdateSupplierPcnDto: {
+            /** @enum {string} */
+            changeType: "MATERIAL" | "PROCESS" | "EQUIPMENT" | "SITE";
+            title: string;
+            materialCode: string;
+            beforeChange: string;
+            afterChange: string;
+            reason: string;
+            riskControl: string;
+            /** Format: date */
+            plannedDate: string;
+            expectedVersion: number;
+        };
+        SubmitSupplierPcnDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            fileId: string;
+        };
+        AdvanceSupplierPcnDto: {
+            expectedVersion: number;
+            expectedWorkflowVersion: number;
+            expectedProblemVersion: number;
+            /** Format: uuid */
+            currentNodeId: string;
+            /** Format: uuid */
+            fileId: string;
+        };
         /** @enum {string} */
         ProblemStatus: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
         /** @enum {string} */
@@ -4701,7 +9864,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -5562,6 +10725,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    PermissionsController_myPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionsResponseDto"];
+                };
             };
             /** @description Controlled API error */
             default: {
@@ -6779,6 +11970,43 @@ export interface operations {
             };
         };
     };
+    FileController_retryScan: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     FileController_get: {
         parameters: {
             query?: never;
@@ -6909,6 +12137,37 @@ export interface operations {
             };
         };
     };
+    OutboxAdministrationController_attempts: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxAttemptPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     OutboxAdministrationController_retry: {
         parameters: {
             query?: {
@@ -6948,7 +12207,7 @@ export interface operations {
                 organizationId?: string;
                 pageSize?: number;
                 offset?: number;
-                status?: "PENDING" | "IN_PROGRESS" | "OVERDUE";
+                status?: "PENDING" | "IN_PROGRESS" | "OVERDUE" | "FAILED";
                 claim?: "UNCLAIMED" | "MINE" | "OTHERS";
             };
             header?: never;
@@ -6963,6 +12222,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_statistics: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStatisticsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_transfer: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskTransferDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskTransferResultDto"][];
                 };
             };
             default: {
@@ -7013,6 +12338,43 @@ export interface operations {
         };
     };
     TaskInboxController_release: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    TaskInboxController_retry: {
         parameters: {
             query?: {
                 organizationId?: string;
@@ -8625,6 +13987,423 @@ export interface operations {
             };
         };
     };
+    ProcessQualityController_productionBatches: {
+        parameters: {
+            query: {
+                organizationId?: string;
+                periodStart: string;
+                periodEnd: string;
+                productCode?: string;
+                batchCode?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessProductionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_createProduction: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProcessProductionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessProductionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_productionSummary: {
+        parameters: {
+            query: {
+                organizationId?: string;
+                periodStart: string;
+                periodEnd: string;
+                productCode?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessProductionSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_productionDetail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessProductionDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_correctProduction: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectProcessProductionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessProductionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_shipmentReportList: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                productCode?: string;
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_createShipmentReport: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProcessShipmentReportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_shipmentReportDetail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_archiveShipmentReport: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveProcessShipmentReportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_updateShipmentReportEvidence: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessShipmentReportEvidenceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_associateShipmentReportCustomer: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssociateProcessShipmentReportCustomerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessQualityController_linkShipmentReportIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkProcessShipmentReportIssueDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessShipmentReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ProcessQualityController_types: {
         parameters: {
             query?: {
@@ -9073,6 +14852,141 @@ export interface operations {
             };
         };
     };
+    CustomerQualityController_customerRelations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRelationDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_createCustomerRelation: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerRelationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRelationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_updateCustomerRelation: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomerRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRelationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_deleteCustomerRelation: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomerRelationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     CustomerQualityController_complaints: {
         parameters: {
             query?: never;
@@ -9122,6 +15036,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_complaintAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintAssigneesDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_importComplaints: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCustomerComplaintsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintImportResultDto"];
                 };
             };
             default: {
@@ -9214,6 +15189,381 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ArchiveComplaintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_complaintEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintEventDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_complaintEightD: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintEightDDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_saveComplaintEightD: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCustomerComplaintEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintEightDDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_submitComplaintEightD: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitCustomerComplaintEightDDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintEightDDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_approveComplaintEightD: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveCustomerComplaintEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintEightDDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_complaintAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_triageComplaint: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageCustomerComplaintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_progressComplaint: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgressCustomerComplaintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_resolveComplaint: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveCustomerComplaintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_closeComplaint: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCustomerComplaintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerComplaintDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_reopenComplaint: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCustomerComplaintDto"];
             };
         };
         responses: {
@@ -9810,6 +16160,122 @@ export interface operations {
             };
         };
     };
+    AuditManagementController_execution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionSnapshotDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_executionNcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_executionReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_planReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPlanReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     AuditManagementController_checklist: {
         parameters: {
             query?: never;
@@ -9834,6 +16300,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditChecklistResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitAuditExecutionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
                 };
             };
             default: {
@@ -10049,6 +16551,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_imports: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                sourceSystem?: "CUSTOMER" | "SECOND_PARTY";
+                status?: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_importRow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportAuditRowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_reviewImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewAuditImportRowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_issueImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueAuditImportRowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportIssueResultDto"];
                 };
             };
             default: {
@@ -10480,6 +17121,511 @@ export interface operations {
             };
         };
     };
+    NewProductQualityController_exportTrialReport: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_trialSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_createTrialSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductTrialSummaryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_trialSummaryRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryRevisionDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_exportTrialSummary: {
+        parameters: {
+            query: {
+                expectedVersion: number;
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                format: "xlsx" | "pdf";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_reviseTrialSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviseNewProductTrialSummaryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_submitTrialSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitNewProductTrialSummaryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_decideTrialSummary: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideNewProductTrialSummaryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductTrialSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_earlyFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_createEarlyFlow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNewProductEarlyFlowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_reviseEarlyFlow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviseNewProductEarlyFlowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_submitEarlyFlow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitNewProductEarlyFlowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_approveEarlyFlow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveNewProductEarlyFlowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_decideEarlyFlowRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideNewProductEarlyFlowReleaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowReleaseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_releases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEarlyFlowReleaseDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     NewProductQualityController_selectedDefects: {
         parameters: {
             query?: {
@@ -10535,6 +17681,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_issues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductIssueListDto"];
                 };
             };
             default: {
@@ -10619,6 +17794,150 @@ export interface operations {
             };
         };
     };
+    NewProductQualityController_assignIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignNewProductIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductIssueDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_recordIssueMeasure: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordNewProductMeasureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductIssueDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_verifyIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyNewProductIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductIssueDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_closeIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseNewProductIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductIssueDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     NewProductQualityController_legacyIssue: {
         parameters: {
             query?: never;
@@ -10679,6 +17998,4607 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductQualityController_handover: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverNewProductProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductHandoverDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_metrics: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                metricDefinitionId?: string;
+                from?: string;
+                to?: string;
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDefinitionDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_createMetric: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMetricDefinitionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDefinitionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_recordFact: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMetricFactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricFactDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_snapshot: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQualitySnapshotDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySnapshotDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_internalSnapshot: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInternalQualitySnapshotDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySnapshotDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_snapshotDetail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualitySnapshotDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_factDrilldown: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                expectedMetricVersion?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityFactDrilldownDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_trend: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                metricDefinitionId?: string;
+                from?: string;
+                to?: string;
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricFactDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_dashboard: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                metricDefinitionId?: string;
+                from?: string;
+                to?: string;
+                limit?: components["schemas"]["Object"];
+                domain?: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityDashboardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_insights: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                metricDefinitionId?: string;
+                from?: string;
+                to?: string;
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityInsightDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    QualityDataController_managementReport: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                metricDefinitionId?: string;
+                from?: string;
+                to?: string;
+                limit?: components["schemas"]["Object"];
+                domain?: "SUPPLIER" | "PROCESS" | "CUSTOMER" | "NEW_PRODUCT";
+            };
+            header?: never;
+            path: {
+                format: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                materialCode?: string;
+                status?: "DRAFT" | "COMPLETED" | "CORRECTED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIncomingInspectionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_detail: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteIncomingInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_correct: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectIncomingInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_linkProblem: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkIncomingProblemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierIncomingController_attachPhoto: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachIncomingPhotoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_revise: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_schedule: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CoordinateInspectionController_progress: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgressCoordinateInspectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoordinateInspectionRequestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                month?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformancePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPerformanceCardDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceCardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishSupplierPerformanceCardDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceCardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceAppealController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceAppealController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPerformanceAppealDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceAppealController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPerformanceAppealTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformanceAppealController_review: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPerformanceAppealTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformancePortalCardController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                month?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformancePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformancePortalAppealController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformancePortalAppealController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPerformanceAppealDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPerformancePortalAppealController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPerformanceAppealTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPerformanceAppealDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                inspectionId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "RELEASED" | "WITHDRAWN";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConcessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_detail: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConcessionVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_withdraw: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConcessionVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideConcessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_reject: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideConcessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierConcessionController_release: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideConcessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConcessionRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_mine: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                unreadOnly?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementMinePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_manage: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementManagePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_audienceUsers: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementAudienceUsersDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_receipts: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementReceiptDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAnnouncementDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_publish: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_archive: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AnnouncementController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementReadDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                auditType?: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+                search?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditStandardPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAuditStandardDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditStandardDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_updateDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAuditStandardDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_revise: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAuditStandardDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditStandardsController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishAuditTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedAuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "ACCEPTED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionController_detail: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionController_review: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSupplierAdmissionDocumentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionDocumentDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionPortalController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "ACCEPTED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionPortalController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierAdmissionDocumentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionDocumentDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionPortalController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAdmissionPortalController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSupplierAdmissionDocumentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAdmissionDocumentDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "ACTIVE" | "REVOKED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignaturePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_register: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterESignatureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_revoke: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeESignatureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_approvals: {
+        parameters: {
+            query: {
+                organizationId?: string;
+                resourceType: string;
+                resourceId: string;
+                resourceVersion: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalSignatureDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_signApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignApprovalDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalSignatureDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_listPlans: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                year?: number;
+                status?: "PLANNED" | "SUBMITTED" | "CLOSED" | "CANCELLED" | "DRAFT" | "SUBMITTED" | "CLOSED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditPlanPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_createPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierAuditPlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditPlanDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_submitPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierAuditTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditPlanDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_listRecords: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                year?: number;
+                status?: "PLANNED" | "SUBMITTED" | "CLOSED" | "CANCELLED" | "DRAFT" | "SUBMITTED" | "CLOSED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditRecordPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_createRecord: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierAuditRecordDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_getChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditChecklistDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_updateChecklist: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierAuditChecklistDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditChecklistDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_submitRecord: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierAuditTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAuditController_closeRecord: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseSupplierAuditRecordDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAuditRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                year?: number;
+                periodType?: "ANNUAL" | "MONTHLY";
+                status?: "DRAFT" | "SUBMITTED" | "APPROVED" | "PUBLISHED" | "RETIRED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierQualityTargetDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierQualityTargetTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveSupplierQualityTargetDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishSupplierQualityTargetDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_revise: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviseSupplierQualityTargetDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_actualHistory: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetActualHistoryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityTargetsController_recordActual: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordSupplierQualityTargetActualDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierQualityTargetActualDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_list: {
+        parameters: {
+            query?: {
+                profileId?: string;
+                status?: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierMeetingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_start: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierMeetingTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierMeetingTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_createTopic: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierMeetingTopicDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingTopicDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_concludeTopic: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                topicId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConcludeSupplierMeetingTopicDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingTopicDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_createAction: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierMeetingActionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingActionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMeetingsController_completeAction: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                actionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteSupplierMeetingActionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierMeetingActionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED";
+                level?: number;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPpapDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_addItem: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPpapItemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_bindEvidence: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPpapEvidenceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_reviewItem: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSupplierPpapItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPpapTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_review: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSupplierPpapDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPpapController_requalify: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequalifySupplierPpapDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPpapDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierInspectionStandardsController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                materialCode?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierInspectionStandardPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierInspectionStandardsController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierInspectionStandardDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierInspectionStandardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierInspectionStandardsController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierInspectionStandardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierInspectionStandardsController_addItem: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierInspectionStandardItemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierInspectionStandardItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierInspectionStandardsController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierInspectionStandardTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierInspectionStandardDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierBarcodeController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                materialCode?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierBarcodeRulePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierBarcodeController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierBarcodeRuleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierBarcodeRuleDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierBarcodeController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierBarcodeRuleDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierBarcodeController_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierBarcodeTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierBarcodeRuleDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierBarcodeController_scan: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanSupplierBarcodeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierBarcodeScanDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAsnController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                profileId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAsnPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAsnController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierAsnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAsnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAsnController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAsnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAsnController_updateEvidence: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierAsnEvidenceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAsnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierAsnController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierAsnTransitionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierAsnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "APPROVED" | "CLOSED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnController_detail: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnController_start: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSupplierPcnWorkflowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnController_review: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSupplierPcnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "DRAFT" | "SUBMITTED" | "NEEDS_CHANGES" | "APPROVED" | "CLOSED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSupplierPcnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_profiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnProfilesDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSupplierPcnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSupplierPcnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPcnPortalController_advance: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvanceSupplierPcnDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPcnDto"];
                 };
             };
             default: {

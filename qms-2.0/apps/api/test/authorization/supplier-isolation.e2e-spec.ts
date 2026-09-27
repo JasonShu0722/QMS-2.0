@@ -305,6 +305,14 @@ describe('supplier isolation HTTP guard', () => {
     });
   });
 
+  it('lets an authenticated business member read only their own permission context', async () => {
+    const own = await get('/api/v1/system/my-permissions', 'internal-member-token').expect(200);
+    expect(own.body).toEqual({ organizationId: ORG_INTERNAL.id, permissions: ['organization:read'] });
+    const scoped = await get(`/api/v1/system/my-permissions?organizationId=${ORG_SUPPLIER_A.id}`, 'internal-member-token').expect(200);
+    expect(scoped.body).toEqual(own.body);
+    await request(app.getHttpServer()).get('/api/v1/system/my-permissions').expect(401);
+  });
+
   it('fails closed without leaking an audit storage error on a denied request', async () => {
     prisma.auditEvent.create.mockRejectedValueOnce(new Error('SELECT secret FROM private_table'));
     const response = await get('/api/v1/system/permissions', 'internal-member-token').expect(500);

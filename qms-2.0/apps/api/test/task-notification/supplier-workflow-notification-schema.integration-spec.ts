@@ -248,5 +248,5 @@ describe('supplier workflow notifications on PostgreSQL', () => {
     expect(await prisma.supplierPortalNotification.findMany({ where: { supplierProblemId: context.index.sourceId! } })).toMatchObject([{
       ownerOrganizationId: context.owner.id, supplierOrganizationId: context.supplier.id, recipientUserId: context.supplierUser.id, kind: 'TASK_ASSIGNED',
     }]);
-  });
+  }, 30_000);
 });

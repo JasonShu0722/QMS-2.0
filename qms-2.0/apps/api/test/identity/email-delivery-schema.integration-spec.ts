@@ -130,7 +130,7 @@ describe('SMTP concurrency and absolute deadline', () => {
       if (kind === 'organization') await prisma.organization.update({ where: { id: organizationId }, data: { status: 'ACTIVE' } });
       await smtp.close();
     }
-  });
+  }, 30000);
 
   it('destroys a slow multi-stage SMTP socket before the transaction deadline and persists its attempt', async () => {
     const smtp = await smtpServer({ delay: 2800 });

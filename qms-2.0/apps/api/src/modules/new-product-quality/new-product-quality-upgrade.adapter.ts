@@ -17,8 +17,12 @@ export class NewProductQualityUpgradeAdapter implements WorkflowUpgradeDomainAda
 
   onModuleInit(): void { this.registry.register(this); }
 
-  async authorizeAndLock(tx: Prisma.TransactionClient, actor: WorkflowActor, problem: ProblemIndex): Promise<void> {
+  async authorizeAndLock(tx: Prisma.TransactionClient, actor: WorkflowActor, problem: ProblemIndex, purpose: 'preview' | 'upgrade' | 'history'): Promise<void> {
     if (actor.accountType !== 'INTERNAL' || actor.organizationId !== problem.organizationId || !problem.sourceId) workflowError('WORKFLOW_UPGRADE_DOMAIN_DENIED', 403);
+    const [issue] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT project_id FROM new_product_issues WHERE id = ${problem.sourceId}::uuid AND organization_id = ${problem.organizationId}::uuid AND problem_index_id = ${problem.id}::uuid`);
+    if (!issue) workflowError('WORKFLOW_UPGRADE_DOMAIN_DENIED', 403);
+    const [project] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status FROM new_product_projects WHERE id = ${issue.project_id}::uuid AND organization_id = ${problem.organizationId}::uuid FOR UPDATE`);
+    if (purpose !== 'history' && project?.status !== 'ACTIVE') workflowError('WORKFLOW_UPGRADE_NOT_ALLOWED', 409);
     await tx.$queryRaw`SELECT id FROM new_product_issues WHERE id = ${problem.sourceId}::uuid AND organization_id = ${problem.organizationId}::uuid AND problem_index_id = ${problem.id}::uuid FOR UPDATE`;
     const source = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM new_product_issues WHERE id = ${problem.sourceId}::uuid AND organization_id = ${problem.organizationId}::uuid AND problem_index_id = ${problem.id}::uuid`);
     if (!source[0]) workflowError('WORKFLOW_UPGRADE_DOMAIN_DENIED', 403);

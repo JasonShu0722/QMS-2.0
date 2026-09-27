@@ -99,12 +99,18 @@ test('grouped matrix grants only selected user operations and revokes them on li
     await expect(matrix.getByRole('heading', { name: '供应商质量', exact: true })).toBeVisible();
     await expect(matrix.getByRole('checkbox', { name: '供应商资料 · 查看业务资料', exact: true })).toBeVisible();
     await expect(matrix.getByText('待接入', { exact: true }).first()).toBeVisible();
-    for (const groupName of ['制程质量', '客户质量', '新品质量', '审核管理']) {
+    const activeModules = new Map([
+      ['制程质量', '制程不良品台账 · 查看制程不良品台账'],
+      ['客户质量', '客户客诉台账 · 查看客户客诉台账'],
+      ['新品质量', '新品质量管理 · 查看新品质量项目'],
+      ['审核管理', '审核计划与整改 · 查看审核管理'],
+    ]);
+    for (const [groupName, checkboxName] of activeModules) {
       await page.getByLabel('板块筛选', { exact: true }).click();
       await page.locator('.ant-select-item-option').filter({ hasText: groupName }).click();
       await expect(matrix.getByRole('heading', { name: groupName, exact: true })).toBeVisible();
+      await expect(matrix.getByRole('checkbox', { name: checkboxName, exact: true })).toBeVisible();
       await expect(matrix.getByText('待接入', { exact: true }).first()).toBeVisible();
-      await expect(matrix.getByRole('checkbox')).toHaveCount(0);
     }
     await page.getByLabel('板块筛选', { exact: true }).click();
     await page.locator('.ant-select-item-option').filter({ hasText: '系统管理' }).click();

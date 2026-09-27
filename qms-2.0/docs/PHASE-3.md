@@ -156,7 +156,7 @@ API 35 suites / 433 tests PASS，Web 工作空间及供应商定向 5 files / 22
 | Web 全量回归 | 69 PASS / 2 FAIL（共 71 项，当时尚未加入上述两项幂等测试）；均为既有 permission-matrix 测试 45 秒/30 秒超时，未放宽超时、跳过或擅改无关代码 |
 | 权限目录补充回归 | 保留绩效、审核、PPAP planned 模块后，admin-role HTTP 7/7 PASS |
 | 结构与契约包导出 | Node 两项结构/导出检查 PASS |
-| Foundation Compose | 初次缺 QMS_RATE_LIMIT_SECRET / MINIO_ROOT_* 按要求失败；配置进程内临时随机值后 `docker compose -f deployment/docker-compose.foundation.yml -p qms2-supplier-quality config --quiet` PASS，未启动 Compose 服务 |
+| Foundation Compose | 初次缺 QMS_RATE_LIMIT_SECRET / RUSTFS_* 按要求失败；配置进程内临时随机值后 `docker compose -f deployment/docker-compose.foundation.yml -p qms2-supplier-quality config --quiet` PASS，未启动 Compose 服务 |
 
 浏览器使用真实 API 3318、Vite 5188（`QMS_DEV_API_URL=http://127.0.0.1:3318`）、临时 PostgreSQL 55448、独立浏览器 contexts。未启动网关 8088，因此这不是网关/TLS 验收。未访问 55440、55446。种子与测试用户全部为临时账号。
 

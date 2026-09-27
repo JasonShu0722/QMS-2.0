@@ -1,4 +1,4 @@
-FROM node:22.22.0-bookworm-slim AS build
+FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable
 COPY . .

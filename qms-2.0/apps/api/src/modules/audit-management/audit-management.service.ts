@@ -4,6 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
+import { DomainSourceIssueService } from '../problem-index/domain-source-issue.service.js';
 import { calculateAuditDueDate, type AuditBusinessCalendar } from './audit-deadline.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 
@@ -60,7 +61,7 @@ function templateItemKeys(definition: unknown): Set<string> {
 
 @Injectable()
 export class AuditManagementService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService, private readonly domainIssues?: DomainSourceIssueService) {}
 
   private scope(actor: AdminActor): string { if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403); return actor.scopeOrganizationId ?? actor.organizationId; }
 
@@ -125,14 +126,124 @@ export class AuditManagementService {
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_TEMPLATE_UPDATED', permission: WRITE, payload: input }, async (tx) => { const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_templates WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid FOR UPDATE`); if (!current) fail('AUDIT_TEMPLATE_NOT_FOUND', 404); if (current.status !== 'DRAFT' || current.version !== input.expectedVersion) fail('CONCURRENCY_CONFLICT', 409); templateItemKeys(input.definition); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_templates SET draft_definition = ${JSON.stringify(input.definition)}::jsonb, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${templateId}::uuid AND version = ${input.expectedVersion} RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_TEMPLATE_UPDATED', row.id, traceId); return row; });
   }
 
+  listTemplates(actor: AdminActor, query: { auditType?: AuditType; search?: string; page?: number; pageSize?: number }) {
+    if (query.auditType && !AUDIT_TYPES.includes(query.auditType)) fail('AUDIT_INPUT_INVALID', 400);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) fail('AUDIT_INPUT_INVALID', 400);
+    const search = query.search?.trim();
+    if (search && search.length > 300) fail('AUDIT_INPUT_INVALID', 400);
+    return this.read(actor, async (tx, organizationId) => {
+      const filters = [Prisma.sql`t.organization_id = ${organizationId}::uuid`];
+      if (query.auditType) filters.push(Prisma.sql`t.audit_type = ${query.auditType}`);
+      if (search) filters.push(Prisma.sql`t.name ILIKE ${`%${search.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`} ESCAPE '\'`);
+      const where = Prisma.join(filters, ' AND ');
+      const rows = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT t.id, t.organization_id, t.name, t.audit_type, t.status, t.version, t.updated_at, COALESCE(MAX(v.version), 0)::integer AS latest_version FROM audit_templates t LEFT JOIN audit_template_versions v ON v.organization_id = t.organization_id AND v.template_id = t.id WHERE ${where} GROUP BY t.id ORDER BY t.updated_at DESC, t.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`);
+      const [count] = await tx.$queryRaw<{ count: bigint }[]>(Prisma.sql`SELECT count(*)::bigint AS count FROM audit_templates t WHERE ${where}`);
+      return { items: rows.map((row) => ({ id: row.id, organizationId: row.organization_id, name: row.name, auditType: row.audit_type, status: row.status, version: row.version, latestVersion: row.latest_version, updatedAt: row.updated_at })), total: Number(count?.count ?? 0), page, pageSize };
+    });
+  }
+
+  getTemplateCatalogDetail(actor: AdminActor, id: string) {
+    const templateId = uuid(id);
+    return this.read(actor, async (tx, organizationId) => {
+      const [template] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_templates WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid`);
+      if (!template) fail('AUDIT_TEMPLATE_NOT_FOUND', 404);
+      const versions = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, version, definition, published_at, published_by_id FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND template_id = ${templateId}::uuid ORDER BY version DESC`);
+      return {
+        id: template.id, organizationId, name: template.name, auditType: template.audit_type, status: template.status,
+        version: template.version, draftDefinition: template.draft_definition, latestVersion: versions[0]?.version ?? 0,
+        versions: versions.map((row) => ({ id: row.id, version: row.version, definition: row.definition, publishedAt: row.published_at, publishedById: row.published_by_id })),
+      };
+    });
+  }
+
+  reviseTemplate(actor: AdminActor, id: string, input: { expectedVersion: number; definition: Record<string, unknown> }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const templateId = uuid(id);
+    templateItemKeys(input.definition);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_TEMPLATE_REVISION_CREATED', permission: WRITE, payload: { id, ...input } }, async (tx) => {
+      const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status, version FROM audit_templates WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid FOR UPDATE`);
+      if (!current) fail('AUDIT_TEMPLATE_NOT_FOUND', 404);
+      if (current.status !== 'PUBLISHED' || current.version !== input.expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_templates SET status = 'DRAFT', draft_definition = ${JSON.stringify(input.definition)}::jsonb, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid AND version = ${input.expectedVersion} RETURNING *`);
+      if (!row) fail('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, organizationId, 'AUDIT_TEMPLATE_REVISION_CREATED', templateId, traceId);
+      return row;
+    });
+  }
+
   publishTemplate(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) {
     const organizationId = this.scope(actor); const templateId = uuid(id);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_TEMPLATE_PUBLISHED', permission: WRITE, payload: { id, expectedVersion } }, async (tx) => { const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_templates WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid FOR UPDATE`); if (!current || current.status !== 'DRAFT' || current.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409); templateItemKeys(current.draft_definition); const [version] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_template_versions(id, organization_id, template_id, version, definition, published_by_id) VALUES (gen_random_uuid(), ${organizationId}::uuid, ${templateId}::uuid, 1, ${JSON.stringify(current.draft_definition)}::jsonb, ${actor.id}::uuid) RETURNING *`); await tx.$executeRaw(Prisma.sql`UPDATE audit_templates SET status = 'PUBLISHED', version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${templateId}::uuid`); await this.record(tx, actor, organizationId, 'AUDIT_TEMPLATE_PUBLISHED', templateId, traceId); return { ...current, versionId: version.id, publishedVersion: version.version }; });
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_TEMPLATE_PUBLISHED', permission: WRITE, payload: { id, expectedVersion } }, async (tx) => {
+      const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_templates WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid FOR UPDATE`);
+      if (!current || current.status !== 'DRAFT' || current.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      templateItemKeys(current.draft_definition);
+      const [latest] = await tx.$queryRaw<{ version: number }[]>(Prisma.sql`SELECT COALESCE(MAX(version), 0)::integer AS version FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND template_id = ${templateId}::uuid`);
+      const nextVersion = (latest?.version ?? 0) + 1;
+      const [version] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_template_versions(id, organization_id, template_id, version, definition, published_by_id) VALUES (gen_random_uuid(), ${organizationId}::uuid, ${templateId}::uuid, ${nextVersion}, ${JSON.stringify(current.draft_definition)}::jsonb, ${actor.id}::uuid) RETURNING *`);
+      const [published] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_templates SET status = 'PUBLISHED', version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${templateId}::uuid AND version = ${expectedVersion} RETURNING *`);
+      if (!published) fail('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, organizationId, 'AUDIT_TEMPLATE_PUBLISHED', templateId, traceId);
+      return { ...published, versionId: version.id, publishedVersion: version.version };
+    });
   }
 
   createExecution(actor: AdminActor, planId: string, templateVersionId: string, traceId: string, key?: string) { const organizationId = this.scope(actor); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_EXECUTION_CREATED', permission: WRITE, payload: { planId, templateVersionId } }, async (tx) => { const [plan] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, audit_type FROM audit_plans WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(planId)}::uuid`); if (!plan) fail('AUDIT_PLAN_NOT_FOUND', 404); const [template] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT v.id, t.audit_type FROM audit_template_versions v JOIN audit_templates t ON t.id = v.template_id AND t.organization_id = v.organization_id WHERE v.organization_id = ${organizationId}::uuid AND v.id = ${uuid(templateVersionId)}::uuid`); if (!template) fail('AUDIT_TEMPLATE_VERSION_NOT_FOUND', 404); if (plan.audit_type !== template.audit_type) fail('AUDIT_TYPE_MISMATCH', 409); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_executions(organization_id, plan_id, template_version_id, created_by_id) VALUES (${organizationId}::uuid, ${uuid(planId)}::uuid, ${uuid(templateVersionId)}::uuid, ${actor.id}::uuid) RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_EXECUTION_CREATED', row.id, traceId); return row; }); }
 
-  recordChecklistResult(actor: AdminActor, executionId: string, input: { itemKey: string; result: ChecklistResult; note?: string }, traceId: string, key?: string) { const organizationId = this.scope(actor); if (!['OK', 'NG', 'NA'].includes(input.result)) fail('AUDIT_INPUT_INVALID', 400); const itemKey = text(input.itemKey, 120); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_CHECKLIST_RECORDED', permission: WRITE, payload: input }, async (tx) => { const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, status, template_version_id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`); if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404); if (execution.status !== 'OPEN') fail('AUDIT_EXECUTION_LOCKED', 409); const [templateVersion] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT definition FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND id = ${execution.template_version_id}::uuid`); if (!templateVersion || !templateItemKeys(templateVersion.definition).has(itemKey)) fail('AUDIT_CHECKLIST_ITEM_NOT_FOUND', 400); const [linkedNc] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT n.id FROM audit_ncs n JOIN audit_checklist_results r ON r.id = n.checklist_result_id AND r.organization_id = n.organization_id WHERE r.organization_id = ${organizationId}::uuid AND r.execution_id = ${uuid(executionId)}::uuid AND r.item_key = ${itemKey}`); if (linkedNc) fail('AUDIT_CHECKLIST_NC_LOCKED', 409); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_checklist_results(organization_id, execution_id, item_key, result, note, recorded_by_id) VALUES (${organizationId}::uuid, ${uuid(executionId)}::uuid, ${itemKey}, ${input.result}, ${input.note ?? null}, ${actor.id}::uuid) ON CONFLICT (organization_id, execution_id, item_key) DO UPDATE SET result = EXCLUDED.result, note = EXCLUDED.note, version = audit_checklist_results.version + 1, recorded_by_id = EXCLUDED.recorded_by_id RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_CHECKLIST_RECORDED', row.id, traceId); return row; }); }
+  async getExecution(actor: AdminActor, executionId: string) {
+    return this.read(actor, async (tx, organizationId) => {
+      const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid`);
+      if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404);
+      const [template] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT definition FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND id = ${execution.template_version_id}::uuid`);
+      if (!template) fail('AUDIT_TEMPLATE_VERSION_NOT_FOUND', 404);
+      const checklist = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_checklist_results WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid ORDER BY item_key`);
+      const definition = template.definition as { items: Array<{ key: string; text: string }> };
+      return { execution, items: definition.items.map((item) => ({ key: item.key, text: item.text })), checklist };
+    });
+  }
+
+  async listNcsForExecution(actor: AdminActor, executionId: string) {
+    return this.read(actor, async (tx, organizationId) => {
+      const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid`);
+      if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404);
+      return tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid ORDER BY created_at, id`);
+    });
+  }
+
+  async submitExecution(actor: AdminActor, executionId: string, expectedVersion: number, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_EXECUTION_SUBMITTED', permission: WRITE, payload: { executionId, expectedVersion } }, async (tx) => {
+      const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, status, version, template_version_id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`);
+      if (!current) fail('AUDIT_EXECUTION_NOT_FOUND', 404);
+      if (current.status !== 'OPEN' || Number(current.version) !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      const [template] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT definition FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND id = ${current.template_version_id}::uuid`);
+      if (!template) fail('AUDIT_TEMPLATE_VERSION_NOT_FOUND', 404);
+      const required = templateItemKeys(template.definition);
+      const checklist = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT item_key FROM audit_checklist_results WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid`);
+      const completed = new Set(checklist.map((row) => String(row.item_key)));
+      if ([...required].some((itemKey) => !completed.has(itemKey))) fail('AUDIT_CHECKLIST_INCOMPLETE', 409);
+      const [updated] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_executions SET status = 'SUBMITTED', version = version + 1, completed_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid AND status = 'OPEN' AND version = ${expectedVersion} RETURNING *`);
+      if (!updated) fail('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, organizationId, 'AUDIT_EXECUTION_SUBMITTED', executionId, traceId);
+      return updated;
+    });
+  }
+
+  async executionReport(actor: AdminActor, executionId: string) {
+    const snapshot = await this.getExecution(actor, executionId);
+    const ncs = await this.read(actor, async (tx, organizationId) => tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, due_at, status FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid`));
+    return { execution: snapshot.execution, checklist: snapshot.checklist, summary: { total: snapshot.items.length, completed: snapshot.checklist.length, ng: snapshot.checklist.filter((item) => item.result === 'NG').length, overdueNc: ncs.filter((nc) => !['CLOSED', 'REJECTED'].includes(String(nc.status)) && new Date(String(nc.due_at)).getTime() < Date.now()).length } };
+  }
+
+  async planReport(actor: AdminActor, planId: string) {
+    const plan = await this.getPlan(actor, planId);
+    const rows = await this.read(actor, async (tx, organizationId) => tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND plan_id = ${uuid(planId)}::uuid ORDER BY started_at`));
+    const overdue = await this.read(actor, async (tx, organizationId) => tx.$queryRaw<Row[]>(Prisma.sql`SELECT n.id FROM audit_ncs n JOIN audit_executions e ON e.id = n.execution_id AND e.organization_id = n.organization_id WHERE e.organization_id = ${organizationId}::uuid AND e.plan_id = ${uuid(planId)}::uuid AND n.status NOT IN ('CLOSED', 'REJECTED') AND n.due_at < CURRENT_TIMESTAMP`));
+    return { plan, executions: rows, overdueNcCount: overdue.length };
+  }
+
+  recordChecklistResult(actor: AdminActor, executionId: string, input: { itemKey: string; result: ChecklistResult; note?: string; expectedVersion?: number }, traceId: string, key?: string) { const organizationId = this.scope(actor); if (!['OK', 'NG', 'NA'].includes(input.result)) fail('AUDIT_INPUT_INVALID', 400); const itemKey = text(input.itemKey, 120); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_CHECKLIST_RECORDED', permission: WRITE, payload: { executionId, ...input } }, async (tx) => { const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, status, template_version_id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid FOR UPDATE`); if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404); if (execution.status !== 'OPEN') fail('AUDIT_EXECUTION_LOCKED', 409); const [templateVersion] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT definition FROM audit_template_versions WHERE organization_id = ${organizationId}::uuid AND id = ${execution.template_version_id}::uuid`); if (!templateVersion || !templateItemKeys(templateVersion.definition).has(itemKey)) fail('AUDIT_CHECKLIST_ITEM_NOT_FOUND', 400); const [linkedNc] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT n.id FROM audit_ncs n JOIN audit_checklist_results r ON r.id = n.checklist_result_id AND r.organization_id = n.organization_id WHERE r.organization_id = ${organizationId}::uuid AND r.execution_id = ${uuid(executionId)}::uuid AND r.item_key = ${itemKey}`); if (linkedNc) fail('AUDIT_CHECKLIST_NC_LOCKED', 409); if (input.expectedVersion !== undefined) { const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT version FROM audit_checklist_results WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid AND item_key = ${itemKey}`); if (Number(current?.version ?? 0) !== input.expectedVersion) fail('CONCURRENCY_CONFLICT', 409); } const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_checklist_results(organization_id, execution_id, item_key, result, note, recorded_by_id) VALUES (${organizationId}::uuid, ${uuid(executionId)}::uuid, ${itemKey}, ${input.result}, ${input.note ?? null}, ${actor.id}::uuid) ON CONFLICT (organization_id, execution_id, item_key) DO UPDATE SET result = EXCLUDED.result, note = EXCLUDED.note, version = audit_checklist_results.version + 1, recorded_by_id = EXCLUDED.recorded_by_id RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_CHECKLIST_RECORDED', row.id, traceId); return row; }); }
 
   registerDeadlinePolicy(actor: AdminActor, input: AuditDeadlinePolicyInput, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
@@ -191,12 +302,131 @@ export class AuditManagementService {
 
   assignNc(actor: AdminActor, id: string, assigneeUserId: string, expectedVersion: number, traceId: string, key?: string) { return this.ncUpdate(actor, id, expectedVersion, 'ASSIGNED', { assigneeUserId: uuid(assigneeUserId) }, traceId, key); }
   respondNc(actor: AdminActor, id: string, input: { expectedVersion: number; response: string }, traceId: string, key?: string) { return this.ncUpdate(actor, id, input.expectedVersion, 'RESPONDED', { response: text(input.response, 10000) }, traceId, key); }
-  verifyNc(actor: AdminActor, id: string, expectedVersion: number, accepted: boolean, traceId: string, key?: string) { return this.ncUpdate(actor, id, expectedVersion, accepted ? 'VERIFIED' : 'REJECTED', { verificationNote: accepted ? '验证通过' : '验证退回', verifiedById: actor.id }, traceId, key); }
+  verifyNc(actor: AdminActor, id: string, expectedVersion: number, accepted: boolean, traceId: string, key?: string, verificationNote?: string) { return this.ncUpdate(actor, id, expectedVersion, accepted ? 'VERIFIED' : 'REJECTED', { verificationNote: text(verificationNote ?? (accepted ? '验证通过' : '验证退回'), 5000), verifiedById: actor.id }, traceId, key); }
   closeNc(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) { return this.ncUpdate(actor, id, expectedVersion, 'CLOSED', { closedById: actor.id }, traceId, key, true); }
 
-  private ncUpdate(actor: AdminActor, id: string, expectedVersion: number, status: string, changes: Record<string, string>, traceId: string, key?: string, requireVerified = false) { const organizationId = this.scope(actor); return this.mutations.run({ actor, organizationId, key, traceId, action: `AUDIT_NC_${status}`, permission: WRITE, payload: { id, expectedVersion, status, changes } }, async (tx) => { const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid FOR UPDATE`); if (!current) fail('AUDIT_NC_NOT_FOUND', 404); if (current.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409); if (status === 'ASSIGNED' && !['OPEN', 'REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409); if (changes.assigneeUserId) { const [assignee] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id = ${changes.assigneeUserId}::uuid AND account_type = 'INTERNAL' AND status = 'ACTIVE'`); if (!assignee) fail('AUDIT_ASSIGNEE_SCOPE_DENIED', 403); } if (requireVerified && current.status !== 'VERIFIED') fail('AUDIT_NC_VERIFY_REQUIRED', 409); if (status === 'RESPONDED' && !['ASSIGNED','REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409); if (status === 'RESPONDED' && current.assignee_user_id !== actor.id) fail('AUDIT_NC_RESPONDER_DENIED', 403); if (['VERIFIED', 'REJECTED'].includes(status) && current.status !== 'RESPONDED') fail('AUDIT_NC_STATE_INVALID', 409); if (['VERIFIED', 'REJECTED'].includes(status) && [current.assignee_user_id, current.responded_by_id].includes(actor.id)) fail('AUDIT_NC_REVIEWER_DENIED', 403); if (status === 'CLOSED' && current.status !== 'VERIFIED') fail('AUDIT_NC_VERIFY_REQUIRED', 409); const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_ncs SET status = ${status}, assignee_user_id = COALESCE(${changes.assigneeUserId ?? null}::uuid, assignee_user_id), assigned_by_id = CASE WHEN ${status} = 'ASSIGNED' THEN ${actor.id}::uuid ELSE assigned_by_id END, response = COALESCE(${changes.response ?? null}, response), responded_by_id = CASE WHEN ${status} = 'RESPONDED' THEN ${actor.id}::uuid ELSE responded_by_id END, verification_note = COALESCE(${changes.verificationNote ?? null}, verification_note), verified_by_id = COALESCE(${changes.verifiedById ?? null}::uuid, verified_by_id), closed_by_id = COALESCE(${changes.closedById ?? null}::uuid, closed_by_id), version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid AND version = ${expectedVersion} RETURNING *`); if (!row) fail('CONCURRENCY_CONFLICT', 409); await this.record(tx, actor, organizationId, `AUDIT_NC_${status}`, row.id, traceId); return row; }); }
+  private ncUpdate(actor: AdminActor, id: string, expectedVersion: number, status: string, changes: Record<string, string>, traceId: string, key?: string, requireVerified = false) {
+    const organizationId = this.scope(actor);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: `AUDIT_NC_${status}`, permission: WRITE, payload: { id, expectedVersion, status, changes } }, async (tx) => {
+      const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid FOR UPDATE`);
+      if (!current) fail('AUDIT_NC_NOT_FOUND', 404);
+      if (current.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      if (status === 'ASSIGNED' && !['OPEN', 'REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409);
+      if (changes.assigneeUserId) {
+        const [assignee] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id = ${changes.assigneeUserId}::uuid AND account_type = 'INTERNAL' AND status = 'ACTIVE'`);
+        if (!assignee) fail('AUDIT_ASSIGNEE_SCOPE_DENIED', 403);
+      }
+      if (requireVerified && current.status !== 'VERIFIED') fail('AUDIT_NC_VERIFY_REQUIRED', 409);
+      if (status === 'RESPONDED' && !['ASSIGNED', 'REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409);
+      if (status === 'RESPONDED' && current.assignee_user_id !== actor.id) fail('AUDIT_NC_RESPONDER_DENIED', 403);
+      if (['VERIFIED', 'REJECTED'].includes(status) && current.status !== 'RESPONDED') fail('AUDIT_NC_STATE_INVALID', 409);
+      if (['VERIFIED', 'REJECTED'].includes(status) && [current.assignee_user_id, current.responded_by_id].includes(actor.id)) fail('AUDIT_NC_REVIEWER_DENIED', 403);
+      if (status === 'CLOSED' && current.status !== 'VERIFIED') fail('AUDIT_NC_VERIFY_REQUIRED', 409);
+      if (status === 'CLOSED' && current.problem_index_id) {
+        const [formal] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT problem.status AS problem_status, instance.status AS workflow_status
+          FROM problem_indexes problem
+          LEFT JOIN workflow_instances instance ON instance.id = problem.workflow_instance_id AND instance.organization_id = problem.organization_id
+          WHERE problem.id = ${current.problem_index_id}::uuid AND problem.organization_id = ${organizationId}::uuid FOR UPDATE OF problem`);
+        if (formal?.problem_status !== 'CLOSED' || formal.workflow_status !== 'COMPLETED') fail('AUDIT_NC_WORKFLOW_NOT_CLOSED', 409);
+      }
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_ncs SET status = ${status}, assignee_user_id = COALESCE(${changes.assigneeUserId ?? null}::uuid, assignee_user_id), assigned_by_id = CASE WHEN ${status} = 'ASSIGNED' THEN ${actor.id}::uuid ELSE assigned_by_id END, response = COALESCE(${changes.response ?? null}, response), responded_by_id = CASE WHEN ${status} = 'RESPONDED' THEN ${actor.id}::uuid ELSE responded_by_id END, verification_note = COALESCE(${changes.verificationNote ?? null}, verification_note), verified_by_id = COALESCE(${changes.verifiedById ?? null}::uuid, verified_by_id), closed_by_id = COALESCE(${changes.closedById ?? null}::uuid, closed_by_id), version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid AND version = ${expectedVersion} RETURNING *`);
+      if (!row) fail('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, organizationId, `AUDIT_NC_${status}`, row.id, traceId);
+      return row;
+    });
+  }
 
-  importCustomerOrSecondPartyRow(actor: AdminActor, adapter: AuditImportAdapter, record: unknown, traceId: string, key?: string) { const organizationId = this.scope(actor); if (!['CUSTOMER', 'SECOND_PARTY'].includes(adapter.sourceSystem)) fail('AUDIT_IMPORT_SOURCE_INVALID', 400); const mapped = adapter.map(record); const externalKey = text(mapped.externalKey, 200); if (!mapped.payload || typeof mapped.payload !== 'object' || Array.isArray(mapped.payload)) fail('AUDIT_INPUT_INVALID', 400); return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_IMPORT_ROW_RECORDED', permission: WRITE, payload: { sourceSystem: adapter.sourceSystem, externalKey, payload: mapped.payload } }, async (tx) => { const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_import_rows(organization_id, source_system, external_key, payload, imported_by_id) VALUES (${organizationId}::uuid, ${adapter.sourceSystem}, ${externalKey}, ${JSON.stringify(mapped.payload)}::jsonb, ${actor.id}::uuid) RETURNING *`); await this.record(tx, actor, organizationId, 'AUDIT_IMPORT_ROW_RECORDED', row.id, traceId); return row; }); }
+  importCustomerOrSecondPartyRow(actor: AdminActor, adapter: AuditImportAdapter, record: unknown, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    if (!['CUSTOMER', 'SECOND_PARTY'].includes(adapter.sourceSystem)) fail('AUDIT_IMPORT_SOURCE_INVALID', 400);
+    const mapped = adapter.map(record);
+    const externalKey = text(mapped.externalKey, 200);
+    if (!mapped.payload || typeof mapped.payload !== 'object' || Array.isArray(mapped.payload)) fail('AUDIT_INPUT_INVALID', 400);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'AUDIT_IMPORT_ROW_RECORDED', permission: WRITE, payload: { sourceSystem: adapter.sourceSystem, externalKey, payload: mapped.payload } }, async (tx) => {
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO audit_import_rows(organization_id, source_system, external_key, payload, imported_by_id) VALUES (${organizationId}::uuid, ${adapter.sourceSystem}, ${externalKey}, ${JSON.stringify(mapped.payload)}::jsonb, ${actor.id}::uuid) RETURNING *`);
+      await this.record(tx, actor, organizationId, 'AUDIT_IMPORT_ROW_RECORDED', row.id, traceId);
+      return row;
+    }).catch((error: unknown) => {
+      if ((error as { code?: string }).code === '23505' || String(error).includes('duplicate key value violates unique constraint')) fail('AUDIT_IMPORT_DUPLICATE', 409);
+      throw error;
+    });
+  }
+
+  async listImportRows(actor: AdminActor, query: { sourceSystem?: 'CUSTOMER' | 'SECOND_PARTY'; status?: string; page?: number; pageSize?: number }) {
+    const organizationId = this.scope(actor);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) fail('AUDIT_IMPORT_QUERY_INVALID', 400);
+    if (query.sourceSystem && !['CUSTOMER', 'SECOND_PARTY'].includes(query.sourceSystem)) fail('AUDIT_IMPORT_QUERY_INVALID', 400);
+    if (query.status && !['PENDING_REVIEW', 'ACCEPTED', 'REJECTED', 'ISSUED'].includes(query.status)) fail('AUDIT_IMPORT_QUERY_INVALID', 400);
+    return this.prisma.$transaction(async (tx) => {
+      await assertAdminAccess(tx, actor, organizationId, READ);
+      const sourceSystem = query.sourceSystem ?? null;
+      const status = query.status ?? null;
+      const rows = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND (${sourceSystem}::varchar IS NULL OR source_system = ${sourceSystem}) AND (${status}::varchar IS NULL OR status = ${status}) ORDER BY created_at DESC, id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`);
+      const totals = await tx.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`SELECT count(*) AS total FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND (${sourceSystem}::varchar IS NULL OR source_system = ${sourceSystem}) AND (${status}::varchar IS NULL OR status = ${status})`);
+      return { items: rows, total: Number(totals[0]?.total ?? 0), page, pageSize };
+    });
+  }
+
+  reviewImportRow(actor: AdminActor, id: string, input: { expectedVersion: number; decision: 'ACCEPTED' | 'REJECTED'; note?: string }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const expectedVersion = input.expectedVersion;
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1 || !['ACCEPTED', 'REJECTED'].includes(input.decision)) fail('AUDIT_IMPORT_REVIEW_INVALID', 400);
+    const note = input.note?.trim() || null;
+    if (note && note.length > 2000) fail('AUDIT_IMPORT_REVIEW_INVALID', 400);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: `AUDIT_IMPORT_${input.decision}`, permission: WRITE, payload: { id, expectedVersion, decision: input.decision, note } }, async (tx) => {
+      const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid FOR UPDATE`);
+      if (!current) fail('AUDIT_IMPORT_NOT_FOUND', 404);
+      if (Number(current.version) !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      if (!['PENDING_REVIEW', 'REJECTED'].includes(String(current.status))) fail('AUDIT_IMPORT_REVIEW_LOCKED', 409);
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_import_rows SET status = ${input.decision}, review_note = ${note}, reviewed_by_id = ${actor.id}::uuid, reviewed_at = CURRENT_TIMESTAMP, version = version + 1 WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid AND version = ${expectedVersion} RETURNING *`);
+      if (!row) fail('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, organizationId, `AUDIT_IMPORT_${input.decision}`, row.id, traceId);
+      return row;
+    });
+  }
+
+  async issueImportedRow(actor: AdminActor, id: string, input: { expectedVersion: number; problemType: string; responseForm: 'BRIEF' | 'EIGHT_D'; responsibleScope: string; severity: string; ownerId?: string; dueAt?: string; workflowBinding: AuditWorkflowBinding }, traceId: string, key?: string) {
+    if (!this.domainIssues || !this.runtime) fail('AUDIT_IMPORT_WORKFLOW_UNAVAILABLE', 503);
+    const organizationId = this.scope(actor);
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1 || !['BRIEF', 'EIGHT_D'].includes(input.responseForm)) fail('AUDIT_IMPORT_ISSUE_INVALID', 400);
+    const current = await this.prisma.$transaction(async (tx) => {
+      await assertAdminAccess(tx, actor, organizationId, WRITE);
+      const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid`);
+      if (!row) fail('AUDIT_IMPORT_NOT_FOUND', 404);
+      const accepted = row.status === 'ACCEPTED' && Number(row.version) === input.expectedVersion;
+      const issued = row.status === 'ISSUED' && Number(row.version) === input.expectedVersion + 1 && Boolean(row.problem_index_id);
+      if (!accepted && !issued && Number(row.version) !== input.expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+      if (!accepted && !issued) fail('AUDIT_IMPORT_ISSUE_STATE_INVALID', 409);
+      return row;
+    });
+    const dueAt = input.dueAt ? iso(input.dueAt) : undefined;
+    const sourceSnapshot = (current.payload ?? {}) as Prisma.InputJsonObject;
+    return this.domainIssues.issue({
+      organizationId, actor, source: { sourceDomain: 'audit-management', sourceType: 'audit-import-row', sourceId: id, sourceVersion: input.expectedVersion, sourceSnapshot, createdBy: String(current.imported_by_id) },
+      problemType: text(input.problemType, 100), responseForm: input.responseForm, responsibleScope: text(input.responsibleScope, 100), severity: text(input.severity, 32), ownerId: input.ownerId ? uuid(input.ownerId) : undefined, dueAt,
+      workflowBinding: input.workflowBinding, idempotencyKey: key ?? '', traceId,
+    }, {
+      authorize: async (tx, command, replay) => {
+        await assertAdminAccess(tx, actor, command.organizationId, WRITE);
+        if (replay) return;
+        const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status, version FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid FOR UPDATE`);
+        if (!row || row.status !== 'ACCEPTED' || Number(row.version) !== input.expectedVersion) fail('AUDIT_IMPORT_ISSUE_STATE_INVALID', 409);
+      },
+      lockAndResolve: async (tx, source) => {
+        const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_import_rows WHERE organization_id = ${organizationId}::uuid AND id = ${source.sourceId}::uuid FOR UPDATE`);
+        if (!row) return null;
+        return { organizationId, createdBy: String(row.imported_by_id), sourceVersion: Number(row.version), sourceSnapshot: (row.payload ?? {}) as Prisma.InputJsonObject };
+      },
+      bindWorkflow: async (tx, binding) => {
+        const started = await this.runtime!.startInstance({ organizationId: binding.organizationId, actor: binding.actor, problemIndexId: binding.problemIndexId, workflowDefinitionId: binding.workflowBinding.workflowDefinitionId, workflowVersionId: binding.workflowBinding.workflowVersionId, expectedProblemVersion: binding.expectedProblemVersion, instanceKey: binding.workflowBinding.instanceKey, idempotencyKey: binding.idempotencyKey, traceId: binding.traceId }, tx);
+        const changed = await tx.$executeRaw(Prisma.sql`UPDATE audit_import_rows SET status = 'ISSUED', problem_index_id = ${binding.problemIndexId}::uuid, version = version + 1 WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid AND status = 'ACCEPTED' AND version = ${input.expectedVersion}`);
+        if (changed !== 1) fail('CONCURRENCY_CONFLICT', 409);
+        return started;
+      },
+    });
+  }
 
   private async lockPlan(tx: AdminTransaction, organizationId: string, id: string) { const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_plans WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid FOR UPDATE`); if (!row) fail('AUDIT_PLAN_NOT_FOUND', 404); return row; }
   private record(tx: AdminTransaction, actor: AdminActor, organizationId: string, action: string, resourceId: string, traceId: string) { return this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'AuditManagement', resourceId, outcome: 'SUCCESS', traceId }, tx); }

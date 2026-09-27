@@ -1,0 +1,8 @@
+.supplier-quality-targets-page { display: grid; gap: 20px; }
+.supplier-quality-targets-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.supplier-quality-targets-heading h1 { margin: 4px 0 8px; }
+.supplier-quality-targets-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: 20px; }
+.supplier-quality-targets-card .ant-input { margin-top: 8px; }
+.supplier-quality-targets-flow { margin: 20px 0; padding-bottom: 16px; border-bottom: 1px solid var(--qms-border); }
+.supplier-quality-targets-flow .ant-input { max-width: 220px; }
+@media (max-width: 640px) { .supplier-quality-targets-heading { flex-direction: column; } .supplier-quality-targets-card { padding: 12px; } .supplier-quality-targets-flow .ant-input { max-width: 100%; } }

@@ -34,6 +34,9 @@
 | [阶段二](PHASE-2.md) | 平台实施和验收记录 |
 | [阶段三](PHASE-3.md) | 供应商质量实施和未完成边界 |
 | [阶段四](PHASE-4.md) | 制程、客户、新品和审核业务域策划入口 |
+| [阶段五](PHASE-5.md) | 覆盖补齐、质量数据与增强能力策划入口 |
+
+阶段五领域设计与实施计划：F4 [设计](../../docs/superpowers/specs/2026-09-26-qms-2.0-f4-audit-excel-import-design.md) / [计划](../../docs/superpowers/plans/2026-09-26-qms-2.0-f4-audit-excel-import.md)；C6 [设计](../../docs/superpowers/specs/2026-09-26-qms-2.0-c6-supplier-pcn-design.md) / [计划](../../docs/superpowers/plans/2026-09-26-qms-2.0-c6-supplier-pcn.md)。
 | [问题工作空间](PROBLEM-WORKSPACE.md) | 问题读取、处理、历史和报告 |
 | [安全](SECURITY.md) | 安全边界与已实现保护 |
 | [流程设计器](WORKFLOW-DESIGNER.md) | 流程定义、版本和设计器行为 |
