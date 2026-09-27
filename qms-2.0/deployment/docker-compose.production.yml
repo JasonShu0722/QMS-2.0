@@ -1,0 +1,27 @@
+services:
+  api:
+    extra_hosts:
+      - "qms.bigshuaibee.cn:host-gateway"
+
+  worker:
+    extra_hosts:
+      - "qms.bigshuaibee.cn:host-gateway"
+
+  web:
+    networks:
+      default: {}
+      qms_proxy:
+        aliases:
+          - qms_nginx
+
+  rustfs:
+    networks:
+      default: {}
+      qms_proxy:
+        aliases:
+          - qms_rustfs
+
+networks:
+  qms_proxy:
+    external: true
+    name: ${NPM_DOCKER_NETWORK:?Set NPM_DOCKER_NETWORK}
