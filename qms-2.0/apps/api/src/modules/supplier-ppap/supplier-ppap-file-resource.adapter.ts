@@ -17,7 +17,7 @@ export class SupplierPpapFileResourceAdapter implements FileResourceAccessAdapte
       SELECT pack.owner_organization_id, pack.status, item.version FROM supplier_ppap_items item
       JOIN supplier_ppap_packages pack ON pack.id = item.package_id AND pack.owner_organization_id = item.owner_organization_id
       WHERE item.id = ${resource.resourceId}::uuid FOR UPDATE OF pack, item`;
-    if (!pack || actor.accountType !== 'INTERNAL' || actor.organizationId !== pack.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (!pack || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, pack.owner_organization_id, action === 'read' ? 'supplier-ppap:read' : 'supplier-ppap:write');
     if (action !== 'read' && !['DRAFT', 'REJECTED'].includes(pack.status)) workflowError('FILE_RESOURCE_DENIED', 403);
     return { organizationId: pack.owner_organization_id, version: pack.version };

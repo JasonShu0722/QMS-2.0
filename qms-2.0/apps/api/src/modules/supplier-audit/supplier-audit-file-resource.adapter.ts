@@ -15,7 +15,7 @@ export class SupplierAuditFileResourceAdapter implements FileResourceAccessAdapt
     if (resource.resourceType !== this.resourceType || !isUUID(resource.resourceId)) workflowError('FILE_RESOURCE_DENIED', 403);
     const [record] = await tx.$queryRaw<{ owner_organization_id: string; status: string; version: number }[]>`
       SELECT owner_organization_id, status, version FROM supplier_audit_records WHERE id = ${resource.resourceId}::uuid FOR UPDATE`;
-    if (!record || actor.accountType !== 'INTERNAL' || actor.organizationId !== record.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (!record || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, record.owner_organization_id, action === 'read' ? 'supplier-audit:records:read' : 'supplier-audit:records:write');
     if (action !== 'read' && record.status !== 'DRAFT') workflowError('FILE_RESOURCE_DENIED', 403);
     return { organizationId: record.owner_organization_id, version: record.version };

@@ -17,7 +17,6 @@ export class SupplierPcnFileResourceAdapter implements FileResourceAccessAdapter
       SELECT owner_organization_id, supplier_organization_id, status, version FROM supplier_pcns WHERE id = ${resource.resourceId}::uuid FOR UPDATE`;
     if (!row) workflowError('FILE_RESOURCE_DENIED', 403);
     if (actor.accountType === 'SUPPLIER' && actor.organizationId !== row.supplier_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
-    if (actor.accountType === 'INTERNAL' && actor.organizationId !== row.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
     if (action === 'delete' || (action !== 'read' && (actor.accountType !== 'SUPPLIER' || !['DRAFT', 'NEEDS_CHANGES'].includes(row.status)))) workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, actor.accountType === 'SUPPLIER' ? row.supplier_organization_id : row.owner_organization_id,
       actor.accountType === 'SUPPLIER' ? action === 'read' ? 'supplier-pcn:submissions:read' : 'supplier-pcn:submissions:write' : 'supplier-pcn:requests:read');
