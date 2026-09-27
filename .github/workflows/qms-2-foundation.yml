@@ -134,6 +134,7 @@ jobs:
       - name: Real PostgreSQL integration tests
         env:
           NODE_ENV: development
+          NODE_OPTIONS: --max-old-space-size=4096
         run: corepack pnpm --filter @qms/api test:integration
       - name: Build Web and API
         run: corepack pnpm build
