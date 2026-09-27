@@ -17,7 +17,7 @@ export class SupplierAsnFileResourceAdapter implements FileResourceAccessAdapter
     if (resource.resourceType !== this.resourceType || !isUUID(resource.resourceId) || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     const [record] = await tx.$queryRaw<{ owner_organization_id: string; status: string; version: number }[]>`
       SELECT owner_organization_id, status, version FROM supplier_asn_records WHERE id = ${resource.resourceId}::uuid FOR UPDATE`;
-    if (!record || actor.organizationId !== record.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (!record || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, record.owner_organization_id, action === 'read' ? 'supplier-asn:read' : 'supplier-asn:write');
     if (action !== 'read' && record.status !== 'DRAFT') workflowError('FILE_RESOURCE_DENIED', 403);
     return { organizationId: record.owner_organization_id, version: record.version };

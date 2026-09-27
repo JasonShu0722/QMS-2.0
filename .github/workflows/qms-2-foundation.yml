@@ -84,7 +84,7 @@ jobs:
           echo "QMS_OBJECT_STORAGE_SECRET_KEY=$STORAGE_SECRET" >> "$GITHUB_ENV"
           docker run --detach --name "$MINIO_CONTAINER" \
             -e MINIO_ROOT_USER=qms-ci -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET" \
-            -p 127.0.0.1::9000 quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            -p 127.0.0.1::9000 bitnamilegacy/minio:2025.7.23-debian-12-r5 server /data
           MINIO_PORT=$(docker port "$MINIO_CONTAINER" 9000/tcp | cut -d: -f2)
           for attempt in {1..60}; do
             if curl --fail --silent "http://127.0.0.1:$MINIO_PORT/minio/health/ready" >/dev/null; then break; fi

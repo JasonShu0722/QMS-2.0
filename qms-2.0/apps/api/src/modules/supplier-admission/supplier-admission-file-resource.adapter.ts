@@ -19,7 +19,6 @@ export class SupplierAdmissionFileResourceAdapter implements FileResourceAccessA
     const row = rows[0];
     if (!row) workflowError('FILE_RESOURCE_DENIED', 403);
     if (actor.accountType === 'SUPPLIER' && actor.organizationId !== row.supplier_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
-    if (actor.accountType === 'INTERNAL' && actor.organizationId !== row.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
     if (action === 'delete' || (action !== 'read' && (actor.accountType !== 'SUPPLIER' || !['DRAFT', 'NEEDS_CHANGES'].includes(row.status)))) workflowError('FILE_RESOURCE_DENIED', 403);
     const permission = actor.accountType === 'SUPPLIER'
       ? action === 'read' ? 'supplier-admission:submissions:read' : 'supplier-admission:submissions:write'

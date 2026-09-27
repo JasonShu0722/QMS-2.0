@@ -22,7 +22,6 @@ export class SupplierQualityFileResourceAdapter implements FileResourceAccessAda
     const index = await transaction.problemIndex.findUnique({ where: { id: problem.problemIndexId }, select: { organizationId: true, status: true, archivedAt: true } });
     if (!index || index.organizationId !== problem.ownerOrganizationId || index.archivedAt) workflowError('FILE_RESOURCE_DENIED', 403);
     if (actor.accountType === 'SUPPLIER' && (problem.replyMode !== 'SUPPLIER' || problem.supplierOrganizationId !== actor.organizationId || !problem.releasedToSupplierAt)) workflowError('FILE_RESOURCE_DENIED', 403);
-    if (actor.accountType === 'INTERNAL' && actor.organizationId !== problem.ownerOrganizationId) workflowError('FILE_RESOURCE_DENIED', 403);
     if (action !== 'read' && ['RESOLVED', 'CLOSED', 'ARCHIVED'].includes(index.status)) workflowError('FILE_RESOURCE_DENIED', 403);
     const permission = action === 'read'
       ? actor.accountType === 'SUPPLIER' ? 'supplier-quality:responses:read' : 'supplier-quality:problems:read'

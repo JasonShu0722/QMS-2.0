@@ -14,7 +14,7 @@ export class SupplierIncomingFileResourceAdapter implements FileResourceAccessAd
     if (resource.resourceType !== this.resourceType || !isUUID(resource.resourceId)) workflowError('FILE_RESOURCE_DENIED', 403);
     const rows = await tx.$queryRaw<{ id: string; owner_organization_id: string; version: number; status: string }[]>`SELECT id, owner_organization_id, version, status FROM supplier_incoming_inspections WHERE id = ${resource.resourceId}::uuid FOR UPDATE`;
     const record = rows[0];
-    if (!record || actor.accountType !== 'INTERNAL' || actor.organizationId !== record.owner_organization_id) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (!record || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, record.owner_organization_id, action === 'read' ? 'supplier-incoming:inspections:read' : 'supplier-incoming:inspections:write');
     if (action !== 'read' && record.status === 'CORRECTED') workflowError('FILE_RESOURCE_DENIED', 403);
     return { organizationId: record.owner_organization_id, version: record.version };

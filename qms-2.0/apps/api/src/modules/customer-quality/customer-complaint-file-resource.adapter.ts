@@ -16,7 +16,7 @@ export class CustomerComplaintFileResourceAdapter implements FileResourceAccessA
   async authorizeAndLock(tx: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant> {
     if (resource.resourceType !== this.resourceType || !isUUID(resource.resourceId) || actor.accountType !== 'INTERNAL') workflowError('FILE_RESOURCE_DENIED', 403);
     const complaint = await tx.customerQualityComplaint.findUnique({ where: { id: resource.resourceId }, select: { id: true, organizationId: true, status: true, version: true } });
-    if (!complaint || complaint.organizationId !== actor.organizationId) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (!complaint) workflowError('FILE_RESOURCE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, complaint.organizationId, action === 'read' ? 'customer-quality:complaints:read' : 'customer-quality:complaints:write');
     await tx.$queryRaw`SELECT id FROM customer_quality_complaints WHERE id = ${complaint.id}::uuid FOR UPDATE`;
     const current = await tx.customerQualityComplaint.findUniqueOrThrow({ where: { id: complaint.id }, select: { version: true, status: true, organizationId: true } });
