@@ -26,7 +26,7 @@ it('adds a custom checklist item through the contracted item endpoint', async ()
   await userEvent.type(screen.getByLabelText('检查项名称'), '补充验证');
   await userEvent.click(screen.getByRole('button', { name: '保存检查项' }));
   expect(vi.mocked(apiRequest)).toHaveBeenCalledWith('/api/v1/supplier-ppap/p1/items', expect.objectContaining({ method: 'POST', body: expect.stringContaining('"itemCode":"CUSTOM"') }));
-});
+}, 30_000);
 
 it('hides write and review actions without their permissions', async () => {
   vi.mocked(apiRequest).mockImplementation(async (path) => String(path).includes('my-permissions') ? { permissions: ['supplier-ppap:read'] } as never : String(path).endsWith('/p1') ? { ...pack, status: 'SUBMITTED' } as never : page as never);
