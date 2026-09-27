@@ -81,6 +81,31 @@ export class SupplierQualityService {
     return profile;
   }
 
+  async performanceProfile(transaction: AdminTransaction, organizationId: string, profileId: string) {
+    const profile = await transaction.supplierBusinessProfile.findFirst({ where: { id: profileId, ownerOrganizationId: organizationId }, select: { id: true, supplierOrganizationId: true, displayName: true } });
+    if (!profile) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+    return profile;
+  }
+
+  async pcnSupplierProfile(transaction: AdminTransaction, supplierOrganizationId: string, profileId: string) {
+    const profile = await transaction.supplierBusinessProfile.findFirst({ where: { id: profileId, supplierOrganizationId }, select: { id: true, ownerOrganizationId: true, supplierOrganizationId: true, displayName: true } });
+    if (!profile) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+    const owner = await transaction.organization.findUnique({ where: { id: profile.ownerOrganizationId }, select: { status: true } });
+    const supplier = await transaction.organization.findUnique({ where: { id: supplierOrganizationId }, select: { status: true } });
+    if (owner?.status !== 'ACTIVE' || supplier?.status !== 'ACTIVE') adminError('ORGANIZATION_DISABLED', 403);
+    return profile;
+  }
+
+  async pcnSupplierProfiles(transaction: AdminTransaction, supplierOrganizationId: string) {
+    return transaction.$queryRaw<{ id: string; ownerOrganizationId: string; supplierOrganizationId: string; displayName: string }[]>`
+      SELECT profile.id, profile.owner_organization_id AS "ownerOrganizationId", profile.supplier_organization_id AS "supplierOrganizationId", profile.display_name AS "displayName"
+      FROM supplier_business_profiles profile
+      JOIN organizations owner_org ON owner_org.id = profile.owner_organization_id AND owner_org.status = 'ACTIVE'
+      JOIN organizations supplier_org ON supplier_org.id = profile.supplier_organization_id AND supplier_org.status = 'ACTIVE'
+      WHERE profile.supplier_organization_id = ${supplierOrganizationId}::uuid
+      ORDER BY profile.business_code ASC, profile.id ASC LIMIT 100`;
+  }
+
   private serializeProfile({ id, version, supplierOrganizationId, businessCode, displayName, contactName, contactEmail }: Prisma.SupplierBusinessProfileGetPayload<object>): SupplierProfileDto {
     return { id, version, supplierOrganizationId, businessCode, displayName, ...(contactName ? { contactName } : {}), ...(contactEmail ? { contactEmail } : {}) };
   }
@@ -156,6 +181,17 @@ export class SupplierQualityService {
       await this.record(transaction, actor, record.ownerOrganizationId, 'SUPPLIER_PROBLEM_DRAFT_CREATED', record.id, traceId);
       return this.serialize(transaction, actor, record, granted);
     });
+  }
+
+  async createDraftFromIncoming(transaction: AdminTransaction, actor: AdminActor, dto: SupplierProblemDraftDto, traceId: string): Promise<{ id: string; version: number }> {
+    this.internal(actor);
+    const organizationId = this.scope(actor);
+    if (dto.organizationId && dto.organizationId !== organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
+    await assertAdminAccess(transaction, actor, organizationId, 'supplier-quality:problems:write');
+    const facts = await this.facts(transaction, actor, dto);
+    const record = await transaction.supplierQualityProblem.create({ data: { ...facts, ownerOrganizationId: organizationId, profileId: dto.profileId, createdById: actor.id } });
+    await this.record(transaction, actor, organizationId, 'SUPPLIER_PROBLEM_DRAFT_CREATED', record.id, traceId);
+    return { id: record.id, version: record.version };
   }
 
   issueDraft(actor: AdminActor, id: string, dto: IssueSupplierProblemDto, traceId: string, key?: string) {

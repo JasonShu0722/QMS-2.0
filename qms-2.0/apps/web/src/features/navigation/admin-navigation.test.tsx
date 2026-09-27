@@ -1,11 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InternalLayout } from '../../layouts/InternalLayout';
+
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
 
 afterEach(() => vi.unstubAllGlobals());
 it('rejects an unauthorized direct admin URL without a placeholder or empty context', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { headers: { 'content-type': 'application/json' } })));
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } }))));
   render(<MemoryRouter initialEntries={['/app/admin']}><InternalLayout /></MemoryRouter>);
   expect(await screen.findByText('无系统管理访问权限')).toBeInTheDocument();
   expect(screen.queryByText(/基础入口已就绪|系统管理上下文/)).not.toBeInTheDocument();

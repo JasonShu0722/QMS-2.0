@@ -19,8 +19,9 @@ const steps = [
 ];
 
 try {
-  assert.match(process.version, /^v22\./, 'Use Node.js >=22.22.0 <23');
-  assert.ok(Number(process.versions.node.split('.')[1]) >= 22, 'Use Node.js >=22.22.0 <23');
+  const [major, minor, patch] = process.versions.node.split('.').map(Number);
+  const supported = major === 24 && (minor > 21 || minor === 21 && patch >= 0);
+  assert.ok(supported, 'Use Node.js >=24.21.0 <25');
   assert.ok(pnpm, 'Run through pnpm acceptance:phase-1');
   for (const name of [
     'DATABASE_URL', 'QMS_SEED_INTERNAL_PASSWORD', 'QMS_SEED_SUPPLIER_PASSWORD',

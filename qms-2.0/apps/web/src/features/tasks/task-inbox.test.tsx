@@ -102,3 +102,20 @@ it('uses server pagination and translates task controls without changing report 
   expect(within(panel).getByRole('button', { name: 'Claim' })).toBeInTheDocument();
   expect(screen.getByText(task.reportNumber)).toBeInTheDocument();
 });
+
+it('lists failed tasks and retries with the returned version', async () => {
+  const failedTask = { ...task, status: 'FAILED', canClaim: false, canRelease: false, canRetry: true };
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf-token' });
+    if (path.endsWith('/retry')) return json({ ...failedTask, status: 'PENDING', version: 4, canRetry: false });
+    if (path.startsWith('/api/v1/notifications')) return json({ items: [], total: 0 });
+    return json({ items: [failedTask], total: 1 });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  mount();
+  await userEvent.selectOptions(await screen.findByLabelText('任务状态'), 'FAILED');
+  expect((await screen.findAllByText('失败')).length).toBeGreaterThan(0);
+  await userEvent.click(await screen.findByRole('button', { name: '失败重试' }));
+  expect((await screen.findAllByText('待处理')).length).toBeGreaterThan(0);
+  expect(fetchMock.mock.calls.find(([path]) => path.endsWith('/retry'))?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ expectedVersion: 3 }) });
+});

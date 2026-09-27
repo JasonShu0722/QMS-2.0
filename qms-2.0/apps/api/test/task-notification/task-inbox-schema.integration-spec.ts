@@ -16,6 +16,7 @@ import { DatabaseModule } from '../../src/database/database.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { TaskNotificationModule } from '../../src/modules/task-notification/task-notification.module.js';
 import { TaskService } from '../../src/modules/task-notification/task.service.js';
+import { TaskTransferService } from '../../src/modules/task-notification/task-transfer.service.js';
 import { NotificationService } from '../../src/modules/task-notification/notification.service.js';
 import { OUTBOX_HANDLER, OutboxWorkerService, type AtomicOutboxHandler } from '../../src/modules/task-notification/outbox-worker.service.js';
 import { clearTimingEvents, timingFixture } from './workflow-timing-fixture.js';
@@ -26,6 +27,7 @@ describe('authorized task inbox on PostgreSQL', () => {
   let module: TestingModule;
   let prisma: PrismaService;
   let tasks: TaskService;
+  let transfers: TaskTransferService;
   let notifications: NotificationService;
   let runtime: WorkflowRuntimeService;
   let worker: OutboxWorkerService;
@@ -36,6 +38,7 @@ describe('authorized task inbox on PostgreSQL', () => {
     await module.init();
     prisma = module.get(PrismaService);
     tasks = module.get(TaskService);
+    transfers = module.get(TaskTransferService);
     notifications = module.get(NotificationService);
     worker = module.get(OutboxWorkerService);
     handler = module.get(OUTBOX_HANDLER);
@@ -52,7 +55,7 @@ describe('authorized task inbox on PostgreSQL', () => {
   }
   async function fixture() {
     const context = await timingFixture(prisma, organizations);
-    for (const code of ['task:read', 'task:claim', 'notification:read']) {
+    for (const code of ['task:read', 'task:claim', 'task:transfer', 'notification:read']) {
       const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await prisma.rolePermission.create({ data: { roleId: context.role.id, permissionId: permission.id } });
     }
@@ -98,6 +101,49 @@ describe('authorized task inbox on PostgreSQL', () => {
     const context = await fixture();
     expect(await tasks.list(context.actor, { pageSize: 1 })).toMatchObject({ total: 1, items: [{ id: context.task.id, canAct: true, canClaim: true, canRelease: false }] });
     expect(await tasks.list(context.actor, { offset: 5 })).toEqual({ total: 1, items: [] });
+    expect(await tasks.statistics(context.actor)).toMatchObject({ total: 1, pending: 1, inProgress: 0, overdue: 0, unclaimed: 1, mine: 0, dueToday: 1, dueThisWeek: 1 });
+  });
+
+  it('lists failed tasks and retries them with authorization, CAS and audit', async () => {
+    const context = await fixture();
+    await prisma.workflowTask.update({ where: { id: context.task.id }, data: { status: 'FAILED', claimedByUserId: context.peer.id, claimedAt: new Date() } });
+    await expect(tasks.list(context.actor, { status: 'FAILED' })).resolves.toMatchObject({ total: 1, items: [{ id: context.task.id, status: 'FAILED', canRetry: true }] });
+    await expect(tasks.retry(context.actor, context.task.id, context.organization.id, 1, randomUUID())).resolves.toMatchObject({ id: context.task.id, status: 'PENDING', version: 2, canRetry: false });
+    expect(await prisma.workflowTask.findUniqueOrThrow({ where: { id: context.task.id } })).toMatchObject({ status: 'PENDING', claimedByUserId: null, claimedAt: null, version: 2 });
+    expect(await prisma.auditEvent.count({ where: { resourceId: context.task.id, action: 'TASK_RETRIED' } })).toBe(1);
+    await expect(tasks.retry(context.actor, context.task.id, context.organization.id, 1, randomUUID())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+  });
+
+  it('exposes failed task recovery through the guarded HTTP contract', async () => {
+    const context = await fixture();
+    await prisma.workflowTask.update({ where: { id: context.task.id }, data: { status: 'FAILED' } });
+    const application = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(prisma).compile();
+    const app = application.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    await app.init();
+    try {
+      const token = await app.get(SessionService).create(context.actor.id, prisma, { mfaVerified: true, reauthenticated: true });
+      const cookie = `qms_session=${token}; qms_csrf=g6-csrf`;
+      await request(app.getHttpServer()).get('/api/v1/tasks?status=FAILED').set('Cookie', cookie).expect(200).expect((response) => {
+        expect(response.body).toMatchObject({ total: 1, items: [{ id: context.task.id, status: 'FAILED', canRetry: true }] });
+      });
+      await request(app.getHttpServer()).post(`/api/v1/tasks/${context.task.id}/retry`).set('Cookie', cookie).set('x-csrf-token', 'g6-csrf').send({ expectedVersion: 1 }).expect(201).expect((response) => {
+        expect(response.body).toMatchObject({ id: context.task.id, status: 'PENDING', version: 2, canRetry: false });
+      });
+    } finally { await app.close(); }
+  });
+
+  it('transfers a task with workflow eligibility, idempotency and CAS', async () => {
+    const context = await fixture();
+    await prisma.session.update({ where: { id: context.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
+    const key = randomUUID();
+    const input = { assigneeUserId: context.peer.id, items: [{ id: context.task.id, expectedVersion: 1 }] };
+    await expect(transfers.transfer(context.actor, context.organization.id, input, randomUUID(), key)).resolves.toMatchObject([{ id: context.task.id, version: 2, assigneeUserId: context.peer.id, status: 'IN_PROGRESS' }]);
+    await expect(transfers.transfer(context.actor, context.organization.id, input, randomUUID(), key)).resolves.toMatchObject([{ id: context.task.id, version: 2, assigneeUserId: context.peer.id }]);
+    await expect(transfers.transfer(context.actor, context.organization.id, { ...input, items: [{ id: context.task.id, expectedVersion: 1 }] }, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await prisma.workflowTask.findUniqueOrThrow({ where: { id: context.task.id } })).toMatchObject({ version: 2, claimedByUserId: context.peer.id });
+    expect(await prisma.auditEvent.count({ where: { resourceId: context.task.id, action: 'TASK_TRANSFERRED' } })).toBe(1);
   });
 
   it('serializes claims, preserves visibility, blocks another actor, and releases with CAS', async () => {

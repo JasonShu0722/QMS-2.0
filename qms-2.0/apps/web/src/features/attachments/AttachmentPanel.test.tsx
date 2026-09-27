@@ -49,3 +49,29 @@ it('does not show a permission error as an empty attachment list', async () => {
   expect(await screen.findByText('resource-trace')).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByText('暂无附件')).not.toBeInTheDocument());
 });
+
+it('notifies the parent when a restored pending file finishes scanning', async () => {
+  let reads = 0;
+  vi.stubGlobal('fetch', vi.fn(async () => json(++reads === 1 ? file : { ...file, version: 3, status: 'AVAILABLE', scanStatus: 'CLEAN' })));
+  const changed = vi.fn();
+  const ready = vi.fn();
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} onFilesChanged={changed} onReady={ready} /></LanguageProvider>);
+  expect(await screen.findByText('等待安全扫描')).toBeInTheDocument();
+  await waitFor(() => expect(changed).toHaveBeenCalledWith([expect.objectContaining({ id: file.id, status: 'AVAILABLE', scanStatus: 'CLEAN' })]), { timeout: 4000 });
+  expect(ready).not.toHaveBeenCalled();
+});
+
+it('offers scan recovery for an unavailable scanner while keeping the file quarantined', async () => {
+  let retried = false;
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.endsWith('/retry-scan')) { retried = true; return json({ ...file, version: 2, scanStatus: 'PENDING' }, 202); }
+    return json({ ...file, scanStatus: retried ? 'PENDING' : 'ERROR' });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} /></LanguageProvider>);
+  expect(await screen.findByText('扫描暂不可用，附件仍隔离')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '重试安全扫描' }));
+  expect(await screen.findByText('等待安全扫描')).toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/retry-scan'))).toBe(true);
+});

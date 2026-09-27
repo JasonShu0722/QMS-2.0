@@ -1,0 +1,10 @@
+.supplier-audit-page { display: grid; gap: 20px; }
+.supplier-audit-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.supplier-audit-heading h1 { margin: 4px 0 8px; }
+.supplier-audit-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: 20px; }
+.supplier-audit-actions { margin-top: 16px; }
+.supplier-audit-item { display: grid; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--qms-border); }
+.supplier-audit-plan-select { display: grid; gap: 8px; }
+.supplier-audit-plan-select > .ant-select { width: 100%; }
+.supplier-audit-item .ant-input { max-width: 280px; }
+@media (max-width: 640px) { .supplier-audit-heading { flex-direction: column; } .supplier-audit-card { padding: 12px; } .supplier-audit-item .ant-input { max-width: 100%; } }

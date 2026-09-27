@@ -362,6 +362,56 @@ describe('attachment lifecycle on real PostgreSQL and object storage', () => {
     expect(await files.get(context.actor, file.id)).toMatchObject({ status: 'QUARANTINED', scanStatus: 'ERROR' });
   });
 
+  it('requeues a terminal scan failure with the same object version and CAS', async () => {
+    const file = await completed();
+    const previousHost = process.env.QMS_FILE_SCANNER_HOST;
+    delete process.env.QMS_FILE_SCANNER_HOST;
+    let now = new Date(Date.now() + 1000);
+    try {
+      const worker = new FileScanWorkerService(prisma, module.get(FileVerificationService), module.get(AuditLogService), () => now);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await worker.processDue(1);
+        now = new Date(now.getTime() + 20000);
+      }
+    } finally { process.env.QMS_FILE_SCANNER_HOST = previousHost; }
+    const failed = await prisma.fileObject.findUniqueOrThrow({ where: { id: file.id } });
+    expect(failed).toMatchObject({ scanStatus: 'ERROR', version: 2, objectVersionId: file.objectVersionId });
+    const key = randomUUID();
+    await expect(files.retryScan(context.actor, file.id, 2, key, randomUUID())).resolves.toMatchObject({ scanStatus: 'PENDING', version: 2 });
+    await expect(files.retryScan(context.actor, file.id, 2, key, randomUUID())).resolves.toMatchObject({ scanStatus: 'PENDING', version: 2 });
+    expect(await prisma.outboxEvent.findFirstOrThrow({ where: { aggregateId: file.id } })).toMatchObject({ status: 'PENDING', attempts: 0, lastError: null });
+    await expect(files.retryScan(context.actor, file.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+    await expect(files.download(context.actor, file.id, randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_NOT_AVAILABLE' } });
+    await scanWorker.processDue(1);
+    expect(await files.get(context.actor, file.id)).toMatchObject({ status: 'AVAILABLE', scanStatus: 'CLEAN', version: 3 });
+    expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: file.id } })).objectVersionId).toBe(file.objectVersionId);
+    expect(await prisma.auditEvent.count({ where: { resourceId: file.id, action: 'ATTACHMENT_SCAN_RETRY_REQUESTED' } })).toBe(1);
+  });
+
+  it('does not restart a clean, rejected or deleted scan', async () => {
+    const clean = await completed();
+    await scanWorker.processDue(1);
+    await expect(files.retryScan(context.actor, clean.id, 3, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_SCAN_RETRY_UNAVAILABLE' } });
+    const rejected = await completed(bytes, 'text/plain', { sha256: 'b'.repeat(64) });
+    await scanWorker.processDue(1);
+    await expect(files.retryScan(context.actor, rejected.id, 3, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_SCAN_RETRY_UNAVAILABLE' } });
+    const deleted = await completed();
+    await files.deleteLogically(context.actor, deleted.id, 2, randomUUID());
+    await expect(files.retryScan(context.actor, deleted.id, 3, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_SCAN_RETRY_UNAVAILABLE' } });
+  });
+
+  it('rolls back scan recovery if its audit entry cannot commit', async () => {
+    const file = await completed();
+    await prisma.fileObject.update({ where: { id: file.id }, data: { scanStatus: 'ERROR', scanReason: 'FILE_SCANNER_UNAVAILABLE' } });
+    const event = await prisma.outboxEvent.findFirstOrThrow({ where: { aggregateId: file.id, eventType: 'FILE_SCAN_REQUESTED' } });
+    await prisma.outboxEvent.update({ where: { id: event.id }, data: { status: 'FAILED', attempts: 5, lastError: 'FILE_SCANNER_UNAVAILABLE' } });
+    const audit = { record: async () => { throw new Error('audit unavailable'); } } as unknown as AuditLogService;
+    const service = new FileLifecycleService(prisma, module.get(FilePolicyService), storage, audit, module.get(FileResourceAccess));
+    await expect(service.retryScan(context.actor, file.id, 2, randomUUID(), randomUUID())).rejects.toThrow('audit unavailable');
+    expect(await prisma.fileObject.findUniqueOrThrow({ where: { id: file.id } })).toMatchObject({ scanStatus: 'ERROR', scanReason: 'FILE_SCANNER_UNAVAILABLE' });
+    expect(await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).toMatchObject({ status: 'FAILED', attempts: 5, lastError: 'FILE_SCANNER_UNAVAILABLE' });
+  });
+
   it('does not publish scan failure after its lease expires waiting for a file lock', async () => {
     const file = await completed();
     let now = new Date(Date.now() + 1000);
@@ -509,6 +559,10 @@ describe('attachment lifecycle on real PostgreSQL and object storage', () => {
       expect(complete.body).toMatchObject({ status: 'QUARANTINED', scanStatus: 'PENDING' });
       expect(complete.body).not.toHaveProperty('objectVersionId');
       await post(`${path}/download`).send({}).expect(409);
+      await prisma.fileObject.update({ where: { id: initialized.body.file.id }, data: { scanStatus: 'ERROR', scanReason: 'FILE_SCANNER_UNAVAILABLE' } });
+      await prisma.outboxEvent.updateMany({ where: { aggregateId: initialized.body.file.id, eventType: 'FILE_SCAN_REQUESTED' }, data: { status: 'FAILED', attempts: 5 } });
+      await post(`${path}/retry-scan`).send({ expectedVersion: 1 }).expect(409);
+      await post(`${path}/retry-scan`).send({ expectedVersion: 2 }).expect(202);
       await scanWorker.processDue(100);
       await request(app.getHttpServer()).get(path).set('Cookie', cookie).expect(200);
       await post(`${path}/download`).send({ actor: context.actor.id }).expect(400);

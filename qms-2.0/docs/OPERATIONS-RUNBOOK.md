@@ -14,7 +14,7 @@ corepack pnpm --version
 corepack pnpm check:governance
 ```
 
-版本以 `package.json` 的 engines 和 packageManager 为准；与 CI、Docker 一起评估升级。出现版本警告先核对 `Get-Command node`，使用正确环境后重跑。环境问题与产品缺陷分别记录。
+当前唯一支持的运行时是 Node.js `>=24.21.0 <25`，固定验证版本为 `24.21.0`；包管理器为 pnpm `11.19.0`。版本以各 workspace `package.json` 的 `engines` 和 `packageManager` 为准，并与 CI、Docker 一起评估升级。出现版本警告先核对 `Get-Command node`，使用正确环境后重跑。环境问题与产品缺陷分别记录。
 
 ## 故障诊断
 

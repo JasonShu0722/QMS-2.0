@@ -8,6 +8,7 @@ import type { DomainSourceRecord, DomainSourceReference } from '../problem-index
 
 export type CustomerComplaintType = 'ZERO_KM' | 'AFTER_SALES';
 export type CustomerExternalSourceSystem = 'ERP' | 'SAP' | 'IMS';
+export type CustomerRelationType = 'CUSTOMER_PARENT' | 'VEHICLE_MODEL' | 'PROJECT' | 'PRODUCT';
 export interface CustomerQualityExternalAdapter<ExternalRecord> {
   readonly system: CustomerExternalSourceSystem;
   map(record: ExternalRecord): Pick<CustomerComplaintInput, 'externalSourceSystem' | 'externalRecordKey' | 'sourceObservedAt'>;
@@ -31,6 +32,7 @@ export interface CustomerComplaintInput {
   externalRecordKey?: string | null;
   sourceObservedAt?: Date | null;
 }
+export type CustomerComplaintImportRow = CustomerComplaintInput & { rowNumber: number };
 
 type Row = Record<string, any>;
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
@@ -44,7 +46,9 @@ function severitySnapshot(value: Prisma.InputJsonValue, level: string, policyVer
   const snapshot = value as Prisma.InputJsonObject;
   if (snapshot.level !== undefined && snapshot.level !== level) fail('CUSTOMER_QUALITY_SEVERITY_SNAPSHOT_INVALID', 400);
   if (snapshot.policyVersion !== undefined && snapshot.policyVersion !== policyVersion) fail('CUSTOMER_QUALITY_SEVERITY_SNAPSHOT_INVALID', 400);
-  return { ...snapshot, level, policyVersion };
+  const normalized = { ...snapshot, level, policyVersion };
+  if (JSON.stringify(normalized).length > 10000) fail('CUSTOMER_QUALITY_SEVERITY_SNAPSHOT_INVALID', 400);
+  return normalized;
 }
 function mapUnique(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
@@ -104,6 +108,113 @@ export class CustomerQualityService {
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_CREATED', resourceType: 'CustomerComplaint', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1 } }, tx);
       return record;
     }).catch(mapUnique);
+  }
+
+  async listCustomerRelations(actor: AdminActor, customerId: string) {
+    const organizationId = this.scope(actor); customerId = uuid(customerId);
+    return this.prisma.$transaction(async (tx) => {
+      await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read');
+      const customer = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_customers WHERE id = ${customerId}::uuid AND organization_id = ${organizationId}::uuid`;
+      if (!customer[0]) fail('CUSTOMER_MASTER_NOT_FOUND', 404);
+      return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_customer_relations WHERE organization_id = ${organizationId}::uuid AND customer_id = ${customerId}::uuid ORDER BY relation_type, related_code NULLS LAST, related_name NULLS LAST`;
+    });
+  }
+
+  private normalizeCustomerRelation(input: { relationType: CustomerRelationType; relatedCustomerId?: string | null; relatedCode?: string | null; relatedName?: string | null }) {
+    if (!['CUSTOMER_PARENT', 'VEHICLE_MODEL', 'PROJECT', 'PRODUCT'].includes(input.relationType)) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    const relatedCustomerId = input.relatedCustomerId ? uuid(input.relatedCustomerId) : null;
+    const relatedCode = optional(input.relatedCode, 100); const relatedName = optional(input.relatedName, 200);
+    if (input.relationType === 'CUSTOMER_PARENT' && (!relatedCustomerId || relatedCode || relatedName)) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    if (input.relationType !== 'CUSTOMER_PARENT' && (relatedCustomerId || !relatedCode || !relatedName)) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    return { relationType: input.relationType, relatedCustomerId, relatedCode, relatedName };
+  }
+
+  async createCustomerRelation(actor: AdminActor, customerId: string, input: { relationType: CustomerRelationType; relatedCustomerId?: string; relatedCode?: string; relatedName?: string }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor); customerId = uuid(customerId); const relation = this.normalizeCustomerRelation(input);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTER_RELATION_CREATED', payload: { customerId, ...relation }, permission: 'customer-quality:complaints:write', duplicateCode: 'CONCURRENCY_CONFLICT' }, async (tx) => {
+      const customer = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_customers WHERE id = ${customerId}::uuid AND organization_id = ${organizationId}::uuid`;
+      if (!customer[0]) fail('CUSTOMER_MASTER_NOT_FOUND', 404);
+      if (relation.relatedCustomerId) {
+        if (relation.relatedCustomerId === customerId) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+        const parent = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_customers WHERE id = ${relation.relatedCustomerId}::uuid AND organization_id = ${organizationId}::uuid`;
+        if (!parent[0]) fail('CUSTOMER_MASTER_NOT_FOUND', 404);
+        const cycle = await tx.$queryRaw<Row[]>`WITH RECURSIVE ancestors(id) AS (SELECT ${relation.relatedCustomerId}::uuid UNION SELECT r.related_customer_id FROM customer_quality_customer_relations r JOIN ancestors a ON r.customer_id = a.id WHERE r.organization_id = ${organizationId}::uuid AND r.relation_type = 'CUSTOMER_PARENT') SELECT id FROM ancestors WHERE id = ${customerId}::uuid LIMIT 1`;
+        if (cycle[0]) fail('CONCURRENCY_CONFLICT', 409);
+      }
+      const id = randomUUID();
+      const rows = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_customer_relations (id, organization_id, customer_id, relation_type, related_customer_id, related_code, related_name, version, created_by_id, updated_by_id, updated_at) VALUES (${id}::uuid, ${organizationId}::uuid, ${customerId}::uuid, ${relation.relationType}, ${relation.relatedCustomerId}::uuid, ${relation.relatedCode}, ${relation.relatedName}, 1, ${actor.id}::uuid, ${actor.id}::uuid, CURRENT_TIMESTAMP) RETURNING *`;
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_MASTER_RELATION_CREATED', resourceType: 'CustomerMasterRelation', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { customerId, relationType: relation.relationType, resourceVersion: 1 } }, tx);
+      return rows[0]!;
+    }).catch(mapUnique);
+  }
+
+  async updateCustomerRelation(actor: AdminActor, id: string, input: { expectedVersion: number; relatedCustomerId?: string; relatedCode?: string; relatedName?: string }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor); id = uuid(id); if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTER_RELATION_UPDATED', payload: { id, ...input }, permission: 'customer-quality:complaints:write' }, async (tx) => {
+      const current = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_customer_relations WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
+      if (!current[0]) fail('CUSTOMER_MASTER_RELATION_NOT_FOUND', 404);
+      const normalized = this.normalizeCustomerRelation({ relationType: current[0].relation_type, relatedCustomerId: input.relatedCustomerId ?? current[0].related_customer_id, relatedCode: input.relatedCode ?? current[0].related_code, relatedName: input.relatedName ?? current[0].related_name });
+      if (normalized.relatedCustomerId) {
+        if (normalized.relatedCustomerId === current[0].customer_id) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+        const parent = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_customers WHERE id = ${normalized.relatedCustomerId}::uuid AND organization_id = ${organizationId}::uuid`;
+        if (!parent[0]) fail('CUSTOMER_MASTER_NOT_FOUND', 404);
+        const cycle = await tx.$queryRaw<Row[]>`WITH RECURSIVE ancestors(id) AS (SELECT ${normalized.relatedCustomerId}::uuid UNION SELECT r.related_customer_id FROM customer_quality_customer_relations r JOIN ancestors a ON r.customer_id = a.id WHERE r.organization_id = ${organizationId}::uuid AND r.relation_type = 'CUSTOMER_PARENT') SELECT id FROM ancestors WHERE id = ${current[0].customer_id}::uuid LIMIT 1`;
+        if (cycle[0]) fail('CONCURRENCY_CONFLICT', 409);
+      }
+      const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_customer_relations SET related_customer_id = ${normalized.relatedCustomerId}::uuid, related_code = ${normalized.relatedCode}, related_name = ${normalized.relatedName}, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${input.expectedVersion} RETURNING *`;
+      if (!rows[0]) fail('CONCURRENCY_CONFLICT', 409);
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_MASTER_RELATION_UPDATED', resourceType: 'CustomerMasterRelation', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: rows[0].version } }, tx);
+      return rows[0];
+    }, async (tx) => { const rows = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_customer_relations WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; if (!rows[0]) fail('CUSTOMER_MASTER_RELATION_NOT_FOUND', 404); }).catch(mapUnique);
+  }
+
+  async deleteCustomerRelation(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) {
+    const organizationId = this.scope(actor); id = uuid(id); if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTER_RELATION_DELETED', payload: { id, expectedVersion }, permission: 'customer-quality:complaints:write' }, async (tx) => {
+      const rows = await tx.$queryRaw<Row[]>`DELETE FROM customer_quality_customer_relations WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${expectedVersion} RETURNING id`;
+      if (!rows[0]) fail('CONCURRENCY_CONFLICT', 409);
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_MASTER_RELATION_DELETED', resourceType: 'CustomerMasterRelation', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { expectedVersion } }, tx);
+      return { id, deleted: true };
+    });
+  }
+
+  async importComplaints(actor: AdminActor, rows: CustomerComplaintImportRow[], traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    if (!Array.isArray(rows) || rows.length < 1 || rows.length > 100) fail('CUSTOMER_QUALITY_IMPORT_ROWS_INVALID', 400);
+    const batchKey = key;
+    if (!batchKey) fail('IDEMPOTENCY_KEY_REQUIRED', 400);
+    const items: { rowNumber: number; status: 'CREATED' | 'DUPLICATE' | 'REJECTED'; complaintId: string | null; complaintNumber: string | null; errorCode: string | null }[] = [];
+    for (const row of rows) {
+      const rowKey = `${batchKey}:${row.rowNumber}`.slice(0, 128);
+      try {
+        const facts = this.normalize(row);
+        facts.customerId = uuid(facts.customerId);
+        if (!facts.externalSourceSystem || !facts.externalRecordKey || !facts.sourceObservedAt) fail('CUSTOMER_QUALITY_IMPORT_EXTERNAL_ID_REQUIRED', 400);
+        try {
+          const created = await this.createComplaint(actor, facts, traceId, rowKey);
+          items.push({ rowNumber: row.rowNumber, status: 'CREATED', complaintId: created.id, complaintNumber: created.complaint_number, errorCode: null });
+        } catch (error) {
+          const status = error instanceof HttpException ? error.getStatus() : 500;
+          if (status === 409) {
+            const existing = await this.prisma.$transaction(async (tx) => {
+              await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:write');
+              const records = await tx.$queryRaw<Row[]>`SELECT id, complaint_number FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND external_source_system = ${facts.externalSourceSystem} AND external_record_key = ${facts.externalRecordKey}`;
+              return records[0] ?? null;
+            });
+            if (existing) {
+              items.push({ rowNumber: row.rowNumber, status: 'DUPLICATE', complaintId: existing.id, complaintNumber: existing.complaint_number, errorCode: null });
+              continue;
+            }
+          }
+          throw error;
+        }
+      } catch (error) {
+        const response = error instanceof HttpException ? error.getResponse() : null;
+        const errorCode = typeof response === 'object' && response !== null && 'code' in response ? String((response as { code: unknown }).code) : 'CUSTOMER_QUALITY_IMPORT_ROW_FAILED';
+        items.push({ rowNumber: row.rowNumber, status: 'REJECTED', complaintId: null, complaintNumber: null, errorCode });
+      }
+    }
+    return { created: items.filter((item) => item.status === 'CREATED').length, duplicates: items.filter((item) => item.status === 'DUPLICATE').length, rejected: items.filter((item) => item.status === 'REJECTED').length, items };
   }
 
   async updateComplaint(actor: AdminActor, id: string, input: { expectedVersion: number; defectDescription?: string; severity?: string; severityPolicyVersion?: string; severitySnapshot?: Prisma.InputJsonValue }, traceId: string, key?: string) {
@@ -176,8 +287,11 @@ export class CustomerQualityService {
   async archiveComplaint(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) {
     const organizationId = this.scope(actor); id = uuid(id); if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_COMPLAINT_ARCHIVED', payload: { id, expectedVersion }, permission: 'customer-quality:complaints:write' }, async (tx) => {
-      const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET status = 'ARCHIVED', archived_at = CURRENT_TIMESTAMP, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${expectedVersion} AND archived_at IS NULL RETURNING *`;
+      const eightD = await tx.$queryRaw<{ eight_d_status: string }[]>`SELECT c.eight_d_status FROM customer_quality_complaints c JOIN domain_source_issue_links l ON l.organization_id = c.organization_id AND l.source_domain = 'customer-quality' AND l.source_type = 'customer-complaint' AND l.source_id = c.id AND l.removed_at IS NULL JOIN problem_indexes p ON p.organization_id = l.organization_id AND p.id = l.problem_index_id JOIN workflow_instances wi ON wi.organization_id = p.organization_id AND wi.id = p.workflow_instance_id JOIN workflow_definitions wd ON wd.organization_id = wi.organization_id AND wd.id = wi.workflow_definition_id WHERE c.organization_id = ${organizationId}::uuid AND c.id = ${id}::uuid AND wd.code = 'CUSTOMER_8D'`;
+      if (eightD.some((entry) => entry.eight_d_status !== 'APPROVED')) throw new HttpException({ code: 'CUSTOMER_8D_APPROVAL_REQUIRED', message: 'CUSTOMER_8D_APPROVAL_REQUIRED' }, 409);
+      const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET status = 'ARCHIVED', archived_at = CURRENT_TIMESTAMP, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${expectedVersion} AND status = 'CLOSED' RETURNING *`;
       if (!rows[0]) fail('CONCURRENCY_CONFLICT', 409);
+      await tx.$executeRaw`INSERT INTO customer_quality_complaint_events (id, organization_id, complaint_id, seq, event_type, from_status, to_status, note, category, responsible_department_id, owner_user_id, actor_user_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, (SELECT COALESCE(MAX(seq), 0) + 1 FROM customer_quality_complaint_events WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${id}::uuid), 'ARCHIVED', 'CLOSED', 'ARCHIVED', '复核关闭后归档', ${rows[0].category}, ${rows[0].responsible_department_id}::uuid, ${rows[0].owner_user_id}::uuid, ${actor.id}::uuid)`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_ARCHIVED', resourceType: 'CustomerComplaint', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: rows[0].version } }, tx);
       return rows[0];
     }, async (tx) => { const rows = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; if (!rows[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); });

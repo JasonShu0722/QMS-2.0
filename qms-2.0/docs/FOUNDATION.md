@@ -2,6 +2,21 @@
 
 本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
 
+## Node 24 兼容性迁移验证（2026-09-24，门禁通过，资源验收未执行）
+
+本轮将 workspace、API、Web、contracts、CI 和 Docker 的唯一支持线切换为 Node.js `>=24.21.0 <25`，固定验证版本为 Node `v24.21.0`、pnpm `11.19.0`。官方 Node 24.21.0 二进制只在仓库外临时目录使用，未写入 Git；历史章节中的 Node 22 版本仍是当时的冻结事实。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| Frozen install | PASS；Node 24.21.0 下 `corepack pnpm install --frozen-lockfile` 完成，递归脚本统一通过 `corepack pnpm` 解析 pnpm 11.19.0，无 Node engine warning |
+| 治理、契约和文档 | PASS；`check:governance`、`contracts:check`、文档检查均退出码 0，生成的 OpenAPI 契约未变化 |
+| API/Web 测试 | PASS；API 38 suites / 441 tests，Web 34 files / 175 tests；完整 `pnpm test` 在 Node 24.21.0 下退出码 0 |
+| API/Web 构建 | PASS；API 与 Web 构建退出码 0；Web 保留既有 Ant Design chunk 体积提示 |
+| Compose 配置 | PASS；使用一次性进程占位变量执行 foundation `docker compose ... config --quiet`，未启动资源、构建镜像或部署 |
+| phase-1 真实资源验收 | 未执行；Node 24 版本门禁通过后因缺少 `DATABASE_URL` 在第一步停止，未使用 SQLite、Mock、Skip 或保留预览数据库 |
+
+本节证明的是 Node 24 兼容性门禁、依赖安装、测试、构建和配置检查；不替代真实 PostgreSQL、对象存储、扫描、邮件、Worker 和浏览器资源验收。
+
 ## P6 聚合收尾记录（2026-09-20，PASS）
 
 在 `D:/WorkSpace/QMS-2.0/qms-2.0` 执行 `pnpm acceptance:phase-2`，最终完整运行退出码0，四个聚合步骤全部 PASS（含 phase-1 九步），0 skipped。权威日志为 Git 外 `D:/WorkSpace/QMS-2.0-local/main-integration-20260919/p6-final-green3.log`，完整回归1097秒，测试领域契约33秒。使用 Node22.22.0、pnpm11.19.0、临时 PostgreSQL18/55448、MinIO19048、ClamAV13348、Mailpit51026/51027、三个独立数据库及网关18098/18099/18100；未使用保留预览55440。
@@ -543,6 +558,21 @@ Windows NTFS、Node 22.22.0、pnpm 11.19.0、Prisma 7.10.0、Vite 6.4.3、Postgr
 | 视觉与 diff 检查 | 已检查浅色工作台、深色管理页、移动工作台及登录框；本轮 Web diff whitespace 检查 PASS |
 
 限制与排错：本机 `pnpm exec vitest` shim 无法执行，改用同一已安装包的 Node CLI 后成功；首次外观用例对背景文件名的假设已改为检查真实背景图存在。最终用例明确等待管理页标题和加载结束，避免把加载占位当成完成。浏览器 bridge 初次不可用后使用项目 Playwright 真实浏览器，并通过可用 CUA 检查截图。没有以 mock/skip 替代真实登录。没有验收全部业务写入、所有表单未保存路径、所有控件的可访问性及统计图表。详细前端范围和后续交互边界见 FRONTEND-DESIGN.md。上述集成失败未定性为已有代码缺陷，也不由本次 UI 工作顺带修改。
+
+## 2026-09-25 阶段五自动化门禁复核
+
+本轮在 Git 外一次性环境 `D:/WorkSpace/QMS-2.0-local/p2-stage-acceptance-20260923-f/` 使用 PostgreSQL 18（55462）、MinIO（19067）、ClamAV（13362）、Mailpit（51046/51047）、真实 Worker、Chromium 和三个浏览器网关执行阶段五门禁。主库和文件/问题浏览器夹具均在本轮重新创建，未连接保留预览库 55440。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 阶段五自动化门禁 | PASS：12/12 项通过，日志 `phase5-final5.log` |
+| 真实 PostgreSQL 集成 | PASS：58 suites / 639 tests；72 条迁移已部署 |
+| API / Web 单测 | PASS：API 41 suites / 469 tests；Web 43 files / 200 tests |
+| Worker 生命周期 | PASS：3 tests |
+| 真实浏览器 | PASS：20/20；供应商注销、问题投影、附件扫描、权限矩阵和流程设计均通过 |
+| 构建、契约、治理、Compose | 全部 PASS |
+
+该结果证明当前阶段五工程门禁和已实现切片通过一次性真实资源验收，不等同于五阶段全部业务范围完成。未完成条目、外部系统联调和生产发布边界继续以 `PHASE-5.md`、`CAPABILITY-STATUS.md` 及覆盖台账为准。
 
 测试资源清理：已按任务标签移除一次性 PostgreSQL 容器及其匿名卷，标签查询无剩余容器；核对本轮 PID 后停止临时 API 和 18767 Vite 服务。没有修改保留预览环境。
 

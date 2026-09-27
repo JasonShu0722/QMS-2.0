@@ -94,8 +94,44 @@ export class FileLifecycleService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
+  async retryScan(actor: FileActor, id: string, expectedVersion: number, key: string, traceId: string): Promise<FileDto> {
+    this.assertVersion(expectedVersion);
+    const receiptKey = this.receiptKey('retry-scan', key);
+    const digest = createHash('sha256').update(canonical({ id, expectedVersion })).digest('hex');
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockReceipt(tx, actor, receiptKey);
+      const { file } = await this.authorizedFile(tx, actor, id, 'complete');
+      const receipt = await tx.fileUploadReceipt.findUnique({ where: { actorUserId_key: { actorUserId: actor.id, key: receiptKey } } });
+      if (receipt) {
+        if (receipt.requestDigest !== digest || receipt.fileId !== id) workflowError('IDEMPOTENCY_REPLAY', 409);
+        return fileDto(file);
+      }
+      if (file.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
+      if (file.uploadedById !== actor.id) workflowError('FILE_RESOURCE_DENIED', 403);
+      if (file.status !== 'QUARANTINED' || file.scanStatus !== 'ERROR' || !file.objectVersionId || !file.uploadCompletedAt) workflowError('FILE_SCAN_RETRY_UNAVAILABLE', 409);
+      const event = await tx.outboxEvent.findFirst({ where: { aggregateType: 'FileObject', aggregateId: id, eventType: 'FILE_SCAN_REQUESTED', eventKey: `file-scan:${id}:${file.version}` } });
+      if (!event || event.status !== 'FAILED') workflowError('FILE_SCAN_RETRY_UNAVAILABLE', 409);
+      await tx.outboxEvent.update({ where: { id: event.id }, data: { status: 'PENDING', attempts: 0, availableAt: new Date(), lastError: null, processingAt: null, processedAt: null } });
+      const pending = await tx.fileObject.update({ where: { id }, data: { scanStatus: 'PENDING', scanReason: null } });
+      await tx.fileUploadReceipt.create({ data: { actorUserId: actor.id, key: receiptKey, requestDigest: digest, fileId: id } });
+      await this.record(tx, actor, pending, 'ATTACHMENT_SCAN_RETRY_REQUESTED', traceId);
+      return fileDto(pending);
+    }, { isolationLevel: 'ReadCommitted' });
+  }
+
   async get(actor: FileActor, id: string): Promise<FileDto> {
     return this.prisma.$transaction(async (tx) => fileDto((await this.authorizedFile(tx, actor, id, 'read')).file), { isolationLevel: 'ReadCommitted' });
+  }
+
+  async listResource(actor: FileActor, resource: FileResourceRef): Promise<FileDto[]> {
+    return this.prisma.$transaction(async (tx) => {
+      const grant = await this.access(tx, actor, resource, 'read');
+      const files = await tx.fileObject.findMany({ where: {
+        organizationId: grant.organizationId, resourceType: resource.resourceType, resourceId: resource.resourceId,
+        status: { not: 'DELETED' }, OR: [{ objectVersionId: { not: null } }, { scanStatus: 'WAITING_UPLOAD', uploadExpiresAt: { gt: new Date() } }],
+      }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: this.policy.maxFiles });
+      return files.map(fileDto);
+    }, { isolationLevel: 'ReadCommitted' });
   }
 
   async readEvidence(tx: Prisma.TransactionClient, actor: FileActor, groups: { resource: FileResourceRef; fileIds: string[] }[]): Promise<FileEvidenceDto[]> {

@@ -17,7 +17,7 @@ async function fixture(context) {
   await mkdir(join(repository, 'docs/superpowers/plans'), { recursive: true });
   await writeFile(join(repository, 'AGENTS.md'), '# 根规则\n');
   await writeFile(join(repository, '.gitignore'), '.env\n');
-  await writeFile(join(root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@11.19.0', engines: { node: '>=22.22.0 <23' } }));
+  await writeFile(join(root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@11.19.0', engines: { node: '>=24.21.0 <25' } }));
   await writeFile(join(root, 'AGENTS.md'), '# 工程规则\n');
   await writeFile(join(root, 'source.ts'), 'export const value = 1;\n');
   await writeFile(join(root, 'governance/documentation-index.json'), JSON.stringify({ agents: [{ path: 'AGENTS.md', scope: '.' }], documents: [] }));

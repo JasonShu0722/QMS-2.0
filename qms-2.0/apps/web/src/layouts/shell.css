@@ -28,6 +28,8 @@
 .qms-topbar-location { color: var(--qms-muted); font-size: 13px; }
 .qms-topbar-location > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qms-home-label { white-space: nowrap; }
+.qms-announcement-reminder { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--qms-warning); font-size: 13px; }
+.qms-announcement-reminder strong { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--qms-warning); color: var(--qms-surface); font-size: 12px; }
 .qms-topbar .qms-mobile-menu { display: none; }
 .qms-content { padding: 28px; min-width: 0; outline: none; }
 .qms-content > .ant-alert { margin-bottom: 20px; }

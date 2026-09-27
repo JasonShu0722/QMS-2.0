@@ -1,0 +1,58 @@
+import 'reflect-metadata'; import { createHash, randomUUID } from 'node:crypto'; import { Test } from '@nestjs/testing'; import { ValidationPipe, type INestApplication } from '@nestjs/common'; import request from 'supertest'; import { AppModule } from '../../src/app.module.js'; import { PrismaService } from '../../src/database/prisma.service.js'; import { SessionService } from '../../src/modules/identity/session.service.js'; import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js'; import { FileScanWorkerService } from '../../src/modules/file-management/file-scan-worker.service.js';
+const databaseUrl = process.env.DATABASE_URL; if (!databaseUrl || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || new URL(databaseUrl).port === '55440') throw new Error('Supplier ASN requires an independent disposable PostgreSQL database');
+describe('supplier ASN on PostgreSQL and HTTP', () => { let app: INestApplication; let prisma: PrismaService; let ownerCookie: string; let otherCookie: string; const ownerId = randomUUID(); const otherOwnerId = randomUUID(); const supplierId = randomUUID(); const ownerUserId = randomUUID(); const otherUserId = randomUUID(); const ownerRoleId = randomUUID(); const otherRoleId = randomUUID(); const profileId = randomUUID(); const standardId = randomUUID(); const ppapId = randomUUID(); const csrf = randomUUID(); const permissions = ['supplier-asn:read', 'supplier-asn:write', 'supplier-asn:submit', 'supplier-quality:profiles:read'];
+  beforeAll(async () => { const module = await Test.createTestingModule({ imports: [AppModule] }).compile(); app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); app.useGlobalFilters(new GlobalExceptionFilter()); await app.init(); prisma = app.get(PrismaService); await prisma.organization.createMany({ data: [{ id: ownerId, code: `ASN-O-${ownerId.slice(0, 8)}`, name: 'ASN审核方', type: 'INTERNAL' }, { id: otherOwnerId, code: `ASN-X-${otherOwnerId.slice(0, 8)}`, name: '其他审核方', type: 'INTERNAL' }, { id: supplierId, code: `ASN-S-${supplierId.slice(0, 8)}`, name: 'ASN供应商', type: 'SUPPLIER' }] }); for (const [userId, organizationId, roleId] of [[ownerUserId, ownerId, ownerRoleId], [otherUserId, otherOwnerId, otherRoleId]] as const) { await prisma.user.create({ data: { id: userId, organizationId, username: `asn-${userId.slice(0, 8)}`, accountType: 'INTERNAL', passwordHash: 'test-only' } }); await prisma.role.create({ data: { id: roleId, organizationId, code: `ASN-${roleId.slice(0, 8)}`, name: 'ASN测试' } }); for (const code of permissions) { const p = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} }); await prisma.rolePermission.create({ data: { roleId, permissionId: p.id } }); } await prisma.userRole.create({ data: { userId, organizationId, roleId } }); } await prisma.supplierBusinessProfile.create({ data: { id: profileId, ownerOrganizationId: ownerId, supplierOrganizationId: supplierId, businessCode: `ASN-${profileId.slice(0, 8)}`, displayName: 'ASN供应商' } }); const sessions = app.get(SessionService); ownerCookie = `qms_session=${await sessions.create(ownerUserId, prisma, { reauthenticated: true })}; qms_csrf=${csrf}`; otherCookie = `qms_session=${await sessions.create(otherUserId, prisma, { reauthenticated: true })}; qms_csrf=${csrf}`; }, 120_000);
+  afterAll(async () => {
+    if (prisma) {
+      await prisma.$executeRaw`DELETE FROM supplier_asn_events WHERE owner_organization_id IN (${ownerId}::uuid, ${otherOwnerId}::uuid)`;
+      await prisma.$executeRaw`DELETE FROM supplier_asn_records WHERE owner_organization_id IN (${ownerId}::uuid, ${otherOwnerId}::uuid)`;
+      await prisma.$executeRaw`DELETE FROM supplier_ppap_packages WHERE owner_organization_id = ${ownerId}::uuid`;
+      await prisma.$executeRaw`DELETE FROM supplier_inspection_standards WHERE owner_organization_id = ${ownerId}::uuid`;
+      const files = await prisma.fileObject.findMany({ where: { organizationId: { in: [ownerId, otherOwnerId] } }, select: { id: true } });
+      await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'FileObject', aggregateId: { in: files.map((file) => file.id) } } });
+      await prisma.fileUploadReceipt.deleteMany({ where: { fileId: { in: files.map((file) => file.id) } } });
+      await prisma.fileObject.deleteMany({ where: { id: { in: files.map((file) => file.id) } } });
+      await prisma.adminMutation.deleteMany({ where: { organizationId: { in: [ownerId, otherOwnerId] } } });
+      await prisma.auditEvent.deleteMany({ where: { organizationId: { in: [ownerId, otherOwnerId] } } });
+      await prisma.supplierBusinessProfile.deleteMany({ where: { id: profileId } });
+      await prisma.userRole.deleteMany({ where: { roleId: { in: [ownerRoleId, otherRoleId] } } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: { in: [ownerRoleId, otherRoleId] } } });
+      await prisma.role.deleteMany({ where: { id: { in: [ownerRoleId, otherRoleId] } } });
+      await prisma.session.deleteMany({ where: { userId: { in: [ownerUserId, otherUserId] } } });
+      await prisma.user.deleteMany({ where: { id: { in: [ownerUserId, otherUserId] } } });
+      await prisma.organization.deleteMany({ where: { id: { in: [ownerId, otherOwnerId, supplierId] } } });
+    }
+    await app?.close();
+  }, 120_000);
+  function post(path: string, cookie: string, body: object, key = randomUUID()) { return request(app.getHttpServer()).post(path).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body); }
+  it('enforces published inspection standard and approved PPAP before ASN submission', async () => { const body = { profileId, asnNumber: 'ASN-001', materialCode: 'MAT-001', plannedArrivalDate: '2026-10-10', quantity: 100 }; const created = await post('/api/v1/supplier-asn', ownerCookie, body).expect(201); expect(created.body).toMatchObject({ asnNumber: 'ASN-001', status: 'DRAFT', version: 1 }); await post('/api/v1/supplier-asn', otherCookie, body).expect(404); await post(`/api/v1/supplier-asn/${created.body.id}/submit`, ownerCookie, { expectedVersion: 1 }).expect(409);
+    await prisma.$executeRaw`INSERT INTO supplier_inspection_standards (id, owner_organization_id, supplier_organization_id, profile_id, material_code, title, status, version, effective_from, created_by_id, published_by_id, published_at) VALUES (${standardId}::uuid, ${ownerId}::uuid, ${supplierId}::uuid, ${profileId}::uuid, 'MAT-001', 'ASN检验规范', 'PUBLISHED', 2, '2026-10-01'::date, ${ownerUserId}::uuid, ${ownerUserId}::uuid, CURRENT_TIMESTAMP)`;
+    await prisma.$executeRaw`INSERT INTO supplier_ppap_packages (id, owner_organization_id, supplier_organization_id, profile_id, level, title, part_number, status, version, created_by_id, submitted_by_id, submitted_at, reviewed_by_id, reviewed_at) VALUES (${ppapId}::uuid, ${ownerId}::uuid, ${supplierId}::uuid, ${profileId}::uuid, 3, 'ASN PPAP', 'MAT-001', 'APPROVED', 3, ${ownerUserId}::uuid, ${ownerUserId}::uuid, CURRENT_TIMESTAMP, ${ownerUserId}::uuid, CURRENT_TIMESTAMP)`;
+    const withoutEvidence = await post(`/api/v1/supplier-asn/${created.body.id}/submit`, ownerCookie, { expectedVersion: 1 }).expect(409);
+    expect(withoutEvidence.body.code).toBe('FILE_NOT_AVAILABLE');
+    const bytes = Buffer.from('ASN shipment report evidence.');
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const upload = await post('/api/v1/files/uploads', ownerCookie, { resourceType: 'supplier-asn-record', resourceId: created.body.id, originalName: 'shipment-report.txt', contentType: 'text/plain', sizeBytes: bytes.length, sha256 }).expect(201);
+    const evidencePath = `/api/v1/supplier-asn/${created.body.id}/evidence`;
+    await post(evidencePath, otherCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }).expect(404);
+    const pending = await post(evidencePath, ownerCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }).expect(409);
+    expect(pending.body.code).toBe('FILE_NOT_AVAILABLE');
+    expect((await fetch(upload.body.uploadUrl, { method: 'PUT', headers: upload.body.headers, body: bytes })).status).toBe(200);
+    await post(`/api/v1/files/${upload.body.file.id}/complete`, ownerCookie, { expectedVersion: 1 }).expect(202);
+    await post(evidencePath, ownerCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }).expect(409);
+    expect(await app.get(FileScanWorkerService).processDue(1)).toMatchObject({ processed: 1 });
+    const evidenceKey = randomUUID();
+    const attached = await post(evidencePath, ownerCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }, evidenceKey).expect(201);
+    expect(attached.body).toMatchObject({ status: 'DRAFT', version: 2, evidence: [{ fileId: upload.body.file.id, fileVersion: 3, sha256 }] });
+    expect((await post(evidencePath, ownerCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }, evidenceKey).expect(201)).body).toEqual(attached.body);
+    await post(evidencePath, ownerCookie, { expectedVersion: 1, fileIds: [upload.body.file.id] }).expect(409);
+    const submittedKey = randomUUID();
+    const submitted = await post(`/api/v1/supplier-asn/${created.body.id}/submit`, ownerCookie, { expectedVersion: 2 }, submittedKey).expect(201);
+    expect(submitted.body).toMatchObject({ status: 'SUBMITTED', version: 3, evidence: [{ fileId: upload.body.file.id, fileVersion: 3, sha256 }] });
+    expect((await post(`/api/v1/supplier-asn/${created.body.id}/submit`, ownerCookie, { expectedVersion: 2 }, submittedKey).expect(201)).body).toEqual(submitted.body);
+    await post(`/api/v1/files/${upload.body.file.id}/delete`, ownerCookie, { expectedVersion: 3 }).expect(403);
+    expect((await request(app.getHttpServer()).get(`/api/v1/supplier-asn/${created.body.id}`).set('Cookie', ownerCookie).expect(200)).body.evidence).toEqual(submitted.body.evidence);
+    await request(app.getHttpServer()).get(`/api/v1/supplier-asn/${created.body.id}`).set('Cookie', otherCookie).expect(404);
+    expect(await prisma.auditEvent.count({ where: { organizationId: ownerId, action: { startsWith: 'SUPPLIER_ASN_' } } })).toBe(3);
+  });
+});

@@ -155,3 +155,168 @@ export class ProcessIssueResultDto {
   @ApiProperty({ type: ProcessIssueProblemDto }) problem!: ProcessIssueProblemDto;
   @ApiProperty() replayed!: boolean;
 }
+
+export class ProcessProductionPeriodQueryDto extends ProcessScopeDto {
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodStart!: Date;
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodEnd!: Date;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) productCode?: string;
+}
+
+export class ProcessProductionQueryDto extends ProcessProductionPeriodQueryDto {
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) batchCode?: string;
+  @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) page = 1;
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+}
+
+export class CreateProcessProductionDto extends ProcessScopeDto {
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) batchCode!: string;
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) workOrderCode!: string;
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) operationCode!: string;
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) productCode!: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) lineCode?: string;
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodStart!: Date;
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodEnd!: Date;
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) totalQuantity!: number;
+  @ApiProperty({ minimum: 0 }) @IsInt() @Min(0) goodQuantity!: number;
+  @ApiProperty({ minimum: 0 }) @IsInt() @Min(0) firstPassQuantity!: number;
+}
+
+export class CorrectProcessProductionDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiPropertyOptional({ minimum: 1 }) @IsOptional() @IsInt() @Min(1) totalQuantity?: number;
+  @ApiProperty({ minimum: 0 }) @IsInt() @Min(0) goodQuantity!: number;
+  @ApiProperty({ minimum: 0 }) @IsInt() @Min(0) firstPassQuantity!: number;
+  @ApiProperty({ maxLength: 2000 }) @IsString() @MaxLength(2000) reason!: string;
+}
+
+export class ProcessProductionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty() batchCode!: string;
+  @ApiProperty() workOrderCode!: string;
+  @ApiProperty() operationCode!: string;
+  @ApiProperty() productCode!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) lineCode!: string | null;
+  @ApiProperty({ format: 'date-time' }) periodStart!: Date;
+  @ApiProperty({ format: 'date-time' }) periodEnd!: Date;
+  @ApiProperty() totalQuantity!: number;
+  @ApiProperty() goodQuantity!: number;
+  @ApiProperty() firstPassQuantity!: number;
+  @ApiProperty({ enum: ['MANUAL'] }) sourceKind!: string;
+  @ApiProperty() yieldRate!: number;
+  @ApiProperty() firstPassRate!: number;
+  @ApiProperty() version!: number;
+  @ApiProperty({ format: 'date-time' }) createdAt!: Date;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
+}
+
+export class ProcessProductionSummaryDto {
+  @ApiProperty() batchCount!: number;
+  @ApiProperty() totalQuantity!: number;
+  @ApiProperty() goodQuantity!: number;
+  @ApiProperty() firstPassQuantity!: number;
+  @ApiPropertyOptional({ type: Number, nullable: true }) yieldRate!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true }) firstPassRate!: number | null;
+}
+
+export class ProcessProductionPageDto {
+  @ApiProperty({ type: [ProcessProductionDto] }) items!: ProcessProductionDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
+}
+
+export class ProcessProductionDetailDto extends ProcessProductionDto {
+  @ApiProperty({ type: [Object] }) revisions!: Record<string, unknown>[];
+  @ApiProperty({ type: [ProcessDefectDto] }) defects!: ProcessDefectDto[];
+  @ApiProperty() defectQuantity!: number;
+}
+
+export class CreateProcessShipmentReportDto extends ProcessScopeDto {
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) reportNumber?: string;
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodStart!: Date;
+  @ApiProperty({ format: 'date-time' }) @Type(() => Date) @IsDate() periodEnd!: Date;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) productCode?: string;
+  @ApiProperty({ type: [String], format: 'uuid', minItems: 1, maxItems: 100 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsUUID('4', { each: true }) batchIds!: string[];
+}
+
+export class ProcessShipmentReportQueryDto extends ProcessScopeDto {
+  @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) page = 1;
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) productCode?: string;
+  @ApiPropertyOptional({ default: false }) @IsOptional() @Type(() => Boolean) @IsBoolean() includeArchived?: boolean;
+}
+
+export class ArchiveProcessShipmentReportDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+}
+
+export class UpdateProcessShipmentReportEvidenceDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiProperty({ type: [String], format: 'uuid', minItems: 1, maxItems: 20 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsUUID('4', { each: true }) fileIds!: string[];
+}
+
+export class AssociateProcessShipmentReportCustomerDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() customerId!: string;
+}
+
+export class LinkProcessShipmentReportIssueDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() problemId!: string;
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedProblemVersion!: number;
+}
+
+export class ProcessShipmentReportEvidenceDto {
+  @ApiProperty({ format: 'uuid' }) fileId!: string;
+  @ApiProperty() fileVersion!: number;
+  @ApiProperty() sha256!: string;
+  @ApiProperty({ format: 'date-time' }) scannedAt!: Date;
+  @ApiProperty() position!: number;
+}
+
+export class ProcessShipmentReportCustomerDto {
+  @ApiProperty({ format: 'uuid' }) customerId!: string;
+  @ApiProperty() customerVersion!: number;
+  @ApiProperty() customerCode!: string;
+  @ApiProperty() customerName!: string;
+}
+
+export class ProcessShipmentReportIssueDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() reportNumber!: string;
+  @ApiProperty() status!: string;
+  @ApiProperty() version!: number;
+}
+
+export class ProcessShipmentReportDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty() reportNumber!: string;
+  @ApiProperty({ enum: ['DRAFT', 'ARCHIVED'] }) status!: string;
+  @ApiProperty({ format: 'date-time' }) periodStart!: Date;
+  @ApiProperty({ format: 'date-time' }) periodEnd!: Date;
+  @ApiPropertyOptional({ type: String, nullable: true }) productCode!: string | null;
+  @ApiProperty() batchCount!: number;
+  @ApiProperty() totalQuantity!: number;
+  @ApiProperty() goodQuantity!: number;
+  @ApiProperty() firstPassQuantity!: number;
+  @ApiProperty() defectQuantity!: number;
+  @ApiPropertyOptional({ type: Number, nullable: true }) yieldRate!: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true }) firstPassRate!: number | null;
+  @ApiProperty() version!: number;
+  @ApiProperty({ format: 'date-time' }) createdAt!: Date;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
+  @ApiPropertyOptional({ format: 'date-time', nullable: true }) archivedAt!: Date | null;
+  @ApiProperty({ type: Object }) snapshot!: Record<string, unknown>;
+  @ApiProperty({ type: [ProcessShipmentReportEvidenceDto] }) evidence!: ProcessShipmentReportEvidenceDto[];
+  @ApiProperty({ type: [ProcessShipmentReportCustomerDto] }) customers!: ProcessShipmentReportCustomerDto[];
+  @ApiProperty({ type: [ProcessShipmentReportIssueDto] }) issues!: ProcessShipmentReportIssueDto[];
+}
+
+export class ProcessShipmentReportPageDto {
+  @ApiProperty({ type: [ProcessShipmentReportDto] }) items!: ProcessShipmentReportDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
+}

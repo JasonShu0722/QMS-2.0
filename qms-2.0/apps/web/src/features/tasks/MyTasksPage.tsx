@@ -74,7 +74,7 @@ export function MyTasksPage() {
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">
           <label>{t('任务状态')} <select aria-label={t('任务状态')} value={taskStatus} onChange={(event) => { setTaskStatus(event.target.value); setTaskOffset(0); }}>
-            <option value="">{t('全部状态')}</option><option value="PENDING">{t('待处理')}</option><option value="IN_PROGRESS">{t('处理中')}</option><option value="OVERDUE">{t('已逾期')}</option>
+            <option value="">{t('全部状态')}</option><option value="PENDING">{t('待处理')}</option><option value="IN_PROGRESS">{t('处理中')}</option><option value="OVERDUE">{t('已逾期')}</option><option value="FAILED">{t('失败')}</option>
           </select></label>
           <label>{t('领取状态')} <select aria-label={t('领取状态')} value={claim} onChange={(event) => { setClaim(event.target.value); setTaskOffset(0); }}>
             <option value="">{t('全部领取状态')}</option><option value="UNCLAIMED">{t('未领取')}</option><option value="MINE">{t('我已领取')}</option><option value="OTHERS">{t('他人已领取')}</option>
@@ -86,10 +86,11 @@ export function MyTasksPage() {
           <List dataSource={tasks.data.items} locale={{ emptyText: <Empty description={t('暂无待办')} /> }} renderItem={(task) => <List.Item key={task.id} actions={[
             ...(task.canClaim ? [<Button key="claim" aria-label={t(task.claimedByUserId ? '重新领取' : '领取')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/claim`, task.id, task.version, tasks.refresh)}>{t(task.claimedByUserId ? '重新领取' : '领取')}</Button>] : []),
             ...(task.canRelease ? [<Button key="release" aria-label={t('释放')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/release`, task.id, task.version, tasks.refresh)}>{t('释放')}</Button>] : []),
+            ...(task.canRetry ? [<Button key="retry" aria-label={t('失败重试')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/retry`, task.id, task.version, tasks.refresh)}>{t('失败重试')}</Button>] : []),
           ]}>
             <List.Item.Meta title={<Link to={`/app/problem-workspace/${task.problemId}?instanceId=${encodeURIComponent(task.instanceId)}`}>{task.reportNumber}</Link>} description={<Space orientation="vertical">
               <span>{task.name}</span>
-              <Space wrap className="task-inbox__filters"><Tag color={task.status === 'OVERDUE' ? 'red' : 'blue'}>{t(task.status === 'OVERDUE' ? '已逾期' : task.status === 'IN_PROGRESS' ? '处理中' : '待处理')}</Tag>
+              <Space wrap className="task-inbox__filters"><Tag color={task.status === 'OVERDUE' ? 'red' : task.status === 'FAILED' ? 'volcano' : 'blue'}>{t(task.status === 'OVERDUE' ? '已逾期' : task.status === 'FAILED' ? '失败' : task.status === 'IN_PROGRESS' ? '处理中' : '待处理')}</Tag>
                 <span>{t(task.claimedByUserId ? task.canAct ? '我已领取' : task.canClaim ? '可重新领取' : '已由其他人领取' : '未领取')}</span>
               </Space>
               {task.dueAt && <span>{t('截止时间')}：{date(task.dueAt)}</span>}

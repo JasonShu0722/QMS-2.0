@@ -29,7 +29,7 @@ export function GroupedPermissionSelector({ catalog, value = [], onChange, disab
   }
   return <div className="permission-selector">
     <div className="admin-toolbar"><Space wrap>
-      <Select aria-label={t('板块筛选')} value={groupKey} onChange={setGroupKey} options={[{ value: 'all', label: t('全部板块') }, ...catalog.map((group) => ({ value: group.key, label: permissionLabel(locale, 'group', group.key, group.name) }))]} />
+      <Select virtual={false} aria-label={t('板块筛选')} value={groupKey} onChange={setGroupKey} options={[{ value: 'all', label: t('全部板块') }, ...catalog.map((group) => ({ value: group.key, label: permissionLabel(locale, 'group', group.key, group.name) }))]} />
       <Input aria-label={t('搜索权限')} placeholder={t('搜索模块、权限名称或代码')} value={search} onChange={(event) => setSearch(event.target.value)} allowClear />
     </Space></div>
     {!groups.length && <Empty description={t('无匹配权限')} />}

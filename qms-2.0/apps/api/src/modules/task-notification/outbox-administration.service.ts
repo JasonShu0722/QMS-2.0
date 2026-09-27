@@ -4,7 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { adminError, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
-import { OutboxFailureDto, OutboxFailurePageDto, OutboxFailureQueryDto, OutboxRetryDto } from './outbox-administration.dto.js';
+import { OutboxAttemptPageDto, OutboxFailureDto, OutboxFailurePageDto, OutboxFailureQueryDto, OutboxRetryDto } from './outbox-administration.dto.js';
 
 const ownedEvents = (organizationId: string) => Prisma.sql`
   FROM outbox_events event
@@ -92,12 +92,26 @@ export class OutboxAdministrationService {
       const scope = ownedEvents(organizationId);
       const [counts, rows] = await Promise.all([
         transaction.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT count(*) AS total ${scope} AND event.status = 'FAILED'`),
-        transaction.$queryRaw<(Omit<OutboxFailureDto, 'createdAt' | 'availableAt' | 'reasonCode'> & { createdAt: Date; availableAt: Date })[]>(Prisma.sql`
+        transaction.$queryRaw<(Omit<OutboxFailureDto, 'createdAt' | 'availableAt' | 'reasonCode' | 'lastFailureAt'> & { createdAt: Date; availableAt: Date; lastFailureAt: Date | null })[]>(Prisma.sql`
           SELECT event.id, event.event_type AS "eventType", event.aggregate_type AS "aggregateType", event.aggregate_id AS "aggregateId", event.attempts,
-          event.created_at AS "createdAt", event.available_at AS "availableAt"
+          event.created_at AS "createdAt", event.available_at AS "availableAt",
+          COALESCE((SELECT attempt.reason_code FROM outbox_delivery_attempts attempt WHERE attempt.outbox_event_id = event.id AND attempt.outcome = 'FAILED' ORDER BY attempt.occurred_at DESC, attempt.id DESC LIMIT 1), 'OUTBOX_HANDLER_ERROR') AS "failureReasonCode",
+          (SELECT attempt.occurred_at FROM outbox_delivery_attempts attempt WHERE attempt.outbox_event_id = event.id AND attempt.outcome = 'FAILED' ORDER BY attempt.occurred_at DESC, attempt.id DESC LIMIT 1) AS "lastFailureAt"
           ${scope} AND event.status = 'FAILED' ORDER BY event.created_at DESC, event.id DESC LIMIT ${pageSize} OFFSET ${offset}`),
       ]);
-      return { total: Number(counts[0]!.total), items: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), availableAt: row.availableAt.toISOString(), reasonCode: 'OUTBOX_DELIVERY_FAILED' })) };
+      return { total: Number(counts[0]!.total), items: rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt).toISOString(), availableAt: new Date(row.availableAt).toISOString(), lastFailureAt: row.lastFailureAt ? new Date(row.lastFailureAt).toISOString() : undefined, reasonCode: 'OUTBOX_DELIVERY_FAILED' as const })) };
+    }, { isolationLevel: 'RepeatableRead' });
+  }
+
+  async attempts(actor: AdminActor, id: string, organizationId: string): Promise<OutboxAttemptPageDto> {
+    return this.prisma.$transaction(async (transaction) => {
+      await assertAdminAccess(transaction, actor, organizationId, 'outbox:read');
+      const event = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT event.id ${ownedEvents(organizationId)} AND event.id = ${id}::uuid`);
+      if (!event.length) adminError('OUTBOX_EVENT_NOT_FOUND', 404);
+      const rows = await transaction.$queryRaw<Array<{ id: string; attemptNumber: number; outcome: 'FAILED' | 'PROCESSED' | 'DEFERRED' | 'RETRY_REQUESTED'; reasonCode: string | null; occurredAt: Date; retryAt: Date | null }>>(Prisma.sql`
+        SELECT id, attempt_number AS "attemptNumber", outcome, reason_code AS "reasonCode", occurred_at AS "occurredAt", retry_at AS "retryAt"
+        FROM outbox_delivery_attempts WHERE outbox_event_id = ${id}::uuid ORDER BY occurred_at DESC, id DESC`);
+      return { items: rows.map((row) => ({ id: row.id, attemptNumber: row.attemptNumber, outcome: row.outcome as OutboxAttemptPageDto['items'][number]['outcome'], reasonCode: row.reasonCode ?? undefined, occurredAt: new Date(row.occurredAt).toISOString(), retryAt: row.retryAt ? new Date(row.retryAt).toISOString() : undefined })) };
     }, { isolationLevel: 'RepeatableRead' });
   }
 
@@ -109,11 +123,14 @@ export class OutboxAdministrationService {
         if (!exists.length) adminError('OUTBOX_EVENT_NOT_FOUND', 404);
         await transaction.$queryRaw`SELECT id FROM outbox_events WHERE id = ${id}::uuid FOR UPDATE`;
         await assertAdminAccess(transaction, actor, organizationId, 'outbox:retry');
-        const current = await transaction.$queryRaw<{ status: string }[]>(Prisma.sql`SELECT event.status ${ownedEvents(organizationId)} AND event.id = ${id}::uuid`);
+        const current = await transaction.$queryRaw<{ status: string; attempts: number }[]>(Prisma.sql`SELECT event.status, event.attempts ${ownedEvents(organizationId)} AND event.id = ${id}::uuid`);
         if (!current.length) adminError('OUTBOX_EVENT_NOT_FOUND', 404);
         if (current[0]!.status !== 'FAILED') adminError('CONCURRENCY_CONFLICT', 409);
         await assertRecentAuthentication(transaction, actor);
-        await transaction.outboxEvent.update({ where: { id }, data: { status: 'PENDING', attempts: 0, availableAt: new Date(), lastError: null, processingAt: null, processedAt: null } });
+        const retryAt = new Date();
+        const attemptNumber = current[0]!.attempts;
+        await transaction.outboxEvent.update({ where: { id }, data: { status: 'PENDING', attempts: 0, availableAt: retryAt, lastError: null, processingAt: null, processedAt: null } });
+        await transaction.outboxDeliveryAttempt.create({ data: { outboxEventId: id, attemptNumber: attemptNumber + 1, outcome: 'RETRY_REQUESTED', reasonCode: 'OUTBOX_ADMIN_RETRY', occurredAt: retryAt, retryAt } });
         await this.audit.record({ actorUserId: actor.id, organizationId, action: 'OUTBOX_RETRY_REQUESTED', resourceType: 'OutboxEvent', resourceId: id, outcome: 'SUCCESS', traceId }, transaction);
         return { id, status: 'PENDING' };
       }, { isolationLevel: 'ReadCommitted' });

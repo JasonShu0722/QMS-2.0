@@ -36,6 +36,15 @@ export class FileController {
     return this.files.complete(actor(request), id, body.expectedVersion, key, requestTraceId(request));
   }
 
+  @Post(':id/retry-scan')
+  @HttpCode(202)
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiResponse({ status: 202, type: FileDto })
+  retryScan(@Param('id', ParseUUIDPipe) id: string, @Body() body: FileMutationDto, @Headers('idempotency-key') key: string, @Req() request: AuthorizedRequest) {
+    return this.files.retryScan(actor(request), id, body.expectedVersion, key, requestTraceId(request));
+  }
+
   @Get(':id')
   @ApiOkResponse({ type: FileDto })
   get(@Param('id', ParseUUIDPipe) id: string, @Req() request: AuthorizedRequest) {

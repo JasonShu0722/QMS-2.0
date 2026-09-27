@@ -88,3 +88,14 @@ it('keeps safe English retry errors and trace readable inside the Outbox modal',
   expect(screen.queryByText('raw worker credentials')).not.toBeInTheDocument();
   expect(within(dialog).getByRole('button', { name: 'Retry' })).toBeEnabled();
 });
+
+it('shows durable notification attempt receipts without exposing handler details', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path.includes('/attempts?')) return json({ items: [{ id: 'attempt-1', attemptNumber: 5, outcome: 'FAILED', reasonCode: 'OUTBOX_HANDLER_ERROR', occurredAt: '2026-09-19T12:00:00.000Z' }] });
+    return json({ total: 1, items: [{ id: 'event-id', eventType: 'WORKFLOW_TASK_ASSIGNED', aggregateId: 'resource-id', attempts: 5, createdAt: '2026-09-19T12:00:00.000Z', reasonCode: 'OUTBOX_DELIVERY_FAILED', failureReasonCode: 'OUTBOX_HANDLER_ERROR' }] });
+  }));
+  render(<LanguageProvider><OutboxAdministration organization={{ ...organization, permissions: ['outbox:read'] }} /></LanguageProvider>);
+  await userEvent.click(await screen.findByRole('button', { name: '查看尝试' }));
+  expect((await screen.findAllByText('OUTBOX_HANDLER_ERROR')).length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('FAILED')).toBeInTheDocument();
+});

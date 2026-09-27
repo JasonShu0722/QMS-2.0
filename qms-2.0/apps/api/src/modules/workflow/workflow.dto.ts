@@ -146,7 +146,7 @@ export class WorkflowQueryDto {
 
 export class WorkflowOptionsQueryDto {
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) search?: string;
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 50 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
 }
 
 export class WorkflowCodeOptionDto {

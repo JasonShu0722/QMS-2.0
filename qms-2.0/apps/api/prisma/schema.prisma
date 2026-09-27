@@ -1074,12 +1074,27 @@ model OutboxEvent {
   processedAt   DateTime? @map("processed_at") @db.Timestamptz(3)
   processingAt  DateTime? @map("processing_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deliveryAttempts OutboxDeliveryAttempt[]
 
   @@index([status, availableAt])
   @@index([status, processingAt])
   @@index([processedAt, availableAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")
+}
+
+model OutboxDeliveryAttempt {
+  id            String      @id @default(uuid()) @db.Uuid
+  outboxEventId String      @map("outbox_event_id") @db.Uuid
+  attemptNumber Int         @map("attempt_number")
+  outcome       String      @db.VarChar(32)
+  reasonCode    String?     @map("reason_code") @db.VarChar(64)
+  occurredAt    DateTime    @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  retryAt       DateTime?   @map("retry_at") @db.Timestamptz(3)
+  outboxEvent   OutboxEvent @relation(fields: [outboxEventId], references: [id], onDelete: Cascade)
+
+  @@index([outboxEventId, occurredAt, id])
+  @@map("outbox_delivery_attempts")
 }
 
 model PlatformSettings {
@@ -1149,8 +1164,34 @@ model CustomerQualityCustomer {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  relations      CustomerQualityCustomerRelation[] @relation("CustomerRelations")
+  parentOf       CustomerQualityCustomerRelation[] @relation("RelatedCustomerRelations")
+
+  @@unique([organizationId, id])
   @@unique([organizationId, code])
   @@map("customer_quality_customers")
+}
+
+model CustomerQualityCustomerRelation {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  customerId        String   @map("customer_id") @db.Uuid
+  relationType      String   @map("relation_type") @db.VarChar(32)
+  relatedCustomerId String?  @map("related_customer_id") @db.Uuid
+  relatedCode       String?  @map("related_code") @db.VarChar(100)
+  relatedName       String?  @map("related_name") @db.VarChar(200)
+  version           Int      @default(1)
+  createdById       String   @map("created_by_id") @db.Uuid
+  updatedById       String   @map("updated_by_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customer       CustomerQualityCustomer @relation("CustomerRelations", fields: [organizationId, customerId], references: [organizationId, id], onDelete: Cascade)
+  relatedCustomer CustomerQualityCustomer? @relation("RelatedCustomerRelations", fields: [organizationId, relatedCustomerId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, customerId, relationType, relatedCustomerId, relatedCode])
+  @@index([organizationId, customerId, relationType])
+  @@map("customer_quality_customer_relations")
 }
 
 model CustomerQualityComplaint {
@@ -1172,6 +1213,16 @@ model CustomerQualityComplaint {
   severityPolicyVersion String    @map("severity_policy_version") @db.VarChar(100)
   severitySnapshot      Json      @map("severity_snapshot")
   status                String    @default("OPEN") @db.VarChar(32)
+  category              String?   @db.VarChar(32)
+  categoryNote          String?   @map("category_note") @db.VarChar(200)
+  responsibleDepartmentId String? @map("responsible_department_id") @db.Uuid
+  ownerUserId           String?   @map("owner_user_id") @db.Uuid
+  resolutionSummary     String?   @map("resolution_summary") @db.Text
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz(3)
+  resolvedById          String?   @map("resolved_by_id") @db.Uuid
+  closedAt              DateTime? @map("closed_at") @db.Timestamptz(3)
+  closedById            String?   @map("closed_by_id") @db.Uuid
+  closureNote           String?   @map("closure_note") @db.Text
   externalSourceSystem  String?   @map("external_source_system") @db.VarChar(32)
   externalRecordKey     String?   @map("external_record_key") @db.VarChar(200)
   sourceObservedAt      DateTime? @map("source_observed_at") @db.Timestamptz(3)
@@ -1181,12 +1232,44 @@ model CustomerQualityComplaint {
   createdById           String    @map("created_by_id") @db.Uuid
   updatedById           String    @map("updated_by_id") @db.Uuid
   archivedAt            DateTime? @map("archived_at") @db.Timestamptz(3)
+  eightDContent         Json      @default("{}") @map("eight_d_content")
+  eightDVersion         Int       @default(0) @map("eight_d_version")
+  eightDStatus          String    @default("DRAFT") @map("eight_d_status") @db.VarChar(24)
+  eightDApprovalLevel   String    @default("L1") @map("eight_d_approval_level") @db.VarChar(2)
+  eightDSubmittedAt     DateTime? @map("eight_d_submitted_at") @db.Timestamptz(3)
+  eightDSubmittedById   String?   @map("eight_d_submitted_by_id") @db.Uuid
+  eightDApprovedAt      DateTime? @map("eight_d_approved_at") @db.Timestamptz(3)
+  eightDApprovedById    String?   @map("eight_d_approved_by_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  events                CustomerQualityComplaintEvent[]
 
+  @@unique([organizationId, id])
   @@unique([organizationId, complaintNumber])
   @@index([organizationId, status, createdAt])
   @@map("customer_quality_complaints")
+}
+
+model CustomerQualityComplaintEvent {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  complaintId           String   @map("complaint_id") @db.Uuid
+  seq                   Int
+  eventType             String   @map("event_type") @db.VarChar(32)
+  fromStatus            String   @map("from_status") @db.VarChar(32)
+  toStatus              String   @map("to_status") @db.VarChar(32)
+  note                  String   @db.Text
+  category              String?  @db.VarChar(32)
+  responsibleDepartmentId String? @map("responsible_department_id") @db.Uuid
+  ownerUserId           String?  @map("owner_user_id") @db.Uuid
+  evidenceFileObjectId  String?  @map("evidence_file_object_id") @db.Uuid
+  actorUserId           String   @map("actor_user_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  complaint             CustomerQualityComplaint @relation(fields: [organizationId, complaintId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, complaintId, seq])
+  @@index([organizationId, complaintId, seq])
+  @@map("customer_quality_complaint_events")
 }
 
 model CustomerQualityIngestionAudit {
@@ -1371,6 +1454,11 @@ model AuditImportRow {
   payload        Json
   status         String   @default("PENDING_REVIEW") @db.VarChar(24)
   importedById   String   @map("imported_by_id") @db.Uuid
+  version        Int      @default(1)
+  reviewNote     String?  @map("review_note") @db.VarChar(2000)
+  reviewedById   String?  @map("reviewed_by_id") @db.Uuid
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  problemIndexId String?  @map("problem_index_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@unique([organizationId, sourceSystem, externalKey])

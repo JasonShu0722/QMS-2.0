@@ -5,4 +5,5 @@
 .new-product-quality-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
 .new-product-quality-lookup { width: min(100%, 620px); }
 .new-product-quality-loading { display: grid; min-height: 220px; place-items: center; }
+.new-product-quality-issue-panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface-subtle, #f8fafc); }
 @media (max-width: 720px) { .new-product-quality-page { padding: 16px; } .new-product-quality-heading { flex-direction: column; } .new-product-quality-card { padding: 16px; } .new-product-quality-lookup { width: 100%; } }

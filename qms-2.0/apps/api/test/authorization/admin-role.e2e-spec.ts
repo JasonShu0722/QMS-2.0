@@ -53,7 +53,7 @@ describe('administrator role HTTP contract', () => {
 
   it('returns ordered module groups with supplier-quality grantable codes', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', cookies).expect(200);
-    expect(response.body.map((group: { key: string }) => group.key)).toEqual(['platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'system']);
+    expect(response.body.map((group: { key: string }) => group.key)).toEqual(['platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'quality-data', 'coordinate-inspection', 'e-signature', 'system']);
     const supplier = response.body[1];
     expect(supplier.status).toBe('active');
     expect(supplier.modules.find((module: { key: string }) => module.key === 'supplier-problems').operations.map((operation: { code: string }) => operation.code)).toEqual(['supplier-quality:problems:read', 'supplier-quality:problems:write']);
@@ -64,8 +64,8 @@ describe('administrator role HTTP contract', () => {
     expect(customer.status).toBe('active');
     expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write']);
     const newProduct = response.body[4];
-    expect(newProduct.status).toBe('planned');
-    expect(newProduct.modules.every((module: { operations: unknown[] }) => module.operations.length === 0)).toBe(true);
+    expect(newProduct.status).toBe('active');
+    expect(newProduct.modules.find((module: { key: string }) => module.key === 'new-product-quality').operations.map((operation: { code: string }) => operation.code)).toEqual(['new-product-quality:projects:read', 'new-product-quality:projects:write']);
     const audit = response.body[5];
     expect(audit.status).toBe('active');
     expect(audit.modules.find((module: { key: string }) => module.key === 'audit-core').operations.map((operation: { code: string }) => operation.code)).toEqual(['audit-management:read', 'audit-management:write']);

@@ -11,11 +11,7 @@ import { rethrowSecurityRejection } from '../../common/security/security-rejecti
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
 
-type SessionTransaction = {
-  user: Pick<PrismaService['user'], 'findUnique'>;
-  session: Pick<PrismaService['session'], 'updateMany'>;
-  auditEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
-};
+type SessionTransaction = Pick<PrismaService, '$queryRaw' | 'user' | 'session' | 'auditEvent'>;
 
 const SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
@@ -97,22 +93,34 @@ export class SessionService {
   }
 
   async revoke(token: string, traceId = requestTraceId()): Promise<void> {
-    await this.prisma.$transaction(async (transaction) => {
-      const session = await transaction.session.findUnique({
-        where: { tokenHash: this.tokenHash(token) }, include: { user: true },
-      });
-      if (!session || session.revokedAt) return;
-      const changed = await transaction.session.updateMany({
-        where: { tokenHash: this.tokenHash(token), revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      if (changed.count !== 1) return;
-      await this.audit.record({
-        actorUserId: session.user.id, organizationId: session.user.organizationId,
-        action: 'SESSION_REVOKED', resourceType: 'User', resourceId: session.user.id,
-        outcome: 'SUCCESS', traceId,
-      }, transaction);
-    });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (transaction) => {
+          const tokenHash = this.tokenHash(token);
+          const session = await transaction.session.findUnique({
+            where: { tokenHash }, include: { user: true },
+          });
+          if (!session || session.revokedAt) return;
+          await transaction.$queryRaw`SELECT id FROM users WHERE id = ${session.user.id}::uuid FOR UPDATE`;
+          const changed = await transaction.session.updateMany({
+            where: { tokenHash, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+          if (changed.count !== 1) return;
+          await this.audit.record({
+            actorUserId: session.user.id, organizationId: session.user.organizationId,
+            action: 'SESSION_REVOKED', resourceType: 'User', resourceId: session.user.id,
+            outcome: 'SUCCESS', traceId,
+          }, transaction);
+        });
+        return;
+      } catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+        const message = error instanceof Error ? error.message : String(error);
+        if (attempt === 2 || (code !== 'P2034' && !/deadlock detected/i.test(message))) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    }
   }
 
   async listForUser(userId: string, currentSessionId: string) {

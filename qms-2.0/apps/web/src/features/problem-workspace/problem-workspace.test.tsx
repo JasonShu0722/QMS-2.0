@@ -19,7 +19,7 @@ const workspace: api.ProblemWorkspace = {
   instances: [], upgrades: [], domain: { domainVersion: 4, revisionId: 'revision', summary: { title: '调查事项', description: '真实问题摘要', domainUiKey: 'neutral' }, sections: [] }, domainAvailability: 'AVAILABLE', readOnly: true,
   nodes: [{ id: 'node', key: 'investigate', name: '调查节点', type: 'ACTION', current: true, visited: true, actionCount: 1 }], workflowActions: [],
   capabilities: { canAct: false, allowedActions: [], reasonCode: 'TASK_CLAIM_REQUIRED', currentNodeId: 'node', taskId: 'task', claimedByUserId: null, projectionPending: false },
-  task: { id: 'task', version: 7, canClaim: true, canRelease: false, claimedByUserId: null, instanceId: 'current', fixedVersion: 'definition-version', entryInstanceVersion: 2, nodeId: 'node', name: '调查节点', type: 'ACTION', problemId: 'problem', reportNumber: 'QMS-001', dueAt: null, status: 'PENDING', claimedAt: null, canAct: false },
+  task: { id: 'task', version: 7, canClaim: true, canRelease: false, canRetry: false, claimedByUserId: null, instanceId: 'current', fixedVersion: 'definition-version', entryInstanceVersion: 2, nodeId: 'node', name: '调查节点', type: 'ACTION', problemId: 'problem', reportNumber: 'QMS-001', dueAt: null, status: 'PENDING', claimedAt: null, canAct: false },
   actions: [{ actionKey: 'platform.upgrade', label: '升级', enabled: true, reasonCode: null }], evidence: [],
 };
 function mount() { return render(<MemoryRouter initialEntries={['/app/problem-workspace/problem?organizationId=organization']}><LanguageProvider><ProblemWorkspacePage problemId="problem" /></LanguageProvider></MemoryRouter>); }

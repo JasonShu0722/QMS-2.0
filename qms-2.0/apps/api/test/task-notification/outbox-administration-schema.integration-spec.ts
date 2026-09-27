@@ -47,7 +47,20 @@ describe('outbox organization administration', () => {
     expect(result.items[0]?.id).toBe(context.event.id);
     expect(JSON.stringify(result)).not.toMatch(/secret-db|payload|lastError/);
     expect(result.items[0]?.reasonCode).toBe('OUTBOX_DELIVERY_FAILED');
+    expect(result.items[0]?.failureReasonCode).toBe('OUTBOX_HANDLER_ERROR');
     await expect(service.retry(context.actor, foreign.event.id, context.organization.id, randomUUID())).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns durable failure receipts and retry history without exposing handler details', async () => {
+    const context = await fixture();
+    await prisma.$executeRaw`
+      INSERT INTO outbox_delivery_attempts (id, outbox_event_id, attempt_number, outcome, reason_code, occurred_at)
+      VALUES (${randomUUID()}::uuid, ${context.event.id}::uuid, 5, 'FAILED', 'OUTBOX_HANDLER_ERROR', CURRENT_TIMESTAMP)
+    `;
+    const history = await service.attempts(context.actor, context.event.id, context.organization.id);
+    expect(history.items).toHaveLength(1);
+    expect(history.items[0]).toMatchObject({ attemptNumber: 5, outcome: 'FAILED', reasonCode: 'OUTBOX_HANDLER_ERROR' });
+    expect(JSON.stringify(history)).not.toMatch(/secret-db|lastError|payload/);
   });
 
   it('atomically resets a failed event, preserves its key, and audits one concurrent winner', async () => {

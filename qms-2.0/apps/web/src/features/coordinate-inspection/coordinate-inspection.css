@@ -1,0 +1,8 @@
+.coordinate-inspection-page { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
+.coordinate-inspection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.coordinate-inspection-heading h1 { margin: 4px 0 0; }
+.coordinate-inspection-heading p { margin-bottom: 0; max-width: 760px; }
+.coordinate-inspection-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); min-width: 0; }
+.coordinate-inspection-loading { min-height: 220px; display: grid; place-items: center; }
+.coordinate-inspection-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+@media (max-width: 720px) { .coordinate-inspection-page { padding: 16px; } .coordinate-inspection-heading { flex-direction: column; } .coordinate-inspection-card { padding: 16px; } .coordinate-inspection-form-grid { grid-template-columns: 1fr; } }

@@ -1,0 +1,4 @@
+.supplier-pcn-page { display: grid; gap: 20px; padding: 28px; }
+.supplier-pcn-page > header { display: grid; gap: 8px; }
+.supplier-pcn-page > section { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: 16px; overflow-x: auto; }
+@media (max-width: 760px) { .supplier-pcn-page { padding: 16px; } }

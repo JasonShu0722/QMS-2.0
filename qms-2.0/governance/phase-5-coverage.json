@@ -1,0 +1,1102 @@
+{
+  "version": 2,
+  "reviewedOn": "2026-09-24",
+  "source": "阶段五评估决策清单.xlsx",
+  "decisionValues": [
+    "in-phase-5",
+    "later",
+    "excluded",
+    "merged-into-permissions"
+  ],
+  "statusValues": [
+    "pending",
+    "partial",
+    "accepted",
+    "later",
+    "excluded",
+    "merged"
+  ],
+  "items": [
+    {
+      "id": "A1",
+      "title": "四大领域浏览器主链",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A2",
+      "description": "制程、客户、新品、审核从创建到关闭的真实页面闭环",
+      "domain": "phase-4-closeout",
+      "status": "partial",
+      "phaseWave": "5.0",
+      "owner": "phase-4-closeout",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "制程、客户、新品、审核从创建到关闭的真实页面闭环",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "A2",
+      "title": "Worker/提醒/升级",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A3",
+      "description": "到期提醒、逾期升级、通知重试、定时任务",
+      "domain": "phase-4-closeout",
+      "status": "partial",
+      "phaseWave": "5.0",
+      "owner": "phase-4-closeout",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "到期提醒、逾期升级、通知重试、定时任务",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "A3",
+      "title": "附件失败恢复",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A4",
+      "description": "上传失败、病毒扫描失败、重试、恢复和回滚",
+      "domain": "phase-4-closeout",
+      "status": "partial",
+      "phaseWave": "5.0",
+      "owner": "phase-4-closeout",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "上传失败、病毒扫描失败、重试、恢复和回滚",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "A4",
+      "title": "外部接口真实验收",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A5",
+      "description": "MES/IMS/ERP 等接口的真实联调、失败重试和审计",
+      "domain": "phase-4-closeout",
+      "status": "pending",
+      "phaseWave": "5.0",
+      "owner": "phase-4-closeout",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "MES/IMS/ERP 等接口的真实联调、失败重试和审计",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "A5",
+      "title": "8D 详细控制",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A6",
+      "description": "5W2H、围堵、根因、验证、预防、水平展开、分级审批",
+      "domain": "phase-4-closeout",
+      "status": "partial",
+      "phaseWave": "5.0",
+      "owner": "phase-4-closeout",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "5W2H、围堵、根因、验证、预防、水平展开、分级审批",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B1",
+      "title": "外部质量数据接入",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A7",
+      "description": "从 IMS、MES、ERP、SAP 等系统采集质量数据",
+      "domain": "quality-data",
+      "status": "pending",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "从 IMS、MES、ERP、SAP 等系统采集质量数据",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B2",
+      "title": "质量指标中心",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A8",
+      "description": "来料合格率、PPM、制程不良率、直通率等指标定义和计算",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [
+        "quality-data:metrics:read"
+      ],
+      "acceptance": [
+        "来料合格率、PPM、制程不良率、直通率等指标定义和计算",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B3",
+      "title": "质量趋势与预警",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A9",
+      "description": "指标趋势、红绿灯、阈值预警、异常期间分析",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [
+        "quality-data:metrics:read"
+      ],
+      "acceptance": [
+        "指标趋势、红绿灯、阈值预警、异常期间分析",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B4",
+      "title": "指标下钻",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A10",
+      "description": "从指标下钻到批次、来源记录、供应商、正式问题",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "从指标下钻到批次、来源记录、供应商、正式问题",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B5",
+      "title": "质量管理看板",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A11",
+      "description": "跨供应商、制程、客户、新品的综合看板",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "跨供应商、制程、客户、新品的综合看板",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B6",
+      "title": "管理报表导出",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A12",
+      "description": "Excel/PDF 报表、周期报表、管理层汇总",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "Excel/PDF 报表、周期报表、管理层汇总",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "B7",
+      "title": "AI 辅助分析",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A13",
+      "description": "异常诊断、自然语言查询、图表建议、相似问题推荐",
+      "domain": "quality-data",
+      "status": "partial",
+      "phaseWave": "5.1",
+      "owner": "quality-data",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "异常诊断、自然语言查询、图表建议、相似问题推荐",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C1",
+      "title": "IQC/来料检验",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A14",
+      "description": "来料检验记录、批次判定、抽检结果、NG 处理",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-incoming:inspections:read"
+      ],
+      "acceptance": [
+        "来料检验记录、批次判定、抽检结果、NG 处理",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": "接入 IQC；重点物料检验记录先支持拍照存档，并预留 MES 批次与检验结果接口。"
+    },
+    {
+      "id": "C2",
+      "title": "特采管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A15",
+      "description": "特采申请、审批、有效期、批次放行和追溯",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-concession:requests:read"
+      ],
+      "acceptance": [
+        "特采申请、审批、有效期、批次放行和追溯",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C3",
+      "title": "供应商准入",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A16",
+      "description": "供应商申请、资质审核、准入审批、状态管理",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-admission:documents:read"
+      ],
+      "acceptance": [
+        "供应商申请、资质审核、准入审批、状态管理",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": "先接入质量资料提交和审核问题跟进。"
+    },
+    {
+      "id": "C4",
+      "title": "供应商资质/证书",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A17",
+      "description": "文件上传、有效期、到期提醒、失效限制",
+      "domain": "supplier-quality",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "supplier-quality",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "C5",
+      "title": "供应商生命周期",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A18",
+      "description": "启用、暂停、整改、淘汰、恢复等状态管理",
+      "domain": "supplier-quality",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "supplier-quality",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "C6",
+      "title": "PCN 变更管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A19",
+      "description": "供应商材料、工艺、设备或场地变更申报和审批",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "供应商材料、工艺、设备或场地变更申报和审批",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C7",
+      "title": "供应商审核",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A20",
+      "description": "年度审核、审核计划、审核记录、审核不符合项",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-audit:plans:read"
+      ],
+      "acceptance": [
+        "年度审核、审核计划、审核记录、审核不符合项",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C8",
+      "title": "供应商质量目标",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A21",
+      "description": "年度/月度质量目标、版本、生效、审批和签署",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-quality:targets:read"
+      ],
+      "acceptance": [
+        "年度/月度质量目标、版本、生效、审批和签署",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C9",
+      "title": "供应商绩效",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A22",
+      "description": "月度评分、质量/交付/配合度、绩效卡和排名",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-performance:cards:read"
+      ],
+      "acceptance": [
+        "月度评分、质量/交付/配合度、绩效卡和排名",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C10",
+      "title": "供应商绩效申诉",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A23",
+      "description": "供应商对评分结果申诉、复核和结果留痕",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-performance:appeals:read"
+      ],
+      "acceptance": [
+        "供应商对评分结果申诉、复核和结果留痕",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C11",
+      "title": "供应商会议",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A24",
+      "description": "C/D 级会议、改善报告、参会记录、逾期扣分",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-meetings:read"
+      ],
+      "acceptance": [
+        "C/D 级会议、改善报告、参会记录、逾期扣分",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C12",
+      "title": "PPAP",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A25",
+      "description": "Level 1–5、资料清单、逐项审核、批准、再鉴定",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-ppap:read"
+      ],
+      "acceptance": [
+        "Level 1–5、资料清单、逐项审核、批准、再鉴定",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C13",
+      "title": "检验规范/SIP",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A26",
+      "description": "检验标准、版本、生效、适用供应商和物料",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-inspection-standards:read"
+      ],
+      "acceptance": [
+        "检验标准、版本、生效、适用供应商和物料",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C14",
+      "title": "出货报告/ASN",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A27",
+      "description": "出货报告频率、ASN 资料、缺失资料限制放行",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-asn:read"
+      ],
+      "acceptance": [
+        "出货报告频率、ASN 资料、缺失资料限制放行",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C15",
+      "title": "关键件条码",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A28",
+      "description": "条码规则、扫码校验、防重、批次归档和追溯",
+      "domain": "supplier-quality",
+      "status": "partial",
+      "phaseWave": "5.2",
+      "owner": "supplier-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "supplier-barcode:read"
+      ],
+      "acceptance": [
+        "条码规则、扫码校验、防重、批次归档和追溯",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "C16",
+      "title": "供应商索赔/结算",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A29",
+      "description": "供应商责任索赔、费用明细、责任确认和结算依据",
+      "domain": "supplier-quality",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "supplier-quality",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "D1",
+      "title": "客户主数据",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A30",
+      "description": "客户档案、客户层级、车型/项目/产品关系维护",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "customer-quality:complaints:read",
+        "customer-quality:complaints:write"
+      ],
+      "acceptance": [
+        "客户档案、客户层级、车型/项目/产品关系维护",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "D2",
+      "title": "客户投诉",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A31",
+      "description": "客诉登记、分类、责任部门、处理进度和关闭",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "customer-quality:complaints:read"
+      ],
+      "acceptance": [
+        "客诉登记、分类、责任部门、处理进度和关闭",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "D3",
+      "title": "客户索赔",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A32",
+      "description": "索赔金额、问题关联、审批、费用跟踪和统计",
+      "domain": "customer-process-quality",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "customer-process-quality",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "D4",
+      "title": "客诉批量导入",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A33",
+      "description": "Excel 导入客诉记录、重复校验、错误行处理",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "customer-quality:complaints:write"
+      ],
+      "acceptance": [
+        "Excel 导入客诉记录、重复校验、错误行处理",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "D5",
+      "title": "客户审核",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A34",
+      "description": "客户/二方审核计划、执行、问题和整改闭环",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "audit-management:read"
+      ],
+      "acceptance": [
+        "客户/二方审核计划、执行、问题和整改闭环",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": "归入审核问题管理模块。"
+    },
+    {
+      "id": "D6",
+      "title": "生产分母和良率",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A35",
+      "description": "生产数量、合格数量、不良数量、良率和直通率计算",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "process-quality:defects:read"
+      ],
+      "acceptance": [
+        "生产数量、合格数量、不良数量、良率和直通率计算",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "D7",
+      "title": "出货报告归档",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A36",
+      "description": "出货报告上传、版本、批次、客户和问题关联",
+      "domain": "customer-process-quality",
+      "status": "partial",
+      "phaseWave": "5.3",
+      "owner": "customer-process-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "process-quality:defects:read"
+      ],
+      "acceptance": [
+        "出货报告上传、版本、批次、客户和问题关联",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "D8",
+      "title": "出货/批次追溯",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A37",
+      "description": "从客户、出货批次追溯到订单、物料、供应商和生产记录",
+      "domain": "customer-process-quality",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "customer-process-quality",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "E1",
+      "title": "试产报告",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A38",
+      "description": "试产数据、问题、结论、Excel/PDF 报告和审批",
+      "domain": "new-product-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "new-product-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "new-product-quality:projects:read"
+      ],
+      "acceptance": [
+        "试产数据、问题、结论、Excel/PDF 报告和审批",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "E2",
+      "title": "试产问题闭环",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A39",
+      "description": "试产问题分派、措施、验证、升级、关闭和统计",
+      "domain": "new-product-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "new-product-quality",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "试产问题分派、措施、验证、升级、关闭和统计",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "E3",
+      "title": "量产移交",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A40",
+      "description": "研发/项目向量产移交资料、审批、归档和缺项检查",
+      "domain": "new-product-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "new-product-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "new-product-quality:projects:write"
+      ],
+      "acceptance": [
+        "研发/项目向量产移交资料、审批、归档和缺项检查",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "E4",
+      "title": "初期流动管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A41",
+      "description": "新品量产初期的质量跟踪、频率、放行和退出条件",
+      "domain": "new-product-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "new-product-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "new-product-quality:projects:write"
+      ],
+      "acceptance": [
+        "新品量产初期的质量跟踪、频率、放行和退出条件",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "F1",
+      "title": "审核标准库",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A42",
+      "description": "审核模板、检查项、版本、生效和复用",
+      "domain": "audit-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "audit-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "audit-management:read"
+      ],
+      "acceptance": [
+        "审核模板、检查项、版本、生效和复用",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "F2",
+      "title": "审核计划与执行",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A43",
+      "description": "审核计划、现场记录、延期、逾期升级和报告",
+      "domain": "audit-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "audit-quality",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "审核计划、现场记录、延期、逾期升级和报告",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "F3",
+      "title": "审核问题导入",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A44",
+      "description": "Excel 问题清单逐条导入、幂等校验、错误反馈",
+      "domain": "audit-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "audit-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "audit-management:write"
+      ],
+      "acceptance": [
+        "Excel 问题清单逐条导入、幂等校验、错误反馈",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "F4",
+      "title": "审核 NC 转正式问题",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A45",
+      "description": "审核不符合项转问题中心、整改、验证和关闭",
+      "domain": "audit-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "audit-quality",
+      "decision": "in-phase-5",
+      "permission": [
+        "audit-management:read",
+        "audit-management:write",
+        "workflow:start"
+      ],
+      "acceptance": [
+        "审核不符合项转问题中心、整改、验证和关闭",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "F5",
+      "title": "移动/离线审核",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A46",
+      "description": "手机/PDA 现场执行、弱网草稿、恢复同步和冲突处理",
+      "domain": "audit-quality",
+      "status": "partial",
+      "phaseWave": "5.4",
+      "owner": "audit-quality",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "手机/PDA 现场执行、弱网草稿、恢复同步和冲突处理",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": "作为审核标准库的移动/离线补充能力。"
+    },
+    {
+      "id": "G1",
+      "title": "公告管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A47",
+      "description": "公告发布、范围、重要公告和阅读状态",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [
+        "announcement:read"
+      ],
+      "acceptance": [
+        "公告发布、范围、重要公告和阅读状态",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G2",
+      "title": "强制阅读审计",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A48",
+      "description": "必读公告、阅读记录、未读提醒和审计记录",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [
+        "announcement:audit:read"
+      ],
+      "acceptance": [
+        "必读公告、阅读记录、未读提醒和审计记录",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G3",
+      "title": "电子签名",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A49",
+      "description": "用户签名、审批签章、签名资源保护和引用",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "用户签名、审批签章、签名资源保护和引用",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G4",
+      "title": "通知规则",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A50",
+      "description": "按事件、角色、组织配置邮件/企业 IM 通知规则",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "按事件、角色、组织配置邮件/企业 IM 通知规则",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G5",
+      "title": "通知失败处理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A51",
+      "description": "发送失败、重试、失败队列、升级和投递记录",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "发送失败、重试、失败队列、升级和投递记录",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G6",
+      "title": "任务管理增强",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A52",
+      "description": "全局任务统计、逾期分析、批量转派、失败任务处理",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "全局任务统计、逾期分析、批量转派、失败任务处理",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "G7",
+      "title": "移动/PDA 入口",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A53",
+      "description": "移动端页面、扫码、现场快速处理和响应式适配",
+      "domain": "system-efficiency",
+      "status": "partial",
+      "phaseWave": "5.5",
+      "owner": "system-efficiency",
+      "decision": "in-phase-5",
+      "permission": [],
+      "acceptance": [
+        "移动端页面、扫码、现场快速处理和响应式适配",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": ""
+    },
+    {
+      "id": "H1",
+      "title": "仪器台账",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A54",
+      "description": "仪器、量具、责任人、状态、位置和使用记录",
+      "domain": "reserved-quality-domains",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "reserved-quality-domains",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "H2",
+      "title": "校准管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A55",
+      "description": "校准计划、到期提醒、证书、超期冻结和使用互锁",
+      "domain": "reserved-quality-domains",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "reserved-quality-domains",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "H3",
+      "title": "MSA/GR&R",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A56",
+      "description": "测量系统分析、重复性、再现性和报告",
+      "domain": "reserved-quality-domains",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "reserved-quality-domains",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "H4",
+      "title": "质量成本",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A57",
+      "description": "预防成本、鉴定成本、内部损失、外部损失和 COQ",
+      "domain": "reserved-quality-domains",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "reserved-quality-domains",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "H5",
+      "title": "试验管理",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A58",
+      "description": "试验项目、样品、试验结果、报告和问题关联",
+      "domain": "coordinate-inspection",
+      "status": "partial",
+      "phaseWave": "5.6",
+      "owner": "coordinate-inspection",
+      "decision": "in-phase-5",
+      "permission": [
+        "coordinate-inspection:read"
+      ],
+      "acceptance": [
+        "试验项目、样品、试验结果、报告和问题关联",
+        "完成真实资源、权限和浏览器业务验收；证据记录于 docs/PHASE-5.md。"
+      ],
+      "nonGoal": "阶段五只做三坐标检测申请、审批、排单和使用进度可视化。"
+    },
+    {
+      "id": "I1",
+      "title": "1.0 历史数据迁移",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A59",
+      "description": "数据盘点、字段映射、清洗、重复处理、正式迁移",
+      "domain": "migration",
+      "status": "excluded",
+      "phaseWave": "excluded",
+      "owner": "migration",
+      "decision": "excluded",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "当前 QMS 2.0 不接入。"
+    },
+    {
+      "id": "I2",
+      "title": "AD/LDAP/OA 集成",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A60",
+      "description": "企业身份登录、组织同步、账号禁用和权限映射",
+      "domain": "identity-integration",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "identity-integration",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    },
+    {
+      "id": "I3",
+      "title": "双环境/灰度发布",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A61",
+      "description": "Preview/Stable、多环境验证、白名单和回滚",
+      "domain": "release-environments",
+      "status": "excluded",
+      "phaseWave": "excluded",
+      "owner": "release-environments",
+      "decision": "excluded",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "当前 QMS 2.0 不接入。"
+    },
+    {
+      "id": "I4",
+      "title": "Feature Flag",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A62",
+      "description": "功能开关、组织/用户灰度、审计和快速回滚",
+      "domain": "authorization",
+      "status": "merged",
+      "phaseWave": "5.0",
+      "owner": "authorization",
+      "decision": "merged-into-permissions",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "不建设普通业务 Feature Flag，能力开关并入权限体系。"
+    },
+    {
+      "id": "I5",
+      "title": "AI 自动业务决策",
+      "source": "阶段五评估决策清单.xlsx#Sheet1!A63",
+      "description": "AI 自动改状态、自动审批、自动生成 SQL 或自动写入",
+      "domain": "ai",
+      "status": "later",
+      "phaseWave": "later",
+      "owner": "ai",
+      "decision": "later",
+      "permission": [],
+      "acceptance": [],
+      "nonGoal": "阶段五不实施，列入后续版本。"
+    }
+  ],
+  "statusDefinitions": {
+    "pending": "阶段五尚未形成可验收的实现切片",
+    "partial": "已有实现切片，仍缺完整业务与真实资源验收",
+    "accepted": "完整业务与真实资源验收通过",
+    "later": "用户决策移至后续版本",
+    "excluded": "用户决策当前版本不接入",
+    "merged": "并入其他既有能力"
+  }
+}
