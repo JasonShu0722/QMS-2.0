@@ -96,7 +96,7 @@ async function preflight() {
   assert.equal(new Set([main, file, problem].map((value) => `${value.port || '5432'}${value.pathname}`)).size, 3, 'Acceptance databases must be isolated');
   for (const name of [
     'QMS_SEED_INTERNAL_PASSWORD', 'QMS_SEED_SUPPLIER_PASSWORD', 'POSTGRES_PASSWORD',
-    'MINIO_ROOT_USER', 'MINIO_ROOT_PASSWORD', 'QMS_RATE_LIMIT_SECRET',
+    'QMS_OBJECT_STORAGE_PROVIDER', 'QMS_RATE_LIMIT_SECRET',
     'QMS_SECURITY_CURRENT_KEY_ID', 'QMS_SECURITY_KEYRING', 'QMS_OBJECT_STORAGE_ACCESS_KEY',
     'QMS_OBJECT_STORAGE_SECRET_KEY', 'QMS_ACCEPTANCE_MFA_CACHE_FILE', 'QMS_BACKUP_KEY',
     'QMS_FILE_BROWSER_PASSWORD', 'QMS_PROBLEM_BROWSER_PASSWORD',
@@ -115,7 +115,7 @@ async function preflight() {
   assert.equal(typeof (await csrf.json()).csrfToken, 'string', 'Acceptance gateway must return a CSRF token');
 
   const storage = loopbackUrl('QMS_OBJECT_STORAGE_ENDPOINT');
-  await probe('QMS_OBJECT_STORAGE_ENDPOINT', new URL('/minio/health/ready', storage));
+  await probe('QMS_OBJECT_STORAGE_ENDPOINT', new URL('/health', storage));
   required('QMS_ACCEPTANCE_MAILPIT_URL');
   const mailpit = loopbackUrl('QMS_ACCEPTANCE_MAILPIT_URL');
   await probe('QMS_ACCEPTANCE_MAILPIT_URL', new URL('/api/v1/messages?limit=1', mailpit));

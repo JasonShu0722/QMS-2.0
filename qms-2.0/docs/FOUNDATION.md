@@ -129,7 +129,7 @@ P3开发与定向验收完成；P4设计器/工作空间、P5升级、P6最终�
 | 证据与限制 | 原始日志 `D:/WorkSpace/QMS-2.0-local/main-integration-acceptance.log`；聚合NODE_ENV=development，未将本次构建描述为独立显式production环境验证。AntD vendor 1,278.31kB警告保留，未构建产品容器镜像、未执行云端CI |
 | 临时资源 | 为紧接的P2c验证保留本批临时服务与资源，最终清理另记；不是生产/持久预览发布 |
 
-首次临时MinIO创建使用了未存在的Docker Hub镜像名称而失败（exit125），随后核对既有镜像来源，改用已安装的 `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` 启动成功。失败发生在聚合前，完整聚合未跳过任何步骤。主目录成果整合完成不代表P2c、P3附件、P4工作空间、P5简报升级及完整领域浏览器链已完成；后续计划见[主目录整合与收尾](../../docs/superpowers/plans/2026-09-19-qms-2-main-integration.md)。
+早期临时 MinIO 镜像曾因仓库不可用导致 CI 失败；经过 RustFS 的 S3 SDK、版本、对象锁和预签名下载验证后，Foundation 的默认对象存储路线切换为 RustFS 1.0.0。主目录成果整合完成不代表 P2c、P3 附件、P4 工作空间、P5 简报升级及完整领域浏览器链已完成；后续计划见[主目录整合与收尾](../../docs/superpowers/plans/2026-09-19-qms-2-main-integration.md)。
 
 ## 阶段二 D–H 治理验收（2026-09-19）
 
@@ -239,7 +239,7 @@ P1 已有事务 callback、幂等回执、双 CAS、授权复核、真实状态�
 | `QMS_SEED_INTERNAL_PASSWORD` / `QMS_SEED_SUPPLIER_PASSWORD` | 不同的至少 16 字符口令，与已有本地种子一致 |
 | `QMS_ACCEPTANCE_BASE_URL` | loopback Web/Nginx 网关 URL，例如 `http://127.0.0.1:8080` |
 | `POSTGRES_PASSWORD` / `QMS_RATE_LIMIT_SECRET` | Compose 所需临时随机秘密 |
-| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Compose 所需本地对象存储凭据 |
+| `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | Compose 所需 RustFS 对象存储凭据 |
 | `COMPOSE_PROJECT_NAME` / 端口变量 | 可选，使用独立项目和未占用的本机端口 |
 
 ```powershell
