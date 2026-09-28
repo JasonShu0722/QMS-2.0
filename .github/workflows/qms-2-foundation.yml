@@ -8,6 +8,7 @@ on:
       - 'AGENTS.md'
       - 'README.md'
       - '.github/workflows/qms-2-foundation.yml'
+      - '.github/workflows/qms-2-deploy.yml'
   pull_request:
     paths:
       - 'qms-2.0/**'
@@ -15,6 +16,7 @@ on:
       - 'AGENTS.md'
       - 'README.md'
       - '.github/workflows/qms-2-foundation.yml'
+      - '.github/workflows/qms-2-deploy.yml'
 
 permissions:
   contents: read

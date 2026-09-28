@@ -1,13 +1,19 @@
 services:
+  postgres:
+    restart: unless-stopped
+
   api:
+    restart: unless-stopped
     extra_hosts:
       - "qms.bigshuaibee.cn:host-gateway"
 
   worker:
+    restart: unless-stopped
     extra_hosts:
       - "qms.bigshuaibee.cn:host-gateway"
 
   web:
+    restart: unless-stopped
     networks:
       default: {}
       qms_proxy:
@@ -15,6 +21,7 @@ services:
           - qms_nginx
 
   rustfs:
+    restart: unless-stopped
     networks:
       default: {}
       qms_proxy:

@@ -21,7 +21,7 @@
 
 ## 本地开发
 
-使用 Node.js `22.22.x`、pnpm `11.19.x`、PostgreSQL 18 和 Docker Compose。命令从本目录执行：
+本地命令使用 Node.js `24.21.x`、pnpm `11.19.x`、PostgreSQL 18 和 Docker Compose；版本要求以 `package.json` 的 `engines` 为准。命令从本目录执行：
 
 ```powershell
 corepack enable
@@ -54,7 +54,7 @@ corepack pnpm contracts:check
 
 ## Foundation Compose
 
-`deployment/docker-compose.foundation.yml` 定义 `postgres`、`minio`、`api`、`worker` 和 `web`。API 与 Worker 使用同一镜像和不同启动命令，Nginx 提供静态 Web 和 `/api/` 代理。Compose 配置检查不等于镜像构建、部署或生产验收。
+`deployment/docker-compose.foundation.yml` 定义 `postgres`、`rustfs`、`api`、`worker` 和 `web`。API 与 Worker 使用同一镜像和不同启动命令，Nginx 提供静态 Web 和 `/api/` 代理。云端联调还叠加 `docker-compose.production.yml`（NPM 网络）和 `docker-compose.scanning.yml`（ClamAV）。从目录、密钥、NPM 到迁移与更新的完整顺序见[仓库根 README 的 Linux 新机部署](../README.md#新机部署要求)。Compose 配置检查不等于镜像构建、部署或生产验收。
 
 ```powershell
 docker compose -f deployment/docker-compose.foundation.yml config --quiet
@@ -63,6 +63,68 @@ docker compose -f deployment/docker-compose.foundation.yml config --quiet
 密钥通过环境变量或仓库外配置注入。Docker 构建上下文必须在 `qms-2.0/` 内；依赖目录、生成源码、测试输出、环境文件、上传文件、日志和备份不得进入镜像上下文。
 
 Worker 持续轮询流程、任务时限和附件扫描事件，支持有限重试、失败队列、租约恢复和 `--once` 单批运行。无效配置、缺失处理器和必需前置条件必须显式失败。
+
+## 生产管理员初始化
+
+仅在 Linux 云服务器**首次部署、迁移完成且用户表为空**时执行。开发用 `db seed` 会拒绝生产模式和非 loopback 数据库，不能用于创建生产账号。下面的命令复用已运行的 API 镜像、Argon2id 密码哈希器和现有权限目录，在一个事务中创建内部组织 `QMS-HQ`、账号 `admin`、管理员角色及权限。密码由终端静默输入，不写入仓库、命令参数或 shell 历史；出现 `ADMIN_BOOTSTRAP_PASS` 才表示提交成功。
+
+```bash
+read -r -s -p '设置 admin 密码（16–256 位）：' QMS_ADMIN_PASSWORD
+echo
+printf '%s' "$QMS_ADMIN_PASSWORD" |
+docker exec -i qms2-foundation-api-1 node --input-type=module -e '
+import "reflect-metadata";
+import { readFileSync } from "node:fs";
+import { PrismaService } from "./dist/database/prisma.service.js";
+import { PasswordHasherService } from "./dist/common/security/password-hasher.service.js";
+import { PERMISSION_CATALOG } from "./dist/modules/authorization/permission-catalog.js";
+
+const password = readFileSync(0, "utf8");
+if (password.length < 16 || password.length > 256) throw new Error("密码长度必须为 16–256 位");
+const operations = PERMISSION_CATALOG
+  .filter(group => group.status === "active")
+  .flatMap(group => group.modules
+    .filter(module => module.status === "active")
+    .flatMap(module => module.operations));
+const permissions = [...new Map(operations.map(item => [item.code, item])).values()];
+const hash = await new PasswordHasherService().hash(password);
+const db = new PrismaService();
+try {
+  await db.$transaction(async tx => {
+    if (await tx.user.count() !== 0) throw new Error("用户表不为空，拒绝重复初始化");
+    await tx.permission.createMany({
+      data: permissions.map(item => ({ code: item.code, name: item.name })),
+      skipDuplicates: true
+    });
+    const grants = await tx.permission.findMany({
+      where: { code: { in: permissions.map(item => item.code) } },
+      select: { id: true }
+    });
+    if (grants.length !== permissions.length) throw new Error("权限初始化不完整");
+    const org = await tx.organization.create({
+      data: { code: "QMS-HQ", name: "QMS 管理组织", type: "INTERNAL" }
+    });
+    const user = await tx.user.create({
+      data: { organizationId: org.id, username: "admin",
+        accountType: "INTERNAL", passwordHash: hash }
+    });
+    const role = await tx.role.create({
+      data: { organizationId: org.id, code: "QMS_ADMIN", name: "系统管理员",
+        permissions: { create: grants.map(item => ({ permissionId: item.id })) } }
+    });
+    await tx.userRole.create({
+      data: { organizationId: org.id, userId: user.id, roleId: role.id }
+    });
+  }, { timeout: 20000 });
+  console.log("ADMIN_BOOTSTRAP_PASS username=admin organization=QMS-HQ");
+} finally {
+  await db.$disconnect();
+}
+'
+unset QMS_ADMIN_PASSWORD
+```
+
+首次登录 `https://qms.bigshuaibee.cn/login` 后按页面引导完成 MFA 注册，恢复码保存于 Git 外。若用户表已有账号，此命令会拒绝执行，不会重置已有账号的密码或角色；已有环境的账号维护应走受权的管理功能。
 
 ## 验证与 CI
 
@@ -91,10 +153,6 @@ corepack pnpm acceptance:phase-2
 
 ## 临时环境清理
 
-验收使用一次性资源，完成后销毁容器、网络、卷、进程和临时数据库：
-
-```powershell
-docker compose -f deployment/docker-compose.foundation.yml down --volumes --remove-orphans
-```
+验收使用独立的一次性 Compose 项目和资源，完成后只清理该项目的容器、网络、卷、进程和临时数据库。先核对项目名及卷归属；生产项目 `qms2-foundation` 的数据卷不能作为验收资源清理。
 
 备份、日志、凭据、证书和测试夹具必须保留在仓库外指定目录，便于复核但不会进入 Git。

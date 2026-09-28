@@ -56,7 +56,7 @@ services:
       retries: 20
 
   api:
-    image: qms2-foundation-api:local
+    image: qms2-foundation-api:${QMS_IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: deployment/api.Dockerfile
@@ -74,7 +74,7 @@ services:
       retries: 20
 
   worker:
-    image: qms2-foundation-api:local
+    image: qms2-foundation-api:${QMS_IMAGE_TAG:-local}
     command: [node, dist/worker.js]
     restart: on-failure
     stop_grace_period: 60s
@@ -88,6 +88,7 @@ services:
         condition: service_healthy
 
   web:
+    image: qms2-foundation-web:${QMS_IMAGE_TAG:-latest}
     build:
       context: ..
       dockerfile: deployment/web.Dockerfile

@@ -2,6 +2,10 @@ packages:
   - apps/*
   - packages/*
 
+fetchTimeout: 600000
+fetchRetries: 5
+networkConcurrency: 4
+
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/engines': true

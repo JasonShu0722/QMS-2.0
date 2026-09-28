@@ -1,0 +1,48 @@
+name: QMS 2.0 deploy
+
+on:
+  workflow_run:
+    workflows: ['QMS 2.0 foundation']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qms-2-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{ github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Deploy validated commit over pinned SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.QMS_DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.QMS_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.QMS_DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
+          umask 077
+          key=$(mktemp)
+          known_hosts=$(mktemp)
+          trap 'rm -f "$key" "$known_hosts"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts"
+          ssh -p 22 -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts" \
+            "root@$DEPLOY_HOST" "bash -s -- $DEPLOY_SHA" \
+            < qms-2.0/deployment/deploy.sh
