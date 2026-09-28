@@ -115,6 +115,8 @@ jobs:
           working-directory: qms-2.0
           cache: true
           require-lockfile: true
+      - name: Build Web and API
+        run: pnpm --recursive build
       - name: Create ephemeral integration services
         run: |
           POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -197,8 +199,6 @@ jobs:
           NODE_ENV: development
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter @qms/api test:integration
-      - name: Build Web and API
-        run: pnpm --recursive build
       - name: Real worker process lifecycle
         env:
           NODE_ENV: development

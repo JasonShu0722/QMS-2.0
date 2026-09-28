@@ -221,6 +221,7 @@ it('reloads the MFA form value and comparison baseline before retrying a role ed
   expect(within(dialog).queryByText('private role details')).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '重新加载并放弃权限修改' }));
   await waitFor(() => expect(within(dialog).getByRole('switch', { name: 'MFA' })).toBeChecked());
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: '保存角色' })).toBeEnabled());
   fireEvent.click(within(dialog).getByRole('button', { name: '保存角色' }));
   await waitFor(() => expect(writes).toHaveLength(2));
   expect(writes[1]).toEqual({ name: 'Renamed Role' });
