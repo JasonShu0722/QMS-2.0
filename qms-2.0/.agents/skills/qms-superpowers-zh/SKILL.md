@@ -41,6 +41,12 @@ description: Use when implementing, reviewing, debugging, or planning QMS 2.0 ch
 - 每次交付至少运行 `corepack pnpm check:governance`，并按计划运行受影响测试、构建和真实资源验收。
 - 未经用户明确要求，不提交、推送、合并或删除工作成果。
 
+## Issue、PR 与发布闭环
+
+涉及需求、缺陷或维护优化时，先阅读[需求交付与功能维护流程](../../../docs/DELIVERY-MAINTENANCE-PROCESS.md)，把用户目标拆成一个 Issue，并固定范围、验收标准、验证命令和回滚路径。使用项目工具完成实现、PR 审查和 Actions 检查；同一目标保持一条分支、一个 PR，后续修复继续回写并推送到原 Issue/PR。
+
+合并前必须完成本地验证和 PR 检查；合并后还要核对主分支 Foundation、部署日志中的源码 SHA 与镜像、服务健康状态、HTTP 以及目标功能的线上证据。不能把绿色 Action 或部署退出码单独当作线上发布成功。线上证据确认后才关闭 Issue，并把根因、有效修复、无效尝试和可复用规则沉淀到上述流程文档或对应专项文档。
+
 ## 交接记录
 
 每个任务完成时记录：实现子代理、文件范围、基线/当前 Git 状态、红灯和绿灯命令、规格审查结论、质量审查结论、主代理独立验证结果和未完成限制。阶段验收写入 `qms-2.0/docs/PHASE-*.md`。
