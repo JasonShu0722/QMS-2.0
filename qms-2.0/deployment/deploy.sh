@@ -49,7 +49,7 @@ if [[ "$tip" != "$sha" ]]; then
 fi
 
 "${compose[@]}" up -d --no-build --wait --wait-timeout 180 postgres rustfs clamav
-"${compose[@]}" run --rm --no-deps api node node_modules/prisma/build/index.js migrate deploy
+"${compose[@]}" run --rm --no-deps api node node_modules/prisma/build/index.js migrate deploy </dev/null
 "${compose[@]}" up -d --no-build --wait --wait-timeout 180 api worker web
 
 worker_id=$("${compose[@]}" ps -q worker)
