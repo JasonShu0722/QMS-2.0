@@ -76,11 +76,19 @@ it('offers an explicit NG problem draft trigger and preserves the link on reload
     .mockResolvedValueOnce({ id: 'link-1', problem_id: 'problem-1' })
     .mockResolvedValueOnce({ ...ng, items: [], photos: [], problemLinks: [{ id: 'link-1', problem_id: 'problem-1' }] });
   render(<SupplierIncomingPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '测试供应商' }));
-  fireEvent.click(await screen.findByRole('button', { name: '创建供应商问题草稿' }));
+  const supplier = await screen.findByText('测试供应商');
+  expect(supplier.closest('button')).not.toBeNull();
+  fireEvent.click(supplier);
+  const create = await screen.findByText('创建供应商问题草稿');
+  expect(create.closest('button')).not.toBeNull();
+  fireEvent.click(create);
   fireEvent.change(await screen.findByLabelText('不良描述'), { target: { value: '外观缺陷' } });
-  fireEvent.click(screen.getByRole('button', { name: '创建并关联' }));
+  const submit = screen.getByText('创建并关联');
+  expect(submit.closest('button')).not.toBeNull();
+  fireEvent.click(submit);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-incoming/inspections/inspection-1/problem-links', expect.objectContaining({ method: 'POST', body: expect.stringContaining('"expectedVersion":2') })));
-  expect(await screen.findByRole('link', { name: '查看供应商问题' })).toHaveAttribute('href', '/app/supplier-quality/problems/problem-1');
-  expect(screen.queryByRole('button', { name: '创建供应商问题草稿' })).not.toBeInTheDocument();
+  const problemLink = await screen.findByText('查看供应商问题');
+  expect(problemLink.tagName).toBe('A');
+  expect(problemLink).toHaveAttribute('href', '/app/supplier-quality/problems/problem-1');
+  expect(screen.getByText('供应商问题').closest('section')?.querySelector('button')).toBeNull();
 }, 30000);

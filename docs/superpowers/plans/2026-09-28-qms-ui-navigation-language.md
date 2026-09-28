@@ -52,3 +52,13 @@
 - [x] **步骤 3：检查差异和分支状态**：确认只修改 issue 范围内文件，未触碰 `archive/qms-1.0/`、生成契约或秘密文件。
 - [x] **步骤 4：推送分支并创建 PR**：已推送 `codex/ui-nav-language-issue-7` 并创建 PR #8，关联 issue #7。
 - [x] **步骤 5：提交交接**：PR 记录提交 SHA、issue、验证命令和未运行完整 Playwright 服务的限制。合并与生产部署需后续明确指示。
+
+### 追加任务：Foundation 稳定性与运行时间（issue #7 / PR #8）
+
+**基线：** 2026-09-28 的 Foundation #67 总耗时约 18 分钟；其中 Web/API 单测 683 秒、真实 PostgreSQL 集成测试 238 秒、依赖安装 27 秒。Foundation #64 的三个 Web 用例超时，其他三次相邻运行通过。
+
+- [ ] 定向复现三个超时测试，保留业务断言，减少测试交互中不必要的等待；完整 Web 测试复验。
+- [ ] 功能分支仅跑 PR，`main` push 保持完整门禁；PR 新提交取消旧运行。
+- [ ] 锁文件依赖缓存、Web 测试分片与独立检查并行；真实 PostgreSQL、对象存储、扫描、Worker、构建与 Compose 检查不能省略。
+- [ ] Deploy 工作流只接收 `main` Foundation 完成事件，仍要求同仓库 `main` push 且 Foundation 成功。
+- [ ] 运行本地分层验证，推送现有 PR #8，确认 Actions 全部通过并记录实际耗时。
