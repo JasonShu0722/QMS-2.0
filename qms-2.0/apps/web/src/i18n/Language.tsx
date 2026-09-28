@@ -1,7 +1,8 @@
-import { ConfigProvider } from 'antd';
+import { Button, ConfigProvider, Dropdown } from 'antd';
 import english from 'antd/locale/en_US';
 import chinese from 'antd/locale/zh_CN';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Check, ChevronDown, Languages } from 'lucide-react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { workflowTranslations } from '../features/workflows/workflow-translations';
 import { problemWorkspaceTranslations } from '../features/problem-workspace/problem-workspace-translations';
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
@@ -24,6 +25,11 @@ const translations: Record<string, string> = {
   "鸢尾紫": "Iris purple",
   "风险和完成状态保持固定含义。偏好保存在当前浏览器。": "Risk and completion states retain their meaning. Preferences are saved in this browser.",
   "综合工作台": "Workbench",
+  "问题与改进": "Problems and improvements",
+  "审核管理": "Quality audits",
+  "质量分析": "Quality analytics",
+  "检测管理": "Inspection management",
+  "知识与公告": "Knowledge and announcements",
   "业务导航": "Business navigation",
   "打开导航": "Open navigation",
   "关闭导航": "Close navigation",
@@ -196,5 +202,25 @@ export const useLanguage = () => useContext(LanguageContext);
 
 export function LanguageSwitcher() {
   const { locale, setLocale } = useLanguage();
-  return <label className="language-switcher">Language / 语言 <select aria-label="Language / 语言" value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>;
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) queueMicrotask(() => triggerRef.current?.focus());
+  }
+  return <Dropdown open={open} onOpenChange={handleOpenChange} trigger={['click']} placement="bottomRight" autoFocus menu={{
+    selectable: true,
+    selectedKeys: [locale],
+    items: ([{ key: 'zh-CN', label: '简体中文' }, { key: 'en-US', label: 'English' }] as const).map(item => ({
+      ...item,
+      role: 'menuitemradio',
+      'aria-checked': item.key === locale,
+      icon: <Check size={14} aria-hidden="true" style={{ visibility: item.key === locale ? 'visible' : 'hidden' }} />,
+    })),
+    onClick: ({ key }) => setLocale(key as Locale),
+  }}>
+    <Button ref={triggerRef} className="language-switcher" aria-label="Language / 语言" aria-haspopup="menu" aria-expanded={open} icon={<Languages size={17} aria-hidden="true" />}>
+      <span>{locale === 'zh-CN' ? '中文' : 'EN'}</span><ChevronDown size={13} aria-hidden="true" />
+    </Button>
+  </Dropdown>;
 }

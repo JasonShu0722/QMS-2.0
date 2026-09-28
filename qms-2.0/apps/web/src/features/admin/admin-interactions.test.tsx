@@ -1,4 +1,4 @@
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UserAdministration } from './UserAdministration';
@@ -213,16 +213,16 @@ it('reloads the MFA form value and comparison baseline before retrying a role ed
     return json(path.includes('/permission-catalog') ? [] : [{ ...role, mfaRequired: conflicted }]);
   }));
   render(<RoleAdministration organization={organization} />);
-  await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
-  await userEvent.clear(screen.getByLabelText('角色名称'));
-  await userEvent.type(screen.getByLabelText('角色名称'), 'Renamed Role');
-  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
+  fireEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
+  fireEvent.change(screen.getByLabelText('角色名称'), { target: { value: 'Renamed Role' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存角色' }));
   const dialog = screen.getByRole('dialog');
   expect(await within(dialog).findByText('trace-role-reload')).toBeInTheDocument();
   expect(within(dialog).queryByText('private role details')).not.toBeInTheDocument();
-  await userEvent.click(within(dialog).getByRole('button', { name: '重新加载并放弃权限修改' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '重新加载并放弃权限修改' }));
   await waitFor(() => expect(within(dialog).getByRole('switch', { name: 'MFA' })).toBeChecked());
-  await userEvent.click(within(dialog).getByRole('button', { name: '保存角色' }));
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: '保存角色' })).toBeEnabled());
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存角色' }));
   await waitFor(() => expect(writes).toHaveLength(2));
   expect(writes[1]).toEqual({ name: 'Renamed Role' });
 }, 15000);

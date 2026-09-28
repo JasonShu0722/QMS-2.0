@@ -1,8 +1,8 @@
 import { Alert, Button, Drawer, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { activeInternalDomain, internalNavigation } from '../features/navigation/navigation';
+import { activeInternalDomain, internalDomains } from '../features/navigation/navigation';
 import { WorkTabs } from '../work-tabs/WorkTabs';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
@@ -54,6 +54,8 @@ function InternalShell() {
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [organizations, setOrganizations] = useState<AdminOrganization[] | null>(null);
+  const visibleDomains = internalDomains.filter((domain) => domain.path !== '/app/admin' || !!organizations?.length);
+  const activeDomain = visibleDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
   const [adminError, setAdminError] = useState<string>();
   const [adminTraceId, setAdminTraceId] = useState<string>();
   const [directoryRevision, setDirectoryRevision] = useState(0);
@@ -81,9 +83,13 @@ function InternalShell() {
     <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span>{(isWorkbench || mobile) && <span>QMS <small>2.0</small></span>}</Link>
     <nav className="qms-domain-nav" aria-label={t(isWorkbench || mobile ? '内部领域导航' : '内部领域图标导航')}>
       <Link className={`qms-nav-item${isWorkbench ? ' active' : ''}`} to="/app/workbench" title={t('综合工作台')} aria-current={isWorkbench ? 'page' : undefined}><House size={19} /><span className={!isWorkbench && !mobile ? 'sr-only' : ''}>{t('综合工作台')}</span></Link>
-      {internalNavigation.filter((item) => item.path !== '/app/admin' || !!organizations?.length).map((item) => {
+      {visibleDomains.map((item) => {
         const Icon = item.icon;
-        return <Link className={`qms-nav-item${item.path === active?.path ? ' active' : ''}`} key={item.path} to={item.path} title={t(item.label)} aria-current={item.path === active?.path ? 'page' : undefined}><Icon size={19} /><span className={!isWorkbench && !mobile ? 'sr-only' : ''}>{t(item.label)}</span></Link>;
+        const selected = item === activeDomain;
+        return mobile && item.children.length > 1 ? <details className="qms-mobile-domain" key={item.path} open={selected}>
+          <summary className={`qms-nav-item${selected ? ' active' : ''}`}><Icon size={19} /><span>{t(item.label)}</span><ChevronDown className="qms-domain-chevron" size={16} /></summary>
+          <div className="qms-mobile-domain-entries">{item.children.map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={entry.path === active?.path ? 'page' : undefined}>{t(entry.label)}</Link>)}</div>
+        </details> : <Link className={`qms-nav-item${selected ? ' active' : ''}`} key={item.path} to={item.path} title={t(item.label)} aria-current={selected ? 'page' : undefined}><Icon size={19} /><span className={!isWorkbench && !mobile ? 'sr-only' : ''}>{t(item.label)}</span></Link>;
       })}
     </nav>
   </>;
@@ -91,10 +97,10 @@ function InternalShell() {
     <a className="skip-link" href="#main-content">{t('跳到正文')}</a>
     <aside className="qms-navigation">
       <div className="qms-primary-navigation">{navigation()}{!isWorkbench && menuCollapsed && <Button className="qms-expand-menu" type="text" icon={<PanelLeftOpen size={19} />} aria-label={t('展开业务菜单')} title={t('展开业务菜单')} onClick={() => setMenuCollapsed(false)} />}</div>
-      {!isWorkbench && !menuCollapsed && active && <aside className="qms-domain-context">
-        <div className="qms-context-heading"><strong>{t(active.label)}</strong><Button type="text" icon={<PanelLeftClose size={17} />} aria-label={t('收起业务菜单')} onClick={() => setMenuCollapsed(true)} /></div>
-        <nav aria-label={`${t(active.label)} ${t('上下文菜单')}`}>
-          {(active.context ?? (isAdmin ? [] : [{ label: active.label, path: active.path }])).map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={location.pathname === entry.path ? 'page' : undefined}>{t(entry.label)}</Link>)}
+      {!isWorkbench && !menuCollapsed && activeDomain && <aside className="qms-domain-context">
+        <div className="qms-context-heading"><strong>{t(activeDomain.label)}</strong><Button type="text" icon={<PanelLeftClose size={17} />} aria-label={t('收起业务菜单')} onClick={() => setMenuCollapsed(true)} /></div>
+        <nav aria-label={`${t(activeDomain.label)} ${t('上下文菜单')}`}>
+          {activeDomain.children.map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={entry.path === active?.path ? 'page' : undefined}>{t(entry.label)}</Link>)}
           {problemRoute && <span className="qms-context-current">{t('问题处理')}</span>}
           {workflowRoute && <span className="qms-context-current">{t('流程编辑')}</span>}
         </nav>

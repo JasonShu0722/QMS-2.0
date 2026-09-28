@@ -58,7 +58,8 @@ test('real task claims, conflict refresh, release, eligibility loss and notifica
     await page.getByRole('tab', { name: '我的通知', exact: true }).click();
     await page.getByRole('button', { name: '标为已读', exact: true }).click();
     await expect(page.getByText('已读', { exact: true })).toBeVisible();
-    await page.getByLabel('Language / 语言').selectOption('en-US');
+    await page.getByRole('button', { name: 'Language / 语言' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.getByRole('tab', { name: 'My notifications', exact: true })).toBeVisible();
     await page.reload();
     await page.getByRole('tab', { name: 'My notifications', exact: true }).click();

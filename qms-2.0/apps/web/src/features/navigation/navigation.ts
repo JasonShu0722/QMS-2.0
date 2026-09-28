@@ -29,6 +29,19 @@ export const internalNavigation: NavigationItem[] = [
   { label: '个人账号', path: '/app/account', icon: UserCircle, context: [{ label: '基本信息', path: '/app/account' }] },
   { label: '系统管理', path: '/app/admin', icon: Settings },
 ];
+export const internalDomains = [
+  { label: '问题与改进', path: '/app/problem-center', icon: ShieldAlert, paths: ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer'] },
+  { label: '供应商质量', path: '/app/supplier-quality', icon: Users, paths: ['/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn'] },
+  { label: '制程质量', path: '/app/process-quality', icon: Target, paths: ['/app/process-quality', '/app/site-scanning'] },
+  { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, paths: ['/app/customer-quality'] },
+  { label: '新品质量', path: '/app/new-product-quality', icon: Target, paths: ['/app/new-product-quality'] },
+  { label: '审核管理', path: '/app/audits', icon: ClipboardCheck, paths: ['/app/audits', '/app/audit-standards'] },
+  { label: '质量分析', path: '/app/quality-data', icon: Gauge, paths: ['/app/quality-data', '/app/task-statistics', '/app/risk-dashboard'] },
+  { label: '检测管理', path: '/app/coordinate-inspection', icon: Ruler, paths: ['/app/coordinate-inspection'] },
+  { label: '知识与公告', path: '/app/documents', icon: FileText, paths: ['/app/documents', '/app/announcements'] },
+  { label: '个人账号', path: '/app/account', icon: UserCircle, paths: ['/app/account'] },
+  { label: '系统管理', path: '/app/admin', icon: Settings, paths: ['/app/admin'] },
+].map(({ paths, ...domain }) => ({ ...domain, children: internalNavigation.filter((entry) => paths.includes(entry.path)) }));
 export const supplierNavigation: NavigationItem[] = [
   { label: '待办', path: '/supplier/inbox', icon: Inbox },
   { label: '整改', path: '/supplier/corrections', icon: Target },
