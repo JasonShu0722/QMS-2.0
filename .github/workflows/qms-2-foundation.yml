@@ -40,10 +40,11 @@ jobs:
       RUSTFS_CONTAINER: qms2-ci-rustfs-${{ github.run_id }}-${{ github.run_attempt }}
       CLAMAV_CONTAINER: qms2-ci-clamav-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24.21.0'
+          package-manager-cache: false
       - name: Install independent workspace
         run: |
           corepack enable
