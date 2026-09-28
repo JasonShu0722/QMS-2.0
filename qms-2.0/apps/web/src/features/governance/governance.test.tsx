@@ -66,7 +66,8 @@ it('shows MFA challenge without exposing business navigation or persisting a cod
 it('switches core governance labels and document language using only a locale preference', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => json({ total: 0, items: [], nextCursor: null })));
   render(<LanguageProvider><LanguageSwitcher /><AuditAdministration organization={organization} /></LanguageProvider>);
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'en-US');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
   expect(await screen.findByRole('button', { name: 'Search' })).toBeInTheDocument();
   expect(document.documentElement.lang).toBe('en-US');
   expect(localStorage.getItem('qms:locale:v1')).toBe('en-US');

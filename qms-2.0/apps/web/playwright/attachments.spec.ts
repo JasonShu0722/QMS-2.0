@@ -76,7 +76,8 @@ test('real internal and supplier uploads remain isolated until scanned, download
     scan();
     await expect(page.getByText('扫描未通过，附件已隔离', { exact: true })).toBeVisible({ timeout: 20000 });
     await expect(page.getByRole('button', { name: '下载附件', exact: true })).toHaveCount(0);
-    await page.getByLabel('Language / 语言').selectOption('en-US');
+    await page.getByRole('button', { name: 'Language / 语言' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.getByText('Scan rejected; quarantined', { exact: true })).toBeVisible();
   } finally { await supplierContext.close(); }
 });

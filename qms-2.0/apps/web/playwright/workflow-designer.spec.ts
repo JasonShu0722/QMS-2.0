@@ -95,7 +95,8 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
     const old = await page.request.get(`/api/v1/workflows/${original.id}/versions/${original.version.id}`);
     expect(old.status()).toBe(200);
     expect((await old.json()).version.structureSnapshot).toEqual(published.version.structureSnapshot);
-    await page.getByLabel('Language / 语言').selectOption('en-US');
+    await page.getByRole('button', { name: 'Language / 语言' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeVisible();
     await login(restricted, data.users[2]!.username);
     expect((await restricted.request.get('/api/v1/workflows')).status()).toBe(403);

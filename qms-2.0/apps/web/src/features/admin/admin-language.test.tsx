@@ -22,7 +22,8 @@ afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 it('translates and searches the registered permission catalog while preserving codes and planned state', async () => {
   render(<LanguageProvider><LanguageSwitcher /><GroupedPermissionSelector catalog={catalog} /></LanguageProvider>);
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看用户' })).toBeInTheDocument();
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'en-US');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
   expect(screen.getByRole('checkbox', { name: 'User management · View users' })).toBeInTheDocument();
   expect(screen.getByText('account:users:read')).toBeInTheDocument();
   expect(screen.getByText('Supplier management')).toBeInTheDocument();
@@ -31,7 +32,8 @@ it('translates and searches the registered permission catalog while preserving c
   expect(screen.getByRole('checkbox', { name: 'User management · View users' })).toBeInTheDocument();
   expect(screen.queryByText('Supplier management')).not.toBeInTheDocument();
   await userEvent.clear(screen.getByRole('textbox', { name: 'Search permissions' }));
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'zh-CN');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: '简体中文' }));
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看用户' })).toBeInTheDocument();
 });
 
@@ -39,12 +41,14 @@ it('switches existing user, role and matrix controls without translating custome
   vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('permission-catalog') ? catalog : path.includes('/users?') ? [] : [role])));
   render(<LanguageProvider><LanguageSwitcher /><UserAdministration organization={organization} organizations={[organization]} /><RoleAdministration organization={organization} /><PermissionMatrix organization={organization} /></LanguageProvider>);
   await screen.findByRole('button', { name: '编辑角色' });
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'en-US');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
   expect(screen.getByRole('button', { name: 'Create user' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create role' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Save permissions' })).toBeInTheDocument();
   expect(screen.getAllByText(role.name).length).toBeGreaterThan(0);
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'zh-CN');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: '简体中文' }));
   expect(screen.getByRole('button', { name: '创建用户' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '保存权限' })).toBeInTheDocument();
 });

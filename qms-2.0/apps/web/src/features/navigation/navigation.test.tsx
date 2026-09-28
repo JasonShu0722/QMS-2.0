@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { InternalLayout } from '../../layouts/InternalLayout';
 import { SupplierLayout } from '../../layouts/SupplierLayout';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { internalDomains, internalNavigation } from './navigation';
 
 vi.setConfig({ testTimeout: 15_000 });
 
@@ -19,6 +20,12 @@ describe('portal navigation', () => {
     return <output aria-label="current path">{useLocation().pathname}</output>;
   }
 
+  it('assigns every internal entry to exactly one parent domain', () => {
+    expect(internalDomains).toBeDefined();
+    const childPaths = internalDomains.flatMap((domain) => domain.children.map((entry) => entry.path));
+    expect([...childPaths].sort()).toEqual(internalNavigation.map((entry) => entry.path).sort());
+  });
+
   it('shows the internal workbench with full domain navigation', () => {
     render(
       <MemoryRouter initialEntries={['/app/workbench']}>
@@ -26,8 +33,12 @@ describe('portal navigation', () => {
       </MemoryRouter>,
     );
 
-    for (const label of ['问题中心', '流程设计', '供应商质量', '供应商审核', '供应商质量目标', '供应商 PPAP', '供应商 ASN', '审计管理', '体系文件', '风险看板']) {
-      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    const navigation = within(screen.getByRole('navigation', { name: '内部领域导航' }));
+    for (const label of ['问题与改进', '供应商质量', '制程质量', '客户质量', '新品质量', '审核管理', '质量分析', '检测管理', '知识与公告', '个人账号']) {
+      expect(navigation.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    for (const label of ['问题中心', '流程设计', '供应商 PPAP', '供应商 ASN', '审计管理', '体系文件', '风险看板']) {
+      expect(navigation.queryByRole('link', { name: label })).not.toBeInTheDocument();
     }
     expect(screen.getByText('个人待办')).toBeInTheDocument();
     expect(screen.getByText('待审批')).toBeInTheDocument();
@@ -48,8 +59,46 @@ describe('portal navigation', () => {
     );
 
     expect(screen.getByLabelText('内部领域图标导航')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '问题中心 上下文菜单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '问题台账' })).toHaveAttribute('href', '/app/problem-center');
+    const context = within(screen.getByRole('navigation', { name: '问题与改进 上下文菜单' }));
+    expect(context.getByRole('link', { name: '问题中心' })).toHaveAttribute('href', '/app/problem-center');
+    expect(context.getByRole('link', { name: '我的待办' })).toHaveAttribute('href', '/app/my-tasks');
+    expect(context.getByRole('link', { name: '流程设计' })).toHaveAttribute('href', '/app/workflow-designer');
+  });
+
+  it('selects the supplier parent domain for a leaf deep link and exposes its sibling entries', () => {
+    render(
+      <MemoryRouter initialEntries={['/app/supplier-pcn']}>
+        <InternalLayout />
+      </MemoryRouter>,
+    );
+
+    const navigation = within(screen.getByRole('navigation', { name: '内部领域图标导航' }));
+    expect(navigation.getByRole('link', { name: '供应商质量' })).toHaveAttribute('aria-current', 'page');
+    expect(navigation.queryByRole('link', { name: 'PCN 变更' })).not.toBeInTheDocument();
+    const context = within(screen.getByRole('navigation', { name: '供应商质量 上下文菜单' }));
+    expect(context.getByRole('link', { name: 'PCN 变更' })).toHaveAttribute('aria-current', 'page');
+    expect(context.getByRole('link', { name: '供应商 PPAP' })).toHaveAttribute('href', '/app/supplier-ppap');
+    expect(context.getByRole('link', { name: '供应商 ASN' })).toHaveAttribute('href', '/app/supplier-asn');
+    expect(useWorkTabsStore.getState().tabs.find((tab) => tab.path === '/app/supplier-pcn')).toMatchObject({ title: 'PCN 变更' });
+  });
+
+  it('opens the supplier leaf entries from the mobile domain menu', async () => {
+    render(
+      <MemoryRouter initialEntries={['/app/workbench']}>
+        <InternalLayout />
+        <Routes><Route path="*" element={<LocationProbe />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '打开导航' }));
+    const drawer = within(screen.getByRole('dialog'));
+    const supplier = drawer.getByText('供应商质量', { selector: 'summary span' });
+    await user.click(supplier);
+    expect(supplier.closest('details')).toHaveAttribute('open');
+    expect(drawer.getByRole('link', { name: '供应商 PPAP' })).toHaveAttribute('href', '/app/supplier-ppap');
+    await user.click(drawer.getByRole('link', { name: 'PCN 变更' }));
+    expect(screen.getByLabelText('current path')).toHaveTextContent('/app/supplier-pcn');
   });
 
   it('uses an independent supplier portal entry set', () => {
@@ -76,8 +125,8 @@ describe('portal navigation', () => {
     );
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('link', { name: '问题中心' }));
-    await user.click(screen.getByRole('link', { name: '问题中心' }));
+    await user.click(screen.getByRole('link', { name: '问题与改进' }));
+    await user.click(within(screen.getByRole('navigation', { name: '问题与改进 上下文菜单' })).getByRole('link', { name: '问题中心' }));
 
     const state = useWorkTabsStore.getState();
     expect(screen.getByLabelText('current path')).toHaveTextContent('/app/problem-center');

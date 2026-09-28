@@ -425,7 +425,8 @@ a {
 .account-center .ant-alert { margin-bottom: 12px; }
 @media (max-width: 640px) { .admin-page { padding: 12px; } .admin-heading .ant-select { min-width: 180px; } }
 
- .language-switcher { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--qms-surface); color: var(--qms-muted); border: 1px solid var(--qms-border); border-radius: 7px; font-size: 12px; }
+.language-switcher.ant-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; background: var(--qms-surface); color: var(--qms-text); border: 1px solid var(--qms-border); border-radius: 7px; font-size: 13px; font-weight: 500; }
+.language-switcher.ant-btn:hover { color: var(--qms-text); border-color: var(--qms-accent); }
  .governance-panel { display: grid; gap: 16px; padding-block: 12px; }
  .governance-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
  .governance-panel table { width: 100%; }
@@ -442,9 +443,7 @@ body { color: var(--qms-text); background: var(--qms-background); }
 .login-panel-shell { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
 .login-panel-shell > a { display: inline-block; color: var(--qms-accent); margin-top: 20px; font-size: 14px; }
 .auth-language-switcher { position: fixed; top: 12px; right: 20px; z-index: 1100; }
-.auth-language-switcher .language-switcher { background: #fff; color: #293b50; border-color: #e1e7ef; color-scheme: light; }
-.language-switcher select { min-height: 24px; max-width: 130px; background: transparent; color: inherit; border: 0; font: inherit; }
-.language-switcher select option { background: var(--qms-surface); color: var(--qms-text); }
+.auth-language-switcher .language-switcher.ant-btn { background: #fff; color: #293b50; border-color: #e1e7ef; color-scheme: light; }
 .admin-page { padding: 24px; box-shadow: var(--qms-shadow); min-width: 0; }
 .admin-heading { margin-bottom: 24px; }
 .admin-heading h2, .account-center h2 { font-size: 26px; letter-spacing: -.3px; }

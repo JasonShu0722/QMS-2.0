@@ -81,10 +81,12 @@ test('D/F/H real configuration, position hierarchy, audit export and language na
     const stream = await (await download).createReadStream(); expect(Boolean(stream)).toBe(true);
     const bytes: Buffer[] = []; for await (const chunk of stream!) bytes.push(Buffer.from(chunk));
     const csv = Buffer.concat(bytes).toString(); expect(csv).toContain(department.id); expect(csv).not.toMatch(/passwordHash|encryptedSecret|tokenHash/);
-    await page.getByLabel('Language / 语言').selectOption('en-US');
+    await page.getByRole('button', { name: 'Language / 语言' }).click();
+    await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.getByRole('tab', { name: 'Audit log', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Users', exact: true }).click(); await expect(page.getByRole('button', { name: 'Create user', exact: true })).toBeVisible();
-    await page.getByLabel('Language / 语言').selectOption('zh-CN');
+    await page.getByRole('button', { name: 'Language / 语言' }).click();
+    await page.getByRole('menuitemradio', { name: '简体中文' }).click();
   } finally {
     const current = await (await page.request.get(`/api/v1/${settingsPath}`)).json() as Schema['PlatformSettingsDto'];
     expect((await write(page.request, settingsPath, 'PATCH', { notificationLocale: original.notificationLocale, exportRetentionMinutes: original.exportRetentionMinutes, expectedVersion: current.version })).status()).toBe(200);
