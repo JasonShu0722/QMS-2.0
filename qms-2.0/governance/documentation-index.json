@@ -80,6 +80,12 @@
   ],
   "documents": [
     {
+      "path": ".agents/skills/qms-start-development/SKILL.md",
+      "topic": "skill-start-development",
+      "canonical": true,
+      "status": "active"
+    },
+    {
       "path": "docs/DOMAIN-GLOSSARY.md",
       "topic": "domain-glossary",
       "canonical": true,
@@ -187,6 +193,36 @@
           {
             "path": "docs/ATTACHMENTS.md",
             "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/OPENCLAW-OPS-HANDOFF.md",
+      "topic": "openclaw-operations-handoff",
+      "canonical": true,
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（OpenClaw 运维协作接入复核）",
+        "reviewedOn": "2026-09-28",
+        "maxAgeDays": 30,
+        "reason": "根据当前能力状态、运维手册和观测准备文档，冻结机器人只读运维、飞书表格和需求拆解边界。",
+        "sources": [
+          {
+            "path": "docs/OPERATIONS-RUNBOOK.md",
+            "sha256": "377829a834dde4ade29495cc808dc1d47f6ad33a98978093c496a0e05d6a3cf4"
+          },
+          {
+            "path": "docs/OPERABILITY-READINESS.md",
+            "sha256": "15dd0100296242f606cf69d8fc39f68280515afcd3be61ed934f23f032fe8f3c"
+          },
+          {
+            "path": "docs/CAPABILITY-STATUS.md",
+            "sha256": "a3fef124e84480a506bbbc8f11e60536e9ad01fe794605cfe8c7aa5fd3f7992c"
+          },
+          {
+            "path": "README.md",
+            "sha256": "19439ab487460d7fc616541b5f674aea132662c9ab37252d54e7c35826bde4ef"
           }
         ]
       }
