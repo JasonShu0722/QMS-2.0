@@ -86,10 +86,10 @@ describe('PostgreSQL immutable numbering', () => {
 
   it('rolls sequence allocation back with the caller transaction', async () => {
     await expect(prisma.$transaction(async (tx) => {
-      await service.allocateReportNumber(tx, { organizationId, ruleCode, classificationCode: 'QA' });
+      await service.allocateReportNumber(tx, { organizationId, ruleCode, classificationCode: 'QA', at: new Date('2026-09-18T00:00:00.000Z') });
       throw new Error('rollback');
     })).rejects.toThrow('rollback');
-    const next = await prisma.$transaction((tx) => service.allocateReportNumber(tx, { organizationId, ruleCode, classificationCode: 'QA' }));
+    const next = await prisma.$transaction((tx) => service.allocateReportNumber(tx, { organizationId, ruleCode, classificationCode: 'QA', at: new Date('2026-09-18T00:00:00.000Z') }));
     expect(next.sequence).toBe(22);
   });
 
