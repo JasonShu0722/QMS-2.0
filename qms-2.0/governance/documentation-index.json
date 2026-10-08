@@ -656,9 +656,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（项目级 Superpowers 工作流）",
-        "reviewedOn": "2026-09-24",
+        "reviewedOn": "2026-10-08",
         "maxAgeDays": 90,
-        "reason": "将 superpowers-zh 的设计、计划、子代理、审查和验证门禁接入 QMS 2.0 项目入口。",
+        "reason": "2026-10-09（Asia/Shanghai，对应 UTC 2026-10-08）复核新增 GitHub 提交命名入口：大写 V 前缀、V0.0.0 起点、中文主题及 fix 序号遵循交付流程，项目技能既有授权、验证及发布门禁保持适用。",
         "sources": [
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -666,7 +666,7 @@
           },
           {
             "path": "AGENTS.md",
-            "sha256": "dd7b5d120c862889327bf7b005834c457876e6d63861fd2ff6a3e09bbf9bc154"
+            "sha256": "745c11d49603d4905037aed9fe851ade0db937a92b6530fdec0fc560e7d3bd51"
           }
         ]
       }
