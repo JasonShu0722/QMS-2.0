@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ['QMS 2.0 foundation']
     types: [completed]
+    branches: [main]
 
 permissions:
   contents: read

@@ -97,7 +97,8 @@ it('uses server pagination and translates task controls without changing report 
   await screen.findByText(task.reportNumber);
   await userEvent.click(screen.getByTitle('2'));
   await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => path.startsWith('/api/v1/tasks?') && path.includes('offset=25'))).toBe(true));
-  await userEvent.selectOptions(screen.getByLabelText('Language / 语言'), 'en-US');
+  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
   const panel = screen.getByRole('tabpanel', { name: 'My tasks' });
   expect(within(panel).getByRole('button', { name: 'Claim' })).toBeInTheDocument();
   expect(screen.getByText(task.reportNumber)).toBeInTheDocument();

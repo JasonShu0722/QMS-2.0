@@ -39,6 +39,12 @@
 .qms-mobile-navigation .qms-brand { padding: 0 12px; }
 .qms-mobile-navigation .qms-nav-item { padding: 12px 14px; justify-content: flex-start; }
 .qms-mobile-navigation .qms-domain-nav { margin-top: 20px; }
+.qms-mobile-domain > summary { list-style: none; cursor: pointer; }
+.qms-mobile-domain > summary::-webkit-details-marker { display: none; }
+.qms-mobile-domain .qms-domain-chevron { margin-left: auto; transition: transform 150ms; }
+.qms-mobile-domain[open] .qms-domain-chevron { transform: rotate(180deg); }
+.qms-mobile-domain-entries { display: grid; gap: 4px; margin: 4px 0 8px 32px; border-left: 1px solid var(--qms-border); padding-left: 8px; }
+.qms-nav-item:focus-visible { outline: 2px solid var(--qms-accent-action); outline-offset: 2px; }
 .qms-shell:has(.problem-workspace.is-focused) { --navigation-width: 0px; }
 .qms-shell:has(.problem-workspace.is-focused) > .qms-navigation { display: none; }
 .qms-shell:has(.problem-workspace.is-focused) .qms-mobile-menu { display: none; }
@@ -57,8 +63,6 @@
   .qms-topbar-location { flex: 1; }
   .qms-topbar-location > span, .qms-topbar-location > svg { display: none; }
   .qms-topbar-actions { gap: 6px; }
-  .qms-topbar .language-switcher { font-size: 0; padding: 4px; border: 0; }
-  .qms-topbar .language-switcher select { font-size: 12px; max-width: 90px; }
   .qms-topbar .qms-appearance-trigger { padding: 6px; }
   .qms-content { padding: 20px 16px; }
   .qms-main > .qms-work-tabs { margin: 12px 16px 0; }

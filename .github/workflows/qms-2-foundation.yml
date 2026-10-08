@@ -2,6 +2,7 @@ name: QMS 2.0 foundation
 
 on:
   push:
+    branches: [main]
     paths:
       - 'qms-2.0/**'
       - 'docs/superpowers/**'
@@ -18,11 +19,78 @@ on:
       - '.github/workflows/qms-2-foundation.yml'
       - '.github/workflows/qms-2-deploy.yml'
 
+concurrency:
+  group: qms-2-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
-  foundation:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: qms-2.0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24.21.0
+          working-directory: qms-2.0
+          cache: true
+          require-lockfile: true
+      - name: Check archive isolation
+        run: pnpm run check:archive-isolation
+      - name: Check QMS development governance
+        run: pnpm run check:governance
+      - name: Check generated OpenAPI contract
+        run: pnpm run contracts:check
+      - name: Workspace and contracts tests
+        run: |
+          node --test test/*.test.mjs
+          pnpm --filter @qms/contracts test
+
+  web-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: qms-2.0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24.21.0
+          working-directory: qms-2.0
+          cache: true
+          require-lockfile: true
+      - name: Web unit tests
+        run: pnpm --filter @qms/web test --shard=${{ matrix.shard }}/4 --maxWorkers=1
+
+  api-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: qms-2.0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24.21.0
+          working-directory: qms-2.0
+          cache: true
+          require-lockfile: true
+      - name: API unit tests
+        run: pnpm --filter @qms/api test
+
+  integration:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -41,22 +109,14 @@ jobs:
       CLAMAV_CONTAINER: qms2-ci-clamav-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: pnpm/setup@v3
         with:
-          node-version: '24.21.0'
-          package-manager-cache: false
-      - name: Install independent workspace
-        run: |
-          corepack enable
-          corepack pnpm install --frozen-lockfile
-      - name: Check archive isolation
-        run: corepack pnpm run check:archive-isolation
-      - name: Check QMS development governance
-        run: corepack pnpm run check:governance
-      - name: Check generated OpenAPI contract
-        run: corepack pnpm run contracts:check
-      - name: Web and API unit tests
-        run: corepack pnpm test
+          runtime: node@24.21.0
+          working-directory: qms-2.0
+          cache: true
+          require-lockfile: true
+      - name: Build Web and API
+        run: pnpm --recursive build
       - name: Create ephemeral integration services
         run: |
           POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -138,13 +198,11 @@ jobs:
         env:
           NODE_ENV: development
           NODE_OPTIONS: --max-old-space-size=4096
-        run: corepack pnpm --filter @qms/api test:integration
-      - name: Build Web and API
-        run: corepack pnpm build
+        run: pnpm --filter @qms/api test:integration
       - name: Real worker process lifecycle
         env:
           NODE_ENV: development
-        run: corepack pnpm --filter @qms/api test:worker-process
+        run: pnpm --filter @qms/api test:worker-process
       - name: Validate foundation Compose
         run: docker compose -f deployment/docker-compose.foundation.yml config --quiet
       - name: Destroy ephemeral integration services
@@ -153,3 +211,21 @@ jobs:
           for container in "$PG_CONTAINER" "$RUSTFS_CONTAINER" "$CLAMAV_CONTAINER"; do
             docker rm --force --volumes "$container" || true
           done
+
+  foundation:
+    needs: [checks, web-tests, api-unit, integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every foundation check
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          WEB: ${{ needs.web-tests.result }}
+          API: ${{ needs.api-unit.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+        run: |
+          test "$CHECKS" = success
+          test "$WEB" = success
+          test "$API" = success
+          test "$INTEGRATION" = success

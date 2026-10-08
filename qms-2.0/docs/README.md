@@ -7,6 +7,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [开发治理](DEVELOPMENT-GOVERNANCE.md) | 任务模板、证据矩阵、分层门禁、独立审查和模块边界 |
+| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | Issue、实现、PR、Actions、部署、线上确认和复盘闭环 |
 | [业务术语](DOMAIN-GLOSSARY.md) | 跨领域术语、权限与交付状态的区别 |
 | [架构决策](ARCHITECTURE-DECISIONS.md) | 既有决策、原始来源、代价和重审条件 |
 | [变更影响分析](CHANGE-IMPACT.md) | 新功能、缺陷、依赖升级的分析与复用模板 |

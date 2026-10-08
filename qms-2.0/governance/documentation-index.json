@@ -264,6 +264,12 @@
       "status": "active"
     },
     {
+      "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
+      "topic": "delivery-maintenance-process",
+      "canonical": true,
+      "status": "active"
+    },
+    {
       "path": "docs/CAPABILITY-STATUS.md",
       "topic": "capability-status",
       "canonical": true,
