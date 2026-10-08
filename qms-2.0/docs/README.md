@@ -13,10 +13,12 @@
 | [变更影响分析](CHANGE-IMPACT.md) | 新功能、缺陷、依赖升级的分析与复用模板 |
 | [变更验证推荐](VALIDATION-IMPACT.md) | 根据 Git 改动推荐检查与文档复核，未知路径保守处理 |
 | [维护与发布手册](OPERATIONS-RUNBOOK.md) | 故障诊断、发布、恢复及防复发记录 |
+| [OpenClaw 运维协作接入](OPENCLAW-OPS-HANDOFF.md) | OpenClaw 的项目背景、监控、飞书表格协作和权限边界 |
 | [维护事项台账](MAINTENANCE-REGISTER.md) | 已知弃用和容量限制的触发、复核及关闭证据 |
 | [运行观测与演练准备](OPERABILITY-READINESS.md) | 一次性数据库的 Outbox/扫描快照与备份恢复演练边界 |
 | [文档复核机制](DOCUMENTATION-MAINTENANCE.md) | 索引、来源变化、复核到期与废弃规则 |
 | [工程工具与 Skill](ENGINEERING-TOOLS.md) | 任务交接、源码快照、验收证据与三个专用 Skill |
+| [飞书需求开发启动 Skill](../.agents/skills/qms-start-development/SKILL.md) | 自然语言查看遗留工作或接单；独立评审并推进已批准的本地开发 |
 | [能力状态总账](CAPABILITY-STATUS.md) | 当前能力、验收状态、限制和试点/生产边界 |
 | [Foundation](FOUNDATION.md) | 基础、平台和治理验收事实及历史记录 |
 | [平台交接](PLATFORM-HANDOFF.md) | 平台接口、事务、权限和集成约束 |
