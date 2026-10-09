@@ -367,7 +367,7 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
   const disabledWrites = writeForbidden || mutating || viewsLoading;
   return <main className="problem-center">
     <div className="problem-center__heading">
-      <div><Typography.Title level={1}>{t('问题中心')}</Typography.Title><Typography.Paragraph type="secondary">{t('在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
+      <div><Typography.Title level={1}>{t('问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t('在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
       <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
     </div>
     <Feedback error={organizationError} t={t} />

@@ -44,7 +44,11 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
   restricted.setDefaultTimeout(15000);
   try {
     await login(page, data.users[0]!.username);
-    await page.goto('/app/workflow-designer');
+    await expect(page.getByRole('navigation', { name: '内部领域导航', exact: true }).getByRole('link', { name: '系统服务', exact: true })).toBeVisible();
+    await page.getByRole('navigation', { name: '内部领域导航', exact: true }).getByRole('link', { name: '系统服务', exact: true }).click();
+    const services = page.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true });
+    await expect(services.getByRole('link', { name: '平台管理', exact: true })).toHaveCount(0);
+    await services.getByRole('link', { name: '流程设计', exact: true }).click();
     await page.getByRole('button', { name: '新建流程', exact: true }).click();
     await page.getByLabel('流程代码', { exact: true }).fill(`FLOW_${randomUUID()}`);
     await page.getByLabel('流程名称', { exact: true }).fill('浏览器受控流程');
@@ -55,6 +59,15 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
     const original = await creation.json() as components['schemas']['WorkflowDefinitionResponseDto'];
     const path = `/app/workflow-designer/${original.id}/${original.version.id}`;
     await expect(page).toHaveURL(new RegExp(`${original.version.id}$`));
+    await expect(page.getByRole('navigation', { name: '流程对象层级', exact: true })).toContainText('系统服务');
+    await expect(page.getByRole('navigation', { name: '流程对象层级', exact: true })).toContainText(`草稿编辑 · 版本 ${original.version.version}`);
+    await expect(page.getByRole('heading', { name: original.name, exact: true })).toBeVisible();
+    await expect(page.locator('.qms-topbar-location')).toContainText(original.name);
+    await expect(page.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true }).getByRole('link', { name: '流程设计', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true }).getByText('流程编辑', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '全部标签', exact: true }).click();
+    await expect(page.getByRole('dialog').getByText(`${original.name} · 编辑`, { exact: true })).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: /^(close|关闭)$/i }).click();
     await page.getByRole('button', { name: '编辑节点 处理', exact: true }).click();
     await page.getByLabel('处理范围 角色', { exact: true }).selectOption('DESIGNER');
     await page.getByLabel('处理时限（分钟）', { exact: true }).fill('120');
@@ -70,6 +83,11 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
     await peer.getByRole('button', { name: '编辑节点 处理', exact: true }).click();
     await page.getByRole('button', { name: '编辑节点 处理', exact: true }).click();
     await page.getByLabel('节点名称', { exact: true }).fill('调查确认');
+    await page.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true }).getByRole('link', { name: '公告', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${original.version.id}$`));
+    await expect(page.getByLabel('节点名称', { exact: true })).toHaveValue('调查确认');
     await save(page);
     await peer.getByLabel('节点名称', { exact: true }).fill('保留的同事草稿');
     await save(peer, 409);
@@ -81,6 +99,7 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
     const publishedResponse = await publishing;
     expect(publishedResponse.status()).toBe(201);
     const published = await publishedResponse.json() as components['schemas']['WorkflowDefinitionResponseDto'];
+    await expect(page.getByRole('navigation', { name: '流程对象层级', exact: true })).toContainText(`已发布查看 · 版本 ${published.version.version}`);
     await expect(page.getByLabel('节点名称', { exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: '添加节点', exact: true })).toBeDisabled();
     const copying = page.waitForResponse((entry) => entry.url().endsWith('/copy'));
@@ -98,7 +117,14 @@ test('design, validate, publish, copy and preserve conflicts using real restrict
     await page.getByRole('button', { name: 'Language / 语言' }).click();
     await page.getByRole('menuitemradio', { name: 'English' }).click();
     await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Workflow hierarchy', exact: true })).toContainText(`Edit draft · Version ${copied.version.version}`);
+    await expect(page.locator('.qms-topbar-location')).toContainText(copied.name);
     await login(restricted, data.users[2]!.username);
+    await restricted.getByRole('navigation', { name: '内部领域导航', exact: true }).getByRole('link', { name: '系统服务', exact: true }).click();
+    const personalServices = restricted.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true });
+    await expect(personalServices.getByRole('link', { name: '个人账号', exact: true })).toBeVisible();
+    await expect(personalServices.getByRole('link', { name: '流程设计', exact: true })).toHaveCount(0);
+    await expect(personalServices.getByRole('link', { name: '平台管理', exact: true })).toHaveCount(0);
     expect((await restricted.request.get('/api/v1/workflows')).status()).toBe(403);
     await restricted.goto('/app/workflow-designer');
     await expect(restricted.getByText('无权执行此操作', { exact: true })).toBeVisible();

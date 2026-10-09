@@ -1,5 +1,7 @@
 import { Alert, Button, Card, Empty, Input, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import type { components } from '@qms/contracts';
+import { useLanguage } from '../../i18n/Language';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import './site-scanning.css';
 
@@ -9,6 +11,7 @@ type RulePage = { items: Rule[]; total: number; page: number; pageSize: number }
 function denied(cause: unknown) { return cause instanceof ApiError && (cause.status === 403 || cause.code === 'FEATURE_PERMISSION_DENIED' || cause.code === 'ORGANIZATION_SCOPE_DENIED'); }
 
 export function SiteScanningPage() {
+  const { t } = useLanguage();
   const [rules, setRules] = useState<Rule[]>([]);
   const [selected, setSelected] = useState<string>();
   const [code, setCode] = useState('');
@@ -23,7 +26,7 @@ export function SiteScanningPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([apiRequest<{ permissions?: string[] }>('/api/v1/system/my-permissions'), apiRequest<RulePage>('/api/v1/supplier-barcode?page=1&pageSize=100')])
+    Promise.all([apiRequest<components['schemas']['PermissionsResponseDto']>('/api/v1/system/my-permissions'), apiRequest<RulePage>('/api/v1/supplier-barcode?page=1&pageSize=100')])
       .then(([permissions, page]) => {
         if (!active) return;
         if (!permissions.permissions?.includes('supplier-barcode:scan')) { setError(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '暂无现场扫码权限' }, 403)); return; }
@@ -44,7 +47,7 @@ export function SiteScanningPage() {
 
   if (loading) return <main className="site-scanning-page"><Spin /> </main>;
   if (error && denied(error)) return <main className="site-scanning-page"><Alert type="warning" showIcon title="暂无现场扫码权限" /></main>;
-  return <main className="site-scanning-page"><Typography.Text type="secondary">现场能力</Typography.Text><Typography.Title level={1}>PDA / 现场扫码</Typography.Title>
+  return <main className="site-scanning-page"><Typography.Text type="secondary">现场能力</Typography.Text><Typography.Title level={1}>{t('关键件条码校验')}</Typography.Title>
     {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}
     <Card title="关键件条码校验"><Space orientation="vertical" style={{ width: '100%' }} size="large">
       {!available.length ? <Empty description="暂无已发布条码规则" /> : <><Select aria-label="条码规则" value={selected} onChange={setSelected} options={available.map((rule) => ({ value: rule.id, label: `${rule.title} · ${rule.materialCode}` }))} />

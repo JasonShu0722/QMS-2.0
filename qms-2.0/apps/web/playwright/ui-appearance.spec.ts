@@ -18,6 +18,13 @@ test('shared appearance covers real internal pages and responsive navigation', a
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await completeMfa(context.request, await login, 'local.internal', page);
   await expect(page.getByRole('navigation', { name: '内部领域导航', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '知识与文件', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '体系文件', exact: true })).toHaveCount(0);
+  await page.goto('/app/documents');
+  await expect(page.locator('#main-content').getByRole('heading', { name: '体系文件', exact: true })).toBeVisible();
+  await expect(page.locator('#main-content .empty-domain')).toBeVisible();
+  await page.goto('/app/workbench');
+  await expect(page.getByRole('navigation', { name: '内部领域导航', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '外观设置' })).toHaveCount(1);
   await page.screenshot({ path: join(tmpdir(), 'qms-ui-workbench-light.png') });
   await page.getByRole('button', { name: '外观设置' }).click();
@@ -37,8 +44,9 @@ test('shared appearance covers real internal pages and responsive navigation', a
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'light');
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: /close|关闭/i }).click();
-  for (const [label, heading] of [['问题中心', '问题中心'], ['我的待办', '我的待办'], ['流程设计', '受控流程列表'], ['个人账号', '个人账号'], ['系统管理', '系统管理']]) {
-    await page.getByRole('navigation', { name: /内部领域/ }).getByRole('link', { name: label, exact: true }).click();
+  for (const [domain, label, heading] of [['问题中心', '问题管理面板', '问题管理面板'], ['问题中心', '我的待办', '我的待办'], ['供应商质量', '供应商问题台账', '供应商问题台账'], ['供应商质量', '关键件条码校验', '关键件条码校验'], ['制程质量', '不良品台账', '不良品台账'], ['系统服务', '流程设计', '受控流程列表'], ['系统服务', '个人账号', '个人账号'], ['系统服务', '平台管理', '平台管理']]) {
+    await page.getByRole('navigation', { name: /内部领域/ }).getByRole('link', { name: domain, exact: true }).click();
+    await page.getByRole('navigation', { name: `${domain} 上下文菜单`, exact: true }).getByRole('link', { name: label, exact: true }).click();
     await expect(page.getByRole('navigation', { name: '内部领域图标导航', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '外观设置' })).toHaveCount(1);
     await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'dark');
@@ -49,7 +57,7 @@ test('shared appearance covers real internal pages and responsive navigation', a
   await page.screenshot({ path: join(tmpdir(), 'qms-ui-admin-dark.png') });
   await page.reload();
   await expect(page.getByRole('navigation', { name: '工作标签', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '系统管理', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '平台管理', exact: true })).toBeVisible();
   await expect(page.locator('#main-content .ant-spin-spinning')).toHaveCount(0);
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'dark');
   for (const width of [1024, 390]) {

@@ -33,7 +33,7 @@ export function AdminPage({ organizations, error, traceId, onDirectoryChange }: 
   ];
   const activeTabAllowed = (activeTab === 'users' && users) || ((activeTab === 'roles' || activeTab === 'matrix') && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">
-    <header className="admin-heading"><Typography.Title level={2}>{t('系统管理')}</Typography.Title>
+    <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
       <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) { if (matrixDirty) setPendingOrganization(id); else setSelectedId(id); } }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
     <Tabs key={organization.id} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
