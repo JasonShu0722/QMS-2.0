@@ -107,6 +107,9 @@ it('references only a scanned and available supplier attachment', async () => {
   const fileId = '55555555-5555-4555-8555-555555555555';
   const pendingFile = { resourceType: 'supplier-quality', resourceId: issuedProblem.id, id: fileId, originalName: 'evidence.txt', contentType: 'text/plain', sizeBytes: 8, sha256: '0'.repeat(64), status: 'QUARANTINED', scanStatus: 'PENDING', scanReason: null, version: 2, uploadExpiresAt: new Date().toISOString(), scannedAt: null, deletedAt: null, retainUntil: new Date().toISOString() };
   let scanned = false;
+  let attachmentReads = 0;
+  let releasePendingReads!: () => void;
+  const pendingReads = new Promise<void>((resolve) => { releasePendingReads = resolve; });
   let submitted = false;
   let submittedBody: unknown;
   vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
@@ -114,7 +117,11 @@ it('references only a scanned and available supplier attachment', async () => {
     if (path === '/api/v1/files/uploads') return json({ file: pendingFile, uploadUrl: 'https://upload.example.test/file', headers: {}, urlExpiresAt: new Date().toISOString() });
     if (path === 'https://upload.example.test/file') return new Response(null, { status: 200 });
     if (path.endsWith(`/files/${fileId}/complete`)) return json(pendingFile);
-    if (path.endsWith(`/files/${fileId}`)) return json(scanned ? { ...pendingFile, status: 'AVAILABLE', scanStatus: 'CLEAN', version: 3 } : pendingFile);
+    if (path.endsWith(`/files/${fileId}`)) {
+      attachmentReads += 1;
+      if (!scanned) { await pendingReads; return json(pendingFile); }
+      return json({ ...pendingFile, status: 'AVAILABLE', scanStatus: 'CLEAN', version: 3 });
+    }
     if (init?.method === 'POST' && path.endsWith('/actions')) { submittedBody = JSON.parse(String(init.body)); submitted = true; return json({ ...issuedProblem, version: 4, canEditResponse: false }); }
     return json(submitted ? { ...issuedProblem, version: 4, canEditResponse: false } : issuedProblem);
   }));
@@ -124,8 +131,14 @@ it('references only a scanned and available supplier attachment', async () => {
   fireEvent.change(await screen.findByLabelText('选择附件'), { target: { files: [selected] } });
   expect(await screen.findByText('等待安全扫描')).toBeInTheDocument();
   expect(screen.getByText(/已选 0 个可提交证据/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByLabelText('选择附件')).not.toBeDisabled());
+  expect(screen.getByRole('button', { name: '刷新附件' })).toBeDisabled();
+  releasePendingReads();
+  await waitFor(() => expect(screen.getByRole('button', { name: '刷新附件' })).not.toBeDisabled());
+  const readsBeforeRefresh = attachmentReads;
   scanned = true;
   fireEvent.click(screen.getByRole('button', { name: '刷新附件' }));
+  await waitFor(() => expect(attachmentReads).toBeGreaterThan(readsBeforeRefresh));
   expect(await screen.findByText(/已选 1 个可提交证据/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('根本原因'), { target: { value: '原因' } });
   fireEvent.change(screen.getByLabelText('纠正措施'), { target: { value: '措施' } });
