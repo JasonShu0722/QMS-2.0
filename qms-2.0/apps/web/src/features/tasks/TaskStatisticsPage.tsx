@@ -32,7 +32,7 @@ export function TaskStatisticsPage() {
 
   return <section className="task-statistics-page">
     <header className="task-statistics-heading">
-      <div><Typography.Text type="secondary">系统效率</Typography.Text><Typography.Title level={1}>任务统计</Typography.Title><Typography.Paragraph type="secondary">按当前组织权限汇总进行中的流程任务，帮助团队识别逾期、未领取和待处理工作。</Typography.Paragraph></div>
+      <div><Typography.Title level={1}>任务统计</Typography.Title><Typography.Paragraph type="secondary">按当前组织权限汇总进行中的流程任务，帮助团队识别逾期、未领取和待处理工作。</Typography.Paragraph></div>
       <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
     </header>
     {error ? <Alert type={isDenied(error) ? 'warning' : 'error'} showIcon title={isDenied(error) ? '暂无任务统计访问权限' : error instanceof ApiError ? safeAccountError(error) : '任务统计加载失败，请重试。'} description={error instanceof ApiError ? error.traceId : undefined} action={isDenied(error) ? undefined : <Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}

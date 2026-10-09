@@ -91,7 +91,7 @@ export function AnnouncementsPage() {
   const error = mutationError ?? loadError;
   return <section className="announcements-page">
     <header className="announcements-heading">
-      <div><Typography.Text type="secondary">系统协同</Typography.Text><Typography.Title level={1}>公告中心</Typography.Title><Typography.Paragraph type="secondary">查看发布范围内的公告，重要必读公告需主动确认阅读。</Typography.Paragraph></div>
+      <div><Typography.Title level={1}>公告中心</Typography.Title><Typography.Paragraph type="secondary">查看发布范围内的公告，重要必读公告需主动确认阅读。</Typography.Paragraph></div>
       <Space><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>{managed && <Button type="primary" onClick={() => setEditor('new')}>新建公告</Button>}</Space>
     </header>
     {Boolean(error) && <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={safeAccountError(error)} description={error instanceof ApiError ? error.traceId : undefined} />}

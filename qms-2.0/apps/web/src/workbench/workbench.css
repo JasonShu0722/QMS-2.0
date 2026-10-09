@@ -1,10 +1,8 @@
 .qms-workbench { display: grid; gap: 28px; color: var(--qms-text); min-width: 0; }
-.qms-workbench__heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 8px 0; }
+.qms-workbench__heading { padding: 8px 0; }
 .qms-workbench h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.4; }
 .qms-workbench h2 { margin: 0 0 16px; font-size: 18px; line-height: 1.5; }
 .qms-workbench p { margin: 0; color: var(--qms-muted); line-height: 1.8; }
-.qms-workbench__primary { display: inline-flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0; min-height: 40px; padding: 8px 16px; border-radius: 7px; background: var(--qms-accent-action); color: var(--qms-on-accent); font-weight: 600; text-decoration: none; }
-.qms-workbench__primary:hover { color: var(--qms-on-accent); box-shadow: 0 0 0 3px var(--qms-accent-soft); }
 .qms-workbench__entries > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); overflow: hidden; }
 .qms-workbench__entry { display: flex; align-items: flex-start; gap: 16px; padding: 24px; color: var(--qms-text); text-decoration: none; border-right: 1px solid var(--qms-border); }
 .qms-workbench__entry:last-child { border-right: 0; }
@@ -21,4 +19,4 @@
 .qms-workbench__overview dt { font-size: 13px; color: var(--qms-muted); }
 .qms-workbench__overview dd { margin: 12px 0 0; font-size: 16px; font-weight: 500; color: var(--qms-muted); }
 @media (max-width: 1100px) { .qms-workbench__entries > div { grid-template-columns: 1fr; } .qms-workbench__entry { border-right: 0; border-bottom: 1px solid var(--qms-border); } .qms-workbench__entry:last-child { border-bottom: 0; } }
-@media (max-width: 760px) { .qms-workbench__heading { align-items: flex-start; flex-direction: column; gap: 16px; } .qms-workbench__overview, .qms-workbench__entry { padding: 20px; } .qms-workbench__overview dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; } }
+@media (max-width: 760px) { .qms-workbench__overview, .qms-workbench__entry { padding: 20px; } .qms-workbench__overview dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; } }

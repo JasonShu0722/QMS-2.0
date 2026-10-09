@@ -47,9 +47,9 @@ export function SiteScanningPage() {
 
   if (loading) return <main className="site-scanning-page"><Spin /> </main>;
   if (error && denied(error)) return <main className="site-scanning-page"><Alert type="warning" showIcon title="暂无现场扫码权限" /></main>;
-  return <main className="site-scanning-page"><Typography.Text type="secondary">现场能力</Typography.Text><Typography.Title level={1}>{t('关键件条码校验')}</Typography.Title>
+  return <main className="site-scanning-page"><Typography.Title level={1}>{t('关键件条码校验')}</Typography.Title>
     {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}
-    <Card title="关键件条码校验"><Space orientation="vertical" style={{ width: '100%' }} size="large">
+    <Card><Space orientation="vertical" style={{ width: '100%' }} size="large">
       {!available.length ? <Empty description="暂无已发布条码规则" /> : <><Select aria-label="条码规则" value={selected} onChange={setSelected} options={available.map((rule) => ({ value: rule.id, label: `${rule.title} · ${rule.materialCode}` }))} />
         <Input aria-label="条码" autoFocus value={code} onChange={(event) => setCode(event.target.value)} onPressEnter={() => void scan()} placeholder="扫描或输入条码" />
         <Input aria-label="批次（可选）" value={batch} onChange={(event) => setBatch(event.target.value)} placeholder="批次（可选）" />
