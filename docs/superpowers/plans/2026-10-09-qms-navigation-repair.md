@@ -21,10 +21,10 @@
 
 | 单元 | 需求及实际记录 ID | Issue / PR 状态 | 计划分支及依赖 |
 | --- | --- | --- | --- |
-| A | REQ-0007 `recvxs4jVc8pek`；REQ-0010 `rec28l95YoFGnT` | [Issue #12](https://github.com/JasonShu0722/QMS-2.0/issues/12)，PR 未创建 | `codex/req-0007-0010-navigation` |
-| B | REQ-0008 `recvxsiXu2gv5S` | [Issue #13](https://github.com/JasonShu0722/QMS-2.0/issues/13)，PR 未创建 | `codex/req-0008-workbench`，独立实现并行 |
-| C | REQ-0006 `recvxrTGzJl04f` | [Issue #14](https://github.com/JasonShu0722/QMS-2.0/issues/14)，PR 未创建 | `codex/req-0006-login-tools`，独立实现并行 |
-| D | REQ-0009 `rec28l7O9rBQf5` | [Issue #15](https://github.com/JasonShu0722/QMS-2.0/issues/15)，PR 未创建 | `codex/req-0009-feedback`，独立组件并行，共享外壳整合串行 |
+| A | REQ-0007 `recvxs4jVc8pek`；REQ-0010 `rec28l95YoFGnT` | [Issue #12](https://github.com/JasonShu0722/QMS-2.0/issues/12)；[V0.0.1 / PR #16](https://github.com/JasonShu0722/QMS-2.0/pull/16) | `codex/req-0007-0010-navigation` |
+| B | REQ-0008 `recvxsiXu2gv5S` | [Issue #13](https://github.com/JasonShu0722/QMS-2.0/issues/13)；[V0.0.2 / PR #17](https://github.com/JasonShu0722/QMS-2.0/pull/17) | `codex/req-0008-workbench`，独立实现并行 |
+| C | REQ-0006 `recvxrTGzJl04f` | [Issue #14](https://github.com/JasonShu0722/QMS-2.0/issues/14)；[V0.0.3 / PR #18](https://github.com/JasonShu0722/QMS-2.0/pull/18) | `codex/req-0006-login-tools`，独立实现并行 |
+| D | REQ-0009 `rec28l7O9rBQf5` | [Issue #15](https://github.com/JasonShu0722/QMS-2.0/issues/15)；[V0.0.4 / PR #19](https://github.com/JasonShu0722/QMS-2.0/pull/19) | `codex/req-0009-feedback`，独立组件并行，共享外壳整合串行 |
 
 A 两条共同定义导航树与编辑上下文，需要共同验收与回滚；B / C / D 目标和失败场景独立。状态、批准范围、验收与最终回填仍逐条记录。
 
@@ -130,7 +130,7 @@ return children.length ? { ...domain, path: children[0]!.path, children } : unde
 ## 5. 提交、回归、关闭与回填
 
 - [x] 直接获准后发布并回读四个真实 Issue；建 Issue 与最终 PR 分开。提交 / PR 版本号仍需按负责人 / 计划确认，不能由 REQ 或包版本推断。
-- [ ] 本地验证与两阶段审查后，在授权范围内提交、推送和创建 A PR；只包含 A 实现、相关证据摘要及本轮首次规划 / 规则文档。附真实 URL 到本聊天，回写实际映射。
+- [x] 本地验证与两阶段审查后，依据直接授权按 A～D 拆分提交、推送并创建四个 PR；A 首次包含规划 / 规则文档，后续仅对应单元及增量交付记录。四个真实 URL 已附到本聊天，实际映射如下。
 - [ ] 获准合并 / 发布后，逐交付单元核验 Foundation、部署完整 SHA、镜像、启动、健康、HTTP 和目标行为；本地独立实现可并行，不跳过任一交付单元门禁。
 - [ ] 冻结含 A～D 的最终版本，执行设计第 12 节逐需求及联合回归；A 两条和受影响联合项全部 PASS 才关闭 A。
 - [ ] Issue 先记录真实验收 / 限制 / 回滚 / 复盘，再以 `completed` 关闭并回读。
@@ -141,7 +141,7 @@ return children.length ? { ...domain, path: children[0]!.path, children } : unde
 - 拟沉淀：独立子入口权限、前端导航事实与数据库菜单的区分、对象标签从读取事实生成、跨页面层级排查；仅真实实施验证后判断是否形成通用要求。
 - 权威目标：公共前端规则进入前端统一规格及 `qms-2.0/docs/FRONTEND-DESIGN.md`；通用交付规则仍在 `DELIVERY-MAINTENANCE-PROCESS.md`，项目规则 / Skill 仅保留入口。A 的名称、数量、ID 和排查结论留在本计划。
 - 验证：相关交互与权限用例、独立审查、真实浏览器、来源摘要和治理；没有新可复用规则则记录理由，不把单次修复升级为强制规则。
-- 当前：四个单元本地实现、规格 / 质量审查、现有环境的独立门禁已完成；回读 rev 148，创建并回读 Issue #12～#15。证据与限制见第 10 节；没有 PR、提交、发布或飞书回填结果。
+- 当前：四个单元本地实现、规格 / 质量审查、现有环境的独立门禁已完成；回读 rev 148，创建并回读 Issue #12～#15。证据与限制见第 10 节；四个 PR 已提交并推送，实际映射见第 11 节；未合并、发布或回填飞书。
 
 ## 7. 并行任务及共享文件所有权
 
@@ -258,7 +258,7 @@ onClick={event => {
 
 本轮按本地接单授权先准备 Issue 底稿及红灯用例；用户纠正顺序后，已创建并回读四个 Issue，再接续四个单元实施。后续以“确认范围 / 授权 → 建 Issue → 实现 → 验证与两阶段审查 → 最终 PR → 合并 / 发布核验 → 最终版本逐项及联合回归 → 关闭 / 回填”为检查点，不用并行开发绕过交付检查点。
 
-证据目录为 Git 外 `D:/WorkSpace/QMS-2.0-local/acceptance/2026-10-09-navigation-repair/`；以下日志文件名均相对此目录。源码仍是未提交本地工作区，基线 SHA 为第 1 节所列值；本地静态资源验证不等于已发布 SHA 验收。
+证据目录为 Git 外 `D:/WorkSpace/QMS-2.0-local/acceptance/2026-10-09-navigation-repair/`；以下日志文件名均相对此目录。以下是提交前整合工作区的实际验证记录，基线 SHA 为第 1 节所列值；当前提交映射见第 11 节，本地静态资源验证不等于已发布 SHA 验收。
 
 | 单元 / 实现代理 | 红灯与绿灯证据 |
 | --- | --- |
@@ -292,8 +292,25 @@ onClick={event => {
 
 本轮通用交付要求已进入 `DELIVERY-MAINTENANCE-PROCESS.md`，`DEVELOPMENT-GOVERNANCE.md`、`AGENTS.md` 与接单 / Superpowers 技能仅保留路由和边界；已运行规则场景复核与治理。前端指导补齐共享工具栏 / 反馈 / 导航事实拥有者的实际复用入口。独立权限、实际对象名称、失败工作页、复用与真实验收沿用现有统一前端规范，不新增另一套 UI 强制规则；具体数量、路由、ID 与结论仅留本专项。
 
-交付前再次按实际 record_id 回读，rev 148，五条仍为“开发中”，批准范围没有变更；快照 `requirements-after-implementation.json`。四个 Issue 均已建立，PR / 提交 / 推送尚未执行，未改变飞书状态或链接。提交阶段按单元拆分源码与共享文件的必要 hunk，并独立核验每个 PR 基线；版本号、提交 / 推送及 PR 授权须取得直接确认，不能从建 Issue 授权扩大。
+交付前再次按实际 record_id 回读，rev 148，五条仍为“开发中”，批准范围没有变更；快照 `requirements-after-implementation.json`。当时四个 Issue 均已建立，PR / 提交 / 推送尚未执行，未改变飞书状态或链接。随后取得第 1.1 节的直接授权，按单元拆分源码与共享文件的必要 hunk 并核验依赖基线；实际提交及 PR 见第 11 节。
 
 真实触屏硬件尚未验收；最终含 A～D 的主分支部署 SHA、镜像 / 健康 / HTTP、逐需求联合回归、关闭四个 Issue、逐行回填飞书均待对应阶段执行。没有最终发布与真实设备证据时，保持相关检查项未完成，不把本地绿色结果回填为“已上线”“上线验收完成”或“已结束”。
 
 一次性环境已收尾：核对本轮记录的进程身份后停止 API / Worker；仅销毁 `qms-navigation-20261009` 的容器与网络，回读无残留。加密凭据、日志及截图继续保存在 Git 外；没有留下持续预览或接单任务。
+
+## 11. 实际提交与 PR 映射（2026-10-09）
+
+四个交付单元已提交并原子推送至 `origin`，四个 PR 均为开放状态并已附到本线程。主分支未修改；不使用自动关闭语句。
+
+| 单元 / 版本 | Issue | PR | 源码提交 SHA | PR base |
+| --- | --- | --- | --- | --- |
+| A / V0.0.1 | [#12](https://github.com/JasonShu0722/QMS-2.0/issues/12) | [#16](https://github.com/JasonShu0722/QMS-2.0/pull/16) | `1abf0cf3145f659b3eb90774abac8f1504e2ce6f` | `main` |
+| B / V0.0.2 | [#13](https://github.com/JasonShu0722/QMS-2.0/issues/13) | [#17](https://github.com/JasonShu0722/QMS-2.0/pull/17) | `ed0d852a374ad831e7299c589943ab70b210be2b` | `codex/req-0007-0010-navigation` |
+| C / V0.0.3 | [#14](https://github.com/JasonShu0722/QMS-2.0/issues/14) | [#18](https://github.com/JasonShu0722/QMS-2.0/pull/18) | `f76da952893b8ceed4fb6da098384e1f447adc4a` | `codex/req-0008-workbench` |
+| D / V0.0.4 | [#15](https://github.com/JasonShu0722/QMS-2.0/issues/15) | [#19](https://github.com/JasonShu0722/QMS-2.0/pull/19) | `5d98e1e43d1bebe5c319820e1c513f995bf0fb17` | `codex/req-0006-login-tools` |
+
+提交前在 Node 24.21.0 重新执行 6 文件 / 55 项测试、Web 类型检查、治理及差异检查，均 exit 0；证据在 Git 外本轮目录的 `publication/tests-before-commit.log`、`lint-before-commit.log`、`governance-before-commit.log`。最初一次命令未加载本地运行入口使用 Node 22，测试已主动中止，不作为完成证据；随后在项目规定运行环境复核。
+
+逐单元检查差异文件清单，最终 D 提交树与已验收的 48 文件整合树逐文件一致；相对完整验收快照只增加授权与依赖记录，未修改功能源码。D 后续追加本节、设计当前状态及前端指导的实际交付记录，属于文档增量，功能源码 SHA 仍为上表值。
+
+CI 以最新 PR HEAD 的实际结果为准，创建成功不代表 CI 通过。合并、发布、真实触屏硬件、最终部署版本逐项及联合回归、关闭 Issue、飞书回填仍未完成；按第 5 节检查点继续。
