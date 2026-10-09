@@ -6,6 +6,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
 import * as api from './workflow-api';
 import { WorkflowProperties } from './WorkflowProperties';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 vi.mock('./workflow-api', () => ({ getWorkflowVersion: vi.fn(), getWorkflowOptions: vi.fn(), saveWorkflow: vi.fn(), publishWorkflow: vi.fn(), copyWorkflow: vi.fn(), validateWorkflow: vi.fn() }));
 vi.mock('./WorkflowCanvas', () => ({ WorkflowCanvas: () => <div>Canvas</div> }));
@@ -17,13 +18,23 @@ const graph = { nodes: [
 const definition = { id: 'definition', organizationId: 'organization', code: 'QA', name: '质量流程', revision: 3,
   version: { id: 'version', workflowDefinitionId: 'definition', version: 1, status: 'DRAFT', structureSnapshot: graph } };
 const response = (value: unknown) => value as Awaited<ReturnType<typeof api.getWorkflowVersion>>;
-function mount() { return render(<MemoryRouter><LanguageProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></LanguageProvider></MemoryRouter>); }
+function mount() { return render(<MemoryRouter initialEntries={['/app/workflow-designer/definition/version']}><LanguageProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></LanguageProvider></MemoryRouter>); }
 
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear();
+  useWorkTabsStore.getState().reset();
   vi.mocked(api.getWorkflowVersion).mockResolvedValue(response(structuredClone(definition)));
   vi.mocked(api.getWorkflowOptions).mockResolvedValue({ roles: [{ code: 'QA', name: '质量' }], users: [], permissions: [] });
   vi.mocked(api.validateWorkflow).mockResolvedValue({ valid: true, errors: [] });
+});
+
+it.each([['DRAFT', '草稿编辑', '编辑'], ['PUBLISHED', '已发布查看', '查看'], ['RETIRED', '已停用版本查看', '查看']])('uses loaded object and %s version for hierarchy and work tab', async (status, action, tabAction) => {
+  vi.mocked(api.getWorkflowVersion).mockResolvedValue(response({ ...definition, version: { ...definition.version, status, version: 7 } }));
+  mount();
+  expect(await screen.findByRole('heading', { name: '质量流程' })).toBeVisible();
+  expect(screen.getByRole('navigation', { name: '流程对象层级' })).toHaveTextContent(`系统服务/流程设计/质量流程/${action} · 版本 7`);
+  expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === '/app/workflow-designer/definition/version')).toMatchObject({ title: `质量流程 · ${tabAction}` });
+  expect(api.getWorkflowVersion).toHaveBeenCalledTimes(1);
 });
 
 it('preserves edits after stale revision conflict and does not retry the write automatically', async () => {

@@ -4,6 +4,8 @@
 
 ## 1. 当前基线
 
+2026-10-09 会话确认的[导航、登录工具栏与需求反馈专项设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md)覆盖 REQ-0006～0010：系统服务整合、暂时移除知识与文件入口、保留待办卡片、登录页语言与外观、双门户反馈按钮。Issue #12～#15 已建立，本地独立部分并行、共享文件统一整合；本地实现、规格 / 质量审查及现有环境门禁已完成，四个 PR 的目标仍独立。实际证据、真实触屏设备限制和剩余闭环见[本轮执行计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md)。尚未提交 PR、发布或完成最终上线验收，不能将本地验证状态当作新增已交付基线。
+
 用户已认可 UI V2 的总体设计：浅蓝默认、深浅/跟随系统、独立品牌主色、工作台完整导航、领域图标轨与上下文菜单、内部工作标签、专注处理。外观入口统一在顶栏。
 
 **现有正式页面已完成首轮视觉迁移，样板继续作为设计参考。** 正式 Web 沿用 React + TypeScript + Ant Design 以及现有业务路由、请求和权限。未来领域表单、质量统计与完整草稿生命周期仍按各业务阶段交付。
@@ -41,6 +43,9 @@
 | --- | --- |
 | `apps/web/src/theme/tokens.ts`、`ThemeProvider.tsx` | 模式/品牌色解析、容错记忆、CSS 变量和 Ant Design token 同源 |
 | `apps/web/src/theme/AppearanceButton.tsx` | 唯一外观入口与设置抽屉 |
+| `apps/web/src/features/auth/AuthToolbar.tsx`、`AuthToolbar.css` | 登录前两个紧凑入口，复用共享语言菜单与外观抽屉；窄屏 / 粗指针触控区域 |
+| `apps/web/src/features/feedback/FeedbackButton.tsx`、`feedback-config.ts` | 双登录后外壳共享需求反馈；指针防误触、有界位置记忆与固定安全外部链接 |
+| `apps/web/src/features/navigation/navigation.ts`、`layouts/InternalLayout.tsx` | 前端导航事实、原路由识别、系统服务各子入口独立权限；对象页加载失败仍登记当前工作标签 |
 | `apps/web/src/layouts/ShellHeader.tsx`、`shell.css` | 内部/供应商共享顶栏、导航尺寸、窄屏及专注布局 |
 | `apps/web/src/layouts/UnsavedChanges.tsx` | 已登记编辑器的链接离开、标签切换/关闭与 beforeunload 保护 |
 | `apps/web/src/work-tabs/` | 宽度收纳、检索、另开浏览器页签、按身份隔离的有界会话元数据 |

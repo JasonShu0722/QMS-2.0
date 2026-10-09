@@ -7,7 +7,8 @@
 | 文档 | 用途 |
 | --- | --- |
 | [开发治理](DEVELOPMENT-GOVERNANCE.md) | 任务模板、证据矩阵、分层门禁、独立审查和模块边界 |
-| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | Issue、实现、PR、Actions、部署、线上确认和复盘闭环 |
+| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 按目标分组、独立建 Issue 与提交 PR、最终回归、关闭、台账回填及计划内规则沉淀 |
+| [本轮变更修复计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md) | REQ-0006～0010、Issue #12～#15，独立实现并行、共享整合与最终交付闭环 |
 | [业务术语](DOMAIN-GLOSSARY.md) | 跨领域术语、权限与交付状态的区别 |
 | [架构决策](ARCHITECTURE-DECISIONS.md) | 既有决策、原始来源、代价和重审条件 |
 | [变更影响分析](CHANGE-IMPACT.md) | 新功能、缺陷、依赖升级的分析与复用模板 |
@@ -33,6 +34,7 @@
 | [数据保护](DATA-PROTECTION.md) | TLS、密钥、对象保护、备份和恢复 |
 | [邮件恢复](EMAIL-RECOVERY.md) | 邮箱确认、找回和投递 Worker |
 | [前端设计](FRONTEND-DESIGN.md) | 生产 Web 参考、迁移和验收 |
+| [导航、登录工具栏与需求反馈设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md) | REQ-0006～0010 的确认方案、四个 Issue / PR 分配、回归关闭与飞书回填；暂未实施 |
 | [OpenAPI](OPENAPI.md) | API 契约生成与同步 |
 | [阶段二](PHASE-2.md) | 平台实施和验收记录 |
 | [阶段三](PHASE-3.md) | 供应商质量实施和未完成边界 |

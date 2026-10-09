@@ -106,7 +106,7 @@ test('A internal profile, other-session revocation and password rotation use rea
     expect((await other.request.get('/api/v1/auth/session')).status()).toBe(401);
     await page.goto('/app/admin');
     await expect(page.getByText('无系统管理访问权限')).toBeVisible();
-    await expect(page.getByRole('link', { name: '系统管理' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '平台管理' })).toHaveCount(0);
   } finally { await other.close(); await probe.close(); }
 });
 
@@ -118,7 +118,7 @@ test('A supplier profile restores email and cannot enter internal administration
     await page.getByLabel('邮箱', { exact: true }).fill(`${unique('supplier')}@example.test`);
     await page.getByRole('button', { name: '保存资料' }).click();
     await expect(page.getByText('资料已保存')).toBeVisible();
-    await expect(page.getByRole('link', { name: '系统管理' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '平台管理' })).toHaveCount(0);
     await page.getByLabel('邮箱', { exact: true }).fill(original.email ?? '');
     const restored = page.waitForResponse((response) => response.url().endsWith('/api/v1/me') && response.request().method() === 'PATCH');
     await page.getByRole('button', { name: '保存资料' }).click();

@@ -83,7 +83,19 @@
       "path": ".agents/skills/qms-start-development/SKILL.md",
       "topic": "skill-start-development",
       "canonical": true,
-      "status": "active"
+      "status": "active",
+      "review": {
+        "owner": "QMS 工程维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-10-09",
+        "maxAgeDays": 90,
+        "reason": "复核交付分组、最终回归、逐记录回填与计划内沉淀路由；保留接单的本地授权与外部写入边界。",
+        "sources": [
+          {
+            "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
+            "sha256": "ff6bca5a96ed675d8c77c1602bf0c476f0ff851d39e2bd39b586424e8597f4d5"
+          }
+        ]
+      }
     },
     {
       "path": "docs/DOMAIN-GLOSSARY.md",
@@ -148,13 +160,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-22",
+        "reviewedOn": "2026-10-09",
         "maxAgeDays": 90,
-        "reason": "扩展现有任务模板，引用原分层门禁与事务边界，不改变阶段完成定义。",
+        "reason": "复核任务模板新增分组、交付闭环与沉淀要求，变更影响分析的分层门禁及事务边界继续适用。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+            "sha256": "02feefd29f4118edee081657ea64d9ac8dd158b35918c154ee772c21aabae943"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -309,7 +321,23 @@
       "path": "docs/FRONTEND-DESIGN.md",
       "topic": "frontend-design",
       "canonical": true,
-      "status": "active"
+      "status": "active",
+      "review": {
+        "owner": "QMS 前端维护者（本轮 Codex 核对）",
+        "reviewedOn": "2026-10-09",
+        "maxAgeDays": 90,
+        "reason": "复核 REQ-0006～0010 的确认设计、已创建 Issue #12～#15 和并行修复计划：独立实现并行、共享整合、验证后提交 PR，最终回归后关闭并回填。本地实现、两阶段审查与现有环境门禁已核验，真实设备及发布闭环仍待执行，不宣称上线验收完成。",
+        "sources": [
+          {
+            "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
+            "sha256": "ee82a541d16719bec9049b1fdf4f682ef7d7d29c458cbc59fa1d86631c3910c9"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md",
+            "sha256": "d5c8a00c3d1d506108720a4899d381047a93663910eba322b1c9feff05894244"
+          }
+        ]
+      }
     },
     {
       "path": "docs/OPENAPI.md",
@@ -566,9 +594,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-23",
+        "reviewedOn": "2026-10-09",
         "maxAgeDays": 90,
-        "reason": "P2-04 复核变更影响指南新增推荐工具后，本 Skill 仍以原任务模板和真实验收为准。",
+        "reason": "复核任务模板新增交付映射、闭环与沉淀字段，功能交付技能的影响分析和真实验收门禁继续适用。",
         "sources": [
           {
             "path": "docs/CHANGE-IMPACT.md",
@@ -576,7 +604,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+            "sha256": "02feefd29f4118edee081657ea64d9ac8dd158b35918c154ee772c21aabae943"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -592,13 +620,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-22",
+        "reviewedOn": "2026-10-09",
         "maxAgeDays": 90,
-        "reason": "P2 新增入口，核对引用来源、实际脚本及适用边界；不替代业务验收或用户授权。",
+        "reason": "复核任务模板新增交付闭环与沉淀要求，权限审查的验证责任及授权边界继续适用。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "d8e029e39b746956a6a73dc337f84830b0d81d719d69b088abb7b806e6e5ddf6"
+            "sha256": "02feefd29f4118edee081657ea64d9ac8dd158b35918c154ee772c21aabae943"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -656,9 +684,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（项目级 Superpowers 工作流）",
-        "reviewedOn": "2026-10-08",
+        "reviewedOn": "2026-10-09",
         "maxAgeDays": 90,
-        "reason": "2026-10-09（Asia/Shanghai，对应 UTC 2026-10-08）复核新增 GitHub 提交命名入口：大写 V 前缀、V0.0.0 起点、中文主题及 fix 序号遵循交付流程，项目技能既有授权、验证及发布门禁保持适用。",
+        "reason": "复核按目标分组、独立建 Issue 与提交 PR、最终回归、回填及计划内沉淀路由；提交命名、授权和真实验证门禁继续遵循项目规则。",
         "sources": [
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -666,7 +694,11 @@
           },
           {
             "path": "AGENTS.md",
-            "sha256": "745c11d49603d4905037aed9fe851ade0db937a92b6530fdec0fc560e7d3bd51"
+            "sha256": "1d970628b097cafb7235066f55f8c164970bbb4b29480483386fe80cc17a66d5"
+          },
+          {
+            "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
+            "sha256": "ff6bca5a96ed675d8c77c1602bf0c476f0ff851d39e2bd39b586424e8597f4d5"
           }
         ]
       }

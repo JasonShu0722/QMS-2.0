@@ -18,6 +18,7 @@ it('shows an empty supplier inbox without offering internal draft creation', asy
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, canCreateDraft: false }), { headers: { 'content-type': 'application/json' } })));
   render(<MemoryRouter initialEntries={['/supplier/corrections']}><SupplierQualityPage portal /></MemoryRouter>);
   expect(await screen.findByText('尚未收到问题单')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '问题与整改' })).toBeVisible();
   expect(screen.queryByRole('button', { name: '创建问题草稿' })).not.toBeInTheDocument();
 });
 
@@ -25,6 +26,7 @@ it('reports authorization failure instead of displaying an empty successful ledg
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }), { status: 403, headers: { 'content-type': 'application/json' } })));
   render(<MemoryRouter initialEntries={['/app/supplier-quality']}><SupplierQualityPage /></MemoryRouter>);
   expect(await screen.findByText('无权执行此操作')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '供应商问题台账' })).toBeVisible();
   expect(screen.queryByText('暂无问题草稿')).not.toBeInTheDocument();
 });
 

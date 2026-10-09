@@ -8,6 +8,10 @@ import { problemWorkspaceTranslations } from '../features/problem-workspace/prob
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
 
 const translations: Record<string, string> = {
+  '制程质量': 'Process quality', '不良品台账': 'Defect ledger',
+  '系统服务': 'System services', '平台管理': 'Platform administration', '问题管理面板': 'Problem management panel', '供应商问题台账': 'Supplier problem ledger', '公告': 'Announcements',
+  '关键件条码校验': 'Critical part barcode validation', '流程权限加载失败': 'Workflow permissions could not be loaded',
+  '流程对象层级': 'Workflow hierarchy', '查看': 'View', '草稿编辑': 'Edit draft', '已发布查看': 'View published version', '已停用版本查看': 'View retired version',
 "供应商协作基础入口已就绪，暂无业务数据。": "The supplier collaboration entry is ready. No business data is available yet.",
 "供应商导航": "Supplier navigation",
 "放弃修改并关闭": "Discard and close",

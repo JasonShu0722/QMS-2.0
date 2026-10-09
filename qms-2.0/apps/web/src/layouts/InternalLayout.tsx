@@ -1,4 +1,5 @@
 import { Alert, Button, Drawer, Typography } from 'antd';
+import type { components } from '@qms/contracts';
 import { useEffect, useState } from 'react';
 import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -34,7 +35,7 @@ import { SupplierQualityTargetsPage } from '../features/supplier-quality-targets
 import { SupplierPpapPage } from '../features/supplier-ppap/SupplierPpapPage';
 import { SupplierAsnPage } from '../features/supplier-asn/SupplierAsnPage';
 import { getAdminOrganizations, type AdminOrganization } from '../features/admin/admin';
-import { ApiError, safeAccountError } from '../api/client';
+import { ApiError, apiRequest, safeAccountError } from '../api/client';
 import { useLanguage } from '../i18n/Language';
 import { ShellHeader } from './ShellHeader';
 import { UnsavedChangesProvider } from './UnsavedChanges';
@@ -44,17 +45,26 @@ function EmptyDomain({ title }: { title: string }) {
   const { t } = useLanguage();
   return <section className="empty-domain"><Typography.Title level={2}>{title}</Typography.Title><Typography.Paragraph type="secondary">{t('基础入口已就绪，业务功能将在后续阶段接入。')}</Typography.Paragraph></section>;
 }
-export function InternalLayout() { return <UnsavedChangesProvider><InternalShell /></UnsavedChangesProvider>; }
+export function InternalLayout() {
+  const sessionScope = useWorkTabsStore((state) => state.sessionScope);
+  return <UnsavedChangesProvider><InternalShell key={sessionScope} /></UnsavedChangesProvider>;
+}
 function InternalShell() {
   const { t } = useLanguage();
   const location = useLocation();
   const openTab = useWorkTabsStore((state) => state.openTab);
+  const currentTab = useWorkTabsStore((state) => state.tabs.find((tab) => tab.id === location.pathname));
   const isWorkbench = location.pathname === '/app/workbench' || location.pathname === '/app';
   const active = activeInternalDomain(location.pathname);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [organizations, setOrganizations] = useState<AdminOrganization[] | null>(null);
-  const visibleDomains = internalDomains.filter((domain) => domain.path !== '/app/admin' || !!organizations?.length);
+  const [permissions, setPermissions] = useState<components['schemas']['PermissionsResponseDto']>();
+  const [permissionError, setPermissionError] = useState<unknown>();
+  const visibleDomains = internalDomains.flatMap((domain) => {
+    const children = domain.children.filter((entry) => entry.path === '/app/admin' ? !!organizations?.length : entry.path === '/app/workflow-designer' ? !!permissions?.permissions?.includes('workflow:manage') : true);
+    return children.length ? [{ ...domain, path: children[0]!.path, children }] : [];
+  });
   const activeDomain = visibleDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
   const [adminError, setAdminError] = useState<string>();
   const [adminTraceId, setAdminTraceId] = useState<string>();
@@ -65,8 +75,17 @@ function InternalShell() {
   const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
   useEffect(() => {
     let current = true;
+    setOrganizations(null); setAdminError(undefined); setAdminTraceId(undefined);
     void getAdminOrganizations().then((result) => { if (current) { setOrganizations(result); setAdminError(undefined); setAdminTraceId(undefined); } }).catch((cause) => { if (current) { setAdminError(safeAccountError(cause)); setAdminTraceId(cause instanceof ApiError ? cause.traceId : undefined); } });
     return () => { current = false; };
+  }, [directoryRevision]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setPermissions(undefined); setPermissionError(undefined);
+    void apiRequest<components['schemas']['PermissionsResponseDto']>('/api/v1/system/my-permissions', { signal: controller.signal })
+      .then((result) => { if (!controller.signal.aborted) setPermissions(result); })
+      .catch((cause) => { if (!controller.signal.aborted) setPermissionError(cause); });
+    return () => controller.abort();
   }, [directoryRevision]);
   useEffect(() => {
     setMobileOpen(false);
@@ -76,9 +95,11 @@ function InternalShell() {
     const path = `${location.pathname}${location.search}`;
     const id = problemRoute ? `problem:${problemRoute[1]}` : location.pathname;
     const existing = store.tabs.find((tab) => tab.id === id);
-    const title = problemRoute ? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : workflowRoute ? `${t('流程编辑')} · ${workflowRoute[2]!.slice(0, 8)}` : active.label;
-    openTab({ id, path, title: existing?.title ?? title });
-  }, [location.pathname, location.search, isWorkbench, active, isAdmin, organizations, openTab]);
+    const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : workflowRoute ? existing?.title ?? active.label : active.label;
+    openTab({ id, path, title });
+  }, [location.pathname, location.search, isWorkbench, active, isAdmin, organizations, openTab, t]);
+  const workflowTitle = workflowRoute && currentTab && [t('编辑'), t('查看')].some((action) => currentTab.title.endsWith(` · ${action}`))
+    ? currentTab.title.slice(0, currentTab.title.lastIndexOf(' · ')) : undefined;
   const navigation = (mobile = false) => <>
     <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span>{(isWorkbench || mobile) && <span>QMS <small>2.0</small></span>}</Link>
     <nav className="qms-domain-nav" aria-label={t(isWorkbench || mobile ? '内部领域导航' : '内部领域图标导航')}>
@@ -102,15 +123,15 @@ function InternalShell() {
         <nav aria-label={`${t(activeDomain.label)} ${t('上下文菜单')}`}>
           {activeDomain.children.map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={entry.path === active?.path ? 'page' : undefined}>{t(entry.label)}</Link>)}
           {problemRoute && <span className="qms-context-current">{t('问题处理')}</span>}
-          {workflowRoute && <span className="qms-context-current">{t('流程编辑')}</span>}
         </nav>
       </aside>}
     </aside>
     <div className="qms-main">
-      <ShellHeader title={isWorkbench ? '质量管理平台' : active?.label ?? '工作页'} onOpenNavigation={() => setMobileOpen(true)} />
+      <ShellHeader title={isWorkbench ? '质量管理平台' : workflowTitle ?? active?.label ?? '工作页'} translateTitle={workflowTitle === undefined} onOpenNavigation={() => setMobileOpen(true)} />
       <WorkTabs mode="strip" />
       <main className="qms-content" id="main-content" tabIndex={-1}>
         {adminError && !isAdmin ? <Alert type="error" role="alert" title={`${t('管理权限加载失败')}: ${t(adminError)}`} description={adminTraceId ? <code>{adminTraceId}</code> : undefined} /> : null}
+        {!!permissionError && <Alert type="error" role="alert" title={`${t('流程权限加载失败')}: ${t(safeAccountError(permissionError))}`} description={permissionError instanceof ApiError && permissionError.traceId ? <code>{permissionError.traceId}</code> : undefined} />}
         {isWorkbench ? <Workbench /> : null}
         {!isWorkbench && active && !implemented ? <EmptyDomain title={t(active.label)} /> : null}
         {location.pathname.startsWith('/app/problem-center') ? <ProblemCenterPage /> : null}

@@ -94,7 +94,8 @@ test('real neutral problem supports saved views, evidence, immutable revisions, 
     expect(projectionBeforeResponse.status()).toBe(200);
     const projectionBefore = await projectionBeforeResponse.json() as ProjectionStatus;
     expect(projectionBefore).toMatchObject({ outboxEventId: fixture.failedOutbox.id, outboxStatus: 'FAILED' });
-    await page.getByRole('link', { name: '系统管理', exact: true }).click();
+    await page.getByRole('navigation', { name: /内部领域/ }).getByRole('link', { name: '系统服务', exact: true }).click();
+    await page.getByRole('navigation', { name: '系统服务 上下文菜单', exact: true }).getByRole('link', { name: '平台管理', exact: true }).click();
     await page.getByRole('tab', { name: '失败队列', exact: true }).click();
     const failureRow = page.getByRole('row').filter({ hasText: fixture.problem.instanceId });
     await expect(failureRow).toContainText('5');
@@ -113,6 +114,7 @@ test('real neutral problem supports saved views, evidence, immutable revisions, 
     expect(projectionAfter.notificationCount).toBe(projectionBefore.notificationCount);
 
     await page.getByRole('link', { name: '问题中心', exact: true }).click();
+    await page.getByRole('navigation', { name: '问题中心 上下文菜单', exact: true }).getByRole('link', { name: '问题管理面板', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/app/problem-center`));
     const queryButton = page.getByRole('button', { name: /^查\s*询$/ });
     await expect(queryButton).toBeVisible({ timeout: 15000 });

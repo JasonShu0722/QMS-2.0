@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
-import { Alert, Button, Card, Space, Spin, Tag, Typography } from 'antd';
-import { Link, useNavigate } from 'react-router-dom';
+import { Alert, Breadcrumb, Button, Card, Space, Spin, Tag, Typography } from 'antd';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import * as api from './workflow-api';
@@ -17,6 +18,8 @@ export function WorkflowDesignerPage(props: Props) { return <Designer key={`${pr
 function Designer({ definitionId, versionId }: Props) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
+  const openTab = useWorkTabsStore((state) => state.openTab);
   const [baseline, setBaseline] = useState<api.WorkflowDefinition>();
   const [graph, setGraph] = useState<api.WorkflowGraph>({ nodes: [], transitions: [] });
   const [description, setDescription] = useState('');
@@ -56,6 +59,9 @@ function Designer({ definitionId, versionId }: Props) {
   useUnsavedChanges(dirty);
   const frozen = baseline?.version.status !== 'DRAFT';
   const readOnly = frozen || denied || busy;
+  useEffect(() => {
+    if (baseline) openTab({ id: location.pathname, path: `${location.pathname}${location.search}`, title: `${baseline.name} · ${t(baseline.version.status === 'DRAFT' ? '编辑' : '查看')}` });
+  }, [baseline, location.pathname, location.search, openTab, t]);
   useEffect(() => {
     if (!dirty) return;
     const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -108,6 +114,12 @@ function Designer({ definitionId, versionId }: Props) {
   }
   const conflict = error instanceof ApiError && ['CONCURRENCY_CONFLICT', 'WORKFLOW_VERSION_IMMUTABLE', 'WORKFLOW_DRAFT_EXISTS'].includes(error.code);
   return <section className="workflow-editor">
+    {baseline && <nav aria-label={t('流程对象层级')}><Breadcrumb items={[
+      { title: <Link to="/app/announcements">{t('系统服务')}</Link> },
+      { title: <Link to="/app/workflow-designer">{t('流程设计')}</Link> },
+      { title: baseline.name },
+      { title: `${t(baseline.version.status === 'DRAFT' ? '草稿编辑' : baseline.version.status === 'PUBLISHED' ? '已发布查看' : '已停用版本查看')} · ${t('版本')} ${baseline.version.version}` },
+    ]} /></nav>}
     <Link to="/app/workflow-designer">{t('受控流程列表')}</Link>
     <header className="workflow-heading"><div><Typography.Title level={2}>{baseline?.name ?? t('流程设计器')}</Typography.Title>
       {baseline && <Space><code>{baseline.code}</code><Tag>{t(workflowLabel(baseline.version.status))}</Tag><span>{t('版本')} {baseline.version.version}</span><span>{t('编辑修订')} {baseline.revision}</span>{dirty && <Tag color="orange">{t('未保存')}</Tag>}</Space>}
