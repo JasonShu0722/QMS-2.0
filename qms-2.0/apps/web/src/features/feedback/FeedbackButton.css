@@ -1,0 +1,24 @@
+.qms-feedback-button {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid var(--qms-accent);
+  border-radius: 50%;
+  background: var(--qms-surface);
+  color: var(--qms-accent-action);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 12%);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.qms-feedback-button:hover { background: var(--qms-accent-soft); box-shadow: 0 4px 16px rgb(0 0 0 / 16%); }
+.qms-feedback-button:active { cursor: grabbing; }
+.qms-feedback-button:focus-visible { outline: 3px solid var(--qms-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .qms-feedback-button { transition: none; } }
+@media print { .qms-feedback-button { display: none; } }
