@@ -1,24 +1,20 @@
-import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { LoginPage } from './features/auth/LoginPage';
 import { AuthenticatedRoute } from './features/auth/AuthenticatedRoute';
 import { InternalLayout } from './layouts/InternalLayout';
 import { SupplierLayout } from './layouts/SupplierLayout';
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
-import { LanguageProvider, LanguageSwitcher } from './i18n/Language';
+import { LanguageProvider } from './i18n/Language';
 import { SecurityPage } from './features/auth/SecurityPage';
 import { ReauthenticationProvider } from './features/auth/ReauthenticationProvider';
 import { PasswordRecoveryPage } from './features/auth/PasswordRecoveryPage';
-
-function AuthLanguageSwitcher() {
-  const { pathname } = useLocation();
-  return pathname.startsWith('/app') || pathname.startsWith('/supplier') ? null : <div className="auth-language-switcher"><LanguageSwitcher /></div>;
-}
+import { AuthToolbar } from './features/auth/AuthToolbar';
 
 export function App() {
   return (
     <LanguageProvider><ThemeProvider><Router><ReauthenticationProvider>
-      <AuthLanguageSwitcher />
+      <AuthToolbar />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/mfa" element={<SecurityPage />} />

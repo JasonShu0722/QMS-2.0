@@ -20,6 +20,7 @@ describe('shared appearance', () => {
   it('changes mode and accent independently and restores saved preferences', async () => {
     localStorage.setItem(preferenceKey, JSON.stringify({ mode: 'dark', accent: 'teal' }));
     render(<ThemeProvider><AppearanceButton /></ThemeProvider>);
+    expect(screen.getByRole('button', { name: '外观设置' })).toHaveTextContent('外观');
     fireEvent.click(screen.getByRole('button', { name: '外观设置' }));
     fireEvent.click(await screen.findByRole('button', { name: '鸢尾紫' }));
     expect(document.documentElement.dataset.qmsAppearance).toBe('dark');
