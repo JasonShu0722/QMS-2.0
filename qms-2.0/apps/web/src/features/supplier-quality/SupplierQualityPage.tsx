@@ -192,7 +192,7 @@ export function SupplierQualityPage({ portal = false }: { portal?: boolean }) {
   const base = supplierPath(portal);
   const suffix = location.pathname.slice(base.length);
   const match = /^\/problems\/([0-9a-f-]{36})$/i.exec(suffix);
-  return <main className="supplier-quality-page"><div className="supplier-heading"><div><Typography.Text type="secondary">供应商质量协作</Typography.Text><Typography.Title level={1}>{portal ? '问题与整改' : t('供应商问题台账')}</Typography.Title></div>
+  return <main className="supplier-quality-page"><div className="supplier-heading"><div><Typography.Title level={1}>{portal ? '问题与整改' : t('供应商问题台账')}</Typography.Title></div>
     {!portal ? <Space wrap><Link to={base}>问题台账</Link><Link to={`${base}/profiles`}>供应商资料</Link></Space> : null}</div>
     {match ? <ProblemDetail key={match[1]} id={match[1]} portal={portal} /> : !portal && suffix === '/new' ? <><Link to={base}>返回台账</Link><ProblemForm saved={(value) => navigate(`${base}/problems/${value.id}`)} /></> : !portal && suffix === '/profiles' ? <SupplierProfilesPage /> : <ProblemLedger portal={portal} />}
   </main>;
