@@ -36,6 +36,20 @@ A 两条共同定义导航树与编辑上下文，需要共同验收与回滚；
 
 后续获准合并时，先将前置 PR 合入 `main`，再核对后续 PR 的基线并改为 `main`；如果采用 squash / rebase 合并，须重建后续依赖基线并重新验证差异，避免带入前置提交。不得直接把后续 PR 合入功能分支当作主分支交付。实际 PR 链接与源码 SHA 在创建后记录；CI、最终部署与闭环状态以真实结果为准。
 
+### 1.2 PR #18 的 CI 回归修复
+
+2026-10-09 用户指出 PR #18 失败并要求继续；沿用本轮提交、推送和原 PR 更新授权，不新增 Issue / PR。Foundation run `37892252611` 的 `web-tests (4)` 唯一失败是供应商附件用例未等到“已选 1 个可提交证据”，其他 127 项及其余任务通过；A / B / D 的最新 Foundation 已通过。
+
+影响范围仅为 `SupplierQualityPage.test.tsx` 的异步刷新交互和本计划 / 来源摘要，不修改附件上传、扫描、证据授权、API、数据库或 CI 超时。根因已验证：上传后“等待安全扫描”已显示，但自动查询仍在进行，测试点击禁用的刷新按钮被忽略；自动轮询 2000 ms 晚于查询断言默认 1000 ms。受控附件读取 Promise 稳定重现同一断言红灯；修复等待可交互状态后点击，并保留扫描前拒绝、扫描后新增读取及实际提交证据 ID 的断言。
+
+检查点：全新实现代理 `ci18_attachment_test_fix` 执行确定性红绿及附件相邻测试；先规格审查，再独立质量审查；主代理复跑受影响测试、原 4/4 shard、类型检查、治理和差异检查。修复版本预留 `V0.0.3-fix1`；验证通过后更新原 PR #18，并以普通合并同步 D 的依赖基线，不重写已推送历史。CI 通过前保持失败 / 待复核状态，部署、Issue 关闭及飞书回填仍未执行。
+
+证据在 Git 外本轮目录的 `publication/`：原单文件基线 9 PASS / exit 0（`C-fix1-baseline.log`）；受控读取原失败 1 FAIL / exit 1（`C-fix1-red.log`，仅选择目标用例）；附件相邻 2 文件 / 15 PASS / exit 0（`C-fix1-green.log`）；最终目标 1 PASS / exit 0（`C-fix1-target-final.log`）。主代理在 Node 24.21.0 复跑原 CI 命令 `corepack pnpm --filter @qms/web test --shard=4/4 --maxWorkers=1`：16 文件 / 128 PASS / exit 0（`C-fix1-shard4.log`），无 Skip；Web 类型检查 exit 0（`C-fix1-lint.log`）。规格代理 `ci18_spec_review` 与质量代理 `ci18_quality_review` 均 PASS，无阻断；最终 CI 结果在原 PR 接续，不将本地结果当作 CI 或上线结果。
+
+本次生产源码完全不变，未重建一次性业务环境或重跑真实浏览器 / PostgreSQL；本轮之前的业务证据仍对应相同生产源码，不作为最终发布验收。沿用既有“异步交互等待状态、不用延长超时掩盖竞态”的维护要求，无新增通用规则；受控读请求保留在失败用例中防止复发。
+
+修复提交 `72c9dfc9578943476822b40f8bf1795026ae5bb5` 已推送至原 PR #18；[Foundation #84](https://github.com/JasonShu0722/QMS-2.0/actions/runs/37897054682) 实际 completed / success。D 通过普通合并同步此依赖提交，保留既有 PR 映射和交付文档；唯一来源摘要冲突按最终合并计划的实际内容重算，不选用任一旧摘要。D 最新 HEAD 的检查仍单独核验，不复用旧 HEAD 的绿色结果。
+
 ## 2. 已发布 Issue 的范围底稿
 
 ### A：调整导航结构与页面层级
