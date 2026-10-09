@@ -7,7 +7,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [开发治理](DEVELOPMENT-GOVERNANCE.md) | 任务模板、证据矩阵、分层门禁、独立审查和模块边界 |
-| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 按目标分组、独立建 Issue 与提交 PR、最终回归、关闭、台账回填及计划内规则沉淀 |
+| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 常规修复主动建 Issue / 提 PR、纯文档例外、授权检查点、最终回归、关闭与回填 |
 | [本轮变更修复计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md) | REQ-0006～0010、Issue #12～#15，独立实现并行、共享整合与最终交付闭环 |
 | [业务术语](DOMAIN-GLOSSARY.md) | 跨领域术语、权限与交付状态的区别 |
 | [架构决策](ARCHITECTURE-DECISIONS.md) | 既有决策、原始来源、代价和重审条件 |
@@ -18,8 +18,8 @@
 | [维护事项台账](MAINTENANCE-REGISTER.md) | 已知弃用和容量限制的触发、复核及关闭证据 |
 | [运行观测与演练准备](OPERABILITY-READINESS.md) | 一次性数据库的 Outbox/扫描快照与备份恢复演练边界 |
 | [文档复核机制](DOCUMENTATION-MAINTENANCE.md) | 索引、来源变化、复核到期与废弃规则 |
-| [工程工具与 Skill](ENGINEERING-TOOLS.md) | 任务交接、源码快照、验收证据与三个专用 Skill |
-| [飞书需求开发启动 Skill](../.agents/skills/qms-start-development/SKILL.md) | 自然语言查看遗留工作或接单；独立评审并推进已批准的本地开发 |
+| [工程工具与 Skill](ENGINEERING-TOOLS.md) | 命令环境、共享 Git 状态、浏览器接续、任务交接和验收证据 |
+| [飞书需求开发启动 Skill](../.agents/skills/qms-start-development/SKILL.md) | 查看遗留工作或接单；评审后按有效授权主动推进对应检查点 |
 | [能力状态总账](CAPABILITY-STATUS.md) | 当前能力、验收状态、限制和试点/生产边界 |
 | [Foundation](FOUNDATION.md) | 基础、平台和治理验收事实及历史记录 |
 | [平台交接](PLATFORM-HANDOFF.md) | 平台接口、事务、权限和集成约束 |
@@ -34,7 +34,7 @@
 | [数据保护](DATA-PROTECTION.md) | TLS、密钥、对象保护、备份和恢复 |
 | [邮件恢复](EMAIL-RECOVERY.md) | 邮箱确认、找回和投递 Worker |
 | [前端设计](FRONTEND-DESIGN.md) | 生产 Web 参考、迁移和验收 |
-| [导航、登录工具栏与需求反馈设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md) | REQ-0006～0010 的确认方案、四个 Issue / PR 分配、回归关闭与飞书回填；暂未实施 |
+| [导航、登录工具栏与需求反馈设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md) | REQ-0006～0010 的设计与交付映射；已发布并经负责人手动最终验收、关闭回填 |
 | [OpenAPI](OPENAPI.md) | API 契约生成与同步 |
 | [阶段二](PHASE-2.md) | 平台实施和验收记录 |
 | [阶段三](PHASE-3.md) | 供应商质量实施和未完成边界 |
