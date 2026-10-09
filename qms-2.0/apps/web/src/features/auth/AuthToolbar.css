@@ -1,0 +1,44 @@
+.qms-auth-toolbar {
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px;
+  border: 1px solid var(--qms-border);
+  border-radius: 10px;
+  background: var(--qms-surface);
+  box-shadow: var(--qms-shadow);
+}
+
+.qms-auth-toolbar button.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--qms-text);
+  background: var(--qms-surface);
+}
+
+.qms-auth-toolbar button.ant-btn:hover {
+  color: var(--qms-text);
+  background: var(--qms-accent-soft);
+}
+
+.qms-auth-toolbar .language-switcher > span:not(.ant-btn-icon),
+.qms-auth-toolbar .language-switcher > svg {
+  display: none;
+}
+
+.login-topbar .entry-note { margin-right: 84px; }
+
+@media (max-width: 760px), (pointer: coarse) {
+  .qms-auth-toolbar { top: 6px; right: 12px; }
+  .qms-auth-toolbar button.ant-btn { width: 44px; height: 44px; }
+  .login-topbar .entry-note { margin-right: 92px; }
+}

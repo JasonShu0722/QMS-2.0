@@ -221,7 +221,7 @@ export function LanguageSwitcher() {
       'aria-checked': item.key === locale,
       icon: <Check size={14} aria-hidden="true" style={{ visibility: item.key === locale ? 'visible' : 'hidden' }} />,
     })),
-    onClick: ({ key }) => setLocale(key as Locale),
+    onClick: ({ key, domEvent }) => { domEvent.preventDefault(); setLocale(key as Locale); handleOpenChange(false); },
   }}>
     <Button ref={triggerRef} className="language-switcher" aria-label="Language / 语言" aria-haspopup="menu" aria-expanded={open} icon={<Languages size={17} aria-hidden="true" />}>
       <span>{locale === 'zh-CN' ? '中文' : 'EN'}</span><ChevronDown size={13} aria-hidden="true" />

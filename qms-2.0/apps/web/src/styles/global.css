@@ -442,8 +442,6 @@ body { color: var(--qms-text); background: var(--qms-background); }
 .login-container { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; }
 .login-panel-shell { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
 .login-panel-shell > a { display: inline-block; color: var(--qms-accent); margin-top: 20px; font-size: 14px; }
-.auth-language-switcher { position: fixed; top: 12px; right: 20px; z-index: 1100; }
-.auth-language-switcher .language-switcher.ant-btn { background: #fff; color: #293b50; border-color: #e1e7ef; color-scheme: light; }
 .admin-page { padding: 24px; box-shadow: var(--qms-shadow); min-width: 0; }
 .admin-heading { margin-bottom: 24px; }
 .admin-heading h2, .account-center h2 { font-size: 26px; letter-spacing: -.3px; }

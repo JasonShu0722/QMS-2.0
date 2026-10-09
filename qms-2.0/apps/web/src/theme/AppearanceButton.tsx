@@ -5,12 +5,12 @@ import { useLanguage } from '../i18n/Language';
 import { useAppearance } from './ThemeProvider';
 import { accentNames, resolveTokens, type Accent } from './tokens';
 
-export function AppearanceButton() {
+export function AppearanceButton({ compact = false }: { compact?: boolean }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const { preferences, setPreferences } = useAppearance();
   return <>
-    <Button className="qms-appearance-trigger" type="text" icon={<Palette size={18} />} onClick={() => setOpen(true)} aria-label={t('外观设置')}>{t('外观')}</Button>
+    <Button className="qms-appearance-trigger" type="text" icon={<Palette size={18} aria-hidden="true" />} onClick={() => setOpen(true)} aria-label={t('外观设置')} title={t('外观设置')}>{compact ? null : t('外观')}</Button>
     <Drawer title={t('外观设置')} open={open} onClose={() => setOpen(false)} size={360}>
       <section className="qms-appearance-settings">
         <h3>{t('显示模式')}</h3><p>{t('选择适合当前环境的界面亮度')}</p>
