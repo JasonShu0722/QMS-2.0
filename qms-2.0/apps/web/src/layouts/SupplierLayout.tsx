@@ -2,6 +2,7 @@ import { Drawer, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supplierNavigation } from '../features/navigation/navigation';
+import { FeedbackButton } from '../features/feedback/FeedbackButton';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { WorkTabs } from '../work-tabs/WorkTabs';
 import { AccountCenterPage } from '../features/account/AccountCenterPage';
@@ -34,5 +35,6 @@ function SupplierShell() {
       <main className="qms-content" id="main-content" tabIndex={-1}>{location.pathname.startsWith('/supplier/account') ? <AccountCenterPage /> : location.pathname.startsWith('/supplier/corrections') ? <SupplierQualityPage portal /> : location.pathname.startsWith('/supplier/pcns') ? <SupplierPcnPage portal /> : location.pathname.startsWith('/supplier/performance') ? <SupplierPerformancePortalPage /> : location.pathname === '/supplier/inbox' ? <SupplierNotificationsPage /> : <section className="empty-domain"><Typography.Title level={2}>{t(active.label)}</Typography.Title><Typography.Paragraph type="secondary">{t('供应商协作基础入口已就绪，暂无业务数据。')}</Typography.Paragraph></section>}</main>
     </div>
     <Drawer title={t('供应商导航')} open={mobileOpen} placement="left" size={280} onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation">{navigation}</div></Drawer>
+    <FeedbackButton />
   </div>;
 }

@@ -17,6 +17,7 @@ const translations: Record<string, string> = {
 "放弃修改并关闭": "Discard and close",
   "外观": "Appearance",
   "外观设置": "Appearance settings",
+  "需求反馈": "Requirement feedback",
   "显示模式": "Display mode",
   "选择适合当前环境的界面亮度": "Choose the brightness for your environment",
   "浅色": "Light",

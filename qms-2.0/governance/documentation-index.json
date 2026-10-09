@@ -330,11 +330,11 @@
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
-            "sha256": "ee82a541d16719bec9049b1fdf4f682ef7d7d29c458cbc59fa1d86631c3910c9"
+            "sha256": "65693758e8faf3044edfc771ac610de6715c0af4644db6d9eadc6ad60ce7bbb9"
           },
           {
             "path": "../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md",
-            "sha256": "45e67fcc0e8fea7891ece5b200374264b8931d0773e04191fd82abe66f9dfbb3"
+            "sha256": "8f5f126e5ab8c42aabd7dbdbebf36d4b692191bbcbeb93661e637c5b88072470"
           }
         ]
       }

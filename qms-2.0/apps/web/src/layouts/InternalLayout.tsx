@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { activeInternalDomain, internalDomains } from '../features/navigation/navigation';
+import { FeedbackButton } from '../features/feedback/FeedbackButton';
 import { WorkTabs } from '../work-tabs/WorkTabs';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
@@ -163,5 +164,6 @@ function InternalShell() {
       </main>
     </div>
     <Drawer title={t('业务导航')} open={mobileOpen} placement="left" size={280} onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation">{navigation(true)}</div></Drawer>
+    <FeedbackButton />
   </div>;
 }

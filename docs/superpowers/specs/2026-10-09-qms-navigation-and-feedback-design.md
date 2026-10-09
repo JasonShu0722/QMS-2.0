@@ -2,7 +2,7 @@
 
 日期：2026-10-09（Asia/Shanghai）。
 
-状态：用户已在当前会话确认下述方向；本文件记录设计，功能尚未实施、验收或发布。飞书最近读取快照的五条需求均为“方案沟通中”，本次设计确认不自动变更表格状态。
+状态：下述设计已由用户确认；本轮本地实现与现有环境验证完成，已获准提交、推送并创建 PR #16～#19，尚未合并、发布或完成最终上线验收。设计阶段“方案沟通中”快照属于历史；执行阶段回读 rev 148，五条均为“开发中”，未写入飞书。实际映射与限制见[本轮实现计划](../plans/2026-10-09-qms-navigation-repair.md)。
 
 ## 1. 来源与范围
 
@@ -195,6 +195,6 @@ B、C、D 的交付目标及失败场景独立，保留单独 Issue 和 PR。接
 
 本次仅完善设计、四个交付单元及执行闭环，更新导航和来源索引；未创建 GitHub Issue / PR，未修改功能代码、提交、推送、合并、发布或回填飞书。第 1 节状态是读取快照，不代表未来执行时仍有效。
 
-上述为设计阶段历史记录。2026-10-09 用户在同线程启动修复并将五条需求设为“开发中”，已回读 rev 148；按用户顺序要求先创建并回读 [Issue #12](https://github.com/JasonShu0722/QMS-2.0/issues/12)（A）、[#13](https://github.com/JasonShu0722/QMS-2.0/issues/13)（B）、[#14](https://github.com/JasonShu0722/QMS-2.0/issues/14)（C）、[#15](https://github.com/JasonShu0722/QMS-2.0/issues/15)（D）。独立实现按用户要求并行，真实结果与剩余闭环记录在[本轮实现计划](../plans/2026-10-09-qms-navigation-repair.md)。尚未提交 PR 或完成上线验收，不能提前关闭 Issue。
+上述为设计阶段历史记录。2026-10-09 用户在同线程启动修复并将五条需求设为“开发中”，已回读 rev 148；按用户顺序要求先创建并回读 [Issue #12](https://github.com/JasonShu0722/QMS-2.0/issues/12)（A）、[#13](https://github.com/JasonShu0722/QMS-2.0/issues/13)（B）、[#14](https://github.com/JasonShu0722/QMS-2.0/issues/14)（C）、[#15](https://github.com/JasonShu0722/QMS-2.0/issues/15)（D）。独立实现按用户要求并行，真实结果与剩余闭环记录在[本轮实现计划](../plans/2026-10-09-qms-navigation-repair.md)。随后直接获准提交、推送并创建 [PR #16](https://github.com/JasonShu0722/QMS-2.0/pull/16)（A / V0.0.1）、[#17](https://github.com/JasonShu0722/QMS-2.0/pull/17)（B / V0.0.2）、[#18](https://github.com/JasonShu0722/QMS-2.0/pull/18)（C / V0.0.3）、[#19](https://github.com/JasonShu0722/QMS-2.0/pull/19)（D / V0.0.4）；按 A → B → C → D 依赖基线隔离差异。尚未合并、发布或完成最终上线验收，不能提前关闭 Issue。
 
 后续执行先回查需求、已有链接和有效授权，在根 `docs/superpowers/plans/` 保存各交付单元的实际实现计划。计划关联本设计第 10～13 节，并逐步填写真实编号、源码、审查、验证和闭环结果；不得只完成修改或合并而遗漏最终回归、关闭 Issue 与飞书回读确认。
