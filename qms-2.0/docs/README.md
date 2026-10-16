@@ -6,20 +6,24 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [开发治理](DEVELOPMENT-GOVERNANCE.md) | 任务模板、证据矩阵、分层门禁、独立审查和模块边界 |
-| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 常规修复主动建 Issue / 提 PR、纯文档例外、授权检查点、最终回归、关闭与回填 |
-| [本轮变更修复计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md) | REQ-0006～0010、Issue #12～#15，独立实现并行、共享整合与最终交付闭环 |
+| [开发治理](DEVELOPMENT-GOVERNANCE.md) | 计划顶部当前摘要、工程完成条件、证据矩阵、质量门禁和独立审查 |
+| [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 参与者、授权、主动版本分配、Issue / PR、发布验收与关闭回填的权威流程 |
+| [工作流与治理整合设计](../../docs/superpowers/specs/2026-10-12-qms-workflow-integration-design.md) | 本轮已批准的职责整合、OpenClaw 只读分析、当前摘要与主动版本规则 |
+| [工作流与治理整合计划](../../docs/superpowers/plans/2026-10-12-qms-workflow-integration.md) | V0.0.6 文档调整、规则推演、独立复核与实际验证状态 |
+| [导航修复交付记录](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md) | REQ-0006～0010 历史闭环及顶部当前摘要；V0.0.5 已推送事实与部署版本分开 |
 | [业务术语](DOMAIN-GLOSSARY.md) | 跨领域术语、权限与交付状态的区别 |
 | [架构决策](ARCHITECTURE-DECISIONS.md) | 既有决策、原始来源、代价和重审条件 |
 | [变更影响分析](CHANGE-IMPACT.md) | 新功能、缺陷、依赖升级的分析与复用模板 |
 | [变更验证推荐](VALIDATION-IMPACT.md) | 根据 Git 改动推荐检查与文档复核，未知路径保守处理 |
 | [维护与发布手册](OPERATIONS-RUNBOOK.md) | 故障诊断、发布、恢复及防复发记录 |
-| [OpenClaw 运维协作接入](OPENCLAW-OPS-HANDOFF.md) | OpenClaw 的项目背景、监控、飞书表格协作和权限边界 |
+| [OpenClaw 运维协作接入](OPENCLAW-OPS-HANDOFF.md) | 源码 / 文档只读分析、需求五字段初稿、字段责任、监控与机器人权限边界 |
 | [维护事项台账](MAINTENANCE-REGISTER.md) | 已知弃用和容量限制的触发、复核及关闭证据 |
 | [运行观测与演练准备](OPERABILITY-READINESS.md) | 一次性数据库的 Outbox/扫描快照与备份恢复演练边界 |
 | [文档复核机制](DOCUMENTATION-MAINTENANCE.md) | 索引、来源变化、复核到期与废弃规则 |
 | [工程工具与 Skill](ENGINEERING-TOOLS.md) | 命令环境、共享 Git 状态、浏览器接续、任务交接和验收证据 |
 | [飞书需求开发启动 Skill](../.agents/skills/qms-start-development/SKILL.md) | 查看遗留工作或接单；评审后按有效授权主动推进对应检查点 |
+| [功能交付 Skill](../.agents/skills/qms-feature-delivery/SKILL.md) | 根据当前事实主动推进交付，输出阶段产物、证据与下一动作 |
+| [QMS 工程方法 Skill](../.agents/skills/qms-superpowers-zh/SKILL.md) | 工程方法路由；阶段细则引用交付流程 |
 | [能力状态总账](CAPABILITY-STATUS.md) | 当前能力、验收状态、限制和试点/生产边界 |
 | [Foundation](FOUNDATION.md) | 基础、平台和治理验收事实及历史记录 |
 | [平台交接](PLATFORM-HANDOFF.md) | 平台接口、事务、权限和集成约束 |

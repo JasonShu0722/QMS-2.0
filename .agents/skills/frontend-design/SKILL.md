@@ -7,6 +7,12 @@ This skill guides creation of distinctive, production-grade frontend interfaces 
 
 The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
 
+## 已有产品的适用边界
+
+先读项目的 AGENTS、设计规范、依赖与正式组件。已有设计系统和批准范围优先于下文所有风格建议；常规维护复用现有主题、字体、图标、布局和交互，小改动只做所需变化。QMS 正式 Web 使用其既有 Ant Design、共享主题与 lucide-react，不因本技能引入 Tailwind、第二套图标、字体或动画。下文风格探索用于新建界面或已获准的整体改版；原型保持隔离，不能据探索结果迁移生产页面。
+
+QMS 的场景分流、Taste 审计方法与人工验收接续依[前端实施指南](../../../qms-2.0/docs/FRONTEND-DESIGN.md#41-taste-与前端技能协作)。需要时加载已安装的 `design-taste-frontend` 作为同一任务中的审计 / 返修参考，不另开设计、TDD 或审查流程；未安装时按项目指南继续，不自动安装依赖。
+
 ## Design Thinking
 
 Before coding, understand the context and commit to a BOLD aesthetic direction:

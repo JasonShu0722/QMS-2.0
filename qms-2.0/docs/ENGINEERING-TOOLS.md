@@ -56,6 +56,8 @@ Git 清单覆盖活动 `qms-2.0/`、根 `docs/superpowers/`、根 AGENTS/README 
 
 断连或标签失效后重新读取浏览器清单，绑定本次清单中的目标标签；没有新的观察证据时不反复重试同一路径，不把连接错误报告为产品缺陷或验收 PASS。恢复工具失败时说明具体阻塞，选择可用且获准的另一验收会话，或提供[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)中的人工清单，不停在重复要求用户重新连接。
 
+负责人已选择此类连接故障按交付流程转人工验收，不将自动工具恢复作为继续开发的前置；提供版本、角色 / 环境、步骤、预期与反馈方式，保留待人工验收状态。只有用户另行要求恢复自动化或出现新的有效诊断依据时，再处理工具专项，不因工具故障反复中断其他已授权工作。
+
 已有用户登录会话优先使用正常工具控制；不读取、复制 cookie、令牌、会话文件或绕过 MFA，不自行修改扩展注册 / 安全配置。需要用户登录或验证时保留明确的交接页面，等待实际验证后再确认身份和可操作范围；不能把收到“已连接”当作工具已连接或业务已登录。结束时恢复临时视口等验收设置，保留用户原有标签和未保存内容。
 
 鼠标、CDP 模拟触屏与真实硬件证据分别记账；实际未提供的设备 / 角色按对应来源记录，不以模拟输入补造真实设备结论。具体恢复命令遵循所用浏览器 Skill，不在项目规则复制第三方安装或底层操作手册。
@@ -64,13 +66,24 @@ Git 清单覆盖活动 `qms-2.0/`、根 `docs/superpowers/`、根 AGENTS/README 
 
 | 入口 | 触发场景 |
 | --- | --- |
-| [功能交付](../.agents/skills/qms-feature-delivery/SKILL.md) | 领域开发、缺陷与跨层变更，连接影响分析和验收 |
+| [功能交付](../.agents/skills/qms-feature-delivery/SKILL.md) | 按当前摘要推进领域 / 缺陷交付检查点，交付实际产物与下一动作 |
 | [权限审查](../.agents/skills/qms-permission-review/SKILL.md) | 账号、组织/供应商、节点和附件授权的专项复核 |
 | [故障诊断](../.agents/skills/qms-incident-diagnosis/SKILL.md) | 依据现象逐层查证，修复后验证防复发 |
-| [QMS Superpowers 工作流](../.agents/skills/qms-superpowers-zh/SKILL.md) | QMS 功能、计划、子代理、审查和真实验收的流程路由 |
-| [飞书需求启动与接续](../.agents/skills/qms-start-development/SKILL.md) | 查看或接单，按有效授权推进 Issue、实现、PR 和对应闭环 |
+| [QMS Superpowers 工作流](../.agents/skills/qms-superpowers-zh/SKILL.md) | 设计、计划、隔离、TDD、子代理、审查和验证的工程方法路由 |
+| [飞书需求启动与接续](../.agents/skills/qms-start-development/SKILL.md) | 只读盘点、授权核验、机器人初稿评审与当前检查点定位 |
 
 上述入口引用权威规则，不自行授予部署或生产修改权限。它们位于工程内 `.agents/skills/`；从工程 AGENTS 可直接定位。客户端扫描该工程目录后才可能加入自动发现列表，不修改全局 Skill 配置，不声称文件更新等于客户端已热加载。
+
+### 通用技能协作边界
+
+- 项目入口确定范围、授权和当前检查点；Superpowers 执行工程方法，Matt 技能补充具体设计、测试或审查方法。同一任务只组织一条设计 / TDD / 审查流程，已确认事实不重复访谈。
+- `finishing-a-development-branch` 先复用交付流程中的有效决定；已授权 PR 或仅本地的情形直接接续，菜单只用于真实未决动作，不扩大合并、发布或删除权限。
+- `code-review` 组织完整范围与规格 / 质量两轴；仓库 `code-reviewer` 仅为质量参考，被委派时只做指定维度。QMS 保留先规格后质量与独立上下文；`qms-permission-review` 提供权限专项证据，不再反向启动完整审查。
+- 正式 Web 的权威依据与技术栈仍为前端目录 AGENTS 和设计规范。`frontend-design`、`design-taste-frontend`、Tailwind 等仅提供适用参考，保留既有 Ant Design、共享主题和 lucide-react，不因通用默认值新增框架、字体、图标或动画。
+- 技能文件存在、可经 AGENTS 找到、客户端自动发现、工具连接、真实业务验收分别核验。Codex 的[仓库发现范围](https://learn.chatgpt.com/docs/build-skills)从会话工作目录向上扫描；根目录会话不会仅因工程内存在 `.agents/skills/` 就向下发现其入口，沿既有 AGENTS 路径读取即可，不复制第二套权威技能。新独立上下文的路由演练不冒充客户端新聊天或热加载成功。
+- 浏览器正常初始化失败时保留原始错误和未执行范围；遇协议 / 信任等安全拒绝时停止该动作，不改安全策略、不换通道实现被拒绝的结果。人工证据可按已批准验收清单补充，不能据此声明自动工具已恢复。
+
+流程与授权由[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)维护，摘要与证据由开发治理维护；OpenClaw 的源码只读分析与五字段输出由[协作说明](OPENCLAW-OPS-HANDOFF.md)维护。`task:handoff` 是源码与计划快照，不自动更新顶部摘要或验证外部状态；接续时仍须人工 / 代理核对摘要和来源，不为本轮文档整合修改工具实现。
 
 ## 治理补强
 
