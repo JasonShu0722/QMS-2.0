@@ -93,6 +93,7 @@ describe('authenticated route', () => {
     globalThis.fetch = vi.fn<typeof globalThis.fetch>(() =>
       mockJsonResponse({
         user: { id: 'user-1', organizationId: 'org-1', accountType },
+        landingPath: path, securityState: 'AUTHENTICATED',
       }),
     );
 
@@ -118,7 +119,7 @@ describe('authenticated route', () => {
     globalThis.fetch = vi.fn<typeof globalThis.fetch>(() =>
       mockJsonResponse({
         user: { id: 'supplier-1', organizationId: 'org-1', accountType: 'SUPPLIER' },
-        landingPath: '/supplier/inbox',
+        landingPath: '/supplier/inbox', securityState: 'AUTHENTICATED',
       }),
     );
 
@@ -150,6 +151,7 @@ describe('authenticated route', () => {
       .mockImplementationOnce(() =>
         mockJsonResponse({
           user: { id: 'user-1', organizationId: 'org-1', accountType: 'INTERNAL' },
+          landingPath: '/app/workbench', securityState: 'AUTHENTICATED',
         }),
       );
 

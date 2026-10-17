@@ -8,7 +8,7 @@ export type { AccountType, LoginResponse } from '@qms/contracts';
 
 export type SessionView = {
   accountType: AccountType;
-  landingPath: LoginResponse['landingPath'];
+  landingPath: SessionResponse['landingPath'];
   userId: SessionResponse['user']['id'];
   organizationId: SessionResponse['user']['organizationId'];
 };
@@ -41,7 +41,7 @@ export function registerReauthentication(handler: () => Promise<void>) {
   return () => { if (reauthenticate === handler) reauthenticate = undefined; };
 }
 
-async function request<T>(path: string, init: RequestInit = {}, canReauthenticate = true): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, options: { replayAfterReauthentication?: boolean } = {}, canReauthenticate = true): Promise<T> {
   const response = await fetch(path, {
     ...init,
     credentials: 'include',
@@ -54,8 +54,11 @@ async function request<T>(path: string, init: RequestInit = {}, canReauthenticat
   if (!response.ok) {
     if (canReauthenticate && reauthenticate && (payload as Partial<ApiErrorPayload>)?.code === 'AUTH_REAUTHENTICATION_REQUIRED') {
       await reauthenticate();
+      if (options.replayAfterReauthentication === false) {
+        throw new ApiError({ code: 'CLIENT_REAUTHENTICATION_COMPLETED', message: '身份验证已完成，请重新提交操作' });
+      }
       const token = await csrfToken();
-      return request<T>(path, { ...init, headers: { ...init.headers, 'x-csrf-token': token } }, false);
+      return request<T>(path, { ...init, headers: { ...init.headers, 'x-csrf-token': token } }, options, false);
     }
     const fallback: ApiErrorPayload = {
       code: `HTTP_${response.status}`,
@@ -162,7 +165,10 @@ export async function logout(): Promise<void> {
 export async function getSession(): Promise<SessionView> {
   const response = await request<SessionResponse>('/api/v1/auth/session');
   const accountType = response.user.accountType;
-  const landingPath = accountType === 'SUPPLIER' ? '/supplier/inbox' : '/app/workbench';
+  if (!['/app/workbench', '/supplier/inbox'].includes(response.landingPath) || response.securityState !== 'AUTHENTICATED') {
+    throw new ApiError({ code: 'CLIENT_INVALID_RESPONSE', message: '登录状态响应无效' });
+  }
+  const landingPath = response.landingPath;
 
   return {
     accountType,

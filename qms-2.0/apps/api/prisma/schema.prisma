@@ -134,6 +134,12 @@ model Organization {
   @@map("organizations")
 }
 
+enum MfaPreference {
+  DEFAULT
+  ENABLED
+  DISABLED
+}
+
 model User {
   accountBatches AccountBatch[]
   id             String      @id @default(uuid()) @db.Uuid
@@ -150,6 +156,7 @@ model User {
   accountType    AccountType @map("account_type")
   status         UserStatus  @default(ACTIVE)
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
+  mfaPreference MfaPreference @default(DEFAULT) @map("mfa_preference")
   securityVersion Int @default(1) @map("security_version")
   mfaFailures Int @default(0) @map("mfa_failures")
   mfaBlockedUntil DateTime? @map("mfa_blocked_until") @db.Timestamptz(3)
@@ -341,11 +348,18 @@ model UserRole {
   @@map("user_roles")
 }
 
+enum SessionLifetimeType {
+  STANDARD
+  REMEMBERED_ADMIN
+  REMEMBERED_USER
+}
+
 model Session {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   tokenHash String    @unique @map("token_hash") @db.VarChar(128)
   expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  lifetimeType SessionLifetimeType @default(STANDARD) @map("lifetime_type")
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
   securityVersion Int @default(1) @map("security_version")
   mfaVerifiedAt DateTime? @map("mfa_verified_at") @db.Timestamptz(3)
@@ -376,6 +390,7 @@ model MfaChallenge {
   policyDigest String @map("policy_digest") @db.Char(64)
   organizationId String @map("organization_id") @db.Uuid
   enrollment Boolean
+  rememberMe Boolean @default(false) @map("remember_me")
   attempts Int @default(0)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
@@ -439,6 +454,7 @@ model PasswordChangeChallenge {
   organizationId String @map("organization_id") @db.Uuid
   credentialVersion Int @map("credential_version")
   tokenHash String @unique @map("token_hash") @db.Char(64)
+  rememberMe Boolean @default(false) @map("remember_me")
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

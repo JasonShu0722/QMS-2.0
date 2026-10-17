@@ -399,6 +399,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/mfa/preference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MfaController_preference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/email-verification": {
         parameters: {
             query?: never;
@@ -5185,6 +5201,8 @@ export interface components {
         LoginDto: {
             identifier: string;
             password: string;
+            /** @default false */
+            rememberMe: boolean;
         };
         LoginResponseDto: {
             /** @enum {string} */
@@ -5205,6 +5223,14 @@ export interface components {
         };
         SessionResponseDto: {
             user: components["schemas"]["SessionUserDto"];
+            /** @enum {string} */
+            landingPath: "/app/workbench" | "/supplier/inbox";
+            /** @enum {string} */
+            securityState: "AUTHENTICATED";
+            /** @enum {string} */
+            lifetimeType: "STANDARD" | "REMEMBERED_ADMIN" | "REMEMBERED_USER";
+            /** Format: date-time */
+            expiresAt: string;
         };
         CompletePasswordResetDto: {
             temporaryCode: string;
@@ -5335,8 +5361,14 @@ export interface components {
         SecurityStatusDto: {
             /** Format: date-time */
             emailVerifiedAt: string | null;
+            /** @description Whether an authenticator is bound; independent of the effective login MFA policy. */
             mfaEnabled: boolean;
+            /** @description Effective MFA requirement for the current server-side governance identity and preference. */
             mfaRequired: boolean;
+            isAdministrator: boolean;
+            /** @enum {string} */
+            mfaPreference: "DEFAULT" | "ENABLED" | "DISABLED";
+            canUnbindMfa: boolean;
             /** @enum {string} */
             securityState: "AUTHENTICATED" | "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
             recoveryCodesRemaining: number;
@@ -5372,6 +5404,11 @@ export interface components {
         RecoveryCodesDto: {
             /** @description Shown once. Store offline; each code can be used once. */
             recoveryCodes: string[];
+        };
+        MfaPreferenceDto: {
+            /** @enum {string} */
+            preference: "ENABLED" | "DISABLED";
+            code?: string;
         };
         CompleteEmailVerificationDto: {
             token: string;
@@ -10928,6 +10965,39 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MfaController_preference: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaPreferenceDto"];
+            };
+        };
         responses: {
             204: {
                 headers: {

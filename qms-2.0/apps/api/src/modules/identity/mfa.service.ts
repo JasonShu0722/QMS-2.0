@@ -4,10 +4,11 @@ import { Secret, TOTP } from 'otpauth';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma, User } from '../../generated/prisma/client.js';
 import { assertRecentAuthentication, digest, isSecurityConcurrencyConflict, mfaPolicy, securityError } from '../../common/security/session-security.js';
-import { decryptSecret, encryptSecret } from '../../common/security/security-keyring.js';
+import { adminMutationDigests, decryptSecret, encryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { SessionService } from './session.service.js';
 import { PasswordService } from './password.service.js';
+import type { MfaPreferenceDto } from './dto/mfa.dto.js';
 
 export const MFA_CHALLENGE_COOKIE = 'qms_mfa_challenge';
 type Transaction = Prisma.TransactionClient;
@@ -27,13 +28,13 @@ export class MfaService {
     });
   }
 
-  async createChallenge(user: User, transaction: Transaction) {
+  async createChallenge(user: User, transaction: Transaction, rememberMe = false) {
     if (user.mustChangePassword) securityError('AUTH_PASSWORD_CHANGE_REQUIRED');
     const policy = await mfaPolicy(transaction, user.id);
-    if (!policy.required && !user.mfaEnabled) return null;
+    if (!policy.required) return null;
     if (user.mfaBlockedUntil && user.mfaBlockedUntil.getTime() > Date.now()) securityError('AUTH_MFA_RATE_LIMITED', 429);
     const token = randomBytes(32).toString('base64url');
-    await transaction.mfaChallenge.create({ data: { userId: user.id, organizationId: user.organizationId, tokenHash: digest(token), securityVersion: user.securityVersion, passwordDigest: digest(user.passwordHash), policyDigest: policy.digest, enrollment: !user.mfaEnabled, expiresAt: new Date(Date.now() + 300_000) } });
+    await transaction.mfaChallenge.create({ data: { userId: user.id, organizationId: user.organizationId, tokenHash: digest(token), securityVersion: user.securityVersion, passwordDigest: digest(user.passwordHash), policyDigest: policy.digest, enrollment: !user.mfaEnabled, rememberMe, expiresAt: new Date(Date.now() + 300_000) } });
     return { token, enrollment: !user.mfaEnabled };
   }
 
@@ -41,7 +42,7 @@ export class MfaService {
     return this.prisma.$transaction(async (transaction) => {
       const { user, challenge, session } = await this.authenticate(transaction, authentication);
       const policy = await mfaPolicy(transaction, user.id);
-      return { emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null, mfaEnabled: user.mfaEnabled, mfaRequired: policy.required, securityState: challenge ? challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' : 'AUTHENTICATED', recoveryCodesRemaining: await transaction.mfaRecoveryCode.count({ where: { userId: user.id, consumedAt: null } }), reauthenticationExpiresAt: session?.reauthenticatedAt ? new Date(session.reauthenticatedAt.getTime() + 300_000).toISOString() : null };
+      return { emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null, mfaEnabled: user.mfaEnabled, mfaRequired: policy.required, isAdministrator: policy.administrator, mfaPreference: user.mfaPreference, canUnbindMfa: !policy.administrator && !policy.roleRequired, securityState: challenge ? challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' : 'AUTHENTICATED', recoveryCodesRemaining: await transaction.mfaRecoveryCode.count({ where: { userId: user.id, consumedAt: null } }), reauthenticationExpiresAt: session?.reauthenticatedAt ? new Date(session.reauthenticatedAt.getTime() + 300_000).toISOString() : null };
     });
   }
 
@@ -72,9 +73,9 @@ export class MfaService {
       await transaction.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
       await transaction.mfaChallenge.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: new Date() } });
       const recoveryCodes = await this.generateCodes(transaction, user.id);
-      const sessionToken = await this.sessions.create(user.id, transaction, { mfaVerified: true, reauthenticated: true });
+      const issued = await this.sessions.createWithMetadata(user.id, transaction, { mfaVerified: true, reauthenticated: true, rememberMe: challenge?.rememberMe ?? (session?.lifetimeType !== 'STANDARD'), expiresAt: session?.expiresAt });
       await this.record(transaction, user, 'MFA_ENABLED', traceId);
-      return { recoveryCodes, sessionToken, accountType: user.accountType, landingPath: user.accountType === 'INTERNAL' ? '/app/workbench' as const : '/supplier/inbox' as const, securityState: 'AUTHENTICATED' as const };
+      return { recoveryCodes, ...issued, accountType: user.accountType, landingPath: user.accountType === 'INTERNAL' ? '/app/workbench' as const : '/supplier/inbox' as const, securityState: 'AUTHENTICATED' as const };
     });
     if ('error' in result) securityError(result.error!, result.error === 'AUTH_MFA_RATE_LIMITED' ? 429 : 401);
     return result;
@@ -88,9 +89,9 @@ export class MfaService {
       if (!(await this.consumeFactor(transaction, user.id, code))) return this.failure(transaction, user, challenge.id, traceId);
       await transaction.mfaChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } });
       await transaction.user.update({ where: { id: user.id }, data: { mfaFailures: 0, mfaBlockedUntil: null } });
-      const sessionToken = await this.sessions.create(user.id, transaction, { mfaVerified: true, reauthenticated: true });
+      const issued = await this.sessions.createWithMetadata(user.id, transaction, { mfaVerified: true, reauthenticated: true, rememberMe: challenge.rememberMe });
       await this.record(transaction, user, 'MFA_LOGIN_SUCCEEDED', traceId);
-      return { sessionToken, accountType: user.accountType, landingPath: user.accountType === 'INTERNAL' ? '/app/workbench' as const : '/supplier/inbox' as const, securityState: 'AUTHENTICATED' as const };
+      return { ...issued, accountType: user.accountType, landingPath: user.accountType === 'INTERNAL' ? '/app/workbench' as const : '/supplier/inbox' as const, securityState: 'AUTHENTICATED' as const };
     });
     if ('error' in result) securityError(result.error!, result.error === 'AUTH_MFA_RATE_LIMITED' ? 429 : 401);
     return result;
@@ -101,9 +102,9 @@ export class MfaService {
       const { user, session } = await this.authenticate(transaction, { sessionToken: authentication.sessionToken });
       if (await this.blocked(transaction, user, undefined, traceId)) return { error: 'AUTH_MFA_RATE_LIMITED' };
       const policy = await mfaPolicy(transaction, user.id);
-      if (!(await this.passwords.verify(user.passwordHash, password)) || ((user.mfaEnabled || policy.required) && !(await this.consumeFactor(transaction, user.id, code ?? '')))) return this.failure(transaction, user, undefined, traceId);
+      if (!(await this.passwords.verify(user.passwordHash, password)) || (policy.required && !(await this.consumeFactor(transaction, user.id, code ?? '')))) return this.failure(transaction, user, undefined, traceId);
       const now = new Date();
-      await transaction.session.update({ where: { id: session!.id }, data: { reauthenticatedAt: now, ...((user.mfaEnabled || policy.required) ? { mfaVerifiedAt: now } : {}) } });
+      await transaction.session.update({ where: { id: session!.id }, data: { reauthenticatedAt: now, ...(policy.required ? { mfaVerifiedAt: now } : {}) } });
       await transaction.user.update({ where: { id: user.id }, data: { mfaFailures: 0, mfaBlockedUntil: null } });
       await this.record(transaction, user, 'REAUTHENTICATION_SUCCEEDED', traceId);
       return { reauthenticationExpiresAt: new Date(now.getTime() + 300_000).toISOString() };
@@ -127,7 +128,8 @@ export class MfaService {
     return this.run(authentication, traceId, async (transaction) => {
       const { user, session } = await this.authenticate(transaction, { sessionToken: authentication.sessionToken });
       const { policy } = await assertRecentAuthentication(transaction, { id: user.id, sessionId: session!.id });
-      if (policy.required) securityError('AUTH_MFA_POLICY_REQUIRED', 403);
+      // Deleting a binding retains the original governance/role restriction, regardless of login preference.
+      if (policy.administrator || policy.roleRequired) securityError('AUTH_MFA_POLICY_REQUIRED', 403);
       if (!user.mfaEnabled) securityError('AUTH_MFA_NOT_ENABLED', 409);
       await transaction.user.update({ where: { id: user.id }, data: { mfaEnabled: false, securityVersion: { increment: 1 } } });
       await transaction.mfaCredential.deleteMany({ where: { userId: user.id } });
@@ -136,6 +138,34 @@ export class MfaService {
       await transaction.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
       await this.record(transaction, user, 'MFA_DISABLED', traceId);
     });
+  }
+
+  async setPreference(authentication: Authentication, input: MfaPreferenceDto, key: string | undefined, traceId: string) {
+    const result = await this.run({ sessionToken: authentication.sessionToken }, traceId, async (transaction) => {
+      const { user, session } = await this.authenticate(transaction, { sessionToken: authentication.sessionToken });
+      const { policy } = await assertRecentAuthentication(transaction, { id: user.id, sessionId: session!.id });
+      if (!policy.administrator) securityError('FEATURE_PERMISSION_DENIED', 403);
+      if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) securityError('IDEMPOTENCY_KEY_REQUIRED', 400);
+      const requestDigests = adminMutationDigests(JSON.stringify({ preference: input.preference, code: input.code ?? null }), process.env.QMS_RATE_LIMIT_SECRET?.trim() ?? 'qms-development-rate-limit-secret-not-for-production');
+      const identity = { actorUserId: user.id, organizationId: user.organizationId, key };
+      const existing = await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
+      if (existing) {
+        if (existing.action !== 'MFA_PREFERENCE_CHANGED' || !requestDigests.includes(existing.requestDigest)) securityError('IDEMPOTENCY_REPLAY', 409);
+        return {};
+      }
+      if (input.preference === 'ENABLED' && !user.mfaEnabled) securityError('AUTH_MFA_NOT_ENABLED', 409);
+      if (await this.blocked(transaction, user, undefined, traceId)) return { error: 'AUTH_MFA_RATE_LIMITED' };
+      if ((policy.required || input.preference === 'ENABLED') && !(await this.consumeFactor(transaction, user.id, input.code ?? ''))) return this.failure(transaction, user, undefined, traceId);
+      const now = new Date();
+      await transaction.user.update({ where: { id: user.id }, data: { mfaPreference: input.preference, securityVersion: { increment: 1 }, mfaFailures: 0, mfaBlockedUntil: null } });
+      await transaction.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } });
+      await transaction.mfaChallenge.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
+      await transaction.passwordChangeChallenge.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
+      await this.audit.record({ actorUserId: user.id, organizationId: user.organizationId, resourceType: 'User', resourceId: user.id, action: 'MFA_PREFERENCE_CHANGED', traceId, outcome: 'SUCCESS', metadata: { status: input.preference } }, transaction);
+      await transaction.adminMutation.create({ data: { ...identity, action: 'MFA_PREFERENCE_CHANGED', requestDigest: requestDigests[0]!, response: {} } });
+      return {};
+    });
+    if ('error' in result && typeof result.error === 'string') securityError(result.error, result.error === 'AUTH_MFA_RATE_LIMITED' ? 429 : 401);
   }
 
   private async authenticate(transaction: Transaction, authentication: Authentication) {
@@ -154,7 +184,7 @@ export class MfaService {
     const challenge = preliminaryChallenge ? await transaction.mfaChallenge.findUnique({ where: { id: preliminaryChallenge.id } }) : null;
     const session = preliminarySession ? await transaction.session.findUnique({ where: { id: preliminarySession.id } }) : null;
     if (challenge && (challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now() || challenge.securityVersion !== user.securityVersion || challenge.passwordDigest !== digest(user.passwordHash) || challenge.organizationId !== user.organizationId || challenge.policyDigest !== policy.digest)) securityError('AUTH_MFA_CHALLENGE_INVALID');
-    if (session && (session.revokedAt || session.expiresAt.getTime() <= Date.now() || session.securityVersion !== user.securityVersion || ((policy.required || user.mfaEnabled) && !session.mfaVerifiedAt))) securityError('AUTH_SESSION_REQUIRED');
+    if (session && (session.revokedAt || session.expiresAt.getTime() <= Date.now() || session.securityVersion !== user.securityVersion || (policy.required && !session.mfaVerifiedAt))) securityError('AUTH_SESSION_REQUIRED');
     if (!session && !challenge) securityError('AUTH_SESSION_REQUIRED');
     return { user, challenge, session };
   }

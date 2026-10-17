@@ -1,13 +1,9 @@
-import { Alert, Button, Form, Input, Typography } from 'antd';
-import { useState } from 'react';
+import type { LoginRequest } from '@qms/contracts';
+import { Alert, Button, Checkbox, Form, Input, Spin, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
-import { ApiError, login, safeAccountError } from '../../api/client';
-
-type LoginValues = {
-  identifier: string;
-  password: string;
-};
+import { ApiError, getSession, login, safeAccountError } from '../../api/client';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -15,11 +11,28 @@ export function LoginPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function submit(values: LoginValues) {
+  const [retryCount, setRetryCount] = useState(0);
+  const [sessionState, setSessionState] = useState<'checking' | 'unauthenticated' | 'error'>('checking');
+
+  useEffect(() => {
+    let active = true;
+    setSessionState('checking');
+    getSession().then((session) => {
+      if (active) navigate(session.landingPath, { replace: true });
+    }).catch((cause: unknown) => {
+      if (!active) return;
+      setSessionState(cause instanceof ApiError && (cause.status === 401 || ['HTTP_401', 'AUTH_SESSION_REQUIRED'].includes(cause.code))
+        ? 'unauthenticated' : 'error');
+    });
+    return () => { active = false; };
+  }, [navigate, retryCount]);
+
+  async function submit(values: LoginRequest) {
+    if (sessionState !== 'unauthenticated') return;
     setLoading(true);
     setError(null);
     try {
-      const result = await login(values);
+      const result = await login({ ...values, rememberMe: values.rememberMe ?? false });
       navigate(result.landingPath, { replace: true });
     } catch (caught) {
       setError(
@@ -61,6 +74,12 @@ export function LoginPage() {
               <p>QMS Access</p>
               <Typography.Title id="login-title" level={1}>{t('账号登录')}</Typography.Title>
             </div>
+            {sessionState === 'checking' ? <div role="status" aria-label={t('正在验证登录状态')}><Spin size="small" /> {t('正在验证登录状态')}</div> : null}
+            {sessionState === 'error' ? <Alert
+              showIcon type="error" role="alert" title={t('暂时无法验证登录状态')}
+              description={t('请检查网络连接后重试。')}
+              action={<Button onClick={() => setRetryCount((count) => count + 1)}>{t('重试')}</Button>}
+            /> : null}
             {error ? (
               <Alert
                 showIcon
@@ -76,14 +95,17 @@ export function LoginPage() {
                 }
               />
             ) : null}
-            <Form layout="vertical" onFinish={submit} className="login-form">
+            <Form layout="vertical" onFinish={submit} initialValues={{ rememberMe: false }} className="login-form">
               <Form.Item label={t('账号')} name="identifier" rules={[{ required: true, message: t('请输入账号') }]}>
                 <Input autoComplete="username" size="large" />
               </Form.Item>
               <Form.Item label={t('密码')} name="password" rules={[{ required: true, message: t('请输入密码') }]}>
                 <Input.Password autoComplete="current-password" size="large" />
               </Form.Item>
-              <Button aria-label={t('登录')} block type="primary" htmlType="submit" loading={loading} size="large">
+              <Form.Item name="rememberMe" valuePropName="checked" extra={t('管理员保持登录 7 天，普通账号 30 天。请勿在公共设备上勾选。')}>
+                <Checkbox>{t('记住登录')}</Checkbox>
+              </Form.Item>
+              <Button disabled={sessionState !== 'unauthenticated'} aria-label={t('登录')} block type="primary" htmlType="submit" loading={loading} size="large">
                 {t('登录')}
               </Button>
             </Form>
