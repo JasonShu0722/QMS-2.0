@@ -3,6 +3,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
 import { CustomerMasterSection } from './CustomerMasterSection';
 
+const spreadsheet = vi.hoisted(() => ({ rows: [] as unknown[][], columns: [{ numFmt: '' }, { numFmt: '' }], writeBuffer: vi.fn(async () => new Uint8Array([1])) }));
+vi.mock('exceljs', () => ({ default: { Workbook: class {
+  xlsx = { writeBuffer: spreadsheet.writeBuffer };
+  addWorksheet() { return { addRow: (row: unknown[]) => spreadsheet.rows.push(row), columns: spreadsheet.columns }; }
+} } }));
+
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client');
   return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn() };
@@ -19,8 +25,109 @@ async function selectCustomer(label: string) {
   fireEvent.click(await screen.findByText(label));
 }
 beforeEach(() => {
+  spreadsheet.rows = []; spreadsheet.columns.forEach((column) => { column.numFmt = ''; });
+  spreadsheet.writeBuffer.mockReset().mockResolvedValue(new Uint8Array([1]));
   vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockImplementation((path) => Promise.resolve(path.endsWith('/my-permissions') ? { permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] } : path.endsWith('/customers') ? [customer] : []));
+});
+
+it('disables export before loading and after an authorized list refresh fails, rather than exporting stale or empty data', async () => {
+  const first = deferred<unknown[]>();
+  vi.mocked(apiRequest).mockReturnValueOnce(first.promise).mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([]);
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:read']} />);
+  const button = screen.getByRole('button', { name: '导出当前客户清单' });
+  expect(button).toBeDisabled();
+  await act(async () => { first.resolve([customer]); await first.promise; });
+  expect(button).not.toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '刷新客户' }));
+  expect(button).toBeDisabled();
+  await screen.findByText('请求失败，请重试');
+  fireEvent.click(button);
+  expect(spreadsheet.writeBuffer).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '刷新客户' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(3));
+  expect(button).toBeDisabled();
+});
+
+it('restores export after a failed refresh only when both customers and current permissions are revalidated', async () => {
+  const revalidatedPermissions = deferred<{ permissions: string[] }>();
+  let customerReads = 0;
+  let permissionReads = 0;
+  vi.mocked(apiRequest).mockImplementation((path) => {
+    if (path.endsWith('/my-permissions')) {
+      permissionReads++;
+      return permissionReads === 3 ? revalidatedPermissions.promise : Promise.resolve({ permissions: ['customer-quality:complaints:read'] });
+    }
+    if (path.endsWith('/customers')) {
+      customerReads++;
+      return customerReads === 2 ? Promise.reject(new Error('network')) : Promise.resolve([customer]);
+    }
+    return Promise.resolve([]);
+  });
+  render(<CustomerMasterSection />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).not.toBeDisabled());
+  fireEvent.click(screen.getByRole('button', { name: '刷新客户' }));
+  await screen.findByText('请求失败，请重试');
+  expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+  await waitFor(() => expect(customerReads).toBe(3));
+  expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
+  await act(async () => { revalidatedPermissions.resolve({ permissions: ['customer-quality:complaints:read'] }); await revalidatedPermissions.promise; });
+  await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).not.toBeDisabled());
+  expect(permissionReads).toBe(3);
+});
+
+it('does not offer list export with only import/write permission', async () => {
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:write']} />);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledOnce());
+  expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
+});
+
+it('discards a generated export when its list has been refreshed before download completes', async () => {
+  const bytes = deferred<Uint8Array>();
+  spreadsheet.writeBuffer.mockReturnValueOnce(bytes.promise);
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:customers') });
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:read']} />);
+  const button = screen.getByRole('button', { name: '导出当前客户清单' });
+  await waitFor(() => expect(button).not.toBeDisabled());
+  fireEvent.click(button);
+  await waitFor(() => expect(spreadsheet.writeBuffer).toHaveBeenCalledOnce());
+  vi.mocked(apiRequest).mockRejectedValueOnce(new Error('network'));
+  fireEvent.click(screen.getByRole('button', { name: '刷新客户' }));
+  await screen.findByText('请求失败，请重试');
+  await act(async () => { bytes.resolve(new Uint8Array([1])); await bytes.promise; });
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
+
+it('reports export failure and revokes the blob URL even if the browser download fails', async () => {
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:customers') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('download'); });
+  try {
+    render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:read']} />);
+    const button = screen.getByRole('button', { name: '导出当前客户清单' });
+    await waitFor(() => expect(button).not.toBeDisabled()); fireEvent.click(button);
+    await screen.findByText('客户清单导出失败，请重试');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:customers');
+  } finally { click.mockRestore(); }
+});
+
+it('exports only the loaded authorized organization customer code and name as text', async () => {
+  vi.mocked(apiRequest).mockResolvedValue([{ ...customer, code: '00042', name: '=1+1' }]);
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:customers') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  try {
+    render(<CustomerMasterSection organizationId="org-a" organizationPermissions={['customer-quality:complaints:read']} />);
+    const button = screen.getByRole('button', { name: '导出当前客户清单' });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    expect(spreadsheet.rows).toEqual([['客户编码', '客户名称'], ['00042', '=1+1']]);
+    expect(spreadsheet.columns.every((column) => column.numFmt === '@')).toBe(true);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:customers');
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/api/v1/customer-quality/customers?organizationId=org-a');
+  } finally { click.mockRestore(); }
 });
 afterEach(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
 

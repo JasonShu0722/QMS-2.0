@@ -3,6 +3,7 @@ import type { components } from '@qms/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { CustomerMasterImport } from './CustomerMasterImport';
+import { useLanguage } from '../../i18n/Language';
 
 type Customer = components['schemas']['CustomerMasterDto'];
 type Relation = components['schemas']['CustomerRelationDto'];
@@ -21,12 +22,16 @@ export function CustomerMasterSection({ organizationId, organizationPermissions 
 }
 
 function CustomerMasterContent({ organizationId, organizationPermissions }: { organizationId?: string; organizationPermissions?: string[] }) {
+  const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<string>();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [permissions, setPermissions] = useState<Permissions | undefined>(organizationPermissions ? { organizationId: organizationId ?? '', permissions: organizationPermissions } : undefined);
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
+  const [customersLoaded, setCustomersLoaded] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
   const [edit, setEdit] = useState<{ kind: 'customer' | 'relation'; id: string; version: number; name: string }>();
   const [form] = Form.useForm<CreateRelation>();
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
@@ -35,11 +40,24 @@ function CustomerMasterContent({ organizationId, organizationPermissions }: { or
   const customerRequest = useRef(0);
   const mounted = useRef(true);
   const canWrite = (organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:write') ?? false;
+  const canRead = (organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:read') ?? false;
+  const readable = useRef(canRead);
+  readable.current = canRead;
   const scoped = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path;
 
   async function refreshCustomers() {
     const request = ++customerRequest.current;
-    try { const rows = await apiRequest<Customer[]>(scoped(`${base}/customers`)); if (mounted.current && request === customerRequest.current) { setCustomers(rows); setError(undefined); } }
+    setCustomersLoaded(false);
+    try {
+      const [rows, currentPermissions] = await Promise.all([
+        apiRequest<Customer[]>(scoped(`${base}/customers`)),
+        organizationPermissions ? undefined : apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')),
+      ]);
+      if (mounted.current && request === customerRequest.current) {
+        setCustomers(rows); setCustomersLoaded(true); setError(undefined);
+        if (currentPermissions) setPermissions(currentPermissions);
+      }
+    }
     catch (cause) { if (!mounted.current || request !== customerRequest.current) return; relationRequest.current++; selectedCustomer.current = undefined; setCustomers([]); setSelected(undefined); setRelations([]); setPermissions(undefined); setEdit(undefined); setError(cause); }
   }
   async function refreshRelations(customerId: string) {
@@ -51,9 +69,28 @@ function CustomerMasterContent({ organizationId, organizationPermissions }: { or
   useEffect(() => {
     mounted.current = true;
     void refreshCustomers();
-    if (!organizationPermissions) void apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')).then((value) => { if (mounted.current) setPermissions(value); }, (cause) => { if (!mounted.current) return; customerRequest.current++; relationRequest.current++; selectedCustomer.current = undefined; setPermissions(undefined); setCustomers([]); setSelected(undefined); setRelations([]); setEdit(undefined); setError(cause); });
     return () => { mounted.current = false; customerRequest.current++; relationRequest.current++; };
   }, []);
+
+  async function exportCustomers() {
+    if (!canRead || !customersLoaded || !customers.length || exporting) return;
+    const request = customerRequest.current;
+    setExporting(true); setExportError(false);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet(t('客户'));
+      sheet.addRow([t('客户编码'), t('客户名称')]);
+      customers.forEach((customer) => sheet.addRow([customer.code, customer.name]));
+      sheet.columns.forEach((column) => { column.width = 24; column.numFmt = '@'; });
+      const bytes = await workbook.xlsx.writeBuffer();
+      if (!mounted.current || request !== customerRequest.current || !readable.current) return;
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      try { const link = document.createElement('a'); link.href = url; link.download = `${t('客户清单')}.xlsx`; link.click(); }
+      finally { URL.revokeObjectURL(url); }
+    } catch { if (mounted.current && request === customerRequest.current) setExportError(true); }
+    finally { if (mounted.current) setExporting(false); }
+  }
 
   async function mutate(path: string, method: 'POST' | 'PUT' | 'DELETE', body: object) {
     if (organizationId) body = { ...body, organizationId };
@@ -101,8 +138,9 @@ function CustomerMasterContent({ organizationId, organizationPermissions }: { or
 
   return <section className="customer-quality-card" aria-label="客户主数据">
     <Typography.Title level={3}>客户主数据</Typography.Title>
+    {exportError ? <Alert showIcon type="error" title={t('客户清单导出失败，请重试')} /> : null}
     {error ? <Alert showIcon type="error" title={safeAccountError(error)} action={<Button onClick={() => { void refreshCustomers(); if (selected) void refreshRelations(selected); }}>重试</Button>} /> : null}
-    <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} onChange={(id) => { selectedCustomer.current = id; relationRequest.current++; setSelected(id); setRelations([]); setEdit(undefined); if (canWrite) form.resetFields(); void refreshRelations(id); }} /><Button onClick={() => void refreshCustomers()}>刷新客户</Button>{selected && canWrite ? <Button onClick={() => { const customer = customers.find((item) => item.id === selected); if (customer) setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); }} disabled={busy}>编辑客户</Button> : null}</Space>
+    <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} onChange={(id) => { selectedCustomer.current = id; relationRequest.current++; setSelected(id); setRelations([]); setEdit(undefined); if (canWrite) form.resetFields(); void refreshRelations(id); }} /><Button onClick={() => void refreshCustomers()}>刷新客户</Button>{canRead ? <Button onClick={() => void exportCustomers()} loading={exporting} disabled={!customersLoaded || !customers.length || exporting}>{t('导出当前客户清单')}</Button> : null}{selected && canWrite ? <Button onClick={() => { const customer = customers.find((item) => item.id === selected); if (customer) setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); }} disabled={busy}>编辑客户</Button> : null}</Space>
     {canWrite ? <Form layout="inline" onFinish={(values: { code: string; name: string }) => void createCustomer(values)}><Form.Item name="code" rules={[{ required: true }]}><Input aria-label="客户代码" placeholder="客户代码" maxLength={100} /></Form.Item><Form.Item name="name" rules={[{ required: true }]}><Input aria-label="客户名称" placeholder="客户名称" maxLength={200} /></Form.Item><Button htmlType="submit" loading={busy}>新增客户</Button></Form> : null}
     {canWrite ? <CustomerMasterImport organizationId={organizationId} onImported={refreshCustomers} /> : null}
     {selected ? <><Table<Relation> rowKey="id" dataSource={relations} pagination={false} columns={[{ title: '类型', dataIndex: 'relation_type', render: (value: Relation['relation_type']) => labels[value] }, { title: '关系', render: (_, row) => row.relation_type === 'CUSTOMER_PARENT' ? customers.find((item) => item.id === String(row.related_customer_id))?.name ?? String(row.related_customer_id ?? '') : `${row.related_code} · ${row.related_name}` }, ...(canWrite ? [{ title: '操作', render: (_: unknown, row: Relation) => <Space><Button onClick={() => setEdit({ kind: 'relation', id: row.id, version: row.version, name: typeof row.related_name === 'string' ? row.related_name : '' })} disabled={row.relation_type === 'CUSTOMER_PARENT' || busy}>编辑</Button><Popconfirm title="删除客户关系" description="确认删除这条关系？" okText="删除" cancelText="取消" onConfirm={() => void removeRelation(row)}><Button danger disabled={busy}>删除</Button></Popconfirm></Space> }] : [])]} />
