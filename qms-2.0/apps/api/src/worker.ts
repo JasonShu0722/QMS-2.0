@@ -6,6 +6,7 @@ import { parseWorkerOptions, runWorkerLoop } from './worker-runner.js';
 import { AuditExportService } from './modules/audit-log/audit-export.service.js';
 import { RecoveryMailService } from './modules/identity/recovery-mail.service.js';
 import { FileScanWorkerService } from './modules/file-management/file-scan-worker.service.js';
+import { TemporaryPasswordService } from './modules/identity/temporary-password.service.js';
 
 async function bootstrap(): Promise<void> {
   const options = parseWorkerOptions(process.argv.slice(2), process.env);
@@ -30,6 +31,7 @@ async function bootstrap(): Promise<void> {
       if (Date.now() < nextMaintenance) return;
       await app.get(FileScanWorkerService).expireUploads();
       await app.get(AuditExportService).purgeExpired();
+      await app.get(TemporaryPasswordService).purgeExpired();
       if (mailEnabled) await app.get(RecoveryMailService).dispatchPending(options.batchSize);
       nextMaintenance = Date.now() + 60000;
     }, logCycles ? (result) => console.info(`QMS_WORKER_CYCLE ${JSON.stringify({ ...result, observedAt: new Date().toISOString() })}`) : undefined);

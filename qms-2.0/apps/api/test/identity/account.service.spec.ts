@@ -11,6 +11,10 @@ describe('account center service', () => {
       findUniqueOrThrow: jest.fn().mockResolvedValue({ securityVersion: 2 }),
     },
     passwordReset: { updateMany: jest.fn() },
+    userTemporaryPassword: { deleteMany: jest.fn() },
+    passwordChangeChallenge: { updateMany: jest.fn() },
+    mfaChallenge: { updateMany: jest.fn() },
+    emailVerification: { updateMany: jest.fn() },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     session: { findFirst: jest.fn(), update: jest.fn() },
@@ -37,11 +41,14 @@ describe('account center service', () => {
     limits as never,
     audit as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.session.findFirst.mockResolvedValue({ id: 'session-1', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', passwordHash: 'encoded' });
+    prisma.user.update.mockResolvedValue({ securityVersion: 2 });
   });
 
   it('returns a safe profile without the password hash', async () => {
@@ -80,7 +87,8 @@ describe('account center service', () => {
       userId: 'user-1', currentSessionId: 'session-1', currentPassword: 'old-password', newPassword: 'new-password-123', traceId: 'trace-1',
     });
 
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1', passwordHash: 'encoded', status: 'ACTIVE' }, data: { passwordHash: 'new-encoded', securityVersion: { increment: 1 } } });
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { passwordHash: 'new-encoded', securityVersion: { increment: 1 }, credentialVersion: { increment: 1 }, mustChangePassword: false } });
+    expect(prisma.userTemporaryPassword.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
     expect(sessions.revokeOtherSessions).toHaveBeenCalledWith('user-1', 'session-1', 'trace-1', expect.anything());
   });
 
@@ -101,7 +109,7 @@ describe('account center service', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', passwordHash: 'encoded', organizationId: 'org-1', organization: { status: 'ACTIVE' } });
     passwords.verify.mockResolvedValue(true);
     passwords.hash.mockResolvedValue('new-encoded');
-    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', passwordHash: 'superseded' });
     prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
     await expect(service.changePassword({ userId: 'user-1', currentSessionId: 'session-1', currentPassword: 'old-password', newPassword: 'new-password-123', traceId: 'trace-1' })).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
     expect(sessions.revokeOtherSessions).not.toHaveBeenCalled();

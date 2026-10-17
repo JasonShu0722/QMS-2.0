@@ -19,6 +19,9 @@ import { MfaController } from './mfa.controller.js';
 import { EmailRecoveryController } from './email-recovery.controller.js';
 import { EmailRecoveryService } from './email-recovery.service.js';
 import { RecoveryMailService } from './recovery-mail.service.js';
+import { PasswordChangeChallengeService } from './password-change-challenge.service.js';
+import { TemporaryPasswordService } from './temporary-password.service.js';
+import { AdminUserBatchService } from './admin-user-batch.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule],
@@ -28,15 +31,18 @@ import { RecoveryMailService } from './recovery-mail.service.js';
     PasswordService,
     SessionService,
     IdentityService,
+    PasswordChangeChallengeService,
+    TemporaryPasswordService,
     MfaService,
     EmailRecoveryService,
     RecoveryMailService,
     AdminUserService,
+    AdminUserBatchService,
     PasswordResetService,
     RateLimitService,
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService],
 })
 export class IdentityModule {}

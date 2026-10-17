@@ -28,6 +28,7 @@ export class MfaService {
   }
 
   async createChallenge(user: User, transaction: Transaction) {
+    if (user.mustChangePassword) securityError('AUTH_PASSWORD_CHANGE_REQUIRED');
     const policy = await mfaPolicy(transaction, user.id);
     if (!policy.required && !user.mfaEnabled) return null;
     if (user.mfaBlockedUntil && user.mfaBlockedUntil.getTime() > Date.now()) securityError('AUTH_MFA_RATE_LIMITED', 429);
@@ -144,7 +145,7 @@ export class MfaService {
     if (!userId) securityError('AUTH_MFA_CHALLENGE_INVALID');
     await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
     const user = await transaction.user.findUnique({ where: { id: userId }, include: { organization: true } });
-    if (!user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE') securityError('AUTH_SESSION_REQUIRED');
+    if (!user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE' || user.mustChangePassword) securityError('AUTH_SESSION_REQUIRED');
     await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;
     const activeOrganization = await transaction.organization.findUnique({ where: { id: user.organizationId } });
     if (activeOrganization?.status !== 'ACTIVE') securityError('AUTH_SESSION_REQUIRED');

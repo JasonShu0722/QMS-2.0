@@ -6,6 +6,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { PasswordService } from './password.service.js';
 import { RecoveryMailService, type RecoveryPurpose } from './recovery-mail.service.js';
 import type { PasswordRecoveryDto } from './dto/email-recovery.dto.js';
+import { replacePassword } from './password-credentials.js';
 
 @Injectable()
 export class EmailRecoveryService {
@@ -70,11 +71,8 @@ export class EmailRecoveryService {
           const passwordHash = await this.passwords.hash(newPassword);
           const consumed = await transaction.emailVerification.updateMany({ where: { id: verification.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
           if (consumed.count !== 1) securityError('AUTH_RECOVERY_INVALID', 400);
-          await transaction.user.update({ where: { id: user.id }, data: { passwordHash, securityVersion: { increment: 1 } } });
+          await replacePassword(transaction, user.id, passwordHash);
           await transaction.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } });
-          await transaction.mfaChallenge.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
-          await transaction.passwordReset.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
-          await transaction.emailVerification.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
         }
         await this.audit.record({ actorUserId: user.id, organizationId: user.organizationId, action: purpose === 'VERIFY_EMAIL' ? 'EMAIL_VERIFIED' : 'PASSWORD_RECOVERED', resourceType: 'User', resourceId: user.id, outcome: 'SUCCESS', traceId }, transaction);
       }, { timeout: 15000 });
