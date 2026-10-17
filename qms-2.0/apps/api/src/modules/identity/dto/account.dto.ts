@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class OrganizationSummaryDto {
   @ApiProperty()
@@ -31,8 +31,25 @@ export class AccountProfileDto {
   @ApiProperty()
   mfaEnabled!: boolean;
 
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' })
+  avatarFileId!: string | null;
+
+  @ApiProperty({ minimum: 1 })
+  avatarVersion!: number;
+
   @ApiProperty({ type: OrganizationSummaryDto })
   organization!: OrganizationSummaryDto;
+}
+
+export class UpdateAccountAvatarDto {
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' })
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  fileId!: string | null;
+
+  @ApiProperty({ minimum: 1, maximum: 2147483647 })
+  @IsInt() @Min(1) @Max(2147483647)
+  expectedVersion!: number;
 }
 
 export class UpdateAccountProfileDto {

@@ -20,6 +20,7 @@
     "file-management -> workflow",
     "identity -> audit-log",
     "identity -> authorization",
+    "identity -> file-management",
     "organization -> audit-log",
     "organization -> authorization",
     "platform-configuration -> audit-log",

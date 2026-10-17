@@ -8,6 +8,15 @@ import { problemWorkspaceTranslations } from '../features/problem-workspace/prob
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
 
 const translations: Record<string, string> = {
+  '本人头像': 'My avatar', '重试加载头像': 'Retry loading avatar',
+  '仅本人可见，JPEG/PNG，最大 2 MiB。': 'Visible only to you. JPEG/PNG, up to 2 MiB.',
+  '头像状态加载失败，请重试': 'Could not load avatar status. Please retry.',
+  '请选择不超过 2 MiB 的 JPEG 或 PNG 图片': 'Choose a JPEG or PNG image no larger than 2 MiB.',
+  '扫描暂不可用，头像仍隔离': 'Scanning is unavailable. The avatar remains quarantined.',
+  '扫描未通过，头像已隔离': 'The avatar failed scanning and remains quarantined.',
+  '扫描通过，可设为头像': 'Scan passed. Ready to use as your avatar.',
+  '选择头像': 'Choose avatar', '移除头像': 'Remove avatar',
+  '正在处理头像': 'Processing avatar', '刷新头像状态': 'Refresh avatar status', '设为头像': 'Use as avatar',
   'MFA 设置': 'MFA settings', 'MFA 设置已保存': 'MFA settings saved',
   'MFA 生效状态': 'Effective MFA policy', '验证器绑定': 'Authenticator binding',
   '已绑定': 'Bound', '未绑定': 'Not bound', '是': 'Yes', '否': 'No',

@@ -7,7 +7,7 @@ import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/Unsaved
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { AccountMenu } from './AccountMenu';
 
-const profile = { username: 'alice' };
+const profile = { id: 'user-alice', username: 'alice', avatarFileId: null, avatarVersion: 1 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 function Page({ dirty }: { dirty: boolean }) {
   useUnsavedChanges(dirty);

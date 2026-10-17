@@ -166,7 +166,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+            "sha256": "75ee5e7509345d7b567b429a24720fc8fdcde2045c575140cb446962cdd22224"
           }
         ]
       }
@@ -222,7 +222,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+            "sha256": "75ee5e7509345d7b567b429a24720fc8fdcde2045c575140cb446962cdd22224"
           }
         ]
       }
@@ -614,7 +614,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "2bd9b4eb825db291f4b2bc692bece4532baa1ce59ca38db92445bb044676e87a"
+            "sha256": "9316d262d243ed544fccf934c06683fd248953185a702fe523dd1c3d0c7626b2"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -736,7 +736,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "47bd7ef8949b47406bed4731f6eb81f481aad67f31a7ac17dc2aeffd2a6a5c3e"
+            "sha256": "75ee5e7509345d7b567b429a24720fc8fdcde2045c575140cb446962cdd22224"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",

@@ -111,6 +111,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AccountController_updateAvatar"];
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -489,6 +505,102 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["EmailRecoveryController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_initialize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/retry-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_retryScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FileController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["FileController_remove"];
         delete?: never;
         options?: never;
         head?: never;
@@ -893,102 +1005,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["PlatformConfigurationController_updateCategory"];
-        trace?: never;
-    };
-    "/api/v1/files/uploads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["FileController_initialize"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/files/{id}/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["FileController_complete"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/files/{id}/retry-scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["FileController_retryScan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/files/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["FileController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/files/{id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["FileController_download"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/files/{id}/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["FileController_remove"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/outbox/failures": {
@@ -5254,6 +5270,11 @@ export interface components {
             resetId: string;
             newPassword: string;
         };
+        UpdateAccountAvatarDto: {
+            /** Format: uuid */
+            fileId: string | null;
+            expectedVersion: number;
+        };
         OrganizationSummaryDto: {
             id: string;
             code: string;
@@ -5268,6 +5289,9 @@ export interface components {
             /** @enum {string} */
             status: "ACTIVE" | "DISABLED";
             mfaEnabled: boolean;
+            /** Format: uuid */
+            avatarFileId: string | null;
+            avatarVersion: number;
             organization: components["schemas"]["OrganizationSummaryDto"];
         };
         UpdateAccountProfileDto: {
@@ -5450,6 +5474,58 @@ export interface components {
         CompletePasswordRecoveryDto: {
             token: string;
             newPassword: string;
+        };
+        InitializeFileUploadDto: {
+            resourceType: string;
+            /** Format: uuid */
+            resourceId: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+        };
+        FileDto: {
+            resourceType: string;
+            /** Format: uuid */
+            resourceId: string;
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+            /** @enum {string} */
+            status: "QUARANTINED" | "AVAILABLE" | "DELETED";
+            /** @enum {string} */
+            scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            scanReason: string | null;
+            version: number;
+            /** Format: date-time */
+            uploadExpiresAt: string;
+            /** Format: date-time */
+            scannedAt: string | null;
+            /** Format: date-time */
+            deletedAt: string | null;
+            /** Format: date-time */
+            retainUntil: string;
+        };
+        FileUploadDto: {
+            file: components["schemas"]["FileDto"];
+            uploadUrl: string;
+            headers: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            urlExpiresAt: string;
+        };
+        FileMutationDto: {
+            expectedVersion: number;
+        };
+        FileDownloadRequestDto: Record<string, never>;
+        FileDownloadDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         PermissionsResponseDto: {
             organizationId: string;
@@ -5716,58 +5792,6 @@ export interface components {
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
             sortOrder?: number;
-        };
-        InitializeFileUploadDto: {
-            resourceType: string;
-            /** Format: uuid */
-            resourceId: string;
-            originalName: string;
-            contentType: string;
-            sizeBytes: number;
-            sha256: string;
-        };
-        FileDto: {
-            resourceType: string;
-            /** Format: uuid */
-            resourceId: string;
-            /** Format: uuid */
-            id: string;
-            originalName: string;
-            contentType: string;
-            sizeBytes: number;
-            sha256: string;
-            /** @enum {string} */
-            status: "QUARANTINED" | "AVAILABLE" | "DELETED";
-            /** @enum {string} */
-            scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
-            scanReason: string | null;
-            version: number;
-            /** Format: date-time */
-            uploadExpiresAt: string;
-            /** Format: date-time */
-            scannedAt: string | null;
-            /** Format: date-time */
-            deletedAt: string | null;
-            /** Format: date-time */
-            retainUntil: string;
-        };
-        FileUploadDto: {
-            file: components["schemas"]["FileDto"];
-            uploadUrl: string;
-            headers: {
-                [key: string]: string;
-            };
-            /** Format: date-time */
-            urlExpiresAt: string;
-        };
-        FileMutationDto: {
-            expectedVersion: number;
-        };
-        FileDownloadRequestDto: Record<string, never>;
-        FileDownloadDto: {
-            url: string;
-            /** Format: date-time */
-            expiresAt: string;
         };
         OutboxFailureDto: {
             /** Format: uuid */
@@ -10330,6 +10354,41 @@ export interface operations {
             };
         };
     };
+    AccountController_updateAvatar: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountAvatarDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountProfileDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     AccountController_profile: {
         parameters: {
             query?: never;
@@ -11231,6 +11290,214 @@ export interface operations {
                 content?: never;
             };
             /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_initialize: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeFileUploadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileUploadDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_retryScan: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_download: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileDownloadRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDownloadDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    FileController_remove: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileMutationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"];
+                };
+            };
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -12390,214 +12657,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionCategoryDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_initialize: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "Idempotency-Key": string;
-                "x-csrf-token": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InitializeFileUploadDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileUploadDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_complete: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "Idempotency-Key": string;
-                "x-csrf-token": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileMutationDto"];
-            };
-        };
-        responses: {
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_retryScan: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "Idempotency-Key": string;
-                "x-csrf-token": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileMutationDto"];
-            };
-        };
-        responses: {
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_download: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileDownloadRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDownloadDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    FileController_remove: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileMutationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDto"];
                 };
             };
             default: {
