@@ -16,15 +16,15 @@ export function relationPayload(values: CreateRelation): CreateRelation {
     : { relationType: values.relationType, relatedCode: values.relatedCode, relatedName: values.relatedName };
 }
 
-export function CustomerMasterSection({ organizationId }: { organizationId?: string } = {}) {
-  return <CustomerMasterContent key={organizationId ?? 'current'} organizationId={organizationId} />;
+export function CustomerMasterSection({ organizationId, organizationPermissions }: { organizationId?: string; organizationPermissions?: string[] } = {}) {
+  return <CustomerMasterContent key={organizationId ?? 'current'} organizationId={organizationId} organizationPermissions={organizationPermissions} />;
 }
 
-function CustomerMasterContent({ organizationId }: { organizationId?: string }) {
+function CustomerMasterContent({ organizationId, organizationPermissions }: { organizationId?: string; organizationPermissions?: string[] }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<string>();
   const [relations, setRelations] = useState<Relation[]>([]);
-  const [permissions, setPermissions] = useState<Permissions>();
+  const [permissions, setPermissions] = useState<Permissions | undefined>(organizationPermissions ? { organizationId: organizationId ?? '', permissions: organizationPermissions } : undefined);
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<{ kind: 'customer' | 'relation'; id: string; version: number; name: string }>();
@@ -34,7 +34,7 @@ function CustomerMasterContent({ organizationId }: { organizationId?: string }) 
   const selectedCustomer = useRef<string | undefined>(undefined);
   const customerRequest = useRef(0);
   const mounted = useRef(true);
-  const canWrite = permissions?.permissions.includes('customer-quality:complaints:write') ?? false;
+  const canWrite = (organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:write') ?? false;
   const scoped = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path;
 
   async function refreshCustomers() {
@@ -51,7 +51,7 @@ function CustomerMasterContent({ organizationId }: { organizationId?: string }) 
   useEffect(() => {
     mounted.current = true;
     void refreshCustomers();
-    void apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')).then((value) => { if (mounted.current) setPermissions(value); }, (cause) => { if (!mounted.current) return; customerRequest.current++; relationRequest.current++; selectedCustomer.current = undefined; setPermissions(undefined); setCustomers([]); setSelected(undefined); setRelations([]); setEdit(undefined); setError(cause); });
+    if (!organizationPermissions) void apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')).then((value) => { if (mounted.current) setPermissions(value); }, (cause) => { if (!mounted.current) return; customerRequest.current++; relationRequest.current++; selectedCustomer.current = undefined; setPermissions(undefined); setCustomers([]); setSelected(undefined); setRelations([]); setEdit(undefined); setError(cause); });
     return () => { mounted.current = false; customerRequest.current++; relationRequest.current++; };
   }, []);
 

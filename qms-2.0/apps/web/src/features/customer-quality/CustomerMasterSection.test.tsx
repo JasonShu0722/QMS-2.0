@@ -32,6 +32,19 @@ it('lists customer relations and gates writes by permission', async () => {
   expect(screen.queryByRole('button', { name: '新增关系' })).not.toBeInTheDocument();
 });
 
+it('uses the selected admin organization permissions instead of the home context', async () => {
+  render(<CustomerMasterSection organizationId="org-selected" organizationPermissions={['customer-quality:complaints:read']} />);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/customers?organizationId=org-selected'));
+  expect(screen.queryByRole('button', { name: '新增客户' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/my-permissions'))).toBe(false);
+});
+
+it('enables writes from the selected admin organization permissions', async () => {
+  render(<CustomerMasterSection organizationId="org-selected" organizationPermissions={['customer-quality:complaints:read', 'customer-quality:complaints:write']} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/my-permissions'))).toBe(false);
+});
+
 it('creates customer with CSRF and idempotency', async () => {
   render(<CustomerMasterSection />);
   await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
