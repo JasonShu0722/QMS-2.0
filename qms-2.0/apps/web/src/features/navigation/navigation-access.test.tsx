@@ -17,6 +17,14 @@ vi.mock('../workflows/WorkflowCanvas', () => ({ WorkflowCanvas: () => null }));
 const organizations = [{ id: 'org', name: '组织', code: 'org', type: 'INTERNAL', permissions: ['account:users:read'] }] as Awaited<ReturnType<typeof getAdminOrganizations>>;
 function LocationProbe() { return <output aria-label="current path">{useLocation().pathname}</output>; }
 function mount(path = '/app/announcements') { return render(<MemoryRouter initialEntries={[path]}><LanguageProvider><InternalLayout /><LocationProbe /></LanguageProvider></MemoryRouter>); }
+async function expectCurrentWorkPage(title: string, allTabs = '全部标签') {
+  const header = within(screen.getByRole('button', { name: allTabs }).closest('header')!);
+  expect(header.getAllByRole('navigation')).toHaveLength(1);
+  fireEvent.click(header.getByRole('button', { name: allTabs }));
+  const drawer = within(await screen.findByRole('dialog'));
+  expect(drawer.getByRole('button', { name: title })).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(drawer.getByRole('button', { name: /^(close|关闭)$/i }));
+}
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().reset();
   vi.mocked(getAdminOrganizations).mockResolvedValue([]);
@@ -100,14 +108,15 @@ it('keeps workflow selection and the loaded object name in the shell without ano
   const menu = within(screen.getByRole('navigation', { name: '系统服务 上下文菜单' }));
   expect(menu.getByRole('link', { name: '流程设计' })).toHaveAttribute('aria-current', 'page');
   expect(menu.queryByText('流程编辑')).not.toBeInTheDocument();
-  expect(document.querySelector('.qms-topbar-location')).toHaveTextContent('来料 · 质量流程');
+  await expectCurrentWorkPage('来料 · 质量流程 · 编辑');
   expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · 编辑');
   await act(async () => resolveDirectory([]));
   expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · 编辑');
   fireEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
   fireEvent.click(await screen.findByText('English'));
   await waitFor(() => expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · Edit'));
-  expect(document.querySelector('.qms-topbar-location')).toHaveTextContent('来料 · 质量流程');
+  expect(screen.getByRole('heading', { name: '来料 · 质量流程' })).toBeVisible();
+  await expectCurrentWorkPage('来料 · 质量流程 · Edit', 'All tabs');
   expect(getWorkflowVersion).toHaveBeenCalledTimes(1);
 });
 
@@ -145,6 +154,6 @@ it('does not translate an actual workflow name that matches a static English tra
   expect(await screen.findByRole('heading', { name: '流程设计' })).toBeVisible();
   expect(screen.getByRole('navigation', { name: 'Workflow hierarchy' })).toHaveTextContent('流程设计');
   expect(useWorkTabsStore.getState().tabs.find(tab => tab.id === path)?.title).toBe('流程设计 · Edit');
-  expect(document.querySelector('.qms-topbar-location')).toHaveTextContent('流程设计');
-  expect(document.querySelector('.qms-topbar-location')).not.toHaveTextContent('Workflow design');
+  await expectCurrentWorkPage('流程设计 · Edit', 'All tabs');
+  expect(within(screen.getByRole('button', { name: 'All tabs' }).closest('header')!).queryByText('Workflow design')).not.toBeInTheDocument();
 });
