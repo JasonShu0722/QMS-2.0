@@ -4,10 +4,10 @@ import { PasswordService } from './password.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { PasswordResetService } from './password-reset.service.js';
-import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto } from './dto/admin-user.dto.js';
+import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto, AdminMfaPolicyInputDto } from './dto/admin-user.dto.js';
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 import { TemporaryPasswordService } from './temporary-password.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertRecentAuthentication, mfaPolicy } from '../../common/security/session-security.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
@@ -37,6 +37,40 @@ export class AdminUserService {
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId }, select: USER_SELECT });
     if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
     return user;
+  }
+
+  async getMfaPolicy(actor: AdminUserActor, userId: string, organizationId = actor.scopeOrganizationId ?? actor.organizationId) {
+    return this.prisma.$transaction(async (transaction) => {
+      await assertAdminAccess(transaction, actor, organizationId, 'account:users:read');
+      if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
+      const user = await transaction.user.findFirst({ where: { id: userId, organizationId } });
+      if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
+      const policy = await mfaPolicy(transaction, userId);
+      return { userId, required: policy.required, bound: user.mfaEnabled, override: user.mfaRequirementOverride, roleRequired: policy.roleRequired, securityVersion: user.securityVersion, selfSessionRevoked: false };
+    });
+  }
+
+  setMfaPolicy(actor: AdminUserActor, userId: string, dto: AdminMfaPolicyInputDto, organizationId: string, traceId: string, key?: string) {
+    return this.mutations.run({ actor, organizationId, key, action: 'USER_MFA_POLICY_CHANGED', payload: { userId, ...dto }, permission: 'account:users:reset', traceId }, async (transaction) => {
+      const user = await transaction.user.findUniqueOrThrow({ where: { id: userId } });
+      if (user.securityVersion !== dto.expectedSecurityVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      const changed = user.mfaRequirementOverride !== dto.required;
+      if (changed) {
+        await transaction.user.update({ where: { id: userId }, data: { mfaRequirementOverride: dto.required, securityVersion: { increment: 1 } } });
+        const now = new Date();
+        await transaction.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
+        await transaction.mfaChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
+        await transaction.passwordChangeChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
+      }
+      const policy = await mfaPolicy(transaction, userId);
+      await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_MFA_POLICY_CHANGED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId, status: dto.required ? 'ENABLED' : 'DISABLED' } }, transaction);
+      return { userId, required: policy.required, bound: user.mfaEnabled, override: dto.required, roleRequired: policy.roleRequired, securityVersion: user.securityVersion + Number(changed), selfSessionRevoked: changed && actor.id === userId };
+    }, async (transaction) => {
+      if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      if (!(await transaction.user.findFirst({ where: { id: userId, organizationId } }))) adminError('ADMIN_USER_NOT_FOUND', 404);
+      await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
+    });
   }
 
   create(actor: AdminUserActor, dto: CreateAdminUserDto, traceId: string, key?: string) {

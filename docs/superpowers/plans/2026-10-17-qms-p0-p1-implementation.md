@@ -8,7 +8,14 @@
 
 **技术栈：** NestJS、Prisma/PostgreSQL、React/Ant Design、现有 ExcelJS、对象存储/ClamAV/Worker、生成 contracts；不新增实现框架。
 
-## 当前摘要（2026-10-17，主分支部署后接续，Asia/Taipei）
+## 当前摘要（2026-10-18，账号安全体验与集中治理）
+
+- D 已通过 [PR #35](https://github.com/JasonShu0722/QMS-2.0/pull/35) 合入 `main` / `40dafaaf891de83bc7e72444a9ed9b10a18c2540`；PR 与 main Foundation 均 8/8 PASS，部署 [39049136037](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39049136037) SUCCESS。两条迁移、API/Worker/Web healthy 以及线上新契约均已核对；浏览器仍待人工确认，Issue #23 未关闭。
+- 负责人随后要求账号安全改为弹窗卡片，并明确“只有管理员可以开关”，包括管理员本人在账号管理设置 MFA。新交付目标为 [Issue #36](https://github.com/JasonShu0722/QMS-2.0/issues/36) / `V0.0.15`，沿用主分支基线和 `codex/account-security-dialog`，具体设计、实现边界和验收见[集中治理计划](2026-10-18-account-security-dialog.md)。未提交的原 UI-only `V0.0.10-fix1` 草案由本范围取代，既有 V0.0.11～14 预留不变。
+- 当前实现分为同源个人安全弹窗与后台账号级 MFA 配置；后者沿原凭据治理权限、受控组织、近期认证、审计与并发/幂等，不能仅隐藏个人按钮。个人不再有自助策略或解绑；管理员显式账号开关优先，未配置维持既有默认，不丢失绑定。
+- 自动门禁按实际影响执行；仅 UI 改动不扩大 PostgreSQL 范围，但账号级策略新增迁移/API 需真实 PG 与生成契约。浏览器统一上线后人工确认；本地只运行受影响定向 Web 测试、类型和构建，完整并行回归在 PR CI，不重复耗时串行全量。
+
+## 历史摘要（2026-10-17，主分支部署后接续，Asia/Taipei）
 
 - 授权：沿用本会话 P0/P1 开发、Issue/PR 持续授权；负责人已明确“正常推进合并部署即可”。Issue 关闭、飞书回填仍未执行，也不因部署通过自动批准关闭。
 - 当前基线：`main` / `22c7dd457058487b164f177a107d920a6c46e4a1`，PR #34 已把 A/B/C/F2 累计提交完整接入主分支；主分支 Foundation [39037143143](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39037143143) 8/8 PASS，自动部署 [39037671625](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39037671625) SUCCESS。

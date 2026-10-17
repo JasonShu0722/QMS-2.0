@@ -4,6 +4,8 @@
 
 ## 1. 当前基线
 
+2026-10-18：负责人要求账号安全改为已登录页面内的卡片弹窗，并进一步明确所有账号的 MFA 开关只由管理员在账号管理设置。头像菜单与账号中心共用安全内容，`/mfa` 保留登录挑战入口；个人弹窗展示状态、绑定和恢复功能。账号级治理、布局、关闭保护、临时秘密清理和部署后人工检查见[账号安全弹窗计划](../../docs/superpowers/plans/2026-10-18-account-security-dialog.md)，实现前不视为已交付。
+
 2026-10-17 REQ-0016 / Issue #20（A 单元）已在功能分支实现共享单行顶栏，双门户仅挂载一个 WorkTabs，移除顶部路径行与正文重复标签栏，未改标签 store。27 项定向 Web 测试、lint/build 以及真实网关双门户三档尺寸浏览器 2 项通过；包括英文窄屏、六主题、专注切换、反馈按钮可点击和未保存关闭保护。独立规格及质量审查无阻断；浏览器专注用例使用实际不可访问对象的错误态验证外壳，不代表真实对象业务处理链已验收。当前未发布，B/D/E 的个人菜单、长会话与头像分别交付；各项结果与 Git 外日志见[P0/P1 总计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-implementation.md)。
 
 2026-10-09 会话确认的[导航、登录工具栏与需求反馈专项设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md)覆盖 REQ-0006～0010：系统服务整合、暂时移除知识与文件入口、保留待办卡片、登录页语言与外观、双门户反馈按钮。Issue #12～#15 已建立，本地独立部分并行、共享文件统一整合；本地实现、规格 / 质量审查及现有环境门禁已完成，四个 PR 的目标仍独立。实际证据、用户手动验收来源及闭环结果见[本轮执行计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md)。PR #16～#19 已依次合入 main 并逐单元核验自动部署，最终 SHA 为 `acc4c152943fa2bec4df163c91d1b6a0a904fe18`；真实 URL、部分线上回归和链接回填见执行计划。负责人已按手动清单确认最终验收；四个 Issue 已关闭，五条飞书已结束并回填实际完成时间。代理独立验证与用户手动确认分别记账，具体浏览器版本及设备型号未单独提供。
@@ -46,6 +48,7 @@
 | `apps/web/src/theme/tokens.ts`、`ThemeProvider.tsx` | 模式/品牌色解析、容错记忆、CSS 变量和 Ant Design token 同源 |
 | `apps/web/src/theme/AppearanceButton.tsx` | 唯一外观入口与设置抽屉 |
 | `apps/web/src/features/auth/AuthToolbar.tsx`、`AuthToolbar.css` | 登录前两个紧凑入口，复用共享语言菜单与外观抽屉；窄屏 / 粗指针触控区域 |
+| `apps/web/src/features/auth/SecurityPage.tsx`、`SecurityDialog.tsx` | 同源账号安全内容的独立认证页/已登录弹窗宿主；MFA、绑定、恢复码、邮箱和一次性秘密生命周期，登录挑战不能被当作普通设置关闭 |
 | `apps/web/src/features/feedback/FeedbackButton.tsx`、`feedback-config.ts` | 双登录后外壳共享需求反馈；指针防误触、有界位置记忆与固定安全外部链接 |
 | `apps/web/src/features/navigation/navigation.ts`、`layouts/InternalLayout.tsx` | 前端导航事实、原路由识别、系统服务各子入口独立权限；对象页加载失败仍登记当前工作标签 |
 | `apps/web/src/layouts/ShellHeader.tsx`、`shell.css` | 内部/供应商共享顶栏、导航尺寸、窄屏及专注布局 |

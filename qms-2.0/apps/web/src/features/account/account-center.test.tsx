@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ApiError } from '../../api/client';
@@ -35,6 +35,26 @@ describe('account center', () => {
     expect(screen.getByText('Internal · 内部账号')).toBeTruthy();
     await waitFor(() => expect(api.getAccountSessions).toHaveBeenCalledOnce());
     expect(screen.queryByText(/passwordHash|tokenHash/i)).toBeNull();
+  });
+
+  it('opens account security in place and preserves an edited profile', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ isAdministrator: false, mfaEnabled: true, mfaRequired: true, securityState: 'AUTHENTICATED', recoveryCodesRemaining: 5, emailVerifiedAt: '2026-10-17' }), { headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      render(<MemoryRouter initialEntries={['/app/account']}><AccountCenterPage /></MemoryRouter>);
+      await screen.findByText('alice');
+      await userEvent.clear(screen.getByLabelText('邮箱'));
+      await userEvent.type(screen.getByLabelText('邮箱'), 'draft@example.test');
+      const trigger = screen.getByRole('button', { name: '账号安全' });
+      await userEvent.click(trigger);
+      const dialog = within(await screen.findByRole('dialog', { name: '账号安全' }));
+      expect(await dialog.findByText('验证器已绑定')).toBeVisible();
+      expect(screen.queryByRole('link', { name: '账号安全' })).not.toBeInTheDocument();
+      await userEvent.click(dialog.getByRole('button', { name: '关闭账号安全' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByLabelText('邮箱')).toHaveValue('draft@example.test');
+      await waitFor(() => expect(trigger).toHaveFocus());
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('saves email with success feedback', async () => {

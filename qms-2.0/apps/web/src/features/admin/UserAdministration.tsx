@@ -6,6 +6,7 @@ import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../
 import { allows, randomResetCode, scopePath, type AdminOrganization, type AdminRole, type AdminUser, type UserRoles } from './admin';
 import { UserBatchCreate } from './UserBatchCreate';
 import { UserTemporaryPassword } from './UserTemporaryPassword';
+import { UserMfaPolicy } from './UserMfaPolicy';
 
 type CreateUser = components['schemas']['CreateAdminUserDto'];
 type UpdateUser = components['schemas']['UpdateAdminUserDto'];
@@ -29,6 +30,7 @@ export function UserAdministration({ organization, organizations }: { organizati
   const [assignment, setAssignment] = useState<{ user: AdminUser; roles: AdminRole[]; selected: string[]; global: AdminRole[] }>();
   const [reset, setReset] = useState<{ user: AdminUser; code: string; issued?: ResetIssued }>();
   const [temporary, setTemporary] = useState<AdminUser>();
+  const [mfa, setMfa] = useState<{ user: AdminUser; organizationId: string }>();
   const [batch, setBatch] = useState(false);
   const [form] = Form.useForm<UserForm>();
   const mutate = useRef(createAdminMutation());
@@ -44,7 +46,7 @@ export function UserAdministration({ organization, organizations }: { organizati
   const canReset = allows(organization, 'users:reset');
   const canReadRoles = canRead && allows(organization, 'roles:read');
   const canAssign = canReadRoles && allows(organization, 'roles:assign');
-  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setTemporary(undefined); setBatch(false); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
+  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
 
   useEffect(() => {
     let current = true;
@@ -114,6 +116,7 @@ export function UserAdministration({ organization, organizations }: { organizati
       { title: t('主组织'), render: (_, user) => user.organization.name },
       { title: t('状态'), render: (_, user) => <Tag color={user.status === 'ACTIVE' ? 'green' : 'default'}>{user.status === 'ACTIVE' ? t('启用') : t('停用')}</Tag> },
       { title: t('操作'), render: (_, user) => <Space wrap>
+        <Button size="small" disabled={busy} onClick={() => setMfa({ user, organizationId: organization.id })}>{t('MFA 设置')}</Button>
         {(canUpdate || canStatus || canTransfer) && <Button size="small" disabled={busy} onClick={() => edit(user)}>{t('编辑')}</Button>}
         {canStatus && <Button size="small" disabled={busy} onClick={() => void perform(async () => { await mutate.current<AdminUser>(scopePath(`users/${user.id}`, organization.id), 'PATCH', { status: user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' }); }, user.status === 'ACTIVE' ? '用户已停用' : '用户已启用')}>{user.status === 'ACTIVE' ? t('停用') : t('启用')}</Button>}
         {canReset && <Button size="small" disabled={busy} onClick={() => { mutate.current = createAdminMutation(); setReset({ user, code: randomResetCode() }); }}>{t('签发重置凭证')}</Button>}
@@ -121,6 +124,7 @@ export function UserAdministration({ organization, organizations }: { organizati
         {canAssign && <Button size="small" disabled={busy} onClick={() => void openRoles(user)}>{t('分配角色')}</Button>}
       </Space> },
     ]} />}
+    {mfa && canRead && mfa.organizationId === organization.id && <UserMfaPolicy key={`${organization.id}:${mfa.user.id}`} user={mfa.user} organizationId={organization.id} canWrite={canReset} onClose={() => setMfa(undefined)} onSaved={() => { setRevision((value) => value + 1); setSuccess('MFA 设置已保存'); }} />}
     <Modal title={t('批量创建账号')} open={batch && canCreate} onCancel={() => setBatch(false)} footer={null} destroyOnHidden width={950}>
       {batch && canCreate && <UserBatchCreate organizationId={organization.id} canReadPasswords={canReset} />}
     </Modal>
