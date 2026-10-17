@@ -12,6 +12,8 @@ import { adminError, type AdminTransaction } from '../../common/security/admin-m
 import { MfaService } from './mfa.service.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
+import { PasswordChangeChallengeService } from './password-change-challenge.service.js';
+import { replacePassword } from './password-credentials.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -36,12 +38,13 @@ export class IdentityService {
     private readonly limits: RateLimitService,
     private readonly audit: AuditLogService,
     private readonly mfa: MfaService,
+    private readonly passwordChanges: PasswordChangeChallengeService,
   ) {}
 
   async login(
     dto: LoginDto,
     request: RateLimitedRequest,
-  ): Promise<{ response: LoginResponseDto; sessionToken?: string; challengeToken?: string }> {
+  ): Promise<{ response: LoginResponseDto; sessionToken?: string; challengeToken?: string; passwordChangeToken?: string }> {
     const identifier = typeof dto.identifier === 'string' ? dto.identifier.trim() : '';
     const password = typeof dto.password === 'string' ? dto.password : '';
     const rateKey = request[RATE_LIMIT_KEY] ?? this.limits.key(identifier, request.ip ?? 'unknown');
@@ -67,12 +70,18 @@ export class IdentityService {
       await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;
       const current = await transaction.user.findUnique({ where: { id: user.id }, include: { organization: { select: { status: true } } } });
       if (!current || current.status !== 'ACTIVE' || current.organization.status !== 'ACTIVE' || current.passwordHash !== user.passwordHash || current.organizationId !== user.organizationId || current.accountType !== user.accountType) return null;
+      if (current.mustChangePassword) {
+        const temporary = await transaction.userTemporaryPassword.findUnique({ where: { userId: current.id } });
+        if (!temporary || temporary.credentialVersion !== current.credentialVersion || temporary.expiresAt.getTime() <= Date.now()) return null;
+        return { passwordChangeToken: await this.passwordChanges.create(current, transaction) };
+      }
       const challenge = await this.mfa.createChallenge(current, transaction);
       if (challenge) return { challenge };
       return { sessionToken: await this.sessions.create(current.id, transaction, { reauthenticated: true }) };
     }).catch((error: unknown) => rethrowSecurityRejection(this.prisma, this.audit, error, { userId: user.id, resourceType: 'User', resourceId: user.id, traceId: requestTraceId(request), action: 'LOGIN_FAILED', outcome: 'FAILURE' }));
     if (!authentication) return this.rejectLogin(rateKey, request, user);
     this.limits.recordSuccess(rateKey);
+    if (authentication.passwordChangeToken) return { passwordChangeToken: authentication.passwordChangeToken, response: { accountType: user.accountType, landingPath: '/change-password', securityState: 'PASSWORD_CHANGE_REQUIRED' } };
     if (authentication.challenge) return { challengeToken: authentication.challenge.token, response: { accountType: user.accountType, landingPath: '/mfa', securityState: authentication.challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' } };
     const response: LoginResponseDto =
       user.accountType === 'SUPPLIER'
@@ -137,7 +146,7 @@ export class IdentityService {
     traceId: string;
   }): Promise<void> {
     try {
-      if (input.newPassword === input.currentPassword || input.newPassword.length < 12) {
+      if (input.newPassword === input.currentPassword || input.newPassword.length < 12 || input.newPassword.length > 256) {
         throw new HttpException({ code: 'AUTH_PASSWORD_POLICY_INVALID', message: '新密码不符合安全策略' }, 400);
       }
       const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, organizationId: true, passwordHash: true } });
@@ -147,9 +156,9 @@ export class IdentityService {
       const passwordHash = await this.passwords.hash(input.newPassword);
       await this.prisma.$transaction(async (transaction) => {
         await assertRecentAuthentication(transaction, { id: input.userId, sessionId: input.currentSessionId });
-        const changed = await transaction.user.updateMany({ where: { id: input.userId, passwordHash: user.passwordHash, status: 'ACTIVE' }, data: { passwordHash, securityVersion: { increment: 1 } } });
-        if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
-        const current = await transaction.user.findUniqueOrThrow({ where: { id: input.userId }, select: { securityVersion: true } });
+        const locked = await transaction.user.findUniqueOrThrow({ where: { id: input.userId } });
+        if (locked.passwordHash !== user.passwordHash || locked.status !== 'ACTIVE') adminError('CONCURRENCY_CONFLICT', 409);
+        const current = await replacePassword(transaction, input.userId, passwordHash);
         await transaction.session.update({ where: { id: input.currentSessionId }, data: { securityVersion: current.securityVersion } });
         await transaction.passwordReset.updateMany({ where: { userId: input.userId, consumedAt: null }, data: { consumedAt: new Date() } });
         await this.sessions.revokeOtherSessions(input.userId, input.currentSessionId, input.traceId, transaction);

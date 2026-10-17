@@ -71,6 +71,7 @@ async function request<T>(path: string, init: RequestInit = {}, canReauthenticat
 export const apiRequest = request;
 
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
+  components['schemas']['CreateAdminUserBatchDto'] | components['schemas']['ResetTemporaryPasswordDto'] |
   components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |
   components['schemas']['UpdateAdminRoleDto'] | components['schemas']['CopyAdminRoleDto'] | components['schemas']['AssignAdminRolesDto'] | GovernanceBody;
 
@@ -91,6 +92,8 @@ export function safeAccountError(cause: unknown): string {
   if (!(cause instanceof ApiError)) return '请求失败，请重试';
   const messages: Record<string, string> = {
     AUTH_INVALID_CREDENTIALS: '用户名或密码错误',
+    AUTH_PASSWORD_CHANGE_INVALID: '首次改密验证已失效，请重新登录',
+    ADMIN_BATCH_ROW_INVALID: '请检查账号导入行的填写内容',
     AUTH_CURRENT_PASSWORD_INVALID: '当前密码错误',
     AUTH_SESSION_REQUIRED: '请先登录',
     AUTH_RATE_LIMITED: '请求过于频繁，请稍后重试',

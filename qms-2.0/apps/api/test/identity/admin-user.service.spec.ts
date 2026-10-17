@@ -27,7 +27,7 @@ describe('admin user lifecycle service', () => {
   };
   const passwords = { hash: jest.fn() };
   const audit = { record: jest.fn() };
-  const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never));
+  const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never), {} as never);
   const actor = { id: 'admin-1', sessionId: 'session-admin', organizationId: 'org-a', accountType: 'INTERNAL' as const };
 
   beforeEach(() => {

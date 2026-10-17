@@ -31,7 +31,7 @@ export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: s
 export async function assertActiveAuthentication(transaction: Prisma.TransactionClient, actor: { id: string; sessionId: string }) {
   await transaction.$queryRaw`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR UPDATE`;
   const user = await transaction.user.findUnique({ where: { id: actor.id }, include: { organization: true } });
-  if (!actor.sessionId || !user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE') securityError('AUTH_SESSION_REQUIRED');
+  if (!actor.sessionId || !user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE' || user.mustChangePassword) securityError('AUTH_SESSION_REQUIRED');
   await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;
   const organization = await transaction.organization.findUnique({ where: { id: user.organizationId }, select: { status: true } });
   if (organization?.status !== 'ACTIVE') securityError('AUTH_SESSION_REQUIRED');

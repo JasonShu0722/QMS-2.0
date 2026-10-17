@@ -4,6 +4,8 @@ import { Alert, Button, Form, Input, Modal, Select, Space, Table, Tag, Typograph
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../../api/client';
 import { allows, randomResetCode, scopePath, type AdminOrganization, type AdminRole, type AdminUser, type UserRoles } from './admin';
+import { UserBatchCreate } from './UserBatchCreate';
+import { UserTemporaryPassword } from './UserTemporaryPassword';
 
 type CreateUser = components['schemas']['CreateAdminUserDto'];
 type UpdateUser = components['schemas']['UpdateAdminUserDto'];
@@ -26,6 +28,8 @@ export function UserAdministration({ organization, organizations }: { organizati
   const [editing, setEditing] = useState<AdminUser | 'new'>();
   const [assignment, setAssignment] = useState<{ user: AdminUser; roles: AdminRole[]; selected: string[]; global: AdminRole[] }>();
   const [reset, setReset] = useState<{ user: AdminUser; code: string; issued?: ResetIssued }>();
+  const [temporary, setTemporary] = useState<AdminUser>();
+  const [batch, setBatch] = useState(false);
   const [form] = Form.useForm<UserForm>();
   const mutate = useRef(createAdminMutation());
   const alive = useRef(true);
@@ -40,7 +44,7 @@ export function UserAdministration({ organization, organizations }: { organizati
   const canReset = allows(organization, 'users:reset');
   const canReadRoles = canRead && allows(organization, 'roles:read');
   const canAssign = canReadRoles && allows(organization, 'roles:assign');
-  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
+  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setTemporary(undefined); setBatch(false); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
 
   useEffect(() => {
     let current = true;
@@ -102,6 +106,7 @@ export function UserAdministration({ organization, organizations }: { organizati
       {canRead && <><Input.Search aria-label={t('搜索用户')} placeholder={t('用户名或邮箱')} allowClear onSearch={setSearch} />
         <Select aria-label={t('用户状态')} placeholder={t('全部状态')} allowClear value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></>}
       {canCreate && <Button type="primary" disabled={busy} onClick={() => edit('new')}>{t('创建用户')}</Button>}
+      {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
     </Space></div>
     {canRead && <Table<AdminUser> rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} columns={[
       { title: t('用户名'), dataIndex: 'username' }, { title: t('邮箱'), dataIndex: 'email' },
@@ -112,9 +117,16 @@ export function UserAdministration({ organization, organizations }: { organizati
         {(canUpdate || canStatus || canTransfer) && <Button size="small" disabled={busy} onClick={() => edit(user)}>{t('编辑')}</Button>}
         {canStatus && <Button size="small" disabled={busy} onClick={() => void perform(async () => { await mutate.current<AdminUser>(scopePath(`users/${user.id}`, organization.id), 'PATCH', { status: user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' }); }, user.status === 'ACTIVE' ? '用户已停用' : '用户已启用')}>{user.status === 'ACTIVE' ? t('停用') : t('启用')}</Button>}
         {canReset && <Button size="small" disabled={busy} onClick={() => { mutate.current = createAdminMutation(); setReset({ user, code: randomResetCode() }); }}>{t('签发重置凭证')}</Button>}
+        {canReset && <Button size="small" disabled={busy} onClick={() => setTemporary(user)}>{t('临时密码')}</Button>}
         {canAssign && <Button size="small" disabled={busy} onClick={() => void openRoles(user)}>{t('分配角色')}</Button>}
       </Space> },
     ]} />}
+    <Modal title={t('批量创建账号')} open={batch && canCreate} onCancel={() => setBatch(false)} footer={null} destroyOnHidden width={950}>
+      {batch && canCreate && <UserBatchCreate organizationId={organization.id} canReadPasswords={canReset} />}
+    </Modal>
+    <Modal title={temporary ? `${temporary.username} · ${t('临时密码')}` : t('临时密码')} open={!!temporary && canReset} onCancel={() => setTemporary(undefined)} footer={null} destroyOnHidden>
+      {temporary && canReset && <UserTemporaryPassword key={`${organization.id}:${temporary.id}`} user={temporary} organizationId={organization.id} />}
+    </Modal>
     <Modal title={editing === 'new' ? t('创建用户') : t('编辑用户')} open={!!editing} onCancel={() => { setEditing(undefined); form.resetFields(); mutate.current = createAdminMutation(); }} footer={null} destroyOnHidden>
       {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
       <Form name="admin-user-editor" form={form} layout="vertical" onFinish={save} autoComplete="off">

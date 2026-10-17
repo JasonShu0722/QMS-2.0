@@ -10,6 +10,7 @@ import { SecurityPage } from './features/auth/SecurityPage';
 import { ReauthenticationProvider } from './features/auth/ReauthenticationProvider';
 import { PasswordRecoveryPage } from './features/auth/PasswordRecoveryPage';
 import { AuthToolbar } from './features/auth/AuthToolbar';
+import { RequiredPasswordChangePage } from './features/auth/RequiredPasswordChangePage';
 
 export function App() {
   return (
@@ -18,6 +19,7 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/mfa" element={<SecurityPage />} />
+        <Route path="/change-password" element={<RequiredPasswordChangePage />} />
         <Route path="/password-recovery" element={<PasswordRecoveryPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
