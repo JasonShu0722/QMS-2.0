@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthenticatedRoute } from './AuthenticatedRoute';
@@ -44,6 +44,46 @@ describe('authenticated route', () => {
     expect(screen.queryByText('应用壳')).not.toBeInTheDocument();
     expect(await screen.findByLabelText('current path')).toHaveTextContent('/login');
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/v1/auth/session', expect.objectContaining({ credentials: 'include' }));
+  });
+
+  it('recovers an active password challenge from a protected business deep link', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>((path) => path === '/api/v1/auth/session'
+      ? mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401)
+      : mockJsonResponse({ accountType: 'INTERNAL', securityState: 'PASSWORD_CHANGE_REQUIRED', landingPath: '/change-password' }));
+    render(<MemoryRouter initialEntries={['/app/workbench']}><Routes>
+      <Route path="/app/*" element={<AuthenticatedRoute accountType="INTERNAL"><div>应用壳</div></AuthenticatedRoute>} />
+      <Route path="/change-password" element={<LocationProbe />} /><Route path="/login" element={<LocationProbe />} />
+    </Routes></MemoryRouter>);
+    expect(await screen.findByLabelText('current path')).toHaveTextContent('/change-password');
+    expect(screen.queryByText('应用壳')).not.toBeInTheDocument();
+  });
+
+  it('keeps a failed challenge lookup retryable rather than discarding it as logged out', async () => {
+    let fail = true;
+    globalThis.fetch = vi.fn<typeof fetch>((path) => path === '/api/v1/auth/session'
+      ? mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401)
+      : fail ? Promise.reject(new TypeError('network lost')) : mockJsonResponse({ securityState: 'PASSWORD_CHANGE_REQUIRED', landingPath: '/change-password' }));
+    render(<MemoryRouter initialEntries={['/app/workbench']}><Routes>
+      <Route path="/app/*" element={<AuthenticatedRoute accountType="INTERNAL"><div>应用壳</div></AuthenticatedRoute>} />
+      <Route path="/change-password" element={<LocationProbe />} /><Route path="/login" element={<LocationProbe />} />
+    </Routes></MemoryRouter>);
+    expect(await screen.findByText('暂时无法验证登录状态')).toBeInTheDocument();
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+    expect(await screen.findByLabelText('current path')).toHaveTextContent('/change-password');
+  });
+
+  it('ignores a challenge lookup resolved after the protected route unmounts', async () => {
+    let resolveChallenge: ((response: Response) => void) | undefined;
+    globalThis.fetch = vi.fn<typeof fetch>((path) => path === '/api/v1/auth/session'
+      ? mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401)
+      : new Promise<Response>((resolve) => { resolveChallenge = resolve; }));
+    const view = render(<MemoryRouter><AuthenticatedRoute accountType="INTERNAL"><div>应用壳</div></AuthenticatedRoute></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    expect(resolveChallenge).toBeDefined();
+    view.unmount();
+    await act(async () => { resolveChallenge!(await mockJsonResponse({ securityState: 'PASSWORD_CHANGE_REQUIRED', landingPath: '/change-password' })); });
+    expect(screen.queryByText('应用壳')).not.toBeInTheDocument();
   });
 
   it.each([
