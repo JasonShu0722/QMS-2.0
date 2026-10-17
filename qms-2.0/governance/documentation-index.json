@@ -388,7 +388,7 @@
         "owner": "QMS 工程维护者（Taste 定向融合实际复核）",
         "reviewedOn": "2026-10-16",
         "maxAgeDays": 90,
-        "reason": "保留原导航设计与验收历史，实际复核前端目录规则、统一设计与人工验收授权；新增任务分流、视觉审计/重点返修及技能调用边界，不引入第二套主题、不降低验收或声称页面已改版。",
+        "reason": "复核 REQ-0016 的共享单行顶栏、标签整合及保留的导航/未保存边界；记录本地真实浏览器与机器验证，尚未发布。保留前期技能融合及历史证据来源，不扩大为个人菜单或头像交付。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -404,7 +404,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "7c9f0e6f30575382f5bfb33277092d5aad5cea1638acda588464b0d093807c22"
+            "sha256": "ee23960f93474a9555d59bc1ea0886f5cb097cdbefd3f48a378aec69d0d725e4"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",

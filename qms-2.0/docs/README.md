@@ -11,6 +11,14 @@
 | [工作流与治理整合设计](../../docs/superpowers/specs/2026-10-12-qms-workflow-integration-design.md) | 本轮已批准的职责整合、OpenClaw 只读分析、当前摘要与主动版本规则 |
 | [工作流与治理整合计划](../../docs/superpowers/plans/2026-10-12-qms-workflow-integration.md) | V0.0.6 文档调整、规则推演、独立复核与实际验证状态 |
 | [导航修复交付记录](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md) | REQ-0006～0010 历史闭环及顶部当前摘要；V0.0.5 已推送事实与部署版本分开 |
+| [P0/P1 开发策划与确认记录](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-development-planning.md) | REQ-0013～0016 的已确认决定、源码差距、候选交付单元和未决范围；策划中，非已冻结实现计划 |
+| [P0/P1 实施总计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-implementation.md) | A～G 分组、F1/F2/F3、8 个功能单元、依赖、Issue/PR 映射、验收与关闭回填 |
+| [A/B/E 外壳实施计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-web.md) | 紧凑顶栏、个人菜单与真实扫描头像的文件、TDD、回归和独立交付 |
+| [C/D 身份账号实施计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-identity.md) | 首次改密、临时密码、批量幂等、长期会话和自主 MFA 的实施步骤 |
+| [F1/F2/F3/G 基础数据实施计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-master-data.md) | 供应商档案解耦与多账号、客户复用、两字段物料、逐行导入及外部只预留 |
+| [P0/P1 身份与账号设计](../../docs/superpowers/specs/2026-10-17-qms-p0-p1-identity-account-design.md) | REQ-0013～0014 的登录、MFA、批量账号与临时密码设计规格 |
+| [P0/P1 基础数据设计](../../docs/superpowers/specs/2026-10-17-qms-p0-p1-master-data-design.md) | REQ-0015 的供应商用户账号、供应商/客户/物料导入和外部接收预留规格 |
+| [P0/P1 顶栏与个人入口设计](../../docs/superpowers/specs/2026-10-17-qms-p0-p1-shell-design.md) | REQ-0013/0016 的共享顶栏、工作标签、头像菜单和退出确认规格 |
 | [业务术语](DOMAIN-GLOSSARY.md) | 跨领域术语、权限与交付状态的区别 |
 | [架构决策](ARCHITECTURE-DECISIONS.md) | 既有决策、原始来源、代价和重审条件 |
 | [变更影响分析](CHANGE-IMPACT.md) | 新功能、缺陷、依赖升级的分析与复用模板 |
