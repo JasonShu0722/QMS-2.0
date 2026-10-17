@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Form, Input, List, Space, Tag, Typography } from 'antd';
 import { changeAccountPassword, getAccountProfile, getAccountSessions, revokeAccountSession, updateAccountProfile } from '../../api/client';
 import { GovernanceFeedback } from '../governance/GovernanceFeedback';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import type { AccountProfile, AccountSession } from '@qms/contracts';
 
 export function AccountCenterPage() {
   const { t, locale } = useLanguage();
+  const location = useLocation();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<unknown>();
@@ -31,6 +32,12 @@ export function AccountCenterPage() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (location.hash !== '#password' || !loaded) return;
+    const target = document.getElementById('password');
+    target?.scrollIntoView({ block: 'start' });
+    target?.focus({ preventScroll: true });
+  }, [loaded, location.hash]);
 
   async function saveProfile(values: { email?: string }) {
     setSaving(true); setError(undefined); setSuccess(undefined);
@@ -68,7 +75,7 @@ export function AccountCenterPage() {
           <Button type="primary" htmlType="submit" loading={saving}>{t('保存资料')}</Button>
         </Form>
       </Card>
-      <Card title={t('修改密码')}>
+      <Card id="password" tabIndex={-1} title={t('修改密码')}>
         <Form form={passwordForm} layout="vertical" onFinish={savePassword} className="account-form" disabled={!loaded || saving}>
           <Form.Item name="currentPassword" label={t('当前密码')} rules={[{ required: true }]}><Input.Password /></Form.Item>
           <Form.Item name="newPassword" label={t('新密码')} rules={[{ required: true }, { min: 12, message: t('新密码至少 12 位') }]}><Input.Password /></Form.Item>

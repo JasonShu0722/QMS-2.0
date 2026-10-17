@@ -151,6 +151,11 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   });
 }
 
+export async function logout(): Promise<void> {
+  const token = await csrfToken();
+  await request<void>('/api/v1/auth/logout', { method: 'POST', headers: { 'x-csrf-token': token } });
+}
+
 export async function getSession(): Promise<SessionView> {
   const response = await request<SessionResponse>('/api/v1/auth/session');
   const accountType = response.user.accountType;
