@@ -27,7 +27,7 @@ function reject(code: string, status: number): never {
 function serialize(row: CardRow) {
   return {
     id: String(row.id), organizationId: String(row.owner_organization_id), profileId: String(row.profile_id),
-    supplierOrganizationId: String(row.supplier_organization_id), supplierName: String(row.supplier_name),
+    supplierOrganizationId: row.supplier_organization_id === null ? null : String(row.supplier_organization_id), supplierName: String(row.supplier_name),
     month: new Date(String(row.score_month)).toISOString().slice(0, 7), inspectionCount: Number(row.inspection_count),
     passCount: Number(row.pass_count), incomingScore: Number(row.incoming_score), cooperationScore: Number(row.cooperation_score),
     incomingWeight: Number(row.incoming_weight), cooperationWeight: Number(row.cooperation_weight),
@@ -229,9 +229,19 @@ export class SupplierPerformanceService {
       actor, organizationId, key, traceId, action: 'SUPPLIER_PERFORMANCE_CARD_PUBLISHED',
       payload: { id, expectedVersion: input.expectedVersion, organizationId }, permission: PUBLISH_PERMISSION,
     }, async (transaction) => {
+      const current = await transaction.$queryRaw<CardRow[]>(Prisma.sql`
+        SELECT profile_id, supplier_organization_id FROM supplier_performance_cards
+        WHERE id = ${id}::uuid AND owner_organization_id = ${organizationId}::uuid
+          AND status = 'DRAFT' AND version = ${input.expectedVersion} FOR UPDATE`);
+      if (!current[0]) reject('SUPPLIER_PERFORMANCE_CARD_CONCURRENCY_CONFLICT', 409);
+      const profile = await this.suppliers.collaborationProfile(transaction, organizationId, String(current[0].profile_id));
+      if (current[0].supplier_organization_id !== null && current[0].supplier_organization_id !== profile.supplierOrganizationId) {
+        reject('SUPPLIER_PERFORMANCE_CARD_CONCURRENCY_CONFLICT', 409);
+      }
       const rows = await transaction.$queryRaw<CardRow[]>(Prisma.sql`
         UPDATE supplier_performance_cards
-        SET status = 'PUBLISHED', version = version + 1, published_by_id = ${actor.id}::uuid,
+        SET supplier_organization_id = ${profile.supplierOrganizationId}::uuid,
+            status = 'PUBLISHED', version = version + 1, published_by_id = ${actor.id}::uuid,
             published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = ${id}::uuid AND owner_organization_id = ${organizationId}::uuid
           AND status = 'DRAFT' AND version = ${input.expectedVersion}
@@ -239,7 +249,7 @@ export class SupplierPerformanceService {
       if (!rows[0]) reject('SUPPLIER_PERFORMANCE_CARD_CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'SUPPLIER_PERFORMANCE_CARD_PUBLISHED',
         resourceType: 'SupplierPerformanceCard', resourceId: id, outcome: 'SUCCESS', traceId,
-        metadata: { version: Number(rows[0].version), supplierOrganizationId: String(rows[0].supplier_organization_id) } }, transaction);
+        metadata: { version: Number(rows[0].version), supplierOrganizationId: profile.supplierOrganizationId } }, transaction);
       return serialize(rows[0]);
     });
   }

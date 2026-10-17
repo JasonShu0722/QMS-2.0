@@ -10,7 +10,7 @@ import { CONCESSION_PERMISSIONS, concessionError, requiredText, validateConcessi
 
 type ConcessionRow = {
   id: string; owner_organization_id: string; inspection_id: string; inspection_version: number;
-  profile_id: string; supplier_organization_id: string; supplier_name: string; material_code: string;
+  profile_id: string; supplier_organization_id: string | null; supplier_name: string; material_code: string;
   incoming_batch: string; received_quantity: number; quantity: number; reason: string;
   expires_at: Date; status: string; version: number; requested_by_id: string;
   approved_by_id: string | null; approved_at: Date | null; released_at: Date | null;

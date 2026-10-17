@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
+import { SupplierQualityService } from '../supplier-quality/supplier-quality.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -31,6 +32,7 @@ export class SupplierAdmissionService {
     private readonly mutations: AdminMutationService,
     private readonly audit: AuditLogService,
     private readonly files: FileLifecycleService,
+    private readonly suppliers: SupplierQualityService,
   ) {}
 
   private scope(actor: AdminActor, requested?: string) {
@@ -102,8 +104,7 @@ export class SupplierAdmissionService {
     if (!title) adminError('SUPPLIER_INPUT_INVALID', 400);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_ADMISSION_CREATED', payload: input,
       permission: this.permission(actor, true) }, async (tx) => {
-      const profile = await tx.supplierBusinessProfile.findFirst({ where: { id: input.profileId, supplierOrganizationId: organizationId } });
-      if (!profile) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+      const profile = await this.suppliers.pcnSupplierProfile(tx, organizationId, input.profileId);
       const rows = await tx.$queryRaw<DocumentRow[]>`
         INSERT INTO supplier_admission_documents (id, owner_organization_id, supplier_organization_id,
           profile_id, document_type, title, created_by_id)

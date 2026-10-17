@@ -12,6 +12,7 @@ import { OutboxAdministration } from '../governance/OutboxAdministration';
 import { useLanguage } from '../../i18n/Language';
 import { CustomerMasterSection } from '../customer-quality/CustomerMasterSection';
 import { MaterialMasterPage } from '../material-master/MaterialMasterPage';
+import { SupplierProfilesPage } from '../supplier-quality/SupplierProfilesPage';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 export function AdminPage({ organizations, error, traceId, onDirectoryChange }: { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void }) {
@@ -30,6 +31,7 @@ export function AdminPage({ organizations, error, traceId, onDirectoryChange }: 
   const roles = allows(organization, 'roles:read');
   const customerMaster = organization.permissions.includes('customer-quality:complaints:read');
   const additionalTabs = [
+    ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)) ? [{ key: 'supplier-master', label: t('供应商清单'), children: <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(organization.permissions.includes('organization:read') ? [{ key: 'organizations', label: t('组织结构'), children: <OrganizationAdministration organization={organization} organizations={organizations} onChanged={onDirectoryChange} /> }] : []),
     ...(organization.permissions.includes('organization:structure:read') ? [{ key: 'structure', label: t('部门岗位'), children: <StructureAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('configuration:read') ? [{ key: 'configuration', label: t('平台配置'), children: <ConfigurationAdministration organization={organization} /> }] : []),

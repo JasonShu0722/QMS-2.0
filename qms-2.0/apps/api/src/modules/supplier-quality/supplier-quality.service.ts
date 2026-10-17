@@ -20,6 +20,8 @@ import { assertInternalClosure, assertReplyActor, validateProblemFacts, validate
 import { SupplierRuleError } from './supplier-quality.types.js';
 import type { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierReferenceQueryDto, SupplierResponseRevisionDto, SupplierScopeQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 import { canonical, jsonObject } from '../workflow/workflow-runtime-policy.js';
+import { supplierProfileInput } from './supplier-profile-input.js';
+import { assertSupplierAccountGovernance } from '../authorization/supplier-account-authorization.js';
 
 const problemInclude = { profile: true, responseDraft: true } as const;
 type ProblemRecord = Prisma.SupplierQualityProblemGetPayload<{ include: typeof problemInclude }>;
@@ -67,8 +69,9 @@ export class SupplierQualityService {
   updateProfile(actor: AdminActor, id: string, dto: UpdateSupplierProfileDto, traceId: string, key?: string) {
     this.internal(actor);
     return this.mutations.run({ actor, organizationId: this.scope(actor), key, traceId, action: 'SUPPLIER_PROFILE_UPDATED', payload: { id, dto }, permission: 'supplier-quality:profiles:write', duplicateCode: 'SUPPLIER_PROFILE_DUPLICATE' }, async (transaction) => {
-      if (!dto.businessCode.trim()) adminError('SUPPLIER_INPUT_INVALID', 400);
-      const updated = await transaction.supplierBusinessProfile.updateMany({ where: { id, ownerOrganizationId: this.scope(actor), version: dto.expectedVersion }, data: { businessCode: dto.businessCode.trim(), contactName: dto.contactName?.trim() || null, contactEmail: dto.contactEmail?.trim() || null, version: { increment: 1 } } });
+      const current = await this.findProfile(transaction, actor, id);
+      const data = supplierProfileInput(dto, current.displayName);
+      const updated = await transaction.supplierBusinessProfile.updateMany({ where: { id, ownerOrganizationId: this.scope(actor), version: dto.expectedVersion }, data: { ...data, version: { increment: 1 } } });
       if (updated.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       await this.record(transaction, actor, this.scope(actor), 'SUPPLIER_PROFILE_UPDATED', id, traceId);
       return this.serializeProfile(await this.findProfile(transaction, actor, id));
@@ -82,18 +85,25 @@ export class SupplierQualityService {
   }
 
   async performanceProfile(transaction: AdminTransaction, organizationId: string, profileId: string) {
-    const profile = await transaction.supplierBusinessProfile.findFirst({ where: { id: profileId, ownerOrganizationId: organizationId }, select: { id: true, supplierOrganizationId: true, displayName: true } });
+    const profile = await transaction.supplierBusinessProfile.findFirst({ where: { id: profileId, ownerOrganizationId: organizationId }, select: { id: true, supplierOrganizationId: true, displayName: true, businessCode: true } });
     if (!profile) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
     return profile;
   }
 
+  async collaborationProfile(transaction: AdminTransaction, organizationId: string, profileId: string) {
+    await transaction.$queryRaw`SELECT id FROM supplier_business_profiles WHERE id = ${profileId}::uuid AND owner_organization_id = ${organizationId}::uuid FOR SHARE`;
+    const profile = await this.performanceProfile(transaction, organizationId, profileId);
+    if (!profile.supplierOrganizationId) adminError('SUPPLIER_COLLABORATION_NOT_ENABLED', 409);
+    return { ...profile, supplierOrganizationId: profile.supplierOrganizationId };
+  }
+
   async pcnSupplierProfile(transaction: AdminTransaction, supplierOrganizationId: string, profileId: string) {
     const profile = await transaction.supplierBusinessProfile.findFirst({ where: { id: profileId, supplierOrganizationId }, select: { id: true, ownerOrganizationId: true, supplierOrganizationId: true, displayName: true } });
-    if (!profile) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+    if (!profile || profile.supplierOrganizationId !== supplierOrganizationId) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
     const owner = await transaction.organization.findUnique({ where: { id: profile.ownerOrganizationId }, select: { status: true } });
     const supplier = await transaction.organization.findUnique({ where: { id: supplierOrganizationId }, select: { status: true } });
     if (owner?.status !== 'ACTIVE' || supplier?.status !== 'ACTIVE') adminError('ORGANIZATION_DISABLED', 403);
-    return profile;
+    return { ...profile, supplierOrganizationId };
   }
 
   async pcnSupplierProfiles(transaction: AdminTransaction, supplierOrganizationId: string) {
@@ -140,11 +150,20 @@ export class SupplierQualityService {
     this.internal(actor);
     const ownerOrganizationId = this.scope(actor);
     return this.mutations.run({ actor, organizationId: ownerOrganizationId, key, traceId, action: 'SUPPLIER_PROFILE_CREATED', payload: dto, permission: 'supplier-quality:profiles:write', duplicateCode: 'SUPPLIER_PROFILE_DUPLICATE' }, async (transaction) => {
-      const [owner, supplier] = await Promise.all([this.organizations.lookup(ownerOrganizationId, transaction), this.organizations.lookup(dto.supplierOrganizationId, transaction)]);
-      if (owner?.type !== 'INTERNAL' || supplier?.type !== 'SUPPLIER' || !dto.businessCode.trim()) adminError('SUPPLIER_INPUT_INVALID', 400);
-      const profile = await transaction.supplierBusinessProfile.create({ data: { ownerOrganizationId, supplierOrganizationId: supplier.id, businessCode: dto.businessCode.trim(), displayName: supplier.name, contactName: dto.contactName?.trim() || null, contactEmail: dto.contactEmail?.trim() || null } });
+      const owner = await this.organizations.lookup(ownerOrganizationId, transaction);
+      const supplier = dto.supplierOrganizationId ? await this.organizations.lookup(dto.supplierOrganizationId, transaction) : null;
+      if (owner?.type !== 'INTERNAL' || (dto.supplierOrganizationId && supplier?.type !== 'SUPPLIER')) adminError('SUPPLIER_INPUT_INVALID', 400);
+      if (supplier) await assertSupplierAccountGovernance(transaction, actor, supplier.id, 'account:users:create');
+      const data = supplierProfileInput(dto, supplier?.name);
+      const profile = await transaction.supplierBusinessProfile.create({ data: { ownerOrganizationId, supplierOrganizationId: supplier?.id ?? null, ...data } });
       await this.record(transaction, actor, ownerOrganizationId, 'SUPPLIER_PROFILE_CREATED', profile.id, traceId);
       return this.serializeProfile(profile);
+    }, async (transaction) => {
+      if (dto.supplierOrganizationId) {
+        const supplier = await this.organizations.lookup(dto.supplierOrganizationId, transaction);
+        if (supplier?.type !== 'SUPPLIER') adminError('SUPPLIER_INPUT_INVALID', 400);
+        await assertSupplierAccountGovernance(transaction, actor, supplier.id, 'account:users:create');
+      }
     });
   }
 
@@ -201,14 +220,23 @@ export class SupplierQualityService {
       await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'supplier-quality:problems:write');
       if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
-      const record = await transaction.supplierQualityProblem.findFirst({ where: { id, ownerOrganizationId: organizationId }, include: problemInclude });
+      let record = await transaction.supplierQualityProblem.findFirst({ where: { id, ownerOrganizationId: organizationId }, include: problemInclude });
       if (!record) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
       if (record.problemIndexId && !record.workflowBindingId) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       if (!record.problemIndexId && record.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      if (record.replyMode === 'SUPPLIER') {
+        const profile = await this.collaborationProfile(transaction, organizationId, record.profileId);
+        if (record.supplierOrganizationId && record.supplierOrganizationId !== profile.supplierOrganizationId) adminError('CONCURRENCY_CONFLICT', 409);
+        if (!record.supplierOrganizationId) {
+          if (record.problemIndexId || record.releasedToSupplierAt) adminError('CONCURRENCY_CONFLICT', 409);
+          record = await transaction.supplierQualityProblem.update({ where: { id: record.id }, data: { supplierOrganizationId: profile.supplierOrganizationId }, include: problemInclude });
+        }
+      }
+      const issuedRecord = record;
       const binding = await this.bindings.resolve(transaction, organizationId, { severity: record.severity as never, responseForm: record.responseForm as never, replyMode: record.replyMode as never });
       const problemIndex = await this.indexes.createFromDomain(transaction as never, {
         organizationId, domainCode: 'supplier-quality', problemType: record.responseForm, sourceType: 'supplier-quality', sourceId: record.id,
-        severity: record.severity, responsibleParty: record.supplierOrganizationId, ownerId: actor.id,
+        severity: record.severity, ...(record.supplierOrganizationId ? { responsibleParty: record.supplierOrganizationId } : {}), ownerId: actor.id,
         dueAt: new Date(Date.now() + binding.responseSlaMinutes * 60_000), createdById: actor.id, traceId,
       });
       await this.runtime.startInstance({
@@ -216,11 +244,11 @@ export class SupplierQualityService {
         workflowVersionId: binding.workflowVersionId, expectedProblemVersion: record.problemIndexId ? Number(problemIndex.version) - 1 : Number(problemIndex.version), instanceKey: record.id,
         idempotencyKey: key, traceId, commandPayload: { supplierIssueExpectedVersion: dto.expectedVersion },
       }, transaction, undefined, async (tx, context) => {
-        const current = await tx.supplierQualityProblem.findFirst({ where: { id: record.id, ownerOrganizationId: organizationId } });
+        const current = await tx.supplierQualityProblem.findFirst({ where: { id: issuedRecord.id, ownerOrganizationId: organizationId } });
         if (!current) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
         if (current.problemIndexId === String(problemIndex.id) && current.workflowBindingId === binding.bindingId && current.workflowBindingVersion === binding.bindingVersion) return;
         if (context.replay || current.workflowBindingId) adminError('CONCURRENCY_CONFLICT', 409);
-        const changed = await tx.supplierQualityProblem.updateMany({ where: { id: record.id, ownerOrganizationId: organizationId, problemIndexId: null, version: dto.expectedVersion, workflowBindingId: null }, data: { problemIndexId: String(problemIndex.id), workflowBindingId: binding.bindingId, workflowBindingVersion: binding.bindingVersion, version: { increment: 1 } } });
+        const changed = await tx.supplierQualityProblem.updateMany({ where: { id: issuedRecord.id, ownerOrganizationId: organizationId, problemIndexId: null, version: dto.expectedVersion, workflowBindingId: null }, data: { problemIndexId: String(problemIndex.id), workflowBindingId: binding.bindingId, workflowBindingVersion: binding.bindingVersion, version: { increment: 1 } } });
         if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       });
       const current = await transaction.supplierQualityProblem.findUniqueOrThrow({ where: { id: record.id }, include: problemInclude });

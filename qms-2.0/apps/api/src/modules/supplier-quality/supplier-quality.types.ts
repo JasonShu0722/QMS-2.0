@@ -6,7 +6,7 @@ export const MATERIAL_CATEGORIES = ['STRUCTURE', 'ELECTRONIC'] as const;
 export const SUPPLIER_REPLY_MODES = ['INTERNAL', 'SUPPLIER'] as const;
 
 export interface SupplierProblemFacts {
-  supplierOrganizationId: string;
+  supplierOrganizationId: string | null;
   title: string;
   materialCode: string;
   materialCategory?: (typeof MATERIAL_CATEGORIES)[number];
@@ -23,7 +23,7 @@ export type SupplierActor = AuthorizedSessionUser;
 export interface SupplierProblemResource {
   id: string;
   ownerOrganizationId: string;
-  supplierOrganizationId: string;
+  supplierOrganizationId: string | null;
   replyMode: SupplierProblemFacts['replyMode'];
   internalResponderId: string | null;
   releasedToSupplier: boolean;

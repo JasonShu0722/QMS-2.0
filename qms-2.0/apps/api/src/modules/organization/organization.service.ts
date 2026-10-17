@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { grantSupplierBoundaryCaretaker } from '../authorization/supplier-account-authorization.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, ReplaceUserPositionsDto } from './organization.dto.js';
 
 const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
@@ -16,6 +18,17 @@ export class OrganizationService {
 
   lookup(id: string, transaction: Prisma.TransactionClient = this.prisma) {
     return transaction.organization.findUnique({ where: { id }, select: { id: true, name: true, code: true, type: true } });
+  }
+
+  async createSupplierBoundary(transaction: AdminTransaction, actor: AdminActor, ownerOrganizationId: string, name: string, traceId: string) {
+    if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+    await assertAdminAccess(transaction, actor, ownerOrganizationId, ['supplier-quality:profiles:write', 'account:users:create']);
+    const owner = await this.lookup(ownerOrganizationId, transaction);
+    if (owner?.type !== 'INTERNAL' || !name.trim() || name.trim().length > 200) adminError('SUPPLIER_INPUT_INVALID', 400);
+    const organization = await transaction.organization.create({ data: { code: `SUP-${randomUUID()}`, name: name.trim(), type: 'SUPPLIER' }, select: organizationSelect });
+    await grantSupplierBoundaryCaretaker(transaction, actor, ownerOrganizationId, organization.id);
+    await this.record(transaction, actor, organization.id, 'SUPPLIER_BOUNDARY_CREATED', 'Organization', organization.id, traceId, organization.version);
+    return organization;
   }
 
   async supplierDirectory(query: { search?: string; selectedId?: string; page: number; pageSize: number }, transaction: Prisma.TransactionClient = this.prisma) {

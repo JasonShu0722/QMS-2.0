@@ -31,7 +31,7 @@ export class PublishSupplierQualityTargetDto extends SupplierQualityTargetTransi
 }
 export class ReviseSupplierQualityTargetDto extends CreateSupplierQualityTargetDto { @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number; }
 export class SupplierQualityTargetDto {
-  @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty({ format: 'uuid' }) ownerOrganizationId!: string; @ApiProperty({ format: 'uuid' }) supplierOrganizationId!: string; @ApiProperty({ format: 'uuid' }) profileId!: string;
+  @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty({ format: 'uuid' }) ownerOrganizationId!: string; @ApiProperty({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId!: string | null; @ApiProperty({ format: 'uuid' }) profileId!: string;
   @ApiProperty({ enum: TARGET_PERIOD_TYPES }) periodType!: string; @ApiProperty() targetYear!: number; @ApiPropertyOptional({ nullable: true }) targetMonth!: number | null; @ApiProperty() revision!: number; @ApiProperty() title!: string; @ApiProperty({ type: Object }) metrics!: Record<string, unknown>; @ApiProperty({ enum: TARGET_STATUSES }) status!: string; @ApiProperty() version!: number;
   @ApiPropertyOptional({ format: 'date', nullable: true }) effectiveFrom!: string | null; @ApiPropertyOptional({ format: 'date', nullable: true }) effectiveTo!: string | null; @ApiPropertyOptional({ format: 'uuid', nullable: true }) approvalSignatureId!: string | null; @ApiProperty({ format: 'date-time' }) createdAt!: string; @ApiProperty({ format: 'date-time' }) updatedAt!: string;
 }

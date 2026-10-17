@@ -42,7 +42,7 @@ export class CompleteSupplierMeetingActionDto extends SupplierMeetingTransitionD
 export class SupplierMeetingDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) ownerOrganizationId!: string;
-  @ApiProperty({ format: 'uuid' }) supplierOrganizationId!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty({ format: 'uuid' }) profileId!: string;
   @ApiProperty() title!: string;
   @ApiProperty({ format: 'date-time' }) scheduledStart!: string;

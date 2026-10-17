@@ -58,3 +58,58 @@ export class IncomingQueryDto extends IncomingScopeDto {
   @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 1000000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000000) page = 1;
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
 }
+
+export class IncomingInspectionItemDto extends IncomingItemDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+}
+
+export class IncomingInspectionPhotoDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) file_id!: string;
+  @ApiProperty() purpose!: string;
+  @ApiProperty({ type: String, nullable: true }) note!: string | null;
+  @ApiProperty({ format: 'date-time' }) created_at!: string;
+}
+
+export class IncomingInspectionProblemLinkDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) problem_id!: string;
+  @ApiProperty({ enum: ['PASS', 'NG'] }) conclusion_snapshot!: 'PASS' | 'NG';
+  @ApiProperty({ format: 'date-time' }) created_at!: string;
+}
+
+export class IncomingInspectionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ format: 'uuid' }) profileId!: string;
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' }) supplierOrganizationId!: string | null;
+  @ApiProperty() supplierBusinessCode!: string;
+  @ApiProperty() supplierName!: string;
+  @ApiProperty() materialCode!: string;
+  @ApiProperty() incomingBatch!: string;
+  @ApiProperty() receivedQuantity!: number;
+  @ApiProperty() sampledQuantity!: number;
+  @ApiProperty({ enum: ['PENDING', 'PASS', 'NG'] }) conclusion!: 'PENDING' | 'PASS' | 'NG';
+  @ApiProperty({ enum: ['DRAFT', 'COMPLETED', 'CORRECTED'] }) status!: 'DRAFT' | 'COMPLETED' | 'CORRECTED';
+  @ApiProperty({ format: 'uuid' }) inspectorId!: string;
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' }) inspectedAt!: string | null;
+  @ApiProperty({ enum: ['MANUAL', 'MES'] }) sourceSystem!: 'MANUAL' | 'MES';
+  @ApiProperty({ type: String, nullable: true }) externalRecordKey!: string | null;
+  @ApiProperty({ type: String, nullable: true }) externalBatchKey!: string | null;
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' }) observedAt!: string | null;
+  @ApiProperty({ type: Object, additionalProperties: true }) sourceSnapshot!: Record<string, unknown>;
+  @ApiProperty({ type: String, nullable: true }) correctionReason!: string | null;
+  @ApiProperty() version!: number;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string;
+  @ApiPropertyOptional({ type: [IncomingInspectionItemDto] }) items?: IncomingInspectionItemDto[];
+  @ApiPropertyOptional({ type: [IncomingInspectionPhotoDto] }) photos?: IncomingInspectionPhotoDto[];
+  @ApiPropertyOptional({ type: [IncomingInspectionProblemLinkDto] }) problemLinks?: IncomingInspectionProblemLinkDto[];
+}
+
+export class IncomingInspectionPageDto {
+  @ApiProperty({ type: [IncomingInspectionDto] }) items!: IncomingInspectionDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
+}

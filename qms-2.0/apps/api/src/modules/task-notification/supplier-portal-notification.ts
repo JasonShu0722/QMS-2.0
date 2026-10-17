@@ -15,6 +15,7 @@ export async function projectSupplierNotification(tx: Prisma.TransactionClient, 
   if (!record) throw new Error('SUPPLIER_NOTIFICATION_RESOURCE_INVALID');
   if (record.replyMode !== 'SUPPLIER') return false;
   if (!record.releasedToSupplierAt) return true;
+  if (!record.supplierOrganizationId) throw new Error('SUPPLIER_NOTIFICATION_ORGANIZATION_INVALID');
   const supplier = await tx.organization.findFirst({ where: { id: record.supplierOrganizationId, type: 'SUPPLIER', status: 'ACTIVE' } });
   if (!supplier) throw new Error('SUPPLIER_NOTIFICATION_ORGANIZATION_INVALID');
   const candidates = await eligibleWorkflowRecipients(tx, supplier.id, workflowObject(node.config).assignment);

@@ -13,8 +13,9 @@ export class SupplierScopeQueryDto {
 
 export class CreateSupplierProfileDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
-  @ApiProperty({ format: 'uuid' }) @IsUUID() supplierOrganizationId!: string;
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() supplierOrganizationId?: string;
   @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) businessCode!: string;
+  @ApiPropertyOptional({ maxLength: 200, description: '未绑定供应商企业时必填；供应商自有名称' }) @IsOptional() @IsString() @MaxLength(200) displayName?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) contactName?: string;
   @ApiPropertyOptional({ maxLength: 254 }) @IsOptional() @IsEmail() @MaxLength(254) contactEmail?: string;
 }
@@ -23,6 +24,7 @@ export class UpdateSupplierProfileDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
   @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) businessCode!: string;
+  @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) displayName?: string;
   @ApiPropertyOptional({ maxLength: 100, description: '省略或空白表示清除' }) @IsOptional() @IsString() @MaxLength(100) contactName?: string;
   @ApiPropertyOptional({ maxLength: 254, description: '省略表示清除' }) @IsOptional() @IsEmail() @MaxLength(254) contactEmail?: string;
 }
@@ -50,7 +52,7 @@ export class SupplierProblemDetailQueryDto {
 export class SupplierProfileDto {
   @ApiProperty() id!: string;
   @ApiProperty() version!: number;
-  @ApiProperty() supplierOrganizationId!: string;
+  @ApiProperty({ type: String, nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty() businessCode!: string;
   @ApiProperty() displayName!: string;
   @ApiPropertyOptional() contactName?: string;
@@ -163,7 +165,7 @@ export class SupplierWorkflowNodeDto {
 
 export class SupplierProblemDto extends SupplierProblemDraftDto {
   @ApiProperty() id!: string;
-  @ApiProperty() supplierOrganizationId!: string;
+  @ApiProperty({ type: String, nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty() supplierName!: string;
   @ApiProperty() version!: number;
   @ApiProperty({ enum: ['DRAFT', 'ISSUED'] }) stage!: 'DRAFT' | 'ISSUED';

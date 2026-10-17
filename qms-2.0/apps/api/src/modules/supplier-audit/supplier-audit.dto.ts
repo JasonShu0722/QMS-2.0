@@ -74,7 +74,7 @@ export class SupplierAuditChecklistDto {
 export class SupplierAuditPlanDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) ownerOrganizationId!: string;
-  @ApiProperty({ format: 'uuid' }) supplierOrganizationId!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty({ format: 'uuid' }) profileId!: string;
   @ApiProperty() auditYear!: number;
   @ApiProperty({ enum: SUPPLIER_AUDIT_TYPES }) auditType!: string;
@@ -90,7 +90,7 @@ export class SupplierAuditPlanDto {
 export class SupplierAuditRecordDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) ownerOrganizationId!: string;
-  @ApiProperty({ format: 'uuid' }) supplierOrganizationId!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty({ format: 'uuid' }) profileId!: string;
   @ApiProperty({ format: 'uuid' }) planId!: string;
   @ApiProperty({ format: 'date' }) auditDate!: string;
