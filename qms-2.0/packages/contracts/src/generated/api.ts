@@ -2527,6 +2527,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/material-masters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MaterialMasterController_list"];
+        put?: never;
+        post: operations["MaterialMasterController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/material-masters/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["MaterialMasterController_update"];
+        trace?: never;
+    };
+    "/api/v1/material-masters/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MaterialMasterController_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-management/plans/{id}": {
         parameters: {
             query?: never;
@@ -7618,6 +7666,48 @@ export interface components {
             actorUserId?: string | null;
             /** Format: date-time */
             changedAt: string;
+        };
+        MaterialMasterDto: {
+            /** Format: uuid */
+            id: string;
+            materialCode: string;
+            materialName: string;
+            version: number;
+        };
+        CreateMaterialMasterDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            materialCode: string;
+            materialName: string;
+        };
+        UpdateMaterialMasterDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            materialName: string;
+        };
+        MaterialMasterImportRowDto: {
+            rowNumber: number;
+            materialCode: string;
+            materialName: string;
+        };
+        MaterialMasterImportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            rows: components["schemas"]["MaterialMasterImportRowDto"][];
+        };
+        MaterialMasterImportItemDto: {
+            rowNumber: number;
+            code: string;
+            /** @enum {string} */
+            status: "CREATED" | "SKIPPED_DUPLICATE" | "FAILED";
+            errorCode?: string;
+        };
+        MaterialMasterImportResultDto: {
+            items: components["schemas"]["MaterialMasterImportItemDto"][];
+            created: number;
+            skipped: number;
+            failed: number;
         };
         AuditPlanResponseDto: {
             /** Format: uuid */
@@ -16432,6 +16522,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerIssueLinkHistoryDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaterialMasterDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMaterialMasterDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_import: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialMasterImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterImportResultDto"];
                 };
             };
             default: {

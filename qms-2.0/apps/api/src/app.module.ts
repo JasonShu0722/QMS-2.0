@@ -14,6 +14,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
+import { MaterialMasterModule } from './modules/material-master/material-master.module.js';
 import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
 import { NewProductQualityModule } from './modules/new-product-quality/new-product-quality.module.js';
 import { QualityDataModule } from './modules/quality-data/quality-data.module.js';
@@ -51,6 +52,7 @@ import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js
     SupplierQualityModule,
     ProcessQualityModule,
     CustomerQualityModule,
+    MaterialMasterModule,
     AuditManagementModule,
     NewProductQualityModule,
     QualityDataModule,

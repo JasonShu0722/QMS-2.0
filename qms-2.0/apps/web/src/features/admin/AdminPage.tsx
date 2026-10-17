@@ -11,9 +11,12 @@ import { AuditAdministration } from '../governance/AuditAdministration';
 import { OutboxAdministration } from '../governance/OutboxAdministration';
 import { useLanguage } from '../../i18n/Language';
 import { CustomerMasterSection } from '../customer-quality/CustomerMasterSection';
+import { MaterialMasterPage } from '../material-master/MaterialMasterPage';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 export function AdminPage({ organizations, error, traceId, onDirectoryChange }: { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void }) {
   const { t } = useLanguage();
+  const requestLeave = useNavigationGuard();
   const [selectedId, setSelectedId] = useState<string>();
   const [matrixDirty, setMatrixDirty] = useState(false);
   const [matrixBusy, setMatrixBusy] = useState(false);
@@ -33,18 +36,19 @@ export function AdminPage({ organizations, error, traceId, onDirectoryChange }: 
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
     ...(customerMaster ? [{ key: 'customer-master', label: t('客户清单'), children: <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
+    ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['material-master:read', 'material-master:write', 'material-master:import'].includes(code)) ? [{ key: 'material-master', label: t('物料清单'), children: <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
   ];
   const activeTabAllowed = (activeTab === 'users' && users) || ((activeTab === 'roles' || activeTab === 'matrix') && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">
     <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
-      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) { if (matrixDirty) setPendingOrganization(id); else setSelectedId(id); } }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
+      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) { if (matrixDirty) setPendingOrganization(id); else requestLeave(() => setSelectedId(id)); } }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
     <Tabs key={organization.id} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
       ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} /> }] : []),
       ...(roles ? [{ key: 'roles', label: t('角色'), children: <RoleAdministration organization={organization} /> }, { key: 'matrix', label: t('权限矩阵'), children: <PermissionMatrix organization={organization} onDirtyChange={setMatrixDirty} onBusyChange={setMatrixBusy} /> }] : []),
       ...additionalTabs,
     ]} />
-    <Modal title={t('放弃未保存的权限修改？')} open={!!pendingOrganization} okText={t('放弃修改')} cancelText={t('继续编辑')} onCancel={() => setPendingOrganization(undefined)} onOk={() => { setMatrixDirty(false); setSelectedId(pendingOrganization); setPendingOrganization(undefined); }}>
+    <Modal title={t('放弃未保存的权限修改？')} open={!!pendingOrganization} okText={t('放弃修改')} cancelText={t('继续编辑')} onCancel={() => setPendingOrganization(undefined)} onOk={() => { const id = pendingOrganization; setPendingOrganization(undefined); requestLeave(() => { setMatrixDirty(false); setSelectedId(id); }); }}>
       {t('当前草稿尚未保存，切换组织将放弃修改。')}
     </Modal>
   </section>;
