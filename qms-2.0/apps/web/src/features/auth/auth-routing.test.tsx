@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './LoginPage';
@@ -24,11 +24,7 @@ describe('authenticated routing', () => {
     vi.spyOn(window.sessionStorage.__proto__, 'setItem');
   });
 
-  afterEach(async () => {
-    cleanup();
-    // Ant Design form validation schedules a short state update after input.
-    // Let it settle while jsdom is still alive instead of leaking into teardown.
-    await new Promise((resolve) => setTimeout(resolve, 25));
+  afterEach(() => {
     globalThis.fetch = originalFetch;
     window.localStorage.setItem = originalLocalStorage;
     window.sessionStorage.setItem = originalSessionStorage;
