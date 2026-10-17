@@ -17,9 +17,9 @@ export class AdminUserBatchRowDto {
   @Allow()
   email?: string | null;
 
-  @ApiProperty({ enum: ['INTERNAL'] })
+  @ApiProperty({ type: String, description: 'Raw account type; unsupported values produce a per-row error.' })
   @Allow()
-  accountType!: 'INTERNAL';
+  accountType!: string;
 }
 
 export class CreateAdminUserBatchDto {

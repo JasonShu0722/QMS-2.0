@@ -22,9 +22,9 @@ export function parseUserBatchRows(sheet: readonly (readonly unknown[])[]): Row[
   for (let index = 1; index < sheet.length; index += 1) {
     const values = sheet[index] ?? [];
     if (values.every((value) => cell(value) === '')) continue;
+    if (values.some((value, column) => (column >= headers.length && value != null && value !== '') || (value != null && typeof value === 'object') || (typeof value === 'string' && /^[=+\-@]/.test(value.trim())))) throw new Error(`第 ${index + 1} 行：不支持公式、对象或额外数据列`);
     const [username, email, accountType] = values.map(cell);
-    if (!/^[a-zA-Z0-9._-]{1,100}$/.test(username) || (email && !/^\S+@\S+\.\S+$/.test(email)) || accountType !== 'INTERNAL') throw new Error(`第 ${index + 1} 行：用户名、邮箱或账号类型无效`);
-    rows.push({ rowNumber: index + 1, username, email: email || null, accountType: 'INTERNAL' });
+    rows.push({ rowNumber: index + 1, username: username ?? '', email: email || null, accountType: accountType ?? '' });
   }
   if (!rows.length || rows.length > 100) throw new Error('每次需要 1–100 条非空数据行');
   return rows;

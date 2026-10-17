@@ -20,9 +20,36 @@ it('maps the fixed account template preserving original row numbers', () => {
   ]);
 });
 
-it('rejects supplier rows and formula-like cells before upload', () => {
+it('rejects unsafe formula structures and extra data columns before upload', () => {
   expect(() => parseUserBatchRows([['用户名', '邮箱', '账号类型'], ['=alice', '', 'INTERNAL']])).toThrow();
-  expect(() => parseUserBatchRows([['用户名', '邮箱', '账号类型'], ['alice', '', 'SUPPLIER']])).toThrow();
+  expect(() => parseUserBatchRows([['用户名', '邮箱', '账号类型'], [{ formula: '1+1', result: 'alice' }, '', 'INTERNAL']])).toThrow();
+  expect(() => parseUserBatchRows([['用户名', '邮箱', '账号类型'], ['alice', '', 'INTERNAL', 'extra']])).toThrow();
+});
+
+it('preserves unsupported account types and invalid business values for per-row server validation', () => {
+  expect(parseUserBatchRows([['用户名', '邮箱', '账号类型'], ['bad user', 'invalid-email', 'SUPPLIER'], ['', 'wrong', 'UNKNOWN']])).toEqual([
+    { rowNumber: 2, username: 'bad user', email: 'invalid-email', accountType: 'SUPPLIER' },
+    { rowNumber: 3, username: '', email: 'wrong', accountType: 'UNKNOWN' },
+  ]);
+});
+
+it('submits mixed valid duplicate and invalid business rows and displays server partial-success results', async () => {
+  vi.mocked(readXlsxFile).mockResolvedValue([['用户名', '邮箱', '账号类型'], ['alice', '', 'INTERNAL'], ['alice', '', 'INTERNAL'], ['bad user', 'invalid-email', 'UNKNOWN']]);
+  const fetcher = vi.fn(async (path: string) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : json({ batchId: 'batch', rows: [
+    { rowNumber: 2, username: 'alice', status: 'SUCCESS' },
+    { rowNumber: 3, username: 'alice', status: 'ERROR', code: 'ADMIN_USER_DUPLICATE' },
+    { rowNumber: 4, username: 'bad user', status: 'ERROR', code: 'ADMIN_BATCH_ROW_INVALID' },
+  ] }));
+  vi.stubGlobal('fetch', fetcher);
+  render(<UserBatchCreate organizationId="org-a" />);
+  fireEvent.change(screen.getByLabelText('账号清单文件'), { target: { files: [new File(['content'], 'accounts.xlsx')] } });
+  await waitFor(() => expect(screen.getByRole('button', { name: '创建账号' })).toBeEnabled());
+  await userEvent.click(screen.getByRole('button', { name: '创建账号' }));
+  expect(await screen.findByText('成功')).toBeInTheDocument();
+  expect(screen.getByText('失败 · ADMIN_USER_DUPLICATE')).toBeInTheDocument();
+  expect(screen.getByText('失败 · ADMIN_BATCH_ROW_INVALID')).toBeInTheDocument();
+  const call = fetcher.mock.calls.find(([path]) => path === '/api/v1/admin/users/batch');
+  expect(JSON.parse((call as unknown as [string, RequestInit])[1].body as string).rows[2]).toEqual({ rowNumber: 4, username: 'bad user', email: 'invalid-email', accountType: 'UNKNOWN' });
 });
 
 it('retries unknown network results with the same batch key and prevents a second submission after success', async () => {
