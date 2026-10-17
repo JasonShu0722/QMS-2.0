@@ -65,7 +65,8 @@ export class SessionService {
 
   async create(userId: string, transaction: Pick<PrismaService, 'session' | 'user'> = this.prisma, verified: { mfaVerified?: boolean; reauthenticated?: boolean } = {}): Promise<string> {
     const token = randomBytes(32).toString('base64url');
-    const user = await transaction.user.findUniqueOrThrow({ where: { id: userId }, select: { securityVersion: true } });
+    const user = await transaction.user.findUniqueOrThrow({ where: { id: userId }, select: { securityVersion: true, mustChangePassword: true } });
+    if (user.mustChangePassword) throw new HttpException({ code: 'AUTH_PASSWORD_CHANGE_REQUIRED', message: '请先修改临时密码' }, 401);
     await transaction.session.create({
       data: {
         userId,
@@ -85,7 +86,7 @@ export class SessionService {
       include: { user: { include: { organization: { select: { status: true } } } } },
     });
     if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
-    if (session.user.status !== 'ACTIVE' || session.user.organization.status !== 'ACTIVE') return null;
+    if (session.user.status !== 'ACTIVE' || session.user.organization.status !== 'ACTIVE' || session.user.mustChangePassword) return null;
     if (session.securityVersion !== session.user.securityVersion) return null;
     const policy = await mfaPolicy(this.prisma, session.user.id);
     if ((session.user.mfaEnabled || policy.required) && !session.mfaVerifiedAt) return null;

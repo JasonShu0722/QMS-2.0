@@ -6,6 +6,8 @@ import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, t
 import { PasswordResetService } from './password-reset.service.js';
 import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto } from './dto/admin-user.dto.js';
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
+import { TemporaryPasswordService } from './temporary-password.service.js';
+import { assertRecentAuthentication } from '../../common/security/session-security.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
@@ -16,7 +18,7 @@ const USER_SELECT = {
 
 @Injectable()
 export class AdminUserService {
-  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService, private readonly resets: PasswordResetService) {}
+  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService, private readonly resets: PasswordResetService, private readonly temporaryPasswords: TemporaryPasswordService) {}
 
   async list(actor: AdminUserActor, query: AdminUserListQueryDto) {
     const organizationId = query.organizationId ?? actor.scopeOrganizationId ?? actor.organizationId;
@@ -102,7 +104,35 @@ export class AdminUserService {
     });
   }
 
-  private async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, requiredPermissions: string[], identityChanged = false) {
+  async resetTemporaryPassword(actor: AdminUserActor, userId: string, temporaryPassword: string | undefined, organizationId: string, traceId: string, key?: string) {
+    if (actor.id === userId) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
+    const result = await this.mutations.run({ actor, organizationId, key, action: 'TEMPORARY_PASSWORD_RESET', payload: { userId, temporaryPassword }, permission: 'account:users:reset', traceId }, async (transaction) => {
+      const metadata = await this.temporaryPasswords.reset(transaction, userId, temporaryPassword);
+      await this.record(transaction, actor, organizationId, userId, 'TEMPORARY_PASSWORD_RESET', traceId);
+      return metadata;
+    }, (transaction) => this.assertTemporaryPasswordTarget(transaction, actor, userId, organizationId));
+    return this.readTemporaryPassword(actor, userId, organizationId, traceId, result.credentialVersion);
+  }
+
+  async readTemporaryPassword(actor: AdminUserActor, userId: string, organizationId: string, traceId: string, expectedVersion?: number) {
+    return this.prisma.$transaction(async (transaction) => {
+      await assertRecentAuthentication(transaction, actor);
+      await this.assertTemporaryPasswordTarget(transaction, actor, userId, organizationId);
+      const result = await this.temporaryPasswords.project(transaction, userId, expectedVersion);
+      await this.record(transaction, actor, organizationId, userId, 'TEMPORARY_PASSWORD_READ', traceId);
+      return result;
+    });
+  }
+
+  async assertTemporaryPasswordTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, organizationId: string) {
+    await assertAdminAccess(transaction, actor, organizationId, 'account:users:reset');
+    await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+    const user = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE' } });
+    if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
+    await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
+  }
+
+  async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, requiredPermissions: string[], identityChanged = false) {
     const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
     if (identityChanged && assignments.some((assignment) => assignment.role.organizationId === null)) adminError('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
     for (const organizationId of new Set(assignments.map((assignment) => assignment.organizationId))) {
@@ -112,7 +142,7 @@ export class AdminUserService {
     }
   }
 
-  private async assertOrganizationAccountType(transaction: AdminTransaction, organizationId: string, accountType: string) {
+  async assertOrganizationAccountType(transaction: AdminTransaction, organizationId: string, accountType: string) {
     const organization = await transaction.organization.findUnique({ where: { id: organizationId }, select: { type: true } });
     if (!organization || organization.type !== accountType) adminError('ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH', 400);
   }

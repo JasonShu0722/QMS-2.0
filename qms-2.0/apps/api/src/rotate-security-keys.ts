@@ -28,6 +28,22 @@ async function rotate() {
       userCursor = rows.at(-1)!.userId;
     }
     let exportCursor: string | undefined;
+    let temporaryCursor: string | undefined;
+    while (true) {
+      const rows = await prisma.userTemporaryPassword.findMany({ take: 100, orderBy: { userId: 'asc' }, ...(temporaryCursor ? { where: { userId: { gt: temporaryCursor } } } : {}) });
+      for (const row of rows) {
+        await prisma.$transaction(async (transaction) => {
+          await transaction.$queryRaw`SELECT id FROM users WHERE id = ${row.userId}::uuid FOR UPDATE`;
+          const current = await transaction.userTemporaryPassword.findUnique({ where: { userId: row.userId } });
+          if (!current) return;
+          const context = `temporary-password:${current.userId}:${current.credentialVersion}`;
+          await transaction.userTemporaryPassword.update({ where: { userId: current.userId }, data: { encryptedValue: encryptSecret(decryptSecret(current.encryptedValue, context), context) } });
+        });
+        count += 1;
+      }
+      if (rows.length < 100) break;
+      temporaryCursor = rows.at(-1)!.userId;
+    }
     while (true) {
       const rows = await prisma.exportArtifact.findMany({ where: { ciphertext: { not: null }, ...(exportCursor ? { id: { gt: exportCursor } } : {}) }, orderBy: { id: 'asc' }, take: 100 });
       for (const row of rows) {

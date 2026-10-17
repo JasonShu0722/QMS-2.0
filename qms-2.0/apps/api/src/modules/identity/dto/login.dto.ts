@@ -17,11 +17,11 @@ export class LoginResponseDto {
   @ApiProperty({ enum: ['INTERNAL', 'SUPPLIER'] })
   accountType!: 'INTERNAL' | 'SUPPLIER';
 
-  @ApiProperty({ enum: ['/app/workbench', '/supplier/inbox', '/mfa'] })
-  landingPath!: '/app/workbench' | '/supplier/inbox' | '/mfa';
+  @ApiProperty({ enum: ['/app/workbench', '/supplier/inbox', '/mfa', '/change-password'] })
+  landingPath!: '/app/workbench' | '/supplier/inbox' | '/mfa' | '/change-password';
 
-  @ApiProperty({ enum: ['AUTHENTICATED', 'MFA_REQUIRED', 'MFA_ENROLLMENT_REQUIRED'] })
-  securityState!: 'AUTHENTICATED' | 'MFA_REQUIRED' | 'MFA_ENROLLMENT_REQUIRED';
+  @ApiProperty({ enum: ['AUTHENTICATED', 'MFA_REQUIRED', 'MFA_ENROLLMENT_REQUIRED', 'PASSWORD_CHANGE_REQUIRED'] })
+  securityState!: 'AUTHENTICATED' | 'MFA_REQUIRED' | 'MFA_ENROLLMENT_REQUIRED' | 'PASSWORD_CHANGE_REQUIRED';
 }
 
 export class SessionUserDto {

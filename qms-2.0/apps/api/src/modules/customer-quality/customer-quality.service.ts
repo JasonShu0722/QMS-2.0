@@ -1,5 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
@@ -33,11 +33,13 @@ export interface CustomerComplaintInput {
   sourceObservedAt?: Date | null;
 }
 export type CustomerComplaintImportRow = CustomerComplaintInput & { rowNumber: number };
+export type CustomerMasterImportRow = { rowNumber: number; code: unknown; name: unknown };
+type CustomerMasterImportResultItem = { rowNumber: number; code: string; status: 'CREATED' | 'SKIPPED_DUPLICATE' | 'FAILED'; errorCode?: string };
 
 type Row = Record<string, any>;
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
-function text(value: string | null | undefined, max: number, code = 'CUSTOMER_QUALITY_INPUT_INVALID'): string {
-  const result = value?.trim(); if (!result || result.length > max) fail(code, 400); return result;
+function text(value: unknown, max: number, code = 'CUSTOMER_QUALITY_INPUT_INVALID'): string {
+  const result = typeof value === 'string' ? value.trim() : ''; if (!result || result.length > max) fail(code, 400); return result;
 }
 function optional(value: string | null | undefined, max: number): string | null { return value == null || !value.trim() ? null : text(value, max); }
 function uuid(value: string, code = 'CUSTOMER_QUALITY_INPUT_INVALID'): string { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) fail(code, 400); return value; }
@@ -68,12 +70,44 @@ export class CustomerQualityService {
   async createCustomer(actor: AdminActor, input: { code: string; name: string }, traceId: string, key?: string) {
     const organizationId = this.scope(actor); const code = text(input.code, 100).toUpperCase(); const name = text(input.name, 200);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTER_CREATED', payload: { code, name }, permission: 'customer-quality:complaints:write', duplicateCode: 'CONCURRENCY_CONFLICT' }, async (tx) => {
-      const id = randomUUID();
-      const rows = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_customers (id, organization_id, code, name, active, version, created_by_id, updated_by_id, updated_at) VALUES (${id}::uuid, ${organizationId}::uuid, ${code}, ${name}, true, 1, ${actor.id}::uuid, ${actor.id}::uuid, CURRENT_TIMESTAMP) RETURNING *`;
-      const record = rows[0]!;
-      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_MASTER_CREATED', resourceType: 'CustomerMaster', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1 } }, tx);
+      const record = await this.createCustomerInTransaction(tx, actor, { code, name }, traceId);
+      if (!record) fail('CONCURRENCY_CONFLICT', 409);
       return record;
     }).catch(mapUnique);
+  }
+
+  async createCustomerInTransaction(tx: AdminTransaction, actor: AdminActor, input: { code: unknown; name: unknown }, traceId: string) {
+    const organizationId = this.scope(actor); const code = text(input.code, 100).toUpperCase(); const name = text(input.name, 200);
+    await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:write');
+    const id = randomUUID();
+    const rows = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_customers (id, organization_id, code, name, active, version, created_by_id, updated_by_id, updated_at) VALUES (${id}::uuid, ${organizationId}::uuid, ${code}, ${name}, true, 1, ${actor.id}::uuid, ${actor.id}::uuid, CURRENT_TIMESTAMP) ON CONFLICT (organization_id, code) DO NOTHING RETURNING *`;
+    if (!rows[0]) return null;
+    await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_MASTER_CREATED', resourceType: 'CustomerMaster', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1 } }, tx);
+    return rows[0];
+  }
+
+  async importCustomers(actor: AdminActor, rows: CustomerMasterImportRow[], traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    if (!Array.isArray(rows) || rows.length < 1 || rows.length > 100 || rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row) || !Number.isSafeInteger(row.rowNumber) || row.rowNumber < 1 || Object.keys(row).some((field) => !['rowNumber', 'code', 'name'].includes(field))) || new Set(rows.map((row) => row.rowNumber)).size !== rows.length) fail('CUSTOMER_QUALITY_INPUT_INVALID', 400);
+    // Reserve the complete payload before committing rows, so a replay cannot append or change rows.
+    await this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTER_IMPORT', payload: rows, permission: 'customer-quality:complaints:write', isolationLevel: 'ReadCommitted' }, async () => null);
+    const batchKey = createHash('sha256').update(key!).digest('hex');
+    const items: CustomerMasterImportResultItem[] = [];
+    for (const row of [...rows].sort((first, second) => first.rowNumber - second.rowNumber)) {
+      const code = typeof row.code === 'string' ? row.code.trim().toUpperCase() : '';
+      try {
+        const result = await this.mutations.run({ actor, organizationId, key: `customer-import:${batchKey}:${row.rowNumber}`, traceId, action: 'CUSTOMER_MASTER_IMPORT_ROW', payload: row, permission: 'customer-quality:complaints:write', isolationLevel: 'ReadCommitted' }, async (tx) => {
+          const customer = await this.createCustomerInTransaction(tx, actor, row, traceId);
+          return { rowNumber: row.rowNumber, code, status: customer ? 'CREATED' as const : 'SKIPPED_DUPLICATE' as const };
+        });
+        items.push(result);
+      } catch (error) {
+        const errorCode = error instanceof HttpException ? (error.getResponse() as { code?: string }).code : undefined;
+        if (error instanceof HttpException && ([401, 403].includes(error.getStatus()) || errorCode === 'IDEMPOTENCY_REPLAY')) throw error;
+        items.push({ rowNumber: row.rowNumber, code, status: 'FAILED', errorCode: errorCode ?? 'CUSTOMER_MASTER_IMPORT_ROW_FAILED' });
+      }
+    }
+    return { items, created: items.filter((item) => item.status === 'CREATED').length, skipped: items.filter((item) => item.status === 'SKIPPED_DUPLICATE').length, failed: items.filter((item) => item.status === 'FAILED').length };
   }
 
   async updateCustomer(actor: AdminActor, id: string, input: { expectedVersion: number; name?: string; active?: boolean }, traceId: string, key?: string) {

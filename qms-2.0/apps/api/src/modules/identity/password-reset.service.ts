@@ -6,6 +6,7 @@ import { PasswordService } from './password.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { CompletePasswordResetDto } from './dto/admin-user.dto.js';
 import { isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
+import { replacePassword } from './password-credentials.js';
 
 @Injectable()
 export class PasswordResetService {
@@ -30,11 +31,8 @@ export class PasswordResetService {
         const passwordHash = await this.passwords.hash(dto.newPassword);
         const consumed = await transaction.passwordReset.updateMany({ where: { id: reset.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
         if (consumed.count !== 1) adminError('AUTH_PASSWORD_RESET_INVALID', 400);
-        await transaction.user.update({ where: { id: reset.userId }, data: { passwordHash, securityVersion: { increment: 1 } } });
+        await replacePassword(transaction, reset.userId, passwordHash);
         await transaction.session.updateMany({ where: { userId: reset.userId, revokedAt: null }, data: { revokedAt: new Date() } });
-        await transaction.passwordReset.updateMany({ where: { userId: reset.userId, consumedAt: null }, data: { consumedAt: new Date() } });
-        await transaction.mfaChallenge.updateMany({ where: { userId: reset.userId, consumedAt: null }, data: { consumedAt: new Date() } });
-        await transaction.emailVerification.updateMany({ where: { userId: reset.userId, consumedAt: null }, data: { consumedAt: new Date() } });
         await this.audit.record({ actorUserId: reset.userId, organizationId: reset.user.organizationId, action: 'PASSWORD_RESET', resourceType: 'User', resourceId: reset.userId, outcome: 'SUCCESS', traceId }, transaction);
       }, { isolationLevel: 'Serializable' });
     } catch (error) {

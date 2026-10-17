@@ -32,6 +32,19 @@ it('lists customer relations and gates writes by permission', async () => {
   expect(screen.queryByRole('button', { name: '新增关系' })).not.toBeInTheDocument();
 });
 
+it('uses the selected admin organization permissions instead of the home context', async () => {
+  render(<CustomerMasterSection organizationId="org-selected" organizationPermissions={['customer-quality:complaints:read']} />);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/customers?organizationId=org-selected'));
+  expect(screen.queryByRole('button', { name: '新增客户' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/my-permissions'))).toBe(false);
+});
+
+it('enables writes from the selected admin organization permissions', async () => {
+  render(<CustomerMasterSection organizationId="org-selected" organizationPermissions={['customer-quality:complaints:read', 'customer-quality:complaints:write']} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/my-permissions'))).toBe(false);
+});
+
 it('creates customer with CSRF and idempotency', async () => {
   render(<CustomerMasterSection />);
   await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
@@ -41,6 +54,13 @@ it('creates customer with CSRF and idempotency', async () => {
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path, options]) => path.endsWith('/customers') && options?.method === 'POST')).toBe(true));
   const call = vi.mocked(apiRequest).mock.calls.find(([path, options]) => path.endsWith('/customers') && options?.method === 'POST');
   expect(call?.[1]).toMatchObject({ headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': expect.any(String) }, body: JSON.stringify({ code: 'C-2', name: '客户二' }) });
+});
+
+it('offers the same customer batch import in the existing master section', async () => {
+  render(<CustomerMasterSection />);
+  await screen.findByRole('button', { name: '新增客户' });
+  expect(screen.getByLabelText('客户清单文件')).toHaveAttribute('accept', '.xlsx');
+  expect(screen.getByRole('button', { name: '导入客户' })).toBeDisabled();
 });
 
 it('edits a customer through a controlled dialog with CAS', async () => {

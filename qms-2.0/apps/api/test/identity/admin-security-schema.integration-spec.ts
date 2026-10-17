@@ -354,6 +354,41 @@ describe('administrator security PostgreSQL regression', () => {
     expect(response.body).toEqual([expect.objectContaining({ id: actor.organizationId, type: 'INTERNAL', permissions: expect.arrayContaining(permissionCodes) })]);
   });
 
+  it('exposes customer master organizations without granting platform administration tabs', async () => {
+    const role = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId, code: 'security-reader' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'customer-quality:complaints:read' } });
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+    try {
+      const response = await request(app.getHttpServer()).get('/api/v1/admin/organizations').set('Cookie', cookie).expect(200);
+      const other = response.body.find((entry: { id: string }) => entry.id === otherOrganizationId);
+      expect(other).toMatchObject({ id: otherOrganizationId, type: 'INTERNAL', permissions: ['customer-quality:complaints:read'] });
+      expect(other.permissions).not.toContain('account:users:read');
+    } finally {
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } } });
+    }
+  });
+
+  it('does not expose a supplier customer-read organization as a domain directory', async () => {
+    const supplierOrganization = await prisma.organization.create({ data: { code: `SEC-SUP-${suffix}`, name: 'Supplier customer reader', type: 'SUPPLIER' } });
+    const supplierUser = await prisma.user.create({ data: { organizationId: supplierOrganization.id, username: `supplier-reader-${suffix}`, accountType: 'SUPPLIER', passwordHash: 'unused-test-hash' } });
+    const supplierRole = await prisma.role.create({ data: { organizationId: supplierOrganization.id, code: `SUPPLIER-READER-${suffix}`, name: 'Supplier reader' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'customer-quality:complaints:read' } });
+    await prisma.rolePermission.create({ data: { roleId: supplierRole.id, permissionId: permission.id } });
+    await prisma.userRole.create({ data: { userId: supplierUser.id, organizationId: supplierOrganization.id, roleId: supplierRole.id } });
+    const token = await app.get(SessionService).create(supplierUser.id, prisma, { reauthenticated: true });
+    try {
+      const response = await request(app.getHttpServer()).get('/api/v1/admin/organizations').set('Cookie', `qms_session=${token}`).expect(200);
+      expect(response.body).toEqual([]);
+    } finally {
+      await prisma.session.deleteMany({ where: { userId: supplierUser.id } });
+      await prisma.userRole.deleteMany({ where: { userId: supplierUser.id } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: supplierRole.id } });
+      await prisma.role.delete({ where: { id: supplierRole.id } });
+      await prisma.user.delete({ where: { id: supplierUser.id } });
+      await prisma.organization.delete({ where: { id: supplierOrganization.id } });
+    }
+  });
+
   it('does not clear global roles by moving a user through the lifecycle endpoint', async () => {
     const global = await prisma.role.create({ data: { code: `GLOBAL-${suffix}`, name: 'Global' } });
     const destination = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId } });

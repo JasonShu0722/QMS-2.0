@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiQuery, ApiResponse } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
@@ -8,12 +8,25 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AdminUserService } from './admin-user.service.js';
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 import { AdminUserDto, AdminUserListQueryDto, CreateAdminUserDto, ResetAdminUserPasswordDto, UpdateAdminUserDto, PasswordResetIssuedDto } from './dto/admin-user.dto.js';
+import { ResetTemporaryPasswordDto, TemporaryPasswordDto } from './dto/password-change-challenge.dto.js';
+import { AdminUserBatchService } from './admin-user-batch.service.js';
+import { AdminUserBatchResultDto, CreateAdminUserBatchDto } from './dto/admin-user-batch.dto.js';
 
 @Controller('api/v1/admin/users')
 @ApiCookieAuth('qms_session')
 @ApiResponse({ status: 'default', type: ErrorResponse, description: 'Controlled API error' })
 export class AdminUserController {
-  constructor(private readonly users: AdminUserService) {}
+  constructor(private readonly users: AdminUserService, private readonly batches: AdminUserBatchService) {}
+
+  @Post('batch')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiCreatedResponse({ type: AdminUserBatchResultDto })
+  @RequireAccess({ featurePermission: 'account:users:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
+  createBatch(@Body() dto: CreateAdminUserBatchDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    return this.batches.create(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
 
   @Get()
   @ApiOkResponse({ type: AdminUserDto, isArray: true })
@@ -67,5 +80,28 @@ export class AdminUserController {
     const session = authorized[AUTHENTICATED_SESSION];
     if (!session) throw new Error('Authenticated session guard did not attach a session');
     return { ...session.user, sessionId: session.id, scopeOrganizationId: authorized.authorizedOrganizationId };
+  }
+
+  @Post(':userId/temporary-password/read')
+  @ApiCreatedResponse({ type: TemporaryPasswordDto })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @RequireAccess({ featurePermission: 'account:users:reset', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  readTemporaryPassword(@Param('userId', ParseUUIDPipe) userId: string, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    const actor = this.actor(request);
+    return this.users.readTemporaryPassword(actor, userId, actor.scopeOrganizationId!, requestTraceId(request));
+  }
+
+  @Post(':userId/temporary-password/reset')
+  @ApiCreatedResponse({ type: TemporaryPasswordDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @RequireAccess({ featurePermission: 'account:users:reset', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  resetTemporaryPassword(@Param('userId', ParseUUIDPipe) userId: string, @Body() dto: ResetTemporaryPasswordDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    const actor = this.actor(request);
+    return this.users.resetTemporaryPassword(actor, userId, dto.temporaryPassword, actor.scopeOrganizationId!, requestTraceId(request), request.get('Idempotency-Key'));
   }
 }
