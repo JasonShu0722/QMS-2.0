@@ -19,6 +19,7 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'tasks', name: '我的任务', status: 'active', operations: [operation('task:read', '查看授权任务'), operation('task:claim', '领取和释放任务'), operation('task:transfer', '批量转派任务')] },
     { key: 'notifications', name: '我的通知', status: 'active', operations: [operation('notification:read', '查看和标记通知')] },
     { key: 'announcements', name: '公告管理', status: 'active', operations: [operation('announcement:read', '查看公告'), operation('announcement:manage', '管理公告'), operation('announcement:audit:read', '查看公告阅读审计')] },
+    { key: 'material-master', name: '物料主数据', status: 'active', operations: [operation('material-master:read', '查看物料清单'), operation('material-master:write', '维护物料编码和名称'), operation('material-master:import', '批量新增物料')] },
     { key: 'workflow', name: '受控流程', status: 'active', operations: [operation('workflow:manage', '管理（创建、编辑、校验、发布、复制）'), operation('workflow:start', '启动流程'), operation('workflow:act', '执行被授权的流程节点')] },
   ] },
   { key: 'supplier', name: '供应商质量', status: 'active', modules: [
