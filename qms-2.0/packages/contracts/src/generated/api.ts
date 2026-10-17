@@ -2031,22 +2031,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customer-quality/customers/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CustomerQualityController_importCustomers"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/customer-quality/customers/{id}": {
         parameters: {
             query?: never;
@@ -7043,29 +7027,6 @@ export interface components {
             organizationId?: string;
             code: string;
             name: string;
-        };
-        CustomerMasterImportRowDto: {
-            rowNumber: number;
-            code: string;
-            name: string;
-        };
-        CustomerMasterImportDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            rows: components["schemas"]["CustomerMasterImportRowDto"][];
-        };
-        CustomerMasterImportResultItemDto: {
-            rowNumber: number;
-            code: string;
-            /** @enum {string} */
-            status: "CREATED" | "SKIPPED_DUPLICATE" | "FAILED";
-            errorCode?: string;
-        };
-        CustomerMasterImportResultDto: {
-            items: components["schemas"]["CustomerMasterImportResultItemDto"][];
-            created: number;
-            skipped: number;
-            failed: number;
         };
         UpdateCustomerDto: {
             /** Format: uuid */
@@ -15137,40 +15098,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerMasterDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    CustomerQualityController_importCustomers: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CustomerMasterImportDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CustomerMasterImportResultDto"];
                 };
             };
             default: {
