@@ -10,6 +10,7 @@ import { ConfigurationAdministration } from '../governance/ConfigurationAdminist
 import { AuditAdministration } from '../governance/AuditAdministration';
 import { OutboxAdministration } from '../governance/OutboxAdministration';
 import { useLanguage } from '../../i18n/Language';
+import { CustomerMasterSection } from '../customer-quality/CustomerMasterSection';
 
 export function AdminPage({ organizations, error, traceId, onDirectoryChange }: { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void }) {
   const { t } = useLanguage();
@@ -24,12 +25,14 @@ export function AdminPage({ organizations, error, traceId, onDirectoryChange }: 
   if (!organization) return <Alert type="warning" title={t('无系统管理访问权限')} showIcon />;
   const users = allows(organization, 'users:read') || allows(organization, 'users:create');
   const roles = allows(organization, 'roles:read');
+  const customerMaster = organization.permissions.includes('customer-quality:complaints:read');
   const additionalTabs = [
     ...(organization.permissions.includes('organization:read') ? [{ key: 'organizations', label: t('组织结构'), children: <OrganizationAdministration organization={organization} organizations={organizations} onChanged={onDirectoryChange} /> }] : []),
     ...(organization.permissions.includes('organization:structure:read') ? [{ key: 'structure', label: t('部门岗位'), children: <StructureAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('configuration:read') ? [{ key: 'configuration', label: t('平台配置'), children: <ConfigurationAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
+    ...(customerMaster ? [{ key: 'customer-master', label: t('客户清单'), children: <CustomerMasterSection organizationId={organization.id} /> }] : []),
   ];
   const activeTabAllowed = (activeTab === 'users' && users) || ((activeTab === 'roles' || activeTab === 'matrix') && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">

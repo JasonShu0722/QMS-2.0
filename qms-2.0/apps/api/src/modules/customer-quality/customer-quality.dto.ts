@@ -1,10 +1,30 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Allow, ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 
 export class CustomerScopeDto { @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string; }
 export class CreateCustomerDto extends CustomerScopeDto { @ApiProperty() @IsString() @MaxLength(100) code!: string; @ApiProperty() @IsString() @MaxLength(200) name!: string; }
+export class CustomerMasterImportRowDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) rowNumber!: number;
+  @ApiProperty({ type: String, maxLength: 100 }) @Allow() code!: unknown;
+  @ApiProperty({ type: String, maxLength: 200 }) @Allow() name!: unknown;
+}
+export class CustomerMasterImportDto extends CustomerScopeDto {
+  @ApiProperty({ type: [CustomerMasterImportRowDto], minItems: 1, maxItems: 100 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => CustomerMasterImportRowDto) rows!: CustomerMasterImportRowDto[];
+}
+export class CustomerMasterImportResultItemDto {
+  @ApiProperty() rowNumber!: number;
+  @ApiProperty() code!: string;
+  @ApiProperty({ enum: ['CREATED', 'SKIPPED_DUPLICATE', 'FAILED'] }) status!: 'CREATED' | 'SKIPPED_DUPLICATE' | 'FAILED';
+  @ApiPropertyOptional() errorCode?: string;
+}
+export class CustomerMasterImportResultDto {
+  @ApiProperty({ type: [CustomerMasterImportResultItemDto] }) items!: CustomerMasterImportResultItemDto[];
+  @ApiProperty() created!: number;
+  @ApiProperty() skipped!: number;
+  @ApiProperty() failed!: number;
+}
 export class UpdateCustomerDto extends CustomerScopeDto { @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number; @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) name?: string; @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean; }
 export type CustomerRelationType = 'CUSTOMER_PARENT' | 'VEHICLE_MODEL' | 'PROJECT' | 'PRODUCT';
 export class CreateCustomerRelationDto extends CustomerScopeDto {

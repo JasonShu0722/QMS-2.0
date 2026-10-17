@@ -43,6 +43,13 @@ it('creates customer with CSRF and idempotency', async () => {
   expect(call?.[1]).toMatchObject({ headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': expect.any(String) }, body: JSON.stringify({ code: 'C-2', name: '客户二' }) });
 });
 
+it('offers the same customer batch import in the existing master section', async () => {
+  render(<CustomerMasterSection />);
+  await screen.findByRole('button', { name: '新增客户' });
+  expect(screen.getByLabelText('客户清单文件')).toHaveAttribute('accept', '.xlsx');
+  expect(screen.getByRole('button', { name: '导入客户' })).toBeDisabled();
+});
+
 it('edits a customer through a controlled dialog with CAS', async () => {
   render(<CustomerMasterSection />);
   await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
