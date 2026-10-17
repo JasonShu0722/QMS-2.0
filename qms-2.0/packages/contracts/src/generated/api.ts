@@ -5246,8 +5246,8 @@ export interface components {
             rowNumber: number;
             username: string;
             email?: string | null;
-            /** @enum {string} */
-            accountType: "INTERNAL";
+            /** @description Raw account type; unsupported values produce a per-row error. */
+            accountType: string;
         };
         CreateAdminUserBatchDto: {
             /** Format: uuid */
