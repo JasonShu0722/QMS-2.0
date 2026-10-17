@@ -94,7 +94,8 @@ describe('portal navigation', () => {
     expect(menu.getByRole('link', { name: ledger })).toHaveAttribute('aria-current', 'page');
     expect(menu.queryByRole('link', { name: domain })).not.toBeInTheDocument();
     expect(menu.queryByRole('link', { name: '关键件条码校验' })).not.toBeInTheDocument();
-    expect(document.querySelector('.qms-topbar-location')).toHaveTextContent(ledger);
+    expect(document.querySelector('.qms-topbar-location')).not.toBeInTheDocument();
+    expect(document.querySelector('.qms-topbar .qms-work-tab-manager')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '不良品台账' })).toBeVisible();
     expect(useWorkTabsStore.getState().tabs.find(tab => tab.id === '/app/process-quality')).toMatchObject({ title: '不良品台账' });
   });
