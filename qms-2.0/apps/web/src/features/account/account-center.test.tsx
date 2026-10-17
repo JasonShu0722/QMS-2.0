@@ -55,7 +55,7 @@ describe('account center', () => {
       const trigger = screen.getByRole('button', { name: '账号安全' });
       await userEvent.click(trigger);
       const dialog = within(await screen.findByRole('dialog', { name: '账号安全' }));
-      expect(await dialog.findByText('验证器已绑定')).toBeVisible();
+      await waitFor(() => expect(dialog.getByText('验证器已绑定')).toBeVisible());
       expect(screen.queryByRole('link', { name: '账号安全' })).not.toBeInTheDocument();
       await userEvent.click(dialog.getByRole('button', { name: '关闭账号安全' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
