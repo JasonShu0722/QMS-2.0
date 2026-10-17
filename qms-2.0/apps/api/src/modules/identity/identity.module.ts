@@ -25,6 +25,7 @@ import { AdminUserBatchService } from './admin-user-batch.service.js';
 import { FileManagementModule } from '../file-management/file-management.module.js';
 import { AccountAvatarService } from './account-avatar.service.js';
 import { AccountAvatarFileResourceAdapter } from './account-avatar-file-resource.adapter.js';
+import { SupplierAccountIdentityService } from './supplier-account-identity.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule, FileManagementModule],
@@ -43,11 +44,12 @@ import { AccountAvatarFileResourceAdapter } from './account-avatar-file-resource
     RecoveryMailService,
     AdminUserService,
     AdminUserBatchService,
+    SupplierAccountIdentityService,
     PasswordResetService,
     RateLimitService,
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService],
 })
 export class IdentityModule {}

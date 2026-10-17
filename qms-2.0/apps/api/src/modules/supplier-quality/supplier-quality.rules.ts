@@ -33,7 +33,7 @@ export function validateProblemFacts(input: unknown): SupplierProblemFacts {
       facts[key] = value.trim();
     }
   }
-  if (typeof facts.supplierOrganizationId !== 'string' || !uuidPattern.test(facts.supplierOrganizationId)) {
+  if (facts.supplierOrganizationId !== null && (typeof facts.supplierOrganizationId !== 'string' || !uuidPattern.test(facts.supplierOrganizationId))) {
     fields.supplierOrganizationId = '请选择一家供应商';
   }
   if (typeof facts.defectQuantity !== 'number' || !Number.isSafeInteger(facts.defectQuantity) || facts.defectQuantity < 1) {

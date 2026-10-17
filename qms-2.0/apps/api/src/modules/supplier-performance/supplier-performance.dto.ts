@@ -35,7 +35,7 @@ export class SupplierPerformanceCardDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ format: 'uuid' }) profileId!: string;
-  @ApiProperty({ format: 'uuid' }) supplierOrganizationId!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty() supplierName!: string;
   @ApiProperty({ example: '2026-09' }) month!: string;
   @ApiProperty() inspectionCount!: number;

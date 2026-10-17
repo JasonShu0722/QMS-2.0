@@ -73,8 +73,7 @@ describe('supplier quality real HTTP and PostgreSQL', () => {
   async function draft(overrides: object = {}, owner = 0, supplier = 2) {
     let profile = await prisma.supplierBusinessProfile.findFirst({ where: { ownerOrganizationId: organizations[owner], supplierOrganizationId: organizations[supplier] } });
     if (!profile) {
-      const response = await send(owner, 'post', 'supplier-quality/profiles', { supplierOrganizationId: organizations[supplier], businessCode: `CODE-${randomUUID()}` }).expect(201);
-      profile = await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: response.body.id } });
+      profile = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: organizations[owner]!, supplierOrganizationId: organizations[supplier]!, businessCode: `CODE-${randomUUID()}`, displayName: `Historical supplier ${supplier}` } });
     }
     const body = { profileId: profile.id, title: '来料测试问题', materialCode: 'MAT-001', defectDescription: '端子表面氧化', defectQuantity: 12, severity: 'HIGH', responseForm: 'BRIEF', replyMode: 'SUPPLIER', ...overrides };
     const response = await send(owner, 'post', 'supplier-quality/drafts', body).expect(201);
@@ -150,7 +149,7 @@ describe('supplier quality real HTTP and PostgreSQL', () => {
   it('rejects internal organizations as suppliers and duplicate business relationships', async () => {
     await send(0, 'post', 'supplier-quality/profiles', { supplierOrganizationId: organizations[1], businessCode: 'WRONG' }).expect(400);
     await draft();
-    await send(0, 'post', 'supplier-quality/profiles', { supplierOrganizationId: organizations[2], businessCode: 'DUPLICATE' }).expect(409);
+    await send(0, 'post', 'supplier-quality/profiles', { businessCode: (await prisma.supplierBusinessProfile.findFirstOrThrow({ where: { ownerOrganizationId: organizations[0], supplierOrganizationId: organizations[2] } })).businessCode, displayName: 'Duplicate supplier' }).expect(409);
   });
 
   it('isolates internal organizations and hides unreleased problems from the supplier', async () => {

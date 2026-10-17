@@ -6,41 +6,13 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import type { Attachment } from '../attachments/attachments';
 import './supplier-incoming.css';
 
-type IncomingItem = components['schemas']['IncomingItemDto'];
 type CreateInput = components['schemas']['CreateIncomingInspectionDto'];
 type CompleteInput = components['schemas']['CompleteIncomingInspectionDto'];
 type CorrectInput = components['schemas']['CorrectIncomingInspectionDto'];
 type ProblemDraft = components['schemas']['SupplierProblemDraftDto'];
-type InspectionStatus = 'DRAFT' | 'COMPLETED' | 'CORRECTED';
-type Inspection = {
-  id: string;
-  organizationId: string;
-  profileId: string;
-  supplierOrganizationId: string;
-  supplierBusinessCode: string;
-  supplierName: string;
-  materialCode: string;
-  incomingBatch: string;
-  receivedQuantity: number;
-  sampledQuantity: number;
-  conclusion: 'PASS' | 'NG' | null;
-  status: InspectionStatus;
-  inspectorId: string;
-  inspectedAt: string | null;
-  sourceSystem: 'MANUAL' | 'MES';
-  externalRecordKey: string | null;
-  externalBatchKey: string | null;
-  observedAt: string | null;
-  sourceSnapshot?: unknown;
-  correctionReason: string | null;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  items?: Array<IncomingItem & { id?: string }>;
-  photos?: Array<{ id: string; file_id?: string; fileId?: string; purpose?: string; note?: string; created_at?: string }>;
-  problemLinks?: Array<{ id: string; problem_id?: string; problemId?: string; created_at?: string }>;
-};
-type InspectionPage = { items: Inspection[]; total: number; page: number; pageSize: number };
+type Inspection = components['schemas']['IncomingInspectionDto'];
+type InspectionPage = components['schemas']['IncomingInspectionPageDto'];
+type InspectionStatus = Inspection['status'];
 type MutationBody = CreateInput | CompleteInput | CorrectInput | { fileId: string; expectedVersion: number } | (ProblemDraft & { expectedVersion: number });
 
 const basePath = '/api/v1/supplier-incoming/inspections';
@@ -97,7 +69,7 @@ export function SupplierIncomingPage() {
         { title: '供应商', dataIndex: 'supplierName', render: (value: string, row) => <Button type="link" onClick={() => setSelectedId(row.id)}>{value || row.supplierBusinessCode}</Button> },
         { title: '物料编码', dataIndex: 'materialCode' }, { title: '来料批次', dataIndex: 'incomingBatch' },
         { title: '收货 / 抽检', key: 'quantity', render: (_: unknown, row) => `${row.receivedQuantity} / ${row.sampledQuantity}` },
-        { title: '结论', dataIndex: 'conclusion', render: (value: Inspection['conclusion']) => value ?? '未完成' }, { title: '状态', dataIndex: 'status', render: statusTag },
+        { title: '结论', dataIndex: 'conclusion', render: (value: Inspection['conclusion']) => value === 'PENDING' ? '未完成' : value }, { title: '状态', dataIndex: 'status', render: statusTag },
         { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
       ]} />}
     </section>
@@ -168,16 +140,16 @@ function InspectionDrawer({ id, close, refreshed }: { id: string; close: () => v
     } catch (cause) { setProblemError(cause); }
     finally { setProblemBusy(false); }
   }
-  const linkedProblemId = record?.problemLinks?.[0]?.problem_id ?? record?.problemLinks?.[0]?.problemId;
+  const linkedProblemId = record?.problemLinks?.[0]?.problem_id;
   return <Drawer open title="来料检验详情" size={Math.min(720, window.innerWidth - 16)} onClose={close}>
     {loading ? <div className="supplier-incoming-loading"><Spin /></div> : error ? <Alert type={isDenied(error) ? 'warning' : 'error'} showIcon title={errorTitle(error, '详情加载失败，请重试。')} action={!isDenied(error) ? <Button onClick={() => void load()}>重试</Button> : undefined} /> : record ? <div className="supplier-incoming-detail">
       <Space align="center">{statusTag(record.status)}<Typography.Text type="secondary">版本 {record.version}</Typography.Text></Space>
-      <Descriptions column={{ xs: 1, sm: 2 }} items={[{ key: 'id', label: '检验记录 ID', children: <Typography.Text copyable={{ text: record.id }}>{record.id}</Typography.Text>, span: 2 }, { key: 'supplier', label: '供应商', children: record.supplierName || record.supplierBusinessCode }, { key: 'material', label: '物料编码', children: record.materialCode }, { key: 'batch', label: '来料批次', children: record.incomingBatch }, { key: 'quantity', label: '收货 / 抽检', children: `${record.receivedQuantity} / ${record.sampledQuantity}` }, { key: 'conclusion', label: '结论', children: record.conclusion ?? '未完成' }, { key: 'source', label: '来源', children: record.sourceSystem === 'MANUAL' ? '人工登记' : 'MES' }, { key: 'reason', label: '更正原因', children: record.correctionReason ?? '—' }]} />
+      <Descriptions column={{ xs: 1, sm: 2 }} items={[{ key: 'id', label: '检验记录 ID', children: <Typography.Text copyable={{ text: record.id }}>{record.id}</Typography.Text>, span: 2 }, { key: 'supplier', label: '供应商', children: record.supplierName || record.supplierBusinessCode }, { key: 'material', label: '物料编码', children: record.materialCode }, { key: 'batch', label: '来料批次', children: record.incomingBatch }, { key: 'quantity', label: '收货 / 抽检', children: `${record.receivedQuantity} / ${record.sampledQuantity}` }, { key: 'conclusion', label: '结论', children: record.conclusion === 'PENDING' ? '未完成' : record.conclusion }, { key: 'source', label: '来源', children: record.sourceSystem === 'MANUAL' ? '人工登记' : 'MES' }, { key: 'reason', label: '更正原因', children: record.correctionReason ?? '—' }]} />
       {actionError ? <Alert type={isDenied(actionError) ? 'warning' : 'error'} showIcon title={errorTitle(actionError, '操作失败，请刷新后重试。')} description={actionError instanceof ApiError ? actionError.traceId : undefined} /> : null}
       {record.status === 'DRAFT' ? <Space wrap><Button type="primary" loading={busy} onClick={() => void complete('PASS')}>完成并判定合格</Button><Button danger loading={busy} onClick={() => void complete('NG')}>完成并判定不合格</Button></Space> : <Button onClick={() => setCorrectionOpen(true)}>发起更正</Button>}
       {record.conclusion === 'NG' && record.status !== 'DRAFT' ? <section className="supplier-incoming-detail-section"><Typography.Title level={4}>供应商问题</Typography.Title>{linkedProblemId ? <a href={`/app/supplier-quality/problems/${linkedProblemId}`}>查看供应商问题</a> : <Button onClick={() => setProblemOpen(true)}>创建供应商问题草稿</Button>}</section> : null}
-      <section className="supplier-incoming-detail-section"><Typography.Title level={4}>检验项目</Typography.Title><Table<IncomingItem & { id?: string }> size="small" rowKey={(item) => item.id ?? `${item.order}-${item.name}`} pagination={false} dataSource={record.items ?? []} locale={{ emptyText: '未记录检验项目' }} columns={[{ title: '序号', dataIndex: 'order' }, { title: '项目', dataIndex: 'name' }, { title: '实测值', dataIndex: 'measuredValue', render: (value?: string) => value || '—' }, { title: '结果', dataIndex: 'result' }]} /></section>
-      <section className="supplier-incoming-detail-section"><Typography.Title level={4}>检验照片</Typography.Title><Typography.Paragraph type="secondary">上传后等待安全扫描，通过后将照片归档到本次检验。扫描失败可在附件卡片重试或上传新照片，检验草稿会保留。</Typography.Paragraph>{photoError ? <Alert type={isDenied(photoError) ? 'warning' : 'error'} showIcon title={errorTitle(photoError, '照片归档失败，请检查文件状态或刷新版本。')} action={photoError instanceof ApiError && photoError.status === 409 ? <Button onClick={() => void load()}>重新加载</Button> : undefined} /> : null}<AttachmentPanel resource={{ resourceType: 'supplier-incoming', resourceId: record.id }} fileIds={(record.photos ?? []).map((photo) => photo.file_id ?? photo.fileId).filter((value): value is string => Boolean(value))} readOnly={record.status === 'CORRECTED' || photoBusy} onReady={(file) => setReadyPhoto(file)} onRemoved={(fileId) => { if (readyPhoto?.id === fileId) setReadyPhoto(undefined); }} />{readyPhoto && !(record.photos ?? []).some((photo) => (photo.file_id ?? photo.fileId) === readyPhoto.id) ? <Button type="primary" loading={photoBusy} onClick={() => void attachPhoto()}>归档已扫描照片</Button> : null}<Table size="small" rowKey="id" pagination={false} dataSource={record.photos ?? []} locale={{ emptyText: '尚未归档照片' }} columns={[{ title: '照片', render: (_: unknown, photo) => photo.file_id ?? photo.fileId }, { title: '归档时间', dataIndex: 'created_at', render: (value?: string) => value ? new Date(value).toLocaleString('zh-CN') : '—' }]} /></section>
+      <section className="supplier-incoming-detail-section"><Typography.Title level={4}>检验项目</Typography.Title><Table<components['schemas']['IncomingInspectionItemDto']> size="small" rowKey={(item) => item.id ?? `${item.order}-${item.name}`} pagination={false} dataSource={record.items ?? []} locale={{ emptyText: '未记录检验项目' }} columns={[{ title: '序号', dataIndex: 'order' }, { title: '项目', dataIndex: 'name' }, { title: '实测值', dataIndex: 'measuredValue', render: (value?: string) => value || '—' }, { title: '结果', dataIndex: 'result' }]} /></section>
+      <section className="supplier-incoming-detail-section"><Typography.Title level={4}>检验照片</Typography.Title><Typography.Paragraph type="secondary">上传后等待安全扫描，通过后将照片归档到本次检验。扫描失败可在附件卡片重试或上传新照片，检验草稿会保留。</Typography.Paragraph>{photoError ? <Alert type={isDenied(photoError) ? 'warning' : 'error'} showIcon title={errorTitle(photoError, '照片归档失败，请检查文件状态或刷新版本。')} action={photoError instanceof ApiError && photoError.status === 409 ? <Button onClick={() => void load()}>重新加载</Button> : undefined} /> : null}<AttachmentPanel resource={{ resourceType: 'supplier-incoming', resourceId: record.id }} fileIds={(record.photos ?? []).map((photo) => photo.file_id).filter((value): value is string => Boolean(value))} readOnly={record.status === 'CORRECTED' || photoBusy} onReady={(file) => setReadyPhoto(file)} onRemoved={(fileId) => { if (readyPhoto?.id === fileId) setReadyPhoto(undefined); }} />{readyPhoto && !(record.photos ?? []).some((photo) => (photo.file_id) === readyPhoto.id) ? <Button type="primary" loading={photoBusy} onClick={() => void attachPhoto()}>归档已扫描照片</Button> : null}<Table size="small" rowKey="id" pagination={false} dataSource={record.photos ?? []} locale={{ emptyText: '尚未归档照片' }} columns={[{ title: '照片', render: (_: unknown, photo) => photo.file_id }, { title: '归档时间', dataIndex: 'created_at', render: (value?: string) => value ? new Date(value).toLocaleString('zh-CN') : '—' }]} /></section>
     </div> : <Empty description="检验记录不存在" />}
     {correctionOpen && record ? <CorrectionModal record={record} close={() => setCorrectionOpen(false)} saved={(updated) => { setRecord(updated); setCorrectionOpen(false); refreshed(); }} /> : null}
     {problemOpen && record ? <ProblemDraftModal record={record} busy={problemBusy} error={problemError} close={() => setProblemOpen(false)} submit={createProblem} /> : null}

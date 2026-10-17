@@ -16,7 +16,7 @@ export class SupplierIncomingService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly files: FileLifecycleService, private readonly supplierProblems: SupplierQualityService) {}
 
   async concessionSource(tx: AdminTransaction, organizationId: string, inspectionId: string) {
-    const rows = await tx.$queryRaw<{ id: string; owner_organization_id: string; profile_id: string; supplier_organization_id: string; supplier_name: string; material_code: string; incoming_batch: string; received_quantity: number; conclusion: string; status: string; version: number }[]>`
+    const rows = await tx.$queryRaw<{ id: string; owner_organization_id: string; profile_id: string; supplier_organization_id: string | null; supplier_name: string; material_code: string; incoming_batch: string; received_quantity: number; conclusion: string; status: string; version: number }[]>`
       SELECT id, owner_organization_id, profile_id, supplier_organization_id, supplier_name, material_code,
         incoming_batch, received_quantity, conclusion, status, version
       FROM supplier_incoming_inspections
@@ -80,10 +80,9 @@ export class SupplierIncomingService {
     const materialCode = text(input.materialCode, 100); const incomingBatch = text(input.incomingBatch, 160);
     const items = normalizeItems(input.items ?? []);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_INCOMING_CREATED', payload: { ...input, items }, permission: WRITE_PERMISSION, duplicateCode: 'CONCURRENCY_CONFLICT' }, async (tx) => {
-      const profile = await tx.$queryRaw<Row[]>`SELECT id, owner_organization_id, supplier_organization_id, business_code, display_name FROM supplier_business_profiles WHERE id = ${input.profileId}::uuid AND owner_organization_id = ${organizationId}::uuid FOR SHARE`;
-      if (!profile[0]) fail('SUPPLIER_PROFILE_NOT_FOUND', 404);
+      const profile = await this.supplierProblems.performanceProfile(tx, organizationId, input.profileId);
       const id = randomUUID();
-      const rows = await tx.$queryRaw<Row[]>`INSERT INTO supplier_incoming_inspections (id, owner_organization_id, profile_id, supplier_organization_id, supplier_business_code, supplier_name, material_code, incoming_batch, received_quantity, sampled_quantity, inspector_id, source_system, source_snapshot) VALUES (${id}::uuid, ${organizationId}::uuid, ${input.profileId}::uuid, ${profile[0].supplier_organization_id}::uuid, ${profile[0].business_code}, ${profile[0].display_name}, ${materialCode}, ${incomingBatch}, ${input.receivedQuantity}, ${input.sampledQuantity}, ${actor.id}::uuid, 'MANUAL', ${JSON.stringify({ source: 'MANUAL' })}::jsonb) RETURNING *`;
+      const rows = await tx.$queryRaw<Row[]>`INSERT INTO supplier_incoming_inspections (id, owner_organization_id, profile_id, supplier_organization_id, supplier_business_code, supplier_name, material_code, incoming_batch, received_quantity, sampled_quantity, inspector_id, created_by_id, source_system, source_snapshot) VALUES (${id}::uuid, ${organizationId}::uuid, ${profile.id}::uuid, ${profile.supplierOrganizationId}::uuid, ${profile.businessCode}, ${profile.displayName}, ${materialCode}, ${incomingBatch}, ${input.receivedQuantity}, ${input.sampledQuantity}, ${actor.id}::uuid, ${actor.id}::uuid, 'MANUAL', ${JSON.stringify({ source: 'MANUAL' })}::jsonb) RETURNING *`;
       for (const item of items) await tx.$executeRaw`INSERT INTO supplier_incoming_items (id, inspection_id, item_order, item_name, measured_value, result) VALUES (${randomUUID()}::uuid, ${id}::uuid, ${item.order}, ${item.name}, ${item.measuredValue}, ${item.result})`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'SUPPLIER_INCOMING_CREATED', resourceType: 'SupplierIncomingInspection', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1 } }, tx);
       return this.serialize(rows[0]);
@@ -119,8 +118,8 @@ export class SupplierIncomingService {
       if (existing[0]) return existing[0];
       if (Number(inspection[0].version) !== input.expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
       if (inspection[0].conclusion !== 'NG' || !['COMPLETED', 'CORRECTED'].includes(inspection[0].status)) fail('SUPPLIER_INCOMING_PROBLEM_REQUIRES_NG', 409);
-      const profiles = await tx.$queryRaw<Row[]>`SELECT id FROM supplier_business_profiles WHERE id = ${inspection[0].profile_id}::uuid AND owner_organization_id = ${organizationId}::uuid AND supplier_organization_id = ${inspection[0].supplier_organization_id}::uuid FOR SHARE`;
-      if (!profiles[0]) fail('SUPPLIER_PROFILE_NOT_FOUND', 404);
+      const profile = await this.supplierProblems.performanceProfile(tx, organizationId, inspection[0].profile_id);
+      if (inspection[0].supplier_organization_id !== null && inspection[0].supplier_organization_id !== profile.supplierOrganizationId) fail('SUPPLIER_PROFILE_NOT_FOUND', 404);
       const problem = await this.supplierProblems.createDraftFromIncoming(tx, actor, {
         profileId: inspection[0].profile_id, title: input.title, materialCode: inspection[0].material_code,
         defectDescription: input.defectDescription, defectQuantity: input.defectQuantity,

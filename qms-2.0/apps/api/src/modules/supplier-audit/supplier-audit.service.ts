@@ -22,7 +22,7 @@ function instant(value: string): Date { const result = new Date(value); if (Numb
 
 function serializePlan(row: Row) {
   return {
-    id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: String(row.supplier_organization_id),
+    id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: row.supplier_organization_id === null ? null : String(row.supplier_organization_id),
     profileId: String(row.profile_id), auditYear: Number(row.audit_year), auditType: String(row.audit_type), title: String(row.title),
     plannedStart: new Date(String(row.planned_start)).toISOString(), plannedEnd: new Date(String(row.planned_end)).toISOString(),
     status: String(row.status), version: Number(row.version), createdAt: new Date(String(row.created_at)).toISOString(),
@@ -32,7 +32,7 @@ function serializePlan(row: Row) {
 
 function serializeRecord(row: Row) {
   return {
-    id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: String(row.supplier_organization_id),
+    id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: row.supplier_organization_id === null ? null : String(row.supplier_organization_id),
     profileId: String(row.profile_id), planId: String(row.plan_id), auditDate: String(row.audit_date).slice(0, 10),
     auditor: String(row.auditor), summary: String(row.summary), findings: (row.findings ?? {}) as Record<string, unknown>,
     conclusion: row.conclusion ? String(row.conclusion) : null, closeNote: row.close_note ? String(row.close_note) : null,
@@ -142,7 +142,7 @@ export class SupplierAuditService {
       if (!plan || !['SUBMITTED', 'CLOSED'].includes(String(plan.status))) fail('SUPPLIER_AUDIT_PLAN_NOT_FOUND', 404);
       const rows = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO supplier_audit_records
         (id, owner_organization_id, supplier_organization_id, profile_id, plan_id, audit_date, auditor, summary, findings, created_by_id, updated_at)
-        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${String(plan.supplier_organization_id)}::uuid, ${String(plan.profile_id)}::uuid, ${String(plan.id)}::uuid, ${auditDate}::date, ${auditor}, ${summary}, ${JSON.stringify(findings)}::jsonb, ${actor.id}::uuid, CURRENT_TIMESTAMP)
+        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${plan.supplier_organization_id}::uuid, ${String(plan.profile_id)}::uuid, ${String(plan.id)}::uuid, ${auditDate}::date, ${auditor}, ${summary}, ${JSON.stringify(findings)}::jsonb, ${actor.id}::uuid, CURRENT_TIMESTAMP)
         RETURNING *`);
       const row = rows[0]!;
       await this.recordEvent(tx, actor, organizationId, row, 'CREATED', traceId);

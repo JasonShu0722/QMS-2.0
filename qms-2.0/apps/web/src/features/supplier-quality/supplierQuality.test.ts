@@ -35,3 +35,15 @@ it('starts a different request key when a failed draft is edited', async () => {
   }
   expect(keys[0]).not.toBe(keys[1]);
 });
+
+it('retains unknown-result keys independently when supplier account targets are interleaved', async () => {
+  const keys: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return new Response(JSON.stringify({ csrfToken: 'csrf' }), { headers: { 'content-type': 'application/json' } });
+    keys.push(new Headers(init.headers).get('Idempotency-Key')!);
+    throw new TypeError('lost response');
+  }));
+  const mutate = createSupplierMutation();
+  for (const id of ['a', 'b', 'a']) await expect(mutate(`/profiles/p/accounts/${id}/status`, 'PUT', { status: 'DISABLED', expectedSecurityVersion: 1 })).rejects.toThrow();
+  expect(keys[0]).toBe(keys[2]); expect(keys[0]).not.toBe(keys[1]);
+});

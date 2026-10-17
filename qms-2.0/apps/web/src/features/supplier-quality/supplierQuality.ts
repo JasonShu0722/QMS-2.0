@@ -12,7 +12,7 @@ export type ProfilePage = components['schemas']['SupplierProfilePageDto'];
 export type ReferenceOptions = components['schemas']['SupplierReferenceOptionsDto'];
 export type ReferenceOption = components['schemas']['SupplierReferenceOptionDto'];
 export type SupplierWorkflowActionBody = Omit<components['schemas']['SupplierWorkflowActionDto'], 'accepted'> & Partial<Pick<components['schemas']['SupplierWorkflowActionDto'], 'accepted'>>;
-type MutationBody = ProblemDraft | components['schemas']['UpdateSupplierProblemDraftDto'] | components['schemas']['IssueSupplierProblemDto'] | components['schemas']['SaveSupplierResponseDraftDto'] | components['schemas']['SubmitSupplierResponseDto'] | SupplierWorkflowActionBody | ProfileInput | components['schemas']['UpdateSupplierProfileDto'];
+type MutationBody = ProblemDraft | components['schemas']['UpdateSupplierProblemDraftDto'] | components['schemas']['IssueSupplierProblemDto'] | components['schemas']['SaveSupplierResponseDraftDto'] | components['schemas']['SubmitSupplierResponseDto'] | SupplierWorkflowActionBody | ProfileInput | components['schemas']['UpdateSupplierProfileDto'] | components['schemas']['SupplierProfileImportDto'] | components['schemas']['CreateSupplierAccountDto'] | components['schemas']['SetSupplierAccountStatusDto'] | components['schemas']['SupplierAccountScopeDto'];
 
 export const supplierApi = (portal: boolean) => `/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}`;
 export const supplierPath = (portal: boolean) => portal ? '/supplier/corrections' : '/app/supplier-quality';
@@ -40,14 +40,14 @@ export function supplierError(cause: unknown): string {
 }
 
 export function createSupplierMutation() {
-  let pending: { signature: string; key: string } | undefined;
+  const pending = new Map<string, string>();
   return async function mutate<Result>(path: string, method: 'POST' | 'PUT', body: MutationBody): Promise<Result> {
     const signature = JSON.stringify([path, method, body]);
-    if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
-    const attempt = pending;
+    if (!pending.has(signature)) pending.set(signature, crypto.randomUUID());
+    const key = pending.get(signature)!;
     const token = await csrfToken();
-    const result = await apiRequest<Result>(path, { method, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: JSON.stringify(body) });
-    if (pending === attempt) pending = undefined;
+    const result = await apiRequest<Result>(path, { method, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body) });
+    if (pending.get(signature) === key) pending.delete(signature);
     return result;
   };
 }

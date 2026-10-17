@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
+import { SupplierQualityService } from '../supplier-quality/supplier-quality.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -18,11 +19,11 @@ function text(value: string, max: number): string { const normalized = value?.tr
 function iso(value: unknown): string { return new Date(String(value)).toISOString(); }
 function isUniqueViolation(error: unknown): boolean { const value = error as { code?: string; meta?: { code?: string }; message?: string }; const message = String(value?.message ?? error); return value?.code === 'P2002' || value?.code === 'P2010' && value?.meta?.code === '23505' || message.includes('23505') || message.includes('duplicate key'); }
 function itemDto(row: Row) { return { id: String(row.id), packageId: String(row.package_id), itemCode: String(row.item_code), title: String(row.title), description: row.description === null ? null : String(row.description), required: Boolean(row.required), status: String(row.status), content: (row.content ?? {}) as Record<string, unknown>, evidenceFileIds: (row.evidence_file_ids ?? []) as string[], reviewNote: row.review_note === null || row.review_note === undefined ? null : String(row.review_note), reviewedAt: row.reviewed_at ? iso(row.reviewed_at) : null, version: Number(row.version), createdAt: iso(row.created_at), updatedAt: iso(row.updated_at) }; }
-function packageDto(row: Row, items: Row[] = []) { return { id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: String(row.supplier_organization_id), profileId: String(row.profile_id), level: Number(row.level), title: String(row.title), partNumber: String(row.part_number), status: String(row.status), version: Number(row.version), reviewNote: row.review_note === null ? null : String(row.review_note), requalificationDueAt: row.requalification_due_at ? iso(row.requalification_due_at) : null, lastRequalifiedAt: row.last_requalified_at ? iso(row.last_requalified_at) : null, requalificationNote: row.requalification_note === null || row.requalification_note === undefined ? null : String(row.requalification_note), items: items.map(itemDto), createdAt: iso(row.created_at), updatedAt: iso(row.updated_at) }; }
+function packageDto(row: Row, items: Row[] = []) { return { id: String(row.id), ownerOrganizationId: String(row.owner_organization_id), supplierOrganizationId: row.supplier_organization_id === null ? null : String(row.supplier_organization_id), profileId: String(row.profile_id), level: Number(row.level), title: String(row.title), partNumber: String(row.part_number), status: String(row.status), version: Number(row.version), reviewNote: row.review_note === null ? null : String(row.review_note), requalificationDueAt: row.requalification_due_at ? iso(row.requalification_due_at) : null, lastRequalifiedAt: row.last_requalified_at ? iso(row.last_requalified_at) : null, requalificationNote: row.requalification_note === null || row.requalification_note === undefined ? null : String(row.requalification_note), items: items.map(itemDto), createdAt: iso(row.created_at), updatedAt: iso(row.updated_at) }; }
 
 @Injectable()
 export class SupplierPpapService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly files: FileLifecycleService) {}
+  constructor(private readonly suppliers: SupplierQualityService, private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly files: FileLifecycleService) {}
 
   private scope(actor: AdminActor, requested?: string) {
     if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
@@ -71,9 +72,7 @@ export class SupplierPpapService {
   create(actor: AdminActor, input: CreateSupplierPpapDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor); const title = text(input.title, 300); const partNumber = text(input.partNumber, 120);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_PPAP_CREATED', payload: input, permission: WRITE, additionalAccess: [{ organizationId, permission: 'supplier-quality:profiles:read' }] }, async (tx) => {
-      const profile = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, supplier_organization_id FROM supplier_business_profiles WHERE id = ${uuid(input.profileId)}::uuid AND owner_organization_id = ${organizationId}::uuid`);
-      if (!profile[0]) adminError('SUPPLIER_PPAP_NOT_FOUND', 404);
-      const rows = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO supplier_ppap_packages (id, owner_organization_id, supplier_organization_id, profile_id, level, title, part_number, created_by_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${String(profile[0]!.supplier_organization_id)}::uuid, ${String(profile[0]!.id)}::uuid, ${input.level}, ${title}, ${partNumber}, ${actor.id}::uuid) RETURNING *`);
+      const profile = await this.suppliers.performanceProfile(tx, organizationId, input.profileId); const rows = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO supplier_ppap_packages (id, owner_organization_id, supplier_organization_id, profile_id, level, title, part_number, created_by_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${profile.supplierOrganizationId}::uuid, ${profile.id}::uuid, ${input.level}, ${title}, ${partNumber}, ${actor.id}::uuid) RETURNING *`);
       const row = rows[0]!;
       for (const item of ppapTemplate(input.level)) await tx.$executeRaw`INSERT INTO supplier_ppap_items (id, owner_organization_id, package_id, item_code, title, required, status, created_by_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${String(row.id)}::uuid, ${item.code}, ${item.title}, true, 'PENDING', ${actor.id}::uuid)`;
       await this.event(tx, actor, organizationId, String(row.id), 'PACKAGE', String(row.id), 'CREATED', 1, traceId);

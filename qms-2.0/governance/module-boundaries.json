@@ -123,7 +123,15 @@
     "workflow -> audit-log",
     "workflow -> authorization",
     "workflow -> problem-index",
-    "workflow -> task-notification"
+    "workflow -> task-notification",
+    "supplier-ppap -> supplier-quality",
+    "supplier-inspection-standards -> supplier-quality",
+    "supplier-barcode -> supplier-quality",
+    "supplier-asn -> supplier-quality",
+    "supplier-admission -> supplier-quality"
   ],
-  "forbiddenImportFileSuffixes": [".controller.ts", ".controller.js"]
+  "forbiddenImportFileSuffixes": [
+    ".controller.ts",
+    ".controller.js"
+  ]
 }

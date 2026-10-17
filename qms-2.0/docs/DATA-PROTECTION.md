@@ -25,6 +25,14 @@ docker compose -f deployment/docker-compose.foundation.yml -f deployment/docker-
 
 ## 对象保护与数据库恢复
 
+### 发布迁移前的本机数据库检查点
+
+F1 升级增加 `deployment/deploy.sh` 的强制检查点：PostgreSQL 就绪后、任何迁移前，以真实容器原生 `pg_dump --format=custom` 保存当时数据库，先验证目录可读，再用独立随机口令的 OpenSSL AES-256-CBC / PBKDF2（200000 次、加盐）加密；解密比对与 `pg_restore --list` 验证成功后删除本次两份临时明文，失败阻断迁移。数据库工具标准输入显式隔离，不能消费后续远程部署脚本。
+
+密文及明文内容 SHA-256 位于 `/opt/qms2/migration-backups-v1/<完整SHA>/snapshot.<随机后缀>/`；对应独立密钥为 `/opt/qms2/migration-backup-keys-v1/<完整SHA>.snapshot.<同后缀>.key`。目录 root-only 700，密钥和密文 600，检查真实路径与所有者并拒绝符号链接。相同版本重试产生独立快照，不覆盖前一次；日志只报告版本与验证结果，不输出密钥、口令或数据。
+
+这是本机、迁移前数据库快照，不是 `QMSB2` 数据库＋对象完整包，不能直接交给 `data:protect restore`，也不替代异地灾备。恢复由管理员先在受限临时位置以对应密钥解密，核对 `database.sha256` 与 `pg_restore --list`，再恢复到独立空库并核验；不得直接覆盖生产或删除迁移后新数据。密钥与快照仍在同一主机，异地保管、保留期限和灾备继续按既有运维方案管理，本轮没有配置自动删旧快照。
+
 配置 `QMS_OBJECT_STORAGE_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY`，可选 `REGION`（默认 us-east-1）及 `PROVIDER=s3`。运行 `pnpm --filter @qms/api data:protect init-storage`：启用版本管理、Object Lock、默认 COMPLIANCE 保留和显式删除拒绝策略；AWS S3 同时设置 Block Public Access。`QMS_OBJECT_RETENTION_DAYS` 默认 7，范围 1–3650。COMPLIANCE 期间版本无法删除，初始化前须确定目标桶和保留政策。
 
 上传适配器生成 UUID 对象键，使用 60 秒签名 URL，签名绑定 Content-Type 和 `If-None-Match: *`，阻止同键覆盖。桶匿名读取被拒绝。此处仅说明对象保护边界；P3 已交付的资源级授权、上传完成校验、扫描及下载行为见[附件生命周期](ATTACHMENTS.md)，具体领域证据接入仍须单独验收。

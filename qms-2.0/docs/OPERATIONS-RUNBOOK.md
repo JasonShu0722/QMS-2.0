@@ -18,6 +18,8 @@ corepack pnpm check:governance
 
 ## 故障诊断
 
+发布迁移前必须出现 `Pre-migration encrypted database snapshot verified: <完整SHA>`，随后才执行 Prisma migrate。备份失败、root 权限/目录安全检查失败或解密核验失败会阻断部署；不得删掉检查点来放行。实际路径、独立密钥、恢复到隔离空库和本机快照限制见[数据保护](DATA-PROTECTION.md)。同 SHA 重跑保留旧快照并生成新随机快照，不需要覆盖或删除既有文件。
+
 | 现象 | 只读排查顺序 | 恢复成功的证据 |
 | --- | --- | --- |
 | 登录或权限拒绝 | 复现时间与 traceId → 会话 → 用户/组织状态 → 功能权限 → 数据范围 → 节点规则 | 原允许场景恢复，原拒绝场景仍拒绝 |

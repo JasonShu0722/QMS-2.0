@@ -210,7 +210,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "9c10d78a12da1d8c7d862b779b8682400b3452df2bdc000458d12f6e50ddcd8a"
+            "sha256": "fd577b856431c3e8eabe567794f2d98485667d6bfc5394e21e498d4c0b3549dc"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",
@@ -240,7 +240,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "377829a834dde4ade29495cc808dc1d47f6ad33a98978093c496a0e05d6a3cf4"
+            "sha256": "ce19c7fc8276f16fb45ff0556e60281a7e859ed203a59e49ddc643808e6cbafb"
           },
           {
             "path": "docs/OPERABILITY-READINESS.md",
@@ -614,7 +614,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "9316d262d243ed544fccf934c06683fd248953185a702fe523dd1c3d0c7626b2"
+            "sha256": "72e33a681dff32fa78f0a2a9aecc3a2a8b22d7ac6f3b50b1245349c254de1e19"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -732,7 +732,7 @@
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
-            "sha256": "aa303af3aad51e1ca12111cc1adb39554eb699db301bb413383d03147ae7b139"
+            "sha256": "242195166236394a1c989b230442b84c2bc98dbdda37b42728298187c84b906d"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -758,11 +758,11 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "377829a834dde4ade29495cc808dc1d47f6ad33a98978093c496a0e05d6a3cf4"
+            "sha256": "ce19c7fc8276f16fb45ff0556e60281a7e859ed203a59e49ddc643808e6cbafb"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "9c10d78a12da1d8c7d862b779b8682400b3452df2bdc000458d12f6e50ddcd8a"
+            "sha256": "fd577b856431c3e8eabe567794f2d98485667d6bfc5394e21e498d4c0b3549dc"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",

@@ -35,6 +35,9 @@ describe('OpenAPI HTTP contract', () => {
       expect(response.body.paths['/api/v1/organizations/current'].get.parameters[0].name).toBe('organizationId');
       expect(response.body.paths['/api/v1/system/permissions'].get.responses['200'].content['application/json'].schema)
         .toEqual({ $ref: '#/components/schemas/PermissionsResponseDto' });
+      expect(response.body.paths['/api/v1/supplier-incoming/inspections'].get.responses['200'].content['application/json'].schema)
+        .toEqual({ $ref: '#/components/schemas/IncomingInspectionPageDto' });
+      expect(schemas.IncomingInspectionDto.properties.supplierOrganizationId).toMatchObject({ type: 'string', nullable: true });
     } finally {
       await app.close();
     }

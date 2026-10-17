@@ -2,6 +2,20 @@
 
 本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
 
+## 供应商独立档案与按需多账号（2026-10-18，F1 / V0.0.12 候选）
+
+关联 Issue #25 / REQ-0015，活动分支 `codex/p0p1-f1-supplier-master`，接续 F3 `d5e4acb61500d6242ebf2a71a99f30e396ef4a15` 的工作树候选；最终 PR 必须以已部署 main 为目标，不以功能分支合并冒充上线。范围与实现取舍见 [基础数据计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-master-data.md)及[供应商交接](SUPPLIER-PLATFORM-HANDOFF.md)。
+
+- 实现上下文 `implement_f1_supplier_api`、`implement_f1_consumers`、`implement_f1_web`，真实升级证据独立上下文 `verify_f1_upgrade`。主代理统一迁移/契约、模块边界、入口、语言及文档，不把并行工作夹入 F3 提交。
+- 独立旧库升级：`supplier-master-migration.integration-spec.ts` 在随机自建库真实执行 99 条旧迁移，插入 12 域、已释放问题、合法数据库文件/通知/工作流，再执行实际 F1 SQL。全字段快照不变及新 nullable/owner 强 FK/非空三元/CHECK 29/29 PASS（`p0p1-f1-upgrade-green-20261018.log`）；文件事实仅证明升级引用，不冒充本次存储/扫描验收。
+- 新真实 master/consumer/workflow 联合 28 项 PASS：独立导入不建企业、逐行审计失败回滚、首账号事务失败/并发、同家多人、临时密码有效性/权限重放、真实新账号首登改密及 SUBMIT/企业隔离、内部无组织完整流程、锁等待后撤 owner/目标读取权限拒绝。独立 API 规格及安全复审对 P1 `workflow:act` 缺失、P2 列表锁后撤权两项返修通过。
+- 最终全供应商真实 PG 在新一次性 `qms_p0p1_f1_final_20261018` / 55517 冻结快照执行：24 suites / 193 tests PASS（`p0p1-f1-fresh-all-supplier-pg.log`）。包含全部受影响供应商消费者及升级测试。旧多次重复测试库的通知 Worker 因前序测试 Outbox 积压出现 3 项 FAIL，日志保留；新 workflow fixture 仅清自身随机 owner 聚合事件，不全局清队列或改 Worker 批量上限，新库完整复验通过。
+- 身份真实 PG 11 套 138 项通过；邮箱 suite 首次缺 SMTP 前置失败保留，补一次性真实 Mailpit 后单独通过，旧 HTTP 授权隔离亦独立执行。真实新供应商首登/门户提交仍以新增 PG 用例为证据，不拿旧 Prisma override HTTP suite 冒充真实数据隔离。
+- Incoming 本轮受 nullable 影响，补 Swagger 列表/详情响应并移除 Web 手写 DTO；契约缺失红灯后具体响应/可空企业断言 1/1 PASS（`f1-incoming-contract-green.log`），没有新增业务字段或接口。
+- Web 首次各文件定向 24 项 PASS，独立审查发现账户域 401/403 未清已显示密码、StrictMode mounted 防护和英文恢复文案缺口，三项均红绿返修且规格/质量复审通过。最后账号面板聚合 16 PASS / 2 默认超时保留，两项默认单独复验通过，临时密码核心 5 项、StrictMode/原 CAS 最后 3 项通过；不把聚合失败改记全绿，完整默认回归由本 PR CI 执行。浏览器统一部署后人工确认，阶段五外部/设备证据没有伪造 PASS。
+- 主代理最终独立门禁：新增 master/workflow/consumer/真实升级四套 58/58 PASS（`p0p1-f1-root-pg-verified.log`），包含最后 101 行 413；API 全量单测 49 套 531/531 PASS（`p0p1-f1-api-unit-verified.log`），Web lint/build、API build、生成契约检查、治理/归档隔离及 Compose PASS。构建保留原大包提示，MAINT-001～003 均仍开放。
+- 迁移前备份检查点由独立实现上下文 `f1_pre_migration_backup` 补齐：一次性真实 PostgreSQL 18 中执行实际部署 checkpoint 两次、解密及完整恢复到独立空库、事实/FK 比对通过；root 700/600、相同 SHA 不覆盖、无明文残留和失败阻断有独立证据。Git 外 `f1-backup-evidence-0d1c0fe1a541427c946d70189d672100/verification.txt`，仅本机 DB 快照，不冒充生产/对象/异地灾备。实际生产是否执行以新部署日志为准。
+
 ## 两字段物料与外部接收预留（2026-10-18，F3 / V0.0.14 候选）
 
 关联 Issue #27 / REQ-0015，独立基线为 E 合入后的 `c0241b7570ec456ebc5a53098af92f86fa6bbd30`，活动分支 `codex/p0p1-f3-material-delivery`。只新增物料编码/名称，不改已有专业领域的 `materialCode`，不增加单位、规格、来源、状态或删除能力。

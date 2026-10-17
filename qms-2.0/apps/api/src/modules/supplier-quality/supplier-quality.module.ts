@@ -13,6 +13,9 @@ import { SupplierWorkflowBindingService } from './supplier-workflow-binding.serv
 import { SupplierWorkflowBindingController } from './supplier-workflow-binding.controller.js';
 import { SupplierQualityFileResourceAdapter } from './supplier-quality-file-resource.adapter.js';
 import { SupplierQualityUpgradeAdapter } from './supplier-quality-upgrade.adapter.js';
+import { SupplierMasterController } from './supplier-master.controller.js';
+import { SupplierAccountService } from './supplier-account.service.js';
+import { SupplierProfileImportService } from './supplier-profile-import.service.js';
 
-@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, IdentityModule, OrganizationModule, ProblemIndexModule, WorkflowModule], controllers: [SupplierQualityController, SupplierPortalController, SupplierWorkflowBindingController], providers: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierQualityFileResourceAdapter, SupplierQualityUpgradeAdapter], exports: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService] })
+@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, IdentityModule, OrganizationModule, ProblemIndexModule, WorkflowModule], controllers: [SupplierQualityController, SupplierPortalController, SupplierWorkflowBindingController, SupplierMasterController], providers: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierQualityFileResourceAdapter, SupplierQualityUpgradeAdapter, SupplierAccountService, SupplierProfileImportService], exports: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService] })
 export class SupplierQualityModule {}
