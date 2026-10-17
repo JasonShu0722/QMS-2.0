@@ -122,6 +122,8 @@ export class IdentityService {
       accountType: user.accountType,
       status: user.status,
       mfaEnabled: user.mfaEnabled,
+      avatarFileId: user.avatarFileId,
+      avatarVersion: user.avatarVersion,
       organization: {
         id: user.organization.id ?? user.organizationId,
         code: user.organization.code,

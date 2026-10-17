@@ -7,6 +7,8 @@ import { useLanguage } from '../../i18n/Language';
 import type { AccountProfile, AccountSession } from '@qms/contracts';
 import { ShieldCheck } from 'lucide-react';
 import { SecurityDialog } from '../auth/SecurityDialog';
+import { AvatarEditor } from './AvatarEditor';
+import { accountAvatarEpoch, publishAccountAvatar } from './account-avatar-state';
 
 export function AccountCenterPage() {
   const { t, locale } = useLanguage();
@@ -22,14 +24,18 @@ export function AccountCenterPage() {
   const [passwordForm] = Form.useForm();
 
   async function load() {
+    const epoch = accountAvatarEpoch();
     setError(undefined);
     try {
       const [nextProfile, nextSessions] = await Promise.all([getAccountProfile(), getAccountSessions()]);
+      if (epoch !== accountAvatarEpoch()) return;
+      publishAccountAvatar(nextProfile, epoch);
       setProfile(nextProfile);
       setSessions(nextSessions);
       profileForm.setFieldsValue({ email: nextProfile.email ?? '' });
       setLoaded(true);
     } catch (cause) {
+      if (epoch !== accountAvatarEpoch()) return;
       setError(cause); setLoaded(false);
     }
   }
@@ -69,6 +75,7 @@ export function AccountCenterPage() {
     {success ? <Alert type="success" showIcon title={t(success)} role="status" /> : null}
     <div className="account-grid">
       <Card title={t('基本信息')} loading={!profile && !error}>
+        {profile ? <AvatarEditor profile={profile} onChange={setProfile} /> : null}
         {profile ? <Space direction="vertical" size="small" className="account-summary">
           <Typography.Text strong>{profile.username}</Typography.Text>
           <Typography.Text type="secondary">{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</Typography.Text>

@@ -9,6 +9,8 @@ export type FileResourceAction = 'upload' | 'complete' | 'read' | 'delete' | 'at
 export interface FileResourceGrant { organizationId: string; version: number }
 export interface FileResourceAccessAdapter {
   readonly resourceType: string;
+  validateUpload?(input: { contentType: string; sizeBytes: number }): void;
+  quotaFilter?(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef): Promise<Prisma.FileObjectWhereInput>;
   authorizeAndLock(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant>;
 }
 export const FILE_RESOURCE_ADAPTERS = Symbol('FILE_RESOURCE_ADAPTERS');
@@ -25,6 +27,18 @@ export class FileResourceAccess {
   register(adapter: FileResourceAccessAdapter): void {
     if (!adapter.resourceType || this.adapters.some((candidate) => candidate.resourceType === adapter.resourceType)) throw new Error('FILE_RESOURCE_ADAPTER_DUPLICATE');
     this.adapters.push(adapter);
+  }
+
+  validateUpload(resource: FileResourceRef, input: { contentType: string; sizeBytes: number }): void {
+    const adapter = this.adapters.find((candidate) => candidate.resourceType === resource.resourceType);
+    if (!adapter) workflowError('FILE_RESOURCE_DENIED', 403);
+    adapter.validateUpload?.(input);
+  }
+
+  async quotaFilter(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef): Promise<Prisma.FileObjectWhereInput> {
+    const adapter = this.adapters.find((candidate) => candidate.resourceType === resource.resourceType);
+    if (!adapter) workflowError('FILE_RESOURCE_DENIED', 403);
+    return adapter.quotaFilter ? adapter.quotaFilter(transaction, actor, resource) : {};
   }
 
   async authorizeAndLock(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant> {

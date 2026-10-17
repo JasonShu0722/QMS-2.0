@@ -1,4 +1,4 @@
-import { Alert, Avatar, Button, Dropdown, Modal, Space } from 'antd';
+import { Alert, Button, Dropdown, Modal, Space } from 'antd';
 import type { AccountProfile } from '@qms/contracts';
 import type { MenuProps } from 'antd';
 import { ChevronDown, LogOut, RefreshCw, Settings, KeyRound, ShieldCheck } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useLanguage } from '../../i18n/Language';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { SecurityDialog } from '../auth/SecurityDialog';
+import { AccountAvatar } from './AccountAvatar';
+import { accountAvatarEpoch, publishAccountAvatar } from './account-avatar-state';
 
 type Props = { supplier?: boolean };
 
@@ -17,7 +19,7 @@ export function AccountMenu({ supplier = false }: Props) {
   const navigate = useNavigate();
   const requestLeave = useNavigationGuard();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [profile, setProfile] = useState<Pick<AccountProfile, 'username'>>();
+  const [profile, setProfile] = useState<AccountProfile>();
   const [profileError, setProfileError] = useState(false);
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -28,12 +30,13 @@ export function AccountMenu({ supplier = false }: Props) {
   const logoutPending = useRef(false);
 
   async function loadProfile() {
+    const epoch = accountAvatarEpoch();
     setProfileError(false);
     try {
       const next = await getAccountProfile();
-      if (alive.current) setProfile({ username: next.username });
+      if (alive.current && epoch === accountAvatarEpoch()) { setProfile(next); publishAccountAvatar(next, epoch); }
     } catch {
-      if (alive.current) setProfileError(true);
+      if (alive.current && epoch === accountAvatarEpoch()) setProfileError(true);
     }
   }
   useEffect(() => { alive.current = true; void loadProfile(); return () => { alive.current = false; }; }, []);
@@ -82,7 +85,7 @@ export function AccountMenu({ supplier = false }: Props) {
   return <>
     <Dropdown open={open} onOpenChange={(next) => { setOpen(next); if (!next) restoreFocus(); }} trigger={['click']} placement="bottomRight" autoFocus menu={{ items, onClick: onMenuClick }}>
       <Button ref={triggerRef} className="qms-account-menu-trigger" type="text" aria-label={label} aria-haspopup="menu" aria-expanded={open}>
-        <Space size={6}><Avatar size={28}>{(username?.[0] ?? '?').toUpperCase()}</Avatar><span className="qms-account-menu-name">{username ?? t('个人账号')}</span><ChevronDown className="qms-account-menu-chevron" size={14} aria-hidden="true" /></Space>
+        <Space size={6}><AccountAvatar profile={profile} /><span className="qms-account-menu-name">{username ?? t('个人账号')}</span><ChevronDown className="qms-account-menu-chevron" size={14} aria-hidden="true" /></Space>
       </Button>
     </Dropdown>
     <SecurityDialog open={securityOpen} onClose={() => setSecurityOpen(false)} afterClose={restoreFocus} />

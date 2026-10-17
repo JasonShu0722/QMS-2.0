@@ -18,7 +18,7 @@ vi.mock('../../api/client', async (original) => ({ ...await original<typeof impo
 describe('account center', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    api.getAccountProfile.mockResolvedValue({ id: 'u1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'o1', code: 'internal', name: 'Internal' } });
+    api.getAccountProfile.mockResolvedValue({ id: 'u1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organization: { id: 'o1', code: 'internal', name: 'Internal' } });
     api.getAccountSessions.mockResolvedValue([{ id: 's1', createdAt: '2026-09-18T00:00:00.000Z', expiresAt: '2026-09-18T08:00:00.000Z', revokedAt: null, isCurrent: true }]);
   });
 
@@ -35,6 +35,13 @@ describe('account center', () => {
     expect(screen.getByText('Internal · 内部账号')).toBeTruthy();
     await waitFor(() => expect(api.getAccountSessions).toHaveBeenCalledOnce());
     expect(screen.queryByText(/passwordHash|tokenHash/i)).toBeNull();
+  });
+
+  it('offers the private JPEG/PNG avatar picker in the existing account page', async () => {
+    render(<MemoryRouter><AccountCenterPage /></MemoryRouter>);
+    await screen.findByText('alice');
+    expect(screen.getByLabelText('选择头像')).toHaveAttribute('accept', 'image/jpeg,image/png');
+    expect(screen.getByText('仅本人可见，JPEG/PNG，最大 2 MiB。')).toBeVisible();
   });
 
   it('opens account security in place and preserves an edited profile', async () => {
@@ -58,7 +65,7 @@ describe('account center', () => {
   });
 
   it('saves email with success feedback', async () => {
-    api.updateAccountProfile.mockResolvedValue({ username: 'alice', organization: { name: 'Internal' } });
+    api.updateAccountProfile.mockResolvedValue({ id: 'u1', username: 'alice', avatarFileId: null, avatarVersion: 1, organization: { name: 'Internal' } });
     render(<MemoryRouter><AccountCenterPage /></MemoryRouter>);
     await screen.findByText('alice');
     await userEvent.clear(screen.getByLabelText('邮箱'));

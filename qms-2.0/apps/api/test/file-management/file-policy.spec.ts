@@ -55,4 +55,19 @@ describe('attachment policy and immutable object signing', () => {
     process.env.QMS_OBJECT_STORAGE_PROVIDER = 'filesystem';
     expect(() => createObjectStorage()).toThrow('OBJECT_STORAGE_PROVIDER_UNSUPPORTED');
   });
+
+  it('applies upload limits from the selected resource without narrowing other resources', () => {
+    const resources = new FileResourceAccess([{ resourceType: 'Avatar',
+      authorizeAndLock: async () => ({ organizationId: 'fixture', version: 1 }),
+      validateUpload: ({ contentType, sizeBytes }) => {
+        if (contentType !== 'image/png' || sizeBytes > 2 * 1024 * 1024) throw new Error('AVATAR_INPUT_INVALID');
+      },
+    }]);
+    expect(() => resources.validateUpload({ resourceType: 'Avatar', resourceId: 'self' }, { contentType: 'image/png', sizeBytes: 12 })).not.toThrow();
+    expect(() => resources.validateUpload({ resourceType: 'Avatar', resourceId: 'self' }, { contentType: 'text/plain', sizeBytes: 12 })).toThrow('AVATAR_INPUT_INVALID');
+    expect(() => resources.validateUpload({ resourceType: 'Avatar', resourceId: 'self' }, { contentType: 'image/png', sizeBytes: 2 * 1024 * 1024 + 1 })).toThrow('AVATAR_INPUT_INVALID');
+    const generic = new FileResourceAccess([{ resourceType: 'Evidence', authorizeAndLock: async () => ({ organizationId: 'fixture', version: 1 }) }]);
+    expect(() => generic.validateUpload({ resourceType: 'Evidence', resourceId: 'fixture' }, { contentType: 'application/pdf', sizeBytes: 42 })).not.toThrow();
+    expect(() => generic.validateUpload({ resourceType: 'Unknown', resourceId: 'fixture' }, { contentType: 'image/png', sizeBytes: 12 })).toThrow();
+  });
 });

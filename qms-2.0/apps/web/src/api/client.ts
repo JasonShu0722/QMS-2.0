@@ -3,6 +3,7 @@ import type {
 } from '@qms/contracts';
 import type { components } from '@qms/contracts';
 import type { GovernanceBody } from '../features/governance/governance';
+import { clearAccountAvatar } from '../features/account/account-avatar-state';
 
 export type { AccountType, LoginResponse } from '@qms/contracts';
 
@@ -160,6 +161,7 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
 export async function logout(): Promise<void> {
   const token = await csrfToken();
   await request<void>('/api/v1/auth/logout', { method: 'POST', headers: { 'x-csrf-token': token } });
+  clearAccountAvatar();
 }
 
 export async function getSession(): Promise<SessionView> {
@@ -178,8 +180,17 @@ export async function getSession(): Promise<SessionView> {
   };
 }
 
-export function getAccountProfile(): Promise<AccountProfile> {
-  return request<AccountProfile>('/api/v1/me');
+export function getAccountProfile(signal?: AbortSignal): Promise<AccountProfile> {
+  return request<AccountProfile>('/api/v1/me', { signal });
+}
+
+export async function updateAccountAvatar(body: components['schemas']['UpdateAccountAvatarDto'], key: string, signal?: AbortSignal): Promise<AccountProfile> {
+  const token = await csrfToken();
+  return request<AccountProfile>('/api/v1/me/avatar', {
+    method: 'PATCH', signal,
+    headers: { 'x-csrf-token': token, 'Idempotency-Key': key },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateAccountProfile(body: UpdateAccountProfileRequest): Promise<AccountProfile> {

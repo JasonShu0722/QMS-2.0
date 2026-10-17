@@ -15,7 +15,7 @@
       "sources": [
         {
           "path": "apps/web/src/features/account/AccountCenterPage.tsx",
-          "sha256": "d93308523291463ca088f91694b857338a5d655b0fc28ac6b708100f68960710"
+          "sha256": "84a66e0c35ef25922fbb487e265daf8edaf25384ef9c6c7ead733833aac4df3f"
         }
       ]
     },

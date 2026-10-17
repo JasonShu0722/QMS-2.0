@@ -54,13 +54,13 @@ describe('account center service', () => {
   it('returns a safe profile without the password hash', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL',
-      status: 'ACTIVE', mfaEnabled: false, organizationId: 'org-1',
+      status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organizationId: 'org-1',
       organization: { code: 'internal', name: 'Internal' },
     });
 
     await expect(service.profile('user-1')).resolves.toEqual({
       id: 'user-1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL',
-      status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-1', code: 'internal', name: 'Internal' },
+      status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organization: { id: 'org-1', code: 'internal', name: 'Internal' },
     });
     expect(JSON.stringify(await service.profile('user-1'))).not.toMatch(/passwordHash/i);
   });

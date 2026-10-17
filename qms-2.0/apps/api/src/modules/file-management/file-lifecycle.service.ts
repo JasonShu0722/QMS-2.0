@@ -33,6 +33,7 @@ export class FileLifecycleService {
       await this.lockReceipt(tx, actor, receiptKey);
       const grant = await this.access(tx, actor, input, 'upload');
       this.validateInput(input);
+      this.resources.validateUpload(input, input);
       const receipt = await tx.fileUploadReceipt.findUnique({ where: { actorUserId_key: { actorUserId: actor.id, key: receiptKey } }, include: { file: true } });
       if (receipt) {
         if (receipt.requestDigest !== digest) workflowError('IDEMPOTENCY_REPLAY', 409);
@@ -42,6 +43,7 @@ export class FileLifecycleService {
         return existing;
       }
       const reservation = await tx.fileObject.aggregate({ where: { organizationId: grant.organizationId, resourceType: input.resourceType, resourceId: input.resourceId,
+        AND: [await this.resources.quotaFilter(tx, actor, input)],
         status: { not: 'DELETED' }, OR: [{ objectVersionId: { not: null } }, { scanStatus: 'WAITING_UPLOAD', uploadExpiresAt: { gt: new Date() } }] }, _count: true, _sum: { sizeBytes: true } });
       if (reservation._count >= this.policy.maxFiles || Number(reservation._sum.sizeBytes ?? 0) + input.sizeBytes > this.policy.maxBytes) workflowError('FILE_QUOTA_EXCEEDED', 409);
       const created = await tx.fileObject.create({ data: { organizationId: grant.organizationId, resourceType: input.resourceType, resourceId: input.resourceId,

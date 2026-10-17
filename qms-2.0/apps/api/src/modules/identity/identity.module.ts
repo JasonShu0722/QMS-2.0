@@ -22,12 +22,17 @@ import { RecoveryMailService } from './recovery-mail.service.js';
 import { PasswordChangeChallengeService } from './password-change-challenge.service.js';
 import { TemporaryPasswordService } from './temporary-password.service.js';
 import { AdminUserBatchService } from './admin-user-batch.service.js';
+import { FileManagementModule } from '../file-management/file-management.module.js';
+import { AccountAvatarService } from './account-avatar.service.js';
+import { AccountAvatarFileResourceAdapter } from './account-avatar-file-resource.adapter.js';
 
 @Module({
-  imports: [AuditLogModule, AdminMutationModule],
+  imports: [AuditLogModule, AdminMutationModule, FileManagementModule],
   controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
     PasswordHasherService,
+    AccountAvatarService,
+    AccountAvatarFileResourceAdapter,
     PasswordService,
     SessionService,
     IdentityService,

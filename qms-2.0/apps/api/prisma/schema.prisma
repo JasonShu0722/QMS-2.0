@@ -158,6 +158,10 @@ model User {
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
   mfaPreference MfaPreference @default(DEFAULT) @map("mfa_preference")
   mfaRequirementOverride Boolean? @map("mfa_requirement_override")
+  avatarFileId String? @map("avatar_file_id") @db.Uuid
+  avatarVersion Int @default(1) @map("avatar_version")
+  avatarFile FileObject? @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: Restrict)
+  avatarReceipts AccountAvatarReceipt[]
   securityVersion Int @default(1) @map("security_version")
   mfaFailures Int @default(0) @map("mfa_failures")
   mfaBlockedUntil DateTime? @map("mfa_blocked_until") @db.Timestamptz(3)
@@ -506,6 +510,7 @@ model AuditEvent {
 }
 
 model FileObject {
+  avatarUsers User[] @relation("UserAvatar")
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @map("organization_id") @db.Uuid
   objectKey      String       @unique @map("object_key") @db.VarChar(512)
@@ -559,6 +564,19 @@ model FileUploadReceipt {
   @@unique([actorUserId, key])
   @@index([fileId])
   @@map("file_upload_receipts")
+}
+
+model AccountAvatarReceipt {
+  actorUserId String @map("actor_user_id") @db.Uuid
+  key String @db.VarChar(128)
+  requestDigest String @map("request_digest") @db.Char(64)
+  avatarFileId String? @map("avatar_file_id") @db.Uuid
+  avatarVersion Int @map("avatar_version")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@id([actorUserId, key])
+  @@map("account_avatar_receipts")
 }
 
 model ProblemIndex {

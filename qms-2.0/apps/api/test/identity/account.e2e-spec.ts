@@ -13,7 +13,7 @@ describe('account center HTTP contract', () => {
   const user = {
     id: '10000000-0000-4000-8000-000000000001', organizationId: '20000000-0000-4000-8000-000000000001',
     username: 'internal.admin', email: 'internal@example.test', passwordHash: 'encoded',
-    accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false,
+    accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1,
     organization: { status: 'ACTIVE' },
   };
   const prisma = {
