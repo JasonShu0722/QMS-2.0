@@ -5,7 +5,6 @@ import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom';
 import { activeInternalDomain, internalDomains } from '../features/navigation/navigation';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
-import { WorkTabs } from '../work-tabs/WorkTabs';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
 import { ProblemCenterPage } from '../features/problem-center/ProblemCenterPage';
@@ -54,7 +53,6 @@ function InternalShell() {
   const { t } = useLanguage();
   const location = useLocation();
   const openTab = useWorkTabsStore((state) => state.openTab);
-  const currentTab = useWorkTabsStore((state) => state.tabs.find((tab) => tab.id === location.pathname));
   const isWorkbench = location.pathname === '/app/workbench' || location.pathname === '/app';
   const active = activeInternalDomain(location.pathname);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
@@ -99,8 +97,6 @@ function InternalShell() {
     const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : workflowRoute ? existing?.title ?? active.label : active.label;
     openTab({ id, path, title });
   }, [location.pathname, location.search, isWorkbench, active, isAdmin, organizations, openTab, t]);
-  const workflowTitle = workflowRoute && currentTab && [t('编辑'), t('查看')].some((action) => currentTab.title.endsWith(` · ${action}`))
-    ? currentTab.title.slice(0, currentTab.title.lastIndexOf(' · ')) : undefined;
   const navigation = (mobile = false) => <>
     <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span>{(isWorkbench || mobile) && <span>QMS <small>2.0</small></span>}</Link>
     <nav className="qms-domain-nav" aria-label={t(isWorkbench || mobile ? '内部领域导航' : '内部领域图标导航')}>
@@ -128,8 +124,7 @@ function InternalShell() {
       </aside>}
     </aside>
     <div className="qms-main">
-      <ShellHeader title={isWorkbench ? '质量管理平台' : workflowTitle ?? active?.label ?? '工作页'} translateTitle={workflowTitle === undefined} onOpenNavigation={() => setMobileOpen(true)} />
-      <WorkTabs mode="strip" />
+      <ShellHeader onOpenNavigation={() => setMobileOpen(true)} />
       <main className="qms-content" id="main-content" tabIndex={-1}>
         {adminError && !isAdmin ? <Alert type="error" role="alert" title={`${t('管理权限加载失败')}: ${t(adminError)}`} description={adminTraceId ? <code>{adminTraceId}</code> : undefined} /> : null}
         {!!permissionError && <Alert type="error" role="alert" title={`${t('流程权限加载失败')}: ${t(safeAccountError(permissionError))}`} description={permissionError instanceof ApiError && permissionError.traceId ? <code>{permissionError.traceId}</code> : undefined} />}
