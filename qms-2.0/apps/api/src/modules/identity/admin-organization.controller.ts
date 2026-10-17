@@ -2,7 +2,8 @@ import { Controller, Get, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
-import { ADMIN_PERMISSIONS, adminError } from '../../common/security/admin-mutation.service.js';
+import { adminError } from '../../common/security/admin-mutation.service.js';
+import { ADMIN_PERMISSIONS } from '../authorization/permission-catalog.js';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { RequireAuthenticated } from '../authorization/access.decorator.js';
 import { AdminOrganizationDto } from './dto/admin-user.dto.js';
@@ -27,6 +28,6 @@ export class AdminOrganizationController {
       entry.permissions = [...new Set([...entry.permissions, ...assignment.role.permissions.map((item) => item.permission.code)])].sort();
       result.set(organization.id, entry);
     }
-    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code))).sort((first, second) => first.code.localeCompare(second.code));
+    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code)) || (actor.accountType === 'INTERNAL' && entry.type === 'INTERNAL' && entry.permissions.includes('customer-quality:complaints:read'))).sort((first, second) => first.code.localeCompare(second.code));
   }
 }
