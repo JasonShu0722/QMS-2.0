@@ -59,6 +59,15 @@ describe('account center', () => {
     expect(screen.getByLabelText('新密码')).toHaveValue('');
   });
 
+  it('focuses the password section after loading a password deep link', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<MemoryRouter initialEntries={['/app/account#password']}><AccountCenterPage /></MemoryRouter>);
+    await screen.findByText('alice');
+    await waitFor(() => expect(document.getElementById('password')).toHaveFocus());
+    expect(scroll).toHaveBeenCalled();
+  });
+
   it('revokes another session with feedback', async () => {
     api.getAccountSessions.mockResolvedValue([{ id: 'other', createdAt: '2026-09-18', expiresAt: '2026-09-19', isCurrent: false }]);
     api.revokeAccountSession.mockResolvedValue(undefined);

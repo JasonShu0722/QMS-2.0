@@ -614,7 +614,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "ec4e9c9f8f0a48b237e8cb6fe4ae7b16d151b812353f2b6a8061c2df38c7ae80"
+            "sha256": "3a351988845203643749dbe98471349c35b4b2d097c5bad5d4a03bef90f813e6"
           },
           {
             "path": "governance/operability-alerts.json",
