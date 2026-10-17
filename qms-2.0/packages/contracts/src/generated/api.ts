@@ -5230,7 +5230,7 @@ export interface components {
             rowNumber: number;
             username: string;
             email?: string | null;
-            /** @enum {string} */
+            /** @description Raw account type; unsupported values produce a per-row error. */
             accountType: string;
         };
         CreateAdminUserBatchDto: {
