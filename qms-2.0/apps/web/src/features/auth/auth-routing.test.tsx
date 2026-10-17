@@ -42,6 +42,7 @@ describe('authenticated routing', () => {
   ] as const)('routes %s users from the server-owned landing path', async (accountType, landingPath) => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401))
       .mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' }))
       .mockImplementationOnce(() => mockJsonResponse({ accountType, landingPath }));
     globalThis.fetch = fetch;
@@ -61,9 +62,9 @@ describe('authenticated routing', () => {
     await userEvent.click(screen.getByRole('button', { name: '登录' }));
 
     await screen.findByText(landingPath);
-    expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/auth/csrf', expect.objectContaining({ credentials: 'include' }));
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/v1/auth/csrf', expect.objectContaining({ credentials: 'include' }));
     expect(fetch).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/v1/auth/login',
       expect.objectContaining({
         credentials: 'include',
@@ -78,6 +79,7 @@ describe('authenticated routing', () => {
   it('maps structured API errors without exposing implementation details', async () => {
     globalThis.fetch = vi
       .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401))
       .mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' }))
       .mockImplementationOnce(() =>
         mockJsonResponse(
@@ -112,7 +114,8 @@ describe('authenticated routing', () => {
     ['AUTH_MFA_CODE_INVALID', 'Invalid or used code. Enter a new code.'],
   ])('localizes %s login errors without rendering backend messages or fields', async (code, message) => {
     localStorage.setItem('qms:locale:v1', 'en-US');
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code, message: 'raw authentication internals', fields: { identifier: ['raw secret field'] }, traceId: 'trace-login-en' }, 401));
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401))
+      .mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code, message: 'raw authentication internals', fields: { identifier: ['raw secret field'] }, traceId: 'trace-login-en' }, 401));
     render(<LanguageProvider><MemoryRouter><LoginPage /></MemoryRouter></LanguageProvider>);
     await userEvent.type(screen.getByLabelText('Account'), 'alice');
     await userEvent.type(screen.getByLabelText('Password'), 'bad-password');
@@ -124,7 +127,8 @@ describe('authenticated routing', () => {
 
   it('keeps validation field locations with controlled translated messages', async () => {
     localStorage.setItem('qms:locale:v1', 'en-US');
-    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code: 'VALIDATION_FAILED', message: 'raw validation internals', fields: { identifier: ['private field rule'], arbitrary: ['another private rule'] } }, 400));
+    globalThis.fetch = vi.fn<typeof fetch>().mockImplementationOnce(() => mockJsonResponse({ code: 'AUTH_SESSION_REQUIRED' }, 401))
+      .mockImplementationOnce(() => mockJsonResponse({ csrfToken: 'csrf-token' })).mockImplementationOnce(() => mockJsonResponse({ code: 'VALIDATION_FAILED', message: 'raw validation internals', fields: { identifier: ['private field rule'], arbitrary: ['another private rule'] } }, 400));
     render(<LanguageProvider><MemoryRouter><LoginPage /></MemoryRouter></LanguageProvider>);
     await userEvent.type(screen.getByLabelText('Account'), 'alice');
     await userEvent.type(screen.getByLabelText('Password'), 'password');

@@ -209,10 +209,12 @@ describe('identity HTTP contract', () => {
   });
 
   it('reads and revokes only a hashed server-side session', async () => {
+    const expiresAt = new Date(Date.now() + 60_000);
     prisma.session.findUnique.mockResolvedValue({
       id: 'database-session-id',
       tokenHash: 'stored-hash',
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt,
+      lifetimeType: 'STANDARD',
       revokedAt: null,
       user: INTERNAL_USER,
     });
@@ -222,6 +224,10 @@ describe('identity HTTP contract', () => {
       .expect(200);
 
     expect(current.body).toEqual({
+      landingPath: '/app/workbench',
+      securityState: 'AUTHENTICATED',
+      lifetimeType: 'STANDARD',
+      expiresAt: expiresAt.toISOString(),
       user: {
         id: INTERNAL_USER.id,
         organizationId: INTERNAL_USER.organizationId,

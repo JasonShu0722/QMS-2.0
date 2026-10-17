@@ -68,7 +68,7 @@ export function AccountCenterPage() {
         {profile ? <Space direction="vertical" size="small" className="account-summary">
           <Typography.Text strong>{profile.username}</Typography.Text>
           <Typography.Text type="secondary">{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</Typography.Text>
-          <Tag color={profile.mfaEnabled ? 'green' : 'default'}>{t(profile.mfaEnabled ? 'MFA 已启用' : 'MFA 未启用')}</Tag>
+          <Tag color={profile.mfaEnabled ? 'green' : 'default'}>{t(profile.mfaEnabled ? '验证器已绑定' : '验证器未绑定')}</Tag>
         </Space> : null}
         <Form form={profileForm} layout="vertical" onFinish={saveProfile} className="account-form" disabled={!loaded || saving}>
           <Form.Item name="email" label={t('邮箱')} rules={[{ type: 'email', message: t('请输入有效邮箱') }]}><Input /></Form.Item>

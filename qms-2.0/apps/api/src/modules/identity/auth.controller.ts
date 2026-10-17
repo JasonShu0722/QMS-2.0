@@ -61,7 +61,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.identity.login(dto, request);
-    if (result.sessionToken) response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
+    if (result.sessionToken) response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions(undefined, result.sessionExpiresAt));
     else response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
     if (result.challengeToken) response.cookie(MFA_CHALLENGE_COOKIE, result.challengeToken, { ...sessionCookieOptions(), maxAge: 300_000 });
     else response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
@@ -88,7 +88,7 @@ export class AuthController {
     response.clearCookie(PASSWORD_CHANGE_COOKIE, clearSessionCookieOptions());
     response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
     response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
-    if (result.sessionToken) response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
+    if (result.sessionToken) response.cookie(SESSION_COOKIE, result.sessionToken, sessionCookieOptions(undefined, result.sessionExpiresAt));
     if (result.challengeToken) response.cookie(MFA_CHALLENGE_COOKIE, result.challengeToken, { ...sessionCookieOptions(), maxAge: 300_000 });
     return result.response;
   }

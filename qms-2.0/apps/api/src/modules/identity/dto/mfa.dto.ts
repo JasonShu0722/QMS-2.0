@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { LoginResponseDto } from './login.dto.js';
 
 export class MfaCodeDto {
@@ -22,15 +22,36 @@ export class ReauthenticateDto {
   code?: string;
 }
 
+export class MfaPreferenceDto {
+  @ApiProperty({ enum: ['ENABLED', 'DISABLED'] })
+  @IsIn(['ENABLED', 'DISABLED'])
+  preference!: 'ENABLED' | 'DISABLED';
+
+  @ApiPropertyOptional({ minLength: 6, maxLength: 43 })
+  @IsOptional()
+  @IsString()
+  @Length(6, 43)
+  code?: string;
+}
+
 export class SecurityStatusDto {
   @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   emailVerifiedAt!: string | null;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Whether an authenticator is bound; independent of the effective login MFA policy.' })
   mfaEnabled!: boolean;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Effective MFA requirement for the current server-side governance identity and preference.' })
   mfaRequired!: boolean;
+
+  @ApiProperty()
+  isAdministrator!: boolean;
+
+  @ApiProperty({ enum: ['DEFAULT', 'ENABLED', 'DISABLED'] })
+  mfaPreference!: 'DEFAULT' | 'ENABLED' | 'DISABLED';
+
+  @ApiProperty()
+  canUnbindMfa!: boolean;
 
   @ApiProperty({ enum: ['AUTHENTICATED', 'MFA_REQUIRED', 'MFA_ENROLLMENT_REQUIRED'] })
   securityState!: string;

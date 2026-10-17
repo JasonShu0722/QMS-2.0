@@ -112,6 +112,12 @@ describe('supplier isolation HTTP guard', () => {
   let app: INestApplication;
   const prisma = {
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    user: {
+      findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
+        const user = Object.values(USERS).find((entry) => entry.id === where.id);
+        return user ? { ...user, mfaEnabled: false, mfaPreference: 'DEFAULT' } : null;
+      }),
+    },
     session: {
       findUnique: jest.fn(),
     },

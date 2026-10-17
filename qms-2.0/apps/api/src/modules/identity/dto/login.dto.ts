@@ -1,5 +1,5 @@
-import { IsString, Length } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LoginDto {
   @ApiProperty({ minLength: 1, maxLength: 254 })
@@ -11,6 +11,11 @@ export class LoginDto {
   @IsString()
   @Length(1, 256)
   password!: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
 }
 
 export class LoginResponseDto {
@@ -38,6 +43,18 @@ export class SessionUserDto {
 export class SessionResponseDto {
   @ApiProperty({ type: SessionUserDto })
   user!: SessionUserDto;
+
+  @ApiProperty({ enum: ['/app/workbench', '/supplier/inbox'] })
+  landingPath!: '/app/workbench' | '/supplier/inbox';
+
+  @ApiProperty({ enum: ['AUTHENTICATED'] })
+  securityState!: 'AUTHENTICATED';
+
+  @ApiProperty({ enum: ['STANDARD', 'REMEMBERED_ADMIN', 'REMEMBERED_USER'] })
+  lifetimeType!: 'STANDARD' | 'REMEMBERED_ADMIN' | 'REMEMBERED_USER';
+
+  @ApiProperty({ format: 'date-time' })
+  expiresAt!: string;
 }
 
 export class CsrfResponseDto {

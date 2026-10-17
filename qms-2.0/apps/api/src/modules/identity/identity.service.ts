@@ -4,7 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import type { LoginDto, LoginResponseDto, SessionResponseDto } from './dto/login.dto.js';
 import { PasswordService } from './password.service.js';
 import { RATE_LIMIT_KEY, RateLimitService } from './rate-limit.guard.js';
-import { SessionService } from './session.service.js';
+import { SessionService, type IssuedSession } from './session.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import type { AccountProfileDto, UpdateAccountProfileDto } from './dto/account.dto.js';
@@ -44,7 +44,7 @@ export class IdentityService {
   async login(
     dto: LoginDto,
     request: RateLimitedRequest,
-  ): Promise<{ response: LoginResponseDto; sessionToken?: string; challengeToken?: string; passwordChangeToken?: string }> {
+  ): Promise<{ response: LoginResponseDto; challengeToken?: string; passwordChangeToken?: string } & Partial<IssuedSession>> {
     const identifier = typeof dto.identifier === 'string' ? dto.identifier.trim() : '';
     const password = typeof dto.password === 'string' ? dto.password : '';
     const rateKey = request[RATE_LIMIT_KEY] ?? this.limits.key(identifier, request.ip ?? 'unknown');
@@ -65,7 +65,9 @@ export class IdentityService {
     const passwordMatches = await this.passwords.verify(user.passwordHash, password);
     if (!passwordMatches || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE') return this.rejectLogin(rateKey, request, user);
 
-    const authentication = await this.prisma.$transaction(async (transaction) => {
+    const authentication = await this.prisma.$transaction(async (transaction): Promise<
+      { passwordChangeToken: string } | { challenge: { token: string; enrollment: boolean } } | IssuedSession | null
+    > => {
       await transaction.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
       await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;
       const current = await transaction.user.findUnique({ where: { id: user.id }, include: { organization: { select: { status: true } } } });
@@ -73,21 +75,21 @@ export class IdentityService {
       if (current.mustChangePassword) {
         const temporary = await transaction.userTemporaryPassword.findUnique({ where: { userId: current.id } });
         if (!temporary || temporary.credentialVersion !== current.credentialVersion || temporary.expiresAt.getTime() <= Date.now()) return null;
-        return { passwordChangeToken: await this.passwordChanges.create(current, transaction) };
+        return { passwordChangeToken: await this.passwordChanges.create(current, transaction, dto.rememberMe ?? false) };
       }
-      const challenge = await this.mfa.createChallenge(current, transaction);
+      const challenge = await this.mfa.createChallenge(current, transaction, dto.rememberMe ?? false);
       if (challenge) return { challenge };
-      return { sessionToken: await this.sessions.create(current.id, transaction, { reauthenticated: true }) };
+      return this.sessions.createWithMetadata(current.id, transaction, { reauthenticated: true, rememberMe: dto.rememberMe ?? false });
     }).catch((error: unknown) => rethrowSecurityRejection(this.prisma, this.audit, error, { userId: user.id, resourceType: 'User', resourceId: user.id, traceId: requestTraceId(request), action: 'LOGIN_FAILED', outcome: 'FAILURE' }));
     if (!authentication) return this.rejectLogin(rateKey, request, user);
     this.limits.recordSuccess(rateKey);
-    if (authentication.passwordChangeToken) return { passwordChangeToken: authentication.passwordChangeToken, response: { accountType: user.accountType, landingPath: '/change-password', securityState: 'PASSWORD_CHANGE_REQUIRED' } };
-    if (authentication.challenge) return { challengeToken: authentication.challenge.token, response: { accountType: user.accountType, landingPath: '/mfa', securityState: authentication.challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' } };
+    if ('passwordChangeToken' in authentication) return { passwordChangeToken: authentication.passwordChangeToken, response: { accountType: user.accountType, landingPath: '/change-password', securityState: 'PASSWORD_CHANGE_REQUIRED' } };
+    if ('challenge' in authentication) return { challengeToken: authentication.challenge.token, response: { accountType: user.accountType, landingPath: '/mfa', securityState: authentication.challenge.enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'MFA_REQUIRED' } };
     const response: LoginResponseDto =
       user.accountType === 'SUPPLIER'
         ? { accountType: 'SUPPLIER', landingPath: '/supplier/inbox', securityState: 'AUTHENTICATED' }
         : { accountType: 'INTERNAL', landingPath: '/app/workbench', securityState: 'AUTHENTICATED' };
-    return { response, sessionToken: authentication.sessionToken };
+    return { response, sessionToken: authentication.sessionToken, sessionExpiresAt: authentication.sessionExpiresAt };
   }
 
   async current(sessionToken: string | undefined): Promise<SessionResponseDto> {
@@ -95,6 +97,10 @@ export class IdentityService {
     const session = await this.sessions.resolve(sessionToken);
     if (!session) this.sessionRequired();
     return {
+      landingPath: session.user.accountType === 'SUPPLIER' ? '/supplier/inbox' : '/app/workbench',
+      securityState: 'AUTHENTICATED',
+      lifetimeType: session.lifetimeType,
+      expiresAt: session.expiresAt.toISOString(),
       user: {
         id: session.user.id,
         organizationId: session.user.organizationId,

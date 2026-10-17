@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { LoginResponseDto } from './dto/login.dto.js';
-import { MfaCodeDto, MfaEnrollmentCompleteDto, MfaEnrollmentDto, ReauthenticateDto, ReauthenticationResponseDto, RecoveryCodesDto, SecurityStatusDto } from './dto/mfa.dto.js';
+import { MfaCodeDto, MfaEnrollmentCompleteDto, MfaEnrollmentDto, MfaPreferenceDto, ReauthenticateDto, ReauthenticationResponseDto, RecoveryCodesDto, SecurityStatusDto } from './dto/mfa.dto.js';
 import { MFA_CHALLENGE_COOKIE, MfaService } from './mfa.service.js';
 import { clearSessionCookieOptions, parseCookie, SESSION_COOKIE, sessionCookieOptions } from './session.service.js';
 
@@ -36,8 +36,8 @@ export class MfaController {
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: MfaEnrollmentCompleteDto })
   async confirm(@Body() dto: MfaCodeDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    const { sessionToken, ...result } = await this.mfa.confirmEnrollment(this.authentication(request), dto.code, requestTraceId(request));
-    response.cookie(SESSION_COOKIE, sessionToken, sessionCookieOptions());
+    const { sessionToken, sessionExpiresAt, ...result } = await this.mfa.confirmEnrollment(this.authentication(request), dto.code, requestTraceId(request));
+    response.cookie(SESSION_COOKIE, sessionToken, sessionCookieOptions(undefined, sessionExpiresAt));
     response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
     return result;
   }
@@ -48,8 +48,8 @@ export class MfaController {
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: LoginResponseDto })
   async verify(@Body() dto: MfaCodeDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    const { sessionToken, ...result } = await this.mfa.verifyChallenge(this.authentication(request).challengeToken, dto.code, requestTraceId(request));
-    response.cookie(SESSION_COOKIE, sessionToken, sessionCookieOptions());
+    const { sessionToken, sessionExpiresAt, ...result } = await this.mfa.verifyChallenge(this.authentication(request).challengeToken, dto.code, requestTraceId(request));
+    response.cookie(SESSION_COOKIE, sessionToken, sessionCookieOptions(undefined, sessionExpiresAt));
     response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
     return result;
   }
@@ -78,6 +78,17 @@ export class MfaController {
   async disable(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     await this.mfa.disable(this.authentication(request), requestTraceId(request));
     response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
+  }
+
+  @Post('me/mfa/preference')
+  @HttpCode(204)
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiNoContentResponse()
+  async preference(@Body() dto: MfaPreferenceDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    await this.mfa.setPreference(this.authentication(request), dto, request.get('Idempotency-Key'), requestTraceId(request));
+    response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
+    response.clearCookie(MFA_CHALLENGE_COOKIE, clearSessionCookieOptions());
   }
 
   private authentication(request: Request) {

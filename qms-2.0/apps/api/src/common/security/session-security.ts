@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { effectiveMfa } from './mfa-policy.js';
 
 export const RECENT_AUTHENTICATION_MS = 5 * 60 * 1000;
 
@@ -23,9 +24,13 @@ export function isGovernancePermission(code: string): boolean {
 }
 
 export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: string) {
+  const user = await transaction.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true, mfaPreference: true } });
+  if (!user) securityError('AUTH_SESSION_REQUIRED');
   const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
   const facts = assignments.map(({ role, organizationId }) => ({ id: role.id, organizationId, required: role.mfaRequired, permissions: role.permissions.map(({ permission }) => permission.code).sort() })).sort((first, second) => `${first.id}:${first.organizationId}`.localeCompare(`${second.id}:${second.organizationId}`));
-  return { required: facts.some((role) => role.required || role.permissions.some(isGovernancePermission)), digest: digest(JSON.stringify(facts)) };
+  const administrator = facts.some((role) => role.permissions.some(isGovernancePermission));
+  const roleRequired = facts.some((role) => role.required);
+  return { administrator, roleRequired, required: effectiveMfa(administrator, user.mfaPreference, roleRequired, user.mfaEnabled), digest: digest(JSON.stringify({ facts, preference: user.mfaPreference, bound: user.mfaEnabled })) };
 }
 
 export async function assertActiveAuthentication(transaction: Prisma.TransactionClient, actor: { id: string; sessionId: string }) {
@@ -39,7 +44,7 @@ export async function assertActiveAuthentication(transaction: Prisma.Transaction
   const session = await transaction.session.findFirst({ where: { id: actor.sessionId, userId: actor.id, revokedAt: null, expiresAt: { gt: new Date() }, securityVersion: user.securityVersion } });
   if (!session) securityError('AUTH_SESSION_REQUIRED');
   const policy = await mfaPolicy(transaction, user.id);
-  if ((policy.required || user.mfaEnabled) && !session.mfaVerifiedAt) securityError('AUTH_MFA_REQUIRED');
+  if (policy.required && !session.mfaVerifiedAt) securityError('AUTH_MFA_REQUIRED');
   return { user, session, policy };
 }
 

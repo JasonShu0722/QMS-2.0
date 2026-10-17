@@ -2,6 +2,22 @@
 
 本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
 
+## P0/P1 D 会话与本人 MFA 增量（2026-10-17，本地候选）
+
+范围为 Issue #23 / `V0.0.10`，基于 `22c7dd457058487b164f177a107d920a6c46e4a1` 的活动分支 `codex/p0p1-d-session-mfa` 未提交源码。Node 24.21.0、pnpm 11.19.0；一次性 PostgreSQL 18 使用 loopback 55517 / `qms_p0p1_d_20261017`，未连接保留预览 55440。源码有后续返修时，以新命令结果更新，不能沿用较早快照声称最终通过。
+
+| 门禁 | 实际证据与范围 |
+| --- | --- |
+| API 全量单测 | `corepack pnpm --filter @qms/api test` PASS：49 suites / 527 tests，`D:/WorkSpace/QMS-2.0-local/d-final-api-test.log`。 |
+| D 专项真实 PG | 直接 Jest 执行 `session-policy-migration`、`remember-login-schema`、`mfa-preference-schema` 三套集成测试 PASS：22/22，`d-primary-pg.log`。迁移测试在独立事务 schema 执行两条实际迁移，确认旧会话到期不变、绑定事实保留、全部偏好 DEFAULT。 |
+| 身份邻近真实 PG | 独立实现上下文最后重跑 D2 12 项与管理员安全 59 项共 71/71 PASS，`p0p1-d2-pg-verified-r2.log`；保留原锁测试监听旧 `create` 导致超时的 FAIL，修正其 spy 至真实 `createWithMetadata` 后通过，不减少行锁验证。 |
+| 契约与构建 | 官方 `contracts:generate`、`contracts:check`、Web lint、Web build PASS；API 构建随契约生成通过。Web 保留既有大包警告。初次生成因新增方法返回值类型收窄不足失败，修正后重新生成与检查通过。 |
+| Web 全量与返修 | 首次整合全量 PASS：73 files / 412 tests，`d-final-web-test.log`；独立审查发现近期认证重复消费因子问题后，新用例先 2 FAIL / 1 PASS，再定向 4 files / 31 tests PASS。返修后默认全量实际为 414 PASS / 1 FAIL：未改动的导航语言/抽屉综合用例超过 10 秒上限，`d-final-web-after-review.log`。同文件独立复验 15/15 PASS、该用例 5.1 秒，`d-navigation-recheck.log`；未加宽超时或删断言。2026-10-18 后续本地单 worker 全量运行耗时过长，负责人反馈后中断，`d-final-web-serial.log` 不作为 PASS；完整回归转草稿 PR 的并行 CI，检查通过前不合并。 |
+| 完整真实资源门禁 | 本地尚未运行完整阶段聚合；对象存储、扫描、邮件、真实 Worker 由本轮 PR Foundation 的一次性资源完整回归核验，结果必须后续绑定具体 head/运行链接。不得把上述局部 PG 结果记为全阶段通过。 |
+| 浏览器 | 负责人本轮要求统一推送部署后人工确认；自动浏览器不作为提交/发布前置。此前本机启动验收服务命令被工具策略拒绝，未绕过、未记 PASS；尚未执行的浏览器测试文件已撤下。人工清单保存在 [C/D 计划](../../docs/superpowers/plans/2026-10-17-qms-p0-p1-identity.md)，待最终部署 SHA。 |
+
+目前未把本轮 D 记为已上线或最终验收完成，Issue 保持开放。API/Web 审查和当前证据不替代部署日志、线上 HTTP、实际镜像 SHA 或负责人人工确认。
+
 ## Node 24 兼容性迁移验证（2026-09-24，门禁通过，资源验收未执行）
 
 本轮将 workspace、API、Web、contracts、CI 和 Docker 的唯一支持线切换为 Node.js `>=24.21.0 <25`，固定验证版本为 Node `v24.21.0`、pnpm `11.19.0`。官方 Node 24.21.0 二进制只在仓库外临时目录使用，未写入 Git；历史章节中的 Node 22 版本仍是当时的冻结事实。

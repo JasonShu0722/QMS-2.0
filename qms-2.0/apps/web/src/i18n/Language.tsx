@@ -8,6 +8,8 @@ import { problemWorkspaceTranslations } from '../features/problem-workspace/prob
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
 
 const translations: Record<string, string> = {
+  '记住登录': 'Remember sign-in',
+  '管理员保持登录 7 天，普通账号 30 天。请勿在公共设备上勾选。': 'Stay signed in for 7 days as an administrator or 30 days as a regular account. Do not select on shared devices.',
   '制程质量': 'Process quality', '不良品台账': 'Defect ledger',
   '系统服务': 'System services', '平台管理': 'Platform administration', '问题管理面板': 'Problem management panel', '供应商问题台账': 'Supplier problem ledger', '公告': 'Announcements',
   '关键件条码校验': 'Critical part barcode validation', '流程权限加载失败': 'Workflow permissions could not be loaded',
@@ -110,6 +112,14 @@ const translations: Record<string, string> = {
   '导出筛选结果': 'Export filtered records', '下载 CSV': 'Download CSV', '请缩小导出筛选范围，最多 5000 条': 'Narrow the filters to at most 5,000 records.',
   '导出已过期，请重新生成': 'Export expired. Generate it again.', '导出记录不存在': 'Export not found.',
   '账号安全': 'Account security', '重新验证身份': 'Verify your identity', '验证': 'Verify', '验证码或恢复码': 'Authenticator or recovery code',
+  '验证器已绑定': 'Authenticator bound', '验证器未绑定': 'Authenticator not bound',
+  '登录时要求 MFA': 'MFA required at sign-in', '登录时不要求 MFA': 'MFA not required at sign-in', '登录 MFA': 'Sign-in MFA',
+  '关闭登录 MFA？': 'Disable sign-in MFA?', '开启登录 MFA': 'Enable sign-in MFA',
+  '关闭并重新登录': 'Disable and sign in again', '开启并重新登录': 'Enable and sign in again',
+  '关闭后保留验证器和恢复码，撤销现有会话并重新登录。': 'Your authenticator and recovery codes are retained. Existing sessions will be revoked and you must sign in again.',
+  '开启后撤销现有会话并重新登录。请输入当前验证码或恢复码。': 'Existing sessions will be revoked and you must sign in again. Enter your current authenticator or recovery code.',
+  '请输入当前验证码或恢复码': 'Enter your current authenticator or recovery code',
+  '身份验证已完成，请输入新的验证码或未使用的恢复码后重试': 'Identity verified. Enter a new authenticator code or an unused recovery code, then try again.',
   '恢复码': 'Recovery codes', '剩余恢复码': 'Remaining recovery codes', '重新生成恢复码': 'Regenerate recovery codes', '启用 MFA': 'Enable MFA', '停用 MFA 并退出': 'Disable MFA and sign out',
   '请离线保存恢复码，每个仅可使用一次。关闭后无法再次查看。': 'Save these recovery codes offline. Each works once. They cannot be displayed again after closing.',
   '已保存，继续': 'Saved, continue', '账号策略要求启用 MFA': 'Your account policy requires MFA', '返回登录': 'Back to sign in',

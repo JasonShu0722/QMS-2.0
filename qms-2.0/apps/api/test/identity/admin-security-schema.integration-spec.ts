@@ -321,12 +321,12 @@ describe('administrator security PostgreSQL regression', () => {
     const replacementHash = await passwords.hash('login-lock-replacement-password');
     const user = await prisma.user.create({ data: { organizationId: actor.organizationId, username: `login-lock-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: await passwords.hash(password) } });
     const sessions = app.get(SessionService);
-    const create = sessions.create.bind(sessions);
+    const create = sessions.createWithMetadata.bind(sessions);
     let signalCreating!: () => void;
     let releaseLogin!: () => void;
     const creating = new Promise<void>((resolve) => { signalCreating = resolve; });
     const released = new Promise<void>((resolve) => { releaseLogin = resolve; });
-    const paused = jest.spyOn(sessions, 'create').mockImplementationOnce(async (...args) => {
+    const paused = jest.spyOn(sessions, 'createWithMetadata').mockImplementationOnce(async (...args) => {
       signalCreating();
       await released;
       return create(...args);
