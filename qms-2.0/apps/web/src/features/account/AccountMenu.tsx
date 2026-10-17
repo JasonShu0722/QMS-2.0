@@ -38,9 +38,9 @@ export function AccountMenu({ supplier = false }: Props) {
 
   const prefix = supplier ? '/supplier' : '/app';
   function restoreFocus() { window.setTimeout(() => triggerRef.current?.focus(), 0); }
-  function closeMenu() { setOpen(false); restoreFocus(); }
+  function closeMenu(restore = true) { setOpen(false); if (restore) restoreFocus(); }
   function beginLogout() {
-    closeMenu();
+    closeMenu(false);
     requestLeave(() => { setError(undefined); setConfirmOpen(true); });
   }
   async function confirmLogout() {
