@@ -1,10 +1,44 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { OrganizationSummaryDto } from './account.dto.js';
 
 const ACCOUNT_TYPES = ['INTERNAL', 'SUPPLIER'] as const;
 const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
+
+export class AdminMfaPolicyInputDto {
+  @ApiProperty()
+  @IsBoolean()
+  required!: boolean;
+
+  @ApiProperty({ minimum: 0 })
+  @IsInt()
+  @Min(0)
+  expectedSecurityVersion!: number;
+}
+
+export class AdminMfaPolicyDto {
+  @ApiProperty({ format: 'uuid' })
+  userId!: string;
+
+  @ApiProperty()
+  required!: boolean;
+
+  @ApiProperty()
+  bound!: boolean;
+
+  @ApiProperty({ type: Boolean, nullable: true })
+  override!: boolean | null;
+
+  @ApiProperty()
+  roleRequired!: boolean;
+
+  @ApiProperty()
+  securityVersion!: number;
+
+  @ApiProperty()
+  selfSessionRevoked!: boolean;
+}
 
 export class AdminUserListQueryDto {
   @ApiPropertyOptional()

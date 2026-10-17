@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Form, Input, List, Space, Tag, Typography } from 'antd';
 import { changeAccountPassword, getAccountProfile, getAccountSessions, revokeAccountSession, updateAccountProfile } from '../../api/client';
 import { GovernanceFeedback } from '../governance/GovernanceFeedback';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import type { AccountProfile, AccountSession } from '@qms/contracts';
+import { ShieldCheck } from 'lucide-react';
+import { SecurityDialog } from '../auth/SecurityDialog';
 
 export function AccountCenterPage() {
   const { t, locale } = useLanguage();
@@ -15,6 +17,7 @@ export function AccountCenterPage() {
   const [loaded, setLoaded] = useState(false);
   const [success, setSuccess] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
 
@@ -60,7 +63,8 @@ export function AccountCenterPage() {
   }
 
   return <section className="account-center">
-    <Typography.Title level={2}>{t('个人账号')}</Typography.Title><Link to="/mfa">{t('账号安全')}</Link>
+    <Typography.Title level={2}>{t('个人账号')}</Typography.Title><Button icon={<ShieldCheck size={16} />} onClick={() => setSecurityOpen(true)}>{t('账号安全')}</Button>
+    <SecurityDialog open={securityOpen} onClose={() => setSecurityOpen(false)} />
     <GovernanceFeedback error={error} retry={() => void load()} />
     {success ? <Alert type="success" showIcon title={t(success)} role="status" /> : null}
     <div className="account-grid">

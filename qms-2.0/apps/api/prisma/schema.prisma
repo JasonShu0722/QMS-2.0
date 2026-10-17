@@ -157,6 +157,7 @@ model User {
   status         UserStatus  @default(ACTIVE)
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
   mfaPreference MfaPreference @default(DEFAULT) @map("mfa_preference")
+  mfaRequirementOverride Boolean? @map("mfa_requirement_override")
   securityVersion Int @default(1) @map("security_version")
   mfaFailures Int @default(0) @map("mfa_failures")
   mfaBlockedUntil DateTime? @map("mfa_blocked_until") @db.Timestamptz(3)

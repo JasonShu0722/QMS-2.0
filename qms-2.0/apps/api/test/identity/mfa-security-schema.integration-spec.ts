@@ -199,9 +199,9 @@ describe('MFA PostgreSQL security boundaries', () => {
     await expect(mfa.verifyChallenge(token, account.recoveryCodes[0], randomUUID())).resolves.toMatchObject({ securityState: 'AUTHENTICATED' });
   });
 
-  it('supports optional enrollment, forbids forced disable, and regenerates codes without a receipt', async () => {
+  it('supports optional enrollment and code regeneration but rejects all personal unbinding', async () => {
     const mandatory = await enrolled();
-    await expect(mfa.disable({ sessionToken: mandatory.sessionToken }, randomUUID())).rejects.toMatchObject({ response: { code: 'AUTH_MFA_POLICY_REQUIRED' } });
+    await expect(mfa.disable({ sessionToken: mandatory.sessionToken }, randomUUID())).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
     const account = await user(false);
     const token = await sessions.create(account.id, prisma, { reauthenticated: true });
     const enrollment = await mfa.beginEnrollment({ sessionToken: token }, randomUUID());
@@ -209,9 +209,9 @@ describe('MFA PostgreSQL security boundaries', () => {
     const codes = await mfa.regenerateCodes({ sessionToken: confirmed.sessionToken }, randomUUID());
     expect(codes.recoveryCodes).toHaveLength(10);
     expect(await prisma.mfaRecoveryCode.findUnique({ where: { codeHash: digest(confirmed.recoveryCodes[0]) } })).toBeNull();
-    await mfa.disable({ sessionToken: confirmed.sessionToken }, randomUUID());
-    expect(await sessions.resolve(confirmed.sessionToken)).toBeNull();
-    expect(await prisma.mfaCredential.count({ where: { userId: account.id } })).toBe(0);
+    await expect(mfa.disable({ sessionToken: confirmed.sessionToken }, randomUUID())).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(await sessions.resolve(confirmed.sessionToken)).not.toBeNull();
+    expect(await prisma.mfaCredential.count({ where: { userId: account.id } })).toBe(1);
   });
 
   it('rejects canceled challenges and revoked or expired reauthentication sessions', async () => {

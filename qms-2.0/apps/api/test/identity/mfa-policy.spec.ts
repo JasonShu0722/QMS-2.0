@@ -15,15 +15,15 @@ describe('effective MFA policy', () => {
     [true, 'DISABLED', true, false, false],
     [true, 'DISABLED', true, true, false],
     [false, 'DEFAULT', false, false, false],
-    [false, 'DEFAULT', false, true, true],
+    [false, 'DEFAULT', false, true, false],
     [false, 'DEFAULT', true, false, true],
     [false, 'DEFAULT', true, true, true],
     [false, 'ENABLED', false, false, false],
-    [false, 'ENABLED', false, true, true],
+    [false, 'ENABLED', false, true, false],
     [false, 'ENABLED', true, false, true],
     [false, 'ENABLED', true, true, true],
     [false, 'DISABLED', false, false, false],
-    [false, 'DISABLED', false, true, true],
+    [false, 'DISABLED', false, true, false],
     [false, 'DISABLED', true, false, true],
     [false, 'DISABLED', true, true, true],
   ];
@@ -34,4 +34,10 @@ describe('effective MFA policy', () => {
       expect(effectiveMfa(administrator, preference, roleRequired, bound)).toBe(expected);
     },
   );
+
+  it.each([true, false])('uses explicit administrator account override=%s regardless of role, preference or binding', (override) => {
+    for (const [administrator, preference, roleRequired, bound] of cases) {
+      expect(effectiveMfa(administrator, preference, roleRequired, bound, override)).toBe(override);
+    }
+  });
 });

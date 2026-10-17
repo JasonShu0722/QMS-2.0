@@ -223,6 +223,22 @@ export interface paths {
         patch: operations["AdminUserController_update"];
         trace?: never;
     };
+    "/api/v1/admin/users/{userId}/mfa-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminUserController_getMfaPolicy"];
+        put: operations["AdminUserController_setMfaPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{userId}/password-reset": {
         parameters: {
             query?: never;
@@ -5321,6 +5337,20 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        AdminMfaPolicyDto: {
+            /** Format: uuid */
+            userId: string;
+            required: boolean;
+            bound: boolean;
+            override: boolean | null;
+            roleRequired: boolean;
+            securityVersion: number;
+            selfSessionRevoked: boolean;
+        };
+        AdminMfaPolicyInputDto: {
+            required: boolean;
+            expectedSecurityVersion: number;
         };
         CreateAdminUserDto: {
             username: string;
@@ -10613,6 +10643,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminUserController_getMfaPolicy: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMfaPolicyDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminUserController_setMfaPolicy: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminMfaPolicyInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMfaPolicyDto"];
                 };
             };
             /** @description Controlled API error */

@@ -122,6 +122,20 @@ it('guards settings navigation before discarding a dirty page', async () => {
   expect(screen.getByLabelText('current path')).toHaveTextContent('/app/account');
 });
 
+it('opens account security over a dirty page without navigating and restores menu focus', async () => {
+  const fetcher = vi.fn(async (path: string) => json(path.endsWith('/security') ? { isAdministrator: false, mfaEnabled: true, mfaRequired: true, securityState: 'AUTHENTICATED', recoveryCodesRemaining: 5, emailVerifiedAt: '2026-10-17' } : profile));
+  vi.stubGlobal('fetch', fetcher);
+  mount(false, true); const trigger = await open();
+  await userEvent.click(screen.getByRole('menuitem', { name: '账号安全' }));
+  const dialog = await screen.findByRole('dialog', { name: '账号安全' });
+  expect(screen.getByLabelText('current path')).toHaveTextContent('/app/workbench');
+  expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument();
+  await within(dialog).findByText('验证器已绑定');
+  await userEvent.click(within(dialog).getByRole('button', { name: '关闭账号安全' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '账号安全' })).not.toBeInTheDocument());
+  await waitFor(() => expect(trigger).toHaveFocus());
+});
+
 it('keeps menu navigation and logout available when profile loading fails, with retry', async () => {
   const fetcher = vi.fn(async () => json({ code: 'PRIVATE_ERROR', message: 'private profile' }, 503)); vi.stubGlobal('fetch', fetcher);
   mount();

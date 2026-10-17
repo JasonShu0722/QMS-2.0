@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -7,7 +7,8 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AdminUserService } from './admin-user.service.js';
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
-import { AdminUserDto, AdminUserListQueryDto, CreateAdminUserDto, ResetAdminUserPasswordDto, UpdateAdminUserDto, PasswordResetIssuedDto } from './dto/admin-user.dto.js';
+import { AdminMfaPolicyDto, AdminMfaPolicyInputDto, AdminUserDto, AdminUserListQueryDto, CreateAdminUserDto, ResetAdminUserPasswordDto, UpdateAdminUserDto, PasswordResetIssuedDto } from './dto/admin-user.dto.js';
+import { clearSessionCookieOptions, SESSION_COOKIE } from './session.service.js';
 import { ResetTemporaryPasswordDto, TemporaryPasswordDto } from './dto/password-change-challenge.dto.js';
 import { AdminUserBatchService } from './admin-user-batch.service.js';
 import { AdminUserBatchResultDto, CreateAdminUserBatchDto } from './dto/admin-user-batch.dto.js';
@@ -42,6 +43,29 @@ export class AdminUserController {
   @RequireAccess({ featurePermission: 'account:users:read', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   detail(@Param('userId', ParseUUIDPipe) userId: string, @Query('organizationId') organizationId: string | undefined, @Req() request: Request) {
     return this.users.detail(this.actor(request), userId, organizationId);
+  }
+
+  @Get(':userId/mfa-policy')
+  @ApiOkResponse({ type: AdminMfaPolicyDto })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @RequireAccess({ featurePermission: 'account:users:read', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  getMfaPolicy(@Param('userId', ParseUUIDPipe) userId: string, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    return this.users.getMfaPolicy(this.actor(request), userId);
+  }
+
+  @Put(':userId/mfa-policy')
+  @ApiOkResponse({ type: AdminMfaPolicyDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @RequireAccess({ featurePermission: 'account:users:reset', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
+  async setMfaPolicy(@Param('userId', ParseUUIDPipe) userId: string, @Body() dto: AdminMfaPolicyInputDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    const actor = this.actor(request);
+    const result = await this.users.setMfaPolicy(actor, userId, dto, actor.scopeOrganizationId!, requestTraceId(request), request.get('Idempotency-Key'));
+    if (result.selfSessionRevoked) response.clearCookie(SESSION_COOKIE, clearSessionCookieOptions());
+    return result;
   }
 
   @Post()

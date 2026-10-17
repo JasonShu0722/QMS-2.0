@@ -24,13 +24,13 @@ export function isGovernancePermission(code: string): boolean {
 }
 
 export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: string) {
-  const user = await transaction.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true, mfaPreference: true } });
+  const user = await transaction.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true, mfaPreference: true, mfaRequirementOverride: true } });
   if (!user) securityError('AUTH_SESSION_REQUIRED');
   const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
   const facts = assignments.map(({ role, organizationId }) => ({ id: role.id, organizationId, required: role.mfaRequired, permissions: role.permissions.map(({ permission }) => permission.code).sort() })).sort((first, second) => `${first.id}:${first.organizationId}`.localeCompare(`${second.id}:${second.organizationId}`));
   const administrator = facts.some((role) => role.permissions.some(isGovernancePermission));
   const roleRequired = facts.some((role) => role.required);
-  return { administrator, roleRequired, required: effectiveMfa(administrator, user.mfaPreference, roleRequired, user.mfaEnabled), digest: digest(JSON.stringify({ facts, preference: user.mfaPreference, bound: user.mfaEnabled })) };
+  return { administrator, roleRequired, required: effectiveMfa(administrator, user.mfaPreference, roleRequired, user.mfaEnabled, user.mfaRequirementOverride ?? null), digest: digest(JSON.stringify({ facts, preference: user.mfaPreference, bound: user.mfaEnabled, override: user.mfaRequirementOverride ?? null })) };
 }
 
 export async function assertActiveAuthentication(transaction: Prisma.TransactionClient, actor: { id: string; sessionId: string }) {
