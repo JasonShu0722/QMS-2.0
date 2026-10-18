@@ -608,13 +608,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-23",
+        "reviewedOn": "2026-10-18",
         "maxAgeDays": 90,
         "reason": "P2-05 与 MAINT-003 复核新增告警判定策略和一次性触发/恢复演练，确认本地证据仍不等于生产告警。",
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "72e33a681dff32fa78f0a2a9aecc3a2a8b22d7ac6f3b50b1245349c254de1e19"
+            "sha256": "e5ebf66a0335eb0617eea850a7402019d7033acda48e36eb89dad558d996e0ca"
           },
           {
             "path": "governance/operability-alerts.json",

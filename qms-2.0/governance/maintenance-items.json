@@ -10,12 +10,12 @@
       "impact": "未来升级 Ant Design 时可能产生兼容性改动；当前测试通过，不据此判断生产故障。",
       "trigger": "升级 Ant Design 前，或弃用提示升级为构建/测试失败时处理。",
       "nextAction": "核对官方迁移说明，替换账号中心弃用用法，运行相关 Web 测试与浏览器回归。",
-      "reviewedOn": "2026-09-23",
+      "reviewedOn": "2026-10-18",
       "reviewDue": "2026-10-23",
       "sources": [
         {
           "path": "apps/web/src/features/account/AccountCenterPage.tsx",
-          "sha256": "84a66e0c35ef25922fbb487e265daf8edaf25384ef9c6c7ead733833aac4df3f"
+          "sha256": "1e77e1bedbde9fab74d9a5f9f44613e78b923229efd77df2d19e7c888d0c5c6e"
         }
       ]
     },

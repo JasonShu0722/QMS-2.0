@@ -12,10 +12,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 function Page({ dirty }: { dirty: boolean }) {
   useUnsavedChanges(dirty);
   const location = useLocation();
-  return <output aria-label="current path">{location.pathname}{location.hash}</output>;
+  return <output aria-label="current path">{location.pathname}{location.search}{location.hash}</output>;
 }
-function mount(supplier = false, dirty = false) {
-  return render(<MemoryRouter initialEntries={[supplier ? '/supplier/inbox' : '/app/workbench']}><LanguageProvider><UnsavedChangesProvider>
+function mount(supplier = false, dirty = false, path = supplier ? '/supplier/inbox' : '/app/workbench') {
+  return render(<MemoryRouter initialEntries={[path]}><LanguageProvider><UnsavedChangesProvider>
     <Routes><Route path="/login" element={<h1>Login</h1>} /><Route path="*" element={<><AccountMenu supplier={supplier} /><Page dirty={dirty} /></>} /></Routes>
   </UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
 }
@@ -32,7 +32,7 @@ async function requestLogout() {
 beforeEach(() => { localStorage.clear(); useWorkTabsStore.getState().reset(); });
 afterEach(() => vi.unstubAllGlobals());
 
-it.each([false, true])('keeps personal settings and password in their own portal supplier=%s', async supplier => {
+it.each([false, true])('keeps settings in the portal and opens password in place supplier=%s', async supplier => {
   vi.stubGlobal('fetch', vi.fn(async () => json(profile)));
   mount(supplier);
   const button = await open();
@@ -42,7 +42,8 @@ it.each([false, true])('keeps personal settings and password in their own portal
   expect(screen.getByLabelText('current path')).toHaveTextContent(`${supplier ? '/supplier' : '/app'}/account`);
   await open();
   await userEvent.click(screen.getByRole('menuitem', { name: '修改密码' }));
-  expect(screen.getByLabelText('current path')).toHaveTextContent(`${supplier ? '/supplier' : '/app'}/account#password`);
+  expect(screen.getByLabelText('current path')).toHaveTextContent(`${supplier ? '/supplier' : '/app'}/account`);
+  await waitFor(() => expect(screen.getByRole('dialog', { name: '修改密码' })).toBeVisible());
 });
 
 it('opens by keyboard and restores trigger focus after Escape', async () => {
@@ -55,6 +56,22 @@ it('opens by keyboard and restores trigger focus after Escape', async () => {
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(button).toHaveFocus());
   expect(button).toHaveAttribute('aria-expanded', 'false');
+});
+
+it.each([false, true])('keeps a dirty page URL, query and hash when opening password supplier=%s', async supplier => {
+  vi.stubGlobal('fetch', vi.fn(async () => json(profile)));
+  const path = `${supplier ? '/supplier' : '/app'}/objects/draft?view=review#evidence`;
+  mount(supplier, true, path);
+  const trigger = await open();
+  await userEvent.click(screen.getByRole('menuitem', { name: '修改密码' }));
+  const dialog = await screen.findByRole('dialog', { name: '修改密码' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  expect(screen.getByLabelText('current path')).toHaveTextContent(path);
+  expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('button', { name: /取.?消/ }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(screen.getByLabelText('current path')).toHaveTextContent(path);
 });
 
 it('cancels logout without requesting csrf or logout and restores focus', async () => {

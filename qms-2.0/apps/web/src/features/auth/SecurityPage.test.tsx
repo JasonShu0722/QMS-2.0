@@ -87,3 +87,12 @@ it('confirms email with CSRF and clears the submitted credential', async () => {
   await waitFor(() => expect(screen.queryByLabelText('邮件凭证')).not.toBeInTheDocument());
   expect(fetcher).toHaveBeenCalledWith('/api/v1/auth/email-verification/complete', expect.objectContaining({ body: JSON.stringify({ token: 's'.repeat(43) }), headers: expect.objectContaining({ 'x-csrf-token': 'test' }) }));
 });
+
+it('shows email purpose and an explicit unconfirmed state with the existing actions', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => json({ ...status, emailVerifiedAt: null })));
+  mount();
+  expect(await screen.findByText('邮箱未确认')).toBeVisible();
+  expect(screen.getByText('用于自助密码找回。')).toBeVisible();
+  expect(screen.getByRole('button', { name: '发送确认邮件' })).toBeVisible();
+  expect(screen.getByLabelText('邮件凭证')).toBeVisible();
+});

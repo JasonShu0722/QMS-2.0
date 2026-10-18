@@ -39,7 +39,12 @@ describe.each([false, true])('shared compact header supplier=%s', (supplier) => 
     expect(header.queryByRole('navigation', { name: /工作标签|工作页/ })).not.toBeInTheDocument();
     expect(header.queryByRole('button', { name: '全部标签' })).not.toBeInTheDocument();
     expect(header.getAllByRole('button', { name: '外观设置' })).toHaveLength(1);
-    expect(header.getByRole('button', { name: 'Language / 语言' })).toBeVisible();
+    const languages = header.getByRole('radiogroup', { name: 'Language / 语言' });
+    expect(within(languages).getByRole('radio', { name: 'CN' })).toBeChecked();
+    const appearance = header.getByRole('button', { name: '外观设置' });
+    const avatar = header.getByRole('button', { name: /个人菜单/ });
+    expect(languages.compareDocumentPosition(appearance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(appearance.compareDocumentPosition(avatar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     if (supplier) expect(header.queryByRole('link', { name: /必读公告/ })).not.toBeInTheDocument();
     else expect(await header.findByRole('link', { name: '2 条必读公告未读' })).toBeVisible();
   });

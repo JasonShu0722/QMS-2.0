@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsEmail, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class OrganizationSummaryDto {
@@ -87,4 +88,36 @@ export class AccountSessionDto {
 
   @ApiProperty()
   isCurrent!: boolean;
+}
+
+export class AccountSessionHistoryQueryDto {
+  @ApiPropertyOptional({ type: Number, default: 1, minimum: 1, maximum: 1000000 })
+  @Type(() => Number) @IsInt() @Min(1) @Max(1000000)
+  page = 1;
+
+  @ApiPropertyOptional({ type: Number, default: 20, minimum: 1, maximum: 100 })
+  @Type(() => Number) @IsInt() @Min(1) @Max(100)
+  pageSize = 20;
+}
+
+export class AccountSessionHistoryItemDto extends AccountSessionDto {
+  @ApiProperty({ enum: ['STANDARD', 'REMEMBERED_ADMIN', 'REMEMBERED_USER'] })
+  lifetimeType!: 'STANDARD' | 'REMEMBERED_ADMIN' | 'REMEMBERED_USER';
+
+  @ApiProperty({ enum: ['ACTIVE', 'REVOKED', 'EXPIRED'] })
+  status!: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+}
+
+export class AccountSessionHistoryPageDto {
+  @ApiProperty({ type: [AccountSessionHistoryItemDto] })
+  items!: AccountSessionHistoryItemDto[];
+
+  @ApiProperty()
+  total!: number;
+
+  @ApiProperty()
+  page!: number;
+
+  @ApiProperty()
+  pageSize!: number;
 }

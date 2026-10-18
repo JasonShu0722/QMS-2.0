@@ -8,6 +8,7 @@ import { HttpException } from '@nestjs/common';
 import { assertRecentAuthentication, isGovernancePermission, mfaPolicy } from '../../common/security/session-security.js';
 import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 import { sessionLifetimeMs } from './session-policy.js';
+import type { AccountSessionHistoryQueryDto } from './dto/account.dto.js';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
@@ -146,6 +147,29 @@ export class SessionService {
       ...session,
       isCurrent: session.id === currentSessionId,
     }));
+  }
+
+  async historyForUser(userId: string, currentSessionId: string, { page, pageSize }: AccountSessionHistoryQueryDto) {
+    return this.prisma.$transaction(async (transaction) => {
+      const now = Date.now();
+      const where = { userId };
+      const total = await transaction.session.count({ where });
+      const sessions = await transaction.session.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, createdAt: true, expiresAt: true, revokedAt: true, lifetimeType: true },
+      });
+      return {
+        items: sessions.map((session) => ({
+          ...session,
+          isCurrent: session.id === currentSessionId,
+          status: session.revokedAt ? 'REVOKED' : session.expiresAt.getTime() <= now ? 'EXPIRED' : 'ACTIVE',
+        })),
+        total, page, pageSize,
+      };
+    }, { isolationLevel: 'RepeatableRead' });
   }
 
   async revokeOtherSessions(

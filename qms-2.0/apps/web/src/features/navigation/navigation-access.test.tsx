@@ -87,8 +87,7 @@ it('clears old grants on identity or organization change and ignores stale repli
 
 it('updates the selected menu, header and work tab when language changes', async () => {
   mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
-  fireEvent.click(await screen.findByText('English'));
+  fireEvent.click(screen.getByRole('radio', { name: 'EN' }));
   expect(screen.getByRole('navigation', { name: 'System services Context menu' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'All tabs' }));
   expect(await screen.findByRole('button', { name: 'Announcements' })).toBeVisible();
@@ -112,8 +111,7 @@ it('keeps workflow selection and the loaded object name in the shell without ano
   expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · 编辑');
   await act(async () => resolveDirectory([]));
   expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · 编辑');
-  fireEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
-  fireEvent.click(await screen.findByText('English'));
+  fireEvent.click(screen.getByRole('radio', { name: 'EN' }));
   await waitFor(() => expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === path)?.title).toBe('来料 · 质量流程 · Edit'));
   expect(screen.getByRole('heading', { name: '来料 · 质量流程' })).toBeVisible();
   await expectCurrentWorkPage('来料 · 质量流程 · Edit', 'All tabs');
