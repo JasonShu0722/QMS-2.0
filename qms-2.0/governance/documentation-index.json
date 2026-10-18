@@ -718,7 +718,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-18",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -732,7 +732,7 @@
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
-            "sha256": "242195166236394a1c989b230442b84c2bc98dbdda37b42728298187c84b906d"
+            "sha256": "a620635c23b13c347c03edb68acf92470abf05ecaf157436e76a2219afaf38b9"
           },
           {
             "path": "docs/ATTACHMENTS.md",
