@@ -4,7 +4,7 @@
 
 ## REQ-0017～0021 四单元接续（2026-10-19，整合验证中）
 
-源码基线 `8a86b28`，活动 checkout `D:/WorkSpace/QMS-2.0`，Node 24.21.0 / pnpm 11.19.0。四单元与 Issue #44～47、授权边界及最终人工清单见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。四单元已提交PR48～51，最新源码PR CI全部通过；A/B已部署核验、C已合并待部署、D待接续。以下仍不代表最终真实业务浏览器验收。
+源码基线 `8a86b28`，活动 checkout `D:/WorkSpace/QMS-2.0`，Node 24.21.0 / pnpm 11.19.0。四单元与 Issue #44～47、授权边界及最终人工清单见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。四单元已提交PR48～51，运行源码PR CI均已通过；A/B已部署核验、C已合并但main CI因GitHub账单限制两次未启动、D保持待合并。以下仍不代表最终真实业务浏览器验收。
 
 | 检查 | 当前实际结果 | 证据与限制 |
 | --- | --- | --- |
@@ -14,10 +14,12 @@
 | 一次性资源 | 新 PostgreSQL 55457 空库迁移及 seed 通过；对象存储 55458 health 200、真实 bucket/versioning 准备成功；扫描 55459 返回 PONG；邮件 55460/55461 启动 | 专用容器 `qms-req17-21-disposable-*`；未连接保留预览库 55440；环境与秘密留在 Git 外 |
 | Compose 配置 | `docker compose -f deployment/docker-compose.foundation.yml config --quiet` exit 0 | 使用本轮一次性环境变量，仅验证配置，不等于已部署 |
 | 真实资源定向复跑 | 6 套 57/57 PASS，Node 24.21.0 | req17-21-pg-final-focused-2.log；覆盖会话历史、审计查询/导出、头像与供应商 workflow/ASN；较早全量 PG 的 78/81 套及三项失败保留，不宣称全集通过 |
-| 当前 Web 与其他门禁 | 四PR最新源码完整CI全部通过；本地Web/API build、lint、contracts、治理48项、归档/Compose通过；界面待人工 | PR CI39150323034/39151261515/39151268693/39151275101；各自四分片及真实PG/Worker通过。本地超时、中断和旧矩阵fixture失败保留，不改称本地全集PASS |
-| 实际部署 | A31d0b657、B47db5bee已验证；C395acc27已合并等待；D待接续 | A部署39151587587、B部署39152712419；每次快照/迁移/健康完整执行，线上HTTP与资源/契约改变已核验，最终业务浏览器未执行 |
+| 当前 Web 与其他门禁 | 四单元运行源码PR完整CI均通过；后续文档HEAD检查受账单限制；本地Web/API build、lint、contracts、治理48项、归档/Compose通过；界面待人工 | PR CI39150323034/39151261515/39151268693/39151275101；各自四分片及真实PG/Worker通过。本地超时、中断和旧矩阵fixture失败保留，不改称本地全集PASS |
+| 实际部署 | A31d0b657、B47db5bee已验证；C395acc27受main CI账单限制阻塞；D未合并 | A部署39151587587、B部署39152712419；每次快照/迁移/健康完整执行，线上HTTP与资源/契约改变已核验，最终业务浏览器未执行 |
 
 前一轮中断保留的失败包括账号 Web 6 项、主数据定向 Web 8 项，当前已按文件所有权接续修复，尚不覆盖这些失败为通过。空库 seed 曾因 cwd 使用错误失败，随后显式切换 API 目录通过；原始日志留在 Git 外，不清除失败历史。
+
+本轮 GitHub Actions 账单阻断（2026-10-19 02:22）：C main run39153238102 attempt1/2所有job均无步骤，注释为付款失败或支出上限需调整；没有代码断言失败。D最新文档提交的检查也受该平台限制，不能记最新HEAD通过。A/B实际生产SHA47db5bee已核验；C/D尚未部署。Git外req17-21-actions-billing-blocker.json保存第二次注释；本聊天每小时跟进req-0017-0021，账户恢复后按原门禁接续，不改账单/额度、不绕过CI。
 
 ## 物料全局治理角色漏迁补齐（2026-10-18，V0.0.14-fix1 候选）
 

@@ -8,14 +8,14 @@
 - 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：四单元实现及独立规格/质量审查均通过；四个 PR 最新源码 CI 全部通过。A PR48 已合并部署 `31d0b657`（main CI39150940325、部署39151587587），B PR49 已合并部署 `47db5bee`（main CI39152046356、部署39152712419）；均核对迁移前加密快照、无待迁移、API/Worker/Web健康与HTTP新资源。C PR50 已合并 `395acc27`，等待main CI/部署；D PR51最新代码 `b836b02` 的CI39151275101全部通过，等待C上线后改base并合并。最终真实业务浏览器验收、Issue关闭与飞书回填尚未完成。下一动作：Codex完成C/D逐版本部署核验、最终联合只读核验及证据归档。
+- 分别状态：四单元实现及独立规格/质量审查均通过；四个单元的运行源码 PR CI 均已通过；后续文档状态提交受下述平台限制，不冒称最新HEAD通过。A PR48 已合并部署 `31d0b657`（main CI39150940325、部署39151587587），B PR49 已合并部署 `47db5bee`（main CI39152046356、部署39152712419）；均核对迁移前加密快照、无待迁移、API/Worker/Web健康与HTTP新资源。C PR50 已合并 `395acc27`，main CI39153238102两次均因GitHub账户付款/支出限制未启动任务，尚未部署；D PR51运行代码 `b836b02` 的CI39151275101全部通过，后续文档HEAD89c9a46及本次状态同步不改变运行代码，最新检查同受平台限制，保持待合并。最终真实业务浏览器验收、Issue关闭与飞书回填尚未完成。下一动作：负责人恢复GitHub Actions账单/额度可用性；本聊天每小时跟进（automation req-0017-0021），恢复后由Codex继续C完整main门禁/部署，再接续D。相同阻断时安静，不修改付款/额度或绕过检查。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
 | --- | --- | --- | --- | --- |
 | A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；[PR #48](https://github.com/JasonShu0722/QMS-2.0/pull/48)；部署 `31d0b657` | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
 | B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；[PR #49](https://github.com/JasonShu0722/QMS-2.0/pull/49)；部署 `47db5bee` | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
-| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；main `395acc27`；待部署 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
+| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；main `395acc27`；Actions账单限制阻塞部署 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
 | D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；[PR #51](https://github.com/JasonShu0722/QMS-2.0/pull/51)；代码 HEAD `b836b02` | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
 
 ## 实现步骤与文件责任
@@ -111,9 +111,17 @@ API 为本人历史读取与审计安全响应/导出增量，历史事实只读
 | --- | --- | --- | --- |
 | A / V0.0.16 | PR48 / ef810dd / CI39150323034 success | 31d0b657 / mainCI39150940325 / deploy39151587587 success | 加密快照验证、101迁移无待执行、API/Worker/Web健康；HTTP200，index-C83V3G9s.js、index-6FsIOYwN.css，密度与accent-text标记存在 |
 | B / V0.0.17 | PR49 / a9eb045 / CI39151261515 success | 47db5bee / mainCI39152046356 / deploy39152712419 success | 同上部署门禁；HTTP200，index-Bp0NKiP6.js、index-Ct7coGGV.css，本人历史契约存在，匿名历史401 |
-| C / V0.0.18 | PR50 / 8b7e2ff / CI39151268693 success | main395acc27；mainCI/部署待执行完成 | 22文件差异，main内容树与B基线相同后合并；不得先记上线 |
+| C / V0.0.18 | PR50 / 8b7e2ff / CI39151268693 success | main395acc27；mainCI39153238102因账单限制未执行，部署阻塞 | 22文件差异，main内容树与B基线相同后合并；尚未上线；attempt1/2均无步骤、同一账单错误 |
 | D / V0.0.19 | PR51 / b836b02 / CI39151275101 success | 待C部署后接续 | 真实审计/账号定位/矩阵保护已复审；本次文档状态更新不改变运行源码 |
 
 四单元最新PR的完整Web四分片、API单测、真实PostgreSQL、扫描/存储、Worker生命周期、契约/治理/归档及Compose均在CI实际通过；本地原失败/中断日志仍保留，不转录为本地全集PASS。B的导航语言调用方遗漏在CI暴露，用EN radio更新两处旧下拉交互，15/15本地通过且独立复审未改变导航/授权断言；fix传播至C/D原PR。
 
 线上只读核验脚本与结果在Git外req17-21-verify-http.mjs、req17-21-{a,b}-deployment-http.json；只证明HTTP/公开契约/资源，未创建生产业务数据，也未证明真实登录后的浏览器业务验收。
+
+## 当前外部阻断与恢复点（2026-10-19 02:22，Asia/Taipei）
+
+- C主分支Foundation run [39153238102](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39153238102) 的所有job都未启动，第一次checks job117751044750的注释明确：`The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings`。
+- 通过已有Git认证只读读取注释，凭据仅在进程内使用，没有输出或写盘；受支持连接未提供该注释路径、浏览器连接不可用。失败job没有日志，未将404解释成测试通过。一次受控重跑后attempt2的checks job117752596864仍是同一注释，没有测试步骤。Git外证据req17-21-actions-billing-blocker.json。
+- A/B生产保持已核验版本47db5bee；没有部署C，也没有合并/部署D。不能将PR源码CI通过改写成C/main CI通过，或从生产跳过门禁。后续文档HEAD的阻断与运行代码的既有绿色结果分别记录。
+- 已创建当前聊天每小时跟进`req-0017-0021`，每次至多一次重跑受阻检查，同一账单限制时安静；恢复后按既有批准接续C/D，全部部署核验后暂停跟进。它不接其他需求，不增加支出额度，不更改付款或检查规则。
+- 负责人所需动作是恢复GitHub账户Billing & plans/Actions可用性。此项外部账户动作不在本次代码/发布授权内；本轮未付款、未改额度、未安装替代runner、未关闭任何检查。Issue44～47保持开放，飞书无写入，最终真实业务浏览器人工清单保持待验收。
