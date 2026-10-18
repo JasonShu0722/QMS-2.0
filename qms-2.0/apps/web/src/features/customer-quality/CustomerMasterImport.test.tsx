@@ -14,14 +14,14 @@ beforeEach(() => {
   vi.mocked(readXlsxFile).mockReset().mockResolvedValue([['客户编码', '客户名称'], ['00042', '中文客户'], ['00042', '不同名称']]);
 });
 afterEach(() => localStorage.removeItem('qms:locale:v1'));
-const upload = () => fireEvent.change(screen.getByLabelText('客户清单文件'), { target: { files: [new File(['xlsx'], 'customers.xlsx')] } });
+const upload = () => { if (!screen.queryByLabelText('客户清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入客户' })); fireEvent.change(screen.getByLabelText('客户清单文件'), { target: { files: [new File(['xlsx'], 'customers.xlsx')] } }); };
 
 it('maps only code/name, preserves leading zeroes and spreadsheet row numbers', () => {
   expect(parseCustomerMasterRows([['客户名称', '客户编码'], [' 中文客户 ', '00042'], [], ['二客户', 'abc']])).toEqual([
     { rowNumber: 2, code: '00042', name: '中文客户' }, { rowNumber: 4, code: 'abc', name: '二客户' },
   ]);
   for (const sheet of [[], [['客户编码', '关系']], [['客户编码', '客户名称'], [{ formula: '1+1', result: 2 }, '客户']], [['客户编码', '客户名称'], ['code', 'name', '额外']]]) expect(() => parseCustomerMasterRows(sheet)).toThrow();
-  expect(() => parseCustomerMasterRows([['客户编码', '客户名称'], ...Array.from({ length: 101 }, () => ['code', 'name'])])).toThrow('1–100');
+  expect(parseCustomerMasterRows([['客户编码', '客户名称'], ...Array.from({ length: 101 }, () => ['code', 'name'])])).toHaveLength(101);
 });
 
 it('keeps invalid business rows for server validation, including an invalid code before a valid same-code row', () => {
@@ -36,6 +36,7 @@ it('submits mixed valid, empty and numeric-code rows and displays each server ou
   vi.mocked(apiRequest).mockResolvedValue({ created: 2, skipped: 0, failed: 2, items: [{ rowNumber: 2, code: 'GOOD', status: 'CREATED' }, { rowNumber: 3, code: 'BAD', status: 'FAILED' }, { rowNumber: 4, code: 'BAD', status: 'CREATED' }, { rowNumber: 5, code: '', status: 'FAILED' }] });
   const refresh = vi.fn();
   render(<LanguageProvider><CustomerMasterImport onImported={refresh} /></LanguageProvider>);
+  fireEvent.click(screen.getByRole('button', { name: /批量导入客户|Batch import customers/ }));
   expect(screen.getByRole('button', { name: 'Download customer template' })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Customer list file'), { target: { files: [new File(['xlsx'], 'customers.xlsx')] } });
   await screen.findByText('Valid later');
@@ -93,5 +94,6 @@ it('discards a late file parse after switching organization and clears the old p
   upload(); view.rerender(<CustomerMasterImport organizationId="org-b" onImported={vi.fn()} />);
   await act(async () => { resolve([['客户编码', '客户名称'], ['A', '旧组织客户']]); });
   expect(screen.queryByText('旧组织客户')).not.toBeInTheDocument();
+  if (!screen.queryByLabelText('客户清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入客户' }));
   expect(screen.getByRole('button', { name: '导入客户' })).toBeDisabled();
 });

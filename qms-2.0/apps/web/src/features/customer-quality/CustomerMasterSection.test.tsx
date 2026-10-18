@@ -21,7 +21,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 async function selectCustomer(label: string) {
-  fireEvent.mouseDown(screen.getByLabelText('选择客户'));
+  fireEvent.mouseDown(await screen.findByLabelText('选择客户'));
   fireEvent.click(await screen.findByText(label));
 }
 beforeEach(() => {
@@ -68,10 +68,11 @@ it('restores export after a failed refresh only when both customers and current 
   await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).not.toBeDisabled());
   fireEvent.click(screen.getByRole('button', { name: '刷新客户' }));
   await screen.findByText('请求失败，请重试');
-  expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '导出当前客户清单' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
-  await waitFor(() => expect(customerReads).toBe(3));
-  expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
+  await waitFor(() => expect(permissionReads).toBe(3));
+  expect(customerReads).toBe(2);
+  expect(screen.getByRole('button', { name: '导出当前客户清单' })).toBeDisabled();
   await act(async () => { revalidatedPermissions.resolve({ permissions: ['customer-quality:complaints:read'] }); await revalidatedPermissions.promise; });
   await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).not.toBeDisabled());
   expect(permissionReads).toBe(3);
@@ -79,7 +80,7 @@ it('restores export after a failed refresh only when both customers and current 
 
 it('does not offer list export with only import/write permission', async () => {
   render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:write']} />);
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledOnce());
+  expect(apiRequest).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: '导出当前客户清单' })).not.toBeInTheDocument();
 });
 
@@ -155,9 +156,10 @@ it('enables writes from the selected admin organization permissions', async () =
 it('creates customer with CSRF and idempotency', async () => {
   render(<CustomerMasterSection />);
   await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
   fireEvent.change(screen.getByLabelText('客户代码'), { target: { value: 'C-2' } });
   fireEvent.change(screen.getByLabelText('客户名称'), { target: { value: '客户二' } });
-  fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
+  fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path, options]) => path.endsWith('/customers') && options?.method === 'POST')).toBe(true));
   const call = vi.mocked(apiRequest).mock.calls.find(([path, options]) => path.endsWith('/customers') && options?.method === 'POST');
   expect(call?.[1]).toMatchObject({ headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': expect.any(String) }, body: JSON.stringify({ code: 'C-2', name: '客户二' }) });
@@ -166,6 +168,7 @@ it('creates customer with CSRF and idempotency', async () => {
 it('offers the same customer batch import in the existing master section', async () => {
   render(<CustomerMasterSection />);
   await screen.findByRole('button', { name: '新增客户' });
+  fireEvent.click(screen.getByRole('button', { name: '批量导入客户' }));
   expect(screen.getByLabelText('客户清单文件')).toHaveAttribute('accept', '.xlsx');
   expect(screen.getByRole('button', { name: '导入客户' })).toBeDisabled();
 });
@@ -230,4 +233,36 @@ it('does not replace the new customer relations after an earlier customer POST f
   await waitFor(() => expect(screen.getByRole('button', { name: /新增关系/ })).not.toBeDisabled());
   expect(screen.getByText('B-P · 客户二产品')).toBeInTheDocument();
   expect(vi.mocked(apiRequest).mock.calls.filter(([path, options]) => path.endsWith('/customer-1/relations') && !options?.method)).toHaveLength(1);
+});
+it('REQ0019 opens create in a modal and never requests a list for write-only permission', async () => {
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:write']} />);
+  expect(screen.queryByLabelText('客户代码')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('客户清单文件')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalled();
+});
+
+it('REQ0019 saves two write-only customers without requesting a forbidden list', async () => {
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:write']} />);
+  for (const code of ['FIRST', 'SECOND']) {
+    fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
+    fireEvent.change(screen.getByLabelText('客户代码'), { target: { value: code } });
+    fireEvent.change(screen.getByLabelText('客户名称'), { target: { value: '客户' } });
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  }
+  expect(apiRequest).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(apiRequest).mock.calls.every(([, init]) => init?.method === 'POST')).toBe(true);
+});
+
+it('REQ0019 preserves known write permission and import access after a list failure', async () => {
+  vi.mocked(apiRequest).mockImplementation(async (path) => {
+    if (path.includes('my-permissions')) return { permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] };
+    throw new Error('network');
+  });
+  render(<CustomerMasterSection />);
+  await screen.findByText('请求失败，请重试');
+  expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '批量导入客户' })).toBeInTheDocument();
 });

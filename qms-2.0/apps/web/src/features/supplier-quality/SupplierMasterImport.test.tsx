@@ -25,16 +25,17 @@ it('preserves text codes and sends business-invalid rows for per-row server vali
 it('rejects unsafe formulas, extra data columns and oversized batches', () => {
   expect(() => parseSupplierMasterRows([headers, ['a', { formula: '1+1' }]])).toThrow();
   expect(() => parseSupplierMasterRows([headers, ['a', 'b', '', '', 'extra']])).toThrow();
-  expect(() => parseSupplierMasterRows([headers, ...Array.from({ length: 101 }, () => ['a', 'b'])])).toThrow();
+  expect(parseSupplierMasterRows([headers, ...Array.from({ length: 101 }, () => ['a', 'b'])])).toHaveLength(101);
 });
 
-const upload = () => fireEvent.change(screen.getByLabelText('供应商清单文件'), { target: { files: [new File(['xlsx'], 'suppliers.xlsx')] } });
+const upload = () => { if (!screen.queryByLabelText('供应商清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入供应商' })); fireEvent.change(screen.getByLabelText('供应商清单文件'), { target: { files: [new File(['xlsx'], 'suppliers.xlsx')] } }); };
 it('downloads a four-column text-only supplier template without organization or account fields', async () => {
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   const create = vi.fn(() => 'blob:template'); const revoke = vi.fn();
   vi.stubGlobal('URL', class extends URL { static createObjectURL = create; static revokeObjectURL = revoke; });
   try {
     render(<SupplierMasterImport onImported={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '批量导入供应商' }));
     fireEvent.click(screen.getByRole('button', { name: '下载供应商模板' }));
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
     expect(spreadsheet.rows).toEqual([headers]);
@@ -75,5 +76,6 @@ it('discards late parsing after switching organization', async () => {
   view.rerender(<SupplierMasterImport organizationId="b" onImported={vi.fn()} />);
   await act(async () => { resolve([headers, ['A', '旧组织供应商']]); });
   expect(screen.queryByText('旧组织供应商')).not.toBeInTheDocument();
+  if (!screen.queryByLabelText('供应商清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入供应商' }));
   expect(screen.getByRole('button', { name: '导入供应商' })).toBeDisabled();
 });

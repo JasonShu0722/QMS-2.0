@@ -23,6 +23,7 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>();
   const [editing, setEditing] = useState<SupplierProfile>();
+  const [creating, setCreating] = useState(false);
   const [accounts, setAccounts] = useState<SupplierProfile>();
   const [notice, setNotice] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -32,13 +33,13 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
   const canRead = granted.includes('supplier-quality:profiles:read');
   const canWrite = granted.includes('supplier-quality:profiles:write');
   const scope = organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : '';
-  async function reload() {
+  async function reload(reportFailure = false) {
     const request = ++sequence.current;
     setLoading(true);
     try {
       const result = await apiRequest<ProfilePage>(`${base}?page=${page}&search=${encodeURIComponent(search)}${scope}`);
       if (alive.current && request === sequence.current) { setData(result); setError(undefined); }
-    } catch (cause) { if (alive.current && request === sequence.current) { setData(undefined); setError(cause); } }
+    } catch (cause) { if (alive.current && request === sequence.current) { setData(undefined); setError(cause); } if (reportFailure) throw cause; }
     finally { if (alive.current && request === sequence.current) setLoading(false); }
   }
   useEffect(() => {
@@ -47,7 +48,7 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
     return () => { alive.current = false; sequence.current++; };
   }, []);
   useEffect(() => { if (canRead) void reload(); else { sequence.current++; setData(undefined); } }, [page, search, canRead]);
-  function saved() { if (!alive.current) return; setEditing(undefined); setNotice(true); if (canRead) void reload(); }
+  function saved() { if (!alive.current) return; setCreating(false); setEditing(undefined); setNotice(true); if (canRead) void reload(); }
   async function exportPage() {
     if (!canRead || loading || exporting || !data?.items.length) return;
     setExporting(true);
@@ -74,10 +75,26 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
         { title: t('协作边界'), render: (_, row) => t(row.supplierOrganizationId ? '已开通协作' : '未开通协作') },
         { title: t('操作'), render: (_, profile) => <Space wrap>{canWrite ? <Button onClick={() => { setEditing(profile); setNotice(false); }}>{t('编辑资料')}</Button> : null}<Button onClick={() => setAccounts(profile)}>{t('供应商用户账号')}</Button></Space> },
       ]} /></> : <Alert type="info" title={t('没有供应商档案查看权限')} />}
-    {canWrite ? <section className="supplier-card"><Typography.Title level={3}>{t('登记供应商资料')}</Typography.Title><ProfileForm organizationId={organizationId} saved={saved} /><SupplierMasterImport organizationId={organizationId} onImported={canRead ? reload : () => undefined} /></section> : null}
+    {canWrite ? <Space wrap><Button onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Space> : null}
+    {canWrite && creating ? <ProfileCreator organizationId={organizationId} saved={saved} close={() => setCreating(false)} /> : null}
     {editing ? <ProfileEditor key={editing.id} organizationId={organizationId} record={editing} saved={saved} close={() => setEditing(undefined)} /> : null}
     {accounts ? <SupplierUsersPanel key={accounts.id} profile={accounts} organizationId={organizationId} organizationPermissions={granted} onBound={canRead ? reload : () => undefined} onClose={() => setAccounts(undefined)} /> : null}
   </section>;
+}
+
+function ProfileCreator({ organizationId, saved, close }: { organizationId?: string; saved: () => void; close: () => void }) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [modal, holder] = Modal.useModal();
+  function cancel() {
+    if (busy) return;
+    if (dirty) modal.confirm({ title: t('当前草稿尚未保存，继续将放弃修改。'), okText: t('放弃修改'), cancelText: t('继续编辑'), onOk: close });
+    else close();
+  }
+  return <Modal open title={t('登记供应商资料')} footer={null} onCancel={cancel} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
+    {holder}<ProfileForm organizationId={organizationId} saved={saved} busyChanged={setBusy} dirtyChanged={setDirty} />
+  </Modal>;
 }
 
 function ProfileEditor({ record, organizationId, saved, close }: { record: SupplierProfile; organizationId?: string; saved: () => void; close: () => void }) {

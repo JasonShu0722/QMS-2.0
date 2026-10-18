@@ -60,7 +60,7 @@ async function checkZipSize(buffer: ArrayBuffer) {
   if (offset !== end) throw new Error('Excel ZIP 结构无效');
 }
 
-export async function readXlsxFile(file: File): Promise<unknown[][]> {
+export async function readXlsxFile(file: File, options?: { mode: 'master-data' }): Promise<unknown[][]> {
   if (!/\.xlsx$/i.test(file.name)) throw new Error('仅支持 .xlsx 文件');
   if (file.size > 2 * 1024 * 1024) throw new Error('文件不能超过 2 MB');
   const buffer = await file.arrayBuffer();
@@ -76,7 +76,7 @@ export async function readXlsxFile(file: File): Promise<unknown[][]> {
   let dataRows = 0;
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber > 10000) throw new Error('数据行号不能超过 10000');
-    if (rowNumber > 1 && ++dataRows > 100) throw new Error('每次最多 100 条数据行');
+    if (rowNumber > 1 && ++dataRows > 100 && options?.mode !== 'master-data') throw new Error('每次最多 100 条数据行');
     const cells: unknown[] = [];
     row.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
       if (columnNumber > 100) throw new Error('列号不能超过 100');
