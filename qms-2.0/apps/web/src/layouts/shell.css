@@ -16,14 +16,14 @@
 .in-domain .qms-brand { padding: 0 6px; }
 .in-domain .qms-nav-item { padding: 12px; justify-content: center; }
 .qms-expand-menu { margin-top: 20px; }
-.qms-domain-context { width: 208px; padding: 32px 16px; border-left: 1px solid var(--qms-border); box-sizing: border-box; overflow-y: auto; }
-.qms-context-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 28px; font-size: 17px; }
+.qms-domain-context { width: 208px; padding: var(--qms-card-padding); border-left: 1px solid var(--qms-border); box-sizing: border-box; overflow-y: auto; }
+.qms-context-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: var(--qms-section-gap); font-size: 17px; }
 .qms-domain-context nav { display: grid; gap: 8px; }
 .qms-context-link, .qms-context-current { display: block; padding: 12px; border-radius: 7px; font-size: 14px; }
 .qms-context-link:hover { background: var(--qms-surface-tint); }
 .qms-context-link[aria-current="page"], .qms-context-current { background: var(--qms-accent-soft); color: var(--qms-text); }
 .qms-main { margin-left: var(--navigation-width); min-width: 0; }
-.qms-topbar { min-height: 72px; margin: 0 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--qms-border); }
+.qms-topbar { min-height: 72px; margin: 0 var(--qms-page-padding); display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--qms-border); }
 .qms-topbar-work, .qms-topbar-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .qms-topbar-work { flex: 1; color: var(--qms-muted); font-size: 13px; }
 .qms-topbar-actions { flex-shrink: 0; }
@@ -35,9 +35,9 @@
 .qms-announcement-reminder { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--qms-warning); font-size: 13px; }
 .qms-announcement-reminder strong { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--qms-warning); color: var(--qms-surface); font-size: 12px; }
 .qms-topbar .qms-mobile-menu { display: none; }
-.qms-content { padding: 28px; min-width: 0; outline: none; }
-.qms-content > .ant-alert { margin-bottom: 20px; }
-.qms-content h1 { font-size: 27px; line-height: 1.4; margin: 0 0 20px; }
+.qms-content { padding: var(--qms-page-padding); min-width: 0; outline: none; }
+.qms-content > .ant-alert { margin-bottom: var(--qms-section-gap); }
+.qms-content h1 { font-size: 27px; line-height: 1.4; margin: 0 0 var(--qms-section-gap); }
 .qms-mobile-navigation .qms-primary-navigation { width: auto; }
 .qms-mobile-navigation .qms-brand { padding: 0 12px; }
 .qms-mobile-navigation .qms-nav-item { padding: 12px 14px; justify-content: flex-start; }
@@ -53,22 +53,23 @@
 .qms-shell:has(.problem-workspace.is-focused) .qms-mobile-menu { display: none; }
 @media(max-width:1200px) and (min-width:761px) {
   .qms-shell.in-domain:not(.menu-collapsed) { --navigation-width: 248px; }
-  .qms-domain-context { width: 184px; padding: 28px 12px; }
-  .qms-topbar { margin-inline: 20px; }
-  .qms-content { padding: 24px 20px; }
+  .qms-domain-context { width: 184px; padding: var(--qms-card-padding) var(--qms-page-padding); }
 }
 @media(max-width:760px) {
   .qms-shell { --navigation-width: 0px !important; }
   .qms-navigation { display: none; }
-  .qms-topbar { min-height: 64px; margin: 0 16px; gap: 8px; padding: 8px 0; box-sizing: border-box; }
+  .qms-topbar { min-height: 64px; margin: 0 var(--qms-page-padding); gap: 8px; padding: 8px 0; box-sizing: border-box; }
   .qms-topbar .qms-mobile-menu { display: inline-flex; flex-shrink: 0; }
   .qms-topbar-actions { gap: 6px; }
   .qms-topbar .ant-btn { min-width: 44px; min-height: 44px; }
-  .qms-topbar .qms-work-tab .ant-btn { min-width: 28px; min-height: 30px; }
   .qms-topbar .qms-appearance-trigger, .qms-topbar .language-switcher { padding: 6px; }
   .qms-topbar .qms-all-tabs > span:not(.ant-btn-icon), .qms-topbar .qms-appearance-trigger > span:not(.ant-btn-icon), .qms-topbar .language-switcher > span:not(.ant-btn-icon), .qms-topbar .language-switcher > svg { display: none; }
   .qms-topbar .qms-announcement-reminder { font-size: 0; gap: 0; min-height: 44px; }
     .qms-topbar .qms-account-menu-trigger { padding: 6px; }
     .qms-topbar .qms-account-menu-name, .qms-topbar .qms-account-menu-chevron { display: none; }
-  .qms-content { padding: 20px 16px; }
+}
+
+@media (pointer: coarse) {
+  .qms-topbar .ant-btn, .qms-context-link, .qms-context-current { min-height: 44px; }
+  .qms-topbar .ant-btn { min-width: 44px; }
 }

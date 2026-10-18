@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [紧凑界面与账号、主数据、审计设计](../../docs/superpowers/specs/2026-10-18-qms-compact-account-master-audit-design.md) | REQ-0017～0021 的已批准目标、独立评审及最小实现边界 |
+| [紧凑界面与账号、主数据、审计计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md) | 四个单元、Issue/PR、TDD、验证审查及授权接续 |
 | [开发治理](DEVELOPMENT-GOVERNANCE.md) | 计划顶部当前摘要、工程完成条件、证据矩阵、质量门禁和独立审查 |
 | [需求交付与功能维护流程](DELIVERY-MAINTENANCE-PROCESS.md) | 参与者、授权、主动版本分配、Issue / PR、发布验收与关闭回填的权威流程 |
 | [工作流与治理整合设计](../../docs/superpowers/specs/2026-10-12-qms-workflow-integration-design.md) | 本轮已批准的职责整合、OpenClaw 只读分析、当前摘要与主动版本规则 |

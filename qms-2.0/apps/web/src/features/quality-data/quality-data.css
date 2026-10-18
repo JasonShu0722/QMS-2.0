@@ -1,15 +1,15 @@
-.quality-data-page { max-width: 1260px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
-.quality-data-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.quality-data-page { max-width: 1260px; margin: 0 auto; padding: 0; display: grid; gap: var(--qms-section-gap);  min-width: 0; }
+.quality-data-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
 .quality-data-heading h1 { margin: 4px 0 0; }
 .quality-data-heading p { margin-bottom: 0; max-width: 720px; }
-.quality-data-card { padding: 20px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); min-width: 0; }
+.quality-data-card { padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); min-width: 0; }
 .quality-data-label { display: block; margin-bottom: 8px; font-weight: 600; }
 .quality-data-select { width: min(100%, 420px); }
-.quality-data-definition { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 20px 0 0; }
+.quality-data-definition { display: flex; flex-wrap: wrap; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0 0; }
 .quality-data-definition div { min-width: 120px; }
 .quality-data-definition dt { color: var(--qms-muted); font-size: 12px; }
 .quality-data-definition dd { margin: 4px 0 0; }
-.quality-data-section-heading { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.quality-data-section-heading { display: flex; justify-content: space-between; gap: var(--qms-section-gap); margin-bottom: var(--qms-section-gap); }
 .quality-data-section-heading h2 { margin: 0; }
 .quality-data-loading { min-height: 180px; display: grid; place-items: center; }
 .quality-data-chart { margin: 0 0 20px; }
@@ -27,4 +27,4 @@
 .quality-data-insight { border: 1px solid var(--qms-border); border-radius: 7px; padding: 12px; display: grid; gap: 6px; }
 .quality-data-insight p { margin: 0; }
 @media (max-width: 720px) { .quality-data-domain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .quality-data-page { padding: 16px; } .quality-data-heading { flex-direction: column; } .quality-data-card { padding: 16px; } }
+@media (max-width: 720px) { .quality-data-page { padding: 0;  min-width: 0; } .quality-data-heading { flex-direction: column; } .quality-data-card { padding: var(--qms-card-padding); } }

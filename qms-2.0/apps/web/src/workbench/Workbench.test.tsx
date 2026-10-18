@@ -11,12 +11,14 @@ const locales = [
     locale: 'zh-CN', workbench: '综合工作台', tasks: '我的待办',
     description: '查看任务与通知，进入关联问题继续处理。', duplicate: '处理我的待办',
     overview: '质量概览', planned: '待接入',
+    slogan: '从待办开始，推进每一项质量改进。',
     unavailable: '统计尚未接入，当前不展示汇总数值。请从待办或问题中心查看实际记录。',
   },
   {
     locale: 'en-US', workbench: 'Workbench', tasks: 'My tasks',
     description: 'Review tasks and notifications, then continue in the linked problem.', duplicate: 'Open my tasks',
     overview: 'Quality overview', planned: 'Planned',
+    slogan: 'Start with your tasks and move quality improvements forward.',
     unavailable: 'Summary metrics are not yet available. View actual records in My tasks or Problem center.',
   },
 ];
@@ -31,6 +33,7 @@ it.each(locales)('keeps one task card linking to My tasks in $locale', (copy) =>
   expect(taskLinks[0]).toHaveAccessibleName(copy.description);
   expect(within(taskLinks[0]!).getByText(copy.tasks)).toBeVisible();
   expect(workbench.queryByRole('link', { name: copy.duplicate })).not.toBeInTheDocument();
+  expect(workbench.queryByText(copy.slogan)).not.toBeInTheDocument();
 });
 
 it.each(locales)('explains that overview metrics are unavailable in $locale', (copy) => {

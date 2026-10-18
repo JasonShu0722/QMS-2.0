@@ -1,6 +1,6 @@
 .supplier-notifications {
   display: grid;
-  gap: 16px;
+  gap: var(--qms-section-gap);
 }
 
 .supplier-notifications__header {
@@ -8,7 +8,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--qms-section-gap);
 }
 
 .supplier-notifications__card {

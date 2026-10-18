@@ -1,3 +1,3 @@
-.site-scanning-page { max-width: 860px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+.site-scanning-page { max-width: 860px; margin: 0 auto; padding: 0; display: grid; gap: var(--qms-section-gap);  min-width: 0; }
 .site-scanning-page .ant-card { border-color: var(--qms-border, #dce3ea); }
-@media (max-width: 720px) { .site-scanning-page { padding: 16px; } .site-scanning-page .ant-btn { min-height: 44px; } }
+@media (max-width: 720px) { .site-scanning-page { padding: 0;  min-width: 0; } .site-scanning-page .ant-btn { min-height: 44px; } }
