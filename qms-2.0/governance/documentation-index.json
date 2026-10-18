@@ -386,7 +386,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（Taste 定向融合实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-18",
         "maxAgeDays": 90,
         "reason": "复核已登录账号安全弹窗与管理员集中 MFA 治理，保留登录挑战、同源安全内容、主题变量、关闭及秘密清理边界；机器门禁按本轮计划，浏览器按负责人决定部署后人工确认。",
         "sources": [
@@ -404,7 +404,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "63eef241f7afc1aa7c38cc06a4c980de515a07ba50f45d8f226b582e2949478d"
+            "sha256": "1c3572aa3205e8bda871ce7eebff31531a71305da29aa2230a837d0288f2eb55"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
