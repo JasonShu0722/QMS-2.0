@@ -1,9 +1,18 @@
+:root {
+  --qms-page-padding: 16px;
+  --qms-section-gap: 12px;
+  --qms-card-padding: 16px;
+  --qms-table-cell-padding-block: 8px;
+}
+@media (max-width: 1200px) {
+  :root { --qms-page-padding: 12px; }
+}
 .qms-appearance-trigger.ant-btn { color: var(--qms-text); background: var(--qms-accent-soft); }
 .qms-appearance-settings { color: var(--qms-text); }
 .qms-appearance-settings h3 { font-size: 16px; margin: 8px 0; }
 .qms-appearance-settings p { color: var(--qms-muted); line-height: 1.7; margin: 8px 0 16px; }
-.qms-appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 28px; }
+.qms-appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: var(--qms-section-gap); }
 .qms-appearance-options button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 94px; padding: 12px 8px; border: 1px solid var(--qms-border); border-radius: 8px; color: var(--qms-text); background: var(--qms-surface); font: inherit; cursor: pointer; }
 .qms-appearance-options button[aria-pressed="true"] { background: var(--qms-accent-soft); border-color: var(--qms-accent); color: var(--qms-text); }
 .qms-color-swatch { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; }
-.qms-appearance-note { padding: 16px; border-radius: 8px; background: var(--qms-surface-tint); }
+.qms-appearance-note { padding: var(--qms-card-padding); border-radius: 8px; background: var(--qms-surface-tint); }

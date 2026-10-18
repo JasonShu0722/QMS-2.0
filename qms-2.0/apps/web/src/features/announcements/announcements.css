@@ -1,5 +1,5 @@
-.announcements-page { display: grid; gap: 20px; padding: 28px; }
-.announcements-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.announcements-page { display: grid; gap: var(--qms-section-gap); padding: 0;  min-width: 0; }
+.announcements-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
 .announcements-heading h1 { margin: 4px 0 8px; }
 .announcements-heading p { margin: 0; }
 .announcements-column { display: block; width: 100%; max-width: 1080px; }
@@ -10,7 +10,7 @@
 .announcements-pagination { margin-top: 8px; }
 .announcements-form-options { align-items: flex-start; }
 @media (max-width: 760px) {
-  .announcements-page { padding: 16px; }
+  .announcements-page { padding: 0;  min-width: 0; }
   .announcements-heading { flex-direction: column; }
   .announcements-heading h1 { font-size: 24px; }
 }

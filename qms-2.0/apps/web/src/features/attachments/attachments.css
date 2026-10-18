@@ -9,4 +9,4 @@
 .attachment-panel__file { background: var(--qms-surface-tint); }
 .attachment-panel__file .ant-card-head-title { overflow-wrap: anywhere; white-space: normal; padding: 4px 0; }
 .attachment-panel .ant-tag { white-space: normal; }
-@media (max-width: 760px) { .attachment-panel > .ant-card-body { padding: 16px; } }
+@media (max-width: 760px) { .attachment-panel > .ant-card-body { padding: var(--qms-card-padding); } }

@@ -1,25 +1,25 @@
-.audit-management-page { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20px; }
-.audit-management-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.audit-management-page { max-width: 1180px; margin: 0 auto; padding: 0; display: grid; gap: var(--qms-section-gap);  min-width: 0; }
+.audit-management-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
 .audit-management-heading h1 { margin: 4px 0 0; }
 .audit-management-heading p { margin-bottom: 0; max-width: 680px; }
-.audit-management-card { padding: 20px; border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
+.audit-management-card { padding: var(--qms-card-padding); border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
 .audit-management-lookup { width: min(100%, 620px); }
 .audit-management-loading { display: grid; min-height: 220px; place-items: center; }
-.audit-import-card { display: grid; gap: 16px; }
-.audit-import-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.audit-import-card { display: grid; gap: var(--qms-section-gap); }
+.audit-import-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
 .audit-import-heading h3 { margin: 0 0 4px; }
 .audit-import-filters { width: 100%; }
 .audit-import-filters .ant-select { min-width: 150px; }
-.audit-import-issue-error { margin-bottom: 16px; }
+.audit-import-issue-error { margin-bottom: var(--qms-section-gap); }
 @media (max-width: 720px) { .audit-import-heading { flex-direction: column; } .audit-import-filters .ant-select { flex: 1; min-width: 0; } }
-@media (max-width: 720px) { .audit-management-page { padding: 16px; } .audit-management-heading { flex-direction: column; } .audit-management-card { padding: 16px; } .audit-management-lookup { width: 100%; } }
-.audit-mobile-execution { display: grid; gap: 16px; }
+@media (max-width: 720px) { .audit-management-page { padding: 0;  min-width: 0; } .audit-management-heading { flex-direction: column; } .audit-management-card { padding: var(--qms-card-padding); } .audit-management-lookup { width: 100%; } }
+.audit-mobile-execution { display: grid; gap: var(--qms-section-gap); }
 .audit-mobile-heading, .audit-mobile-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .audit-mobile-heading h2 { margin: 0; }
 .audit-mobile-lookup { display: flex; gap: 8px; }
 .audit-mobile-lookup .ant-input { min-width: 260px; }
 .audit-mobile-items { display: grid; gap: 12px; }
-.audit-mobile-item { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); }
+.audit-mobile-item { display: grid; gap: 12px; padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); }
 .audit-mobile-item h3 { margin: 0; }
 .audit-mobile-loading { min-height: 120px; display: grid; place-items: center; }
-@media (max-width: 560px) { .audit-mobile-lookup { flex-direction: column; } .audit-mobile-lookup .ant-input { min-width: 0; } .audit-mobile-item { padding: 12px; } }
+@media (max-width: 560px) { .audit-mobile-lookup { flex-direction: column; } .audit-mobile-lookup .ant-input { min-width: 0; } }

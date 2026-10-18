@@ -39,7 +39,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         colorBorderSecondary: tokens.border, borderRadius: 7, controlHeight: 36, fontSize: 14,
         fontFamily: '"Segoe UI", "Microsoft YaHei", sans-serif',
       },
-      components: { Button: { primaryColor: tokens['on-accent'] }, Table: { headerBg: tokens['surface-tint'] }, Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface } },
+      components: {
+        Button: { primaryColor: tokens['on-accent'] },
+        Card: { bodyPadding: 16, bodyPaddingSM: 16 },
+        Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 8, cellPaddingBlockMD: 8, cellPaddingBlockSM: 8 },
+        Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface },
+      },
     }}>{children}</ConfigProvider>
   </AppearanceContext.Provider>;
 }

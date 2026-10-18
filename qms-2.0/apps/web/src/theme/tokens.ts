@@ -30,6 +30,7 @@ export function resolveTokens(dark: boolean, accent: Accent) {
   const [primary, soft, border] = palettes[dark ? 'dark' : 'light'][accent];
   return {
     accent: primary!, 'accent-soft': soft!, 'accent-border': border!,
+    'accent-text': dark ? primary! : '#293b50',
     // Slightly deeper blue for small text and white-on-blue actions (>= 4.5:1).
     'accent-action': !dark && accent === 'blue' ? '#2375bb' : primary!,
     background: dark ? '#111b27' : '#f3f6fa',

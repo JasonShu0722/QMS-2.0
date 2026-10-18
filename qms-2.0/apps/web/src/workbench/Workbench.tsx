@@ -15,7 +15,7 @@ export function Workbench() {
   return (
     <section className="qms-workbench" aria-label={t('综合工作台')}>
       <header className="qms-workbench__heading">
-        <div><h1>{t('综合工作台')}</h1><p>{t('从待办开始，推进每一项质量改进。')}</p></div>
+        <h1>{t('综合工作台')}</h1>
       </header>
       <section className="qms-workbench__entries" aria-labelledby="workbench-entry-title">
         <h2 id="workbench-entry-title">{t('工作入口')}</h2>
