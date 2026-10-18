@@ -175,6 +175,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/sessions/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountController_sessionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/sessions/{sessionId}/revoke": {
         parameters: {
             query?: never;
@@ -5435,6 +5451,23 @@ export interface components {
             expiresAt: string;
             revokedAt?: string | null;
             isCurrent: boolean;
+        };
+        AccountSessionHistoryItemDto: {
+            id: string;
+            createdAt: string;
+            expiresAt: string;
+            revokedAt?: string | null;
+            isCurrent: boolean;
+            /** @enum {string} */
+            lifetimeType: "STANDARD" | "REMEMBERED_ADMIN" | "REMEMBERED_USER";
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED" | "EXPIRED";
+        };
+        AccountSessionHistoryPageDto: {
+            items: components["schemas"]["AccountSessionHistoryItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         AdminUserBatchRowDto: {
             rowNumber: number;
@@ -10826,6 +10859,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountSessionDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AccountController_sessionHistory: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSessionHistoryPageDto"];
                 };
             };
             /** @description Controlled API error */

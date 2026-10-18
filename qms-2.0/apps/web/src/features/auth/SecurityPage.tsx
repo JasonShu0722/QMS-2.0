@@ -79,8 +79,8 @@ export function SecurityContent({ embedded = false, onCloseStateChange }: { embe
         <Button loading={busy} onClick={() => void perform(async () => { const result = await securityPost<components['schemas']['RecoveryCodesDto']>('me/mfa/recovery-codes'); setCodes(result.recoveryCodes); setRevision((value) => value + 1); })}>{t('重新生成恢复码')}</Button>
       </section> : null}
       {status.securityState === 'AUTHENTICATED' ? <section className="qms-security-section" aria-label={t('邮箱确认')}>
-        <div className="qms-security-section-heading"><Mail size={18} aria-hidden="true" /><h3>{t('邮箱确认')}</h3>{status.emailVerifiedAt ? <Typography.Text type="secondary">{t('邮箱已确认')}</Typography.Text> : null}</div>
-        {!status.emailVerifiedAt ? <p>{t('确认邮箱后可使用自助密码找回。')}</p> : null}
+        <div className="qms-security-section-heading"><Mail size={18} aria-hidden="true" /><h3>{t('邮箱确认')}</h3><Typography.Text type="secondary">{t(status.emailVerifiedAt ? '邮箱已确认' : '邮箱未确认')}</Typography.Text></div>
+        <p>{t('用于自助密码找回。')}</p>
         {emailMessage ? <Alert type="success" role="status" title={t(emailMessage)} /> : null}
         {!status.emailVerifiedAt ? <><Button loading={busy} onClick={() => void perform(async () => { await securityPost('me/email-verification'); setEmailMessage('确认邮件已申请，请查看邮箱。'); })}>{t('发送确认邮件')}</Button><Form form={emailForm} layout="vertical" disabled={busy} className="qms-security-form" onFinish={(values: components['schemas']['CompleteEmailVerificationDto']) => void perform(async () => { await securityPost('auth/email-verification/complete', values); emailForm.resetFields(); setEmailMessage('邮箱已确认'); setRevision((value) => value + 1); })}><Form.Item name="token" label={t('邮件凭证')} rules={[{ required: true }, { len: 43 }]}><Input.Password autoComplete="off" maxLength={43} /></Form.Item><Button htmlType="submit" loading={busy}>{t('确认邮箱')}</Button></Form></> : null}
       </section> : null}

@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAuthenticated } from '../authorization/access.decorator.js';
 import { RateLimitGuard } from './rate-limit.guard.js';
-import { AccountProfileDto, AccountSessionDto, ChangePasswordDto, UpdateAccountAvatarDto, UpdateAccountProfileDto } from './dto/account.dto.js';
+import { AccountProfileDto, AccountSessionDto, AccountSessionHistoryPageDto, AccountSessionHistoryQueryDto, ChangePasswordDto, UpdateAccountAvatarDto, UpdateAccountProfileDto } from './dto/account.dto.js';
 import { AccountAvatarService } from './account-avatar.service.js';
 import { IdentityService } from './identity.service.js';
 import { SessionService } from './session.service.js';
@@ -59,6 +59,13 @@ export class AccountController {
   sessions(@Req() request: Request) {
     const session = this.session(request);
     return this.sessionService.listForUser(session.user.id, session.id);
+  }
+
+  @Get('sessions/history')
+  @ApiOkResponse({ type: AccountSessionHistoryPageDto })
+  sessionHistory(@Query() query: AccountSessionHistoryQueryDto, @Req() request: Request) {
+    const session = this.session(request);
+    return this.sessionService.historyForUser(session.user.id, session.id, query);
   }
 
   @Post('sessions/:sessionId/revoke')

@@ -218,6 +218,10 @@ export function getAccountSessions(): Promise<AccountSession[]> {
   return request<AccountSession[]>('/api/v1/me/sessions');
 }
 
+export function getAccountSessionHistory(page = 1): Promise<components['schemas']['AccountSessionHistoryPageDto']> {
+  return request<components['schemas']['AccountSessionHistoryPageDto']>(`/api/v1/me/sessions/history?page=${page}&pageSize=20`);
+}
+
 export async function revokeAccountSession(sessionId: string): Promise<void> {
   const token = await csrfToken();
   await request<void>(`/api/v1/me/sessions/${sessionId}/revoke`, {
