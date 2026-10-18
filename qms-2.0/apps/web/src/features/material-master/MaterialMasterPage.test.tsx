@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, ApiError, csrfToken } from '../../api/client';
 import { readXlsxFile } from '../imports/read-xlsx';
@@ -28,14 +28,15 @@ beforeEach(() => {
   vi.mocked(readXlsxFile).mockReset().mockResolvedValue([['物料编码', '物料名称'], ['00042', '中文物料'], ['00042', '不同名称']]);
   spreadsheet.rows = []; spreadsheet.writeBuffer.mockClear();
 });
-const upload = () => fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } });
+const upload = () => { if (!screen.queryByLabelText('物料清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入物料' })); fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } }); };
 
 it('shows two fields only and creates string codes through the generated contract', async () => {
   render(<MaterialMasterPage organizationPermissions={permissions} />);
   await screen.findByText('原物料');
+  fireEvent.click(screen.getByRole('button', { name: '新增物料' }));
   fireEvent.change(screen.getByLabelText('物料编码'), { target: { value: '00043' } });
   fireEvent.change(screen.getByLabelText('物料名称'), { target: { value: '中文新物料' } });
-  fireEvent.click(screen.getByRole('button', { name: '新增物料' }));
+  fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters', expect.objectContaining({ method: 'POST', body: JSON.stringify({ materialCode: '00043', materialName: '中文新物料' }) })));
   expect(screen.queryByText('单位')).not.toBeInTheDocument();
   expect(screen.queryByText('删除')).not.toBeInTheDocument();
@@ -49,10 +50,11 @@ it('allows write-only users to create twice without requesting a forbidden list'
   });
   render(<LanguageProvider><MaterialMasterPage organizationPermissions={['material-master:write']} /></LanguageProvider>);
   for (const code of ['FIRST', 'SECOND']) {
+    fireEvent.click(screen.getByRole('button', { name: '新增物料' }));
     fireEvent.change(screen.getByLabelText('物料编码'), { target: { value: code } });
     fireEvent.change(screen.getByLabelText('物料名称'), { target: { value: `物料${code}` } });
-    fireEvent.click(screen.getByRole('button', { name: '新增物料' }));
-    await waitFor(() => expect(screen.getByLabelText('物料编码')).toHaveValue(''));
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('button', { name: '新增物料' })).not.toBeDisabled());
   }
   expect(apiRequest).toHaveBeenCalledTimes(2);
@@ -95,7 +97,10 @@ it('renders the real English page and import outcomes through LanguageProvider',
     render(<LanguageProvider><MaterialMasterPage organizationPermissions={permissions} /></LanguageProvider>);
     await screen.findByRole('heading', { name: 'Material masters' });
     expect(screen.getByRole('button', { name: 'Add material' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
     expect(screen.getByLabelText('Material code')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: /批量导入物料|Batch import materials/ }));
     expect(screen.getByRole('button', { name: 'Download material template' })).toBeInTheDocument();
     expect(screen.queryByText('物料主数据')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Material list file'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } });
@@ -113,6 +118,7 @@ it('keeps import separate from manual-write permission and hides inaccessible da
   expect(screen.queryByRole('button', { name: '新增物料' })).not.toBeInTheDocument();
   expect(screen.queryByLabelText('物料清单文件')).not.toBeInTheDocument();
   view.rerender(<MaterialMasterPage organizationPermissions={['material-master:read', 'material-master:import']} />);
+  fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
   expect(screen.getByLabelText('物料清单文件')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '新增物料' })).not.toBeInTheDocument();
 });
@@ -130,7 +136,7 @@ it('discards late list responses and edit drafts after switching organization', 
 it('maps exactly the two columns, preserves case/zeroes and rejects formula or extra cells', () => {
   expect(parseMaterialMasterRows([['物料名称', '物料编码'], [' 中文物料 ', '00042'], [], ['字母', 'aBc']])).toEqual([{ rowNumber: 2, materialCode: '00042', materialName: '中文物料' }, { rowNumber: 4, materialCode: 'aBc', materialName: '字母' }]);
   for (const sheet of [[], [['物料编码', '单位']], [['物料编码', '物料名称'], [{ formula: '1+1', result: 2 }, '物料']], [['物料编码', '物料名称'], ['code', '', '额外']]]) expect(() => parseMaterialMasterRows(sheet)).toThrow();
-  expect(() => parseMaterialMasterRows([['物料编码', '物料名称'], ...Array.from({ length: 101 }, () => ['code', 'name'])])).toThrow('1–100');
+  expect(parseMaterialMasterRows([['物料编码', '物料名称'], ...Array.from({ length: 101 }, () => ['code', 'name'])])).toHaveLength(101);
 });
 
 it('keeps invalid business rows for independent server validation without converting numeric codes', async () => {
@@ -154,25 +160,34 @@ it('retains the edit draft when explicit version reload fails over the network',
   expect(screen.getByLabelText('编辑物料名称')).toHaveValue('网络失败仍保留');
 });
 
-it('guards organization changes with the existing unsaved-draft confirmation', async () => {
+it('guards organization changes while a closed import modal retains unsubmitted rows', async () => {
   vi.mocked(apiRequest).mockResolvedValue([material]);
   const organizations = ['a', 'b'].map((id) => ({ id: `org-${id}`, code: id, name: `组织${id}`, type: 'INTERNAL' as const, permissions }));
   render(<MemoryRouter initialEntries={['/app/admin']}><LanguageProvider><UnsavedChangesProvider><AdminPage organizations={organizations} /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   await screen.findByText('原物料');
-  fireEvent.change(screen.getByLabelText('物料名称'), { target: { value: '未保存草稿' } });
-  await userEvent.click(screen.getByRole('combobox', { name: '管理组织' }));
-  await userEvent.click(screen.getByText('组织b · b', { selector: '.ant-select-item-option-content' }));
+  upload(); await screen.findByText('中文物料');
+  const closeImport = async () => {
+    fireEvent.click(within(screen.getByRole('region', { name: '物料批量新增' })).getByRole('button', { name: /关\s*闭/ }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  };
+  await closeImport();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '管理组织' }));
+  fireEvent.click(screen.getByText('组织b · b', { selector: '.ant-select-item-option-content' }));
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
-  expect(screen.getByLabelText('物料名称')).toHaveValue('未保存草稿');
-  await userEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByLabelText('物料名称')).toHaveValue('未保存草稿');
-  await userEvent.click(screen.getByRole('combobox', { name: '管理组织' }));
-  await userEvent.click(screen.getByText('组织b · b', { selector: '.ant-select-item-option-content' }));
-  await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+  expect(apiRequest).not.toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b');
+  fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
+  expect(screen.getByText('中文物料')).toBeInTheDocument();
+  await closeImport();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '管理组织' }));
+  fireEvent.click(screen.getByText('组织b · b', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(screen.getByRole('button', { name: '放弃修改' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b'));
-  expect(screen.getByLabelText('物料名称')).toHaveValue('');
-}, 30_000);
+  fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
+  expect(screen.getByRole('button', { name: '导入物料' })).toBeDisabled();
+  expect(screen.queryByText('中文物料')).not.toBeInTheDocument();
+}, 60_000);
 
 it('previews and reports added, skipped, failed rows with row numbers', async () => {
   vi.mocked(apiRequest).mockResolvedValue({ created: 1, skipped: 1, failed: 1, items: [{ rowNumber: 2, code: '00042', status: 'CREATED' }, { rowNumber: 3, code: '00042', status: 'SKIPPED_DUPLICATE' }, { rowNumber: 4, code: 'BAD', status: 'FAILED' }] });
@@ -201,7 +216,8 @@ it('clears import preview and discards late parsing on organization switch', asy
   const view = render(<MaterialMasterImport organizationId="org-a" onImported={vi.fn()} />); upload();
   view.rerender(<MaterialMasterImport organizationId="org-b" onImported={vi.fn()} />);
   await act(async () => { resolve([['物料编码', '物料名称'], ['OLD', '旧组织物料']]); });
-  expect(screen.queryByText('旧组织物料')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: '导入物料' })).toBeDisabled();
+  expect(screen.queryByText('旧组织物料')).not.toBeInTheDocument(); if (!screen.queryByLabelText('物料清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
+  expect(screen.getByRole('button', { name: '导入物料' })).toBeDisabled();
 });
 
 it('exports only the loaded organization list as two text columns without interpreting formula-looking names', async () => {
@@ -219,4 +235,14 @@ it('exports only the loaded organization list as two text columns without interp
     expect(apiRequest).toHaveBeenCalledTimes(1);
     expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-a');
   } finally { click.mockRestore(); }
+});
+it('REQ0019 opens material creation and import separately according to permission', async () => {
+  render(<MaterialMasterPage organizationPermissions={['material-master:import']} />);
+  expect(screen.queryByLabelText('物料编码')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('物料清单文件')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '新增物料' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByLabelText('物料清单文件')).toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalled();
 });

@@ -20,6 +20,7 @@ it.each(['create', 'edit'])('shows success and releases busy after a StrictMode 
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : options?.method ? json(profile) : json({ items: [profile], total: 1, canManage: true })));
   render(<StrictMode><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:read', 'supplier-quality:profiles:write']} /></StrictMode>);
   if (action === 'create') {
+    fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
     fireEvent.change(screen.getByLabelText('供应商名称'), { target: { value: '新供应商' } });
     fireEvent.change(screen.getByLabelText('业务编码'), { target: { value: 'B' } });
     fireEvent.click(screen.getByRole('button', { name: '登记供应商' }));
@@ -30,12 +31,13 @@ it.each(['create', 'edit'])('shows success and releases busy after a StrictMode 
     fireEvent.click(editor.getByRole('button', { name: '保存供应商资料' }));
   }
   await screen.findByText('供应商资料已保存');
-  if (action === 'create') expect(screen.getByRole('button', { name: '登记供应商' })).toBeEnabled();
+  if (action === 'create') expect(screen.getByRole('button', { name: '登记供应商资料' })).toBeEnabled();
   else await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
 it('registers the actual unsaved guard for a supplier draft', async () => {
   render(<MemoryRouter><UnsavedChangesProvider><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:write']} /><Link to="/other">离开</Link></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
   fireEvent.change(screen.getByLabelText('供应商名称'), { target: { value: '未保存' } });
   fireEvent.click(screen.getByRole('link', { name: '离开' }));
   expect(await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).toBeInTheDocument();
@@ -47,8 +49,10 @@ it('renders the real English supplier profile and import controls', async () => 
   localStorage.setItem('qms:locale:v1', 'en-US');
   try {
     render(<LanguageProvider><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:write']} /></LanguageProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Register supplier profile' }));
     expect(await screen.findByLabelText('Supplier name')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Register supplier' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /批量导入供应商|Batch import suppliers/ }));
     expect(screen.getByRole('button', { name: 'Download supplier template' })).toBeInTheDocument();
     expect(screen.queryByText('登记供应商资料')).not.toBeInTheDocument();
   } finally { localStorage.removeItem('qms:locale:v1'); }
@@ -149,6 +153,7 @@ it('creates an independent supplier without selecting an enterprise', async () =
     return new Response(JSON.stringify(path.endsWith('/csrf') ? { csrfToken: 'csrf' } : { items: [], total: 0, canManage: true }), { headers: { 'content-type': 'application/json' } });
   }));
   render(<SupplierProfilesPage organizationId="owner" organizationPermissions={['supplier-quality:profiles:write']} />);
+  fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
   fireEvent.change(await screen.findByLabelText('供应商名称'), { target: { value: '独立供应商' } });
   fireEvent.change(screen.getByLabelText('业务编码'), { target: { value: '0007' } });
   fireEvent.click(screen.getByRole('button', { name: '登记供应商' }));
@@ -157,4 +162,12 @@ it('creates an independent supplier without selecting an enterprise', async () =
   expect(JSON.parse(request!.body!)).toMatchObject({ organizationId: 'owner', businessCode: '0007', displayName: '独立供应商' });
   expect(JSON.parse(request!.body!)).not.toHaveProperty('supplierOrganizationId');
   expect(requests.some((item) => item.path.includes('supplier-options') || item.path.includes('profiles?'))).toBe(false);
+});
+it('REQ0019 keeps creation and import inside separate button modals', async () => {
+  render(<SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:write']} />);
+  expect(screen.queryByLabelText('供应商名称')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('供应商清单文件')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByLabelText('供应商名称')).toBeInTheDocument();
 });
