@@ -1,5 +1,7 @@
 import { render, screen, within, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ConfigProvider } from 'antd';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -41,7 +43,7 @@ function server(patch?: (init: RequestInit) => Response | Promise<Response>) {
   return fetch;
 }
 async function openMatrix(permissions = organization.permissions, extra: AdminOrganization[] = []) {
-  render(<ConfigProvider theme={{ token: { motion: false } }}><AdminPage organizations={[{ ...organization, permissions }, ...extra]} /></ConfigProvider>);
+  render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><UnsavedChangesProvider><AdminPage organizations={[{ ...organization, permissions }, ...extra]} /></UnsavedChangesProvider></MemoryRouter></ConfigProvider>);
   await interaction.click(screen.getByRole('tab', { name: '权限矩阵' }));
   await screen.findByRole('combobox', { name: '选择角色' });
   await screen.findByRole('checkbox', { name: '用户管理 · 查看' });
@@ -167,7 +169,8 @@ it('keeps the organization draft on cancellation and discards it only after conf
   server(); await openMatrix(organization.permissions, [{ ...organization, id: 'org-b', code: 'b', name: '乙组织' }]);
   await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await select('管理组织', '乙组织 · b');
-  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
+  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
   await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();

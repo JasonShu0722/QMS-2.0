@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Alert, Modal, Select, Spin, Tabs, Typography } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { useInRouterContext, useLocation, useNavigate, type Location, type NavigateFunction } from 'react-router-dom';
+import { Alert, Select, Spin, Tabs, Typography } from 'antd';
 import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
@@ -15,17 +16,98 @@ import { MaterialMasterPage } from '../material-master/MaterialMasterPage';
 import { SupplierProfilesPage } from '../supplier-quality/SupplierProfilesPage';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
-export function AdminPage({ organizations, error, traceId, onDirectoryChange }: { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void }) {
+type AdminPageProps = { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void };
+type AdminLocation = Pick<Location, 'pathname' | 'search' | 'hash'>;
+const locationPath = (location?: AdminLocation) => location ? `${location.pathname}${location.search}${location.hash}` : '';
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function AdminPage(props: AdminPageProps) {
+  return useInRouterContext() ? <RoutedAdminPage {...props} /> : <AdminPageContent {...props} />;
+}
+
+function RoutedAdminPage(props: AdminPageProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return <AdminPageContent {...props} location={location} navigate={navigate} />;
+}
+
+function AdminPageContent({ organizations, error, traceId, onDirectoryChange, location, navigate }: AdminPageProps & { location?: AdminLocation; navigate?: NavigateFunction }) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [selectedId, setSelectedId] = useState<string>();
-  const [matrixDirty, setMatrixDirty] = useState(false);
   const [matrixBusy, setMatrixBusy] = useState(false);
-  const [pendingOrganization, setPendingOrganization] = useState<string>();
   const [activeTab, setActiveTab] = useState<string>();
-  const organization = organizations?.find((entry) => entry.id === selectedId) ?? organizations?.find((entry) => entry.type === 'INTERNAL') ?? organizations?.[0];
+  const [acceptedLocation, setAcceptedLocation] = useState(location);
+  const [queuedLocation, setQueuedLocation] = useState<AdminLocation>();
+  const [targetConsumed, setTargetConsumed] = useState(false);
+  const restoringPath = useRef<string>(undefined);
+  const query = new URLSearchParams(acceptedLocation?.search);
+  const targeting = !targetConsumed && ['organizationId', 'section', 'userId'].some((key) => query.has(key));
+  const organizationId = query.get('organizationId') ?? '';
+  const userId = query.get('userId') ?? '';
+  const validTarget = ['organizationId', 'section', 'userId'].every((key) => query.getAll(key).length === 1)
+    && query.get('section') === 'users' && uuid.test(organizationId) && uuid.test(userId);
+  const organization = targeting
+    ? organizations?.find((entry) => entry.id.toLowerCase() === organizationId.toLowerCase())
+    : organizations?.find((entry) => entry.id === selectedId) ?? organizations?.find((entry) => entry.type === 'INTERNAL') ?? organizations?.[0];
+  const targetUserId = targeting && validTarget ? userId.toLowerCase() : undefined;
+  function changeScope(action: () => void) {
+    if (matrixBusy) return;
+    requestLeave(action);
+  }
+
+  function changeQuery(next: AdminLocation) {
+    if (matrixBusy) { setQueuedLocation(next); return; }
+    changeScope(() => {
+      setSelectedId(undefined);
+      setTargetConsumed(false);
+      setActiveTab('users');
+      setAcceptedLocation(next);
+      restoringPath.current = locationPath(next);
+      navigate?.(locationPath(next), { replace: true });
+    });
+  }
+
+  useEffect(() => {
+    if (restoringPath.current !== undefined) {
+      if (locationPath(location) !== restoringPath.current) return;
+      restoringPath.current = undefined;
+    }
+    if (location && acceptedLocation && location.pathname === acceptedLocation.pathname && location.search === acceptedLocation.search && location.hash !== acceptedLocation.hash) {
+      setAcceptedLocation(location);
+      return;
+    }
+    const next = locationPath(location) !== locationPath(acceptedLocation) ? location : queuedLocation;
+    if (!next) return;
+    // Keep the accepted URL and mounted draft until the shared leave guard approves.
+    if (locationPath(location) !== locationPath(acceptedLocation)) {
+      restoringPath.current = locationPath(acceptedLocation);
+      navigate?.(locationPath(acceptedLocation), { replace: true });
+    }
+    if (matrixBusy) { setQueuedLocation(next); return; }
+    setQueuedLocation(undefined);
+    changeQuery(next);
+  }, [location, acceptedLocation, queuedLocation, matrixBusy, navigate, requestLeave]);
+
+  useEffect(() => {
+    if (!location || !navigate) return;
+    function protectTargetLink(event: MouseEvent) {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement) || (link.target && link.target !== '_self') || link.hasAttribute('download')) return;
+      const next = new URL(link.href, window.location.href);
+      if (next.origin !== window.location.origin || next.pathname !== location!.pathname || next.search === location!.search) return;
+      // Handle this scope change before the provider's link guard to avoid two confirmations.
+      event.preventDefault();
+      changeQuery(next);
+    }
+    document.addEventListener('click', protectTargetLink, true);
+    return () => document.removeEventListener('click', protectTargetLink, true);
+  }, [location, navigate, matrixBusy, requestLeave]);
+
   if (error) return <Alert type="error" title={t(error)} description={traceId ? <code>{traceId}</code> : undefined} role="alert" showIcon />;
   if (!organizations) return <Spin tip={t('加载系统管理权限')} />;
+  if (targeting && (!validTarget || !organization || !allows(organization, 'users:read'))) return <Alert type="error" title={t('账号定位失败：链接无效或无权查看目标组织账号。')} role="alert" showIcon />;
   if (!organization) return <Alert type="warning" title={t('无系统管理访问权限')} showIcon />;
   const users = allows(organization, 'users:read') || allows(organization, 'users:create');
   const roles = allows(organization, 'roles:read');
@@ -42,16 +124,13 @@ export function AdminPage({ organizations, error, traceId, onDirectoryChange }: 
   ];
   const activeTabAllowed = (activeTab === 'users' && users) || ((activeTab === 'roles' || activeTab === 'matrix') && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">
-    <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
-      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) { if (matrixDirty) setPendingOrganization(id); else requestLeave(() => setSelectedId(id)); } }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
+      <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
+      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
-    <Tabs key={organization.id} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
-      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} /> }] : []),
-      ...(roles ? [{ key: 'roles', label: t('角色'), children: <RoleAdministration organization={organization} /> }, { key: 'matrix', label: t('权限矩阵'), children: <PermissionMatrix organization={organization} onDirtyChange={setMatrixDirty} onBusyChange={setMatrixBusy} /> }] : []),
+    <Tabs key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
+      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} /> }] : []),
+      ...(roles ? [{ key: 'roles', label: t('角色'), children: <RoleAdministration organization={organization} /> }, { key: 'matrix', label: t('权限矩阵'), children: <PermissionMatrix organization={organization} onBusyChange={setMatrixBusy} /> }] : []),
       ...additionalTabs,
     ]} />
-    <Modal title={t('放弃未保存的权限修改？')} open={!!pendingOrganization} okText={t('放弃修改')} cancelText={t('继续编辑')} onCancel={() => setPendingOrganization(undefined)} onOk={() => { const id = pendingOrganization; setPendingOrganization(undefined); requestLeave(() => { setMatrixDirty(false); setSelectedId(id); }); }}>
-      {t('当前草稿尚未保存，切换组织将放弃修改。')}
-    </Modal>
   </section>;
 }

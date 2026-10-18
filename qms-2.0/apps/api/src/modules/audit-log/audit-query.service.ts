@@ -4,6 +4,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from './audit-log.service.js';
 import { AuditPageDto, AuditQueryDto } from './audit-query.dto.js';
+import { auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
 
 @Injectable()
 export class AuditQueryService {
@@ -25,14 +26,14 @@ export class AuditQueryService {
       };
       const [total, rows] = await Promise.all([
         transaction.auditEvent.count({ where }),
-        transaction.auditEvent.findMany({ where: { AND: [where, ...(cursor ? [{ OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] }] : [])] }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1 }),
+        transaction.auditEvent.findMany({ where: { AND: [where, ...(cursor ? [{ OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }] }] : [])] }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, select: { ...auditEventReadSelect, metadata: true } }),
       ]);
       const more = rows.length > pageSize;
       const visible = rows.slice(0, pageSize);
       const last = visible.at(-1);
       return {
         total,
-        items: visible.map((entry) => ({ id: entry.id, organizationId: entry.organizationId!, actorUserId: entry.actorUserId, action: entry.action, resourceType: entry.resourceType, resourceId: entry.resourceId, outcome: entry.outcome, traceId: entry.traceId, createdAt: entry.createdAt.toISOString(), metadata: this.audit.safeMetadata(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) ? entry.metadata as Prisma.InputJsonObject : {}) })),
+        items: visible.map((entry) => ({ id: entry.id, organizationId: entry.organizationId!, actorUserId: entry.actorUserId, action: entry.action, actionLabel: auditActionLabel(entry.action), actorSummary: auditActorSummary(entry), resourceType: entry.resourceType, resourceId: entry.resourceId, outcome: entry.outcome, traceId: entry.traceId, createdAt: entry.createdAt.toISOString(), metadata: this.audit.safeMetadata(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) ? entry.metadata as Prisma.InputJsonObject : {}) })),
         nextCursor: more && last ? Buffer.from(JSON.stringify([last.createdAt.toISOString(), last.id])).toString('base64url') : null,
       };
     }, { isolationLevel: 'RepeatableRead' });

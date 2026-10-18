@@ -8,14 +8,14 @@
 - 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：四单元均已有实现与规格审查；A 质量对比度修复已复审无阻断，B API、D 质量审查通过，C/B Web/Admin 当前源码质量复审进行中。B 会话加载竞态有红绿灯证据；Admin 双确认已移除页面重复对话框，等价共享注册 mock 已修正，相关 49/49 在 Node 24.21.0 通过。完整 Web 发现旧矩阵测试没有 Provider，已修正 fixture；正在重新全量验证。PR、部署、最终人工验收、关闭和回填尚未完成。下一动作由 Codex 收敛当前源码门禁与复审，按单元提 PR，检查通过后串行合并部署。
+- 分别状态：四单元均已有实现与规格审查；A 质量对比度修复已复审无阻断，B API、D 质量审查通过，C/B Web/Admin 当前源码质量复审已通过，无 P0/P1/P2 阻断。B 会话加载竞态有红绿灯证据；Admin 双确认已移除页面重复对话框，等价共享注册 mock 已修正，相关 49/49 在 Node 24.21.0 通过。完整 Web 发现旧矩阵测试没有 Provider，已修正 fixture；又以红灯证明并修复错误重试覆盖邮箱草稿，账号18＋真实矩阵27联合45/45通过。A/B/C已提交并创建PR，D待提交；部署、最终人工验收、关闭和回填尚未完成。下一动作由 Codex 收敛当前源码门禁与复审，按单元提 PR，检查通过后串行合并部署。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
 | --- | --- | --- | --- | --- |
-| A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；PR 尚未创建 | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
-| B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；PR 尚未创建 | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
-| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；PR 尚未创建 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
+| A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；[PR #48](https://github.com/JasonShu0722/QMS-2.0/pull/48)；HEAD `ef810dd` | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
+| B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；[PR #49](https://github.com/JasonShu0722/QMS-2.0/pull/49)；HEAD `8e579e8` | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
+| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；HEAD `3d44fff` | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
 | D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；PR 尚未创建 | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
 
 ## 实现步骤与文件责任
@@ -100,3 +100,7 @@ API 为本人历史读取与审计安全响应/导出增量，历史事实只读
 - 运行时：早期未加载入口导致 Node 22 下的定向结果仅为诊断证据；所有最终门禁从 Enter-Qms.ps1 启动，Node 24.21.0/pnpm 11.19.0。
 - 授权回查：Git 外 req17-21-deploy-auth-recheck-2.json，只读成功，五条仍开发中且批准五字段未实质改变。第一次 CLI 因内存分配失败，没有取得记录或执行写入。
 - 未将 CSS fixture、源码审查、用户范围确认、测试启动或未完整输出的进程计为真实业务浏览器 PASS。最终候选人工清单仍待实际版本及反馈。
+
+- 当前审查：C规格/质量均通过（19冻结文件匹配）；B草稿恢复复审通过；Admin质量复审无阻断，no-provider独立宿主及replace历史为P3；D已有规格/质量通过。公共翻译随B预置C/D词条，API client及生成契约按单元分开；C先提交相邻导航，D再提交账号定位与真实Provider矩阵夹具。
+- 当前独立快照：A ef810dd / PR48、B 8e579e8 / PR49、C 3d44fff / PR50；堆叠base明确，前置部署后更新main基线并复核。A的CI已通过checks/API unit及部分Web分片，其余运行中；不能据此先合并。
+- Node24最终本地：A主题/工作台13/13，B账号＋真实矩阵45/45，Admin定位及共享guard49/49，Web build通过（既有大包提示），governance通过。全量Web多次因本机资源/超时未完成或失败，最终以各提交CI全部结果补齐，不能记为本地全集PASS。

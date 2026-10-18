@@ -1,0 +1,11 @@
+.audit-query-toolbar.ant-form-inline,
+.audit-query-more { display: flex; flex-wrap: wrap; gap: var(--qms-section-gap, 12px); align-items: center; }
+.audit-query-toolbar.ant-form-inline .ant-form-item { margin: 0; }
+.audit-query-toolbar > .ant-form-item { flex: 0 1 230px; }
+.audit-query-more { flex-basis: 100%; }
+.audit-query-more > .ant-form-item { flex: 1 1 210px; }
+.audit-actor, .audit-action { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .audit-query-toolbar > .ant-form-item { flex: 1 1 180px; }
+  .audit-query-toolbar .ant-form-item-control-input { min-width: 0; }
+}

@@ -6,6 +6,7 @@ import { assertActiveAuthentication, assertRecentAuthentication } from '../../co
 import { encryptSecret, decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from './audit-log.service.js';
 import { AuditExportContentDto, AuditExportDto, AuditExportRequestDto } from './audit-export.dto.js';
+import { auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
 
 function csvCell(value: string | null) {
   const normalized = value ?? '';
@@ -25,12 +26,15 @@ export class AuditExportService {
     return this.controlled(actor, traceId, async (transaction) => {
       await assertRecentAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, ['audit:read', 'audit:export']);
-      const rows = await transaction.auditEvent.findMany({ where: { organizationId, actorUserId: query.actorUserId, action: query.action, resourceType: query.resourceType, resourceId: query.resourceId, outcome: query.outcome, ...(from || to ? { createdAt: { gte: from, lte: to } } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 5001, select: { id: true, createdAt: true, actorUserId: true, action: true, resourceType: true, resourceId: true, outcome: true, traceId: true } });
+      const rows = await transaction.auditEvent.findMany({ where: { organizationId, actorUserId: query.actorUserId, action: query.action, resourceType: query.resourceType, resourceId: query.resourceId, outcome: query.outcome, ...(from || to ? { createdAt: { gte: from, lte: to } } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 5001, select: auditEventReadSelect });
       if (rows.length > 5000) throw new HttpException({ code: 'EXPORT_TOO_LARGE', message: '请缩小导出筛选范围，最多 5000 条' }, 422);
       const settings = await transaction.platformSettings.findUnique({ where: { organizationId }, select: { exportRetentionMinutes: true } });
       const id = randomUUID();
       const expiresAt = new Date(Date.now() + (settings?.exportRetentionMinutes ?? 1440) * 60000);
-      const csv = '\uFEFF' + [['id', 'createdAt', 'actorUserId', 'action', 'resourceType', 'resourceId', 'outcome', 'traceId'].map(csvCell).join(','), ...rows.map((row) => [row.id, row.createdAt.toISOString(), row.actorUserId, row.action, row.resourceType, row.resourceId, row.outcome, row.traceId].map(csvCell).join(','))].join('\r\n');
+      const csv = '\uFEFF' + [['id', 'createdAt', 'actorUserId', 'action', 'resourceType', 'resourceId', 'outcome', 'traceId', 'actionLabel', 'accountType', 'username', 'organizationName'].map(csvCell).join(','), ...rows.map((row) => {
+        const summary = auditActorSummary(row);
+        return [row.id, row.createdAt.toISOString(), row.actorUserId, row.action, row.resourceType, row.resourceId, row.outcome, row.traceId, auditActionLabel(row.action), summary?.accountType ?? null, summary?.username ?? null, summary?.organizationName ?? null].map(csvCell).join(',');
+      })].join('\r\n');
       await transaction.exportArtifact.create({ data: { id, organizationId, createdById: actor.id, expiresAt, rowCount: rows.length, ciphertext: encryptSecret(csv, `export:${id}:${organizationId}:${actor.id}`) } });
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AUDIT_EXPORT_CREATED', resourceType: 'ExportArtifact', resourceId: id, outcome: 'SUCCESS', traceId }, transaction);
       return { id, expiresAt: expiresAt.toISOString(), rowCount: rows.length, downloadPath: `/api/v1/admin/audit-exports/${id}?organizationId=${organizationId}` };
