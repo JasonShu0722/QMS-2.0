@@ -8,15 +8,15 @@
 - 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：四单元均已有实现与规格审查；A 质量对比度修复已复审无阻断，B API、D 质量审查通过，C/B Web/Admin 当前源码质量复审已通过，无 P0/P1/P2 阻断。B 会话加载竞态有红绿灯证据；Admin 双确认已移除页面重复对话框，等价共享注册 mock 已修正，相关 49/49 在 Node 24.21.0 通过。完整 Web 发现旧矩阵测试没有 Provider，已修正 fixture；又以红灯证明并修复错误重试覆盖邮箱草稿，账号18＋真实矩阵27联合45/45通过。A/B/C已提交并创建PR，D待提交；部署、最终人工验收、关闭和回填尚未完成。下一动作由 Codex 收敛当前源码门禁与复审，按单元提 PR，检查通过后串行合并部署。
+- 分别状态：四单元实现及独立规格/质量审查均通过；四个 PR 最新源码 CI 全部通过。A PR48 已合并部署 `31d0b657`（main CI39150940325、部署39151587587），B PR49 已合并部署 `47db5bee`（main CI39152046356、部署39152712419）；均核对迁移前加密快照、无待迁移、API/Worker/Web健康与HTTP新资源。C PR50 已合并 `395acc27`，等待main CI/部署；D PR51最新代码 `b836b02` 的CI39151275101全部通过，等待C上线后改base并合并。最终真实业务浏览器验收、Issue关闭与飞书回填尚未完成。下一动作：Codex完成C/D逐版本部署核验、最终联合只读核验及证据归档。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
 | --- | --- | --- | --- | --- |
-| A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；[PR #48](https://github.com/JasonShu0722/QMS-2.0/pull/48)；HEAD `ef810dd` | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
-| B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；[PR #49](https://github.com/JasonShu0722/QMS-2.0/pull/49)；HEAD `8e579e8` | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
-| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；HEAD `3d44fff` | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
-| D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；PR 尚未创建 | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
+| A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；[PR #48](https://github.com/JasonShu0722/QMS-2.0/pull/48)；部署 `31d0b657` | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
+| B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；[PR #49](https://github.com/JasonShu0722/QMS-2.0/pull/49)；部署 `47db5bee` | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
+| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；main `395acc27`；待部署 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
+| D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；[PR #51](https://github.com/JasonShu0722/QMS-2.0/pull/51)；代码 HEAD `b836b02` | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
 
 ## 实现步骤与文件责任
 
@@ -25,39 +25,39 @@
 ### 任务 A：统一密度
 
 - [x] 建立 A Issue #47，记录间距标准和横展清单。
-- [ ] 先为共享密度 token 与既有主题行为补充真实失败断言，再修改 `apps/web/src/theme/`、`layouts/shell.css`、`workbench/workbench.css` 及正式领域 CSS；保留控件/触控和响应式。
-- [ ] 梳理页面实现说明，删除冗余文案，保留安全、错误、权限、未保存与必要导入规则；记录每处处理或例外。
-- [ ] 同步统一设计规范和 FRONTEND-DESIGN，完成主题、顶栏、工作台及受影响组件测试、类型检查与构建。
+- [x] 先为共享密度 token 与既有主题行为补充真实失败断言，再修改 `apps/web/src/theme/`、`layouts/shell.css`、`workbench/workbench.css` 及正式领域 CSS；保留控件/触控和响应式。
+- [x] 梳理页面实现说明，删除冗余文案，保留安全、错误、权限、未保存与必要导入规则；记录每处处理或例外。
+- [x] 同步统一设计规范和 FRONTEND-DESIGN，完成主题、顶栏、工作台及受影响组件测试、类型检查与构建。
 
 ### 任务 B：个人账号
 
 - [x] Issue #44 已固定范围，实施前回读五条授权与目标；接续时 revision 248 未变，负责人再次确认范围。
-- [ ] API：先补 `apps/api/test/identity/` 历史分页及真实 PG 允许/拒绝测试；修改 `session.service.ts`、`account.controller.ts`、`dto/account.dto.ts`。本人过滤、有界分页、安全投影、稳定排序；不改数据库与保留期限。
-- [ ] 主代理生成并检查 contracts，新增生成类型导出及 `apps/web/src/api/client.ts` 历史请求。
-- [ ] Web：先补顶栏/账号/弹窗测试，再实现 EN/CN、头像顺序、改密弹窗、账号信息与安全整合、历史分页。修改 `layouts/ShellHeader`、`features/account/`、`features/auth/SecurityPage`；统一语言条目由主代理整合。
-- [ ] 验证旧锚点无错误、首登挑战不变、改密与撤销语义、双门户及安全秘密清理。
+- [x] API：先补 `apps/api/test/identity/` 历史分页及真实 PG 允许/拒绝测试；修改 `session.service.ts`、`account.controller.ts`、`dto/account.dto.ts`。本人过滤、有界分页、安全投影、稳定排序；不改数据库与保留期限。
+- [x] 主代理生成并检查 contracts，新增生成类型导出及 `apps/web/src/api/client.ts` 历史请求。
+- [x] Web：先补顶栏/账号/弹窗测试，再实现 EN/CN、头像顺序、改密弹窗、账号信息与安全整合、历史分页。修改 `layouts/ShellHeader`、`features/account/`、`features/auth/SecurityPage`；统一语言条目由主代理整合。
+- [x] 验证旧锚点无错误、首登挑战不变、改密与撤销语义、双门户及安全秘密清理。
 
 ### 任务 C：主数据
 
 - [x] 建立 C Issue #45，固定前端分块方案与独立幂等/中断语义。
-- [ ] 先写超过 100 行、请求体边界、进度、取消/继续、未知网络结果同 key 重试、离开保护测试。
-- [ ] 修改 `features/imports/`、三领域 Import 与清单页；新增/导入弹窗，按行数与字节预算分块，保留原全局行号和逐行结果；不改服务端安全限制。
-- [ ] 主代理整合相邻导航与中英词条；验证组织切换、无权限及既有编辑/导出/关系。
+- [x] 先写超过 100 行、请求体边界、进度、取消/继续、未知网络结果同 key 重试、离开保护测试。
+- [x] 修改 `features/imports/`、三领域 Import 与清单页；新增/导入弹窗，按行数与字节预算分块，保留原全局行号和逐行结果；不改服务端安全限制。
+- [x] 主代理整合相邻导航与中英词条；验证组织切换、无权限及既有编辑/导出/关系。
 
 ### 任务 D：审计
 
 - [x] 建立 D Issue #46，固定动作解释与安全操作人摘要，排除新建姓名字段。
-- [ ] 先写真实 PG 隔离/系统与失效操作人/CSV安全与权限测试，再扩展 audit-query/export DTO 与服务。
-- [ ] 主代理生成 contracts；改造 AuditAdministration 紧凑筛选、中文动作/账号列、具有目标账号读取权限的定位链接。
-- [ ] 验证原筛选快照/5000上限/仅创建者下载、公式防护、组织范围与账号定位。
+- [x] 先写真实 PG 隔离/系统与失效操作人/CSV安全与权限测试，再扩展 audit-query/export DTO 与服务。
+- [x] 主代理生成 contracts；改造 AuditAdministration 紧凑筛选、中文动作/账号列、具有目标账号读取权限的定位链接。
+- [x] 验证原筛选快照/5000上限/仅创建者下载、公式防护、组织范围与账号定位。
 
 ## 验证、审查与交付检查点
 
-- [ ] 各任务 TDD 红绿灯及邻近回归；记录命令、真实结果与 Git 外日志。
-- [ ] 各单元独立规格审查通过，再进行独立质量审查；反馈返修后复审，不用实现者自审替代。
+- [x] 各任务 TDD 红绿灯及邻近回归；记录命令、真实结果与 Git 外日志。
+- [x] 各单元独立规格审查通过，再进行独立质量审查；反馈返修后复审，不用实现者自审替代。
 - [ ] 主代理冻结源码，运行 API/Web 测试、真实 PostgreSQL 集成、API/Web 构建、contracts:generate/check、check:governance、归档隔离、Compose config 与 diff 检查。缺前置失败并明确未执行范围。
-- [ ] 按单元文件与基线串行提交；每个 PR 核对独立差异和依赖，前置布局作为显式堆叠 base，不能将混合快照结果当各 PR 独立 PASS。版本再次查重。
-- [ ] 推功能分支、创建 PR 并附当前聊天；普通关联 Issue，禁止自动关闭关键字。核对最新 PR 检查。
+- [x] 按单元文件与基线串行提交；每个 PR 核对独立差异和依赖，前置布局作为显式堆叠 base，不能将混合快照结果当各 PR 独立 PASS。版本再次查重。
+- [x] 推功能分支、创建 PR 并附当前聊天；普通关联 Issue，禁止自动关闭关键字。核对最新 PR 检查。
 - [ ] 合并与发布另核对授权；获准后逐版本核主分支/部署 SHA、镜像、迁移、健康和目标行为。
 - [ ] 最终包含四单元的版本逐 REQ 和联合回归：双门户、六主题、1440/1024/390、中英文、键盘、未保存、导入与权限；浏览器不可用时交付手工清单并保持待验收。
 - [ ] 最终验收后获准写证据→关闭 Issue 并回读→最小回填五条需求并回读，失败保留接续点，不自改阶段权限。
@@ -104,3 +104,16 @@ API 为本人历史读取与审计安全响应/导出增量，历史事实只读
 - 当前审查：C规格/质量均通过（19冻结文件匹配）；B草稿恢复复审通过；Admin质量复审无阻断，no-provider独立宿主及replace历史为P3；D已有规格/质量通过。公共翻译随B预置C/D词条，API client及生成契约按单元分开；C先提交相邻导航，D再提交账号定位与真实Provider矩阵夹具。
 - 当前独立快照：A ef810dd / PR48、B 8e579e8 / PR49、C 3d44fff / PR50；堆叠base明确，前置部署后更新main基线并复核。A的CI已通过checks/API unit及部分Web分片，其余运行中；不能据此先合并。
 - Node24最终本地：A主题/工作台13/13，B账号＋真实矩阵45/45，Admin定位及共享guard49/49，Web build通过（既有大包提示），governance通过。全量Web多次因本机资源/超时未完成或失败，最终以各提交CI全部结果补齐，不能记为本地全集PASS。
+
+## 发布接续实录（2026-10-19，Asia/Taipei）
+
+| 单元 | PR最新源码检查 | main与部署 | 实际核验 |
+| --- | --- | --- | --- |
+| A / V0.0.16 | PR48 / ef810dd / CI39150323034 success | 31d0b657 / mainCI39150940325 / deploy39151587587 success | 加密快照验证、101迁移无待执行、API/Worker/Web健康；HTTP200，index-C83V3G9s.js、index-6FsIOYwN.css，密度与accent-text标记存在 |
+| B / V0.0.17 | PR49 / a9eb045 / CI39151261515 success | 47db5bee / mainCI39152046356 / deploy39152712419 success | 同上部署门禁；HTTP200，index-Bp0NKiP6.js、index-Ct7coGGV.css，本人历史契约存在，匿名历史401 |
+| C / V0.0.18 | PR50 / 8b7e2ff / CI39151268693 success | main395acc27；mainCI/部署待执行完成 | 22文件差异，main内容树与B基线相同后合并；不得先记上线 |
+| D / V0.0.19 | PR51 / b836b02 / CI39151275101 success | 待C部署后接续 | 真实审计/账号定位/矩阵保护已复审；本次文档状态更新不改变运行源码 |
+
+四单元最新PR的完整Web四分片、API单测、真实PostgreSQL、扫描/存储、Worker生命周期、契约/治理/归档及Compose均在CI实际通过；本地原失败/中断日志仍保留，不转录为本地全集PASS。B的导航语言调用方遗漏在CI暴露，用EN radio更新两处旧下拉交互，15/15本地通过且独立复审未改变导航/授权断言；fix传播至C/D原PR。
+
+线上只读核验脚本与结果在Git外req17-21-verify-http.mjs、req17-21-{a,b}-deployment-http.json；只证明HTTP/公开契约/资源，未创建生产业务数据，也未证明真实登录后的浏览器业务验收。
