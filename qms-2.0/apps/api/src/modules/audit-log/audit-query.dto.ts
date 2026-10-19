@@ -44,11 +44,19 @@ export class AuditQueryDto {
   cursor?: string;
 }
 
+export class AuditActorSummaryDto {
+  @ApiProperty() username!: string;
+  @ApiProperty({ enum: ['INTERNAL', 'SUPPLIER'] }) accountType!: 'INTERNAL' | 'SUPPLIER';
+  @ApiProperty() organizationName!: string;
+}
+
 export class AuditEventDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ type: String, nullable: true }) actorUserId!: string | null;
   @ApiProperty() action!: string;
+  @ApiProperty() actionLabel!: string;
+  @ApiProperty({ type: AuditActorSummaryDto, nullable: true }) actorSummary!: AuditActorSummaryDto | null;
   @ApiProperty() resourceType!: string;
   @ApiProperty({ type: String, nullable: true }) resourceId!: string | null;
   @ApiProperty() outcome!: string;

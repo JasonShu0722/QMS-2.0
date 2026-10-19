@@ -12,6 +12,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 | `GET/PATCH /api/v1/me` | 读取或更新当前账号邮箱等可编辑资料；用户名、账号类型、组织和状态由服务端维护 |
 | `POST /api/v1/me/password` | 校验当前口令后修改密码，并撤销其他登录会话 |
 | `GET /api/v1/me/sessions` | 返回当前用户的登录会话摘要，不返回 Session 原文或哈希 |
+| `GET /api/v1/me/sessions/history` | 本人现有会话历史分页；`page` 默认 1、上限 1000000，`pageSize` 默认 20、上限 100；拒绝额外目标参数，返回 `items/total/page/pageSize`，不返回令牌或哈希 |
 | `POST /api/v1/me/sessions/:sessionId/revoke` | 撤销当前用户的其他登录会话；当前会话使用退出登录 |
 | `GET /api/v1/organizations/current` | 功能与组织范围校验后返回组织；可选 organizationId 不能拓宽供应商范围 |
 | `GET /api/v1/system/permissions` | 返回服务端授权上下文的组织及权限列表 |
@@ -24,6 +25,8 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 写请求携带 Cookie 和 `x-csrf-token`，Web 请求使用同源 `/api/v1`。除匿名登录和重置兑换等认证入口外，账号与管理接口要求有效 Session。错误统一包含 `code`、`message`、`fields`、`traceId`；不对客户端暴露堆栈、SQL、口令或内部路径。CSRF、限流和组织权限错误都有稳定代码；具体 status/schema 以当前生成契约为准。
 
 ## 管理员接口
+
+REQ-0020 开发增量：审计事件增加 `actionLabel` 与可空 `actorSummary`（`username/accountType/organizationName`），保留原动作与操作人 UUID。`actionLabel` 对当前实际发出的已知动作提供中文说明，未知动作仍原码回退；不是对任意字符串自动翻译。摘要仅限操作人当前主组织匹配事件授权组织，不能视为历史身份快照。CSV 使用同一安全读取模型并保留既有权限、列、数量与下载边界；本轮状态见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。
 
 下表路径统一以 `/api/v1/admin` 为前缀。query 中的 `organizationId` 为可选 UUID，省略时使用会话主组织；`POST /users` 与 `POST /roles` 则由必填 body.organizationId 选择组织。其他组织的权限不能补充所选组织中缺失的权限；供应商只能本企业。路径中的 userId/roleId 为 UUID。
 

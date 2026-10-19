@@ -5857,6 +5857,12 @@ export interface components {
             positionIds: string[];
             expectedPositionIds: string[];
         };
+        AuditActorSummaryDto: {
+            username: string;
+            /** @enum {string} */
+            accountType: "INTERNAL" | "SUPPLIER";
+            organizationName: string;
+        };
         AuditEventDto: {
             /** Format: uuid */
             id: string;
@@ -5864,6 +5870,8 @@ export interface components {
             organizationId: string;
             actorUserId: string | null;
             action: string;
+            actionLabel: string;
+            actorSummary: components["schemas"]["AuditActorSummaryDto"] | null;
             resourceType: string;
             resourceId: string | null;
             outcome: string;

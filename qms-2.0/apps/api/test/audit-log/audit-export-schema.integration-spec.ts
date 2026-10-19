@@ -70,6 +70,65 @@ describe('controlled audit exports', () => {
     expect(await prisma.auditEvent.count({ where: { organizationId, action: 'AUDIT_EXPORT_DENIED', traceId: 'denied-export' } })).toBe(2);
   });
 
+  it('appends safe actor columns, freezes current profiles at creation, and protects every formula-bearing string', async () => {
+    const old = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } });
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { username: '-USERNAME' } });
+      await prisma.organization.update({ where: { id: organizationId }, data: { name: '\t@ORGANIZATION()' } });
+      const artifact = await service.create(actor, { action: '=FORMULA()' }, 'export-summary');
+      await prisma.user.update({ where: { id: userId }, data: { username: 'changed-after-export' } });
+      const result = await service.download(actor, organizationId, artifact.id, 'export-summary');
+      const lines = result.content.replace(/^\uFEFF/, '').split('\r\n');
+      expect(lines[0]).toBe('"id","createdAt","actorUserId","action","resourceType","resourceId","outcome","traceId","actionLabel","accountType","username","organizationName"');
+      expect(result.content).toContain('"\'=FORMULA()","INTERNAL","\'-USERNAME","\'\t@ORGANIZATION()"');
+      expect(result.content).not.toContain('changed-after-export');
+    } finally {
+      await prisma.user.update({ where: { id: userId }, data: { username: old.username } });
+      await prisma.organization.update({ where: { id: organizationId }, data: { name: 'Exports' } });
+    }
+  });
+
+  it('allows exactly 5000 rows and rejects 5001 without creating an artifact', async () => {
+    const action = `LIMIT_${randomUUID()}`;
+    try {
+      await prisma.auditEvent.createMany({ data: Array.from({ length: 5000 }, () => ({ organizationId, actorUserId: userId, action, resourceType: 'LimitTest', outcome: 'SUCCESS', traceId: 'export-limit' })) });
+      expect((await service.create(actor, { action }, 'export-limit')).rowCount).toBe(5000);
+      await prisma.auditEvent.create({ data: { organizationId, action, resourceType: 'LimitTest', outcome: 'SUCCESS', traceId: 'export-limit' } });
+      const count = await prisma.exportArtifact.count({ where: { organizationId } });
+      await expect(service.create(actor, { action }, 'export-limit')).rejects.toMatchObject({ status: 422 });
+      expect(await prisma.exportArtifact.count({ where: { organizationId } })).toBe(count);
+    } finally { await prisma.auditEvent.deleteMany({ where: { organizationId, action } }); }
+  });
+
+  it('exports no current identity for a foreign actor while retaining the raw UUID and action', async () => {
+    const foreignOrg = randomUUID(); const foreignUser = randomUUID(); const eventId = randomUUID();
+    try {
+      await prisma.organization.create({ data: { id: foreignOrg, code: foreignOrg, name: 'foreign-private-organization', type: 'INTERNAL' } });
+      await prisma.user.create({ data: { id: foreignUser, organizationId: foreignOrg, username: 'foreign-private-actor', passwordHash: 'never-export-secret', email: `${foreignUser}@private.test`, accountType: 'INTERNAL' } });
+      await prisma.auditEvent.create({ data: { id: eventId, organizationId, actorUserId: foreignUser, action: 'USER_UPDATED', resourceType: 'ForeignActorTest', outcome: 'DENIED', traceId: 'export-foreign-actor' } });
+      const artifact = await service.create(actor, { resourceType: 'ForeignActorTest' }, 'export-foreign-actor');
+      const result = await service.download(actor, organizationId, artifact.id, 'export-foreign-actor');
+      expect(result.content).toContain(`"${foreignUser}","USER_UPDATED"`);
+      expect(result.content).toContain('"更新用户","","",""');
+      expect(result.content).not.toMatch(/foreign-private|never-export-secret|private.test/);
+    } finally {
+      await prisma.auditEvent.deleteMany({ where: { id: eventId } });
+      await prisma.user.deleteMany({ where: { id: foreignUser } });
+      await prisma.organization.deleteMany({ where: { id: foreignOrg } });
+    }
+  });
+
+  it('rejects another authorized exporter who did not create the artifact', async () => {
+    const otherId = randomUUID(); const sessionId = randomUUID();
+    try {
+      await prisma.user.create({ data: { id: otherId, organizationId, username: otherId, passwordHash: 'unused', accountType: 'INTERNAL' } });
+      await prisma.userRole.create({ data: { userId: otherId, roleId, organizationId } });
+      await prisma.session.create({ data: { id: sessionId, userId: otherId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() } });
+      const artifact = await service.create(actor, {}, 'export-owner');
+      await expect(service.download({ ...actor, id: otherId, sessionId }, organizationId, artifact.id, 'export-owner')).rejects.toMatchObject({ status: 404 });
+    } finally { await prisma.user.deleteMany({ where: { id: otherId } }); }
+  });
+
   it('expires downloads and cleans ciphertext without deleting source audit', async () => {
     const artifact = await service.create(actor, {}, 'export-test');
     const before = await prisma.auditEvent.count({ where: { organizationId } });
