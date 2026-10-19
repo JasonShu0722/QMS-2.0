@@ -10,6 +10,10 @@ V0.0.20 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90` 已合并并部署。Foundati
 
 以下章节保留各阶段当时的失败和待办，不覆盖本节最终状态；早期本地全量失败不改写为本地全集 PASS。
 
+## 个人账号与全页密度人工反馈返修（2026-10-19，V0.0.21 本地候选）
+
+负责人已批准 [三项反馈规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md)，按 [独立返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续。最终冻结源码的 Web 全集 91 files／653 tests、类型检查和生产构建均通过。账号与共享密度的独立规格、质量及整合复审通过；原竞态与密度遗漏先补红灯后返修，不以首轮 PASS 替代最终结果。主代理用真实前端与隔离 API fixture 通过双门户三宽六主题 36 组、工作台三宽、36／44px 控件几何、英文及安全弹窗焦点／草稿检查。治理、契约和归档实际命令及 Git 外结果见返修计划，既有组件提示和大 chunk 提示保留。当前仅本地；真实生产认证／会话写入／上传扫描、云端 CI、合并部署与人工验收未执行。线上仍为前节的 V0.0.20，Issue 和飞书状态未改。
+
 ## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
 
 对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项复用原PR53；负责人已追加合并上线及仓库再次公开后继续的授权，当前本地已接续D主线，D部署已核验，本项尚未合并或执行生产操作。

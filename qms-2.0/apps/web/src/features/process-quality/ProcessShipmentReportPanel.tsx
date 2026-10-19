@@ -125,7 +125,7 @@ function ReportDetail({ report, canWrite, canReadCustomers, changed }: { report:
     catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
-  return <Space orientation="vertical" size="middle" className="process-quality-report-detail">
+  return <Space orientation="vertical" size={6} className="process-quality-report-detail">
     <Descriptions bordered column={1} size="small" items={[
       { key: 'status', label: '状态', children: report.status === 'ARCHIVED' ? '已归档' : '草稿' },
       { key: 'period', label: '统计期间', children: `${new Date(report.periodStart).toLocaleString('zh-CN')} 至 ${new Date(report.periodEnd).toLocaleString('zh-CN')}` },

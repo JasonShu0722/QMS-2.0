@@ -71,7 +71,7 @@ export function MyTasksPage() {
     <Typography.Title level={2}>{t('我的待办')}</Typography.Title>
     <InboxError cause={mutationError} />
     <Tabs items={[
-      { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">
           <label>{t('任务状态')} <select aria-label={t('任务状态')} value={taskStatus} onChange={(event) => { setTaskStatus(event.target.value); setTaskOffset(0); }}>
             <option value="">{t('全部状态')}</option><option value="PENDING">{t('待处理')}</option><option value="IN_PROGRESS">{t('处理中')}</option><option value="OVERDUE">{t('已逾期')}</option><option value="FAILED">{t('失败')}</option>
@@ -99,7 +99,7 @@ export function MyTasksPage() {
           {pagination(taskOffset, tasks.data.total, setTaskOffset)}
         </>}
       </Space> },
-      { key: 'notifications', label: t('我的通知'), children: <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      { key: 'notifications', label: t('我的通知'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters"><label>{t('阅读状态')} <select aria-label={t('阅读状态')} value={noticeStatus} onChange={(event) => { setNoticeStatus(event.target.value); setNoticeOffset(0); }}>
           <option value="">{t('全部通知')}</option><option value="UNREAD">{t('仅未读')}</option><option value="READ">{t('仅已读')}</option>
         </select></label><Button onClick={notifications.refresh} disabled={notifications.loading}>{t('刷新')}</Button></Space>

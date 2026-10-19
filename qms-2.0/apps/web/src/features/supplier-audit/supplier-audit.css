@@ -1,10 +1,10 @@
 .supplier-audit-page { display: grid; gap: var(--qms-section-gap);  min-width: 0; }
 .supplier-audit-heading { display: flex; justify-content: space-between; gap: var(--qms-section-gap); align-items: flex-start; }
-.supplier-audit-heading h1 { margin: 4px 0 8px; }
+.supplier-audit-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .supplier-audit-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); }
 .supplier-audit-actions { margin-top: var(--qms-section-gap); }
-.supplier-audit-item { display: grid; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--qms-border); }
-.supplier-audit-plan-select { display: grid; gap: 8px; }
+.supplier-audit-item { display: grid; gap: var(--qms-section-gap); padding: var(--qms-card-padding) 0; border-bottom: 1px solid var(--qms-border); }
+.supplier-audit-plan-select { display: grid; gap: var(--qms-section-gap); }
 .supplier-audit-plan-select > .ant-select { width: 100%; }
 .supplier-audit-item .ant-input { max-width: 280px; }
 @media (max-width: 640px) { .supplier-audit-heading { flex-direction: column; } .supplier-audit-card { padding: var(--qms-card-padding); } .supplier-audit-item .ant-input { max-width: 100%; } }

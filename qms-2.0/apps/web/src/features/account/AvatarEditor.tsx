@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Space, Spin, Typography } from 'antd';
 import type { AccountProfile } from '@qms/contracts';
 import { ApiError, getAccountProfile, safeAccountError, updateAccountAvatar } from '../../api/client';
@@ -7,12 +7,14 @@ import { createUploadAttempt, readAttachment, retryScanAttachment, type Attachme
 import { AccountAvatar } from './AccountAvatar';
 import { accountAvatarEpoch, publishAccountAvatar, useAccountAvatar } from './account-avatar-state';
 
-export function AvatarEditor({ profile, onChange }: { profile: AccountProfile; onChange: (profile: AccountProfile) => void }) {
+type AvatarEditorProps = { profile: AccountProfile; onChange: (profile: AccountProfile) => void; children?: ReactNode };
+
+export function AvatarEditor({ profile, onChange, children }: AvatarEditorProps) {
   useAccountAvatar();
-  return <AvatarEditorContent key={`${accountAvatarEpoch()}:${profile.id}`} profile={profile} onChange={onChange} />;
+  return <AvatarEditorContent key={`${accountAvatarEpoch()}:${profile.id}`} profile={profile} onChange={onChange}>{children}</AvatarEditorContent>;
 }
 
-function AvatarEditorContent({ profile, onChange }: { profile: AccountProfile; onChange: (profile: AccountProfile) => void }) {
+function AvatarEditorContent({ profile, onChange, children }: AvatarEditorProps) {
   const { t } = useLanguage();
   const shared = useAccountAvatar();
   const current = shared?.id === profile.id ? shared : profile;
@@ -76,7 +78,7 @@ function AvatarEditorContent({ profile, onChange }: { profile: AccountProfile; o
   const clean = file?.status === 'AVAILABLE' && file.scanStatus === 'CLEAN';
   const status = pending ? '等待安全扫描' : file?.scanStatus === 'ERROR' ? '扫描暂不可用，头像仍隔离' : file?.scanStatus === 'REJECTED' ? '扫描未通过，头像已隔离' : clean ? '扫描通过，可设为头像' : '等待上传完成';
   return <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-    <AccountAvatar profile={profile} size={64} />
+    <div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={64} />{children}</div>
     <Typography.Text type="secondary">{t('仅本人可见，JPEG/PNG，最大 2 MiB。')}</Typography.Text>
     {error ? <Alert type="error" showIcon title={t(error)} role="alert" /> : null}
     {needsReload ? <Button disabled={busy} onClick={() => void reloadAccount()}>{t('重新加载账号')}</Button> : null}

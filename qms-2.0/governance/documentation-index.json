@@ -236,7 +236,7 @@
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 30,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "复核能力状态新增已批准人工反馈返修及本地边界；机器人仍只读分析，状态更新不扩大源码修改、批准或生产操作权限。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "9252acab7b4b6323b93c2e9725fd4a916f246d51a579605dcf11898e889e8bac"
+            "sha256": "21e81e9856f53213243188e8930ab637de17e06add78cf463fe2787688432334"
           },
           {
             "path": "README.md",
@@ -389,10 +389,10 @@
       "canonical": true,
       "status": "active",
       "review": {
-        "owner": "QMS 工程维护者（Taste 定向融合实际复核）",
+        "owner": "QMS 工程维护者（账号与全页密度返修）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
-        "reason": "复核已登录账号安全弹窗与管理员集中 MFA 治理，保留登录挑战、同源安全内容、主题变量、关闭及秘密清理边界；机器门禁按本轮计划，浏览器按负责人决定部署后人工确认。",
+        "reason": "复核已批准人工反馈返修：单张账号概览、历史接口统一会话清单及全页共享留白减半；保留标准控件、粗指针目标、原安全弹窗及真实登录验收边界。当前仅本地，实施和审查结果见返修计划。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -408,11 +408,15 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "1c3572aa3205e8bda871ce7eebff31531a71305da29aa2230a837d0288f2eb55"
+            "sha256": "138b149400f1bf33f5969c0c27763b0fbce1e95722adfa23a38ee90da81766dc"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
             "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md",
+            "sha256": "797b276289f507c3eaea5899ef6d3a7dc1c70fdbc5926ee3adb33c2d29ebdbd1"
           }
         ]
       }
@@ -620,13 +624,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-18",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
-        "reason": "P2-05 与 MAINT-003 复核新增告警判定策略和一次性触发/恢复演练，确认本地证据仍不等于生产告警。",
+        "reason": "复核 MAINT-001 来源随账号返修变化，记录已移除的账号弃用用法及仍需升级前全局检查的边界，保持开放；MAINT-003 的本地告警证据与生产边界不变。",
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "e5ebf66a0335eb0617eea850a7402019d7033acda48e36eb89dad558d996e0ca"
+            "sha256": "5532d1be7e2b906bd882f5d14067a934e91cd76fd5e256c80b9ecc0a6a51c791"
           },
           {
             "path": "governance/operability-alerts.json",

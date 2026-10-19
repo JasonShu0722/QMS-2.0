@@ -2,28 +2,28 @@
 .problem-workspace > h1 { font-size: 26px; line-height: 1.4; margin: 0 0 var(--qms-section-gap); }
 .problem-header { display: flex; align-items: center; justify-content: space-between; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
 .problem-header > div { min-width: 0; }
-.problem-header h2 { font-size: 22px; line-height: 1.5; margin: 12px 0 0; overflow-wrap: anywhere; }
+.problem-header h2 { font-size: 22px; line-height: 1.5; margin: var(--qms-section-gap) 0 0; overflow-wrap: anywhere; }
 .problem-header > a { flex-shrink: 0; }
-.problem-tabs { display: flex; gap: 8px; margin: var(--qms-section-gap) 0; padding-bottom: 16px; border-bottom: 1px solid var(--qms-border); flex-wrap: wrap; }
+.problem-tabs { display: flex; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; padding-bottom: var(--qms-section-gap); border-bottom: 1px solid var(--qms-border); flex-wrap: wrap; }
 .problem-section, .problem-upgrade { padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 10px; margin: var(--qms-section-gap) 0; background: var(--qms-surface); }
-.problem-section > h3, .problem-upgrade > h2 { font-size: 18px; margin: 0 0 16px; }
-.problem-workspace dl { margin-bottom: 0; }
-.problem-workspace dl > div { display: grid; grid-template-columns: minmax(100px, 25%) minmax(0, 1fr); gap: var(--qms-section-gap); padding: 12px 0; border-bottom: 1px solid var(--qms-border); }
+.problem-section > h3, .problem-upgrade > h2 { font-size: 18px; margin: 0 0 var(--qms-section-gap); }
+.problem-workspace dl { margin: var(--qms-section-gap) 0 0; }
+.problem-workspace dl > div { display: grid; grid-template-columns: minmax(100px, 25%) minmax(0, 1fr); gap: var(--qms-section-gap); padding: var(--qms-section-gap) 0; border-bottom: 1px solid var(--qms-border); }
 .problem-workspace dl > div:last-child { border-bottom: 0; }
 .problem-workspace dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .problem-workspace dt { color: var(--qms-muted); }
-.problem-nodes, .problem-evidence, .problem-audit { display: grid; gap: var(--qms-section-gap); padding-left: 24px; }
-.problem-nodes li, .problem-evidence li, .problem-audit li { padding: 8px 0; overflow-wrap: anywhere; }
+.problem-nodes, .problem-evidence, .problem-audit { display: grid; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; padding-left: 24px; }
+.problem-nodes li, .problem-evidence li, .problem-audit li { padding: var(--qms-table-cell-padding-block) 0; overflow-wrap: anywhere; }
 .problem-nodes li::marker { color: var(--qms-accent); font-weight: 600; }
-.problem-nodes strong { margin-right: 8px; }
+.problem-nodes strong { margin-right: var(--qms-section-gap); }
 .problem-audit li { padding: var(--qms-card-padding); background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 8px; }
-.problem-audit p { color: var(--qms-muted); margin: 8px 0 0; }
+.problem-audit p { color: var(--qms-muted); margin: var(--qms-section-gap) 0 0; }
 .problem-workspace code { overflow-wrap: anywhere; font-size: 12px; }
-.problem-workspace > label { display: grid; gap: 8px; }
+.problem-workspace > label { display: grid; gap: var(--qms-section-gap); }
 .problem-workspace select, .problem-upgrade textarea { max-width: 100%; min-width: 0; padding: 8px 12px; min-height: 36px; border: 1px solid var(--qms-border); border-radius: 7px; color: var(--qms-text); background: var(--qms-surface); font: inherit; }
 .problem-workspace :is(select, textarea):focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
-.problem-upgrade textarea { display: block; box-sizing: border-box; width: 100%; min-height: 100px; margin: 8px 0 16px; resize: vertical; }
-.problem-upgrade > .ant-btn { margin: 0 12px 12px 0; }
+.problem-upgrade textarea { display: block; box-sizing: border-box; width: 100%; min-height: 100px; margin: var(--qms-section-gap) 0; resize: vertical; }
+.problem-upgrade > .ant-btn { margin: 0 var(--qms-section-gap) var(--qms-section-gap) 0; }
 .problem-workspace > .ant-alert { margin: var(--qms-section-gap) 0; }
 @media (max-width: 760px) {
   .problem-header { align-items: flex-start; flex-direction: column; padding: var(--qms-card-padding); }
@@ -36,8 +36,8 @@
 .problem-workspace__heading h1 { margin: 0; font-size: 26px; line-height: 1.4; }
 .problem-workspace__body { display: grid; grid-template-columns: 200px minmax(0, 1fr) 260px; gap: var(--qms-section-gap); align-items: start; margin-top: var(--qms-section-gap); }
 .problem-workspace__body > * { min-width: 0; }
-.problem-workspace__body .problem-section { margin: 0 0 20px; padding: var(--qms-card-padding); }
-.problem-workspace__context ul { padding-left: 20px; overflow-wrap: anywhere; }
+.problem-workspace__body .problem-section { margin: 0 0 var(--qms-section-gap); padding: var(--qms-card-padding); }
+.problem-workspace__context ul { margin: var(--qms-section-gap) 0; padding-left: 20px; overflow-wrap: anywhere; }
 .problem-workspace.is-focused .problem-workspace__body { grid-template-columns: 200px minmax(0, 1fr); }
 .problem-workspace.is-focused .problem-workspace__context { display: none; }
 @media (max-width: 1399px) {

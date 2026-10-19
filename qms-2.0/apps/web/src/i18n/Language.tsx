@@ -52,6 +52,8 @@ const translations: Record<string, string> = {
   "邮箱找回受到限流": "Email recovery rate limited",
   "MFA 验证被拒绝": "MFA verification rejected",
   "安全状态": "Security status",
+  "账号概览": "Account overview",
+  "正在加载登录会话": "Loading sign-in sessions",
   "会话历史": "Session history",
   "正在加载会话历史": "Loading session history",
   "暂无会话历史": "No session history",

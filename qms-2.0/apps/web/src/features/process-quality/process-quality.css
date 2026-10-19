@@ -1,6 +1,6 @@
 .process-quality-page { max-width: 1260px; margin: 0 auto; padding: 0; display: grid; gap: var(--qms-section-gap);  min-width: 0; }
 .process-quality-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
-.process-quality-heading h1 { margin: 4px 0 0; }
+.process-quality-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .process-quality-heading p { margin-bottom: 0; max-width: 680px; }
 .process-quality-card { padding: var(--qms-card-padding); border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); }
 .process-quality-toolbar { margin-bottom: var(--qms-section-gap); }

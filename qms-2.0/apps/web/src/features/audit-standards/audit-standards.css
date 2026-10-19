@@ -1,6 +1,6 @@
 .audit-standards-page { display: grid; gap: var(--qms-section-gap); padding: 0; min-width: 0; }
 .audit-standards-heading { display: flex; justify-content: space-between; align-items: start; gap: var(--qms-section-gap); }
-.audit-standards-heading h1 { margin: 4px 0 8px; }
+.audit-standards-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .audit-standards-card { background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 12px; padding: var(--qms-card-padding); min-width: 0; }
 .audit-standards-filters { margin-bottom: var(--qms-section-gap); }
 .audit-standards-type { min-width: 150px; }

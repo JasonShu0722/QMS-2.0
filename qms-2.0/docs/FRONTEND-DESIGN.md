@@ -1,6 +1,6 @@
 # 前端设计实施与参考代码
 
-统一依据：[QMS 2.0 前端统一设计规范 v1.1](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
+统一依据：[QMS 2.0 前端统一设计规范 v1.2](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
 
 ## 1. 当前基线
 
@@ -17,6 +17,8 @@
 **现有正式页面已完成首轮视觉迁移，样板继续作为设计参考。** 正式 Web 沿用 React + TypeScript + Ant Design 以及现有业务路由、请求和权限。未来领域表单、质量统计与完整草稿生命周期仍按各业务阶段交付。
 
 ## 2. 参考代码与样式索引
+
+2026-10-19 人工验收反馈已确认：个人账号整合为一张概览卡和一份登录会话表，共享页面／区块／卡片／表格留白进一步减半。当前实施与本地验证以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；历史部署及旧版人工清单不能替代这次返修验收。正式实现沿用 `features/account/AccountCenterPage.tsx`、`AccountSessionHistory.tsx` 和共享 theme，不引入第二套 profile 模板或 API。
 
 以下路径均指向同一份活动样板，不另复制快照目录：
 

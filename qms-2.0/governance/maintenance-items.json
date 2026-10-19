@@ -6,16 +6,16 @@
       "category": "deprecation",
       "status": "open",
       "owner": "QMS Web 维护者",
-      "fact": "2026-09-23 默认 Web 测试出现 Ant Design List 与 Space 属性弃用提示；账号中心仍使用相应组件和属性。",
+      "fact": "2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-19 账号返修改用 Card/Table 和 Space orientation，账号相关回归已通过，其他页面弃用用法仍需在升级前核对。",
       "impact": "未来升级 Ant Design 时可能产生兼容性改动；当前测试通过，不据此判断生产故障。",
       "trigger": "升级 Ant Design 前，或弃用提示升级为构建/测试失败时处理。",
-      "nextAction": "核对官方迁移说明，替换账号中心弃用用法，运行相关 Web 测试与浏览器回归。",
-      "reviewedOn": "2026-10-18",
+      "nextAction": "升级 Ant Design 前核对官方迁移说明和其余页面弃用用法；本轮账号整合的浏览器证据与限制见返修计划，不据此关闭全局维护事项。",
+      "reviewedOn": "2026-10-19",
       "reviewDue": "2026-10-23",
       "sources": [
         {
           "path": "apps/web/src/features/account/AccountCenterPage.tsx",
-          "sha256": "1e77e1bedbde9fab74d9a5f9f44613e78b923229efd77df2d19e7c888d0c5c6e"
+          "sha256": "d4f5e6366458defaf10d765c07cea8ec7f6dfaf59a160ca460d0aa7996e0fcc7"
         }
       ]
     },

@@ -1,6 +1,6 @@
 .task-statistics-page { max-width: 1260px; margin: 0 auto; padding: 0; display: grid; gap: var(--qms-section-gap);  min-width: 0; }
 .task-statistics-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--qms-section-gap); }
-.task-statistics-heading h1 { margin: 4px 0 0; }
+.task-statistics-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .task-statistics-heading p { margin-bottom: 0; max-width: 720px; }
 .task-statistics-loading { min-height: 280px; display: grid; place-items: center; }
 .task-statistics-secondary { margin-top: 0; }
