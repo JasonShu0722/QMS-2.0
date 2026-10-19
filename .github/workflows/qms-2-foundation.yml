@@ -27,7 +27,26 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.classify.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.21.0'
+      - name: Classify complete event diff
+        id: classify
+        working-directory: qms-2.0
+        run: node scripts/ci-validation-scope.mjs scope
+
   checks:
+    needs: scope
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -45,14 +64,24 @@ jobs:
         run: pnpm run check:archive-isolation
       - name: Check QMS development governance
         run: pnpm run check:governance
+      - name: CI scope and result gate tests
+        if: needs.scope.outputs.scope == 'documentation'
+        run: node --test test/ci-validation-scope.test.mjs
+      - name: Documentation governance tests
+        if: needs.scope.outputs.scope == 'documentation'
+        run: pnpm run test:governance
       - name: Check generated OpenAPI contract
+        if: needs.scope.outputs.scope == 'full'
         run: pnpm run contracts:check
       - name: Workspace and contracts tests
+        if: needs.scope.outputs.scope == 'full'
         run: |
           node --test test/*.test.mjs
           pnpm --filter @qms/contracts test
 
   web-tests:
+    needs: scope
+    if: needs.scope.outputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -74,6 +103,8 @@ jobs:
         run: pnpm --filter @qms/web test --shard=${{ matrix.shard }}/4 --maxWorkers=1
 
   api-unit:
+    needs: scope
+    if: needs.scope.outputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -91,6 +122,8 @@ jobs:
         run: pnpm --filter @qms/api test
 
   integration:
+    needs: scope
+    if: needs.scope.outputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -202,7 +235,7 @@ jobs:
       - name: Real worker process lifecycle
         env:
           NODE_ENV: development
-        run: pnpm --filter @qms/api test:worker-process
+        run: pnpm --filter @qms/api test:worker-process:built
       - name: Validate foundation Compose
         run: docker compose -f deployment/docker-compose.foundation.yml config --quiet
       - name: Destroy ephemeral integration services
@@ -213,19 +246,17 @@ jobs:
           done
 
   foundation:
-    needs: [checks, web-tests, api-unit, integration]
+    needs: [scope, checks, web-tests, api-unit, integration]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.21.0'
       - name: Require every foundation check
         env:
-          CHECKS: ${{ needs.checks.result }}
-          WEB: ${{ needs.web-tests.result }}
-          API: ${{ needs.api-unit.result }}
-          INTEGRATION: ${{ needs.integration.result }}
-        run: |
-          test "$CHECKS" = success
-          test "$WEB" = success
-          test "$API" = success
-          test "$INTEGRATION" = success
+          SCOPE: ${{ needs.scope.outputs.scope }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node qms-2.0/scripts/ci-validation-scope.mjs gate

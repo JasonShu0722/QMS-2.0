@@ -2,6 +2,22 @@
 
 本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
 
+## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
+
+对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项复用原PR53；负责人已追加合并上线及仓库再次公开后继续的授权，当前本地已接续D主线，D部署已核验，本项尚未合并或执行生产操作。
+
+原始本地基线main `395acc27ef0e1bd28cf032ba8096dd38f509350c`；当前本地接入D main `a8871e4829cb2d1a44f57687ccaa52e168e797ab`，Node 24.21.0 / pnpm 11.19.0，基线治理 PASS。实现子代理先取得新 CI 分流/结果门禁测试红灯，再修改实现。后续验证按计划记录实际结果，真实 GitHub 调度和成本节省未验证，不将本地组合测试或旧运行当作最新 CI PASS。
+
+主代理实测：工作区 71 项（包含 CI 分流/门禁 13 项）、API 单测 50 suites/557 项、Web 第一分片 22 files/135 项、API/Web/contracts 构建、归档与治理 PASS；独立规格及质量审查 PASS。Web 第二分片主动中断，第三/四未执行，云端四分片保留。全量真实 PG 出现头像连续替换场景 5000 ms 超时且没有完整结束摘要，保留 FAIL/中断；同端口新空库 `qms_actions_economy_worker` 原样头像 8/8 与编译后 Worker 8/8 PASS，不据此改写全量结果。Worker 运行前后 `dist/worker.js` 时间戳及 SHA-256 不变，确认未二次构建；独立默认入口仍先 build。
+
+本机曾遇加密 pnpm `.cmd` shim、嵌套 Node spawn UNKNOWN 和并行契约 Prisma `VirtualAlloc failed`，失败日志保留；使用同版本官方 pnpm 入口、清理资源后串行 `node scripts/check-openapi-sync.mjs` PASS，生成契约未变化，未调整企业安全设置、断言或超时。Compose foundation/scanning 两组合及 actionlint PASS。本项仅草稿 PR 候选，不声明完整 Foundation、实际节省、合并或上线；PR/最新 CI 在计划指定 Git 外接续点及 Issue #52 关联中追踪，避免编号回填再触发一轮 CI。
+
+真实资源使用本任务新建并标记 `qms.task=actions-economy` 的 PostgreSQL、RustFS、ClamAV 和 Mailpit；PG 随机宿主端口 55040，无预览 55440。凭据、红绿灯与最终日志位于 Git 外 `D:/WorkSpace/QMS-2.0-local/actions-economy-*`。验证后仅清理这四个明确一次性容器及其卷，保留原任务资源和证据。
+
+### 当前四单元上线结果（2026-10-19）
+
+D PR51以完整PR CI39202592968通过的fix6合并为main a8871e4829cb2d1a44f57687ccaa52e168e797ab，main CI39203301651完整PASS。部署39203879250已成功，主代理读取实际日志验证完整镜像SHA、迁移前加密快照、迁移No pending、API/Web健康和Worker启动/最终完成标记；公开HTTP、OpenAPI和所有资源200，A密度、B会话历史及匿名401、C导入和D审计字段均可观察。日志与结构化证据release-deploy-39203879250-verified.json、req17-21-d-deployment-http.json留在Git外。下列早期失败为历史，C失败未重跑；最终登录业务浏览器仍待人工，Issue与飞书未关闭回填。
+
 ## REQ-0017～0021 四单元接续（2026-10-19，整合验证中）
 
 源码基线 `8a86b28`，活动 checkout `D:/WorkSpace/QMS-2.0`，Node 24.21.0 / pnpm 11.19.0。四单元与 Issue #44～47、授权边界及最终人工清单见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。四单元已提交PR48～51，早期运行源码PR CI均已通过；A/B已部署核验。2026-10-19仓库公开后C的main Foundation39153238102 attempt6全部8 jobs PASS，自动部署39188014390在API镜像Corepack/pnpm安装层约20分钟无新输出后SSH timeout/exit255，日志无快照或迁移标记；负责人10:22 SSH输出确认生产仍为B47db5bee，并明确允许不重跑该部署、先接续代码。D保持待合并，本地已返修审计动作标签、账号定位历史与共享导航调用方，独立规格及质量复审均通过；私有期间已完成本地收口，负责人再次公开并明确继续后恢复原PR推送及CI，早期CI不能当作返修后最新PASS。以下仍不代表最终真实业务浏览器验收。

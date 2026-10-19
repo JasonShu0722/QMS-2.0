@@ -8,7 +8,7 @@
 - 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。 2026-10-19 负责人再次要求推进合并上线，并在 C 部署失败后明确允许不重跑该部署、继续其余代码集成，下次部署再验证；该决定仅延后 C 部署先于 D 的接续条件，不免除源码 CI 或将失败记为通过。最新授权：负责人已明确“仓库已开源，继续”，GitHub API现场确认private=false；恢复原范围的推送、云端CI、检查通过后的合并及部署接续。不重跑C失败部署，Issue关闭与飞书写入仍未授权。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：A PR48 / V0.0.16 与 B PR49 / V0.0.17 已核验部署；生产最后确认为 B `47db5bee6f818da5b6e4d1e63b76c364c0a3803f`（负责人 10:22 SSH 输出，本轮未重新访问生产）。C PR50 已合并 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，Foundation39153238102 attempt6 全部 8 jobs PASS；部署39188014390在 API 镜像安装层等待后 SSH timeout/exit255，日志无快照或迁移标记，保持失败，不重跑。D PR51 本地返修已实现，D1/D2 独立规格和质量复审均通过；当前分支 `codex/req-0020-audit`，已推送 HEAD `e40f543a3378cfc8ae466c57044965a1dc7017e6`，其后修改尚未推送，冻结验证见文末。CI39190126869已取消，不是当前返修PASS。本地交付准备已完成；当前按恢复授权向原PR51集中推送、完整CI、依授权合并及核验下一次实际部署，最后接续草稿PR53。最终业务浏览器、Issue关闭和飞书写入均未完成且未执行。
+- 分别状态：A PR48、B PR49此前已部署；C PR50已合并395acc27，原部署39188014390失败保留且未重跑。D PR51 fix6完整CI39202592968全部8jobs通过，合并main `a8871e4829cb2d1a44f57687ccaa52e168e797ab`；main CI39203301651亦全部通过，部署39203879250成功并核验完整SHA/镜像、迁移前加密快照、迁移、API/Web健康与Worker生命周期。线上登录/契约/资源联合只读核验通过，覆盖A密度、B会话历史及匿名401、C导入资源、D审计摘要契约。REQ-0017～0021代码已包含在该上线版本，真实登录业务浏览器仍待原人工清单，Issue关闭和飞书写入未执行。当前接续Actions优化原PR53，不复用旧PASS。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
@@ -208,3 +208,8 @@ React Router 7.18.4 在一次待确认导航中完成另一次 hash-only 导航�
 ## 恢复云端交付（2026-10-19）
 
 负责人明确“仓库已开源，继续”；API核对仓库public、PR51仍open且head=e40f543/base=main395acc27，Issue46仍open且范围未撤回。三个原P2无新增反馈；本地原修改及双审证据保留。V0.0.19-fix6本地/已抓取远端无占用，集中提交审计标签与原生导航返修，更新原PR51并等待最新完整CI，未以旧PASS跳过检查。原C部署不重跑；下一次部署失败时保留事实并定位，不改检查、凭据或账单。
+
+
+## 四单元最终部署核验（2026-10-19）
+
+PR51已以a8871e4829cb2d1a44f57687ccaa52e168e797ab合并，PR CI39202592968/main CI39203301651完整通过。部署39203879250/job117902400958成功，原始日志release-deploy-39203879250.log证明迁移前加密快照完成后才运行migrate（No pending migrations to apply），API/Web healthy、Worker readiness与完整SHA镜像标签一致，最后Deployment successful标记完整。公开HTTP联合核验req17-21-d-deployment-http.json：login/openapi及全部静态资源200，密度token、session history契约与匿名401、终止导入资源、AuditActorSummaryDto/actionLabel均存在。资源index-BcUpx8jF.js/index-DfutgvNG.css相对部署前已改变。本证据不是登录后的业务界面验收，不将负责人“通过了”（Actions截图）当整套人工清单PASS。Issue保持开放，飞书无写入。
