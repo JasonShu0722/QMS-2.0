@@ -6,9 +6,9 @@
 - 授权：负责人后续要求推进合并上线，并在仓库再次公开后明确“继续”，覆盖本项原PR53的CI、检查通过后的合并及部署；Issue关闭和台账写入仍未授权。早期仅本地/PR范围保留为历史，不作为当前阻断。
 - 映射：本聊天直接工程维护需求，无飞书 REQ/record_id；[Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52) → `codex/actions-trigger-economy` → 同 Issue 关联的唯一草稿 PR。版本 V0.0.20，已查开放 PR 无同版本；实际 PR URL、完整 head 和最新 CI 在 Git 外 `D:/WorkSpace/QMS-2.0-local/actions-economy-release-checkpoint.json` 接续，不为回填编号额外推送。
 - 基线：原始main `395acc27ef0e1bd28cf032ba8096dd38f509350c`；当前本地已接入D合并main `a8871e4829cb2d1a44f57687ccaa52e168e797ab`，该版本实际部署及HTTP联合核验已通过，随后集中推送；活动 checkout 起始干净，仅在原位功能分支隔离，不使用 C/E 回退目录或新增外部 worktree。原 D 分支 `codex/req-0020-audit` 保留。
-- 分别状态：原实现与独立规格/质量审查完成，草稿PR53已建；当前合入已部署D main a8871e4，本地整合workspace71项、治理/契约、API/Web类型构建及Compose均PASS。当前源码完整CI仍待集中推送后验证，合并/部署未执行。早期API557项、Web第一片135项、独立头像8项/Worker8项等仅为历史；Web第二片中断、第三/四未运行及全量PG头像5秒超时/中断均保留，不改写为全集PASS。
+- 分别状态：原PR53 head326b4cc已合并为main c7dc86b，PR CI39205068129、main CI39207200414和Deploy39207880874全部PASS；生产镜像/快照/迁移/健康及HTTP已核验。早期本地中断/账单失败保留历史，不冒称本地全量PASS。
 - 证据与限制：Node 24.21.0 / pnpm 11.19.0；用量证据 `D:/WorkSpace/QMS-2.0-local/req17-21-actions-usage-review-20261019.json`，占用非账单分钟。早期账单失败已由公开仓库运行恢复，保留历史，不因它重复触发。
-- 下一动作：原草稿PR53已存在；本地整合D主线，仅FOUNDATION双方顶部插入冲突，已保留双方完整记录。D实际部署已核验，随后冻结当前差异、治理及同范围V0.0.20-fix1查重提交，向原分支集中推送一次。最新PR53完整CI、独立复核及main/实际部署门禁必须通过，不复用旧账单失败或本地子集作为完整PASS。
+- 下一动作：本项代码、完整云端CI、合并部署和full模式实际门禁已完成。仓库已私有，不为状态同步触发CI；documentation真实调度与长期节省效果未实测，待后续实际文档交付/用量数据观察，Issue52保持开放。
 
 > 面向执行代理：使用项目 QMS Superpowers 和 subagent-driven-development；只修改明确文件范围，Git 由主代理串行执行。
 
@@ -47,14 +47,14 @@
 - [x] 更新来源摘要，执行治理、workspace 全部 71 项（覆盖治理子集）、归档和串行契约检查；实际命令/失败前置/成功结果在 Git 外日志与下节记录，不重复跑治理子集。
 - [x] 独立规格审查后质量审查，发现实际问题返修并复审；主代理确认 diff 和最新结果。
 - [x] 执行 API/Web、构建、真实 PG/Worker 与 Compose 并保留部分覆盖和失败：见顶部及下节，不将全量 PG/未执行 Web 记 PASS；预览 55440 未使用，四个本任务一次性容器及卷和临时秘密已清理。
-- [ ] 记录 FOUNDATION 与计划真实 PASS/FAIL/未执行；冻结源码后 diff/governance 最终检查。
+- [x] 本地记录最新完整CI/部署/HTTP结果与历史限制，治理和diff按本次文档复验。
 
 ### 任务 3：提交与接续
 
-- [ ] 再查版本、本地/远端 base/head，集中提交 `V0.0.20 减少Actions无效触发与同次重复构建` 并只推本功能分支；创建一个关联 #52 的 PR，无自动关闭关键字，附当前聊天。
-- [ ] 读取最新 PR 检查，账单失败不自动重跑，原 REQ 发布检查点改为只读等待恢复；不改付款/额度/凭据。
-- [ ] 报告原PR53最新验证与限制；负责人已授权检查通过后合并部署，完整当前CI通过后接续，不把旧PASS或源码整合当上线及节省实测。
-- [ ] 合并发布获准后核对真实 GitHub 文档/业务两种调度和生产门禁；验收后再按授权关闭 Issue/回填。回滚还原本 PR，原 REQ C/D 独立接续。
+- [x] 固定版本和head/base，向原PR53集中推送并完成合并。
+- [x] 最新PR与main完整检查通过，未改账单、额度、凭据或检查规则。
+- [x] 报告最新PR/main CI和部署实际结果；不以旧PASS替代。
+- [ ] full真实调度及生产门禁已核验；documentation真实调度和长期节省效果保留待观察，Issue关闭待相应授权。
 
 ## 规则沉淀与非目标
 
@@ -79,3 +79,9 @@ D PR51当前fix6完整CI39202592968全部8jobs通过（API590项、真实PG81套
 本地整合后workspace71/71、治理、OpenAPI同步、API/Web类型及生产构建、归档隔离与Compose foundation/scanning解析均PASS，原大包告警保留。业务源码及生成契约相对D main无差异，workflow/CI脚本与原PR53已双审版本无差异，不重复执行同一完整业务子集；最新完整Web/API/PG/Worker由更新后的PR53 CI提供，不能拿D的PASS替代。此前全量PG中断与不完整Web结果均保留历史。
 
 规格复核记录：原Actions第一步范围及D保留PASS；唯一P3为当前未完成清单仍写“无合并授权”，主代理已按负责人现有授权修正，不降低完整CI与部署门禁。
+
+
+## 最终上线事实（2026-10-19）
+
+PR53已合并V0.0.20 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`；CI39205068129、main39207200414与部署39207880874成功。full实际门禁已执行SSH并完成部署；documentation模式仅有本地测试证据，未伪造真实调度PASS。
+审查评论4310642935认为jobs不存在run_attempt；现场指定attempt接口返回9个job，字段均存在，已在原评论下解释并保留响应。原校验保留、13项scope测试复验通过，无对应源码修复；不重复触发CI。整合质量复核未签发最终PASS的事实保留，不能写成该轴完成。
