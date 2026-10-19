@@ -44,6 +44,16 @@ corepack pnpm evidence:collect --profile governance --output D:/WorkSpace/QMS-2.
 
 原始子进程输出只显示在终端，不复制进报告。报告不采集环境变量、命令输出正文或差异正文。失败后不自动重试；先查看终端与失败步骤，再使用新的输出目录重跑。
 
+## Actions 范围与同次构建
+
+Foundation 使用 `scripts/ci-validation-scope.mjs`，仅将既有 `governance/validation-impact.json` 的 documentation 路径规则内的 Markdown 变更判为纯文档。PR 比较完整 base/head 分支差异，main 比较整次 push before/after；空差异、无法取得历史、未知路径及混合变更走完整业务检查。设计及验收矩阵见[Actions 优化设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)。
+
+纯文档运行归档隔离、治理与文档测试，业务 job 记为计划跳过；稳定的 foundation 汇总校验预期状态，跳过不代表业务 PASS。deploy 在 SSH 前查询来源运行指定 attempt 的完整 job 结果，仅完整业务检查成功才执行生产操作；文档结果只记录无需部署。缺项、重复、混合或失败均停止，API 不可用同样不能部署。
+
+integration 构建完成后使用 `corepack pnpm --filter @qms/api test:worker-process:built` 复用本次产物。独立本地运行仍用 `corepack pnpm --filter @qms/api test:worker-process`，该入口先构建；不要从另一个源码版本或工作目录借用 dist。业务 PR/main 全套门禁和 Web 分片数本轮保留。
+
+专项定向验证：`node --test test/ci-validation-scope.test.mjs`；默认 workspace 测试也包含该项。执行频率与重跑纪律依[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)，运行占用按 job 分钟累计，不把并行缩短的等待时间当成计费节省。
+
 ## 源码指纹与限制
 
 Git 清单覆盖活动 `qms-2.0/`、根 `docs/superpowers/`、根 AGENTS/README 和 `.github/workflows/`。对覆盖文件内容计算 SHA-256，文本统一 CRLF/LF；包括未跟踪的非忽略源码及受控生成契约。删除文件保留空摘要。报告不会读取归档和已忽略文件；清单内秘密文件、证书、备份、运行产物或符号链接被排除并计数，不能据此生成完整 PASS。

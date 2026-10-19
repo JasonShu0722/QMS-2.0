@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: qms-2-production
@@ -27,7 +28,19 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.21.0'
+      - name: Validate complete source run attempt
+        id: validation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node qms-2.0/scripts/ci-validation-scope.mjs deploy
       - name: Deploy validated commit over pinned SSH
+        if: steps.validation.outputs.scope == 'full'
         env:
           DEPLOY_HOST: ${{ secrets.QMS_DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.QMS_DEPLOY_SSH_KEY }}

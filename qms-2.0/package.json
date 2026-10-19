@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "corepack pnpm --parallel --filter @qms/api --filter @qms/web dev",
-    "test": "node scripts/check-governance.mjs && node --test test/structure.test.mjs test/contracts-package.test.mjs test/documentation.test.mjs test/governance-boundaries.test.mjs test/phase-5-coverage.test.mjs test/engineering-tools.test.mjs test/validation-impact.test.mjs test/maintenance.test.mjs test/operations-snapshot.test.mjs test/operations-alerts.test.mjs && corepack pnpm --recursive test",
+    "test": "node scripts/check-governance.mjs && node --test test/structure.test.mjs test/contracts-package.test.mjs test/documentation.test.mjs test/governance-boundaries.test.mjs test/phase-5-coverage.test.mjs test/engineering-tools.test.mjs test/validation-impact.test.mjs test/maintenance.test.mjs test/operations-snapshot.test.mjs test/operations-alerts.test.mjs test/ci-validation-scope.test.mjs && corepack pnpm --recursive test",
     "test:governance": "node --test test/documentation.test.mjs test/governance-boundaries.test.mjs test/phase-5-coverage.test.mjs test/engineering-tools.test.mjs test/validation-impact.test.mjs test/maintenance.test.mjs test/operations-alerts.test.mjs",
     "check:maintenance": "node scripts/check-maintenance.mjs",
     "validation:recommend": "node scripts/recommend-validation.mjs",

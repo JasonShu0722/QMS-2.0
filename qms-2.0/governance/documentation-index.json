@@ -88,13 +88,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -200,13 +200,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-23",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 30,
         "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。",
         "sources": [
           {
             "path": "package.json",
-            "sha256": "f1f7516c354b5341c8e05763e920133379c3e0356d8f1b394f2aabf31d59966f"
+            "sha256": "4dc69ab6c2d01cf4f61efc193cd7630a28346cdace085db61edc7ae4d8edc018"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
@@ -234,7 +234,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 30,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -256,7 +256,7 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -336,11 +336,15 @@
           {
             "path": "../docs/superpowers/specs/2026-10-12-qms-workflow-integration-design.md",
             "sha256": "ae43292274127dc91dddec2ba37da915bfed361068919d1f613783fe47174422"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md",
+            "sha256": "271a0561fc9eb221beebd7923957ffae27187463580b7a35f12d3d834cebc1fd"
           }
         ],
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。"
+        "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。"
       }
     },
     {
@@ -386,7 +390,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（Taste 定向融合实际复核）",
-        "reviewedOn": "2026-10-18",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核已登录账号安全弹窗与管理员集中 MFA 治理，保留登录挑战、同源安全内容、主题变量、关闭及秘密清理边界；机器门禁按本轮计划，浏览器按负责人决定部署后人工确认。",
         "sources": [
@@ -408,7 +412,7 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           }
         ]
       }
@@ -544,9 +548,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。",
         "sources": [
           {
             "path": "scripts/engineering-report.mjs",
@@ -566,7 +570,7 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -575,6 +579,14 @@
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
             "sha256": "d649f511f5cfefa6619ac2669da007e531413a4f22d6e0cbdfcfd5e4417cc9d6"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md",
+            "sha256": "271a0561fc9eb221beebd7923957ffae27187463580b7a35f12d3d834cebc1fd"
+          },
+          {
+            "path": "scripts/ci-validation-scope.mjs",
+            "sha256": "94592afb679b58dbf1e020a82f25808e2f85dd40e3c59f545c0e2179451aaf0c"
           }
         ]
       }
@@ -638,13 +650,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-23",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核 E1 报告新增依赖后 operations 脚本入口未变；MAINT-003 仍限定只读采样、告警判定、一次性演练与备份恢复，生产告警尚未交付。",
         "sources": [
           {
             "path": "apps/api/package.json",
-            "sha256": "c1f42309bda4fea77fdc72114427b5b6f74ae72f75c7bf54b107fb351ee69d48"
+            "sha256": "158b84076c085a127d418c4b250a48cfdc80c0af617a1df5c374d9f5a75ca62a"
           },
           {
             "path": "apps/api/scripts/operations-snapshot.mjs",
@@ -664,7 +676,7 @@
           },
           {
             "path": "package.json",
-            "sha256": "f1f7516c354b5341c8e05763e920133379c3e0356d8f1b394f2aabf31d59966f"
+            "sha256": "4dc69ab6c2d01cf4f61efc193cd7630a28346cdace085db61edc7ae4d8edc018"
           },
           {
             "path": "scripts/operations-alerts.mjs",
@@ -680,7 +692,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -694,11 +706,11 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "8d296b7586d3d32b58b32cf4a6a81542865a831313631b279b692401c67df984"
+            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
@@ -718,7 +730,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-18",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -740,7 +752,7 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "8d296b7586d3d32b58b32cf4a6a81542865a831313631b279b692401c67df984"
+            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
           }
         ]
       }
@@ -752,7 +764,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -770,7 +782,7 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "8d296b7586d3d32b58b32cf4a6a81542865a831313631b279b692401c67df984"
+            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
           }
         ]
       }
@@ -782,13 +794,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-16",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "8d296b7586d3d32b58b32cf4a6a81542865a831313631b279b692401c67df984"
+            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
           },
           {
             "path": "AGENTS.md",
@@ -796,7 +808,7 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "90402588032f21775d583520016f7d1c622670cb9e9ada1d108c2d28a49d3adf"
+            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",

@@ -2,6 +2,18 @@
 
 本文件保留验证历史；阶段二平台及 2A 治理的最新完整验收见 P6 节。其余批次章节保留当时的范围、失败与限制，不覆盖最新结论。供应商领域和生产试点由阶段三独立验收。
 
+## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
+
+对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项独立于 REQ-0017～0021 的发布阻断；仅批准本地、Issue 与 PR，未执行合并或生产操作。
+
+本地基线 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，Node 24.21.0 / pnpm 11.19.0，基线治理 PASS。实现子代理先取得新 CI 分流/结果门禁测试红灯，再修改实现。后续验证按计划记录实际结果，真实 GitHub 调度和成本节省未验证，不将本地组合测试或旧运行当作最新 CI PASS。
+
+主代理实测：工作区 71 项（包含 CI 分流/门禁 13 项）、API 单测 50 suites/557 项、Web 第一分片 22 files/135 项、API/Web/contracts 构建、归档与治理 PASS；独立规格及质量审查 PASS。Web 第二分片主动中断，第三/四未执行，云端四分片保留。全量真实 PG 出现头像连续替换场景 5000 ms 超时且没有完整结束摘要，保留 FAIL/中断；同端口新空库 `qms_actions_economy_worker` 原样头像 8/8 与编译后 Worker 8/8 PASS，不据此改写全量结果。Worker 运行前后 `dist/worker.js` 时间戳及 SHA-256 不变，确认未二次构建；独立默认入口仍先 build。
+
+本机曾遇加密 pnpm `.cmd` shim、嵌套 Node spawn UNKNOWN 和并行契约 Prisma `VirtualAlloc failed`，失败日志保留；使用同版本官方 pnpm 入口、清理资源后串行 `node scripts/check-openapi-sync.mjs` PASS，生成契约未变化，未调整企业安全设置、断言或超时。Compose foundation/scanning 两组合及 actionlint PASS。本项仅草稿 PR 候选，不声明完整 Foundation、实际节省、合并或上线；PR/最新 CI 在计划指定 Git 外接续点及 Issue #52 关联中追踪，避免编号回填再触发一轮 CI。
+
+真实资源使用本任务新建并标记 `qms.task=actions-economy` 的 PostgreSQL、RustFS、ClamAV 和 Mailpit；PG 随机宿主端口 55040，无预览 55440。凭据、红绿灯与最终日志位于 Git 外 `D:/WorkSpace/QMS-2.0-local/actions-economy-*`。验证后仅清理这四个明确一次性容器及其卷，保留原任务资源和证据。
+
 ## 物料全局治理角色漏迁补齐（2026-10-18，V0.0.14-fix1 候选）
 
 复用 Issue #27，原 `20261018030000_material_master` 只联接组织内角色，排除了全局治理角色，导致既有受控管理员不能查看/授予物料权限，且标准治理不允许修改全局角色。新增前向迁移仅给符合内部双治理且没有任何供应商账号/所属组织/授权范围分配的全局角色补既有三权限，保留所有标准授权约束和 scoped 初授规则。
