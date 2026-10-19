@@ -5,11 +5,11 @@
 ## 当前摘要（2026-10-20，Asia/Taipei）
 
 - 来源：2026-10-20 按实际 record_id 回读 revision262，REQ-0022 `reczz28PGTTvAPTd`、REQ-0023 `reczz28PGW7hLyL5` 均 P0／开发中，has_more=false，目标、初稿与验收无变更；负责人确认自动生效、多来源保留与后续请求使用新授权。
-- 执行范围：U1 本地实现、两阶段审查和 Web 门禁通过，真实业务浏览器待验收；REQ-0023 关联 [Issue #55](https://github.com/JasonShu0722/QMS-2.0/issues/55)，REQ-0022 关联 [Issue #56](https://github.com/JasonShu0722/QMS-2.0/issues/56)。U2／U3 尚未完成，未创建 PR、未部署，不关闭 Issue 或写飞书。
+- 执行范围：U1 本地实现、两阶段审查和 Web 门禁通过（`a29abed`），真实业务浏览器待验收；U2-A 模型及解析器28项单测／真实PG、正式API lint和两阶段审查通过，U2-B正在接入消费者，U2／U3整体尚未完成。REQ-0023 关联 [Issue #55](https://github.com/JasonShu0722/QMS-2.0/issues/55)，REQ-0022 关联 [Issue #56](https://github.com/JasonShu0722/QMS-2.0/issues/56)。未创建 PR、未部署，不关闭 Issue 或写飞书。
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
 - 状态：U1 已实现权限摘要、只读分组详情、搜索和焦点恢复；组织切换待定／失败期间旧角色残留已按规格审查返修。已有部门／岗位／任职和直接角色，仍缺岗位关联及统一继承鉴权。不把签名指纹模块写成可视图片或带有效期的签名功能。
-- 映射：REQ-0023→U1→Issue #55→V0.0.22；REQ-0022→U2／U3→Issue #56→预留 V0.0.23；当前分支 `codex/req-0022-0023-planning`。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
-- 下一动作：保存 U1 本地检查点后，按 U2 数据／解析器→鉴权消费者及配置→U3 接续。仓库实时仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI。不重复确认已定的自动生效规则；合并、部署另核对授权。
+- 映射：REQ-0023→U1→Issue #55→V0.0.22→独立分支 `codex/req-0023-role-details`（`a29abed`）；REQ-0022→U2／U3→Issue #56→V0.0.23；当前执行分支继续使用 `codex/req-0022-0023-planning`，最终 PR 前按差异核对独立 base／head。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
+- 下一动作：U2-B统一鉴权／安全消费者，之后U2-C受控岗位配置及U3资料中心；U2-A不可单独发布。仓库实时仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI。不重复确认已定的自动生效规则；合并、部署另核对授权。
 - 证据：Git外 `D:/WorkSpace/QMS-2.0-local/req22-23-readback-20261020.json`、`req23-main-web-tests.log`（26/26）、`req23-matrix-regression.log`（29/29）、`req23-main-lint.log`、`req23-main-build.log`、`req23-contracts-check.log`、`req23-governance-final.log`，U1 审查与门禁详见末节。没有本次真实业务浏览器、生产部署或人工 PASS。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
@@ -64,9 +64,9 @@ node node_modules/vitest/vitest.mjs run src/features/admin/admin-interactions.te
 
 ### 4.1 模型与有效来源
 
-- [ ] 拟建 `apps/api/test/authorization/effective-role-grants.spec.ts`：直接R＋岗位P继承R＋岗位Q继承R，结果一个R三来源；结束P、撤直接仍保留Q，最后结束Q才撤权。
+- [x] `apps/api/test/authorization/effective-role-grants.spec.ts`：直接R＋岗位P继承R＋岗位Q继承R，结果一个R三来源；结束P、撤直接仍保留Q，最后结束Q才撤权。
 - [ ] 覆盖结束任职／停用岗位或部门／外组织关联／供应商白名单／空映射。迁移后空映射对原直接授权无变化。
-- [ ] 实现最小PositionRole、版本和索引；同组织引用及唯一性由真实PG验证。不得用内存Map冒充持久关系。
+- [x] 实现最小PositionRole、独立roleVersion和索引；同组织引用及唯一性、空映射旧授权不变由真实PG升级链验证。不得用内存Map冒充持久关系。
 
 拟建解析器目标类型：
 
@@ -92,6 +92,24 @@ type GrantSource =
 - [ ] 映射保存立即影响已有在岗人员；任职变化／岗位部门启停／角色权限修改自动影响后续请求，不建异步追赶任务、不设二次批准。
 - [ ] 固定安全版本及锁顺序，授权变化／审计／安全失效同事务；旧会话不能继续操作，敏感在途写入事务内复验，操作者自身撤权不重复写。
 - [ ] 管理页面提供可识别用户入口、岗位角色与来源；展示自动生效说明及影响范围。预览不构成审批闸门，本人页没有授权编辑入口。
+
+### 4.4 实际消费者审计与执行切片（2026-10-20）
+
+主代理已搜索 `apps/api/src` 全部 `userRole.find/count`、`userRoles` 条件和 `role.permissions` 消费者；下表是本次实现范围，不代表已经替换完成。U2 内部按 A→B→C 接续，整个 U2 仍同批发布。
+
+| 切片 | 实际调用方 | 改动口径 |
+| --- | --- | --- |
+| U2-A | schema、新迁移、`common/security/effective-role-grants.ts` | 同组织模型与统一读取，独立角色来源，禁止单独发布 |
+| U2-B | `AuthorizationService`、`adminPermissions`、`mfaPolicy` | Guard／事务内权限与全部组织的 MFA 同用有效角色 |
+| U2-B | `OrganizationScopeService`、`OrganizationService.tree`、`AdminOrganizationController` | 继承人员能进入其有权主组织，保留内部跨组织直接治理与受控停用读取 |
+| U2-B | `SessionService.createWithMetadata`、`AdminUserService.assertTarget`、`assertSupplierAccountTarget` | 记住登录管理员判定、目标权限上限与供应商白名单含岗位来源 |
+| U2-B | `AdminRoleService` 更新／删除／assignments／自锁 | 继承人员纳入安全版本与重置凭证失效；岗位引用阻止删角色；保留旧 `roles` 的直接分配语义，新增有效角色及来源投影，不能把继承角色永久写回 `UserRole` |
+| U2-C | `OrganizationService` 的岗位映射／任职／岗位与部门启停、对应DTO／Controller | CAS、幂等、权限组合与可授予上限、受影响用户锁和安全失效、审计同事务，无二次审批 |
+| U2-C | `StructureAdministration`、`UserAdministration`／角色分配入口 | 可识别人员选择、岗位角色配置、直接／继承来源分开显示，组织切换及草稿保护 |
+
+直接授权维护专用的写入继续保留：`AdminRoleService.assign` 只替换直接集合；组织子节点治理授权、供应商边界 caretaker／portal 角色创建、身份迁移清理仍各自维护真实 `UserRole`，不据其写接口反向推导有效权限。角色序列化读取 `role.permissions` 仅展示角色定义，无须替换为用户授权计算。
+
+U2-A 主代理已独立运行单测10项＋真实PG18项（28/28）及正式API lint；规格审查 McClintock（`01a15526-5bbf-7081-a357-006ff792a9bc`）及质量审查 Schrodinger（`01a15528-c3f4-79c1-bae3-8f0ec542f6ba`）均 PASS。实现者 Rawls（`01a1551b-19cf-7843-8d6a-e36160ae3874`）先在最小空函数下取得9失败／1通过，随后实现；真实PG初次夹具触发旧有同岗活跃任职唯一索引，修正夹具时间后18/18通过，没有弱化旧约束。辅助服务使用本次独立容器，配置在 Git 外 `req22-23-test-env.json`；PG端口57544，RustFS健康200／版本控制已开启、ClamAV PONG，Mailpit已启动。原始迁移、红绿灯、主代理独立测试与lint日志均在 `D:/WorkSpace/QMS-2.0-local/req22-u2a-*`。U2-B由新实现者 Boyle（`01a1552b-b1b7-7f03-8531-731abbe3f084`）接续；尚无完整消费者／全套集成／Worker／业务浏览器证据，不把本检查点当完整U2或REQ-0022完成。
 
 工作目录 `apps/api`，generate／单测串行：
 

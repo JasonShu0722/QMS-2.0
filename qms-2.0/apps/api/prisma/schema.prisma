@@ -273,12 +273,14 @@ model Position {
   name String @db.VarChar(200)
   status OrganizationStatus @default(ACTIVE)
   version Int @default(1)
+  roleVersion Int @default(1) @map("role_version")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   department Department @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
   category PositionCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
   users UserPosition[]
+  roles PositionRole[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -313,10 +315,24 @@ model Role {
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   permissions    RolePermission[]
   userRoles      UserRole[]
+  positions      PositionRole[]
 
+  @@unique([organizationId, id])
   @@unique([organizationId, code])
   @@index([organizationId])
   @@map("roles")
+}
+
+model PositionRole {
+  organizationId String @map("organization_id") @db.Uuid
+  positionId String @map("position_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  position Position @relation(fields: [organizationId, positionId], references: [organizationId, id], onDelete: Cascade, onUpdate: Restrict)
+  role Role @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([organizationId, positionId, roleId])
+  @@index([organizationId, roleId])
+  @@map("position_roles")
 }
 
 model Permission {
