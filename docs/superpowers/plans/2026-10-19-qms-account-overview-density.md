@@ -3,11 +3,11 @@
 ## 当前摘要（2026-10-19，Asia/Taipei）
 
 - 批准：负责人已确认三项返修方案并要求继续；[独立规格](../specs/2026-10-19-qms-account-overview-density-design.md)为本轮范围。
-- 映射：REQ-0017／0018／0021 → 复用 Issue #44／#47 → 本地 `codex/account-overview-density` → 候选交付 V0.0.21。旧 PR 均已合并，本轮使用新 PR；负责人已明确“已开源，继续吧”，进入集中推送与最新 CI。
-- 基线：活动 D 盘 checkout 的 `main` 为 `7e987b8`，包括本地 V0.0.20-fix2 文档提交；origin/main 和线上为 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`。本地入口与 Git 外证据位于 `D:/WorkSpace/QMS-2.0-local/`。从当前 HEAD 建功能分支，保留本地提交。
-- 状态：本地实现、返修、账号／密度独立规格与质量复审、最终整合审查全部完成。主代理 Web 全集 91 files／653 tests、冻结源码类型／构建、治理／归档与隔离浏览器矩阵通过；云端 CI 和部署尚未执行。
+- 映射：REQ-0017／0018／0021 → Issue #44／#47 → `codex/account-overview-density` → [PR #54](https://github.com/JasonShu0722/QMS-2.0/pull/54)，V0.0.21 已合并上线；Issue 保持开放。
+- 开工基线（历史）：活动 D 盘 checkout 的 `main` 为 `7e987b8`，包括本地 V0.0.20-fix2 文档提交；origin/main 和线上为 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`。本地入口与 Git 外证据位于 `D:/WorkSpace/QMS-2.0-local/`。从当前 HEAD 建功能分支，保留本地提交。
+- 状态：本地 91 files／653 tests、独立规格／质量／整合审查及隔离浏览器通过。PR CI39236058320、main CI39237316369 各完整 9 jobs PASS；Deploy39238036827 PASS，生产完整 SHA `ecf7224e023104898606fb6fd154e1b992a95e27`。快照／迁移／同 SHA 镜像／服务及公开 HTTP／契约／资源联合核验通过，真实登录业务人工验收待执行。
 - 当前授权：负责人“已开源，继续吧”解除私有期间本地限制，接续本轮已批准返修的推送、新 PR、CI，以及本聊天已批准范围检查通过后的合并和部署；已实际查询仓库为 public。Issue 关闭、飞书写入与真实业务人工验收仍单独保留，禁止预览数据库 55440。
-- 下一动作：核对 main 基线、集中推送本分支并关联 Issue #44／#47 建新 PR，最新 PR 全部检查通过后合并，核验同 SHA 的 main CI 与自动部署。云端步骤结束即通知可闭源；不修改仓库可见性。
+- 下一动作：云端开发／合并／部署步骤完成，已通知负责人可以闭源。按本计划人工清单验收；Issue 关闭和飞书回填仍待独立授权。最终文档和索引仅本地集中提交，待下次获准交付同步，不为状态更新触发完整 CI 或生产部署。
 
 > 面向执行代理：使用项目 QMS Superpowers 和 subagent-driven-development。分工仅允许不相交文件写入；验证冻结覆盖源码，Git 由主代理管理。
 
@@ -52,8 +52,8 @@
 
 ## 后续交付与人工验收
 
-- [ ] 负责人恢复允许的 Actions 条件后，核对远程 base／head，复用原 Issue 关联新 PR，集中推送并执行最新完整 CI。负责人后续明确公开并继续，已进入本步骤。
-- [ ] 合并／生产部署分别核对授权，按交付流程验证 SHA、镜像、迁移／快照、健康与线上资源；不能以旧版本部署替代本轮证据。
+- [x] 负责人恢复允许的 Actions 条件后，核对远程 base／head，复用原 Issue 关联新 PR，集中推送并执行最新完整 CI。负责人后续明确公开并继续，已进入本步骤。
+- [x] 合并／生产部署分别核对授权，按交付流程验证 SHA、镜像、迁移／快照、健康与线上资源；不能以旧版本部署替代本轮证据。
 - [ ] 负责人使用实际账号验证一张概览、一份会话表、当前会话保护、撤销／改密后刷新、区域内翻页滚动、邮箱草稿、安全弹窗焦点，以及代表性业务页面留白和触控尺寸。记录版本、页面、角色、设备、结果。
 - [ ] Issue 关闭与飞书台账回填等待独立授权；收敛后的公共视觉规则只维护到统一前端规范，不另建平行规范。
 
@@ -127,3 +127,13 @@
 ### 云端接续（2026-10-19）
 
 负责人已明确公开并继续。只读核对仓库 public、无开放 PR、Issue #44／#47 仍开放且未撤回；origin/main 仍为 c7dc86b，功能分支基线领先两提交、没有落后。本次追加仅修正文档中的活动目录和授权记录，不改源码；复用同一源码 91 files／653 tests、本地浏览器及独立审查证据。集中推送前再做治理，不重复运行业务全集。
+
+### 最终上线与联合只读核验（2026-10-19，Asia/Taipei）
+
+- [PR #54](https://github.com/JasonShu0722/QMS-2.0/pull/54) 已于 18:25 合并，完整 SHA `ecf7224e023104898606fb6fd154e1b992a95e27`。PR head `5dba5177431d1cde04d9a46fe2041591098361b5`，base `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`；合并树与 PR head 完全一致。
+- [PR CI39236058320](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39236058320)、[main CI39237316369](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39237316369) 均在 attempt1 完整 9 jobs PASS，以项目原有 evaluateDeployJobs 对实际指定 attempt、每个 job 的 SHA／run_id／run_attempt 和结果重新校验。无重跑、无检查跳过或流程改写。
+- PR 与 main 的真实 PostgreSQL 各 81 suites／872 tests、编译后 Worker 各 8 tests PASS；两个 integration 的 Destroy ephemeral integration services 步骤均 success。日志保存在 Git 外 release-job-118005351915.log、release-job-118009494580.log。
+- [Deploy39238036827](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39238036827) 于 18:35 成功，完整 SHA 同上。release-verify-deploy.py 核验迁移前加密快照存在且先于迁移、No pending migrations、API／Web health、Worker 生命周期和完成标记；联合核验另核对 API／Worker 共用相同完整 SHA 镜像、Web 对应相同 SHA 镜像，Compose wait 健康事件与 Worker 就绪守卫完成。
+- 18:37 公开 HTTP：登录／OpenAPI 200，匿名 /me 与 /me/sessions/history 均 401；API schema SHA-256 与上线前相同。首页 4 个资源均 200，SHA-256 全部匹配已验证本地构建；新业务 JS 为 index-CaTm60_z.js、CSS 为 index-CdSG_FcO.css，确认账号概览／统一会话资源和 page8／section6／card8／table4／topbar54。不把静态资源证据扩写为真实业务人工验收。
+- Git 外证据：release-deploy-39238036827-verified.json、account-density-live-before.json、account-density-live-after.json、account-density-joint-verification.json、account-density-release-checkpoint.json。PR 正文已补实际 CI／部署链接与验收限制；18:37 回读远端 main 与本地部署源码均为同一 SHA。
+- 云端工作已结束并通知可以闭源；没有修改仓库可见性。Issue 未关闭、飞书未写入、真实登录业务验收仍待负责人；没有新建本地数据库／Docker 资源、未触碰保留 55440。最终本地收尾文档提交不再推送，避免仅状态／索引更新再次触发完整业务 CI 与部署；后续按下一次已授权交付集中同步。

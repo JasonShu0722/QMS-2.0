@@ -236,7 +236,7 @@
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 30,
-        "reason": "复核能力状态新增已批准人工反馈返修及本地边界；机器人仍只读分析，状态更新不扩大源码修改、批准或生产操作权限。",
+        "reason": "能力状态已更新为 V0.0.21 返修部署核验通过、真实业务人工验收待执行；复核机器人只读与字段权限边界不因发布状态扩大。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "21e81e9856f53213243188e8930ab637de17e06add78cf463fe2787688432334"
+            "sha256": "cd5e76f8bc8039214003bbc9f6083df6e62a78e3a7e7e2876300f43a62519130"
           },
           {
             "path": "README.md",

@@ -4,15 +4,15 @@
 
 ## 当前最终上线结果（2026-10-19，Asia/Taipei）
 
-V0.0.20 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90` 已合并并部署。Foundation `39207200414` 与 Deploy `39207880874` 全部成功。部署日志核验：迁移前加密快照先于迁移、No pending migrations、完整镜像 SHA、API/Web 健康、Worker 生命周期和完成标记。公开 HTTP/契约/资源联合核验绑定同一 SHA；真实登录业务界面仍按原计划待人工验收，Issue 与飞书未关闭回填。
+V0.0.21 `ecf7224e023104898606fb6fd154e1b992a95e27` 已通过 [PR #54](https://github.com/JasonShu0722/QMS-2.0/pull/54) 合并并部署。PR Foundation39236058320、main Foundation39237316369 与 Deploy39238036827 全部成功。已核对同 SHA 镜像、迁移前加密快照先于迁移、No pending migrations、API／Worker／Web 状态及就绪守卫；公开 HTTP／契约／新静态资源联合核验通过，4 个资源 SHA-256 与已验证本地构建完全相同。真实登录业务界面及人工验收仍按返修清单待执行，Issue 与飞书未关闭回填。V0.0.20 的既有部署记录保留为历史。
 
 四个 `qms-req17-21-disposable-*` 一次性容器及两个专属匿名卷已清理；本轮未触碰保留预览资源 `55440`，未删除 bind 源配置、日志或备份。清理后核对结果见 Git 外 `req17-21-cleanup-final.json`。原 Actions 一次性资源清理另见 `actions-economy-cleanup.json`。
 
 以下章节保留各阶段当时的失败和待办，不覆盖本节最终状态；早期本地全量失败不改写为本地全集 PASS。
 
-## 个人账号与全页密度人工反馈返修（2026-10-19，V0.0.21 本地候选）
+## 个人账号与全页密度人工反馈返修（2026-10-19，V0.0.21 已部署）
 
-负责人已批准 [三项反馈规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md)，按 [独立返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续。最终冻结源码的 Web 全集 91 files／653 tests、类型检查和生产构建均通过。账号与共享密度的独立规格、质量及整合复审通过；原竞态与密度遗漏先补红灯后返修，不以首轮 PASS 替代最终结果。主代理用真实前端与隔离 API fixture 通过双门户三宽六主题 36 组、工作台三宽、36／44px 控件几何、英文及安全弹窗焦点／草稿检查。治理、契约和归档实际命令及 Git 外结果见返修计划，既有组件提示和大 chunk 提示保留。当前仅本地；真实生产认证／会话写入／上传扫描、云端 CI、合并部署与人工验收未执行。线上仍为前节的 V0.0.20，Issue 和飞书状态未改。
+负责人已批准 [三项反馈规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md)，按 [独立返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续。最终冻结源码的 Web 全集 91 files／653 tests、类型检查和生产构建均通过。账号与共享密度的独立规格、质量及整合复审通过；原竞态与密度遗漏先补红灯后返修，不以首轮 PASS 替代最终结果。主代理用真实前端与隔离 API fixture 通过双门户三宽六主题 36 组、工作台三宽、36／44px 控件几何、英文及安全弹窗焦点／草稿检查。治理、契约和归档实际命令及 Git 外结果见返修计划，既有组件提示和大 chunk 提示保留。负责人随后公开并继续，已完成最新 PR/main 完整 CI、合并及 Deploy39238036827 的生产核验。PR 与 main 各真实 PG 872 项、Worker 8 项通过且一次性资源清理成功。真实生产认证／会话写入／上传扫描与人工验收未执行；线上为 V0.0.21，Issue 和飞书状态未改。
 
 ## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
 
