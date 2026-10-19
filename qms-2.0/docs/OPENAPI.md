@@ -26,7 +26,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 ## 管理员接口
 
-REQ-0020 开发增量：审计事件增加 `actionLabel` 与可空 `actorSummary`（`username/accountType/organizationName`），保留原动作与操作人 UUID。摘要仅限操作人当前主组织匹配事件授权组织，不能视为历史身份快照。CSV 使用同一安全读取模型并保留既有权限、列、数量与下载边界；本轮状态见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。
+REQ-0020 开发增量：审计事件增加 `actionLabel` 与可空 `actorSummary`（`username/accountType/organizationName`），保留原动作与操作人 UUID。`actionLabel` 对当前实际发出的已知动作提供中文说明，未知动作仍原码回退；不是对任意字符串自动翻译。摘要仅限操作人当前主组织匹配事件授权组织，不能视为历史身份快照。CSV 使用同一安全读取模型并保留既有权限、列、数量与下载边界；本轮状态见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。
 
 下表路径统一以 `/api/v1/admin` 为前缀。query 中的 `organizationId` 为可选 UUID，省略时使用会话主组织；`POST /users` 与 `POST /roles` 则由必填 body.organizationId 选择组织。其他组织的权限不能补充所选组织中缺失的权限；供应商只能本企业。路径中的 userId/roleId 为 UUID。
 

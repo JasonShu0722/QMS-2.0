@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfigProvider } from 'antd';
-import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRouter, Link, RouterProvider, useLocation, useNavigate } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminPage } from './AdminPage';
 import type { AdminOrganization } from './admin';
 import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -38,18 +38,31 @@ let navigate: ReturnType<typeof useNavigate>;
 function RouteControls() {
   navigate = useNavigate();
   const location = useLocation();
-  return <><output data-testid="url">{location.search}</output><Link to={`/app/admin${target(orgB, userB)}`}>另一审计账号</Link></>;
+  return <><output data-testid="url">{location.search}</output><output aria-label="route hash">{location.hash}</output><Link to={`/app/admin${target(orgB, userB)}`}>另一审计账号</Link></>;
 }
-function view(organizations: AdminOrganization[] | null = [org(orgA), org(orgB)], search = '') {
-  const wrap = (entries: AdminOrganization[] | null) => <ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter initialEntries={[`/app/admin${search}`]}><UnsavedChangesProvider><RouteControls /><AdminPage organizations={entries} /></UnsavedChangesProvider></MemoryRouter></ConfigProvider>;
-  const result = render(wrap(organizations));
-  return { ...result, directory: (entries: AdminOrganization[] | null) => result.rerender(wrap(entries)) };
+function view(organizations: AdminOrganization[] | null = [org(orgA), org(orgB)], search = '', history?: { initialEntries: string[]; initialIndex?: number }) {
+  let updateDirectory: (entries: AdminOrganization[] | null) => void;
+  function Directory() {
+    const [entries, setEntries] = useState(organizations);
+    updateDirectory = setEntries;
+    return <UnsavedChangesProvider><RouteControls /><AdminPage organizations={entries} /></UnsavedChangesProvider>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <Directory /> }], {
+    initialEntries: history?.initialEntries ?? [`/app/admin${search}`], initialIndex: history?.initialIndex,
+  });
+  const result = render(<ConfigProvider theme={{ token: { motion: false } }}><RouterProvider router={router} /></ConfigProvider>);
+  return { ...result, directory: (entries: AdminOrganization[] | null) => act(() => updateDirectory(entries)) };
 }
 async function switchOrganization(name: string) {
   await userEvent.click(screen.getByRole('combobox', { name: '管理组织' }));
   await userEvent.click(screen.getByText(name, { selector: '.ant-select-item-option-content' }));
 }
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
+beforeEach(() => {
+  localStorage.clear(); sessionStorage.clear();
+  // Data router uses Node's Request, which requires a Node AbortSignal in jsdom.
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 describe('C master navigation', () => {
 it('places authorized supplier, customer and material tabs together in that order', () => {
@@ -75,6 +88,52 @@ it.each(['supplier-quality:profiles:read', 'supplier-quality:profiles:write'])('
 });
 
 describe('D account targeting', () => {
+it('pushes an actor link so Back returns to its audit source and Forward returns to the account', async () => {
+  view([org(orgA, ['account:users:read', 'audit:read']), org(orgB)], '', {
+    initialEntries: ['/app/admin?source=older', '/app/admin?source=audit'],
+  });
+  fireEvent.click(screen.getByRole('tab', { name: '管理审计' }));
+  await userEvent.click(screen.getByRole('link', { name: '另一审计账号' }));
+  expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:${userB}`);
+  await act(async () => navigate(-1));
+  await waitFor(() => expect(screen.getByTestId('url').textContent).toBe('?source=audit'));
+  await act(async () => navigate(1));
+  await waitFor(() => expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:${userB}`));
+});
+
+it.each([
+  ['Back', 1, -1, orgB, userB, orgA, userA],
+  ['Forward', 0, 1, orgA, userA, orgB, userB],
+] as const)('preserves both history entries and the draft after cancelling %s, then confirms the same target once', async (_direction, initialIndex, delta, currentOrg, currentUser, nextOrg, nextUser) => {
+  view(undefined, '', {
+    initialEntries: [`/app/admin${target(orgA, userA)}`, `/app/admin${target(orgB, userB)}`],
+    initialIndex,
+  });
+  fireEvent.click(screen.getByRole('button', { name: '编辑账号草稿' }));
+  await act(async () => navigate(delta));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('当前草稿尚未保存');
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByTestId('users')).toHaveTextContent(`${currentOrg}:${currentUser}`);
+  expect(screen.getByText('账号草稿未保存')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByTestId('url').textContent).toBe(target(currentOrg, currentUser));
+  expect(screen.getByTestId('users')).toHaveTextContent(`${currentOrg}:${currentUser}`);
+  expect(screen.getByText('账号草稿未保存')).toBeVisible();
+
+  await act(async () => navigate(delta));
+  const confirmation = within(await screen.findByRole('dialog'));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByTestId('users')).toHaveTextContent(`${currentOrg}:${currentUser}`);
+  await userEvent.click(confirmation.getByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(screen.getByTestId('users')).toHaveTextContent(`${nextOrg}:${nextUser}`));
+  expect(screen.getByTestId('url').textContent).toBe(target(nextOrg, nextUser));
+  expect(screen.queryByText('账号草稿未保存')).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await act(async () => navigate(-delta));
+  await waitFor(() => expect(screen.getByTestId('url').textContent).toBe(target(currentOrg, currentUser)));
+});
+
 it('opens the explicitly authorized organization and passes the target user to its users section', () => {
   view(undefined, target());
   expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:${userA}`);
@@ -224,4 +283,45 @@ it.each(['programmatic', 'link'] as const)('does not change the account scope on
   fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
   expect(await screen.findByTestId('users')).toHaveTextContent(`${orgB}:${kind === 'link' ? userB : userA}`);
 });
+
+it('allows hash-only navigation during a matrix save without changing the scope', async () => {
+  view([org(orgA, ['account:roles:read']), org(orgB)]);
+  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
+  await act(async () => navigate('/app/admin#detail'));
+  expect(screen.getByLabelText('route hash')).toHaveTextContent('#detail');
+  expect(screen.getByRole('tab', { name: '权限矩阵' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  // The next relative hash change must start from the already accepted location.
+  await act(async () => navigate('#next'));
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
+  expect(screen.getByRole('tab', { name: '权限矩阵' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
+
+it('confirms the latest queued busy target once after saving, preserving the draft on cancel', async () => {
+  view([org(orgA, ['account:roles:read']), org(orgB)]);
+  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
+  fireEvent.click(screen.getByRole('button', { name: '编辑矩阵草稿' }));
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
+  await act(async () => navigate(`/app/admin${target(orgB, userA)}`));
+  await act(async () => navigate(`/app/admin${target(orgB, userB)}`));
+  expect(screen.getByTestId('url').textContent).toBe('');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('当前草稿尚未保存');
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByTestId('matrix-dirty')).toBeVisible();
+  expect(screen.getByTestId('url').textContent).toBe('');
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
+  await act(async () => navigate(`/app/admin${target(orgB, userA)}`));
+  await act(async () => navigate(`/app/admin${target(orgB, userB)}`));
+  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
+  fireEvent.click(screen.getByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:${userB}`));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+});
+import { transferableAbortController } from 'node:util';

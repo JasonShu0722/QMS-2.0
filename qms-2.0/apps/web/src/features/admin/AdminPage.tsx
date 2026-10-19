@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useInRouterContext, useLocation, useNavigate, type Location, type NavigateFunction } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useInRouterContext, useLocation, type Location } from 'react-router-dom';
 import { Alert, Select, Spin, Tabs, Typography } from 'antd';
 import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
@@ -14,11 +14,10 @@ import { useLanguage } from '../../i18n/Language';
 import { CustomerMasterSection } from '../customer-quality/CustomerMasterSection';
 import { MaterialMasterPage } from '../material-master/MaterialMasterPage';
 import { SupplierProfilesPage } from '../supplier-quality/SupplierProfilesPage';
-import { useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 type AdminPageProps = { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void };
 type AdminLocation = Pick<Location, 'pathname' | 'search' | 'hash'>;
-const locationPath = (location?: AdminLocation) => location ? `${location.pathname}${location.search}${location.hash}` : '';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function AdminPage(props: AdminPageProps) {
@@ -27,20 +26,18 @@ export function AdminPage(props: AdminPageProps) {
 
 function RoutedAdminPage(props: AdminPageProps) {
   const location = useLocation();
-  const navigate = useNavigate();
-  return <AdminPageContent {...props} location={location} navigate={navigate} />;
+  return <AdminPageContent {...props} location={location} />;
 }
 
-function AdminPageContent({ organizations, error, traceId, onDirectoryChange, location, navigate }: AdminPageProps & { location?: AdminLocation; navigate?: NavigateFunction }) {
+function AdminPageContent({ organizations, error, traceId, onDirectoryChange, location }: AdminPageProps & { location?: AdminLocation }) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [selectedId, setSelectedId] = useState<string>();
   const [matrixBusy, setMatrixBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<string>();
   const [acceptedLocation, setAcceptedLocation] = useState(location);
-  const [queuedLocation, setQueuedLocation] = useState<AdminLocation>();
   const [targetConsumed, setTargetConsumed] = useState(false);
-  const restoringPath = useRef<string>(undefined);
+  useNavigationBusy(matrixBusy);
   const query = new URLSearchParams(acceptedLocation?.search);
   const targeting = !targetConsumed && ['organizationId', 'section', 'userId'].some((key) => query.has(key));
   const organizationId = query.get('organizationId') ?? '';
@@ -56,54 +53,14 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     requestLeave(action);
   }
 
-  function changeQuery(next: AdminLocation) {
-    if (matrixBusy) { setQueuedLocation(next); return; }
-    changeScope(() => {
+  useEffect(() => {
+    if (location?.pathname !== acceptedLocation?.pathname || location?.search !== acceptedLocation?.search) {
       setSelectedId(undefined);
       setTargetConsumed(false);
       setActiveTab('users');
-      setAcceptedLocation(next);
-      restoringPath.current = locationPath(next);
-      navigate?.(locationPath(next), { replace: true });
-    });
-  }
-
-  useEffect(() => {
-    if (restoringPath.current !== undefined) {
-      if (locationPath(location) !== restoringPath.current) return;
-      restoringPath.current = undefined;
-    }
-    if (location && acceptedLocation && location.pathname === acceptedLocation.pathname && location.search === acceptedLocation.search && location.hash !== acceptedLocation.hash) {
       setAcceptedLocation(location);
-      return;
     }
-    const next = locationPath(location) !== locationPath(acceptedLocation) ? location : queuedLocation;
-    if (!next) return;
-    // Keep the accepted URL and mounted draft until the shared leave guard approves.
-    if (locationPath(location) !== locationPath(acceptedLocation)) {
-      restoringPath.current = locationPath(acceptedLocation);
-      navigate?.(locationPath(acceptedLocation), { replace: true });
-    }
-    if (matrixBusy) { setQueuedLocation(next); return; }
-    setQueuedLocation(undefined);
-    changeQuery(next);
-  }, [location, acceptedLocation, queuedLocation, matrixBusy, navigate, requestLeave]);
-
-  useEffect(() => {
-    if (!location || !navigate) return;
-    function protectTargetLink(event: MouseEvent) {
-      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      if (!(link instanceof HTMLAnchorElement) || (link.target && link.target !== '_self') || link.hasAttribute('download')) return;
-      const next = new URL(link.href, window.location.href);
-      if (next.origin !== window.location.origin || next.pathname !== location!.pathname || next.search === location!.search) return;
-      // Handle this scope change before the provider's link guard to avoid two confirmations.
-      event.preventDefault();
-      changeQuery(next);
-    }
-    document.addEventListener('click', protectTargetLink, true);
-    return () => document.removeEventListener('click', protectTargetLink, true);
-  }, [location, navigate, matrixBusy, requestLeave]);
+  }, [location, acceptedLocation]);
 
   if (error) return <Alert type="error" title={t(error)} description={traceId ? <code>{traceId}</code> : undefined} role="alert" showIcon />;
   if (!organizations) return <Spin tip={t('加载系统管理权限')} />;

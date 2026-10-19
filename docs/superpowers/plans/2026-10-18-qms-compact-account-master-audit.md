@@ -5,10 +5,10 @@
 - 批准：负责人指令“我更新了进展，推进开发中条目”，随后对已列明的四单元规格确认“范围没问题”；本次回读飞书 revision 248，五条 REQ-0017～0021 仍为开发中。批准内容与 record_id 见下表及 Git 外快照；P3 不纳入。
 - 设计：[本轮设计](../specs/2026-10-18-qms-compact-account-master-audit-design.md)。独立评审以当前源码为准，采用现有会话历史、前端分块导入、安全账号摘要，未采用草稿中的新历史表、异步任务及新增姓名字段。
 - 源码：活动 checkout `D:/WorkSpace/QMS-2.0`，基线 HEAD / origin/main `8a86b28`，工作区起始干净；Node 24.21.0 / pnpm 11.19.0。只在活动 checkout 功能分支隔离，不使用 C/E 回退目录实现。
-- 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。 2026-10-19 负责人再次要求推进合并上线，并在 C 部署失败后明确允许不重跑该部署、继续其余代码集成，下次部署再验证；该决定仅延后 C 部署先于 D 的接续条件，不免除源码 CI 或将失败记为通过。
+- 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。 2026-10-19 负责人再次要求推进合并上线，并在 C 部署失败后明确允许不重跑该部署、继续其余代码集成，下次部署再验证；该决定仅延后 C 部署先于 D 的接续条件，不免除源码 CI 或将失败记为通过。最新授权：负责人已明确“仓库已开源，继续”，GitHub API现场确认private=false；恢复原范围的推送、云端CI、检查通过后的合并及部署接续。不重跑C失败部署，Issue关闭与飞书写入仍未授权。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：A PR48 / V0.0.16 与 B PR49 / V0.0.17 已核验部署；当前生产仍为 B `47db5bee6f818da5b6e4d1e63b76c364c0a3803f`（负责人 10:22 SSH 输出）。C PR50 已合并 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，仓库公开后 Foundation39153238102 attempt6 全部 8 jobs PASS；自动部署39188014390在 API 镜像 Corepack/pnpm 安装层等待约20分钟后 SSH timeout/exit255，日志无迁移前快照或迁移标记，保持部署失败。负责人允许不重跑，继续 D。D PR51已改base为main，在原分支合入C主线，实际文件树与既有审查运行源码无业务差异；推送后等待最新完整检查再合并。最终真实业务浏览器验收、Issue关闭和飞书写入仍未完成且未执行。下一动作：D当前head完整CI→获准合并→记录自动部署实际状态，再接续Actions优化PR53；不复用旧base PASS，不重跑C部署。
+- 分别状态：A PR48 / V0.0.16 与 B PR49 / V0.0.17 已核验部署；生产最后确认为 B `47db5bee6f818da5b6e4d1e63b76c364c0a3803f`（负责人 10:22 SSH 输出，本轮未重新访问生产）。C PR50 已合并 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，Foundation39153238102 attempt6 全部 8 jobs PASS；部署39188014390在 API 镜像安装层等待后 SSH timeout/exit255，日志无快照或迁移标记，保持失败，不重跑。D PR51 本地返修已实现，D1/D2 独立规格和质量复审均通过；当前分支 `codex/req-0020-audit`，已推送 HEAD `e40f543a3378cfc8ae466c57044965a1dc7017e6`，其后修改尚未推送，冻结验证见文末。CI39190126869已取消，不是当前返修PASS。本地交付准备已完成；当前按恢复授权向原PR51集中推送、完整CI、依授权合并及核验下一次实际部署，最后接续草稿PR53。最终业务浏览器、Issue关闭和飞书写入均未完成且未执行。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
@@ -125,3 +125,86 @@ API 为本人历史读取与审计安全响应/导出增量，历史事实只读
 - A/B生产保持已核验版本47db5bee；没有部署C，也没有合并/部署D。不能将PR源码CI通过改写成C/main CI通过，或从生产跳过门禁。后续文档HEAD的阻断与运行代码的既有绿色结果分别记录。
 - 已创建当前聊天每小时跟进`req-0017-0021`，每次至多一次重跑受阻检查，同一账单限制时安静；恢复后按既有批准接续C/D，全部部署核验后暂停跟进。它不接其他需求，不增加支出额度，不更改付款或检查规则。
 - 负责人所需动作是恢复GitHub账户Billing & plans/Actions可用性。此项外部账户动作不在本次代码/发布授权内；本轮未付款、未改额度、未安装替代runner、未关闭任何检查。Issue44～47保持开放，飞书无写入，最终真实业务浏览器人工清单保持待验收。
+
+
+## 2026-10-19 D 合并前云端审查反馈返修
+
+- 原 PR51 已知三条云端 P2，主代理当前源码核对后纳入同一批准目标的纠错，不另接业务需求。当前 head `e40f543` 的 CI 不能覆盖尚未修复行为，返修后集中推送一次再完整验证。
+- D1 审计动作标签：已有服务发出的业务动作（例如 ANNOUNCEMENT_CREATED、CUSTOMER_MASTER_UPDATED、MATERIAL_MASTER_UPDATED、SUPPLIER_PROFILE_UPDATED）应有中文说明；真正未知动作仍原码回退。实现者负责 `audit-event-read-model.ts` 与同目录对应单测；遍历现有发出动作及动态动作来源，不引入猜测翻译或重复领域事实。先失败测试、最小显式标签与覆盖校验，再绿灯。
+- D2 账号定位历史：用户点击定位链接应新增可后退条目；Back/Forward 进入另一定位时，在未保存确认前不得覆盖目标条目，取消保留当前草稿和可再次使用的历史，确认后才改变范围。实现者只负责 AdminPage.tsx、AdminPage.targeting.test.tsx 和必要的同前缀历史专项测试；复用现有导航保护，不改共享权限语义、不扩展路由基础设施或引入依赖。先用真实 MemoryRouter 多条历史与共享 guard 复现，再最小修复。
+- 主代理串行管理 Git、文档/索引和最终整合，两个实现者写入范围分离；无生产操作、无新数据库。原 18 项真实 PG 的业务读取/导出结构未变，但仍须最新完整 CI 的真实集成结果。返修先独立规格审查再质量审查，最后只推原 PR；未解决反馈不视为已通过。
+
+
+### D2 根因核对后的最小共享扩展
+
+源码确认正式 App 使用 BrowserRouter，现有共享 guard 只能在点击时拦截，POP 已发生后覆盖 URL 会破坏历史；已有 React Router 的 useBlocker 要求 data router。因此允许同一实现者在原 D2 之外修改 `apps/web/src/App.tsx`、`layouts/UnsavedChanges.tsx`、`layouts/UnsavedChanges.test.tsx`，必要新增 App 路由测试；不改变正式路由地址、认证/门户边界、Language/Theme/Reauthentication Provider 语义，不引入新依赖，不改业务权限。
+
+- 保留现有路由组件和布局，使用已安装 React Router 的 createBrowserRouter/RouterProvider 提供原生导航阻塞。
+- 共享 guard 在导航发生前拦截 PUSH/POP/REPLACE，忽略不会改变业务范围的同 pathname/search 的 hash 变化；取消使用 blocker.reset，接受使用 blocker.proceed，不能通过 replace/push 重建历史。
+- 保留通用 requestLeave 的本地表单/组织/工作标签关闭行为；显式已确认回调里的同步导航不得重复弹窗，不让该确认成为后续任意导航的通行证。导航和本地确认共用单一确认状态，重复导航不得覆盖已待确认的目标。
+- AdminPage 注册 busy 保护：忙碌期间不切路由或组织；busy 结束后处理最新待切换目标，若有 dirty 则单次确认再放行。hash-only 不重新激活已消费账号定位。
+- 生产 data router 是本次完整回归对象。已有纯组件 MemoryRouter 宿主可保留兼容路径，但不能用其结果替代正式路由阻塞证据；以共享 guard 和 AdminPage 的 createMemoryRouter 测试覆盖链接、Back/Forward、取消/接受、忙碌、单次确认、重复请求与原有调用方。
+- 实现者先核对所有 requestLeave 调用方，若还须修改业务调用方或更多测试宿主，先报告实际原因和最小文件列表。主代理统一文档与 Git，冻结后独立双审、Web 类型检查/构建、相关调用方回归及完整 CI。
+
+
+## 2026-10-19 额度接近上限，切换模型前接续点
+
+负责人要求尽快收尾当前修改、切换模型后继续。本次不再启动完整CI、推送、合并或部署。
+
+- 当前分支 `codex/req-0020-audit`；已推送 HEAD `e40f543a3378cfc8ae466c57044965a1dc7017e6`，PR51 base=main395acc27；旧CI39190126869已取消，不能作为通过证据。以下返修仍在本地未提交。
+- D1 已完成：三个owned文件补齐当前251个实际审计动作的中文说明（255个标签，含4个保留项），未知/原型键原码回退不变。红灯留存，API定向3套35tests PASS（`release-d1-green.log`）；独立规格审查代理 `01a15211-d4ac-7833-b04c-e9a948ba2326` PASS。质量轴、主代理独立验证、最新完整CI仍待接续。
+- D2 尚未完成：已补History和data-router红灯测试，生产App/Unsaved/AdminPage的共享路由修复待实现/完成。`release-d2-green.log` 是NOT_RUN/NEEDS_CONTEXT，不是通过；以切换前Git外handoff和实际diff为准，不将新增红灯测试状态写成已修复。
+- C main完整CI attempt6 PASS，但部署39188014390 SSH timeout/exit255，生产最后由负责人10:22确认仍为B47db5bee。负责人要求不重跑该失败部署，继续源码工作，下次部署再验证。未操作生产进程/缓存/配置，磁盘95%及孤儿构建可能性保留为运维待查。
+- PR53仍为原草稿（head8e1ba4c），实现及旧独立双审通过，但没有基于修复后D的完整检查；D合入后再接续base、完整CI及获准合并。
+- 下一模型先读 `D:/WorkSpace/QMS-2.0-local/release-model-switch-handoff.md`、Git外req17-21-release-checkpoint.json和本段，核对实际diff/HEAD后继续；保留当前未提交源码及失败测试，不回退、不重复建Issue/PR、不用旧PASS。
+
+
+## 2026-10-19 私有仓库期间本地接续
+
+负责人最新要求“已经闭源了，你继续推进，直到需要云端CI以及需要action的时候”。已核对dirty文件均属于上次留存范围，保留原红灯与快照，不回退或重建分支。
+
+- 本地工作范围仍为D1标签返修与D2原生导航阻塞。D1已独立规格PASS，本轮补独立质量审查；D2重新确认既有红灯后实现，完成后独立规格及质量审查。
+- 本机只运行受影响门禁：审计定向单测、正式data router/共享guard/AdminPage测试，以及AccountMenu、WorkTabs、ShellHeader、导入离开保护与权限矩阵等现有调用方回归；再串行Web类型检查/构建、contracts:check、workspace治理和归档隔离。未改DTO/迁移/权限读取，因此不重复启动原整套真实数据库资源；完整真实PG/Worker和四分片CI仍是推送后的必需机器证据，不能以本地定向PASS替代。
+- 所有验证冻结对应源码后执行，不重复跑已经被较大组合完整覆盖的子集；失败先按实际根因返修再复验，日志保留Git外。完成时记录实际PASS/FAIL/未执行，不把本轮完成误写为PR/上线完成。
+- 当前用户限制优先于早期自动接续：任何定时跟进也必须遵守本地边界，不因旧“仓库公开”或合并授权描述触发CI/部署。原C失败保留，生产最后确认47db5bee，不重跑失败部署。
+
+
+### D2 本地调用方回归追加（私有期间）
+
+正式data router回归发现：成功logout的API回调异步navigate('/login')被仍注册的草稿挡住（`release-d2-resume-logout-red-2.log`）。同一共享guard迁移根因下，最小扩展仅允许 `features/account/AccountMenu.tsx` 和对应测试：成功会话终止路径能够离开；失败/取消保留草稿，不全局豁免/login或清除全部dirty，不留下任意后续导航许可。实现前已有明确红灯，返修后与个人菜单/共享guard邻近测试统一复验。其余业务调用方无证据不扩范围。
+
+
+### D2 待确认导航优先级澄清
+
+React Router 7.18.4 在一次待确认导航中完成另一次 hash-only 导航会重置 blocker，原 proceed 随后抛出 unblocked→proceeding。已用明确红灯复现；采用最小规则：已有待确认目标优先于所有后续导航（包括 hash-only），直到确认/取消；不存在待确认时，普通 dirty 或 busy 下 hash-only 仍允许。此规则不重建历史、不重放URL，也不新增路由许可；测试覆盖先后顺序和原目标放行，14项guard绿灯。此处是原“保留首次待确认目标”的具体边界，不将hash-only允许误解为可以销毁已待确认目标。
+
+
+### D2 规格复审结果
+
+原 P2“busy 队列账号目标随后被 hash-only 请求覆盖”已修复：共享 blocker pending 继续优先阻塞；`onBlocked` 对已排队目标仅允许真正改变 pathname/search 的新目标替换，hash-only 不覆盖。新增 busy→scope target→hash→busy结束的 accept/cancel/clean 三分支测试，shared guard 当前 17/17 PASS。原 native blocker、历史保留、logout、hash-only普通路径仍覆盖；最终质量审查和完整Web回归限制保留。
+
+
+### D2 质量审查卸载残留忙碌返修
+
+独立质量轴发现矩阵保存中目录刷新/撤权卸载真实PermissionMatrix，而AdminPage仍保留，旧onBusyChange缺卸载清理导致全局导航busy残留。补真实AdminPage+PermissionMatrix+data-router两条回归，刷新与撤权均先红灯；最小修复仅在矩阵busy effect清理时向原回调报告false，旧异步请求结果仍按alive边界忽略，不改权限或取消实际请求。文件最小扩展 `PermissionMatrix.tsx` 与现有 `permission-matrix.test.tsx`，不扩其他业务。返修后定向复验和原质量代理复审。
+
+
+## 私有仓库本地收口（2026-10-19，等待云端检查）
+
+- D1：当前已发出251种动作及4种保留动作共255条显式中文标签；未知及原型同名动作保留原码。AST自动覆盖191种静态/直接转发动作，动态分派另行人工逐源核对，不声称AST覆盖全部251种。API三个套件35/35 PASS，原失败保留，规格与质量复审PASS。
+- D2：账号链接新增历史；native blocker在确认前保留PUSH/POP/REPLACE目标；待确认目标不被hash-only请求销毁，busy队列只由真正改变业务范围的新目标替换；正常hash-only不重新消费定位。成功logout仅放行该次同步跳转；失败/取消保留草稿。PermissionMatrix卸载清理busy，迟到响应仍被alive规则隔离。
+- 独立规格审查代理01a15264-0fe1-71b3-b95e-ec6708300beb、质量代理01a1526d-f76c-7ac2-8d3f-5f442fb317a1均复审PASS；busy/hash和卸载残留两项P2均先红后绿，审查者只读，不把主代理日志记为其执行。
+- 物料英文回归曾在组合与整文件运行超过既有10秒上限，失败日志保留；测试宿主关闭motion，并把查询范围限定为实际页面/弹窗、等待创建弹窗不可见，原英文、权限、导入结果和重复跳过断言及超时均保留。质量代理确认没有削弱断言，整文件16/16后纳入最终组合。
+- 主代理冻结最终产品及测试源码，使用Node本地入口、单worker运行App路由8、shared guard17、Admin定位43、AccountMenu16、PermissionMatrix29、MaterialMaster16，共6文件129/129 PASS、exit0，372.58秒，无skip；Git外release-frozen-web.log。保留Ant Design弃用/useForm提示，不扩大此次修复范围。
+- 本轮未启动数据库或服务、未接触55440；API读取/导出授权及DTO/迁移未改。本地组件Mock测试不是真实PostgreSQL或真实业务浏览器验收；原完整CI及真实PG/Worker仍须绑定返修后的最新SHA重新执行。
+- Actions优化原PR53已实现并独立审查，其既有CI未运行成功，完整本地PG曾中断的事实保留；不切换当前未提交D分支、不复用旧PASS。D集成后的基线刷新及完整CI在恢复云端阶段接续。
+- 当前没有提交、推送、触发Actions、合并、部署、Issue关闭或飞书写入；不重跑失败C部署。本地类型/构建/治理及Git外接续点已完成，下一步等待负责人开放云端阶段。
+
+最终串行Web类型检查及生产构建均exit0，构建16.09秒；保留既有大包告警，未改构建阈值或新增依赖。契约同步与API35项结果来自本轮较早最终API验证，之后API源码未改。日志release-frozen-types.log、release-frozen-build.log、release-final-contracts.log、release-final-api.log。
+
+最终治理复验PASS（36份文档、275个本地链接、20份来源复核、123对模块依赖），phase-5 coverage 1/1、归档隔离及git diff --check通过。较早workspace58/58保持独立历史证据。文档摘要曾因未归一化CRLF失败，按现有sourceDigest规则修正后通过，失败保留于release-frozen-governance-digest-red.log。本轮本地收口已完成，修改保留在当前分支工作区，未提交和推送。
+
+
+## 恢复云端交付（2026-10-19）
+
+负责人明确“仓库已开源，继续”；API核对仓库public、PR51仍open且head=e40f543/base=main395acc27，Issue46仍open且范围未撤回。三个原P2无新增反馈；本地原修改及双审证据保留。V0.0.19-fix6本地/已抓取远端无占用，集中提交审计标签与原生导航返修，更新原PR51并等待最新完整CI，未以旧PASS跳过检查。原C部署不重跑；下一次部署失败时保留事实并定位，不改检查、凭据或账单。

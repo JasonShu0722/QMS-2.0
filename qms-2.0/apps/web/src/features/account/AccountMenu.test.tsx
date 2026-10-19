@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { transferableAbortController } from 'node:util';
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -127,6 +128,81 @@ it('honors the existing dirty guard before opening logout confirmation', async (
   expect(screen.queryByRole('dialog', { name: '确认退出登录？' })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   expect(fetcher.mock.calls).toHaveLength(1);
+});
+
+it('finishes an explicitly confirmed dirty-page logout without another data-router draft confirmation', async () => {
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  const fetcher = vi.fn(async (path: string) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf-test' }) : path.endsWith('/logout') ? new Response(null, { status: 204 }) : json(profile));
+  vi.stubGlobal('fetch', fetcher);
+  const store = useWorkTabsStore.getState();
+  store.bindSession('INTERNAL:org:alice');
+  const router = createMemoryRouter([
+    { path: '/login', element: <h1>Login</h1> },
+    { path: '*', element: <LanguageProvider><UnsavedChangesProvider><AccountMenu /><Page dirty /></UnsavedChangesProvider></LanguageProvider> },
+  ], { initialEntries: ['/app/workbench'] });
+  render(<RouterProvider router={router} />);
+  await open();
+  await userEvent.click(screen.getByRole('menuitem', { name: '退出登录' }));
+  await userEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  const confirmation = within((await screen.findByText('确认退出登录？')).closest('[role="dialog"]') as HTMLElement);
+  await userEvent.click(confirmation.getByRole('button', { name: '退出登录' }));
+  await waitFor(() => expect(fetcher.mock.calls.some(([path]) => path.endsWith('/logout'))).toBe(true));
+  expect(await screen.findByRole('heading', { name: 'Login' })).toBeVisible();
+  expect(router.state.location.pathname).toBe('/login');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it.each(['cancelled', 'failed'] as const)('retains dirty protection after a %s data-router logout', async outcome => {
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  const fetcher = vi.fn(async (path: string) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf-test' }) : path.endsWith('/logout') ? json({ code: 'HTTP_503' }, 503) : json(profile));
+  vi.stubGlobal('fetch', fetcher);
+  useWorkTabsStore.getState().bindSession('INTERNAL:org:alice');
+  const router = createMemoryRouter([{ path: '*', element: <LanguageProvider><UnsavedChangesProvider><AccountMenu /><Page dirty /></UnsavedChangesProvider></LanguageProvider> }], { initialEntries: ['/app/workbench'] });
+  render(<RouterProvider router={router} />);
+  await open();
+  await userEvent.click(screen.getByRole('menuitem', { name: '退出登录' }));
+  await userEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  const confirmation = within((await screen.findByText('确认退出登录？')).closest('[role="dialog"]') as HTMLElement);
+  if (outcome === 'failed') {
+    await userEvent.click(confirmation.getByRole('button', { name: '退出登录' }));
+    await screen.findByRole('alert');
+  }
+  await userEvent.click(confirmation.getByRole('button', { name: /取.?消/ }));
+  await waitFor(() => expect(screen.getByText('确认退出登录？')).not.toBeVisible());
+  expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org:alice');
+  await act(async () => { await router.navigate('/login', { replace: true }); });
+  await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('当前草稿尚未保存'));
+  expect(router.state.location.pathname).toBe('/app/workbench');
+  await userEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await act(async () => { await router.navigate('/app/another'); });
+  await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('当前草稿尚未保存'));
+  expect(router.state.location.pathname).toBe('/app/workbench');
+});
+
+it('completes a successful in-flight logout even if another route confirmation was opened meanwhile', async () => {
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  let finishLogout!: (response: Response) => void;
+  const fetcher = vi.fn(async (path: string) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf-test' }) : path.endsWith('/logout') ? new Promise<Response>(resolve => { finishLogout = resolve; }) : json(profile));
+  vi.stubGlobal('fetch', fetcher);
+  useWorkTabsStore.getState().bindSession('INTERNAL:org:alice');
+  const router = createMemoryRouter([
+    { path: '/login', element: <h1>Login</h1> },
+    { path: '*', element: <LanguageProvider><UnsavedChangesProvider><AccountMenu /><Page dirty /></UnsavedChangesProvider></LanguageProvider> },
+  ], { initialEntries: ['/app/workbench'] });
+  render(<RouterProvider router={router} />);
+  await open();
+  await userEvent.click(screen.getByRole('menuitem', { name: '退出登录' }));
+  await userEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  const confirmation = within((await screen.findByText('确认退出登录？')).closest('[role="dialog"]') as HTMLElement);
+  await userEvent.click(confirmation.getByRole('button', { name: '退出登录' }));
+  await waitFor(() => expect(finishLogout).toBeTypeOf('function'));
+  await act(async () => { await router.navigate('/app/another'); });
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await act(async () => { finishLogout(new Response(null, { status: 204 })); });
+  expect(await screen.findByRole('heading', { name: 'Login' })).toBeVisible();
+  expect(router.state.location.pathname).toBe('/login');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
 it('guards settings navigation before discarding a dirty page', async () => {

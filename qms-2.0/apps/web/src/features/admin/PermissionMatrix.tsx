@@ -38,7 +38,7 @@ export function PermissionMatrix({ organization, onDirtyChange, onBusyChange }: 
   const readOnly = !canRead || !allows(organization, 'roles:update') || !selectedRole || selectedRole.organizationId === null;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => { onDirtyChange?.(changes > 0); }, [changes, onDirtyChange]);
-  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => { onBusyChange?.(busy); return () => onBusyChange?.(false); }, [busy, onBusyChange]);
   useEffect(() => {
     if (!changes) return;
     const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };

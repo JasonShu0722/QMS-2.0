@@ -4,6 +4,34 @@ import { AuditQueryService } from '../../src/modules/audit-log/audit-query.servi
 import { auditActionLabel } from '../../src/modules/audit-log/audit-event-read-model.js';
 
 describe('audit summary projection (unit, not PostgreSQL evidence)', () => {
+  it.each([
+    ['ANNOUNCEMENT_CREATED', '创建公告'],
+    ['CUSTOMER_MASTER_UPDATED', '更新客户主数据'],
+    ['MATERIAL_MASTER_UPDATED', '更新物料主数据'],
+    ['SUPPLIER_PROFILE_UPDATED', '更新供应商档案'],
+    ['SUPPLIER_PPAP_EVIDENCE_BOUND', '绑定供应商 PPAP 项目证据'],
+    ['SUPPLIER_PPAP_ACCEPTED', '接受供应商 PPAP 项目'],
+    ['SUPPLIER_PCN_NEEDS_CHANGES', '退回供应商变更通知修改'],
+    ['WORKFLOW_ACTION_COMPLETED', '完成流程动作'],
+    ['AUDIT_NC_REJECTED', '退回审核不符合项整改'],
+    ['AUDIT_IMPORT_REJECTED', '拒绝外部审核导入行'],
+    ['SUPPLIER_ADMISSION_ACCEPTED', '接受供应商准入文档'],
+    ['SUPPLIER_ASN_EVIDENCE_UPDATED', '更新供应商到货预告证据'],
+    ['SUPPLIER_AUDIT_RECORD_CHECKLIST_UPDATED', '更新供应商审核检查表'],
+    ['SUPPLIER_BARCODE_SCANNED', '扫描供应商条码'],
+    ['SUPPLIER_CONCESSION_RELEASED', '放行供应商让步接收'],
+    ['SUPPLIER_INSPECTION_STANDARD_ITEM_CREATED', '创建供应商检验标准项目'],
+    ['SUPPLIER_MEETING_ACTION_COMPLETED', '完成供应商会议行动项'],
+    ['SUPPLIER_PERFORMANCE_APPEAL_ACCEPTED', '接受供应商绩效申诉'],
+    ['SUPPLIER_RESPONSE_RETURN', '退回供应商回复'],
+  ])('explains the emitted business action %s in Chinese', (action, label) => {
+    expect(auditActionLabel(action)).toBe(label);
+  });
+
+  it.each(['UNKNOWN_ACTION', 'SUPPLIER_PPAP_ITEM_EVIDENCE_BOUND', '__proto__', 'constructor', 'toString', 'hasOwnProperty'])('preserves the unrecognized action %s verbatim', (action) => {
+    expect(auditActionLabel(action)).toBe(action);
+  });
+
   it.each([['LOGIN_FAILED', '登录失败'], ['ACTION_REJECTED', '操作被拒绝'], ['AUDIT_EXPORT_DENIED', '审计导出被拒绝'], ['MFA_VERIFICATION_REJECTED', 'MFA 验证被拒绝'], ['USER_ROLES_CHANGED', '变更用户角色']])('preserves the actual meaning of %s', (action, label) => {
     expect(auditActionLabel(action)).toBe(label);
   });
