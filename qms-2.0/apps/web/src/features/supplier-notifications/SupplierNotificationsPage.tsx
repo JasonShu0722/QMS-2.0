@@ -61,7 +61,7 @@ export function SupplierNotificationsPage() {
     {loading ? <Spin aria-label={t('正在加载通知')} /> : data && <>
       <List dataSource={data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) =>
         <List.Item key={notice.id}>
-          <Card className="supplier-notifications__card" title={notice.subject ?? t(notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')}
+          <Card className="supplier-notifications__card qms-display-card" title={notice.subject ?? t(notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')}
             extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
             <Typography.Paragraph className="supplier-notifications__body">{notice.body}</Typography.Paragraph>
             <Space wrap>

@@ -236,7 +236,7 @@
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 30,
-        "reason": "能力状态已更新为 V0.0.21 返修部署核验通过、真实业务人工验收待执行；复核机器人只读与字段权限边界不因发布状态扩大。",
+        "reason": "能力状态增加负责人已批准的展示卡片内部留白横展返修及仅本地边界；复核机器人只读与字段责任不受局部视觉变更影响。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "cd5e76f8bc8039214003bbc9f6083df6e62a78e3a7e7e2876300f43a62519130"
+            "sha256": "79089515f61d6ed4c86043446879da46c8b13fa2d0ff144e3064ba9980099e20"
           },
           {
             "path": "README.md",
@@ -392,7 +392,7 @@
         "owner": "QMS 工程维护者（账号与全页密度返修）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
-        "reason": "复核已批准人工反馈返修：单张账号概览、历史接口统一会话清单及全页共享留白减半；保留标准控件、粗指针目标、原安全弹窗及真实登录验收边界。当前仅本地，实施和审查结果见返修计划。",
+        "reason": "负责人要求按上一版尺寸横展展示卡片内部留白规范；复核展示padding16/gap12与紧凑表格/编辑padding8并存，不扩大已认可页面布局、认证或业务范围。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -408,7 +408,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "138b149400f1bf33f5969c0c27763b0fbce1e95722adfa23a38ee90da81766dc"
+            "sha256": "198e5e1dbe3d275c5d80a4552094258c24931e2dbf8f5ddd2dd48c490445cde9"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",

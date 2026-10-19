@@ -14,6 +14,10 @@ V0.0.21 `ecf7224e023104898606fb6fd154e1b992a95e27` 已通过 [PR #54](https://gi
 
 负责人已批准 [三项反馈规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md)，按 [独立返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续。最终冻结源码的 Web 全集 91 files／653 tests、类型检查和生产构建均通过。账号与共享密度的独立规格、质量及整合复审通过；原竞态与密度遗漏先补红灯后返修，不以首轮 PASS 替代最终结果。主代理用真实前端与隔离 API fixture 通过双门户三宽六主题 36 组、工作台三宽、36／44px 控件几何、英文及安全弹窗焦点／草稿检查。治理、契约和归档实际命令及 Git 外结果见返修计划，既有组件提示和大 chunk 提示保留。负责人随后公开并继续，已完成最新 PR/main 完整 CI、合并及 Deploy39238036827 的生产核验。PR 与 main 各真实 PG 872 项、Worker 8 项通过且一次性资源清理成功。真实生产认证／会话写入／上传扫描与人工验收未执行；线上为 V0.0.21，Issue 和飞书状态未改。
 
+### 展示卡片尺寸纠偏（V0.0.21-fix3，仅本地）
+
+负责人要求按V0.0.20尺寸横展同类展示卡片内部留白。49组隔离浏览器、6files／37tests、类型及构建通过，独立规格／质量审查通过；工作台入口／概览、质量看板／趋势／分析、9张统计卡和双门户通知已接入共享展示密度。筛选／表格／账号等紧凑基线保留。当前仓库私有，源码尚未推送或部署；线上仍ecf7224，真实业务人工验收仍待执行。详见同一返修计划fix3节。
+
 ## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
 
 对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项复用原PR53；负责人已追加合并上线及仓库再次公开后继续的授权，当前本地已接续D主线，D部署已核验，本项尚未合并或执行生产操作。

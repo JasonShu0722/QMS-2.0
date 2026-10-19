@@ -106,7 +106,7 @@ export function MyTasksPage() {
         <InboxError cause={notifications.error} />
         {notifications.loading ? <Spin aria-label={t('正在加载通知')} /> : notifications.data && <>
           <List dataSource={notifications.data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) => <List.Item key={notice.id}>
-            <Card style={{ width: '100%' }} title={notice.subject ?? t(notice.kind === 'TASK_ESCALATED' ? '超时升级' : notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')} extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
+            <Card className="qms-display-card" style={{ width: '100%' }} title={notice.subject ?? t(notice.kind === 'TASK_ESCALATED' ? '超时升级' : notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')} extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
               <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>{notice.body}</Typography.Paragraph>
               <Space wrap className="task-inbox__filters"><span>{notice.nodeName}</span><time dateTime={notice.createdAt}>{date(notice.createdAt)}</time>
                 <Link to={`/app/problem-workspace/${notice.problemId}?${new URLSearchParams({ organizationId: notice.organizationId, instanceId: notice.instanceId })}`}>{t('查看关联实例')}</Link>
