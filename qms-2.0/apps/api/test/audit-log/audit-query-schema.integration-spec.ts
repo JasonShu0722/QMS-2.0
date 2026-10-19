@@ -61,6 +61,35 @@ describe('authorized audit queries on PostgreSQL', () => {
     expect([first.total, second.total, third.total]).toEqual([5, 5, 5]);
   });
 
+  it('projects current safe summaries only for actors in the event organization, including disabled actors', async () => {
+    const sameId = randomUUID(); const foreignId = randomUUID();
+    const summaryTrace = `${prefix}-summary`;
+    try {
+      await prisma.user.create({ data: { id: sameId, organizationId: organizations[0]!, username: `${prefix}-disabled`, status: 'DISABLED', passwordHash: 'never-project-password', email: `${sameId}@private.test`, accountType: 'INTERNAL' } });
+      await prisma.user.create({ data: { id: foreignId, organizationId: organizations[1]!, username: `${prefix}-foreign-secret`, passwordHash: 'never-project-password', accountType: 'INTERNAL' } });
+      for (const actorUserId of [sameId, foreignId, null]) await prisma.auditEvent.create({ data: { organizationId: organizations[0], actorUserId, action: actorUserId ? 'USER_UPDATED' : 'UNKNOWN_ACTION', resourceType: 'SummaryTest', outcome: 'DENIED', traceId: summaryTrace } });
+      const page = await service.list(actor, { resourceType: 'SummaryTest' });
+      const same = page.items.find((entry) => entry.actorUserId === sameId)!;
+      expect(same.actionLabel).toBe('更新用户');
+      expect(same.actorSummary).toEqual({ username: `${prefix}-disabled`, accountType: 'INTERNAL', organizationName: 'Audit test' });
+      expect(page.items.find((entry) => entry.actorUserId === foreignId)?.actorSummary).toBeNull();
+      expect(page.items.find((entry) => entry.actorUserId === null)).toMatchObject({ actionLabel: 'UNKNOWN_ACTION', actorSummary: null });
+      expect(JSON.stringify(page)).not.toMatch(/foreign-secret|never-project-password|private.test|passwordHash|email/);
+      await prisma.user.update({ where: { id: sameId }, data: { username: `${prefix}-renamed` } });
+      expect((await service.list(actor, { actorUserId: sameId })).items[0]?.actorSummary?.username).toBe(`${prefix}-renamed`);
+      await prisma.user.update({ where: { id: sameId }, data: { organizationId: organizations[1]!, username: `${prefix}-moved-private` } });
+      const moved = (await service.list(actor, { actorUserId: sameId })).items[0]!;
+      expect(moved).toMatchObject({ actorUserId: sameId, actorSummary: null });
+      expect(JSON.stringify(moved)).not.toContain('moved-private');
+      await prisma.user.delete({ where: { id: sameId } });
+      const deleted = (await service.list(actor, { resourceType: 'SummaryTest' })).items.find((entry) => entry.id === same.id)!;
+      expect(deleted).toMatchObject({ actorUserId: null, actorSummary: null });
+    } finally {
+      await prisma.auditEvent.deleteMany({ where: { traceId: summaryTrace } });
+      await prisma.user.deleteMany({ where: { id: { in: [sameId, foreignId] } } });
+    }
+  });
+
   it('applies actor, action, resource, outcome and inclusive date filters', async () => {
     const result = await service.list(actor, { actorUserId: userId, action: 'CONFIG_UPDATED', resourceType: 'Configuration', resourceId: '4', outcome: 'DENIED', from: '2026-01-01T12:00:00Z', to: '2026-01-01T12:00:00Z' });
     expect(result.total).toBe(1);

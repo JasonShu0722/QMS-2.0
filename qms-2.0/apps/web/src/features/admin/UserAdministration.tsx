@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
-import { Alert, Button, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { components } from '@qms/contracts';
-import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../../api/client';
+import { ApiError, apiRequest, createAdminMutation, getAdminUser, safeAccountError } from '../../api/client';
+import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { allows, randomResetCode, scopePath, type AdminOrganization, type AdminRole, type AdminUser, type UserRoles } from './admin';
 import { UserBatchCreate } from './UserBatchCreate';
 import { UserTemporaryPassword } from './UserTemporaryPassword';
@@ -13,7 +14,7 @@ type UpdateUser = components['schemas']['UpdateAdminUserDto'];
 type UserForm = CreateUser & Pick<AdminUser, 'status'>;
 type ResetIssued = components['schemas']['PasswordResetIssuedDto'];
 
-export function UserAdministration({ organization, organizations }: { organization: AdminOrganization; organizations: AdminOrganization[] }) {
+export function UserAdministration({ organization, organizations, targetUserId }: { organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string }) {
   const { t, locale } = useLanguage();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState('');
@@ -33,6 +34,12 @@ export function UserAdministration({ organization, organizations }: { organizati
   const [mfa, setMfa] = useState<{ user: AdminUser; organizationId: string }>();
   const [batch, setBatch] = useState(false);
   const [form] = Form.useForm<UserForm>();
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(!!editing && dirty);
+  const requestLeave = useNavigationGuard();
+  const [target, setTarget] = useState<{ organizationId: string; userId: string; user?: AdminUser; error?: string }>();
+  const editor = useRef(editing);
+  editor.current = editing;
   const mutate = useRef(createAdminMutation());
   const alive = useRef(true);
   const scope = useRef(organization.id);
@@ -46,7 +53,31 @@ export function UserAdministration({ organization, organizations }: { organizati
   const canReset = allows(organization, 'users:reset');
   const canReadRoles = canRead && allows(organization, 'roles:read');
   const canAssign = canReadRoles && allows(organization, 'roles:assign');
-  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
+  useEffect(() => { setEditing(undefined); setAssignment(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, form]);
+
+  useEffect(() => {
+    let current = true;
+    setTarget(undefined);
+    if (targetUserId === undefined || !canRead) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
+      setTarget({ organizationId: organization.id, userId: targetUserId, error: '目标账号标识无效' });
+      return;
+    }
+    function load() {
+      if (!current) return;
+      setEditing(undefined); setDirty(false); form.resetFields();
+      setTarget({ organizationId: organization.id, userId: targetUserId! });
+      void getAdminUser(organization.id, targetUserId!).then((user) => {
+        if (current) setTarget(user.id === targetUserId && user.organizationId === organization.id
+          ? { organizationId: organization.id, userId: targetUserId!, user }
+          : { organizationId: organization.id, userId: targetUserId!, error: '目标账号不存在或不在当前组织' });
+      }).catch((cause) => {
+        if (current) setTarget({ organizationId: organization.id, userId: targetUserId!, error: cause instanceof ApiError && cause.status === 403 ? '无权查看目标账号' : cause instanceof ApiError && cause.status === 404 ? '目标账号不存在或不在当前组织' : safeAccountError(cause) });
+      });
+    }
+    if (editor.current) requestLeave(load); else load();
+    return () => { current = false; };
+  }, [organization.id, targetUserId, canRead, revision, requestLeave, form]);
 
   useEffect(() => {
     let current = true;
@@ -66,7 +97,7 @@ export function UserAdministration({ organization, organizations }: { organizati
   }
 
   function edit(user: AdminUser | 'new') {
-    mutate.current = createAdminMutation(); setError(undefined); setEditing(user); form.resetFields();
+    mutate.current = createAdminMutation(); setError(undefined); setEditing(user); setDirty(false); form.resetFields();
     form.setFieldsValue(user === 'new' ? { organizationId: organization.id, accountType: organization.type } : { ...user, email: user.email ?? '' });
   }
 
@@ -102,6 +133,11 @@ export function UserAdministration({ organization, organizations }: { organizati
 
   const organizationOptions = organizations.filter((entry) => allows(entry, editing === 'new' ? 'users:create' : 'users:transfer')).map((entry) => ({ value: entry.id, label: entry.name }));
   return <>
+    {targetUserId !== undefined && (!canRead ? <Alert type="error" title={t('无权查看目标账号')} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.error ? <Alert type="error" title={t(target.error)} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.user ? <section aria-label={t('目标账号')}>
+      <Typography.Title level={4}>{t('目标账号')}</Typography.Title>
+      <Descriptions column={1} items={[{ key: 'username', label: t('用户名'), children: target.user.username }, { key: 'email', label: t('邮箱'), children: target.user.email ?? '—' }, { key: 'type', label: t('账号类型'), children: target.user.accountType === 'INTERNAL' ? t('内部账号') : t('供应商账号') }, { key: 'organization', label: t('主组织'), children: target.user.organization.name }, { key: 'status', label: t('状态'), children: target.user.status === 'ACTIVE' ? t('启用') : t('停用') }]} />
+      {(canUpdate || canStatus || canTransfer) && <Button disabled={busy} onClick={() => edit(target.user!)}>{t('编辑目标账号')}</Button>}
+    </section> : <Typography.Text role="status">{t('正在加载目标账号')}</Typography.Text>)}
     {error && !editing && !assignment && !reset && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
     {success && <Alert type="success" title={t(success)} showIcon />}
     <div className="admin-toolbar"><Space wrap>
@@ -131,9 +167,9 @@ export function UserAdministration({ organization, organizations }: { organizati
     <Modal title={temporary ? `${temporary.username} · ${t('临时密码')}` : t('临时密码')} open={!!temporary && canReset} onCancel={() => setTemporary(undefined)} footer={null} destroyOnHidden>
       {temporary && canReset && <UserTemporaryPassword key={`${organization.id}:${temporary.id}`} user={temporary} organizationId={organization.id} />}
     </Modal>
-    <Modal title={editing === 'new' ? t('创建用户') : t('编辑用户')} open={!!editing} onCancel={() => { setEditing(undefined); form.resetFields(); mutate.current = createAdminMutation(); }} footer={null} destroyOnHidden>
+    <Modal title={editing === 'new' ? t('创建用户') : t('编辑用户')} open={!!editing} onCancel={() => requestLeave(() => { setEditing(undefined); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); })} footer={null} destroyOnHidden>
       {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
-      <Form name="admin-user-editor" form={form} layout="vertical" onFinish={save} autoComplete="off">
+      <Form name="admin-user-editor" form={form} layout="vertical" onValuesChange={() => setDirty(true)} onFinish={save} autoComplete="off">
         {editing === 'new' && <Form.Item name="username" label={t('用户名')} rules={[{ required: true }, { pattern: /^[a-zA-Z0-9._-]+$/, message: t('仅支持字母、数字、点、下划线和连字符') }]}><Input /></Form.Item>}
         {(editing === 'new' || canUpdate) && <Form.Item name="email" label={t('邮箱')} rules={[{ type: 'email' }]}><Input /></Form.Item>}
         {editing === 'new' && <Form.Item name="initialPassword" label={t('初始密码')} rules={[{ required: true }, { min: 12, max: 256 }]}><Input.Password autoComplete="new-password" /></Form.Item>}

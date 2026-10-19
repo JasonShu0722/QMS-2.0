@@ -1,4 +1,5 @@
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { LoginPage } from './features/auth/LoginPage';
 import { AuthenticatedRoute } from './features/auth/AuthenticatedRoute';
@@ -13,8 +14,18 @@ import { AuthToolbar } from './features/auth/AuthToolbar';
 import { RequiredPasswordChangePage } from './features/auth/RequiredPasswordChangePage';
 
 export function App() {
+  const [router, setRouter] = useState<ReturnType<typeof createBrowserRouter>>();
+  useEffect(() => {
+    const next = createBrowserRouter([{ path: '*', element: <ReauthenticationProvider><AppRoutes /></ReauthenticationProvider> }]);
+    setRouter(next);
+    return () => next.dispose();
+  }, []);
+  return <LanguageProvider><ThemeProvider>{router && <RouterProvider router={router} />}</ThemeProvider></LanguageProvider>;
+}
+
+function AppRoutes() {
   return (
-    <LanguageProvider><ThemeProvider><Router><ReauthenticationProvider>
+    <>
       <AuthToolbar />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -40,6 +51,6 @@ export function App() {
         />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </ReauthenticationProvider></Router></ThemeProvider></LanguageProvider>
+    </>
   );
 }

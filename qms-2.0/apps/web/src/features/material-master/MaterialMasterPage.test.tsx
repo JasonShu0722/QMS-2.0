@@ -8,6 +8,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { AdminPage } from '../admin/AdminPage';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { MemoryRouter } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../imports/read-xlsx', () => ({ readXlsxFile: vi.fn() }));
@@ -94,21 +95,26 @@ it('explicitly reloads the current version without losing the name draft and sav
 it('renders the real English page and import outcomes through LanguageProvider', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US');
   try {
-    render(<LanguageProvider><MaterialMasterPage organizationPermissions={permissions} /></LanguageProvider>);
+    const view = render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MaterialMasterPage organizationPermissions={permissions} /></LanguageProvider></ConfigProvider>);
     await screen.findByRole('heading', { name: 'Material masters' });
-    expect(screen.getByRole('button', { name: 'Add material' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
-    expect(screen.getByLabelText('Material code')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(screen.getByRole('button', { name: /批量导入物料|Batch import materials/ }));
-    expect(screen.getByRole('button', { name: 'Download material template' })).toBeInTheDocument();
+    const page = within(view.container);
+    const add = page.getByRole('button', { name: 'Add material' });
+    expect(add).toBeInTheDocument();
+    fireEvent.click(add);
+    const createDialog = screen.getByRole('dialog');
+    expect(within(createDialog).getByLabelText('Material code')).toBeInTheDocument();
+    fireEvent.click(within(createDialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(createDialog).not.toBeVisible());
+    fireEvent.click(page.getByRole('button', { name: /批量导入物料|Batch import materials/ }));
+    const importer = within(screen.getByRole('dialog'));
+    expect(importer.getByRole('button', { name: 'Download material template' })).toBeInTheDocument();
     expect(screen.queryByText('物料主数据')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Material list file'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } });
-    await screen.findByText('中文物料');
+    fireEvent.change(importer.getByLabelText('Material list file'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } });
+    await importer.findByText('中文物料');
     vi.mocked(apiRequest).mockResolvedValueOnce({ created: 1, skipped: 1, failed: 1, items: [{ rowNumber: 2, code: '00042', status: 'CREATED' }, { rowNumber: 3, code: '00042', status: 'SKIPPED_DUPLICATE' }, { rowNumber: 4, code: 'BAD', status: 'FAILED' }] });
-    fireEvent.click(screen.getByRole('button', { name: 'Import materials' }));
-    await screen.findByText('Created 1, duplicate skipped 1, failed 1');
-    expect(screen.getByText('Duplicate skipped')).toBeInTheDocument();
+    fireEvent.click(importer.getByRole('button', { name: 'Import materials' }));
+    await importer.findByText('Created 1, duplicate skipped 1, failed 1');
+    expect(importer.getByText('Duplicate skipped')).toBeInTheDocument();
   } finally { localStorage.removeItem('qms:locale:v1'); }
 });
 

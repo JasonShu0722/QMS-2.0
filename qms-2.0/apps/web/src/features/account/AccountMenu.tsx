@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAccountProfile, logout, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
-import { useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { SecurityDialog } from '../auth/SecurityDialog';
 import { AccountAvatar } from './AccountAvatar';
@@ -24,6 +24,7 @@ function AccountMenuContent({ supplier = false }: Props) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const requestLeave = useNavigationGuard();
+  const completeSessionNavigation = useCompletedSessionNavigation();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [profile, setProfile] = useState<AccountProfile>();
   const [profileError, setProfileError] = useState(false);
@@ -64,7 +65,7 @@ function AccountMenuContent({ supplier = false }: Props) {
       await logout();
       useWorkTabsStore.getState().reset();
       setConfirmOpen(false);
-      navigate('/login', { replace: true });
+      completeSessionNavigation(() => navigate('/login', { replace: true }));
     } catch (cause) {
       setError(cause);
     } finally {

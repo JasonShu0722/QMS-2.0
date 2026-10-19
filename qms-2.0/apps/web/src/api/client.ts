@@ -74,6 +74,10 @@ async function request<T>(path: string, init: RequestInit = {}, options: { repla
 
 export const apiRequest = request;
 
+export function getAdminUser(organizationId: string, userId: string): Promise<components['schemas']['AdminUserDto']> {
+  return request<components['schemas']['AdminUserDto']>(`/api/v1/admin/users/${encodeURIComponent(userId)}?organizationId=${encodeURIComponent(organizationId)}`);
+}
+
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
   components['schemas']['CreateAdminUserBatchDto'] | components['schemas']['ResetTemporaryPasswordDto'] |
   components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |

@@ -1,5 +1,8 @@
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
+import { transferableAbortController } from 'node:util';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ConfigProvider } from 'antd';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -41,7 +44,7 @@ function server(patch?: (init: RequestInit) => Response | Promise<Response>) {
   return fetch;
 }
 async function openMatrix(permissions = organization.permissions, extra: AdminOrganization[] = []) {
-  render(<ConfigProvider theme={{ token: { motion: false } }}><AdminPage organizations={[{ ...organization, permissions }, ...extra]} /></ConfigProvider>);
+  render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><UnsavedChangesProvider><AdminPage organizations={[{ ...organization, permissions }, ...extra]} /></UnsavedChangesProvider></MemoryRouter></ConfigProvider>);
   await interaction.click(screen.getByRole('tab', { name: '权限矩阵' }));
   await screen.findByRole('combobox', { name: '选择角色' });
   await screen.findByRole('checkbox', { name: '用户管理 · 查看' });
@@ -167,7 +170,8 @@ it('keeps the organization draft on cancellation and discards it only after conf
   server(); await openMatrix(organization.permissions, [{ ...organization, id: 'org-b', code: 'b', name: '乙组织' }]);
   await interaction.click(screen.getByRole('checkbox', { name: '用户管理 · 查看' }));
   await select('管理组织', '乙组织 · b');
-  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('放弃未保存的权限修改？')).toBeVisible());
+  await waitFor(() => expect(within(screen.getByRole('dialog')).getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
   await interaction.click(screen.getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('checkbox', { name: '用户管理 · 查看' })).toBeChecked();
@@ -299,4 +303,30 @@ it.each(['new', 'transfer'])('filters %s organization choices by the correspondi
   await interaction.click(within(screen.getByRole('dialog')).getByLabelText('主组织'));
   await waitFor(() => expect(screen.getByText(mode === 'new' ? '仅创建组织' : '仅迁移组织', { selector: '.ant-select-item-option-content' })).toBeVisible());
   expect(screen.queryByText(mode === 'new' ? '仅迁移组织' : '仅创建组织', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
+});
+
+it.each(['refresh', 'revoke'] as const)('releases navigation busy when the saving matrix unmounts on directory %s', async reason => {
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  let finish!: (response: Response) => void;
+  const fetcher = server(() => new Promise<Response>(resolve => { finish = resolve; }));
+  function Directory() {
+    const [entries, setEntries] = useState<AdminOrganization[] | null>([organization]);
+    return <UnsavedChangesProvider>
+      <button onClick={() => setEntries(reason === 'refresh' ? null : [{ ...organization, permissions: [] }])}>change directory</button>
+      <AdminPage organizations={entries} />
+    </UnsavedChangesProvider>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <Directory /> }], { initialEntries: ['/app/admin'] });
+  render(<ConfigProvider theme={{ token: { motion: false } }}><RouterProvider router={router} /></ConfigProvider>);
+  fireEvent.click(await screen.findByRole('tab', { name: '权限矩阵' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: '用户管理 · 查看' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存权限' }));
+  await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init.method === 'PATCH')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: 'change directory' }));
+  expect(screen.queryByRole('combobox', { name: '选择角色' })).not.toBeInTheDocument();
+  await act(async () => { await router.navigate('/app/next'); });
+  await waitFor(() => expect(router.state.location.pathname).toBe('/app/next'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await act(async () => { finish(json(roles[0])); });
+  expect(router.state.location.pathname).toBe('/app/next');
 });

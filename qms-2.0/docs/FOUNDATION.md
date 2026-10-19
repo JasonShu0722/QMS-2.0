@@ -4,15 +4,44 @@
 
 ## Actions 触发与同次构建优化（2026-10-19，V0.0.20 候选）
 
-对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项独立于 REQ-0017～0021 的发布阻断；仅批准本地、Issue 与 PR，未执行合并或生产操作。
+对应 [Issue #52](https://github.com/JasonShu0722/QMS-2.0/issues/52)、[设计](../../docs/superpowers/specs/2026-10-19-qms-actions-economy-design.md)及[计划](../../docs/superpowers/plans/2026-10-19-qms-actions-economy.md)。本项复用原PR53；负责人已追加合并上线及仓库再次公开后继续的授权，当前本地已接续D主线，D部署已核验，本项尚未合并或执行生产操作。
 
-本地基线 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，Node 24.21.0 / pnpm 11.19.0，基线治理 PASS。实现子代理先取得新 CI 分流/结果门禁测试红灯，再修改实现。后续验证按计划记录实际结果，真实 GitHub 调度和成本节省未验证，不将本地组合测试或旧运行当作最新 CI PASS。
+原始本地基线main `395acc27ef0e1bd28cf032ba8096dd38f509350c`；当前本地接入D main `a8871e4829cb2d1a44f57687ccaa52e168e797ab`，Node 24.21.0 / pnpm 11.19.0，基线治理 PASS。实现子代理先取得新 CI 分流/结果门禁测试红灯，再修改实现。后续验证按计划记录实际结果，真实 GitHub 调度和成本节省未验证，不将本地组合测试或旧运行当作最新 CI PASS。
 
 主代理实测：工作区 71 项（包含 CI 分流/门禁 13 项）、API 单测 50 suites/557 项、Web 第一分片 22 files/135 项、API/Web/contracts 构建、归档与治理 PASS；独立规格及质量审查 PASS。Web 第二分片主动中断，第三/四未执行，云端四分片保留。全量真实 PG 出现头像连续替换场景 5000 ms 超时且没有完整结束摘要，保留 FAIL/中断；同端口新空库 `qms_actions_economy_worker` 原样头像 8/8 与编译后 Worker 8/8 PASS，不据此改写全量结果。Worker 运行前后 `dist/worker.js` 时间戳及 SHA-256 不变，确认未二次构建；独立默认入口仍先 build。
 
 本机曾遇加密 pnpm `.cmd` shim、嵌套 Node spawn UNKNOWN 和并行契约 Prisma `VirtualAlloc failed`，失败日志保留；使用同版本官方 pnpm 入口、清理资源后串行 `node scripts/check-openapi-sync.mjs` PASS，生成契约未变化，未调整企业安全设置、断言或超时。Compose foundation/scanning 两组合及 actionlint PASS。本项仅草稿 PR 候选，不声明完整 Foundation、实际节省、合并或上线；PR/最新 CI 在计划指定 Git 外接续点及 Issue #52 关联中追踪，避免编号回填再触发一轮 CI。
 
 真实资源使用本任务新建并标记 `qms.task=actions-economy` 的 PostgreSQL、RustFS、ClamAV 和 Mailpit；PG 随机宿主端口 55040，无预览 55440。凭据、红绿灯与最终日志位于 Git 外 `D:/WorkSpace/QMS-2.0-local/actions-economy-*`。验证后仅清理这四个明确一次性容器及其卷，保留原任务资源和证据。
+
+### 当前四单元上线结果（2026-10-19）
+
+D PR51以完整PR CI39202592968通过的fix6合并为main a8871e4829cb2d1a44f57687ccaa52e168e797ab，main CI39203301651完整PASS。部署39203879250已成功，主代理读取实际日志验证完整镜像SHA、迁移前加密快照、迁移No pending、API/Web健康和Worker启动/最终完成标记；公开HTTP、OpenAPI和所有资源200，A密度、B会话历史及匿名401、C导入和D审计字段均可观察。日志与结构化证据release-deploy-39203879250-verified.json、req17-21-d-deployment-http.json留在Git外。下列早期失败为历史，C失败未重跑；最终登录业务浏览器仍待人工，Issue与飞书未关闭回填。
+
+## REQ-0017～0021 四单元接续（2026-10-19，整合验证中）
+
+源码基线 `8a86b28`，活动 checkout `D:/WorkSpace/QMS-2.0`，Node 24.21.0 / pnpm 11.19.0。四单元与 Issue #44～47、授权边界及最终人工清单见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。四单元已提交PR48～51，早期运行源码PR CI均已通过；A/B已部署核验。2026-10-19仓库公开后C的main Foundation39153238102 attempt6全部8 jobs PASS，自动部署39188014390在API镜像Corepack/pnpm安装层约20分钟无新输出后SSH timeout/exit255，日志无快照或迁移标记；负责人10:22 SSH输出确认生产仍为B47db5bee，并明确允许不重跑该部署、先接续代码。D保持待合并，本地已返修审计动作标签、账号定位历史与共享导航调用方，独立规格及质量复审均通过；私有期间已完成本地收口，负责人再次公开并明确继续后恢复原PR推送及CI，早期CI不能当作返修后最新PASS。以下仍不代表最终真实业务浏览器验收。
+
+| 检查 | 当前实际结果 | 证据与限制 |
+| --- | --- | --- |
+| 本人会话历史单测 | 主代理接续复跑 26/26，exit 0 | `req17-21-b-api-main-check.log`；仅历史新测试文件 |
+| 账号邻近单测 / 真实 PG | 前一轮记录 42/42、26/26 | `req17-21-b-api-green.log` / `req17-21-b-api-pg.log`；本次整合复测待执行 |
+| Swagger 生成 | exit 0 | `req17-21-contracts-generate.log`；同步检查仍待最终源码冻结后执行 |
+| 一次性资源 | 新 PostgreSQL 55457 空库迁移及 seed 通过；对象存储 55458 health 200、真实 bucket/versioning 准备成功；扫描 55459 返回 PONG；邮件 55460/55461 启动 | 专用容器 `qms-req17-21-disposable-*`；未连接保留预览库 55440；环境与秘密留在 Git 外 |
+| Compose 配置 | `docker compose -f deployment/docker-compose.foundation.yml config --quiet` exit 0 | 使用本轮一次性环境变量，仅验证配置，不等于已部署 |
+| 真实资源定向复跑 | 6 套 57/57 PASS，Node 24.21.0 | req17-21-pg-final-focused-2.log；覆盖会话历史、审计查询/导出、头像与供应商 workflow/ASN；较早全量 PG 的 78/81 套及三项失败保留，不宣称全集通过 |
+| 当前 Web 与其他门禁 | 四单元运行源码PR完整CI均通过；后续文档HEAD检查受账单限制；本地Web/API build、lint、contracts、治理48项、归档/Compose通过；界面待人工 | PR CI39150323034/39151261515/39151268693/39151275101；各自四分片及真实PG/Worker通过。本地超时、中断和旧矩阵fixture失败保留，不改称本地全集PASS |
+| 实际部署 | A31d0b657、B47db5bee已验证；C395acc27的main CI attempt6 PASS，但部署39188014390 SSH超时失败；D返修中未合并 | A部署39151587587、B部署39152712419；每次快照/迁移/健康完整执行，线上HTTP与资源/契约改变已核验，最终业务浏览器未执行 |
+
+前一轮中断保留的失败包括账号 Web 6 项、主数据定向 Web 8 项，当前已按文件所有权接续修复，尚不覆盖这些失败为通过。空库 seed 曾因 cwd 使用错误失败，随后显式切换 API 目录通过；原始日志留在 Git 外，不清除失败历史。
+
+历史 GitHub Actions 账单阻断（2026-10-19 02:22，已由后续公开仓库运行恢复）：C main run39153238102 attempt1/2所有job均无步骤，注释为付款失败或支出上限需调整；没有代码断言失败。D最新文档提交的检查也受该平台限制，不能记最新HEAD通过。A/B实际生产SHA47db5bee已核验；C/D尚未部署。Git外req17-21-actions-billing-blocker.json保存第二次注释；本聊天每小时跟进req-0017-0021，账户恢复后按原门禁接续，不改账单/额度、不绕过CI。
+
+### D返修最终本地验证（仓库私有期间）
+
+D1/D2独立规格与质量复审PASS，原busy/hash目标覆盖及矩阵卸载busy残留均以红灯回归后修复。最终冻结源码Web六文件129/129 PASS、无skip，审计API三套35/35 PASS；Web类型检查及生产构建exit0，契约同步PASS，无DTO/迁移变更。物料英文测试原组合超时保留，后续以真实页面/弹窗范围查询及等待弹窗不可见修正测试，原断言和10秒上限不变，最终组合英文6.497秒。既有Ant Design提示和大包告警保留。日志均在Git外：release-frozen-web.log、release-final-api.log、release-frozen-types.log、release-frozen-build.log及release-final-contracts.log。
+
+当前HEAD e40f543后的返修未推送；没有新CI/生产操作，不以本地组件测试替代真实PG/Worker或最终业务浏览器验收。CI39190126869已取消；仓库私有后按负责人要求停在推送/Actions之前。C失败不重跑，下一次实际部署仍须核对快照、迁移、镜像SHA及健康。最终治理结果与完整接续点见实现计划及Git外req17-21-release-checkpoint.json。
 
 ## 物料全局治理角色漏迁补齐（2026-10-18，V0.0.14-fix1 候选）
 

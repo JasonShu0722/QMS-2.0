@@ -144,7 +144,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-09-22",
+        "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
         "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。",
         "sources": [
@@ -158,7 +158,7 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "ed6a6469818aa666d0af3a853a3debbb40639487fd1d3c284aab24805a0d0eda"
+            "sha256": "5ea05c08632b706d0da1686b7c49796c9cf5b9050663ff2b4d97683441f06502"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "6285f97bb73f0aef40fd28d8a99ded1324420d34288e75b79d51ed6ada97cc52"
+            "sha256": "ea95e462c2037d2e9a883937d4c9d3628272a86954584fd340376b781cf15e4c"
           },
           {
             "path": "README.md",
