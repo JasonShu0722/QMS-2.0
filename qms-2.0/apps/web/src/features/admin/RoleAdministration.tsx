@@ -5,15 +5,18 @@ import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../../api/client';
 import { allows, permissionChanges, scopePath, type AdminOrganization, type AdminRole, type PermissionCatalogGroup } from './admin';
 import { GroupedPermissionSelector } from './GroupedPermissionSelector';
+import { permissionSummary, RolePermissionDetails } from './RolePermissionDetails';
 
 type RoleForm = components['schemas']['CreateAdminRoleDto'];
 
 export function RoleAdministration({ organization }: { organization: AdminOrganization }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogGroup[]>([]);
   const [revision, setRevision] = useState(0);
   const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [details, setDetails] = useState<AdminRole>();
+  const detailsTrigger = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -35,12 +38,14 @@ export function RoleAdministration({ organization }: { organization: AdminOrgani
   const canDelete = canRead && allows(organization, 'roles:delete');
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    let current = true; setLoading(true); setError(undefined);
+    let current = true; setLoading(true); setError(undefined); setRoles([]); setCatalog([]);
     if (!canRead) { setRoles([]); setCatalog([]); setLoading(false); return; }
     void Promise.all([apiRequest<AdminRole[]>(scopePath('roles', organization.id)), apiRequest<PermissionCatalogGroup[]>(scopePath('permission-catalog', organization.id))]).then(([nextRoles, nextCatalog]) => { if (current) { setRoles(nextRoles); setCatalog(nextCatalog); } }).catch((cause) => { if (current) setFailure(cause); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [organization.id, revision, canRead]);
-  useEffect(() => { setEditing(undefined); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
+  useEffect(() => { setEditing(undefined); setDetails(undefined); setSuccess(undefined); setBusy(false); mutate.current = createAdminMutation(); }, [organization.id]);
+  useEffect(() => { if (!canRead) setDetails(undefined); }, [canRead]);
+  useEffect(() => { if (details && !roles.some((role) => role.id === details.id)) setDetails(undefined); }, [details, roles]);
   async function perform(action: () => Promise<void>, message: string) {
     const organizationId = organization.id;
     setBusy(true); setError(undefined); setSuccess(undefined);
@@ -92,11 +97,11 @@ export function RoleAdministration({ organization }: { organization: AdminOrgani
       <Table<AdminRole> rowKey="id" loading={loading} dataSource={roles} scroll={{ x: 750 }} columns={[
         { title: t('角色名称'), dataIndex: 'name' }, { title: t('角色代码'), dataIndex: 'code' },
         { title: t('范围'), render: (_, role) => role.organizationId === null ? <Tag>{t('全局只读')}</Tag> : organization.name },
-        { title: t('权限'), render: (_, role) => <Space wrap>{role.permissions.map((permission) => <Tag key={permission.code}>{permission.code}</Tag>)}</Space> },
+         { title: t('权限'), render: (_, role) => { const summary = permissionSummary(role.permissions, catalog, locale); return <Space wrap><span>{t('权限')} {summary.count} {t('项')}{summary.modules.length ? ` · ${summary.modules.join(' · ')}` : ''}</span><Button type="link" size="small" aria-label={`${role.name} · ${t('详情')}`} onClick={(event) => { detailsTrigger.current = event.currentTarget as HTMLButtonElement; setDetails(role); }}>{t('详情')}</Button></Space>; } },
         { title: t('操作'), render: (_, role) => <Space>
           {canCreate && <Button size="small" disabled={busy} onClick={() => edit('copy', role)}>{t('复制模板')}</Button>}
           {role.organizationId !== null && <>{canUpdate && <Button size="small" disabled={busy} onClick={() => edit('edit', role)}>{t('编辑角色')}</Button>}
-            {canDelete && <Button size="small" danger disabled={busy} onClick={() => void perform(async () => { await mutate.current<void>(scopePath(`roles/${role.id}`, organization.id), 'DELETE'); }, '角色已删除')}>{t('删除角色')}</Button>}</>}
+             {canDelete && <Button size="small" danger disabled={busy} onClick={() => void perform(async () => { await mutate.current<void>(scopePath(`roles/${role.id}`, organization.id), 'DELETE'); }, '角色已删除')}>{t('删除角色')}</Button>}</>}
         </Space> },
       ]} />
       <details className="permission-directory" onToggle={(event) => setDirectoryOpen(event.currentTarget.open)}><summary>{t('权限目录（只读）')}</summary>
@@ -113,5 +118,6 @@ export function RoleAdministration({ organization }: { organization: AdminOrgani
         <Button htmlType="submit" type="primary" loading={busy}>{t('保存角色')}</Button>
       </Form>
     </Modal>
+    <RolePermissionDetails open={!!details} role={details} catalog={catalog} onClose={() => setDetails(undefined)} afterClose={() => detailsTrigger.current?.focus()} />
   </>;
 }

@@ -3,7 +3,7 @@ import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-ev
 import { afterEach, expect, it, vi } from 'vitest';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
-import type { AdminOrganization, AdminRole, AdminUser } from './admin';
+import type { AdminOrganization, AdminRole, AdminPermission, AdminUser, PermissionCatalogGroup } from './admin';
 import { AdminPage } from './AdminPage';
 
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
@@ -119,12 +119,138 @@ it('shows global roles as read-only and exposes loading failures', async () => {
   const rendered = render(<RoleAdministration organization={organization} />);
   const row = (await screen.findByText('Global Role')).closest('tr')!;
   expect(within(row).getByText('全局只读')).toBeInTheDocument();
+  expect(within(row).getByRole('button', { name: /Global Role.*详情/ })).toBeInTheDocument();
   expect(within(row).queryByRole('button', { name: '编辑角色' })).not.toBeInTheDocument();
   expect(within(row).queryByRole('button', { name: '删除角色' })).not.toBeInTheDocument();
   rendered.unmount();
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sensitive')));
   render(<RoleAdministration organization={organization} />);
   expect(await screen.findByText('请求失败，请重试')).toBeInTheDocument();
+});
+
+it('summarizes permissions and opens searchable read-only details from the keyboard', async () => {
+  const role: AdminRole = { mfaRequired: false, id: 'role-details', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [
+    { id: 'users-read', code: 'account:users:read', name: '查看用户' },
+    { id: 'roles-delete', code: 'account:roles:delete', name: '删除角色' },
+    { id: 'users-read-copy', code: 'account:users:read', name: '查看用户' },
+    { id: 'legacy-read', code: 'legacy:read', name: 'Legacy read' },
+  ] };
+  const catalog: PermissionCatalogGroup[] = [{ key: 'system', name: '系统管理', status: 'active', modules: [
+    { key: 'users', name: '用户管理', status: 'active', operations: [{ code: 'account:users:read', name: '查看用户', enforcement: 'guarded', grantable: true }] },
+    { key: 'roles', name: '角色管理', status: 'active', operations: [{ code: 'account:roles:delete', name: '删除角色', enforcement: 'guarded', grantable: true }] },
+  ] }];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? catalog : [role]))));
+
+  render(<RoleAdministration organization={organization} />);
+  const row = (await screen.findByText(role.name)).closest('tr')!;
+  expect(within(row).getByText(/3.*用户管理.*角色管理/)).toBeInTheDocument();
+  const trigger = within(row).getByRole('button', { name: /Reader Role.*详情/ });
+  trigger.focus();
+  await userEvent.keyboard('{Enter}');
+
+  const drawer = await screen.findByRole('dialog');
+  expect(within(drawer).getByText('用户管理')).toBeInTheDocument();
+  expect(within(drawer).getByText('角色管理')).toBeInTheDocument();
+  expect(within(drawer).getByText('查看用户')).toBeInTheDocument();
+  expect(within(drawer).getByText('删除角色')).toBeInTheDocument();
+  expect(within(drawer).getByText('legacy:read')).toBeInTheDocument();
+  expect(within(drawer).queryByRole('checkbox')).not.toBeInTheDocument();
+
+  await userEvent.type(within(drawer).getByRole('textbox', { name: '搜索权限' }), '删除');
+  expect(within(drawer).getByText('删除角色')).toBeInTheDocument();
+  expect(within(drawer).queryByText('查看用户')).not.toBeInTheDocument();
+  await userEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+
+it('falls back to the controlled permission name and code when the catalog has no match', async () => {
+  const permission: AdminPermission = { id: 'legacy-read', code: 'legacy:read', name: 'Legacy read' };
+  const role: AdminRole = { mfaRequired: false, id: 'role-legacy', code: 'LEGACY', name: 'Legacy Role', organizationId: organization.id, permissions: [permission] };
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? [] : [role]))));
+
+  render(<RoleAdministration organization={organization} />);
+  const row = (await screen.findByText(role.name)).closest('tr')!;
+  expect(within(row).getByText(/1.*Legacy read/)).toBeInTheDocument();
+  await userEvent.click(within(row).getByRole('button', { name: /Legacy Role.*详情/ }));
+  const drawer = await screen.findByRole('dialog');
+  expect(within(drawer).getAllByText('Legacy read').length).toBeGreaterThan(0);
+  expect(within(drawer).getByText(permission.code)).toBeInTheDocument();
+});
+
+it('clears permission details after organization or access changes and role deletion', async () => {
+  const role: AdminRole = { mfaRequired: false, id: 'role-clear', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: '查看用户' }] };
+  const catalog: PermissionCatalogGroup[] = [{ key: 'system', name: '系统管理', status: 'active', modules: [{ key: 'users', name: '用户管理', status: 'active', operations: [{ code: 'account:users:read', name: '查看用户', enforcement: 'guarded', grantable: true }] }] }];
+  let roles: AdminRole[] = [role];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
+    if (init.method === 'DELETE') { roles = []; return Promise.resolve(new Response(null, { status: 204 })); }
+    return Promise.resolve(json(path.includes('/permission-catalog') ? catalog : roles));
+  }));
+  const other: AdminOrganization = { id: 'org-b', code: 'b', name: 'Organization B', type: 'SUPPLIER', permissions: ['account:roles:read'] };
+  const view = render(<RoleAdministration organization={organization} />);
+  const row = (await screen.findByText(role.name)).closest('tr')!;
+  await userEvent.click(within(row).getByRole('button', { name: /Reader Role.*详情/ }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  view.rerender(<RoleAdministration organization={other} />);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+  view.rerender(<RoleAdministration organization={{ ...organization, permissions: [] }} />);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+  view.rerender(<RoleAdministration organization={organization} />);
+  const deletedRow = (await screen.findByText(role.name)).closest('tr')!;
+  await userEvent.click(within(deletedRow).getByRole('button', { name: /Reader Role.*详情/ }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  await userEvent.click(within(deletedRow).getByRole('button', { name: '删除角色' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.queryByText(role.name)).not.toBeInTheDocument();
+});
+
+it('ignores late role and catalog responses after switching organizations', async () => {
+  const role: AdminRole = { mfaRequired: false, id: 'role-late', code: 'READER', name: 'Late Role', organizationId: organization.id, permissions: [] };
+  let resolveRoles: ((response: Response) => void) | undefined;
+  let resolveCatalog: ((response: Response) => void) | undefined;
+  const paths: string[] = [];
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => {
+    paths.push(path);
+    if (path.includes('organizationId=org-a') && path.includes('/permission-catalog')) return new Promise<Response>((resolve) => { resolveCatalog = resolve; });
+    if (path.includes('organizationId=org-a')) return new Promise<Response>((resolve) => { resolveRoles = resolve; });
+    return Promise.resolve(json([]));
+  }));
+  const other: AdminOrganization = { id: 'org-b', code: 'b', name: 'Organization B', type: 'SUPPLIER', permissions: ['account:roles:read'] };
+  const view = render(<RoleAdministration organization={organization} />);
+  await waitFor(() => { expect(resolveRoles).toBeDefined(); expect(resolveCatalog).toBeDefined(); });
+  view.rerender(<RoleAdministration organization={other} />);
+  await waitFor(() => expect(paths.some((path) => path.includes('organizationId=org-b'))).toBe(true));
+  resolveRoles!(json([role]));
+  resolveCatalog!(json([]));
+  await waitFor(() => expect(screen.queryByText(role.name)).not.toBeInTheDocument());
+});
+
+it('clears old roles, details, and permission catalog while the next organization loads', async () => {
+  const role: AdminRole = { mfaRequired: false, id: 'role-isolated', code: 'READER', name: 'A Role', organizationId: organization.id, permissions: [] };
+  const catalog: PermissionCatalogGroup[] = [{ key: 'system', name: 'A Catalog', status: 'active', modules: [{ key: 'a-module', name: 'A Module', status: 'active', operations: [] }] }];
+  let rejectB: ((cause: Error) => void) | undefined;
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => {
+    if (path.includes('organizationId=org-b')) return new Promise<Response>((_, reject) => { rejectB = reject; });
+    return Promise.resolve(json(path.includes('/permission-catalog') ? catalog : [role]));
+  }));
+  const other: AdminOrganization = { id: 'org-b', code: 'b', name: 'Organization B', type: 'SUPPLIER', permissions: ['account:roles:read'] };
+  const view = render(<RoleAdministration organization={organization} />);
+  const row = (await screen.findByText(role.name)).closest('tr')!;
+  await userEvent.click(within(row).getByRole('button', { name: /A Role.*详情/ }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  await userEvent.click(screen.getByText('权限目录（只读）'));
+  expect(screen.getByText('A Catalog')).toBeInTheDocument();
+
+  view.rerender(<RoleAdministration organization={other} />);
+
+  expect(screen.queryByText(role.name)).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByText('A Catalog')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /A Role.*详情/ })).not.toBeInTheDocument();
+  rejectB!(new Error('sensitive'));
+  expect(await screen.findByText('请求失败，请重试')).toBeInTheDocument();
+  expect(screen.queryByText(role.name)).not.toBeInTheDocument();
 });
 
 it.each([
