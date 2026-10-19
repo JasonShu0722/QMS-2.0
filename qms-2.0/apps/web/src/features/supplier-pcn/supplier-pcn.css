@@ -1,4 +1,4 @@
 .supplier-pcn-page { display: grid; gap: var(--qms-section-gap); padding: 0;  min-width: 0; }
-.supplier-pcn-page > header { display: grid; gap: 8px; }
+.supplier-pcn-page > header { display: grid; gap: var(--qms-section-gap); }
 .supplier-pcn-page > section { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); overflow-x: auto; }
 @media (max-width: 760px) { .supplier-pcn-page { padding: 0;  min-width: 0; } }

@@ -1,9 +1,9 @@
 .supplier-asn-page { display: grid; gap: var(--qms-section-gap);  min-width: 0; }
 .supplier-asn-heading { display: flex; justify-content: space-between; gap: var(--qms-section-gap); align-items: flex-start; }
-.supplier-asn-heading h1 { margin: 4px 0 8px; }
+.supplier-asn-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .supplier-asn-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); }
 .supplier-asn-actions { margin-top: var(--qms-section-gap); }
 .supplier-asn-number { width: 100%; }
-.supplier-asn-actions .ant-alert { margin-bottom: 12px; }
+.supplier-asn-actions .ant-alert { margin-bottom: var(--qms-section-gap); }
 @media (max-width: 760px) { .supplier-asn-heading { flex-wrap: wrap; } .supplier-asn-card { padding: var(--qms-card-padding); min-width: 0; } }
 @media (max-width: 760px) { .supplier-asn-drawer .ant-drawer-content-wrapper { max-width: 100vw; } }

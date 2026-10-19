@@ -121,7 +121,7 @@ export function AuditStandardsPage() {
     <Drawer title={detail?.name ?? '标准详情'} open={!!detail || detailLoading} onClose={() => { setDetail(undefined); setActionError(undefined); }} width={680}>
       {detailLoading && <Spin />}
       {Boolean(actionError) && <Alert type="error" showIcon title={safeAccountError(actionError)} />}
-      {detail && !detailLoading && <Space orientation="vertical" size="middle" className="audit-standards-column">
+      {detail && !detailLoading && <Space orientation="vertical" size={6} className="audit-standards-column">
         <Space wrap><Tag>{auditTypes.find((item) => item.value === detail.auditType)?.label}</Tag><Tag color={detail.status === 'PUBLISHED' ? 'green' : 'orange'}>{detail.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag><Typography.Text type="secondary">最新生效 v{detail.latestVersion}</Typography.Text></Space>
         <Space>{detail.status === 'DRAFT' ? <><Button onClick={() => setEditor('draft')}>编辑草稿</Button><Button type="primary" loading={busy} onClick={() => void publish()}>发布生效</Button></> : <Button onClick={() => setEditor('revision')}>创建修订</Button>}</Space>
         {detail.status === 'DRAFT' && <Card size="small" title="待发布检查项"><ChecklistItems definition={detail.draftDefinition} /></Card>}

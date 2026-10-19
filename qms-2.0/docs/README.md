@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [个人账号与全页密度返修规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md) | 人工验收后确认的账号整合、单一会话表及全页留白减半 |
+| [个人账号与全页密度返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md) | V0.0.21 本地实现、验证、审查、云端边界及新一轮人工检查 |
 | [紧凑界面与账号、主数据、审计设计](../../docs/superpowers/specs/2026-10-18-qms-compact-account-master-audit-design.md) | REQ-0017～0021 的已批准目标、独立评审及最小实现边界 |
 | [紧凑界面与账号、主数据、审计计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md) | 四个单元、Issue/PR、TDD、验证审查及授权接续 |
 | [开发治理](DEVELOPMENT-GOVERNANCE.md) | 计划顶部当前摘要、工程完成条件、证据矩阵、质量门禁和独立审查 |

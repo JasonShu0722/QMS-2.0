@@ -96,7 +96,7 @@ export function AnnouncementsPage() {
     </header>
     {Boolean(error) && <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={safeAccountError(error)} description={error instanceof ApiError ? error.traceId : undefined} />}
     {loading ? <div className="announcements-loading"><Spin /></div> : mine && <Tabs activeKey={managed ? activeTab : 'mine'} onChange={setActiveTab} items={[
-      { key: 'mine', label: <Badge count={mine.unreadMustReadCount} size="small">我的公告</Badge>, children: <Space orientation="vertical" size="middle" className="announcements-column">
+      { key: 'mine', label: <Badge count={mine.unreadMustReadCount} size="small">我的公告</Badge>, children: <Space orientation="vertical" size={6} className="announcements-column">
         {mine.unreadMustReadCount > 0 && <Alert type="warning" showIcon title={mine.unreadMustReadCount + ' 条重要公告待阅读'} />}
         <List dataSource={mine.items} locale={{ emptyText: <Empty description="暂无面向我的公告" /> }} renderItem={(item: MineItem) => <List.Item key={item.id}><Card className="announcements-item" title={<Space wrap><span>{item.title}</span>{item.importance === 'IMPORTANT' && <Tag color="orange">重要</Tag>}{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Tag>{item.readAt ? '已读' : '未读'}</Tag>}><Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph><Space wrap><Typography.Text type="secondary">{formatDate(item.publishedAt)}</Typography.Text>{!item.readAt && <Button type="primary" loading={busy} onClick={() => void act(async () => { await mutate(basePath + '/' + item.id + '/read', 'POST'); window.dispatchEvent(new Event('qms:announcement-read')); })}>我已阅读</Button>}</Space></Card></List.Item>} />
       </Space> },

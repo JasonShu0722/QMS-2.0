@@ -41,8 +41,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       },
       components: {
         Button: { primaryColor: tokens['on-accent'] },
-        Card: { bodyPadding: 16, bodyPaddingSM: 16 },
-        Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 8, cellPaddingBlockMD: 8, cellPaddingBlockSM: 8 },
+        Card: { bodyPadding: 8, bodyPaddingSM: 8, headerPadding: 8, headerPaddingSM: 8, headerHeight: 44, headerHeightSM: 44 },
+        Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 },
         Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface },
       },
     }}>{children}</ConfigProvider>

@@ -129,7 +129,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
           : file.scanStatus === 'EXPIRED' ? '上传已过期'
             : file.scanStatus === 'ERROR' ? '扫描暂不可用，附件仍隔离' : '扫描未通过，附件已隔离';
   return <Card className="attachment-panel" title={t('附件证据')}>
-    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size={6} style={{ width: '100%' }}>
       <Typography.Paragraph>{t('附件上传后先隔离，通过安全扫描后才可下载和提交为证据。')}</Typography.Paragraph>
       {error ? <Alert type="error" title={t(errorText)} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} showIcon /> : null}
       <Space wrap>

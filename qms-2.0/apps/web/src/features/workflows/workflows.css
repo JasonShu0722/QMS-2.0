@@ -30,18 +30,19 @@
 .workflow-canvas .react-flow__node.selected { background: var(--qms-accent-soft); }
 .workflow-canvas .react-flow__controls-button:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
 .workflow-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--qms-section-gap); }
-.workflow-editor label, .workflow-list label { display: grid; gap: 8px; margin: 8px 0; color: var(--qms-text); }
-.workflow-editor input, .workflow-editor select, .workflow-editor textarea, .workflow-list input, .workflow-list select { box-sizing: border-box; padding: 8px 12px; min-height: 36px; border: 1px solid var(--qms-border); border-radius: 7px; font: inherit; width: 100%; min-width: 0; background: var(--qms-surface); color: inherit; }
+.workflow-editor label, .workflow-list label { display: grid; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; color: var(--qms-text); }
+.workflow-editor input:not([type="checkbox"], [type="radio"]), .workflow-editor select, .workflow-editor textarea, .workflow-list input:not([type="checkbox"], [type="radio"]), .workflow-list select { box-sizing: border-box; padding: 8px 12px; min-height: 36px; border: 1px solid var(--qms-border); border-radius: 7px; font: inherit; width: 100%; min-width: 0; background: var(--qms-surface); color: inherit; }
+.workflow-editor input:not([type="checkbox"], [type="radio"]), .workflow-editor select, .workflow-list input:not([type="checkbox"], [type="radio"]), .workflow-list select { height: 36px; padding-block: 6px; }
 .workflow-editor :is(input, select, textarea):focus-visible, .workflow-list :is(input, select):focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
 .workflow-editor :is(input, select, textarea):disabled { color: var(--qms-muted); background: var(--qms-surface-tint); }
 .workflow-editor fieldset { border: 1px solid var(--qms-border); border-radius: 8px; padding: var(--qms-card-padding); margin: var(--qms-section-gap) 0; min-width: 0; }
 .workflow-editor .workflow-properties-fields { border: none; padding: 0; margin: 0; }
 .workflow-editor legend { font-weight: 600; padding: 0 8px; }
-.workflow-editor .workflow-check { display: flex; align-items: center; gap: 8px; }
+.workflow-editor .workflow-check { display: flex; align-items: center; gap: var(--qms-section-gap); }
 .workflow-check input { width: auto; min-height: auto; accent-color: var(--qms-accent); }
-.workflow-node-list { display: grid; gap: 12px; padding-left: 24px; }
-.workflow-node-list li > .ant-tag { margin-left: 12px; }
-.workflow-edge { padding: 12px; margin: 8px 0; border-left: 3px solid var(--qms-accent-border); background: var(--qms-surface-tint); }
+.workflow-node-list { display: grid; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; padding-left: 24px; }
+.workflow-node-list li > .ant-tag { margin-left: var(--qms-section-gap); }
+.workflow-edge { padding: var(--qms-card-padding); margin: var(--qms-section-gap) 0; border-left: 3px solid var(--qms-accent-border); background: var(--qms-surface-tint); }
 .workflow-list__filters { padding: var(--qms-card-padding); background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 10px; }
 .workflow-list__table { overflow-x: auto; min-width: 0; border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
 .workflow-list table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }

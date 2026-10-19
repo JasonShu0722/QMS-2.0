@@ -1,5 +1,5 @@
 .audit-query-toolbar.ant-form-inline,
-.audit-query-more { display: flex; flex-wrap: wrap; gap: var(--qms-section-gap, 12px); align-items: center; }
+.audit-query-more { display: flex; flex-wrap: wrap; gap: var(--qms-section-gap); align-items: center; }
 .audit-query-toolbar.ant-form-inline .ant-form-item { margin: 0; }
 .audit-query-toolbar > .ant-form-item { flex: 0 1 230px; }
 .audit-query-more { flex-basis: 100%; }

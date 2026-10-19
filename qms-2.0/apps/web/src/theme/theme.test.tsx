@@ -20,18 +20,88 @@ describe('shared appearance', () => {
     }
     render(<ThemeProvider><ThemeProbe /></ThemeProvider>);
     const configured = JSON.parse(screen.getByTestId('density').textContent!);
-    expect(configured.components.Card).toMatchObject({ bodyPadding: 16, bodyPaddingSM: 16 });
-    expect(configured.components.Table).toMatchObject({ cellPaddingBlock: 8, cellPaddingBlockMD: 8, cellPaddingBlockSM: 8 });
+    expect(configured.components.Card).toMatchObject({ bodyPadding: 8, bodyPaddingSM: 8, headerPadding: 8, headerPaddingSM: 8, headerHeight: 44, headerHeightSM: 44 });
+    expect(configured.components.Table).toMatchObject({ cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 });
     expect(configured.token.controlHeight).toBe(36);
     expect(configured.token).not.toHaveProperty('padding');
     expect(configured.token).not.toHaveProperty('margin');
   });
   it('declares shared page, section, card and table density in the theme stylesheet', () => {
-    expect(themeStyles).toMatch(/--qms-page-padding:\s*16px/);
-    expect(themeStyles).toMatch(/@media\s*\(max-width:\s*1200px\)\s*\{\s*:root\s*\{\s*--qms-page-padding:\s*12px/);
-    expect(themeStyles).toMatch(/--qms-section-gap:\s*12px/);
-    expect(themeStyles).toMatch(/--qms-card-padding:\s*16px/);
-    expect(themeStyles).toMatch(/--qms-table-cell-padding-block:\s*8px/);
+    expect(themeStyles).toMatch(/--qms-page-padding:\s*8px/);
+    expect(themeStyles).toMatch(/@media\s*\(max-width:\s*1200px\)\s*\{\s*:root\s*\{\s*--qms-page-padding:\s*6px/);
+    expect(themeStyles).toMatch(/--qms-section-gap:\s*6px/);
+    expect(themeStyles).toMatch(/--qms-card-padding:\s*8px/);
+    expect(themeStyles).toMatch(/--qms-table-cell-padding-block:\s*4px/);
+  });
+  it('shares compact form spacing across business pages and editing overlays', () => {
+    expect(themeStyles).toMatch(/:where\(\.qms-content,\s*\.ant-modal,\s*\.ant-drawer\)\s+\.ant-form-item\s*\{[^}]*margin-bottom:\s*var\(--qms-section-gap\)/);
+    expect(styles('features/supplier-quality/supplier-quality.css')).toMatch(/\.supplier-form-grid\s*\{[^}]*column-gap:\s*var\(--qms-section-gap\)/);
+    expect(styles('features/coordinate-inspection/coordinate-inspection.css')).toMatch(/\.coordinate-inspection-form-grid\s*\{[^}]*gap:\s*0\s+var\(--qms-section-gap\)/);
+    expect(styles('workbench/workbench.css')).toMatch(/\.qms-workbench h2\s*\{[^}]*margin:\s*0 0 var\(--qms-section-gap\)/);
+  });
+  it('keeps admin, permission, governance and legacy account spacing compact at every breakpoint', () => {
+    const globalStyles = styles('styles/global.css');
+    for (const [selector, property, expected] of [
+      ['.admin-heading', 'gap', 'var(--qms-section-gap)'],
+      ['.admin-heading label', 'gap', 'var(--qms-section-gap)'],
+      ['.admin-toolbar', 'gap', 'var(--qms-section-gap)'],
+      ['.admin-page', 'padding', 'var(--qms-card-padding)'],
+      ['.admin-page .ant-alert', 'margin-bottom', 'var(--qms-section-gap)'],
+      ['.permission-directory summary', 'margin-bottom', 'var(--qms-section-gap)'],
+      ['.permission-module', 'margin', 'var(--qms-section-gap) 0'],
+      ['.permission-module header', 'gap', 'var(--qms-section-gap)'],
+      ['.governance-panel', 'padding-block', 'var(--qms-section-gap)'],
+      ['.governance-toolbar', 'gap', 'var(--qms-section-gap)'],
+      ['.governance-toolbar', 'padding', 'var(--qms-card-padding)'],
+      ['.governance-panel .ant-form-inline', 'gap', 'var(--qms-section-gap)'],
+      ['.account-grid', 'gap', 'var(--qms-section-gap)'],
+      ['.account-grid', 'margin', 'var(--qms-section-gap) 0'],
+      ['.account-form', 'margin-top', 'var(--qms-section-gap)'],
+      ['.account-sessions', 'margin-top', 'var(--qms-section-gap)'],
+      ['.account-summary', 'margin-bottom', 'var(--qms-section-gap)'],
+      ['.account-center .ant-alert', 'margin-bottom', 'var(--qms-section-gap)'],
+    ]) {
+      const escaped = selector!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rules = [...globalStyles.matchAll(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`, 'g'))];
+      const values = rules.flatMap(rule => [...rule[1]!.matchAll(new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+);`, 'g'))].map(match => match[1]!.trim()));
+      expect(values.length, `${selector} ${property}`).toBeGreaterThan(0);
+      for (const value of values) expect(value, `${selector} ${property}`).toBe(expected);
+    }
+  });
+  it('uses six-pixel gaps for explicit business block Spaces and Rows', () => {
+    for (const file of [
+      'tasks/MyTasksPage', 'attachments/AttachmentPanel', 'audit-standards/AuditStandardsPage',
+      'site-scanning/SiteScanningPage', 'announcements/AnnouncementsPage',
+      'process-quality/ProcessShipmentReportPanel', 'supplier-pcn/SupplierPcnPage',
+    ]) {
+      const spaces = styles(`features/${file}.tsx`).match(/<Space\b[^>]*orientation="vertical"[^>]*>/g) ?? [];
+      expect(spaces.length, file).toBeGreaterThan(0);
+      expect(spaces.join('\n'), file).not.toMatch(/size="(?:middle|large)"|size=\{(?:16|24)\}/);
+      expect(spaces.some(space => space.includes('size={6}')), file).toBe(true);
+    }
+    const rows = styles('features/tasks/TaskStatisticsPage.tsx').match(/<Row\b[^>]*>/g);
+    expect(rows).toHaveLength(2);
+    for (const row of rows!) expect(row).toContain('gutter={[6, 6]}');
+  });
+  it('scopes compact heading and pagination overrides above AntD specificity', () => {
+    expect(themeStyles).toMatch(/\.qms-content \.ant-typography \+ h1\.ant-typography\s*\{[^}]*margin:\s*0 0 var\(--qms-section-gap\)/);
+    expect(themeStyles).toMatch(/:is\(\.qms-content,\s*\.ant-modal,\s*\.ant-drawer\) \.ant-table-wrapper \.ant-table-pagination\.ant-pagination\s*\{[^}]*margin:\s*var\(--qms-section-gap\) 0/);
+  });
+  it('covers scoped coarse controls and overlay close targets without enlarging checkboxes or textareas', () => {
+    const coarse = themeStyles.match(/@media\s*\(pointer:\s*coarse\)\s*\{([\s\S]*?)\n\}/)?.[1];
+    expect(coarse).toContain(':is(.qms-content, .ant-modal, .ant-drawer)');
+    expect(coarse).toMatch(/input:where\(:not\(\[type\]\),[^}]*\[type="text"\][^}]*\[type="date"\][^}]*min-height:\s*44px/);
+    expect(coarse).toMatch(/\.ant-btn-icon-only,\s*\.ant-modal-close,\s*\.ant-drawer-close\)\s*\{[^}]*min-width:\s*44px/);
+    expect(coarse).not.toMatch(/\[type="(?:checkbox|radio)"\]|textarea/);
+  });
+  it('preserves navigation, native controls and workflow canvas geometry', () => {
+    expect(styles('layouts/shell.css')).toMatch(/\.qms-nav-item\s*\{[^}]*min-height:\s*44px/);
+    expect(styles('layouts/shell.css')).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{[^}]*\.qms-context-link[^}]*min-height:\s*44px/);
+    expect(styles('features/tasks/tasks.css')).toMatch(/\.task-inbox select\s*\{[^}]*min-height:\s*36px/);
+    const workflows = styles('features/workflows/workflows.css');
+    expect(workflows).toMatch(/\.workflow-editor input[^}]*min-height:\s*36px/);
+    expect(workflows).toMatch(/\.workflow-editor input:not\(\[type="checkbox"\], \[type="radio"\]\)[^}]*height:\s*36px;\s*padding-block:\s*6px/);
+    expect(workflows).toMatch(/\.workflow-canvas\s*\{[^}]*height:\s*440px/);
   });
   it('lets the shared shell supply page padding at every business-page breakpoint', () => {
     for (const feature of ['announcements', 'audit-management', 'audit-standards', 'coordinate-inspection', 'customer-quality', 'new-product-quality', 'process-quality', 'quality-data', 'site-scanning', 'supplier-admission', 'supplier-concession', 'supplier-incoming', 'supplier-pcn', 'supplier-performance', 'supplier-quality']) {
@@ -50,6 +120,10 @@ describe('shared appearance', () => {
   });
   it('keeps the mobile and coarse-pointer tab close target from shrinking', () => {
     const shell = styles('layouts/shell.css');
+    const topbars = [...shell.matchAll(/\.qms-topbar\s*\{([^}]+)\}/g)];
+    expect(topbars).toHaveLength(2);
+    for (const topbar of topbars) expect(topbar[1]).toMatch(/min-height:\s*54px/);
+    expect(topbars[1]![1]).toMatch(/padding:\s*4px 0/);
     expect(shell).not.toMatch(/\.qms-topbar \.qms-work-tab \.ant-btn\s*\{[^}]*(?:28px|30px)/);
     const workTabs = styles('work-tabs/work-tabs.css');
     expect(workTabs).toMatch(/\.qms-work-tab\s*\{[^}]*height:\s*36px/);
