@@ -5748,10 +5748,28 @@ export interface components {
             name?: string;
             permissionCodes?: string[];
         };
+        EffectiveAdminRoleSourceDto: {
+            /** @enum {string} */
+            kind: "DIRECT" | "POSITION";
+            /** Format: uuid */
+            positionId?: string;
+            /** Format: uuid */
+            assignmentId?: string;
+        };
+        EffectiveAdminRoleDto: {
+            mfaRequired: boolean;
+            id: string;
+            organizationId: string | null;
+            code: string;
+            name: string;
+            permissions: components["schemas"]["AdminPermissionDto"][];
+            sources: components["schemas"]["EffectiveAdminRoleSourceDto"][];
+        };
         AdminUserRolesDto: {
             userId: string;
             organizationId: string;
             roles: components["schemas"]["AdminRoleDto"][];
+            effectiveRoles: components["schemas"]["EffectiveAdminRoleDto"][];
             permissions: string[];
         };
         AssignAdminRolesDto: {

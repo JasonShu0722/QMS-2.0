@@ -41,6 +41,7 @@ describe('identity HTTP contract', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalRateLimitSecret = process.env.QMS_RATE_LIMIT_SECRET;
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     $queryRaw: jest.fn().mockResolvedValue([]),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },

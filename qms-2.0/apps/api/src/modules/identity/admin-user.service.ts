@@ -8,6 +8,7 @@ import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto, Adm
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 import { TemporaryPasswordService } from './temporary-password.service.js';
 import { assertRecentAuthentication, mfaPolicy } from '../../common/security/session-security.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
@@ -167,7 +168,7 @@ export class AdminUserService {
   }
 
   async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, requiredPermissions: string[], identityChanged = false) {
-    const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    const assignments = await effectiveRoleGrants(transaction, userId);
     if (identityChanged && assignments.some((assignment) => assignment.role.organizationId === null)) adminError('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
     for (const organizationId of new Set(assignments.map((assignment) => assignment.organizationId))) {
       const granted = await assertAdminAccess(transaction, actor, organizationId, requiredPermissions);

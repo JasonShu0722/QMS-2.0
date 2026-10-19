@@ -25,8 +25,10 @@ describe('authorization policy', () => {
   it('asserts feature permission through role assignments in the scoped organization', async () => {
     const prisma = {
       organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+      user: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-internal-home' }) },
+      userPosition: { findMany: jest.fn().mockResolvedValue([]) },
       userRole: {
-        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([{ organizationId: 'org-supplier-a', role: { id: 'role', permissions: [{ permission: { code: 'organization:read' } }] } }]),
       },
     };
     const service = new AuthorizationService(prisma as never);
@@ -35,24 +37,21 @@ describe('authorization policy', () => {
       service.assertFeature('user-internal', 'org-supplier-a', 'organization:read'),
     ).resolves.toBeUndefined();
 
-    expect(prisma.userRole.count).toHaveBeenCalledWith({
+    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         userId: 'user-internal',
         organizationId: 'org-supplier-a',
-        role: {
-          permissions: {
-            some: { permission: { code: 'organization:read' } },
-          },
-        },
       },
-    });
+    }));
   });
 
   it('rejects missing feature permission with a stable public code', async () => {
     const prisma = {
       organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+      user: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-internal-home' }) },
+      userPosition: { findMany: jest.fn().mockResolvedValue([]) },
       userRole: {
-        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     const service = new AuthorizationService(prisma as never);
@@ -110,11 +109,13 @@ describe('authorization policy', () => {
 
   it('allows internal users only for organizations assigned on the server', async () => {
     const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-internal-home' }) },
+      userPosition: { findMany: jest.fn().mockResolvedValue([]) },
       userRole: {
-        findFirst: jest
+        findMany: jest
           .fn()
-          .mockResolvedValueOnce({ organizationId: 'org-supplier-a' })
-          .mockResolvedValueOnce(null),
+          .mockResolvedValueOnce([{ organizationId: 'org-supplier-a', role: { id: 'role', permissions: [] } }])
+          .mockResolvedValueOnce([]),
       },
     };
     const scopes = new OrganizationScopeService(prisma as never);

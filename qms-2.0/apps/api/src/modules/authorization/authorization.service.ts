@@ -1,5 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 import type { AccessContextRequirement } from './access.decorator.js';
 import {
   PLATFORM_ERROR_MESSAGES,
@@ -52,19 +53,8 @@ export class AuthorizationService {
     if (organization.status !== 'ACTIVE' && featurePermission === 'organization:read') {
       await this.assertFeature(userId, organizationId, 'organization:manage');
     }
-    const count = await this.prisma.userRole.count({
-      where: {
-        userId,
-        organizationId,
-        role: {
-          permissions: {
-            some: { permission: { code: featurePermission } },
-          },
-        },
-      },
-    });
-
-    if (count < 1) {
+    const permissions = await this.permissionsForContext(userId, organizationId);
+    if (!permissions.includes(featurePermission)) {
       throw new HttpException(
         { code: 'FEATURE_PERMISSION_DENIED', message: '缺少所需权限' },
         403,
@@ -73,10 +63,7 @@ export class AuthorizationService {
   }
 
   async permissionsForContext(userId: string, organizationId: string): Promise<string[]> {
-    const assignments = await this.prisma.userRole.findMany({
-      where: { userId, organizationId },
-      include: { role: { include: { permissions: { include: { permission: true } } } } },
-    });
+    const assignments = await effectiveRoleGrants(this.prisma, userId, organizationId);
     return [
       ...new Set(
         assignments.flatMap((assignment) =>

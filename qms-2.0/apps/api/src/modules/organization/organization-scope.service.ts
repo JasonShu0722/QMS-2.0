@@ -1,5 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 import type { AuthorizedSession } from '../authorization/authorization.service.js';
 
 export interface OrganizationScopeRequest {
@@ -24,11 +25,8 @@ export class OrganizationScopeService {
       return homeOrganizationId;
     }
 
-    const assignment = await this.prisma.userRole.findFirst({
-      where: { userId: session.user.id, organizationId: requestedOrganizationId },
-      select: { organizationId: true },
-    });
-    if (!assignment) this.reject();
+    const assignments = await effectiveRoleGrants(this.prisma, session.user.id, requestedOrganizationId);
+    if (!assignments.length) this.reject();
     return requestedOrganizationId;
   }
 

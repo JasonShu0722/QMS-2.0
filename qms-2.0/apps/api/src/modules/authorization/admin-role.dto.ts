@@ -163,6 +163,22 @@ export class AssignAdminRolesDto {
   roleIds!: string[];
 }
 
+export class EffectiveAdminRoleSourceDto {
+  @ApiProperty({ enum: ['DIRECT', 'POSITION'] })
+  kind!: 'DIRECT' | 'POSITION';
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  positionId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  assignmentId?: string;
+}
+
+export class EffectiveAdminRoleDto extends AdminRoleDto {
+  @ApiProperty({ type: [EffectiveAdminRoleSourceDto] })
+  sources!: EffectiveAdminRoleSourceDto[];
+}
+
 export class AdminUserRolesDto {
   @ApiProperty()
   userId!: string;
@@ -172,6 +188,9 @@ export class AdminUserRolesDto {
 
   @ApiProperty({ type: [AdminRoleDto] })
   roles!: AdminRoleDto[];
+
+  @ApiProperty({ type: [EffectiveAdminRoleDto] })
+  effectiveRoles!: EffectiveAdminRoleDto[];
 
   @ApiProperty({ type: [String] })
   permissions!: string[];

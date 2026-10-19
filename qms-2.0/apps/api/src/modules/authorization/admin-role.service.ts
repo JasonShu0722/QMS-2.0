@@ -7,10 +7,11 @@ import type { AdminUserActor } from '../identity/admin-user.service.js';
 import type { AssignAdminRolesDto, CopyAdminRoleDto, CreateAdminRoleDto, UpdateAdminRoleDto } from './admin-role.dto.js';
 import { AdminMutationService, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
 import { ACTIVE_PERMISSION_CODES, ADMIN_PERMISSIONS, PERMISSION_CATALOG } from './permission-catalog.js';
+import { effectivePositionAssignmentWhere, effectiveRoleGrants, type EffectiveRoleGrant } from '../../common/security/effective-role-grants.js';
+import { SUPPLIER_PORTAL_PERMISSIONS } from './supplier-account-authorization.js';
 
 type Transaction = Prisma.TransactionClient;
 const ROLE_INCLUDE = { permissions: { include: { permission: true } } } as const;
-type RoleWithPermissions = Prisma.RoleGetPayload<{ include: typeof ROLE_INCLUDE }>;
 
 @Injectable()
 export class AdminRoleService {
@@ -83,13 +84,19 @@ export class AdminRoleService {
         const current = new Set(existing.permissions.map((entry) => entry.permission.code));
         if (expected.size !== current.size || [...current].some((code) => !expected.has(code))) this.fail('CONCURRENCY_CONFLICT', 409);
         const permissions = await this.resolvePermissions(transaction, dto.permissionCodes, granted);
+        if (dto.permissionCodes.some((code) => !(SUPPLIER_PORTAL_PERMISSIONS as readonly string[]).includes(code))) {
+          const supplierUsers = await transaction.userRole.count({ where: { roleId, user: { accountType: 'SUPPLIER' } } });
+          const supplierPositions = await transaction.positionRole.count({ where: { roleId, position: { organization: { type: 'SUPPLIER' } } } });
+          if (supplierUsers || supplierPositions) this.fail('FEATURE_PERMISSION_DENIED', 403);
+        }
         await transaction.rolePermission.deleteMany({ where: { roleId } });
         if (permissions.length) await transaction.rolePermission.createMany({ data: permissions.map((permission) => ({ roleId, permissionId: permission.id })) });
-        await transaction.passwordReset.updateMany({ where: { consumedAt: null, user: { userRoles: { some: { roleId } } } }, data: { consumedAt: new Date() } });
       }
       const role = await transaction.role.update({ where: { id: roleId }, data: { ...(dto.name === undefined ? {} : { name: dto.name.trim() }), ...(dto.mfaRequired === undefined ? {} : { mfaRequired: dto.mfaRequired }) }, include: ROLE_INCLUDE });
       if (dto.permissionCodes !== undefined || dto.mfaRequired !== undefined) {
-        await transaction.user.updateMany({ where: { userRoles: { some: { roleId } } }, data: { securityVersion: { increment: 1 } } });
+        const userIds = await this.affectedUsers(transaction, roleId);
+        await transaction.user.updateMany({ where: { id: { in: userIds } }, data: { securityVersion: { increment: 1 } } });
+        await transaction.passwordReset.updateMany({ where: { consumedAt: null, userId: { in: userIds } }, data: { consumedAt: new Date() } });
       }
       await this.assertNotLocked(transaction, actor, granted);
       await this.record(transaction, actor, 'ROLE_UPDATED', roleId, existing.code, traceId);
@@ -102,7 +109,7 @@ export class AdminRoleService {
     return this.mutate(actor, { action: 'ROLE_DELETED', permission: 'account:roles:delete', payload: { roleId }, traceId, key }, async (transaction, granted) => {
       const existing = await this.role(transaction, roleId, organizationId);
       this.assertGranted(existing.permissions.map((entry) => entry.permission.code), granted);
-      if (await transaction.userRole.count({ where: { roleId } })) this.fail('ADMIN_ROLE_IN_USE', 409);
+      if (await transaction.userRole.count({ where: { roleId } }) || await transaction.positionRole.count({ where: { roleId } })) this.fail('ADMIN_ROLE_IN_USE', 409);
       await transaction.role.delete({ where: { id: roleId } });
       await this.record(transaction, actor, 'ROLE_DELETED', roleId, existing.code, traceId);
     });
@@ -112,30 +119,30 @@ export class AdminRoleService {
     const organizationId = this.scope(actor);
     await this.assertRead(actor);
     await this.assertUser(this.prisma, userId, organizationId);
-    const assignments = await this.prisma.userRole.findMany({ where: { userId, organizationId }, include: { role: { include: ROLE_INCLUDE } } });
-    const roles = assignments.map((assignment) => this.serialize(assignment.role));
-    return { userId, organizationId, roles, permissions: [...new Set(roles.flatMap((role) => role.permissions.map((permission) => permission.code)))].sort() };
+    return this.userRoles(userId, organizationId, await effectiveRoleGrants(this.prisma, userId, organizationId));
   }
 
   assign(actor: AdminUserActor, userId: string, dto: AssignAdminRolesDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
     return this.mutate(actor, { action: 'USER_ROLES_CHANGED', permission: 'account:roles:assign', payload: { userId, dto }, traceId, key }, async (transaction, granted) => {
-      await this.assertUser(transaction, userId, organizationId);
+      const user = await this.assertUser(transaction, userId, organizationId);
       const roleIds = [...new Set(dto.roleIds)];
       const roles = roleIds.length ? await transaction.role.findMany({ where: { id: { in: roleIds }, organizationId }, include: ROLE_INCLUDE }) : [];
       if (roles.length !== roleIds.length) this.fail('ADMIN_ROLE_NOT_FOUND', 404);
       await this.resolvePermissions(transaction, roles.flatMap((role) => role.permissions.map((entry) => entry.permission.code)), granted);
-      const existing = await transaction.userRole.findMany({ where: { userId, organizationId }, include: { role: { include: ROLE_INCLUDE } } });
-      if (existing.some((assignment) => assignment.role.organizationId === null)) this.fail('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
+      const effective = await effectiveRoleGrants(transaction, userId);
+      const existing = effective.filter((grant) => grant.organizationId === organizationId);
+      if (existing.some((assignment) => assignment.role.organizationId === null && assignment.sources.some(({ kind }) => kind === 'DIRECT'))) this.fail('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
       this.assertGranted(existing.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)), granted);
+      if (user.accountType === 'SUPPLIER' && (roles.some((role) => role.permissions.some(({ permission }) => !(SUPPLIER_PORTAL_PERMISSIONS as readonly string[]).includes(permission.code)))
+        || effective.some((grant) => grant.organizationId !== organizationId || grant.role.organizationId !== organizationId || grant.role.permissions.some(({ permission }) => !(SUPPLIER_PORTAL_PERMISSIONS as readonly string[]).includes(permission.code))))) this.fail('FEATURE_PERMISSION_DENIED', 403);
       await transaction.userRole.deleteMany({ where: { userId, organizationId } });
       if (roleIds.length) await transaction.userRole.createMany({ data: roleIds.map((roleId) => ({ userId, roleId, organizationId })) });
       await transaction.user.update({ where: { id: userId }, data: { securityVersion: { increment: 1 } } });
       await transaction.passwordReset.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: new Date() } });
       await this.assertNotLocked(transaction, actor, granted);
       await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_ROLES_CHANGED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId } }, transaction);
-      const result = roles.map((role) => this.serialize(role));
-      return { userId, organizationId, roles: result, permissions: [...new Set(result.flatMap((role) => role.permissions.map((permission) => permission.code)))].sort() };
+      return this.userRoles(userId, organizationId, await effectiveRoleGrants(transaction, userId, organizationId));
     });
   }
 
@@ -155,8 +162,9 @@ export class AdminRoleService {
   }
 
   private async assertUser(transaction: Transaction, userId: string, organizationId: string) {
-    const user = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true } });
+    const user = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true, accountType: true } });
     if (!user) this.fail('ADMIN_USER_NOT_FOUND', 404);
+    return user;
   }
 
   private async resolvePermissions(transaction: Transaction, codes: string[], granted: string[]) {
@@ -174,8 +182,26 @@ export class AdminRoleService {
   }
 
   private async effectivePermissions(transaction: Transaction, actor: AdminUserActor): Promise<string[]> {
-    const assignments = await transaction.userRole.findMany({ where: { userId: actor.id, organizationId: this.scope(actor) }, include: { role: { include: ROLE_INCLUDE } } });
+    const assignments = await effectiveRoleGrants(transaction, actor.id, this.scope(actor));
     return [...new Set(assignments.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)))];
+  }
+
+  private async affectedUsers(transaction: Transaction, roleId: string): Promise<string[]> {
+    // Composite FKs keep assignments in each user's home organization; query users once to deduplicate sources.
+    const users = await transaction.user.findMany({
+      where: { OR: [
+        { userRoles: { some: { roleId } } },
+        { positions: { some: { AND: [effectivePositionAssignmentWhere(), { position: { roles: { some: { roleId } } } }] } } },
+      ] },
+      select: { id: true },
+    });
+    return users.map(({ id }) => id);
+  }
+
+  private userRoles(userId: string, organizationId: string, grants: EffectiveRoleGrant[]) {
+    const effectiveRoles = grants.map(({ role, sources }) => ({ ...this.serialize(role), sources }));
+    const roles = grants.filter(({ sources }) => sources.some(({ kind }) => kind === 'DIRECT')).map(({ role }) => this.serialize(role));
+    return { userId, organizationId, roles, effectiveRoles, permissions: [...new Set(effectiveRoles.flatMap((role) => role.permissions.map((permission) => permission.code)))].sort() };
   }
 
   private async assertNotLocked(transaction: Transaction, actor: AdminUserActor, before: string[]) {
@@ -187,7 +213,7 @@ export class AdminRoleService {
     await assertAdminAccess(this.prisma, actor, this.scope(actor), 'account:roles:read');
   }
 
-  private serialize(role: RoleWithPermissions) {
+  private serialize(role: EffectiveRoleGrant['role']) {
     return { id: role.id, organizationId: role.organizationId, code: role.code, name: role.name, mfaRequired: role.mfaRequired, permissions: role.permissions.map(({ permission }) => ({ id: permission.id, code: permission.code, name: permission.name })).sort((first, second) => first.code.localeCompare(second.code)) };
   }
 

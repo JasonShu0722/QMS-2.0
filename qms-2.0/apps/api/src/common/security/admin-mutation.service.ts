@@ -6,6 +6,7 @@ import { AuditLogModule } from '../../modules/audit-log/audit-log.module.js';
 import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
 import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/platform-error.js';
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
+import { effectiveRoleGrants } from './effective-role-grants.js';
 
 export type AdminActor = { id: string; sessionId: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
 export type AdminTransaction = Prisma.TransactionClient;
@@ -16,7 +17,7 @@ export function adminError(code: PlatformErrorCode, status: number): never {
 }
 
 export async function adminPermissions(transaction: AdminTransaction, userId: string, organizationId: string): Promise<string[]> {
-  const assignments = await transaction.userRole.findMany({ where: { userId, organizationId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+  const assignments = await effectiveRoleGrants(transaction, userId, organizationId);
   return [...new Set(assignments.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)))].sort();
 }
 

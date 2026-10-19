@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { effectiveMfa } from './mfa-policy.js';
+import { effectiveRoleGrants } from './effective-role-grants.js';
 
 export const RECENT_AUTHENTICATION_MS = 5 * 60 * 1000;
 
@@ -26,7 +27,7 @@ export function isGovernancePermission(code: string): boolean {
 export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: string) {
   const user = await transaction.user.findUnique({ where: { id: userId }, select: { mfaEnabled: true, mfaPreference: true, mfaRequirementOverride: true } });
   if (!user) securityError('AUTH_SESSION_REQUIRED');
-  const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+  const assignments = await effectiveRoleGrants(transaction, userId);
   const facts = assignments.map(({ role, organizationId }) => ({ id: role.id, organizationId, required: role.mfaRequired, permissions: role.permissions.map(({ permission }) => permission.code).sort() })).sort((first, second) => `${first.id}:${first.organizationId}`.localeCompare(`${second.id}:${second.organizationId}`));
   const administrator = facts.some((role) => role.permissions.some(isGovernancePermission));
   const roleRequired = facts.some((role) => role.required);

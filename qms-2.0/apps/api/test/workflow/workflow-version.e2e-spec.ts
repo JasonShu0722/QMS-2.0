@@ -81,7 +81,12 @@ describe('workflow version release', () => {
     const sessions = { resolve: jest.fn().mockResolvedValue(session) };
     const scopes = { fromSession: jest.fn().mockResolvedValue('org-1') };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
-    const authorization = new AuthorizationService({ organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) }, userRole: { count: jest.fn().mockResolvedValue(0) } } as never);
+    const authorization = new AuthorizationService({
+      organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
+      user: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
+      userRole: { findMany: jest.fn().mockResolvedValue([]) },
+      userPosition: { findMany: jest.fn().mockResolvedValue([]) },
+    } as never);
     const guard = new AuthenticatedGuard(new Reflector(), sessions as never, scopes as never, authorization, audit as never);
     const request = { method: 'POST', headers: { cookie: 'qms_session=session-token' } } as any;
     const context = {

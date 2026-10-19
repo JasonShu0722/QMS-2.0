@@ -12,6 +12,14 @@ export type EffectiveRoleGrantClient = Pick<Prisma.TransactionClient, 'user' | '
 
 const compare = (first: string, second: string) => first < second ? -1 : first > second ? 1 : 0;
 
+export function effectivePositionAssignmentWhere(now = new Date()): Prisma.UserPositionWhereInput {
+  return {
+    startedAt: { lte: now }, OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+    organization: { status: 'ACTIVE' },
+    position: { status: 'ACTIVE', department: { status: 'ACTIVE' } },
+  };
+}
+
 export async function effectiveRoleGrants(
   transaction: EffectiveRoleGrantClient,
   userId: string,
@@ -27,9 +35,7 @@ export async function effectiveRoleGrants(
     ? await transaction.userPosition.findMany({
       where: {
         userId, organizationId: user.organizationId,
-        startedAt: { lte: now }, OR: [{ endedAt: null }, { endedAt: { gt: now } }],
-        organization: { status: 'ACTIVE' },
-        position: { status: 'ACTIVE', department: { status: 'ACTIVE' } },
+        ...effectivePositionAssignmentWhere(now),
       },
       select: {
         id: true, organizationId: true, positionId: true,

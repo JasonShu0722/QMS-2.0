@@ -25,6 +25,7 @@ describe('account session history HTTP behavior', () => {
     { id: 'other-active', createdAt: past, expiresAt: future, revokedAt: null, lifetimeType: 'STANDARD' },
   ];
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     user: { findUnique: jest.fn().mockResolvedValue(user) },
     userRole: { findMany: jest.fn().mockResolvedValue([]) },

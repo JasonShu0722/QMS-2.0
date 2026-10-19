@@ -4,6 +4,7 @@ import { IdentityService } from '../../src/modules/identity/identity.service.js'
 
 describe('account center service', () => {
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),

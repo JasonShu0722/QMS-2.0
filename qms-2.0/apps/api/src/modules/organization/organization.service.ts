@@ -5,6 +5,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { grantSupplierBoundaryCaretaker } from '../authorization/supplier-account-authorization.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, ReplaceUserPositionsDto } from './organization.dto.js';
 
 const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
@@ -50,13 +51,15 @@ export class OrganizationService {
 
   async tree(actor: AdminActor, query: OrganizationListQueryDto) {
     await assertAdminAccess(this.prisma, actor, query.organizationId ?? actor.scopeOrganizationId ?? actor.organizationId, 'organization:read');
+    const grants = await effectiveRoleGrants(this.prisma, actor.id, actor.accountType === 'SUPPLIER' ? actor.organizationId : undefined);
+    const readable = grants.filter(({ role }) => role.permissions.some(({ permission }) => permission.code === 'organization:read')).map(({ organizationId }) => organizationId);
+    const manageable = grants.filter(({ role }) => role.permissions.some(({ permission }) => permission.code === 'organization:manage')).map(({ organizationId }) => organizationId);
     return this.prisma.organization.findMany({
       where: {
-        ...(actor.accountType === 'SUPPLIER' ? { id: actor.organizationId } : {}),
-        userRoles: { some: { userId: actor.id, role: { permissions: { some: { permission: { code: 'organization:read' } } } } } },
+        id: { in: readable },
         OR: [
           { status: 'ACTIVE' },
-          { userRoles: { some: { userId: actor.id, role: { permissions: { some: { permission: { code: 'organization:manage' } } } } } } },
+          { id: { in: manageable } },
         ],
       },
       select: organizationSelect, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0,

@@ -21,7 +21,7 @@ describe('admin user lifecycle service', () => {
     problemIndex: { count: jest.fn() },
     workflowTask: { count: jest.fn() },
     notification: { count: jest.fn() },
-    userPosition: { count: jest.fn() },
+    userPosition: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
   };

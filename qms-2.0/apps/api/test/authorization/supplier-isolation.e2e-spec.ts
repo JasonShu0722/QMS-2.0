@@ -99,18 +99,10 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function hasGrant(userId: string, organizationId: string, permission?: string): boolean {
-  return grants.some(
-    (grant) =>
-      grant.userId === userId &&
-      grant.organizationId === organizationId &&
-      (!permission || grant.permissions.includes(permission)),
-  );
-}
-
 describe('supplier isolation HTTP guard', () => {
   let app: INestApplication;
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
@@ -122,8 +114,6 @@ describe('supplier isolation HTTP guard', () => {
       findUnique: jest.fn(),
     },
     userRole: {
-      count: jest.fn(),
-      findFirst: jest.fn(),
       findMany: jest.fn(),
     },
     organization: {
@@ -161,19 +151,14 @@ describe('supplier isolation HTTP guard', () => {
         user: { ...user, organization: { status: 'ACTIVE' } },
       };
     });
-    prisma.userRole.count.mockImplementation(async ({ where }: { where: { userId: string; organizationId: string; role: { permissions: { some: { permission: { code: string } } } } } }) =>
-      hasGrant(where.userId, where.organizationId, where.role.permissions.some.permission.code)
-        ? 1
-        : 0,
-    );
-    prisma.userRole.findFirst.mockImplementation(async ({ where }: { where: { userId: string; organizationId: string } }) =>
-      hasGrant(where.userId, where.organizationId) ? { organizationId: where.organizationId } : null,
-    );
     prisma.userRole.findMany.mockImplementation(async ({ where }: { where: { userId: string; organizationId: string } }) =>
       grants
-        .filter((grant) => grant.userId === where.userId && grant.organizationId === where.organizationId)
+        .filter((grant) => grant.userId === where.userId && (!where.organizationId || grant.organizationId === where.organizationId))
         .map((grant) => ({
+          organizationId: grant.organizationId,
           role: {
+            id: `role-${grant.organizationId}`,
+            organizationId: grant.organizationId,
             permissions: grant.permissions.map((code) => ({ permission: { code } })),
           },
         })),
@@ -227,8 +212,8 @@ describe('supplier isolation HTTP guard', () => {
     ).expect(403);
 
     expect(response.body.code).toBe('ORGANIZATION_SCOPE_DENIED');
-    expect(prisma.userRole.count).not.toHaveBeenCalled();
-    expect(prisma.userRole.count).not.toHaveBeenCalledWith(
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.userRole.findMany).not.toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ organizationId: ORG_SUPPLIER_B.id }),
       }),
@@ -288,8 +273,8 @@ describe('supplier isolation HTTP guard', () => {
     ).expect(403);
 
     expect(response.body.code).toBe('ORGANIZATION_SCOPE_DENIED');
-    expect(prisma.userRole.count).not.toHaveBeenCalled();
-    expect(prisma.userRole.findFirst).toHaveBeenCalledWith(
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.userRole.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           userId: USERS.internalMember.id,

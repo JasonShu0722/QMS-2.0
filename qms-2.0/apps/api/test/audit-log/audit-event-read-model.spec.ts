@@ -43,7 +43,8 @@ describe('audit summary projection (unit, not PostgreSQL evidence)', () => {
     const entry = { id: 'event', organizationId, actorUserId: eventActor ? 'person' : null, actor: eventActor, action, resourceType: 'User', resourceId: null, outcome: 'DENIED', traceId: 'trace', createdAt: new Date('2026-01-01'), metadata: { password: 'never-project', reasonCode: 'DENIED' } };
     const transaction = {
       user: { findUnique: async () => ({ status: 'ACTIVE', accountType: 'INTERNAL', organizationId, organization: { status: 'ACTIVE' } }) },
-      userRole: { findMany: async () => [{ role: { permissions: [{ permission: { code: 'audit:read' } }] } }] },
+      userRole: { findMany: async () => [{ organizationId, role: { id: 'audit-reader', organizationId, code: 'AUDIT_READER', name: 'Audit reader', mfaRequired: false, permissions: [{ permission: { id: 'audit-read', code: 'audit:read', name: 'Read audit' } }] } }] },
+      userPosition: { findMany: async () => [] },
       organization: { findUnique: async () => ({ status: 'ACTIVE' }) },
       auditEvent: { count: async () => 1, findMany: async (query: unknown) => { selection = query; return [entry]; } },
     };

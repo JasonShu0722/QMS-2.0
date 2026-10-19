@@ -17,6 +17,7 @@ describe('account center HTTP contract', () => {
     organization: { status: 'ACTIVE' },
   };
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     $queryRaw: jest.fn(),
     userRole: { findMany: jest.fn().mockResolvedValue([]) },
