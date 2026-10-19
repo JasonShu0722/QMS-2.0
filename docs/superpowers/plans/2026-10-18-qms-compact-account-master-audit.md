@@ -5,18 +5,18 @@
 - 批准：负责人指令“我更新了进展，推进开发中条目”，随后对已列明的四单元规格确认“范围没问题”；本次回读飞书 revision 248，五条 REQ-0017～0021 仍为开发中。批准内容与 record_id 见下表及 Git 外快照；P3 不纳入。
 - 设计：[本轮设计](../specs/2026-10-18-qms-compact-account-master-audit-design.md)。独立评审以当前源码为准，采用现有会话历史、前端分块导入、安全账号摘要，未采用草稿中的新历史表、异步任务及新增姓名字段。
 - 源码：活动 checkout `D:/WorkSpace/QMS-2.0`，基线 HEAD / origin/main `8a86b28`，工作区起始干净；Node 24.21.0 / pnpm 11.19.0。只在活动 checkout 功能分支隔离，不使用 C/E 回退目录实现。
-- 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。
+- 授权：负责人在本会话追加“继续推进REQ-0017～0021 这部分剩余未完成的开发需求，确保全部推进至上线部署”，覆盖本轮本地、Issue、PR、检查通过后的合并与部署；关闭与台账写入仍需最终逐项验收及相应授权。旧部署 SHA `234bbdc7` 不代表本轮已部署。 2026-10-19 负责人再次要求推进合并上线，并在 C 部署失败后明确允许不重跑该部署、继续其余代码集成，下次部署再验证；该决定仅延后 C 部署先于 D 的接续条件，不免除源码 CI 或将失败记为通过。
 - 版本：核对远端 main、本地全分支提交、开放 Issue/PR 与计划预留，当前已用最大修订号 V0.0.15；预留 A V0.0.16、B V0.0.17、C V0.0.18、D V0.0.19。提交前再次核对。
 - 证据：原主题/顶栏/账号四文件基线 30/30 PASS；Git 外 `req17-21-baseline-web.log`。账号中心现有 List/Space 弃用提示保留，MAINT-001 尚未关闭。
-- 分别状态：四单元实现及独立规格/质量审查均通过；四个单元的运行源码 PR CI 均已通过；后续文档状态提交受下述平台限制，不冒称最新HEAD通过。A PR48 已合并部署 `31d0b657`（main CI39150940325、部署39151587587），B PR49 已合并部署 `47db5bee`（main CI39152046356、部署39152712419）；均核对迁移前加密快照、无待迁移、API/Worker/Web健康与HTTP新资源。C PR50 已合并 `395acc27`，main CI39153238102两次均因GitHub账户付款/支出限制未启动任务，尚未部署；D PR51运行代码 `b836b02` 的CI39151275101全部通过，后续文档HEAD89c9a46及本次状态同步不改变运行代码，最新检查同受平台限制，保持待合并。最终真实业务浏览器验收、Issue关闭与飞书回填尚未完成。下一动作：负责人恢复GitHub Actions账单/额度可用性；本聊天每小时跟进（automation req-0017-0021），恢复后由Codex继续C完整main门禁/部署，再接续D。相同阻断时安静，不修改付款/额度或绕过检查。
+- 分别状态：A PR48 / V0.0.16 与 B PR49 / V0.0.17 已核验部署；当前生产仍为 B `47db5bee6f818da5b6e4d1e63b76c364c0a3803f`（负责人 10:22 SSH 输出）。C PR50 已合并 main `395acc27ef0e1bd28cf032ba8096dd38f509350c`，仓库公开后 Foundation39153238102 attempt6 全部 8 jobs PASS；自动部署39188014390在 API 镜像 Corepack/pnpm 安装层等待约20分钟后 SSH timeout/exit255，日志无迁移前快照或迁移标记，保持部署失败。负责人允许不重跑，继续 D。D PR51已改base为main，在原分支合入C主线，实际文件树与既有审查运行源码无业务差异；推送后等待最新完整检查再合并。最终真实业务浏览器验收、Issue关闭和飞书写入仍未完成且未执行。下一动作：D当前head完整CI→获准合并→记录自动部署实际状态，再接续Actions优化PR53；不复用旧base PASS，不重跑C部署。
 - 真实资源：新建本机 `qms-req17-21-disposable-pg`，端口 `55457`、库名 `qms_req17_21_disposable`；空库迁移与 seed 通过。第一次 seed 使用了错误 cwd；第二次发现入口脚本会切回工程根，随后显式进入 API 目录完成。失败日志保留，不抹成全部首次通过；秘密及环境 helper 均在 Git 外。
 
 | 单元 | 需求与 record_id | Issue | 分支 / PR | 依赖与所有权 |
 | --- | --- | --- | --- | --- |
 | A 紧凑规范与横展 | REQ-0021 `reczz28OqtMgRSZ3`；REQ-0019 的文案横展 `reczz28OqjBueo3s` | [#47](https://github.com/JasonShu0722/QMS-2.0/issues/47) | `codex/req-0021-density`；[PR #48](https://github.com/JasonShu0722/QMS-2.0/pull/48)；部署 `31d0b657` | theme、共享 CSS、工作台与有限页面文案；不写个人账号/导入/审计组件 |
 | B 个人账号 | REQ-0017 `reczz28OqQFFRMxc`；REQ-0018 `reczz28OqWvCVFx7` | [#44](https://github.com/JasonShu0722/QMS-2.0/issues/44) | `codex/req-0017-0018-account`；[PR #49](https://github.com/JasonShu0722/QMS-2.0/pull/49)；部署 `47db5bee` | identity、account、安全内容与顶栏；统一契约/语言/API client 由主代理整合 |
-| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；main `395acc27`；Actions账单限制阻塞部署 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
-| D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；[PR #51](https://github.com/JasonShu0722/QMS-2.0/pull/51)；代码 HEAD `b836b02` | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
+| C 主数据 | REQ-0019 `reczz28OqjBueo3s` | [#45](https://github.com/JasonShu0722/QMS-2.0/issues/45) | `codex/req-0019-master-import`；[PR #50](https://github.com/JasonShu0722/QMS-2.0/pull/50)；main `395acc27`；main CI attempt6 PASS；部署39188014390 SSH超时失败，负责人要求不重跑 | 三领域页面/导入/共享导入器；共享导航、语言由主代理整合 |
+| D 审计 | REQ-0020 `reczz28OqnwIjwgy` | [#46](https://github.com/JasonShu0722/QMS-2.0/issues/46) | `codex/req-0020-audit`；[PR #51](https://github.com/JasonShu0722/QMS-2.0/pull/51)；原运行代码 `b836b02`；当前原分支已接续main，最新head以PR为准 | audit-query/export、AuditAdministration；契约与语言由主代理整合 |
 
 ## 实现步骤与文件责任
 
