@@ -7,11 +7,11 @@
 > **13:58 历史暂停记录（已由下方最新恢复状态接续）：** 负责人反馈本轮多次重启和耗时过长，当时停止重负载验证。只读核验 Windows 记录：10月19日16:30、10月20日13:48均有 BugCheck `0x3B`／`0xC0000005`；另有远程控制软件发起的1074事件，不能混为同一原因，尚未分析最新转储或确认测试与蓝屏的因果关系。核验时无本轮测试／构建／开发服务器 Node 进程；标签 `qms.task=req22-23-20261020` 的四个测试容器均已退出，保留数据。HEAD `83a56cb`，C2界面两阶段审查已通过但未提交，U3后端已提交并审查通过；后端真实PG分15批覆盖86 suites／1041 tests全部通过，Worker8项通过，证据位于Git外。U3 Web最新完整受影响回归90/94，4项失败尚未收口；全Web门禁此前11项失败亦未全部验证解决，不认定为既有问题。账号界面独立审查、最终构建／治理、真实业务浏览器、PR／云端CI／部署仍待完成。失效子代理不可视为仍在推进。恢复时只运行单个短定向测试，后端源码无变化不重跑已完成全套；需要Actions前告知负责人，保留私有仓库及现有发布授权边界。
 
 - 来源：2026-10-20 按实际 record_id 回读 revision262，REQ-0022 `reczz28PGTTvAPTd`、REQ-0023 `reczz28PGW7hLyL5` 均 P0／开发中，has_more=false，目标、初稿与验收无变更；负责人确认自动生效、多来源保留与后续请求使用新授权。
-- 执行范围：REQ-0023角色摘要／只读详情与REQ-0022岗位自动授权／个人资料／账号设置已本地实现，独立规格、质量和浏览器发现的返修复审均通过。后端提交至83a56cb；C2与U3 Web及最终focus补丁已本地提交bb5e226（V0.0.23-fix3）。关联Issue #55／#56，未推送PR、未部署、不关闭Issue或回填飞书。
+- 执行范围：REQ-0023角色摘要／只读详情与REQ-0022岗位自动授权／个人资料／账号设置已实现并完成本地验证。统一PR #57已建立并附到聊天，base main(ecf7224)、head codex/req-0022-0023-planning(89a29b4)；包含展示卡片前置及最终焦点返修，关联Issue #55/#56。尚未合并／部署，不关闭Issue或回填飞书。
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
 - 状态：Web分批覆盖96文件711项通过，真实浏览器发现的StrictMode及focus缺陷返修后完整U3 20项／最新focus5项通过，当前测试总数716按不重复用例记账（非一次全集运行）。7项真实浏览器分批全过；最终新源码生产构建及contracts:check通过，生成契约无新增差异，新浏览器脚本独立类型检查通过。需求最终回读revision262／user／has_more=false／值完全未变。测试服务停止、数据保留。
 - 映射（本次云端交付调整）：REQ-0023→Issue #55→原V0.0.22提交，REQ-0022→Issue #56→V0.0.23；展示卡片V0.0.21-fix3/fix4作为已验证前置。为减少重复Actions和中间版本部署，将同一连续提交链统一为一个V0.0.23 PR，base=main、head=codex/req-0022-0023-planning，保留逐需求验收与历史版本，不单独发布缺少最终焦点返修的a29abed。调整只合并交付批次，不扩大功能或发布授权。
-- 下一动作（云端接续）：负责人已确认公开并继续；已实时核验visibility=public、origin/main=ecf7224、无开放PR，当前源码236e539、工作区干净。需求user回读revision262／has_more=false／原值未变。本轮统一推送最终功能分支、建立关联Issue #55/#56的单PR并跟进最新完整Foundation；本地重负载检查不重复跑。合并会自动触发main检查和生产部署，须按本轮明确授权另行核对；Issue关闭和飞书写入仍不执行。
+- 下一动作（云端修复）：PR #57 Foundation39397412455已真实执行，检查／API及部分Web通过；integration的4个新增文件因写死本地57544/qms_req22而在CI动态一次性库启动前拒绝，另82suite890项通过。只适配四测试guard，保留disposable=true／PostgreSQL／loopback／拒绝55440及query/hash，不修改业务、CI或部署流程；轻量安全边界红绿自检及独立审查后集中推送一次，重新核对完整最新CI。生产部署授权单独核对，保留原失败。
 - 证据：Git外req22-23-implementation-checkpoint.json、req22-23-readback-cloud-20261020.json及末节各批实际日志；后端真实PG1041项／Worker8项、Web分批和最终返修、真实浏览器7项、构建／契约／治理已有证据。本轮云端CI尚待执行；生产部署和负责人手工验收未执行，不用本地结果替代。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
@@ -255,3 +255,10 @@ U3给User增列后，A的历史升级测试仍必须保留“旧迁移链→插�
 - 最终局部返修：StrictMode完整20/20通过（`req22-strictmode-u3-full.log`），Kierkegaard仅移除本人Form清理属性；签名Form原文清理不变。详情先关闭默认focus恢复，组件RED1→GREEN6，但真实仍FAIL：Chrome未触发关闭动画回调，焦点停留body；后将清搜索／恢复焦点迁到`wasOpen`控制的true→false effect，默认focus恢复仍关闭，真实REQ23单项PASS14.1秒、最新组件5/5通过（`req22-browser-focus-lifecycle.log`、`req22-role-focus-lifecycle-final.log`）。Mendel审核StrictMode与首个focus修复、Curie审核最终focus生命周期，限定规格／质量均PASS。历史原始FAIL保留，首修不当最终PASS。
 - 真实浏览器7项已分批取得完整通过证据：双门户三宽布局2项（`req22-browser-final.log`首轮）；内部资料完整持久化／真实409／草稿1项与签名摘要1项（`req22-browser-repaired.log`第二轮）；供应商资料同链1项（`req22-browser-final-two.log`中通过项）；角色详情／搜索／无写请求／关闭焦点1项（`req22-browser-focus-lifecycle.log`）；C2管理UI映射与任职、直接＋岗位双来源、撤一来源保留另一来源、两次旧会话401和最终任务403全链1项（`req22-browser-position-chain.log`）。所有成功项按实际独立运行记账，非一次7/7运行；后续仅改失败项脚本／不相交生产修复。最后C2真实链约29秒通过，原长等待实际由岗位下拉菜单遮挡点击导致，已改Escape关闭及10秒操作上限；搜索改按可访问名称定位。浏览器用例无route Mock或skip，数据仅一次性资源，测试服务已再次停止并保留数据。
 - 签名撤销既有controller实际HTTP201而Swagger声明200，浏览器cleanup按实际201核验，差异记录为既有契约维护限制；本轮没有擅改旧接口／生成契约。首轮浏览器截图文件受本机文件保护影响无法用图片工具解码；保留原文件，几何通过为浏览器boundingBox与页面无溢出断言，不能冒充截图人工审美验收。
+
+### PR #57 首轮云端与数据库守卫适配（2026-10-20）
+
+- 负责人确认公开并继续后实查仓库public、远端main仍ecf7224、无同目标开放PR；需求user回读revision262与批准值一致。将连续前置及两个REQ收为单PR，减少重复完整CI及中间版本部署。PR #57 head89a29b4，Foundation39397412455。
+- checks／OpenAPI／治理、API53suite602项以及Web部分分组通过；集成86suite中82通过、4在加载前拒绝，已执行890项全过，Worker因前置失败尚未运行。失败均来自四个新增测试固定本地端口／库名，CI自身已正确创建动态loopback一次性PostgreSQL；不归因为业务失败或用本地PASS覆盖云端FAIL。
+- Galileo仅修改四个集成文件的环境guard，复用position-role-schema现有安全口径：显式一次性、PostgreSQL、loopback、禁止55440、禁止连接查询覆盖；移除本地端口／库名限定，不修改用例主体、断言、清理或超时。轻量自检及独立审查结果在后续接续记录。原始失败摘要存Git外req22-ci-run39397412455-failure-excerpt.log。
+- 首轮最终Web四组24文件各通过，合计96文件716项（173＋206＋150＋187）；API53suite602项通过。集成失败维持，不跳过Worker前置。四guard轻量检查由旧57PASS／27FAIL变84/84PASS，测试主体及connection声明外哈希未变；主代理independent-v3同84/84且exit0。前两次复跑因输出路径wx冲突退出，不计PASS。Einstein独立规格PASS、Godel独立质量PASS；原CI日志和cleanup证据保留。

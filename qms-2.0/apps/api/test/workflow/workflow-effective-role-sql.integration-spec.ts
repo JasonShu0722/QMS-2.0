@@ -13,9 +13,9 @@ import {
 const connection = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined;
 if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
   || !['postgres:', 'postgresql:'].includes(connection.protocol)
-  || connection.hostname !== '127.0.0.1' || connection.port !== '57544'
-  || connection.pathname !== '/qms_req22' || connection.search || connection.hash) {
-  throw new Error('REQ22 SQL tests require disposable 127.0.0.1:57544/qms_req22; preview 55440 is forbidden.');
+  || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)
+  || connection.port === '55440' || connection.search || connection.hash) {
+  throw new Error('REQ22 SQL tests require explicitly disposable loopback PostgreSQL; preview 55440 is forbidden.');
 }
 jest.setTimeout(30_000);
 

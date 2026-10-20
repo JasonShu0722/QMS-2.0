@@ -16,9 +16,11 @@ import { SUPPLIER_PORTAL_PERMISSIONS } from '../../src/modules/authorization/sup
 import { effectiveRoleGrants } from '../../src/common/security/effective-role-grants.js';
 
 const connection = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined;
-if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || connection.port !== '57544'
-  || connection.pathname !== '/qms_req22' || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)) {
-  throw new Error('Position governance requires disposable loopback PostgreSQL 57544/qms_req22.');
+if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
+  || !['postgres:', 'postgresql:'].includes(connection.protocol)
+  || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)
+  || connection.port === '55440' || connection.search || connection.hash) {
+  throw new Error('Position governance requires explicitly disposable loopback PostgreSQL; preview 55440 is forbidden.');
 }
 jest.setTimeout(120_000);
 

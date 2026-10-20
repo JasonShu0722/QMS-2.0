@@ -20,8 +20,8 @@ const connection = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) 
 if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
   || !['postgres:', 'postgresql:'].includes(connection.protocol)
   || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)
-  || connection.port !== '57544' || connection.search || connection.hash) {
-  throw new Error('Effective-role consumers require explicitly disposable loopback PostgreSQL on 57544.');
+  || connection.port === '55440' || connection.search || connection.hash) {
+  throw new Error('Effective-role consumers require explicitly disposable loopback PostgreSQL; preview 55440 is forbidden.');
 }
 jest.setTimeout(120_000);
 

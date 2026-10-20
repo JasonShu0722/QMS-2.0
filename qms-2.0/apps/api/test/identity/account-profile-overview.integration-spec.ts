@@ -15,9 +15,11 @@ import { Client } from 'pg';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const connection = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined;
-if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || connection.port !== '57544'
-  || connection.pathname !== '/qms_req22' || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)) {
-  throw new Error('Account profile tests require disposable loopback PostgreSQL 57544/qms_req22.');
+if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
+  || !['postgres:', 'postgresql:'].includes(connection.protocol)
+  || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)
+  || connection.port === '55440' || connection.search || connection.hash) {
+  throw new Error('Account profile tests require explicitly disposable loopback PostgreSQL; preview 55440 is forbidden.');
 }
 
 describe('account profile and own overview with real PostgreSQL and HTTP', () => {
