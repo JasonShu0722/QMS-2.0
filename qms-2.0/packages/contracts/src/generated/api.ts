@@ -863,6 +863,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organizationId}/positions/{positionId}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_positionRoles"];
+        put: operations["OrganizationGovernanceController_replacePositionRoles"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organizationId}/positions/{positionId}": {
         parameters: {
             query?: never;
@@ -5841,6 +5857,19 @@ export interface components {
             /** @enum {string} */
             status: "ACTIVE" | "DISABLED";
             version: number;
+        };
+        PositionRolesDto: {
+            positionId: string;
+            roleVersion: number;
+            roles: components["schemas"]["AdminRoleDto"][];
+            /** @description Distinct users with currently effective appointments */
+            effectiveAssigneeCount: number;
+            /** @description The committed mutation invalidated the acting session; reauthenticate without resubmitting */
+            selfSessionRevoked: boolean;
+        };
+        ReplacePositionRolesDto: {
+            roleIds: string[];
+            expectedRoleVersion: number;
         };
         CreatePositionDto: {
             code: string;
@@ -12626,6 +12655,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_positionRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionRolesDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_replacePositionRoles: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacePositionRolesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionRolesDto"];
                 };
             };
             /** @description Controlled API error */

@@ -9,7 +9,7 @@
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
 - 状态：U1 已实现权限摘要、只读分组详情、搜索和焦点恢复；组织切换待定／失败期间旧角色残留已按规格审查返修。已有部门／岗位／任职和直接角色，仍缺岗位关联及统一继承鉴权。不把签名指纹模块写成可视图片或带有效期的签名功能。
 - 映射：REQ-0023→U1→Issue #55→V0.0.22→独立分支 `codex/req-0023-role-details`（`a29abed`）；REQ-0022→U2／U3→Issue #56→V0.0.23；当前执行分支继续使用 `codex/req-0022-0023-planning`，最终 PR 前按差异核对独立 base／head。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
-- 下一动作：U2-C受控岗位配置／任职／启停链路，之后资料中心；U2-A/B不可单独发布。2026-10-20进入C前按record_id回读REQ-0022仍revision262／开发中／has_more=false，目标、背景、方案及验收无变化。仓库最近核对仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI。不重复确认已定的自动生效规则；合并、部署另核对授权。
+- 下一动作：U2-C1受控岗位配置／任职／启停后端链路与U2-B2原生SQL流程授权补漏按不重叠写集并行；之后接管理UI及资料中心。U2-A/B不可单独发布。2026-10-20进入C前按record_id回读REQ-0022仍revision262／开发中／has_more=false，目标、背景、方案及验收无变化。仓库最近核对仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI。不重复确认已定的自动生效规则；合并、部署另核对授权。
 - 证据：Git外 `D:/WorkSpace/QMS-2.0-local/req22-23-readback-20261020.json`、`req23-main-web-tests.log`（26/26）、`req23-matrix-regression.log`（29/29）、`req23-main-lint.log`、`req23-main-build.log`、`req23-contracts-check.log`、`req23-governance-final.log`，U1 审查与门禁详见末节。没有本次真实业务浏览器、生产部署或人工 PASS。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
@@ -104,12 +104,15 @@ type GrantSource =
 | U2-B | `OrganizationScopeService`、`OrganizationService.tree`、`AdminOrganizationController` | 继承人员能进入其有权主组织，保留内部跨组织直接治理与受控停用读取 |
 | U2-B | `SessionService.createWithMetadata`、`AdminUserService.assertTarget`、`assertSupplierAccountTarget` | 记住登录管理员判定、目标权限上限与供应商白名单含岗位来源 |
 | U2-B | `AdminRoleService` 更新／删除／assignments／自锁 | 继承人员纳入安全版本与重置凭证失效；岗位引用阻止删角色；保留旧 `roles` 的直接分配语义，新增有效角色及来源投影，不能把继承角色永久写回 `UserRole` |
+| U2-B2 | `workflow/workflow-access-policy.ts` 的原生SQL `featurePredicate`／`assignmentPredicate`，公共SQL读取模型 | 补齐流程／附件等SQL中的岗位权限及roleCode资格，保留参数化SQL、节点办理人／权限合取及原跨组织边界，并与Prisma helper作真实PG逐状态对照 |
 | U2-C | `OrganizationService` 的岗位映射／任职／岗位与部门启停、对应DTO／Controller | CAS、幂等、权限组合与可授予上限、受影响用户锁和安全失效、审计同事务，无二次审批 |
 | U2-C | `StructureAdministration`、`UserAdministration`／角色分配入口 | 可识别人员选择、岗位角色配置、直接／继承来源分开显示，组织切换及草稿保护 |
 
 直接授权维护专用的写入继续保留：`AdminRoleService.assign` 只替换直接集合；组织子节点治理授权、供应商边界 caretaker／portal 角色创建、身份迁移清理仍各自维护真实 `UserRole`，不据其写接口反向推导有效权限。角色序列化读取 `role.permissions` 仅展示角色定义，无须替换为用户授权计算。
 
 U2-A 主代理已独立运行单测10项＋真实PG18项（28/28）及正式API lint；规格审查 McClintock（`01a15526-5bbf-7081-a357-006ff792a9bc`）及质量审查 Schrodinger（`01a15528-c3f4-79c1-bae3-8f0ec542f6ba`）均 PASS。实现者 Rawls（`01a1551b-19cf-7843-8d6a-e36160ae3874`）先在最小空函数下取得9失败／1通过，随后实现；真实PG初次夹具触发旧有同岗活跃任职唯一索引，修正夹具时间后18/18通过，没有弱化旧约束。辅助服务使用本次独立容器，配置在 Git 外 `req22-23-test-env.json`；PG端口57544，RustFS健康200／版本控制已开启、ClamAV PONG，Mailpit已启动。原始迁移、红绿灯、主代理独立测试与lint日志均在 `D:/WorkSpace/QMS-2.0-local/req22-u2a-*`。U2-B由新实现者 Boyle（`01a1552b-b1b7-7f03-8531-731abbe3f084`）接续；尚无完整消费者／全套集成／Worker／业务浏览器证据，不把本检查点当完整U2或REQ-0022完成。
+
+补充审计：B首轮主要检索Prisma读取，主代理随后搜索所有源码中的 `user_roles`／`role_permissions`，发现 `workflow-access-policy.ts` 两处原生SQL只认直接角色；其调用覆盖workflow能力、运行时、升级及多个附件适配器。历史迁移中的同名表引用仅DDL／一次性回填，未作为运行时修改。新增B2由Singer（`01a1563a-f777-7ec2-a784-0d67a10b2a2f`）独占workflow policy／新SQL模型／定向测试，C1由Darwin（`01a15634-33f9-77a3-9579-0850fd2777e5`）独占组织写入及position-role-policy。两者不并行运行会扫描对方源码的AppModule／全套检查／生成工具，冻结后由主代理串行整合验证；B2不得逐行异步鉴权或先分页再过滤，必须保留SQL嵌入的正确性。
 
 工作目录 `apps/api`，generate／单测串行：
 
@@ -151,6 +154,8 @@ corepack pnpm --filter @qms/web test src/features/account/account-center.test.ts
 签名摘要在现有电子签名模块提供专用投影，与资料／任职摘要分请求加载，单个签名失败不阻断资料编辑；保持既有内部账号及签名权限边界，供应商无能力时明确不可用，不自动授予签名权限。返回真实标签／状态／时间，不包含 fingerprint 或虚构 expiresAt；既有登记／撤销契约保持，不伪造签名图片预览。
 
 资料字段扩展必须同时更新 `authorization/permission-catalog.ts` 的 `userUpdatePermissions`：现逻辑只识别 email，若新增姓名／电话后仅改DTO，姓名＋停用的混合PATCH会只要求status权限而漏掉users:update。实现时补姓名／电话＋status／transfer的组合拒绝测试，保持混合变更整体原子校验。邮箱验证失效已经由旧迁移 `20260919170000_email_recovery` 的数据库触发器负责，修改邮箱会清空验证时间及消费旧验证凭证；复用并用真实PG回归，不另写第二套失效规则。个人资料版本与头像／安全版本独立，管理员和本人同时编辑资料须共享资料CAS。
+
+U3给User增列后，A的历史升级测试仍必须保留“旧迁移链→插入旧数据→应用岗位关联迁移→比较原授权”的真实证据。该用例自建历史库可能与最新生成Prisma的默认全部字段返回不一致；通过明确所需select或在升级断言后应用后续迁移适配，不能删掉升级断言或改成先迁移全链再假装旧数据升级。
 
 这些是同范围技术接缝选择，不表示接口或页面已实现；不引入新的业务能力或二次审批。
 
@@ -207,3 +212,9 @@ corepack pnpm --filter @qms/web test src/features/account/account-center.test.ts
 - 原实现者收到反馈后窄范围返修：允许从现有公共helper抽出共享有效任职where谓词，以单次关系查询求受影响用户，保留全部组织／时间／状态边界。须先补规模业务红灯，再通过A原10＋18、B原600＋22及新回归，之后重新规格／质量审查。不得以缓存、增加超时或Skip解决；新helper修改后的证据不能沿用旧快照。U2-B未提交、未生成最终contracts，后续U2-C及U3仍待执行。
 - 返修实际：旧代码新增1000人MFA／权限规模用例分别5621／5088ms P2028；新共享谓词＋单次关系查询在实现者最终运行中152／170ms通过，同key重放38／32ms，不重复使新会话和reset失效。没有增大5000ms事务期限或添加缓存。主代理重新执行完整API600/600及A10＋18／B22＋新2共52/52，日志 `req22-u2b-p1-main-unit.log`、`req22-u2b-p1-main-ab.log`；定向测试过滤时出现的skipped不替代这次完整52项结果。
 - Noether对26文件冻结版本及共享谓词重新规格复审PASS；Fermat补完全部测试diff和连接调用后完整质量／安全复审PASS，P1消项。主代理运行 `contracts:generate`、`contracts:check` 及Web lint均exit0，生成来源DTO已经纳入本地整合，日志 `req22-u2b-contracts-*`。性能结论仅覆盖这次真实PG1000人场景，不外推更大规模；全套API integration、Worker及业务浏览器仍待最终联合验证。
+
+### U2-C1 后端岗位写入与审查接续（2026-10-20）
+
+- Darwin的C1实现先取得10项真实业务红灯，覆盖接口缺失、权限旁路、未来结束任职、停用后旧会话；随后补齐角色可授予性、锁等待后过期权限复验、操作者自锁、1000人批量失效和审计回滚。一次性 PostgreSQL／Nest HTTP与审计回归最终 `2 suites / 89 tests PASS`，关键日志 `req22-u2c1-main-pg-retry2.log`；1000人单独回归先出现嵌套查询事务超时，改为直接 `UserPosition` 去重查询后通过，原始失败保留。
+- C1规格复审 PASS。首轮质量审查发现三个阻断：新增路由尚未生成 contracts、部门／岗位锁顺序可能反向死锁、Int版本上限递增可能500。主代理已重新生成 `packages/contracts/src/generated/api.ts`，`contracts:check` PASS；岗位更新改为组织→部门集合→岗位锁顺序，最大roleVersion写前返回受控409并新增真实PG回归。修复后等待独立质量复审，未把首轮质量结果当最终PASS。
+- 整仓非integration门禁已完成API侧 `53 suites / 601 tests PASS`；Web全量Vitest受既有 `UserMfaPolicy.test.tsx` 两个10秒超时及测试环境 teardown 后 `MutationObserver is not a constructor` 未通过，未将该结果解释为C1业务回归。C1受影响后端89/89、contracts和API lint独立通过；Web真实业务浏览器、完整阶段验收、U3仍待后续。
