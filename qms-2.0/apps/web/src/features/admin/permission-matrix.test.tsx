@@ -32,7 +32,7 @@ const roles: AdminRole[] = [
   { mfaRequired: false, id: 'role-b', code: 'SECOND', name: '第二角色', organizationId: organization.id, permissions: [] },
   { mfaRequired: false, id: 'global', code: 'GLOBAL', name: '全局角色', organizationId: null, permissions: [] },
 ];
-const account: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
+const account: AdminUser = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 function server(patch?: (init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn((path: string, init: RequestInit) => {
@@ -244,9 +244,17 @@ it.each(['create', 'update', 'delete'])('exposes only the authorized role %s act
 });
 
 it('requires assign as well as both read permissions for assignment', async () => {
-  server(); render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:read', 'account:roles:update'] }} organizations={[organization]} />);
+  const fetch = vi.fn((path: string) => Promise.resolve(json(path.includes('/users?') ? [account] : path.includes('/users/user/roles?') ? { roles: [roles[0]], effectiveRoles: [] } : roles)));
+  vi.stubGlobal('fetch', fetch);
+  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:read', 'account:roles:update'] }} organizations={[organization]} />);
   await screen.findByText('alice');
   expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
+  await interaction.click(screen.getByRole('button', { name: '查看角色' }));
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByRole('combobox', { name: '组织角色' })).toBeDisabled();
+  expect(dialog.queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
+  expect(fetch.mock.calls.filter(([path]) => path.includes('/roles?'))).toHaveLength(2);
+  expect(vi.mocked(globalThis.fetch).mock.calls.filter(([path, init]) => String(path).includes('/admin/') && init?.method && init.method !== 'GET')).toHaveLength(0);
 });
 
 it('retains a role editor conflict draft and explicitly reloads its permission baseline', async () => {

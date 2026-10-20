@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Drawer, Empty, Input, Space, Tag, Typography } from 'antd';
 import { permissionLabel, useLanguage } from '../../i18n/Language';
 import type { AdminRole, PermissionCatalogGroup } from './admin';
@@ -50,6 +50,11 @@ export function RolePermissionDetails({ open, role, catalog, onClose, afterClose
 }) {
   const { t, locale } = useLanguage();
   const [search, setSearch] = useState('');
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (wasOpen.current && !open) { setSearch(''); afterClose?.(); }
+    wasOpen.current = open;
+  }, [open, afterClose]);
   const entries = useMemo(() => permissionEntries(role?.permissions ?? [], catalog, locale, t('权限')), [catalog, locale, role, t]);
   const query = search.trim().toLocaleLowerCase();
   const groups = entries.reduce<{ key: string; name: string; modules: { key: string; name: string; entries: PermissionEntry[] }[] }[]>((result, entry) => {
@@ -67,7 +72,7 @@ export function RolePermissionDetails({ open, role, catalog, onClose, afterClose
     return result;
   }, []).map((group) => ({ ...group, modules: group.modules.map((module) => ({ ...module, entries: module.entries.filter((entry) => !query || [entry.groupName, entry.moduleName, entry.operationName, entry.code].some((value) => value.toLocaleLowerCase().includes(query))) })).filter((module) => module.entries.length > 0) })).filter((group) => group.modules.length > 0);
 
-  return <Drawer open={open} title={role ? `${role.name} · ${t('详情')}` : t('详情')} onClose={onClose} afterOpenChange={(visible) => { if (!visible) { setSearch(''); afterClose?.(); } }} destroyOnHidden>
+  return <Drawer open={open} focusable={{ focusTriggerAfterClose: false }} title={role ? `${role.name} · ${t('详情')}` : t('详情')} onClose={onClose} destroyOnHidden>
     <Input aria-label={t('搜索权限')} placeholder={t('搜索模块、权限名称或代码')} value={search} onChange={(event) => setSearch(event.target.value)} allowClear />
     {!groups.length ? <Empty description={t('无匹配权限')} /> : groups.map((group) => <section className="permission-group" key={group.key}>
       <Typography.Title level={4}>{group.name}</Typography.Title>

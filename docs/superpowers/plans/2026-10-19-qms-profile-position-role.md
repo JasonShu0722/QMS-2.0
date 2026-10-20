@@ -4,12 +4,14 @@
 
 ## 当前摘要（2026-10-20，Asia/Taipei）
 
+> **13:58 历史暂停记录（已由下方最新恢复状态接续）：** 负责人反馈本轮多次重启和耗时过长，当时停止重负载验证。只读核验 Windows 记录：10月19日16:30、10月20日13:48均有 BugCheck `0x3B`／`0xC0000005`；另有远程控制软件发起的1074事件，不能混为同一原因，尚未分析最新转储或确认测试与蓝屏的因果关系。核验时无本轮测试／构建／开发服务器 Node 进程；标签 `qms.task=req22-23-20261020` 的四个测试容器均已退出，保留数据。HEAD `83a56cb`，C2界面两阶段审查已通过但未提交，U3后端已提交并审查通过；后端真实PG分15批覆盖86 suites／1041 tests全部通过，Worker8项通过，证据位于Git外。U3 Web最新完整受影响回归90/94，4项失败尚未收口；全Web门禁此前11项失败亦未全部验证解决，不认定为既有问题。账号界面独立审查、最终构建／治理、真实业务浏览器、PR／云端CI／部署仍待完成。失效子代理不可视为仍在推进。恢复时只运行单个短定向测试，后端源码无变化不重跑已完成全套；需要Actions前告知负责人，保留私有仓库及现有发布授权边界。
+
 - 来源：2026-10-20 按实际 record_id 回读 revision262，REQ-0022 `reczz28PGTTvAPTd`、REQ-0023 `reczz28PGW7hLyL5` 均 P0／开发中，has_more=false，目标、初稿与验收无变更；负责人确认自动生效、多来源保留与后续请求使用新授权。
-- 执行范围：U1 本地实现、两阶段审查和 Web 门禁通过（`a29abed`），真实业务浏览器待验收；U2-A `bea5caf` 模型及解析器已通过检查。U2-B消费者和1000人成员更新超时返修均已完成，主代理重新确认API600/600及A/B合计52/52、契约生成／检查、Web lint通过；规格和完整质量复审PASS。C1/B2后端已提交25bb154；C2管理界面及U3资料接口正在实现，U2／U3整体尚未完成。REQ-0023 关联 [Issue #55](https://github.com/JasonShu0722/QMS-2.0/issues/55)，REQ-0022 关联 [Issue #56](https://github.com/JasonShu0722/QMS-2.0/issues/56)。未创建 PR、未部署，不关闭 Issue 或写飞书。
+- 执行范围：REQ-0023角色摘要／只读详情与REQ-0022岗位自动授权／个人资料／账号设置已本地实现，独立规格、质量和浏览器发现的返修复审均通过。后端提交至83a56cb；C2与U3 Web及最终focus补丁待本轮提交。关联Issue #55／#56，未推送PR、未部署、不关闭Issue或回填飞书。
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
-- 状态：U1 已实现权限摘要、只读分组详情、搜索和焦点恢复；组织切换待定／失败期间旧角色残留已按规格审查返修。岗位关联、统一继承鉴权及受控写入已本地实现，仍缺管理界面和个人资料／概览最终整合。不把签名指纹模块写成可视图片或带有效期的签名功能。
+- 状态：Web分批覆盖96文件711项通过，真实浏览器发现的StrictMode及focus缺陷返修后完整U3 20项／最新focus5项通过，当前测试总数716按不重复用例记账（非一次全集运行）。7项真实浏览器分批全过；最终新源码生产构建及contracts:check通过，生成契约无新增差异，新浏览器脚本独立类型检查通过。需求最终回读revision262／user／has_more=false／值完全未变。测试服务停止、数据保留。
 - 映射：REQ-0023→U1→Issue #55→V0.0.22→独立分支 `codex/req-0023-role-details`（`a29abed`）；REQ-0022→U2／U3→Issue #56→V0.0.23；当前执行分支继续使用 `codex/req-0022-0023-planning`，最终 PR 前按差异核对独立 base／head。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
-- 下一动作：C1/B2后端已经提交 `25bb154`；正在接续 C2 岗位角色管理界面及 U3 资料后端，写集不重叠，均未完成。前代理失效后保留已有 C2 测试，由 Dewey／Mencius 接续；实际活动目录以 Enter-Qms.ps1 执行后的 Get-Location 和根 AGENTS 指定 checkout 为准，不使用误传的 workspace 路径。U2整体不可单独发布。进入C前按record_id回读REQ-0022仍revision262／开发中／has_more=false，目标、背景、方案及验收无变化。仓库最近核对仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI；合并、部署另核对授权。
+- 下一动作（16:08接续）：最终治理／diff检查通过后本地提交V0.0.23-fix3，停止在云端CI边界并通知负责人；当前private，不推送触发Actions。展示卡片前置分支、REQ-0023及REQ-0022按实际base/head组织PR，当前联合分支保留全链及浏览器返修；角色详情补丁须包含在最终发布中，不能只发布旧a29abed当完成。合并／部署、Issue关闭与飞书写入仍独立核对授权。恢复后无新增重启，未改系统驱动。
 - 证据：Git外 `D:/WorkSpace/QMS-2.0-local/req22-23-readback-20261020.json`、`req23-main-web-tests.log`（26/26）、`req23-matrix-regression.log`（29/29）、`req23-main-lint.log`、`req23-main-build.log`、`req23-contracts-check.log`、`req23-governance-final.log`，U1 审查与门禁详见末节。没有本次真实业务浏览器、生产部署或人工 PASS。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
@@ -226,3 +228,30 @@ U3给User增列后，A的历史升级测试仍必须保留“旧迁移链→插�
 - 先有业务红灯，再补管理员提交后目标被并发转移的投影越界红灯、目标锁等待期间岗位授权到期却提交资料的红灯；修复后在目标锁之后、第一次资料写入之前重新验证认证及全部所需权限。日志 `req22-u3-red.log`、`req22-u3-projection-red.log`、`req22-u3-lock-expiry-red.log` 均保留。
 - 主代理独立执行U3的33项真实PG／HTTP＋A的18项历史升级（51/51），完整API602/602；生成新contracts并检查PASS，日志 `req22-u3-main-pg.log`、`req22-u3-main-api-unit.log`、`req22-u3-main-contracts-*`。A历史库先保留旧链升级断言，再应用资料迁移，未删除真实升级证据。
 - Linnaeus（`01a15721-37d0-7122-80ce-a34e2cdc3958`）规格审查PASS；Maxwell（`01a15724-d970-7a42-8ca5-572c088633e0`）独立质量／安全审查PASS，28/28文件指纹一致。28文件清单 `req22-u3-source-manifest.json`；本人账号Web／管理员资料及来源Web由Gibbs接续，真实业务浏览器和最终联合门禁尚未完成，不将后端检查点当REQ-0022完成。
+
+### C2 管理界面本地检查点（2026-10-20，两阶段复审通过）
+
+- Dewey完成岗位角色抽屉／人员任职选择等5文件；主代理曾冻结后独立运行两个组件测试22/22。规格审查随后发现自身任职PUT成功后刷新401被误报保存失败，可能重复提交；原FAIL保留。
+- 返修先红灯，改为PUT成功即接收已提交基线，GET只是后续刷新；401只在当前请求／会话仍匹配时完成会话清理和登录跳转，旧组织／账号迟到401不影响新上下文；临时刷新失败明确“已保存”并阻编辑至显式重读。任职9/9通过，日志 `req22-c2-p2-green.log`；原22/22与返修9/9是不同快照／覆盖，不合并冒充同轮31/31。
+- Leibniz（`01a157b3-ff7e-7b22-9486-d83c6c90458d`）规格复审PASS；Epicurus（`01a157b6-cb85-7802-8514-fa1a7f002152`）独立质量／安全审查PASS，5/5文件指纹首尾一致。最新清单及报告为 `req22-c2-p2-frozen-manifest.json`、`req22-c2-p2-frozen-report.md`。Language新增翻译由主代理维护，账号Web正在适配新契约，最终Web lint／构建及真实浏览器尚待联合验证。
+
+### 联合集成运行与夹具接续（2026-10-20，API已完成、Web待完成）
+
+- 主代理完整API integration第一次没有最终汇总，记录头像11次真实上传扫描超过Jest默认5秒，以及物料历史库缺profile_version；第二次完整运行以Windows退出码0xC0000409结束，无最终PASS，不能据此确认原因。当前按6个suite／新Jest进程分批执行86个suite，保持同一API源码及真实服务配置；逐批结果在 `req22-integration-batches.jsonl`，未全部完成前不得声明完整集成通过。
+- 物料历史测试仅改 `material-governance-migration.integration-spec.ts`：旧用户通过参数化历史列SQL创建，保留原旧物料授权缺口和原repair时点，在支持最新服务前仅应用PositionRole／Profile两增量并比较原授权快照不变。Huygens独立审查PASS，不修改业务／已有迁移。头像仅针对11次上传扫描循环设置30秒测试期限，应用事务期限未改变；诊断与正常命令两suite22/22通过，日志 `req22-avatar-loop-runtime-diagnostic.log`、`req22-upgrade-avatar-fixed.log`。
+- U3账户／管理员Web由Feynman接续前代理未完成源码，保持C2文件隔离；新增资料/签名/管理员测试及原账户回归尚未全绿。主代理Language已补静态新key，未将代码存在或后端通过写为界面验收。隔离API43222、Web43223已启动且HTTP／CSRF200，真实登录布局仍未检查。
+- 后续实际结果：15批全部exit0，清单覆盖86 suites／1041 tests无漏无重复，`req22-integration-batches-summary.json` 记录两项完整性断言均true；Worker进程生命周期8/8通过，Foundation Compose配置通过。这些结果替代前述“分批未完成”状态，不覆盖Web或真实浏览器。用户反馈蓝屏后四个测试容器和API／Web进程均已退出，当前不得把历史HTTP200称为正在运行。
+
+### 稳定性恢复后的账号返修（2026-10-20，尚未交付）
+
+- 负责人要求继续后只使用一个Vitest进程，不恢复Docker或开发服务器；后台代理仅做不相交编辑和只读审查。回读 revision262 两条原始记录，字段和值与旧快照完全一致，实际结果保存在 `req22-23-readback-resume-20261020.json`。
+- 原4项账号失败的局部诊断全部完成操作及断言：改密约16秒，三种资料重读／安全关闭顺序约10～15秒。仅这些复杂用例将期限从10秒改为30秒，移除临时诊断输出；完整31项运行29通过／2超时，原4项均通过。其余两个多动作重试用例同样仅调整局部期限，尚待最终运行，不把此前29/31写成全绿。日志 `req22-u3-account-clean-final.log`、`req22-u3-web-resume-security-orders.log`。
+- Ohm独立规格审查发现2项P2：本人／管理员冲突重读后旧的未修改电话或邮箱会覆盖远端新值；管理员写入期间可继续输入／关闭，成功回调丢弃新草稿。Volta按实际提交的trim／空值口径合并未编辑字段，保留用户修改并重新计算dirty；管理员写入与重读期间Form及关闭入口均受busy／同步锁保护。
+- 返修首次运行4 FAIL／2 PASS／14未选中，捕获上述缺口；归一化补测4 FAIL／20未选中，其中1项等待失败不计缺陷证据。两次红灯原始输出仅在子代理执行记录94315／24210，未落盘，不补造红灯日志。最终两个完整文件24/24 PASS（本人16、管理员8），日志 `req22-u3-p2-final.log`；4文件指纹由主代理保存为 `req22-u3-p2-frozen-manifest.json`。James规格复审待回，独立质量审查和最终联合验收待完成。
+- Pauli对C2与U3生成契约及切换／自身撤权退出接缝做限定只读核对PASS；主代理比较C2冻结清单5/5无漂移。该结论不代替浏览器／完整组件运行。
+- 后续Web联合门禁按不重叠文件分批覆盖96文件711项：剩余91文件609项、账号31项、供应商账号18项、目标3项、管理员交互21项、权限矩阵29项均通过，覆盖清单无遗漏或重复；日志 `req22-web-final-remaining.log`、`req22-web-prior-failures-serial.log`、`req22-admin-interactions-final.log`、`req22-permission-matrix-final.log`，不是一次全集运行。MFA本人撤权长交互局部诊断通过后仅该用例30秒；此前全量因只读角色入口错误标为分配及旧pending-close预期冲突中止，原失败保留。Heisenberg最小返修5项／交互21项通过，Planck限定规格／质量均PASS。
+- Web类型检查、生产构建、文档／完整治理／维护／归档隔离通过；治理来源因实际文档与维护事实复核而更新，不关闭原维护事项。7项真实浏览器首轮2PASS／5FAIL：双门户1440／1024两区等高、390堆叠且无页面溢出通过；资料重开字段空、角色详情焦点恢复失败、C2长链超时和签名cleanup状态码预期不符仍待返修。首轮日志 `req22-browser-final.log`；API真实env连接本任务57544/qms_req22，103条迁移无pending。浏览器结束后停止API／Web及3任务服务，扫描器全程未启动。
+- 资料字段空已由真实StrictMode新测试复现（两门户2FAIL）；`AccountSettingsDialog`移除`clearOnDestroy`，保留父组件真实卸载／preserve=false；双门户预填、保存重开、刷新和放弃草稿／签名输入清理4项绿，完整账号设置复测待完成。角色详情内置focus恢复在afterOpenChange回调后执行，显式焦点回调可能被覆盖，正在定向返修；C2脚本增加分步诊断与有界cleanup。上述浏览器失败修复后将更新前端快照，不能将修复前711项／构建当新源码全部通过。
+- 最终局部返修：StrictMode完整20/20通过（`req22-strictmode-u3-full.log`），Kierkegaard仅移除本人Form清理属性；签名Form原文清理不变。详情先关闭默认focus恢复，组件RED1→GREEN6，但真实仍FAIL：Chrome未触发关闭动画回调，焦点停留body；后将清搜索／恢复焦点迁到`wasOpen`控制的true→false effect，默认focus恢复仍关闭，真实REQ23单项PASS14.1秒、最新组件5/5通过（`req22-browser-focus-lifecycle.log`、`req22-role-focus-lifecycle-final.log`）。Mendel审核StrictMode与首个focus修复、Curie审核最终focus生命周期，限定规格／质量均PASS。历史原始FAIL保留，首修不当最终PASS。
+- 真实浏览器7项已分批取得完整通过证据：双门户三宽布局2项（`req22-browser-final.log`首轮）；内部资料完整持久化／真实409／草稿1项与签名摘要1项（`req22-browser-repaired.log`第二轮）；供应商资料同链1项（`req22-browser-final-two.log`中通过项）；角色详情／搜索／无写请求／关闭焦点1项（`req22-browser-focus-lifecycle.log`）；C2管理UI映射与任职、直接＋岗位双来源、撤一来源保留另一来源、两次旧会话401和最终任务403全链1项（`req22-browser-position-chain.log`）。所有成功项按实际独立运行记账，非一次7/7运行；后续仅改失败项脚本／不相交生产修复。最后C2真实链约29秒通过，原长等待实际由岗位下拉菜单遮挡点击导致，已改Escape关闭及10秒操作上限；搜索改按可访问名称定位。浏览器用例无route Mock或skip，数据仅一次性资源，测试服务已再次停止并保留数据。
+- 签名撤销既有controller实际HTTP201而Swagger声明200，浏览器cleanup按实际201核验，差异记录为既有契约维护限制；本轮没有擅改旧接口／生成契约。首轮浏览器截图文件受本机文件保护影响无法用图片工具解码；保留原文件，几何通过为浏览器boundingBox与页面无溢出断言，不能冒充截图人工审美验收。

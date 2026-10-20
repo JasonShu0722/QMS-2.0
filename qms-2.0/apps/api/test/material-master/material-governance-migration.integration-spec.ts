@@ -57,18 +57,19 @@ describe('global material governance forward migration with real PostgreSQL', ()
       if (/^\d{14}_/.test(migration)) await client.query(readFileSync(new URL(`${migration}/migration.sql`, migrations), 'utf8'));
     }
     prisma = new PrismaService(url.toString());
-    const audit = new AuditLogService(prisma);
-    roles = new AdminRoleService(prisma, audit, new AdminMutationService(prisma, audit));
     await prisma.organization.createMany({ data: [
       { id: internal, code: 'MATERIAL_INTERNAL', name: 'Internal', type: 'INTERNAL' },
       { id: supplier, code: 'MATERIAL_SUPPLIER', name: 'Supplier', type: 'SUPPLIER' },
     ] });
-    await prisma.user.createMany({ data: [
-      { id: internalUser, organizationId: internal, accountType: 'INTERNAL', username: 'internal', passwordHash: 'test-only' },
-      { id: supplierUser, organizationId: supplier, accountType: 'SUPPLIER', username: 'supplier', passwordHash: 'test-only' },
-      { id: supplierInInternal, organizationId: internal, accountType: 'SUPPLIER', username: 'supplier-account', passwordHash: 'test-only' },
-      { id: internalInSupplier, organizationId: supplier, accountType: 'INTERNAL', username: 'supplier-home', passwordHash: 'test-only' },
-    ] });
+    // Seed only historical columns: the current Prisma client supplies profile_version.
+    for (const [id, organizationId, accountType, username] of [
+      [internalUser, internal, 'INTERNAL', 'internal'],
+      [supplierUser, supplier, 'SUPPLIER', 'supplier'],
+      [supplierInInternal, internal, 'SUPPLIER', 'supplier-account'],
+      [internalInSupplier, supplier, 'INTERNAL', 'supplier-home'],
+    ]) {
+      await client.query('INSERT INTO users (id, organization_id, account_type, username, password_hash, updated_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)', [id, organizationId, accountType, username, 'test-only']);
+    }
     for (const code of [...governanceCodes, 'account:roles:read', 'account:roles:create', 'account:roles:update']) {
       await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
     }
@@ -99,6 +100,22 @@ describe('global material governance forward migration with real PostgreSQL', ()
       }
     }
     await client.query(readFileSync(new URL(`${originalMigration}/migration.sql`, migrations), 'utf8'));
+    for (const fixture of fixtures) {
+      expect(await grants(roleIds[fixture.name]!)).toEqual(fixture.name === 'scopedGovernance' ? materialCodes : []);
+    }
+    expect((await client.query("SELECT to_regclass('public.position_roles') AS relation")).rows).toEqual([{ relation: null }]);
+    expect((await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'profile_version'")).rows).toEqual([]);
+    const userRoles = await client.query('SELECT * FROM user_roles ORDER BY user_id, role_id, organization_id');
+    const rolePermissions = await client.query('SELECT * FROM role_permissions ORDER BY role_id, permission_id');
+    // Only add service-required schema; repairSql must first run in the forward-repair hook below.
+    for (const migration of ['20261020010000_position_roles', '20261020020000_account_profile']) {
+      await client.query(readFileSync(new URL(`${migration}/migration.sql`, migrations), 'utf8'));
+      expect((await client.query('SELECT * FROM user_roles ORDER BY user_id, role_id, organization_id')).rows).toEqual(userRoles.rows);
+      expect((await client.query('SELECT * FROM role_permissions ORDER BY role_id, permission_id')).rows).toEqual(rolePermissions.rows);
+      expect((await client.query('SELECT * FROM position_roles')).rows).toEqual([]);
+    }
+    const audit = new AuditLogService(prisma);
+    roles = new AdminRoleService(prisma, audit, new AdminMutationService(prisma, audit));
     const session = await prisma.session.create({ data: { userId: internalUser, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 60_000), reauthenticatedAt: new Date(), mfaVerifiedAt: new Date() } });
     actor = { id: internalUser, organizationId: internal, sessionId: session.id, accountType: 'INTERNAL' };
   });
@@ -107,7 +124,12 @@ describe('global material governance forward migration with real PostgreSQL', ()
     await prisma?.$disconnect();
     await client?.end();
     try {
-      if (databaseCreated) await control.query(`DROP DATABASE ${databaseName}`);
+      if (databaseCreated) {
+        if (!/^qms_material_grant_[0-9a-f]{32}$/.test(databaseName) || databaseName === connection!.pathname.slice(1)) {
+          throw new Error('Refusing to drop a database other than this suite\'s random database');
+        }
+        await control.query(`DROP DATABASE "${databaseName}"`);
+      }
     } finally { await control.end(); }
   });
 

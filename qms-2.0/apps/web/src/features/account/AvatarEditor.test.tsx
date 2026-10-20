@@ -10,7 +10,7 @@ import { ApiError } from '../../api/client';
 const api = vi.hoisted(() => ({ getAccountProfile: vi.fn(), updateAccountAvatar: vi.fn(), createUploadAttempt: vi.fn(), readAttachment: vi.fn(), retryScanAttachment: vi.fn(), attachmentDownload: vi.fn() }));
 vi.mock('../../api/client', async (original) => ({ ...await original<typeof import('../../api/client')>(), getAccountProfile: api.getAccountProfile, updateAccountAvatar: api.updateAccountAvatar }));
 vi.mock('../attachments/attachments', () => api);
-const profile: AccountProfile = { id: 'user-a', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organization: { id: 'org-a', code: 'test', name: 'test' } };
+const profile: AccountProfile = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'user-a', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organization: { id: 'org-a', code: 'test', name: 'test' } };
 const pending = { id: 'file-a', status: 'QUARANTINED', scanStatus: 'PENDING', version: 2 };
 const clean = { ...pending, status: 'AVAILABLE', scanStatus: 'CLEAN', version: 3 };
 beforeEach(() => {

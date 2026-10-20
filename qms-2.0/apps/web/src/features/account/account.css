@@ -2,16 +2,16 @@
 .qms-topbar-language .ant-radio-button-wrapper { height: 36px; min-width: 36px; padding-inline: 9px; line-height: 34px; text-align: center; }
 .account-center { display: grid; gap: var(--qms-section-gap, 6px); min-width: 0; }
 .account-center > .ant-typography { margin: 0; }
-.qms-account-overview { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr); gap: var(--qms-section-gap, 6px); align-items: start; }
+.qms-account-overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-display-card-gap, 12px); align-items: stretch; }
 .qms-account-overview > *, .account-center > *, .qms-account-history { min-width: 0; }
-.qms-account-identity { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.qms-account-identity { display: flex; flex-direction: column; align-items: flex-start; gap: var(--qms-display-card-gap, 12px); padding: var(--qms-display-card-padding, 16px); overflow-wrap: anywhere; }
 .qms-account-identity > *, .qms-account-identity .ant-space-item { min-width: 0; max-width: 100%; }
 .qms-account-avatar-heading { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .qms-account-avatar-heading > :first-child { flex: none; }
 .qms-account-avatar-heading > :not(:first-child) { min-width: 0; }
 .qms-account-identity p { margin: 2px 0 0; color: var(--qms-muted); }
 .qms-account-identity input[type="file"] { width: 100%; max-width: 100%; }
-.qms-account-profile-form, .qms-account-security-summary { border-inline-start: 1px solid var(--qms-border); padding-inline-start: 8px; overflow-wrap: anywhere; }
+.qms-account-security-summary { display: flex; flex-direction: column; gap: var(--qms-display-card-gap, 12px); padding: var(--qms-display-card-padding, 16px); border-top: 1px solid var(--qms-border); overflow-wrap: anywhere; }
 .qms-account-profile-form .ant-form-item { margin-bottom: 6px; }
 .qms-account-security-summary { width: 100%; }
 .qms-account-security-summary .ant-tag { margin-inline-start: 8px; }
@@ -21,9 +21,19 @@
 @media (max-width: 760px) {
   .qms-topbar-language .ant-radio-button-wrapper { padding-inline: 6px; }
   .qms-account-overview { grid-template-columns: minmax(0, 1fr); }
-  .qms-account-profile-form, .qms-account-security-summary { border-inline-start: 0; border-top: 1px solid var(--qms-border); padding-inline-start: 0; padding-top: 6px; }
+
   .qms-password-dialog .ant-modal-body { max-height: 65dvh; overflow-y: auto; }
 }
 @media (pointer: coarse) {
   .qms-topbar-language .ant-radio-button-wrapper { min-height: 44px; line-height: 42px; }
+}
+
+.qms-account-overview details { width: 100%; min-width: 0; }
+.qms-account-overview summary { cursor: pointer; min-height: 36px; display: list-item; }
+.qms-account-settings .ant-modal-body { max-height: 72dvh; overflow-y: auto; overflow-wrap: anywhere; }
+.qms-account-settings input[type="file"] { max-width: 100%; width: 100%; }
+.qms-account-settings .ant-space, .qms-account-settings .ant-space-item { min-width: 0; max-width: 100%; }
+@media (min-width: 1024px) {
+  .qms-account-overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .qms-account-security-summary { border-top: 0; border-inline-start: 1px solid var(--qms-border); }
 }

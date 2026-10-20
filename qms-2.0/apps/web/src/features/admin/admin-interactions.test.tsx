@@ -9,11 +9,11 @@ import { AdminPage } from './AdminPage';
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 
 const organization: AdminOrganization = { id: 'org-a', code: 'a', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset', 'account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'] };
-const user: AdminUser = { id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
+const user: AdminUser = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
 
-it.each([200, 409])('blocks creating a user until a closed editor finishes saving with status %s', async (status) => {
+it.each([200, 409])('keeps the user editor busy until saving with status %s settles before creating a new user', async (status) => {
   let resolveSave: ((response: Response) => void) | undefined;
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
@@ -26,13 +26,29 @@ it.each([200, 409])('blocks creating a user until a closed editor finishes savin
   await userEvent.type(screen.getByLabelText('邮箱'), 'pending@example.test');
   await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
   await waitFor(() => expect(resolveSave).toBeDefined());
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const editor = screen.getByRole('dialog');
+  expect(within(editor).getByLabelText('邮箱')).toBeDisabled();
+  expect(within(editor).getByLabelText('姓名')).toBeDisabled();
+  expect(within(editor).getByLabelText('电话')).toBeDisabled();
+  within(editor).getAllByRole('combobox').forEach(input => expect(input).toBeDisabled());
+  expect(within(editor).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
   const create = screen.getByRole('button', { name: '创建用户' });
   expect(create).toBeDisabled();
   await userEvent.click(create);
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toBe(editor);
+  expect(screen.getByLabelText('邮箱')).toHaveValue('pending@example.test');
   resolveSave!(status === 200 ? json(user) : json({ code: 'ADMIN_USER_ORGANIZATION_IN_USE' }, status));
+  if (status === 409) {
+    await within(editor).findByText('该用户仍关联业务记录，无法变更主组织');
+    expect(screen.getByRole('dialog')).toBe(editor);
+    expect(within(editor).getByLabelText('邮箱')).toHaveValue('pending@example.test');
+    expect(within(editor).getByLabelText('邮箱')).toBeEnabled();
+    await userEvent.click(within(editor).getByRole('button', { name: 'Close' }));
+  } else {
+    expect(await screen.findByText('用户已保存')).toBeInTheDocument();
+  }
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(create).toBeEnabled());
   await userEvent.click(create);
   await userEvent.type(screen.getByLabelText('用户名'), 'next-user');
@@ -88,7 +104,7 @@ it('edits only changed user fields and keeps failed writes retryable with safe e
   fail = false;
   await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
   expect(await screen.findByText('用户已保存')).toBeInTheDocument();
-  expect(requests.map((entry) => JSON.parse(String(entry.body)))).toEqual([{ email: 'updated@example.test' }, { email: 'updated@example.test' }]);
+  expect(requests.map((entry) => JSON.parse(String(entry.body)))).toEqual([{ email: 'updated@example.test', expectedProfileVersion: 1 }, { email: 'updated@example.test', expectedProfileVersion: 1 }]);
   expect((requests[0].headers as Record<string, string>)['Idempotency-Key']).toBe((requests[1].headers as Record<string, string>)['Idempotency-Key']);
 }, 15_000);
 
@@ -160,6 +176,29 @@ it('summarizes permissions and opens searchable read-only details from the keybo
   expect(within(drawer).getByText('删除角色')).toBeInTheDocument();
   expect(within(drawer).queryByText('查看用户')).not.toBeInTheDocument();
   await userEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+
+it('restores the permission details trigger after Escape when a mouse click leaves focus on another input', async () => {
+  const role: AdminRole = { mfaRequired: false, id: 'role-focus', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [{ id: 'users-read', code: 'account:users:read', name: '查看用户' }] };
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => Promise.resolve(json(path.includes('/permission-catalog') ? [] : [role]))));
+
+  render(<><input aria-label="Previous focus" /><RoleAdministration organization={organization} /></>);
+  const row = (await screen.findByText(role.name)).closest('tr')!;
+  const trigger = within(row).getByRole('button', { name: /Reader Role.*详情/ });
+  const previousInput = screen.getByRole('textbox', { name: 'Previous focus' });
+  previousInput.focus();
+  expect(document.activeElement).toBe(previousInput);
+  // A mouse click can open the Drawer without moving focus to its trigger.
+  fireEvent.click(trigger);
+
+  const drawer = await screen.findByRole('dialog');
+  const search = within(drawer).getByRole('textbox', { name: '搜索权限' });
+  await userEvent.click(search);
+  expect(document.activeElement).toBe(search);
+  await userEvent.keyboard('{Escape}');
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 });
 
@@ -285,11 +324,14 @@ it.each([
   expect(requests).toEqual(expected);
 }, 15_000);
 
-it('does not offer user role assignment without both read permissions', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([user])));
-  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:assign'] }} organizations={[organization]} />);
-  await screen.findByText('alice');
+it.each(['account:users:read', 'account:roles:read'])('does not offer user role assignment without %s', async (missing) => {
+  const fetch = vi.fn().mockResolvedValue(json([user]));
+  vi.stubGlobal('fetch', fetch);
+  render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:read', 'account:roles:assign'].filter(permission => permission !== missing) }} organizations={[organization]} />);
+  if (missing !== 'account:users:read') await screen.findByText('alice');
   expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '查看角色' })).not.toBeInTheDocument();
+  expect(fetch.mock.calls.some(([path]) => String(path).includes('/roles'))).toBe(false);
 });
 
 it('never redisplays a credential when its pending issue dialog was closed', async () => {

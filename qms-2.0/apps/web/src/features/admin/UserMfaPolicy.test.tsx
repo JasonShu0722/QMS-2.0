@@ -9,7 +9,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { UserMfaPolicy } from './UserMfaPolicy';
 
 const organization: AdminOrganization = { id: 'org', code: 'org', name: 'Organization', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:reset'] };
-const user: AdminUser = { id: 'u', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: 'org', organization: { id: 'org', code: 'org', name: 'Organization' }, mfaEnabled: false, createdAt: '', updatedAt: '' };
+const user: AdminUser = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'u', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: 'org', organization: { id: 'org', code: 'org', name: 'Organization' }, mfaEnabled: false, createdAt: '', updatedAt: '' };
 const policy = { userId: 'u', required: false, bound: true, override: null, roleRequired: false, securityVersion: 4 };
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -144,6 +144,7 @@ it('allows closing a pending policy read and ignores the late response', async (
   expect(screen.queryByRole('switch', { name: '要求 MFA' })).not.toBeInTheDocument();
 });
 
+// Multi-dialog confirmation and navigation can exceed 10 seconds in JSDOM on Windows.
 it('clears work tabs and replaces the route when changing the current account revokes its session', async () => {
   const store = useWorkTabsStore.getState();
   store.bindSession('INTERNAL:org:u'); store.openTab({ id: 'private', path: '/app/account', title: 'Private' });
@@ -158,7 +159,7 @@ it('clears work tabs and replaces the route when changing the current account re
   expect(await screen.findByText('Login destination')).toBeInTheDocument();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
   expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
-});
+}, 30_000);
 
 it('refreshes policy and user list after saving another account and keeps the dialog busy until complete', async () => {
   let policyReads = 0;
