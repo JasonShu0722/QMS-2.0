@@ -10,9 +10,9 @@
 - 执行范围：REQ-0023角色摘要／只读详情与REQ-0022岗位自动授权／个人资料／账号设置已本地实现，独立规格、质量和浏览器发现的返修复审均通过。后端提交至83a56cb；C2与U3 Web及最终focus补丁已本地提交bb5e226（V0.0.23-fix3）。关联Issue #55／#56，未推送PR、未部署、不关闭Issue或回填飞书。
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
 - 状态：Web分批覆盖96文件711项通过，真实浏览器发现的StrictMode及focus缺陷返修后完整U3 20项／最新focus5项通过，当前测试总数716按不重复用例记账（非一次全集运行）。7项真实浏览器分批全过；最终新源码生产构建及contracts:check通过，生成契约无新增差异，新浏览器脚本独立类型检查通过。需求最终回读revision262／user／has_more=false／值完全未变。测试服务停止、数据保留。
-- 映射：REQ-0023→U1→Issue #55→V0.0.22→独立分支 `codex/req-0023-role-details`（`a29abed`）；REQ-0022→U2／U3→Issue #56→V0.0.23；当前执行分支继续使用 `codex/req-0022-0023-planning`，最终 PR 前按差异核对独立 base／head。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
-- 下一动作（16:08接续）：最终治理／契约与源码构建已通过，已本地提交bb5e226；收口文档与新增文件尾空行后停止在云端CI边界并通知负责人；当前private，不推送触发Actions。展示卡片前置分支、REQ-0023及REQ-0022按实际base/head组织PR，当前联合分支保留全链及浏览器返修；角色详情补丁须包含在最终发布中，不能只发布旧a29abed当完成。合并／部署、Issue关闭与飞书写入仍独立核对授权。恢复后无新增重启，未改系统驱动。
-- 证据：Git外 `D:/WorkSpace/QMS-2.0-local/req22-23-readback-20261020.json`、`req23-main-web-tests.log`（26/26）、`req23-matrix-regression.log`（29/29）、`req23-main-lint.log`、`req23-main-build.log`、`req23-contracts-check.log`、`req23-governance-final.log`，U1 审查与门禁详见末节。没有本次真实业务浏览器、生产部署或人工 PASS。
+- 映射（本次云端交付调整）：REQ-0023→Issue #55→原V0.0.22提交，REQ-0022→Issue #56→V0.0.23；展示卡片V0.0.21-fix3/fix4作为已验证前置。为减少重复Actions和中间版本部署，将同一连续提交链统一为一个V0.0.23 PR，base=main、head=codex/req-0022-0023-planning，保留逐需求验收与历史版本，不单独发布缺少最终焦点返修的a29abed。调整只合并交付批次，不扩大功能或发布授权。
+- 下一动作（云端接续）：负责人已确认公开并继续；已实时核验visibility=public、origin/main=ecf7224、无开放PR，当前源码236e539、工作区干净。需求user回读revision262／has_more=false／原值未变。本轮统一推送最终功能分支、建立关联Issue #55/#56的单PR并跟进最新完整Foundation；本地重负载检查不重复跑。合并会自动触发main检查和生产部署，须按本轮明确授权另行核对；Issue关闭和飞书写入仍不执行。
+- 证据：Git外req22-23-implementation-checkpoint.json、req22-23-readback-cloud-20261020.json及末节各批实际日志；后端真实PG1041项／Worker8项、Web分批和最终返修、真实浏览器7项、构建／契约／治理已有证据。本轮云端CI尚待执行；生产部署和负责人手工验收未执行，不用本地结果替代。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
 
