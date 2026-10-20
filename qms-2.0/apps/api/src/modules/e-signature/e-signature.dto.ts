@@ -31,6 +31,15 @@ export class ESignatureDto {
   @ApiProperty({ format: 'date-time' }) createdAt!: string; @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) revokedAt!: string | null;
 }
 export class ESignaturePageDto { @ApiProperty({ type: [ESignatureDto] }) items!: ESignatureDto[]; @ApiProperty() total!: number; @ApiProperty() page!: number; @ApiProperty() pageSize!: number; }
+export class ESignatureSummaryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() label!: string;
+  @ApiProperty({ enum: ['ACTIVE', 'REVOKED'] }) status!: string;
+  @ApiProperty({ minimum: 1 }) version!: number;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) revokedAt!: string | null;
+}
+export class ESignatureSummaryQueryDto {}
 export class ApprovalSignatureDto {
   @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty({ format: 'uuid' }) organizationId!: string; @ApiProperty({ format: 'uuid' }) signatureId!: string; @ApiProperty({ format: 'uuid' }) signerUserId!: string;
   @ApiProperty() resourceType!: string; @ApiProperty() resourceId!: string; @ApiProperty() resourceVersion!: number; @ApiProperty() signatureFingerprint!: string; @ApiProperty() signedDigest!: string;

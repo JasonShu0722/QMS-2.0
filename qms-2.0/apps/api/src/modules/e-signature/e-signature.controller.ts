@@ -8,6 +8,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { ApprovalSignatureDto, ApprovalSignatureQueryDto, ESignatureDto, ESignaturePageDto, ESignatureQueryDto, RegisterESignatureDto, RevokeESignatureDto, SignApprovalDto } from './e-signature.dto.js';
 import { APPROVAL_READ_PERMISSION, APPROVAL_SIGN_PERMISSION, SIGNATURE_READ_PERMISSION, SIGNATURE_WRITE_PERMISSION } from './e-signature.rules.js';
 import { ESignatureService } from './e-signature.service.js';
+import { ESignatureSummaryDto, ESignatureSummaryQueryDto } from './e-signature.dto.js';
 
 function actor(request: Request) { const authorized = request as AuthorizedRequest; const session = authorized[AUTHENTICATED_SESSION]!; return { ...session.user, sessionId: session.id, scopeOrganizationId: authorized.authorizedOrganizationId }; }
 const queryScope = { source: 'query', field: 'organizationId', optional: true } as const;
@@ -16,6 +17,8 @@ const bodyScope = { source: 'body', field: 'organizationId', optional: true } as
 @Controller('api/v1/e-signatures') @ApiCookieAuth('qms_session') @ApiResponse({ status: 'default', type: ErrorResponse })
 export class ESignatureController {
   constructor(private readonly service: ESignatureService) {}
+  @Get('mine/summary') @ApiOkResponse({ type: [ESignatureSummaryDto] }) @RequireAccess({ featurePermission: SIGNATURE_READ_PERMISSION })
+  summary(@Req() request: Request, @Query() _query: ESignatureSummaryQueryDto) { return this.service.summary(actor(request)); }
   @Get('mine') @ApiOkResponse({ type: ESignaturePageDto }) @RequireAccess({ featurePermission: SIGNATURE_READ_PERMISSION, organizationScope: queryScope })
   list(@Req() request: Request, @Query() query: ESignatureQueryDto) { return this.service.list(actor(request), query); }
   @Post() @ApiCreatedResponse({ type: ESignatureDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: SIGNATURE_WRITE_PERMISSION, organizationScope: bodyScope })

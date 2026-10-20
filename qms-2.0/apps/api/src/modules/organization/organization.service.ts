@@ -24,6 +24,17 @@ export class OrganizationService {
     return transaction.organization.findUnique({ where: { id }, select: { id: true, name: true, code: true, type: true } });
   }
 
+  async currentAssignments(userId: string, organizationId: string, now = new Date(), transaction: Prisma.TransactionClient = this.prisma) {
+    const assignments = await transaction.userPosition.findMany({
+      where: { userId, organizationId, user: { organizationId, status: 'ACTIVE' }, ...effectivePositionAssignmentWhere(now) },
+      select: { id: true, startedAt: true, endedAt: true, position: { select: { id: true, code: true, name: true, department: { select: { id: true, code: true, name: true } } } } },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+    });
+    return assignments.map(({ position: { department, ...position }, ...assignment }) => ({
+      ...assignment, startedAt: assignment.startedAt.toISOString(), endedAt: assignment.endedAt?.toISOString() ?? null, position, department,
+    }));
+  }
+
   async createSupplierBoundary(transaction: AdminTransaction, actor: AdminActor, ownerOrganizationId: string, name: string, traceId: string) {
     if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(transaction, actor, ownerOrganizationId, ['supplier-quality:profiles:write', 'account:users:create']);

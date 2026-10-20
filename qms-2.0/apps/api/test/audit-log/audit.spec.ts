@@ -71,4 +71,12 @@ describe('audit log foundation', () => {
       ]),
     );
   });
+
+  it('allows only controlled profile field names in changedFields and discards profile values', () => {
+    const service = new AuditLogService({} as never);
+    expect(service.safeMetadata({ changedFields: 'fullName,phone,email', resourceVersion: 2, fullName: 'Private name', phone: 'Private extension' })).toEqual({ changedFields: 'fullName,phone,email', resourceVersion: 2 });
+    for (const changedFields of ['phone=Private extension', 'Private name', ['phone'], { phone: 'Private extension' }, 'phone,organizationId']) {
+      expect(service.safeMetadata({ changedFields })).toEqual({});
+    }
+  });
 });

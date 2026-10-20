@@ -56,6 +56,13 @@ describe('position role migration and effective grants with real PostgreSQL', ()
       await client.query('ROLLBACK');
       throw error;
     }
+    expect((await client.query('SELECT to_jsonb(r) AS fact FROM user_roles r ORDER BY user_id, role_id, organization_id')).rows).toEqual(directSnapshot);
+    expect((await client.query('SELECT version, role_version FROM positions WHERE id = $1', [legacy.position])).rows).toEqual([{ version: 7, role_version: 1 }]);
+    expect((await client.query('SELECT count(*)::int AS count FROM position_roles')).rows).toEqual([{ count: 0 }]);
+    // Verify the historical upgrade before applying later migrations required by the current Prisma client.
+    for (const migration of readdirSync(migrations).filter((entry) => /^\d{14}_/.test(entry) && entry > migrationName).sort()) {
+      await client.query(readFileSync(new URL(`${migration}/migration.sql`, migrations), 'utf8'));
+    }
     prisma = new PrismaService(url.toString());
     await prisma.$connect();
   });
@@ -75,7 +82,7 @@ describe('position role migration and effective grants with real PostgreSQL', ()
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Home', type: 'INTERNAL' } });
     const other = await prisma.organization.create({ data: { code: randomUUID(), name: 'Other', type: 'INTERNAL' } });
     const department = await prisma.department.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Direct department' } });
-    const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'test-only', accountType: 'INTERNAL' } });
+    const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'test-only', accountType: 'INTERNAL' }, select: { id: true, organizationId: true } });
     const role = await prisma.role.create({ data: {
       organizationId: organization.id, code: randomUUID(), name: 'R', mfaRequired: true,
       permissions: { create: { permission: { create: { code: `position-role:${randomUUID()}:read`, name: 'Read' } } } },
@@ -93,6 +100,7 @@ describe('position role migration and effective grants with real PostgreSQL', ()
   it('upgrades populated legacy data with empty mappings, independent roleVersion=1 and unchanged direct grants', async () => {
     expect((await client.query('SELECT to_jsonb(r) AS fact FROM user_roles r ORDER BY user_id, role_id, organization_id')).rows).toEqual(directSnapshot);
     expect(await prisma.positionRole.count()).toBe(0);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: legacy.user }, select: { fullName: true, phone: true, profileVersion: true } })).toEqual({ fullName: null, phone: null, profileVersion: 1 });
     expect(await prisma.position.findUniqueOrThrow({ where: { id: legacy.position } })).toMatchObject({ version: 7, roleVersion: 1 });
     expect(await effectiveRoleGrants(prisma, legacy.user, undefined, now)).toEqual([{
       organizationId: legacy.organization,

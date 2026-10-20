@@ -5,11 +5,11 @@
 ## 当前摘要（2026-10-20，Asia/Taipei）
 
 - 来源：2026-10-20 按实际 record_id 回读 revision262，REQ-0022 `reczz28PGTTvAPTd`、REQ-0023 `reczz28PGW7hLyL5` 均 P0／开发中，has_more=false，目标、初稿与验收无变更；负责人确认自动生效、多来源保留与后续请求使用新授权。
-- 执行范围：U1 本地实现、两阶段审查和 Web 门禁通过（`a29abed`），真实业务浏览器待验收；U2-A `bea5caf` 模型及解析器已通过检查。U2-B消费者和1000人成员更新超时返修均已完成，主代理重新确认API600/600及A/B合计52/52、契约生成／检查、Web lint通过；规格和完整质量复审PASS。下一步U2-C配置／任职／启停授权写入，U2／U3整体尚未完成。REQ-0023 关联 [Issue #55](https://github.com/JasonShu0722/QMS-2.0/issues/55)，REQ-0022 关联 [Issue #56](https://github.com/JasonShu0722/QMS-2.0/issues/56)。未创建 PR、未部署，不关闭 Issue 或写飞书。
+- 执行范围：U1 本地实现、两阶段审查和 Web 门禁通过（`a29abed`），真实业务浏览器待验收；U2-A `bea5caf` 模型及解析器已通过检查。U2-B消费者和1000人成员更新超时返修均已完成，主代理重新确认API600/600及A/B合计52/52、契约生成／检查、Web lint通过；规格和完整质量复审PASS。C1/B2后端已提交25bb154；C2管理界面及U3资料接口正在实现，U2／U3整体尚未完成。REQ-0023 关联 [Issue #55](https://github.com/JasonShu0722/QMS-2.0/issues/55)，REQ-0022 关联 [Issue #56](https://github.com/JasonShu0722/QMS-2.0/issues/56)。未创建 PR、未部署，不关闭 Issue 或写飞书。
 - 基线：沿用根 AGENTS 指定的活动 checkout，唯一实现目录为 `qms-2.0/`。规划分支 `codex/req-0022-0023-planning` 从 `e834892` 起步，保留展示卡片修复及原收尾文档。上次已核验生产 `ecf7224`，不是本次实时生产检查。每个新 shell 先加载 `D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1`，禁止预览数据库55440。
-- 状态：U1 已实现权限摘要、只读分组详情、搜索和焦点恢复；组织切换待定／失败期间旧角色残留已按规格审查返修。已有部门／岗位／任职和直接角色，仍缺岗位关联及统一继承鉴权。不把签名指纹模块写成可视图片或带有效期的签名功能。
+- 状态：U1 已实现权限摘要、只读分组详情、搜索和焦点恢复；组织切换待定／失败期间旧角色残留已按规格审查返修。岗位关联、统一继承鉴权及受控写入已本地实现，仍缺管理界面和个人资料／概览最终整合。不把签名指纹模块写成可视图片或带有效期的签名功能。
 - 映射：REQ-0023→U1→Issue #55→V0.0.22→独立分支 `codex/req-0023-role-details`（`a29abed`）；REQ-0022→U2／U3→Issue #56→V0.0.23；当前执行分支继续使用 `codex/req-0022-0023-planning`，最终 PR 前按差异核对独立 base／head。2026-10-20 已 fetch、核对本地与远端提交及开放 PR（为空），最高已有策划号 V0.0.22；实际推送前再次查重。展示卡片 fix3／fix4 仍在独立分支 `codex/display-card-spacing`，PR 应先交付该基线，再接 U1，不能将未上线基线写为生产。
-- 下一动作：U2-C1受控岗位配置／任职／启停后端链路与U2-B2原生SQL流程授权补漏按不重叠写集并行；之后接管理UI及资料中心。U2-A/B不可单独发布。2026-10-20进入C前按record_id回读REQ-0022仍revision262／开发中／has_more=false，目标、背景、方案及验收无变化。仓库最近核对仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI。不重复确认已定的自动生效规则；合并、部署另核对授权。
+- 下一动作：C1/B2后端已经提交 `25bb154`；正在接续 C2 岗位角色管理界面及 U3 资料后端，写集不重叠，均未完成。前代理失效后保留已有 C2 测试，由 Dewey／Mencius 接续；实际活动目录以 Enter-Qms.ps1 执行后的 Get-Location 和根 AGENTS 指定 checkout 为准，不使用误传的 workspace 路径。U2整体不可单独发布。进入C前按record_id回读REQ-0022仍revision262／开发中／has_more=false，目标、背景、方案及验收无变化。仓库最近核对仍私有，遵循负责人先本地、需要 Actions 前告知的限制，暂不推送触发云端 CI；合并、部署另核对授权。
 - 证据：Git外 `D:/WorkSpace/QMS-2.0-local/req22-23-readback-20261020.json`、`req23-main-web-tests.log`（26/26）、`req23-matrix-regression.log`（29/29）、`req23-main-lint.log`、`req23-main-build.log`、`req23-contracts-check.log`、`req23-governance-final.log`，U1 审查与门禁详见末节。没有本次真实业务浏览器、生产部署或人工 PASS。
 
 **目标：** 完整实现个人资料、岗位角色自动授权与来源追溯，以及紧凑的角色摘要／只读权限详情。
@@ -217,4 +217,12 @@ U3给User增列后，A的历史升级测试仍必须保留“旧迁移链→插�
 
 - Darwin的C1实现先取得10项真实业务红灯，覆盖接口缺失、权限旁路、未来结束任职、停用后旧会话；随后补齐角色可授予性、锁等待后过期权限复验、操作者自锁、1000人批量失效和审计回滚。一次性 PostgreSQL／Nest HTTP与审计回归最终 `2 suites / 89 tests PASS`，关键日志 `req22-u2c1-main-pg-retry2.log`；1000人单独回归先出现嵌套查询事务超时，改为直接 `UserPosition` 去重查询后通过，原始失败保留。
 - C1规格复审 PASS。首轮质量审查发现三个阻断：新增路由尚未生成 contracts、部门／岗位锁顺序可能反向死锁、Int版本上限递增可能500。主代理已重新生成 `packages/contracts/src/generated/api.ts`，`contracts:check` PASS；岗位更新改为组织→部门集合→岗位锁顺序，最大roleVersion写前返回受控409并新增真实PG回归。修复后等待独立质量复审，未把首轮质量结果当最终PASS。
-- 整仓非integration门禁已完成API侧 `53 suites / 601 tests PASS`；Web全量Vitest受既有 `UserMfaPolicy.test.tsx` 两个10秒超时及测试环境 teardown 后 `MutationObserver is not a constructor` 未通过，未将该结果解释为C1业务回归。C1受影响后端89/89、contracts和API lint独立通过；Web真实业务浏览器、完整阶段验收、U3仍待后续。
+- 整仓非integration门禁完成API侧 `53 suites / 601 tests PASS`；Web全量实际为91文件中4文件失败、658项中11项失败（647通过）：account-center 3项超时、SupplierUsersPanel 5项超时、UserMfaPolicy 2项超时、SupplierQualityTargetsPage 1项找不到“实际与流程”按钮，另有teardown后的MutationObserver异常。此前摘要只提MFA两项且称“既有”的表述不完整；尚未独立隔离复现，不能归因全部为环境或历史问题。完整日志 `req22-u2c-main-workspace-test.log` 保留，最终Web门禁仍未通过。
+- C1的89/89在最后锁序与数据库Int最大值修复前执行，不能代替最新源码全部回归。2026-10-20补跑精确最大值2项在恢复后的真实PG上通过（`req22-c1-int-ceiling-restored.log`），覆盖输入越界400及数据库已到上限409；其余受影响并发／锁序仍须在后续最新源码联合回归中重新验证。新生成contracts检查、API lint通过；不以只读审查替代缺失运行证据。
+
+### U3 后端本地检查点（2026-10-20，两阶段审查通过）
+
+- 新实现者 Mencius（`01a15707-7d53-7902-b988-8db480db5225`）在28个API文件中新增资料迁移、本人CAS／HMAC幂等／受控审计、管理员资料维护、仅本人home的概览、独立签名摘要。API回执只存标识和版本，重放读取当前受限投影；不持久化电话／姓名原文到幂等JSON。
+- 先有业务红灯，再补管理员提交后目标被并发转移的投影越界红灯、目标锁等待期间岗位授权到期却提交资料的红灯；修复后在目标锁之后、第一次资料写入之前重新验证认证及全部所需权限。日志 `req22-u3-red.log`、`req22-u3-projection-red.log`、`req22-u3-lock-expiry-red.log` 均保留。
+- 主代理独立执行U3的33项真实PG／HTTP＋A的18项历史升级（51/51），完整API602/602；生成新contracts并检查PASS，日志 `req22-u3-main-pg.log`、`req22-u3-main-api-unit.log`、`req22-u3-main-contracts-*`。A历史库先保留旧链升级断言，再应用资料迁移，未删除真实升级证据。
+- Linnaeus（`01a15721-37d0-7122-80ce-a34e2cdc3958`）规格审查PASS；Maxwell（`01a15724-d970-7a42-8ca5-572c088633e0`）独立质量／安全审查PASS，28/28文件指纹一致。28文件清单 `req22-u3-source-manifest.json`；本人账号Web／管理员资料及来源Web由Gibbs接续，真实业务浏览器和最终联合门禁尚未完成，不将后端检查点当REQ-0022完成。

@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { OrganizationSummaryDto } from './account.dto.js';
+import { OrganizationSummaryDto, ProfileFieldsDto } from './account.dto.js';
 
 const ACCOUNT_TYPES = ['INTERNAL', 'SUPPLIER'] as const;
 const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
@@ -63,19 +63,13 @@ export class AdminUserListQueryDto {
   search?: string;
 }
 
-export class CreateAdminUserDto {
+export class CreateAdminUserDto extends ProfileFieldsDto {
   @ApiProperty()
   @IsString()
   @Length(1, 100)
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @Matches(/^[a-zA-Z0-9._-]+$/)
   username!: string;
-
-  @ApiPropertyOptional({ type: String, nullable: true })
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(254)
-  email?: string | null;
 
   @ApiProperty({ enum: ACCOUNT_TYPES })
   @IsIn(ACCOUNT_TYPES)
@@ -91,12 +85,11 @@ export class CreateAdminUserDto {
   initialPassword!: string;
 }
 
-export class UpdateAdminUserDto {
-  @ApiPropertyOptional({ type: String, nullable: true })
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(254)
-  email?: string | null;
+export class UpdateAdminUserDto extends ProfileFieldsDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 2147483647, description: '修改姓名、电话或邮箱时必填' })
+  @ValidateIf((object: UpdateAdminUserDto, value) => value !== undefined || object.fullName !== undefined || object.phone !== undefined || object.email !== undefined)
+  @IsInt() @Min(1) @Max(2147483647)
+  expectedProfileVersion?: number;
 
   @ApiPropertyOptional({ enum: ACCOUNT_TYPES })
   @ValidateIf((_object, value) => value !== undefined)
@@ -142,6 +135,18 @@ export class CompletePasswordResetDto extends ResetAdminUserPasswordDto {
 }
 
 export class AdminUserDto {
+  @ApiProperty({ type: String, nullable: true, maxLength: 100 })
+  fullName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, maxLength: 40 })
+  phone!: string | null;
+
+  @ApiProperty({ minimum: 1, maximum: 2147483647 })
+  profileVersion!: number;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  emailVerifiedAt!: Date | null;
+
   @ApiProperty()
   id!: string;
 

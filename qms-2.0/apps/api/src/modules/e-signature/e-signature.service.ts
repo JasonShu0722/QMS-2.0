@@ -50,6 +50,15 @@ export class ESignatureService {
     });
   }
 
+  async summary(actor: AdminActor) {
+    const organizationId = this.personalOrganization(actor);
+    return this.prisma.$transaction(async (transaction) => {
+      await assertAdminAccess(transaction, actor, organizationId, SIGNATURE_READ_PERMISSION);
+      const rows = await transaction.$queryRaw<Row[]>`SELECT id, label, status, version, created_at, revoked_at FROM user_signatures WHERE organization_id = ${organizationId}::uuid AND user_id = ${actor.id}::uuid ORDER BY created_at DESC, id DESC`;
+      return rows.map((row) => ({ id: String(row.id), label: String(row.label), status: String(row.status), version: Number(row.version), createdAt: new Date(String(row.created_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null }));
+    });
+  }
+
   async register(actor: AdminActor, input: RegisterESignatureDto, traceId: string, key?: string) {
     const organizationId = this.personalOrganization(actor, input.organizationId);
     const label = normalizeText(input.label, 120);

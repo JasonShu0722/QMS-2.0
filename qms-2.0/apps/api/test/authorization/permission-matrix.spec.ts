@@ -38,9 +38,9 @@ describe('granular administration permissions', () => {
     granted = [];
     prisma.$transaction.mockImplementation(async (work: (transaction: typeof prisma) => Promise<unknown>) => work(prisma));
     prisma.user.findUnique.mockResolvedValue({ ...actor, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
-    prisma.user.findFirst.mockResolvedValue({ id: 'target', organizationId: 'org', accountType: 'INTERNAL' });
-    prisma.user.update.mockResolvedValue({ id: 'target' });
-    prisma.user.create.mockResolvedValue({ id: 'target' });
+    prisma.user.findFirst.mockResolvedValue({ id: 'target', organizationId: 'org', accountType: 'INTERNAL', profileVersion: 1 });
+    prisma.user.update.mockResolvedValue({ id: 'target', organizationId: 'org', profileVersion: 2 });
+    prisma.user.create.mockResolvedValue({ id: 'target', organizationId: 'org', profileVersion: 1 });
     prisma.organization.findUnique.mockResolvedValue({ type: 'INTERNAL', status: 'ACTIVE' });
     prisma.userRole.findMany.mockImplementation(async ({ where }: { where: { userId: string } }) => where.userId === actor.id ? [{ organizationId: 'org', role: { id: 'fixture-role', organizationId: 'org', permissions: granted.map((code) => ({ permission: { code } })) } }] : []);
     prisma.userRole.count.mockResolvedValue(0);
@@ -54,7 +54,7 @@ describe('granular administration permissions', () => {
 
   const userActions = {
     create: () => users.create(actor, { organizationId: 'org', username: 'new', accountType: 'INTERNAL', initialPassword: 'password' }, 'trace', 'matrix-key'),
-    update: () => users.update(actor, 'target', { email: 'new@example.test' }, 'org', 'trace', 'matrix-key'),
+    update: () => users.update(actor, 'target', { email: 'new@example.test', expectedProfileVersion: 1 }, 'org', 'trace', 'matrix-key'),
     status: () => users.update(actor, 'target', { status: 'DISABLED' }, 'org', 'trace', 'matrix-key'),
     transfer: () => users.update(actor, 'target', { accountType: 'INTERNAL' }, 'org', 'trace', 'matrix-key'),
     reset: () => users.resetPassword(actor, 'target', 'temporary', 'org', 'trace', 'matrix-key'),

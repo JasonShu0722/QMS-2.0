@@ -9,12 +9,15 @@ import { AuditLogModule } from '../audit-log/audit-log.module.js';
 import { AdminRoleController } from './admin-role.controller.js';
 import { AdminRoleService } from './admin-role.service.js';
 import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
+import { AccountOverviewController } from './account-overview.controller.js';
+import { AccountOverviewService } from './account-overview.service.js';
 
 @Module({
   imports: [IdentityModule, OrganizationModule, AuditLogModule, AdminMutationModule],
-  controllers: [PermissionsController, AdminRoleController],
+  controllers: [PermissionsController, AdminRoleController, AccountOverviewController],
   providers: [
     AuthorizationService,
+    AccountOverviewService,
     AdminRoleService,
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
   ],

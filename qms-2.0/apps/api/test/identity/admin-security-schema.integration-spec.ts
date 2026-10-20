@@ -115,7 +115,7 @@ describe('administrator security PostgreSQL regression', () => {
     const send = (method: 'post' | 'patch' | 'delete' | 'put', path: string, body: object) => request(app.getHttpServer())[method](`/api/v1/admin${path}`).set('Cookie', limitedCookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
     const actions = [
       { permission: 'users:create', status: 201, run: () => send('post', '/users', { organizationId, username: `created-${randomUUID()}`, accountType: 'INTERNAL', initialPassword: 'isolated-initial-password' }) },
-      { permission: 'users:update', status: 200, run: () => send('patch', `/users/${subject.id}`, { email: `isolated-${subject.id}@example.test` }) },
+      { permission: 'users:update', status: 200, run: () => send('patch', `/users/${subject.id}`, { email: `isolated-${subject.id}@example.test`, expectedProfileVersion: 1 }) },
       { permission: 'users:status', status: 200, run: () => send('patch', `/users/${subject.id}`, { status: 'DISABLED' }) },
       { permission: 'users:transfer', status: 200, run: () => send('patch', `/users/${subject.id}`, { accountType: 'INTERNAL' }) },
       { permission: 'users:reset', status: 201, run: () => send('post', `/users/${subject.id}/password-reset`, { temporaryCode: randomUUID() }) },
@@ -152,7 +152,7 @@ describe('administrator security PostgreSQL regression', () => {
     const limitedSession = (await app.get(SessionService).resolve(await app.get(SessionService).create(limited.id, prisma, { mfaVerified: true, reauthenticated: true })))!;
     const limitedActor = { id: limited.id, sessionId: limitedSession.id, organizationId, accountType: 'INTERNAL' as const };
     const service = app.get(AdminUserService);
-    const body = { email: `mixed-${subject.id}@example.test`, status: 'DISABLED' as const };
+    const body = { email: `mixed-${subject.id}@example.test`, status: 'DISABLED' as const, expectedProfileVersion: 1 };
     const key = randomUUID();
     await expect(service.update(limitedActor, subject.id, body, organizationId, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
     expect(await prisma.user.findUniqueOrThrow({ where: { id: subject.id } })).toMatchObject({ email: null, status: 'ACTIVE' });
@@ -513,7 +513,7 @@ describe('administrator security PostgreSQL regression', () => {
       expect(await prisma.auditEvent.count({ where: { traceId: response.body.traceId, action: 'ACTION_REJECTED' } })).toBe(1);
       await expect(prisma.$executeRaw`UPDATE users SET organization_id = ${otherOrganizationId}::uuid WHERE id = ${user.id}::uuid`).rejects.toThrow();
       expect(await snapshot()).toEqual(before);
-      const edited = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}?organizationId=${organizationId}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ organizationId, email: `transfer-${user.id}@example.test`, status: 'DISABLED' }).expect(200);
+      const edited = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}?organizationId=${organizationId}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ organizationId, email: `transfer-${user.id}@example.test`, status: 'DISABLED', expectedProfileVersion: 1 }).expect(200);
       expect(edited.body).toMatchObject({ organizationId, status: 'DISABLED', email: `transfer-${user.id}@example.test` });
       const afterEdit = await snapshot();
       expect(afterEdit.problems).toEqual(before.problems);
@@ -575,13 +575,14 @@ describe('administrator security PostgreSQL regression', () => {
   it('keeps profile unchanged when its audit fails and reports duplicate emails as conflicts', async () => {
     const identity = app.get(IdentityService);
     const targetSession = (await app.get(SessionService).resolve(await app.get(SessionService).create(target.id, prisma, { mfaVerified: true, reauthenticated: true })))!;
-    const before = await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { email: true } });
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { email: true, profileVersion: true } });
     const failure = jest.spyOn(app.get(AuditLogService), 'record').mockRejectedValueOnce(new Error('audit unavailable'));
-    try { await expect(identity.updateProfile(target.id, { email: `profile-${suffix}@example.test` }, randomUUID(), targetSession.id)).rejects.toThrow('audit unavailable'); }
+    try { await expect(identity.updateProfile(target.id, { email: `profile-${suffix}@example.test`, expectedProfileVersion: before.profileVersion }, randomUUID(), targetSession.id, randomUUID())).rejects.toThrow('audit unavailable'); }
     finally { failure.mockRestore(); }
     expect((await prisma.user.findUniqueOrThrow({ where: { id: target.id }, select: { email: true } })).email).toBe(before.email);
-    await identity.updateProfile(actor.id, { email: `admin-${suffix}@example.test` }, randomUUID(), actor.sessionId!);
-    await expect(identity.updateProfile(target.id, { email: `ADMIN-${suffix}@example.test` }, randomUUID(), targetSession.id)).rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_DUPLICATE' } });
+    const adminVersion = (await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { profileVersion: true } })).profileVersion;
+    await identity.updateProfile(actor.id, { email: `admin-${suffix}@example.test`, expectedProfileVersion: adminVersion }, randomUUID(), actor.sessionId!, randomUUID());
+    await expect(identity.updateProfile(target.id, { email: `ADMIN-${suffix}@example.test`, expectedProfileVersion: before.profileVersion }, randomUUID(), targetSession.id, randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'ADMIN_USER_DUPLICATE' } });
   });
 
   it('does not overwrite a concurrent password change after old-password verification', async () => {

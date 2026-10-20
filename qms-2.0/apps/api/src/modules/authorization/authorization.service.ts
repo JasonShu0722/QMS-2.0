@@ -1,6 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import type { AccessContextRequirement } from './access.decorator.js';
 import {
   PLATFORM_ERROR_MESSAGES,
@@ -21,6 +22,10 @@ export interface AuthorizedSession {
 @Injectable()
 export class AuthorizationService {
   constructor(private readonly prisma: PrismaService) {}
+
+  effectiveRolesForContext(userId: string, organizationId: string, now = new Date(), transaction: Prisma.TransactionClient = this.prisma) {
+    return effectiveRoleGrants(transaction, userId, organizationId, now);
+  }
 
   async assertAccess(
     session: AuthorizedSession,
