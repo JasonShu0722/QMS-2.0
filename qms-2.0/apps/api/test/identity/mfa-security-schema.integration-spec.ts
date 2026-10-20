@@ -254,7 +254,7 @@ describe('MFA PostgreSQL security boundaries', () => {
     const wrongPassword = randomUUID();
     const missingTarget = randomUUID();
     await prisma.session.update({ where: { id: current.id }, data: { reauthenticatedAt: new Date(Date.now() - 301_000) } });
-    await expect(identity.updateProfile(account.account.id, { email: 'rejected@example.test' }, staleProfile, current.id)).rejects.toMatchObject({ status: 403 });
+    await expect(identity.updateProfile(account.account.id, { email: 'rejected@example.test', expectedProfileVersion: 1 }, staleProfile, current.id, randomUUID())).rejects.toMatchObject({ status: 403 });
     await expect(identity.changePassword({ userId: account.account.id, currentSessionId: current.id, currentPassword: password, newPassword: 'Rejected replacement password 123!', traceId: stalePassword })).rejects.toMatchObject({ status: 403 });
     await expect(identity.changePassword({ userId: account.account.id, currentSessionId: current.id, currentPassword: 'wrong-secret-123', newPassword: 'Rejected replacement password 123!', traceId: wrongPassword })).rejects.toMatchObject({ status: 401 });
     await prisma.session.update({ where: { id: current.id }, data: { reauthenticatedAt: new Date() } });

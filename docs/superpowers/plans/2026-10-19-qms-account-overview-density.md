@@ -3,11 +3,11 @@
 ## 当前摘要（2026-10-19，Asia/Taipei）
 
 - 批准：负责人已确认三项返修方案并要求继续；[独立规格](../specs/2026-10-19-qms-account-overview-density-design.md)为本轮范围。
-- 映射：REQ-0017／0018／0021 → 复用 Issue #44／#47 → 本地 `codex/account-overview-density` → 候选交付 V0.0.21。旧 PR 均已合并，本轮使用新 PR；负责人已明确“已开源，继续吧”，进入集中推送与最新 CI。
-- 基线：活动 D 盘 checkout 的 `main` 为 `7e987b8`，包括本地 V0.0.20-fix2 文档提交；origin/main 和线上为 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`。本地入口与 Git 外证据位于 `D:/WorkSpace/QMS-2.0-local/`。从当前 HEAD 建功能分支，保留本地提交。
-- 状态：本地实现、返修、账号／密度独立规格与质量复审、最终整合审查全部完成。主代理 Web 全集 91 files／653 tests、冻结源码类型／构建、治理／归档与隔离浏览器矩阵通过；云端 CI 和部署尚未执行。
+- 映射：REQ-0017／0018／0021 → Issue #44／#47 → `codex/account-overview-density` → [PR #54](https://github.com/JasonShu0722/QMS-2.0/pull/54)，V0.0.21 已合并上线；Issue 保持开放。
+- 开工基线（历史）：活动 D 盘 checkout 的 `main` 为 `7e987b8`，包括本地 V0.0.20-fix2 文档提交；origin/main 和线上为 `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`。本地入口与 Git 外证据位于 `D:/WorkSpace/QMS-2.0-local/`。从当前 HEAD 建功能分支，保留本地提交。
+- 状态：本地 91 files／653 tests、独立规格／质量／整合审查及隔离浏览器通过。PR CI39236058320、main CI39237316369 各完整 9 jobs PASS；Deploy39238036827 PASS，生产完整 SHA `ecf7224e023104898606fb6fd154e1b992a95e27`。快照／迁移／同 SHA 镜像／服务及公开 HTTP／契约／资源联合核验通过，真实登录业务人工验收待执行。
 - 当前授权：负责人“已开源，继续吧”解除私有期间本地限制，接续本轮已批准返修的推送、新 PR、CI，以及本聊天已批准范围检查通过后的合并和部署；已实际查询仓库为 public。Issue 关闭、飞书写入与真实业务人工验收仍单独保留，禁止预览数据库 55440。
-- 下一动作：核对 main 基线、集中推送本分支并关联 Issue #44／#47 建新 PR，最新 PR 全部检查通过后合并，核验同 SHA 的 main CI 与自动部署。云端步骤结束即通知可闭源；不修改仓库可见性。
+- 下一动作：负责人确认其他布局无意见，要求展示卡片内部适度放宽并横展同类规范，尺寸参考压缩前 V0.0.20；下节 V0.0.21-fix3 已完成本地横展、37项回归／49组浏览器、构建治理与独立审查；已到云端 CI 边界，本次私有期间不推送，到云端 CI 边界通知；既有已部署 ecf7224 证据保留。Issue 关闭和飞书写入仍未授权。
 
 > 面向执行代理：使用项目 QMS Superpowers 和 subagent-driven-development。分工仅允许不相交文件写入；验证冻结覆盖源码，Git 由主代理管理。
 
@@ -52,8 +52,8 @@
 
 ## 后续交付与人工验收
 
-- [ ] 负责人恢复允许的 Actions 条件后，核对远程 base／head，复用原 Issue 关联新 PR，集中推送并执行最新完整 CI。负责人后续明确公开并继续，已进入本步骤。
-- [ ] 合并／生产部署分别核对授权，按交付流程验证 SHA、镜像、迁移／快照、健康与线上资源；不能以旧版本部署替代本轮证据。
+- [x] 负责人恢复允许的 Actions 条件后，核对远程 base／head，复用原 Issue 关联新 PR，集中推送并执行最新完整 CI。负责人后续明确公开并继续，已进入本步骤。
+- [x] 合并／生产部署分别核对授权，按交付流程验证 SHA、镜像、迁移／快照、健康与线上资源；不能以旧版本部署替代本轮证据。
 - [ ] 负责人使用实际账号验证一张概览、一份会话表、当前会话保护、撤销／改密后刷新、区域内翻页滚动、邮箱草稿、安全弹窗焦点，以及代表性业务页面留白和触控尺寸。记录版本、页面、角色、设备、结果。
 - [ ] Issue 关闭与飞书台账回填等待独立授权；收敛后的公共视觉规则只维护到统一前端规范，不另建平行规范。
 
@@ -127,3 +127,48 @@
 ### 云端接续（2026-10-19）
 
 负责人已明确公开并继续。只读核对仓库 public、无开放 PR、Issue #44／#47 仍开放且未撤回；origin/main 仍为 c7dc86b，功能分支基线领先两提交、没有落后。本次追加仅修正文档中的活动目录和授权记录，不改源码；复用同一源码 91 files／653 tests、本地浏览器及独立审查证据。集中推送前再做治理，不重复运行业务全集。
+
+### 最终上线与联合只读核验（2026-10-19，Asia/Taipei）
+
+- [PR #54](https://github.com/JasonShu0722/QMS-2.0/pull/54) 已于 18:25 合并，完整 SHA `ecf7224e023104898606fb6fd154e1b992a95e27`。PR head `5dba5177431d1cde04d9a46fe2041591098361b5`，base `c7dc86b21ba6bb72cea3c3ccfabda1955e26de90`；合并树与 PR head 完全一致。
+- [PR CI39236058320](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39236058320)、[main CI39237316369](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39237316369) 均在 attempt1 完整 9 jobs PASS，以项目原有 evaluateDeployJobs 对实际指定 attempt、每个 job 的 SHA／run_id／run_attempt 和结果重新校验。无重跑、无检查跳过或流程改写。
+- PR 与 main 的真实 PostgreSQL 各 81 suites／872 tests、编译后 Worker 各 8 tests PASS；两个 integration 的 Destroy ephemeral integration services 步骤均 success。日志保存在 Git 外 release-job-118005351915.log、release-job-118009494580.log。
+- [Deploy39238036827](https://github.com/JasonShu0722/QMS-2.0/actions/runs/39238036827) 于 18:35 成功，完整 SHA 同上。release-verify-deploy.py 核验迁移前加密快照存在且先于迁移、No pending migrations、API／Web health、Worker 生命周期和完成标记；联合核验另核对 API／Worker 共用相同完整 SHA 镜像、Web 对应相同 SHA 镜像，Compose wait 健康事件与 Worker 就绪守卫完成。
+- 18:37 公开 HTTP：登录／OpenAPI 200，匿名 /me 与 /me/sessions/history 均 401；API schema SHA-256 与上线前相同。首页 4 个资源均 200，SHA-256 全部匹配已验证本地构建；新业务 JS 为 index-CaTm60_z.js、CSS 为 index-CdSG_FcO.css，确认账号概览／统一会话资源和 page8／section6／card8／table4／topbar54。不把静态资源证据扩写为真实业务人工验收。
+- Git 外证据：release-deploy-39238036827-verified.json、account-density-live-before.json、account-density-live-after.json、account-density-joint-verification.json、account-density-release-checkpoint.json。PR 正文已补实际 CI／部署链接与验收限制；18:37 回读远端 main 与本地部署源码均为同一 SHA。
+- 云端工作已结束并通知可以闭源；没有修改仓库可见性。Issue 未关闭、飞书未写入、真实登录业务验收仍待负责人；没有新建本地数据库／Docker 资源、未触碰保留 55440。最终本地收尾文档提交不再推送，避免仅状态／索引更新再次触发完整业务 CI 与部署；后续按下一次已授权交付集中同步。
+
+## V0.0.21-fix3：展示卡片内部尺寸横展（2026-10-19）
+
+### 已确认范围与尺寸来源
+
+负责人反馈工作入口／质量概览内部过紧，随后明确“横展同类卡片的规范”“可以对比上一版的尺寸进行设定”。这是既有 REQ-0021 / Issue #47 的局部纠偏；其他已认可布局保持。基线 main9880531（包括前次未推收尾文档），线上 ecf7224；新分支 codex/display-card-spacing，私有期间仅本地，不追加云端写入。后续本项需关联原 Issue 的新 PR，不推已合并 PR54。
+
+通过 git show c7dc86b 只读比较 V0.0.20 的 workbench.css / theme.css：展示卡片正文 padding16、图标与文本 gap12、入口标题与说明 gap8、概览标题下8、指标区边界／列距／值上间距12；上一版质量分析嵌套摘要卡片 padding12。采用这些既有尺寸，不新设密度选项。
+
+统一展示类卡片：快捷入口、概览／看板／趋势／辅助分析、任务统计数值卡与通知内容卡。公共 CSS 标记 qms-display-card / 共享 display padding16、display gap12，同时支持原生容器和 AntD Card 正文。嵌套质量领域／分析摘要沿旧版 padding12，保持相邻标题／值已有4或6间隔。账号概览含编辑表单且已被认可，不据名称 overview 自动纳入；筛选、台账、导入、工作流表单和安全卡片继续紧凑。未被正式页面引用的旧 metric-tile 样式不算已接入。
+
+### 实施与验证步骤
+
+- [x] 实现子代理先以实际浏览器计算样式检查确认旧 padding8 不符合目标16，再最小修改 theme.css、workbench 样式／标记、质量分析样式／标记、任务统计及内部／供应商通知展示卡片标记；不改业务逻辑、共享页面8/6、区块6、表格4、顶栏54及36/44控件。
+- [x] 主代理在本统一规范补“按用途选择密度”的公共规则及旧版来源，记录实际横展清单，避免以后统一压缩所有 Card。
+- [x] 串行执行主题、工作台、质量分析、任务统计、内部任务通知和供应商通知相邻测试；纯 CSS 纠偏不新增镜像实现的机械测试，浏览器验证实际层叠、宽窄屏与中英文。主题已有断言如只约束卡片外标题间距保持，不为通过而删除。
+- [x] 浏览器在1440/1024/390、浅深三品牌色检查工作台与其他同类卡片计算padding、内部间距、无整页横向溢出、长文字换行；确认邻近表格／筛选／账号页仍8/6/4及顶栏54。截图库和测试数据仅Git外，隔离前端不等于真实业务验收。
+- [x] 独立规格审查后质量审查；主代理类型／构建／治理／diff检查，集中本地提交 V0.0.21-fix3，私有仓库云端边界停止并提供预览。
+
+### 维护与交付边界
+
+无API、数据、权限、迁移或依赖变更。真实资源旧PASS仅作历史，不因纯视觉纠偏再建数据库；当前上线版保持ecf7224，局部修复需后续最新CI与部署才能计上线。Issue关闭／飞书写入不执行。
+
+### fix3 已取得证据
+
+实现者01a153d0-a368-7c31-94f9-31eb3c37b247，限定8个源码文件，最终仅CSS／class标记变更。规格审查01a153d3-60c9-7f03-9c93-7c04344dd00e PASS，随后质量审查01a153d5-332d-7ae3-9008-32a14d82edd3 PASS，未发现新增P1/P2；静态审查与主代理运行证据分开记录。
+
+- 浏览器红灯：display-card-browser-red.log，真实应用工作台 entry／overview 实际8px与目标16px不符，exit1。
+- 浏览器绿灯：display-card-browser-green.log／display-card-browser-results.json，Chromium153.0.8010.12，49组通过，exit0。工作台3宽×6主题×中英共36；质量分析、任务统计、内部通知、供应商通知各3宽共12；账号紧凑正文8px对照1组。工作台16/12/8、质量三展示面板16与嵌套12、9统计及通知Card正文16通过；筛选8、表格实际数据行4、页面8/6、外区块6、顶栏54及无整页横向溢出通过。
+- 首轮绿灯脚本误选AntD隐藏测量行，tablepadding读为0而FAIL；改为带data-row-key真实数据行后整轮通过，未为此修改源码或表格密度。
+- 主代理实际查看display-card-workbench-1440.png／display-card-workbench-390.png；测试数据仅隔离前端fixture，不计生产登录或人工业务验收。浏览器和本轮Vite专属进程自动关闭。
+- 定向回归：Vitest依次覆盖theme、Workbench、quality-data、task-statistics、task-inbox、SupplierNotificationsPage，6files／37tests通过，无失败／跳过；display-card-tests.log。未新增镜像CSS文本断言，已有公共紧凑基线测试仍通过。
+- 类型检查 tsc --noEmit、tsc -b 与 Vite生产构建全部exit0；display-card-types.log、display-card-build.log。保留既有大chunk提示，不改阈值。只验证受影响范围，不重跑未受影响API／PG／Worker或将旧PASS冒充本轮。
+
+- 最终治理 check:governance 通过（36文档／287本地链接／20来源复核／123依赖对、阶段覆盖1项），git diff --check通过；display-card-governance.log。本地提交 V0.0.21-fix3，所有截图／浏览器脚本／fixture／原始日志留Git外。仓库当前private，尚未推送、开PR、触发Actions或部署；预览可评审后按负责人恢复的云端条件接续，原PR54不追加发布。

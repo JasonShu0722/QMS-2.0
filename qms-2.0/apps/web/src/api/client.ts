@@ -191,6 +191,28 @@ export function getAccountProfile(signal?: AbortSignal): Promise<AccountProfile>
   return request<AccountProfile>('/api/v1/me', { signal });
 }
 
+export function getAccountOverview(signal?: AbortSignal): Promise<components['schemas']['AccountOverviewDto']> {
+  return request<components['schemas']['AccountOverviewDto']>('/api/v1/me/overview', { signal });
+}
+
+export function getMySignatureSummary(signal?: AbortSignal): Promise<components['schemas']['ESignatureSummaryDto'][]> {
+  return request<components['schemas']['ESignatureSummaryDto'][]>('/api/v1/e-signatures/mine/summary', { signal });
+}
+
+export async function registerMySignature(body: components['schemas']['RegisterESignatureDto'], key: string, signal?: AbortSignal): Promise<components['schemas']['ESignatureDto']> {
+  const token = await csrfToken();
+  return request<components['schemas']['ESignatureDto']>('/api/v1/e-signatures', {
+    method: 'POST', signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body),
+  });
+}
+
+export async function revokeMySignature(id: string, body: components['schemas']['RevokeESignatureDto'], key: string, signal?: AbortSignal): Promise<components['schemas']['ESignatureDto']> {
+  const token = await csrfToken();
+  return request<components['schemas']['ESignatureDto']>(`/api/v1/e-signatures/${encodeURIComponent(id)}/revoke`, {
+    method: 'POST', signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body),
+  });
+}
+
 export async function updateAccountAvatar(body: components['schemas']['UpdateAccountAvatarDto'], key: string, signal?: AbortSignal): Promise<AccountProfile> {
   const token = await csrfToken();
   return request<AccountProfile>('/api/v1/me/avatar', {
@@ -200,11 +222,11 @@ export async function updateAccountAvatar(body: components['schemas']['UpdateAcc
   });
 }
 
-export async function updateAccountProfile(body: UpdateAccountProfileRequest): Promise<AccountProfile> {
+export async function updateAccountProfile(body: UpdateAccountProfileRequest, key: string): Promise<AccountProfile> {
   const token = await csrfToken();
   return request<AccountProfile>('/api/v1/me', {
     method: 'PATCH',
-    headers: { 'x-csrf-token': token },
+    headers: { 'x-csrf-token': token, 'Idempotency-Key': key },
     body: JSON.stringify(body),
   });
 }

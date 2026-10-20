@@ -38,18 +38,18 @@ export function TaskStatisticsPage() {
     {error ? <Alert type={isDenied(error) ? 'warning' : 'error'} showIcon title={isDenied(error) ? '暂无任务统计访问权限' : error instanceof ApiError ? safeAccountError(error) : '任务统计加载失败，请重试。'} description={error instanceof ApiError ? error.traceId : undefined} action={isDenied(error) ? undefined : <Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}
     {loading ? <div className="task-statistics-loading"><Spin /></div> : statistics ? <>
       <Row gutter={[6, 6]}>
-        <Col xs={24} sm={12} lg={6}><Card><Statistic title="进行中任务" value={statistics.total} /></Card></Col>
-        <Col xs={24} sm={12} lg={6}><Card><Statistic title="待处理" value={statistics.pending} /></Card></Col>
-        <Col xs={24} sm={12} lg={6}><Card><Statistic title="处理中" value={statistics.inProgress} /></Card></Col>
-        <Col xs={24} sm={12} lg={6}><Card className={statistics.overdue ? 'task-statistics-card--danger' : undefined}><Statistic title="已逾期" value={statistics.overdue} /></Card></Col>
-        <Col xs={24} sm={12} lg={6}><Card className={statistics.failed ? 'task-statistics-card--danger' : undefined}><Statistic title="失败待恢复" value={statistics.failed} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="qms-display-card"><Statistic title="进行中任务" value={statistics.total} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="qms-display-card"><Statistic title="待处理" value={statistics.pending} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="qms-display-card"><Statistic title="处理中" value={statistics.inProgress} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className={statistics.overdue ? 'qms-display-card task-statistics-card--danger' : 'qms-display-card'}><Statistic title="已逾期" value={statistics.overdue} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className={statistics.failed ? 'qms-display-card task-statistics-card--danger' : 'qms-display-card'}><Statistic title="失败待恢复" value={statistics.failed} /></Card></Col>
       </Row>
       <Row gutter={[6, 6]} className="task-statistics-secondary">
-        <Col xs={24} sm={8}><Card><Statistic title="未领取" value={statistics.unclaimed} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="我负责" value={statistics.mine} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="7 天内到期" value={statistics.dueThisWeek} /></Card></Col>
+        <Col xs={24} sm={8}><Card className="qms-display-card"><Statistic title="未领取" value={statistics.unclaimed} /></Card></Col>
+        <Col xs={24} sm={8}><Card className="qms-display-card"><Statistic title="我负责" value={statistics.mine} /></Card></Col>
+        <Col xs={24} sm={8}><Card className="qms-display-card"><Statistic title="7 天内到期" value={statistics.dueThisWeek} /></Card></Col>
       </Row>
-      <Card className="task-statistics-note"><Typography.Text type="secondary">今日到期任务：{statistics.dueToday} 项。统计只包含当前可见且仍处于运行中的流程任务，失败待恢复单独计数。</Typography.Text></Card>
+      <Card className="task-statistics-note qms-display-card"><Typography.Text type="secondary">今日到期任务：{statistics.dueToday} 项。统计只包含当前可见且仍处于运行中的流程任务，失败待恢复单独计数。</Typography.Text></Card>
     </> : !error ? <Empty description="暂无可统计的任务" /> : null}
   </section>;
 }

@@ -9,13 +9,14 @@ import { assertRecentAuthentication, isGovernancePermission, mfaPolicy } from '.
 import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 import { sessionLifetimeMs } from './session-policy.js';
 import type { AccountSessionHistoryQueryDto } from './dto/account.dto.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
 
 type SessionTransaction = Pick<PrismaService, '$queryRaw' | 'user' | 'session' | 'auditEvent'>;
 
-type SessionCreationTransaction = Pick<PrismaService, 'session' | 'user' | 'userRole'>;
+type SessionCreationTransaction = Pick<PrismaService, 'session' | 'user' | 'userRole' | 'userPosition'>;
 type SessionCreationOptions = { mfaVerified?: boolean; reauthenticated?: boolean; rememberMe?: boolean; expiresAt?: Date };
 export type IssuedSession = { sessionToken: string; sessionExpiresAt: Date };
 
@@ -75,7 +76,7 @@ export class SessionService {
     const token = randomBytes(32).toString('base64url');
     const user = await transaction.user.findUniqueOrThrow({ where: { id: userId }, select: { securityVersion: true, mustChangePassword: true } });
     if (user.mustChangePassword) throw new HttpException({ code: 'AUTH_PASSWORD_CHANGE_REQUIRED', message: '请先修改临时密码' }, 401);
-    const grants = verified.rememberMe ? await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } }) : [];
+    const grants = verified.rememberMe ? await effectiveRoleGrants(transaction, userId) : [];
     const administrator = grants.some(({ role }) => role.permissions.some(({ permission }) => isGovernancePermission(permission.code)));
     const lifetimeType = verified.rememberMe ? administrator ? 'REMEMBERED_ADMIN' : 'REMEMBERED_USER' : 'STANDARD';
     const expiresAt = new Date(Math.min(Date.now() + sessionLifetimeMs(verified.rememberMe ?? false, administrator), verified.expiresAt?.getTime() ?? Infinity));

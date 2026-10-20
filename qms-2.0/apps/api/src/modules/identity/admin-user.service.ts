@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { PasswordService } from './password.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -8,10 +8,13 @@ import type { CreateAdminUserDto, AdminUserListQueryDto, UpdateAdminUserDto, Adm
 import { userUpdatePermissions } from '../authorization/permission-catalog.js';
 import { TemporaryPasswordService } from './temporary-password.service.js';
 import { assertRecentAuthentication, mfaPolicy } from '../../common/security/session-security.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
+import { profileData } from './profile-fields.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
   id: true, username: true, email: true, accountType: true, status: true, mfaEnabled: true,
+  fullName: true, phone: true, profileVersion: true, emailVerifiedAt: true,
   organizationId: true, createdAt: true, updatedAt: true,
   organization: { select: { id: true, code: true, name: true } },
 } as const;
@@ -73,22 +76,31 @@ export class AdminUserService {
     });
   }
 
-  create(actor: AdminUserActor, dto: CreateAdminUserDto, traceId: string, key?: string) {
-    return this.mutations.run({ actor, organizationId: dto.organizationId, key, action: 'USER_CREATED', payload: dto, permission: 'account:users:create', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
+  async create(actor: AdminUserActor, dto: CreateAdminUserDto, traceId: string, key?: string) {
+    const receipt = await this.mutations.run({ actor, organizationId: dto.organizationId, key, action: 'USER_CREATED', payload: dto, permission: 'account:users:create', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
       await this.assertOrganizationAccountType(transaction, dto.organizationId, dto.accountType);
       const passwordHash = await this.passwords.hash(dto.initialPassword);
-      const user = await transaction.user.create({ data: { organizationId: dto.organizationId, username: dto.username.trim(), email: dto.email?.trim().toLowerCase() ?? null, accountType: dto.accountType, passwordHash }, select: USER_SELECT });
+      const user = await transaction.user.create({ data: { organizationId: dto.organizationId, username: dto.username.trim(), ...profileData(dto), accountType: dto.accountType, passwordHash }, select: USER_SELECT });
       await this.record(transaction, actor, dto.organizationId, user.id, 'USER_CREATED', traceId);
-      return user;
+      return { userId: user.id, profileVersion: user.profileVersion, organizationId: user.organizationId };
     });
+    const userId = receipt.userId ?? (receipt as unknown as { id?: string }).id;
+    if (!userId) adminError('ADMIN_USER_NOT_FOUND', 404);
+    return this.mutationProjection(actor, userId, dto.organizationId, dto.organizationId, ['account:users:create']);
   }
 
-  update(actor: AdminUserActor, userId: string, dto: UpdateAdminUserDto, organizationId: string, traceId: string, key?: string) {
+  async update(actor: AdminUserActor, userId: string, dto: UpdateAdminUserDto, organizationId: string, traceId: string, key?: string) {
     const requiredPermissions = userUpdatePermissions(dto);
+    const data = profileData(dto);
+    const profileSubmitted = Object.keys(data).length > 0;
     const additionalAccess = actor.id !== userId && dto.organizationId && dto.organizationId !== organizationId ? [{ organizationId: dto.organizationId, permission: 'account:users:transfer' }] : [];
-    return this.mutations.run({ actor, organizationId, key, action: 'USER_UPDATED', payload: { userId, dto }, permission: requiredPermissions, additionalAccess, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
-      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true, organizationId: true, accountType: true } });
+    await this.mutations.run({ actor, organizationId, key, action: 'USER_UPDATED', payload: { userId, dto }, permission: requiredPermissions, additionalAccess, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true, organizationId: true, accountType: true, fullName: true, phone: true, email: true, profileVersion: true } });
       if (!existing) adminError('ADMIN_USER_NOT_FOUND', 404);
+      if (profileSubmitted && (!Number.isInteger(dto.expectedProfileVersion) || dto.expectedProfileVersion! < 1 || dto.expectedProfileVersion! > 2147483647)) throw new BadRequestException('Invalid profile version');
+      if (profileSubmitted && (existing.profileVersion !== dto.expectedProfileVersion || existing.profileVersion === 2147483647)) adminError('CONCURRENCY_CONFLICT', 409);
+      const changedFields = Object.keys(data).filter((field) => data[field as keyof typeof data] !== existing[field as keyof typeof data]);
       const targetOrganizationId = dto.organizationId ?? existing.organizationId;
       const targetType = dto.accountType ?? existing.accountType;
       const identityChanged = targetOrganizationId !== existing.organizationId || targetType !== existing.accountType;
@@ -106,8 +118,13 @@ export class AdminUserService {
         ]);
         if (references.some((count) => count > 0)) adminError('ADMIN_USER_ORGANIZATION_IN_USE', 409);
       }
+      // Target locking may outlive a position grant or recent authentication.
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, requiredPermissions);
+      for (const access of additionalAccess) await assertAdminAccess(transaction, actor, access.organizationId, access.permission);
       const user = await transaction.user.update({ where: { id: userId }, data: {
-        ...(dto.email !== undefined ? { email: dto.email?.trim().toLowerCase() ?? null } : {}),
+        ...data,
+        ...(changedFields.length ? { profileVersion: { increment: 1 } } : {}),
         ...(dto.accountType ? { accountType: dto.accountType } : {}),
         ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
         ...(dto.status ? { status: dto.status } : {}),
@@ -122,7 +139,18 @@ export class AdminUserService {
         await transaction.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
         await transaction.passwordReset.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
       }
-      await this.record(transaction, actor, organizationId, userId, 'USER_UPDATED', traceId);
+      await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_UPDATED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId, ...(profileSubmitted ? { changedFields: changedFields.join(','), resourceVersion: user.profileVersion } : {}) } }, transaction);
+      return { userId: user.id, profileVersion: user.profileVersion, organizationId: user.organizationId };
+    });
+    return this.mutationProjection(actor, userId, organizationId, dto.organizationId ?? organizationId, requiredPermissions);
+  }
+
+  private mutationProjection(actor: AdminActor, userId: string, organizationId: string, targetOrganizationId: string, permissions: string[]) {
+    return this.prisma.$transaction(async (transaction) => {
+      await assertAdminAccess(transaction, actor, organizationId, permissions);
+      if (targetOrganizationId !== organizationId) await assertAdminAccess(transaction, actor, targetOrganizationId, 'account:users:transfer');
+      const user = await transaction.user.findFirst({ where: { id: userId, organizationId: targetOrganizationId }, select: USER_SELECT });
+      if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
       return user;
     });
   }
@@ -167,7 +195,7 @@ export class AdminUserService {
   }
 
   async assertTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, requiredPermissions: string[], identityChanged = false) {
-    const assignments = await transaction.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    const assignments = await effectiveRoleGrants(transaction, userId);
     if (identityChanged && assignments.some((assignment) => assignment.role.organizationId === null)) adminError('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
     for (const organizationId of new Set(assignments.map((assignment) => assignment.organizationId))) {
       const granted = await assertAdminAccess(transaction, actor, organizationId, requiredPermissions);

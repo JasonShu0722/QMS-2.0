@@ -14,6 +14,8 @@ import { assertRecentAuthentication } from '../../common/security/session-securi
 import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 import { PasswordChangeChallengeService } from './password-change-challenge.service.js';
 import { replacePassword } from './password-credentials.js';
+import { adminMutationDigests } from '../../common/security/security-keyring.js';
+import { profileData } from './profile-fields.js';
 
 type RateLimitedRequest = Request & { [RATE_LIMIT_KEY]?: string };
 
@@ -119,6 +121,10 @@ export class IdentityService {
       id: user.id,
       username: user.username,
       email: user.email,
+      fullName: user.fullName,
+      phone: user.phone,
+      profileVersion: user.profileVersion,
+      emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
       accountType: user.accountType,
       status: user.status,
       mfaEnabled: user.mfaEnabled,
@@ -132,15 +138,29 @@ export class IdentityService {
     };
   }
 
-  async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string, sessionId: string): Promise<AccountProfileDto> {
+  async updateProfile(userId: string, dto: UpdateAccountProfileDto, traceId: string, sessionId: string, key?: string): Promise<AccountProfileDto> {
     try {
+      if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
+      const data = profileData(dto);
+      const digests = adminMutationDigests(JSON.stringify({ userId, ...data, expectedProfileVersion: dto.expectedProfileVersion }), process.env.QMS_RATE_LIMIT_SECRET?.trim() ?? 'qms-development-rate-limit-secret-not-for-production');
       return await this.prisma.$transaction(async (transaction) => {
-        await assertRecentAuthentication(transaction, { id: userId, sessionId });
-        await transaction.user.update({ where: { id: userId }, data: dto.email === undefined ? {} : { email: dto.email?.trim().toLowerCase() ?? null } });
+        const { user } = await assertRecentAuthentication(transaction, { id: userId, sessionId });
+        const identity = { actorUserId: userId, organizationId: user.organizationId, key };
+        const receipt = await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
+        if (receipt) {
+          if (receipt.action !== 'PROFILE_UPDATED' || !digests.includes(receipt.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
+          return this.profile(userId, transaction);
+        }
+        if (!Number.isInteger(dto.expectedProfileVersion) || dto.expectedProfileVersion < 1 || dto.expectedProfileVersion > 2147483647) throw new HttpException('Invalid profile version', 400);
+        if (user.profileVersion !== dto.expectedProfileVersion || user.profileVersion === 2147483647) adminError('CONCURRENCY_CONFLICT', 409);
+        const changedFields = Object.keys(data).filter((field) => data[field as keyof typeof data] !== user[field as keyof typeof data]);
+        const version = user.profileVersion + Number(changedFields.length > 0);
+        if (changedFields.length) await transaction.user.update({ where: { id: userId, profileVersion: dto.expectedProfileVersion }, data: { ...data, profileVersion: version } });
+        await transaction.adminMutation.create({ data: { ...identity, action: 'PROFILE_UPDATED', requestDigest: digests[0]!, response: { value: { userId, profileVersion: version } } } });
         const profile = await this.profile(userId, transaction);
-        await this.audit.record({ actorUserId: userId, organizationId: profile.organization.id, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId }, transaction);
+        await this.audit.record({ actorUserId: userId, organizationId: profile.organization.id, action: 'PROFILE_UPDATED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { changedFields: changedFields.join(','), resourceVersion: version } }, transaction);
         return profile;
-      });
+      }, { isolationLevel: 'ReadCommitted' });
     } catch (error) {
       return rethrowSecurityRejection(this.prisma, this.audit, error, { userId, resourceType: 'User', resourceId: userId, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' });
     }

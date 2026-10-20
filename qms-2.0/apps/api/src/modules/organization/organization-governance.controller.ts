@@ -6,7 +6,7 @@ import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guar
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { OrganizationService } from './organization.service.js';
-import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DepartmentDto, OrganizationDto, OrganizationListQueryDto, PositionDto, ReplaceUserPositionsDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UserPositionDto } from './organization.dto.js';
+import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DepartmentDto, OrganizationDto, OrganizationListQueryDto, PositionDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UserPositionDto } from './organization.dto.js';
 
 const scope = { source: 'params' as const, field: 'organizationId', optional: false };
 
@@ -71,6 +71,22 @@ export class OrganizationGovernanceController {
   @RequireAccess({ featurePermission: 'organization:structure:read', organizationScope: scope })
   positions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Query() query: OrganizationListQueryDto) {
     return this.organizations.positions(organizationId, query);
+  }
+
+  @Get(':organizationId/positions/:positionId/roles')
+  @ApiOkResponse({ type: PositionRolesDto })
+  @RequireAccess({ featurePermission: 'organization:structure:read', featurePermissions: () => ['organization:structure:read', 'account:roles:read'], organizationScope: scope })
+  positionRoles(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Req() request: Request) {
+    return this.organizations.positionRoles(this.actor(request), organizationId, positionId);
+  }
+
+  @Put(':organizationId/positions/:positionId/roles')
+  @ApiOkResponse({ type: PositionRolesDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', featurePermissions: () => ['organization:structure:manage', 'account:roles:read', 'account:roles:assign'], organizationScope: scope })
+  replacePositionRoles(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Body() dto: ReplacePositionRolesDto, @Req() request: Request) {
+    return this.organizations.replacePositionRoles(this.actor(request), organizationId, positionId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Post(':organizationId/positions')

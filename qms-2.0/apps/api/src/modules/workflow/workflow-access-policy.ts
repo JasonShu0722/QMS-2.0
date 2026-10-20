@@ -1,4 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import { effectiveRoleMembershipSql } from '../../common/security/effective-role-membership.sql.js';
 import type { AuthorizedSessionUser } from '../authorization/authorization.service.js';
 import { workflowError } from './workflow-runtime-policy.js';
 
@@ -6,11 +7,10 @@ export type WorkflowActor = AuthorizedSessionUser & { sessionId: string };
 
 export function featurePredicate(userId: Prisma.Sql, organizationId: Prisma.Sql, permission: Prisma.Sql): Prisma.Sql {
   return Prisma.sql`EXISTS (
-    SELECT 1 FROM user_roles membership
-    JOIN roles role ON role.id = membership.role_id
+    SELECT 1 FROM roles role
     JOIN role_permissions grant_record ON grant_record.role_id = role.id
     JOIN permissions permission ON permission.id = grant_record.permission_id
-    WHERE membership.user_id = ${userId} AND membership.organization_id = ${organizationId}
+    WHERE role.id IN (${effectiveRoleMembershipSql(userId, organizationId)})
       AND (role.organization_id = ${organizationId} OR role.organization_id IS NULL)
       AND permission.code = ${permission}
   )`;
@@ -38,8 +38,8 @@ export function assignmentPredicate(userId: Prisma.Sql, organizationId: Prisma.S
     )
     AND (NOT ${assignment} ? 'assigneeUserId' OR ${assignment}->>'assigneeUserId' = ${userId}::text)
     AND (NOT ${assignment} ? 'roleCode' OR EXISTS (
-      SELECT 1 FROM user_roles membership JOIN roles role ON role.id = membership.role_id
-      WHERE membership.user_id = ${userId} AND membership.organization_id = ${organizationId}
+      SELECT 1 FROM roles role
+      WHERE role.id IN (${effectiveRoleMembershipSql(userId, organizationId)})
         AND (role.organization_id = ${organizationId} OR role.organization_id IS NULL)
         AND role.code = ${assignment}->>'roleCode'
     ))

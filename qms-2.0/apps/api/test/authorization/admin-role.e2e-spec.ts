@@ -13,6 +13,7 @@ describe('administrator role HTTP contract', () => {
   const roleId = '30000000-0000-4000-8000-000000000001';
   const user = { id: '10000000-0000-4000-8000-000000000001', organizationId, accountType: 'INTERNAL', status: 'ACTIVE', organization: { status: 'ACTIVE' } };
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     $queryRaw: jest.fn(),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -43,7 +44,7 @@ describe('administrator role HTTP contract', () => {
     prisma.session.findFirst.mockResolvedValue({ id: 'session', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
     prisma.userRole.count.mockResolvedValue(1);
     prisma.userRole.findFirst.mockResolvedValue({ organizationId });
-    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'].map((code) => ({ permission: { code } })) } }]);
+    prisma.userRole.findMany.mockResolvedValue([{ organizationId, role: { id: roleId, organizationId, permissions: ['account:roles:read', 'account:roles:create', 'account:roles:update', 'account:roles:delete', 'account:roles:assign'].map((code) => ({ permission: { code } })) } }]);
     prisma.role.findMany.mockResolvedValue([]);
     prisma.permission.findMany.mockResolvedValue([]);
     prisma.role.create.mockResolvedValue({ id: roleId, organizationId, code: 'QUALITY', name: 'Quality', permissions: [] });
@@ -74,7 +75,7 @@ describe('administrator role HTTP contract', () => {
   it('requires authentication and feature permission for directory and roles', async () => {
     await request(app.getHttpServer()).get('/api/v1/admin/roles').expect(401);
     await request(app.getHttpServer()).get('/api/v1/admin/permissions').set('Cookie', cookies).expect(200);
-    prisma.userRole.count.mockResolvedValue(0);
+    prisma.userRole.findMany.mockResolvedValue([{ organizationId, role: { id: roleId, organizationId, permissions: [] } }]);
     await request(app.getHttpServer()).get('/api/v1/admin/roles').set('Cookie', cookies).expect(403);
   });
 

@@ -2,8 +2,12 @@
   --qms-page-padding: 8px;
   --qms-section-gap: 6px;
   --qms-card-padding: 8px;
+  --qms-display-card-padding: 16px;
+  --qms-display-card-gap: 12px;
   --qms-table-cell-padding-block: 4px;
 }
+.qms-display-card:not(.ant-card) { padding: var(--qms-display-card-padding); }
+.qms-display-card.ant-card > .ant-card-body { padding: var(--qms-display-card-padding); }
 @media (max-width: 1200px) {
   :root { --qms-page-padding: 6px; }
 }

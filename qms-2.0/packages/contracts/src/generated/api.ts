@@ -751,6 +751,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountOverviewController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/current": {
         parameters: {
             query?: never;
@@ -857,6 +873,22 @@ export interface paths {
         get: operations["OrganizationGovernanceController_positions"];
         put?: never;
         post: operations["OrganizationGovernanceController_createPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/positions/{positionId}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_positionRoles"];
+        put: operations["OrganizationGovernanceController_replacePositionRoles"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4511,6 +4543,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/e-signatures/mine/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/e-signatures/mine": {
         parameters: {
             query?: never;
@@ -5425,6 +5473,11 @@ export interface components {
             name: string;
         };
         AccountProfileDto: {
+            fullName: string | null;
+            phone: string | null;
+            profileVersion: number;
+            /** Format: date-time */
+            emailVerifiedAt: string | null;
             id: string;
             username: string;
             email?: string | null;
@@ -5439,7 +5492,10 @@ export interface components {
             organization: components["schemas"]["OrganizationSummaryDto"];
         };
         UpdateAccountProfileDto: {
+            fullName?: string | null;
+            phone?: string | null;
             email?: string | null;
+            expectedProfileVersion: number;
         };
         ChangePasswordDto: {
             currentPassword: string;
@@ -5508,6 +5564,11 @@ export interface components {
             rows: components["schemas"]["AdminUserBatchResultRowDto"][];
         };
         AdminUserDto: {
+            fullName: string | null;
+            phone: string | null;
+            profileVersion: number;
+            /** Format: date-time */
+            emailVerifiedAt: string | null;
             id: string;
             username: string;
             email?: string | null;
@@ -5538,15 +5599,21 @@ export interface components {
             expectedSecurityVersion: number;
         };
         CreateAdminUserDto: {
-            username: string;
+            fullName?: string | null;
+            phone?: string | null;
             email?: string | null;
+            username: string;
             /** @enum {string} */
             accountType: "INTERNAL" | "SUPPLIER";
             organizationId: string;
             initialPassword: string;
         };
         UpdateAdminUserDto: {
+            fullName?: string | null;
+            phone?: string | null;
             email?: string | null;
+            /** @description 修改姓名、电话或邮箱时必填 */
+            expectedProfileVersion?: number;
             /** @enum {string} */
             accountType?: "INTERNAL" | "SUPPLIER";
             organizationId?: string;
@@ -5748,14 +5815,71 @@ export interface components {
             name?: string;
             permissionCodes?: string[];
         };
+        EffectiveAdminRoleSourceDto: {
+            /** @enum {string} */
+            kind: "DIRECT" | "POSITION";
+            /** Format: uuid */
+            positionId?: string;
+            /** Format: uuid */
+            assignmentId?: string;
+        };
+        EffectiveAdminRoleDto: {
+            mfaRequired: boolean;
+            id: string;
+            organizationId: string | null;
+            code: string;
+            name: string;
+            permissions: components["schemas"]["AdminPermissionDto"][];
+            sources: components["schemas"]["EffectiveAdminRoleSourceDto"][];
+        };
         AdminUserRolesDto: {
             userId: string;
             organizationId: string;
             roles: components["schemas"]["AdminRoleDto"][];
+            effectiveRoles: components["schemas"]["EffectiveAdminRoleDto"][];
             permissions: string[];
         };
         AssignAdminRolesDto: {
             roleIds: string[];
+        };
+        AccountAssignmentNameDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        AccountAssignmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+            position: components["schemas"]["AccountAssignmentNameDto"];
+            department: components["schemas"]["AccountAssignmentNameDto"];
+        };
+        AccountRoleSourceDto: {
+            /** @enum {string} */
+            kind: "DIRECT" | "POSITION";
+            /** Format: uuid */
+            positionId?: string;
+            positionName?: string;
+            /** Format: uuid */
+            assignmentId?: string;
+        };
+        AccountEffectiveRoleDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            sources: components["schemas"]["AccountRoleSourceDto"][];
+        };
+        AccountOverviewDto: {
+            /** Format: uuid */
+            organizationId: string;
+            assignments: components["schemas"]["AccountAssignmentDto"][];
+            effectiveRoles: components["schemas"]["AccountEffectiveRoleDto"][];
+            permissions: string[];
         };
         OrganizationDto: {
             id: string;
@@ -5823,6 +5947,19 @@ export interface components {
             /** @enum {string} */
             status: "ACTIVE" | "DISABLED";
             version: number;
+        };
+        PositionRolesDto: {
+            positionId: string;
+            roleVersion: number;
+            roles: components["schemas"]["AdminRoleDto"][];
+            /** @description Distinct users with currently effective appointments */
+            effectiveAssigneeCount: number;
+            /** @description The committed mutation invalidated the acting session; reauthenticate without resubmitting */
+            selfSessionRevoked: boolean;
+        };
+        ReplacePositionRolesDto: {
+            roleIds: string[];
+            expectedRoleVersion: number;
         };
         CreatePositionDto: {
             code: string;
@@ -9665,6 +9802,18 @@ export interface components {
             /** Format: uuid */
             fileId: string;
         };
+        ESignatureSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
         ESignatureDto: {
             /** Format: uuid */
             id: string;
@@ -10790,6 +10939,8 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
                 "x-csrf-token": string;
             };
             path?: never;
@@ -12305,6 +12456,33 @@ export interface operations {
             };
         };
     };
+    AccountOverviewController_overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOverviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     OrganizationController_current: {
         parameters: {
             query?: {
@@ -12608,6 +12786,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_positionRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionRolesDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_replacePositionRoles: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                positionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacePositionRolesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionRolesDto"];
                 };
             };
             /** @description Controlled API error */
@@ -21680,6 +21927,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierAdmissionDocumentDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureSummaryDto"][];
                 };
             };
             default: {

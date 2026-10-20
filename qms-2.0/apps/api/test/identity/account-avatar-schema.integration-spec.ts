@@ -145,7 +145,7 @@ describe('private account avatar on PostgreSQL, object storage and ClamAV', () =
     }
     expect(await context.prisma.fileObject.count({ where: { id: { in: ids }, status: 'AVAILABLE', scanStatus: 'CLEAN', deletedAt: null } })).toBe(11);
     expect(await context.prisma.user.findUniqueOrThrow({ where: { id: fixture.user.id } })).toMatchObject({ avatarFileId: ids[10], avatarVersion: 12 });
-  });
+  }, 30_000); // Eleven real upload/scan cycles exceed the unit-test default on the local container runtime.
 
   it('still rejects an eleventh unfinished avatar upload at the unchanged resource quota', async () => {
     const fixture = await neutralFileFixture(context.prisma);

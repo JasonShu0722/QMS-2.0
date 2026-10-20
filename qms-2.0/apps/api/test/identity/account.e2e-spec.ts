@@ -14,14 +14,17 @@ describe('account center HTTP contract', () => {
     id: '10000000-0000-4000-8000-000000000001', organizationId: '20000000-0000-4000-8000-000000000001',
     username: 'internal.admin', email: 'internal@example.test', passwordHash: 'encoded',
     accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1,
+    fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null,
     organization: { status: 'ACTIVE' },
   };
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     $queryRaw: jest.fn(),
     userRole: { findMany: jest.fn().mockResolvedValue([]) },
     organization: { findUnique: jest.fn().mockResolvedValue({ status: 'ACTIVE' }) },
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    adminMutation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn(), update: jest.fn() },
     session: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   };
@@ -63,7 +66,7 @@ describe('account center HTTP contract', () => {
     const csrf = await request(app.getHttpServer()).get('/api/v1/auth/csrf').expect(200);
     const cookie = (csrf.headers['set-cookie'] as unknown as string[]).find((entry) => entry.startsWith('qms_csrf='))!.split(';', 1)[0];
     await request(app.getHttpServer()).patch('/api/v1/me').set('Cookie', ['qms_session=browser-token', cookie]).send({ email: 'new@example.test' }).expect(403);
-    await request(app.getHttpServer()).patch('/api/v1/me').set('Cookie', ['qms_session=browser-token', cookie]).set('x-csrf-token', cookie.split('=', 2)[1]).send({ email: 'new@example.test' }).expect(200);
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: user.id }, data: { email: 'new@example.test' } });
+    await request(app.getHttpServer()).patch('/api/v1/me').set('Cookie', ['qms_session=browser-token', cookie]).set('x-csrf-token', cookie.split('=', 2)[1]).set('Idempotency-Key', 'profile-http-key').send({ email: 'new@example.test', expectedProfileVersion: 1 }).expect(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: user.id, profileVersion: 1 }, data: { email: 'new@example.test', profileVersion: 2 } });
   });
 });

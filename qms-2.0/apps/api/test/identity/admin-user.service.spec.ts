@@ -21,7 +21,7 @@ describe('admin user lifecycle service', () => {
     problemIndex: { count: jest.fn() },
     workflowTask: { count: jest.fn() },
     notification: { count: jest.fn() },
-    userPosition: { count: jest.fn() },
+    userPosition: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
   };
@@ -62,7 +62,9 @@ describe('admin user lifecycle service', () => {
   });
 
   it('creates a user with a password hash and audit in one transaction', async () => {
-    prisma.user.create.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } });
+    const created = { id: 'user-2', organizationId: 'org-a', username: 'bob', email: null, fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } };
+    prisma.user.create.mockResolvedValue(created);
+    prisma.user.findFirst.mockResolvedValue(created);
     const result = await service.create(actor, { organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', initialPassword: 'password-1234' }, 'trace-1', 'test-key-1');
     expect(result).toMatchObject({ id: 'user-2', username: 'bob' });
     expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordHash: 'hashed-password' }) }));
@@ -70,9 +72,9 @@ describe('admin user lifecycle service', () => {
   });
 
   it('updates status and organization within the authorized scope', async () => {
-    prisma.user.findFirst.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL' });
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-2', organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', profileVersion: 1 }).mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', profileVersion: 2, status: 'DISABLED' });
     prisma.user.update.mockResolvedValue({ id: 'user-2', organizationId: 'org-a', username: 'bob', email: 'b@example.test', accountType: 'INTERNAL', status: 'DISABLED', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } });
-    const result = await service.update(actor, 'user-2', { status: 'DISABLED', email: 'b@example.test' }, 'org-a', 'trace-1', 'test-key-1');
+    const result = await service.update(actor, 'user-2', { status: 'DISABLED', email: 'b@example.test', expectedProfileVersion: 1 }, 'org-a', 'trace-1', 'test-key-1');
     expect(result.status).toBe('DISABLED');
     expect(prisma.session.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-2', revokedAt: null } }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'USER_UPDATED' }), prisma);

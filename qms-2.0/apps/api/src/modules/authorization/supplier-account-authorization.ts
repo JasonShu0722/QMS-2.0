@@ -1,4 +1,5 @@
 import { adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
+import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 
 export const SUPPLIER_ACCOUNT_GOVERNANCE = ['account:users:create', 'account:users:read', 'account:users:reset', 'account:users:status'] as const;
 export const SUPPLIER_PORTAL_PERMISSIONS = [
@@ -20,7 +21,7 @@ export async function assertSupplierAccountTarget(tx: AdminTransaction, actor: A
   await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
   const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'SUPPLIER' } });
   if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
-  const assignments = await tx.userRole.findMany({ where: { userId }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+  const assignments = await effectiveRoleGrants(tx, userId);
   if (assignments.some(({ role, organizationId: scope }) => scope !== organizationId || role.organizationId !== organizationId
     || role.permissions.some(({ permission: entry }) => !(SUPPLIER_PORTAL_PERMISSIONS as readonly string[]).includes(entry.code)))) adminError('FEATURE_PERMISSION_DENIED', 403);
   return user;

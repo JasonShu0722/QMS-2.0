@@ -35,9 +35,10 @@ export class AccountController {
 
   @Patch()
   @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiOkResponse({ type: AccountProfileDto })
-  update(@Body() dto: UpdateAccountProfileDto, @Req() request: Request) {
-    return this.identity.updateProfile(this.session(request).user.id, dto, requestTraceId(request), this.session(request).id);
+  update(@Body() dto: UpdateAccountProfileDto, @Req() request: Request, @Headers('idempotency-key') key?: string) {
+    return this.identity.updateProfile(this.session(request).user.id, dto, requestTraceId(request), this.session(request).id, key);
   }
 
   @Post('password')

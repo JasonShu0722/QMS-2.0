@@ -4,6 +4,7 @@ import { IdentityService } from '../../src/modules/identity/identity.service.js'
 
 describe('account center service', () => {
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -15,6 +16,7 @@ describe('account center service', () => {
     passwordChangeChallenge: { updateMany: jest.fn() },
     mfaChallenge: { updateMany: jest.fn() },
     emailVerification: { updateMany: jest.fn() },
+    adminMutation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     session: { findFirst: jest.fn(), update: jest.fn() },
@@ -54,12 +56,14 @@ describe('account center service', () => {
   it('returns a safe profile without the password hash', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL',
+      fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null,
       status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organizationId: 'org-1',
       organization: { code: 'internal', name: 'Internal' },
     });
 
     await expect(service.profile('user-1')).resolves.toEqual({
       id: 'user-1', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL',
+      fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null,
       status: 'ACTIVE', mfaEnabled: false, avatarFileId: null, avatarVersion: 1, organization: { id: 'org-1', code: 'internal', name: 'Internal' },
     });
     expect(JSON.stringify(await service.profile('user-1'))).not.toMatch(/passwordHash/i);
@@ -98,10 +102,10 @@ describe('account center service', () => {
   });
 
   it('updates profile and audit through the same transaction', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', organization: { status: 'ACTIVE', id: 'org-1', code: 'internal', name: 'Internal' } });
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE', organizationId: 'org-1', profileVersion: 1, organization: { status: 'ACTIVE', id: 'org-1', code: 'internal', name: 'Internal' } });
     prisma.user.update.mockResolvedValue({ id: 'user-1', organization: { id: 'org-1', code: 'internal', name: 'Internal' } });
     prisma.$transaction.mockImplementation(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma));
-    await service.updateProfile('user-1', { email: 'new@example.test' }, 'trace-1', 'session-1');
+    await service.updateProfile('user-1', { email: 'new@example.test', expectedProfileVersion: 1 }, 'trace-1', 'session-1', 'profile-service-key');
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'PROFILE_UPDATED' }), prisma);
   });
 

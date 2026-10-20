@@ -7,14 +7,14 @@ import { createUploadAttempt, readAttachment, retryScanAttachment, type Attachme
 import { AccountAvatar } from './AccountAvatar';
 import { accountAvatarEpoch, publishAccountAvatar, useAccountAvatar } from './account-avatar-state';
 
-type AvatarEditorProps = { profile: AccountProfile; onChange: (profile: AccountProfile) => void; children?: ReactNode };
+type AvatarEditorProps = { profile: AccountProfile; onChange: (profile: AccountProfile) => void; children?: ReactNode; disabled?: boolean; onStateChange?: (state: { busy: boolean; dirty: boolean }) => void };
 
-export function AvatarEditor({ profile, onChange, children }: AvatarEditorProps) {
+export function AvatarEditor({ profile, onChange, children, disabled = false, onStateChange }: AvatarEditorProps) {
   useAccountAvatar();
-  return <AvatarEditorContent key={`${accountAvatarEpoch()}:${profile.id}`} profile={profile} onChange={onChange}>{children}</AvatarEditorContent>;
+  return <AvatarEditorContent key={`${accountAvatarEpoch()}:${profile.id}`} profile={profile} onChange={onChange} disabled={disabled} onStateChange={onStateChange}>{children}</AvatarEditorContent>;
 }
 
-function AvatarEditorContent({ profile, onChange, children }: AvatarEditorProps) {
+function AvatarEditorContent({ profile, onChange, children, disabled = false, onStateChange }: AvatarEditorProps) {
   const { t } = useLanguage();
   const shared = useAccountAvatar();
   const current = shared?.id === profile.id ? shared : profile;
@@ -30,6 +30,7 @@ function AvatarEditorContent({ profile, onChange, children }: AvatarEditorProps)
   const mutation = useRef<{ fileId: string | null; expectedVersion: number; key: string } | undefined>(undefined);
   useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
   const pending = file?.scanStatus === 'PENDING';
+  useEffect(() => { onStateChange?.({ busy, dirty: !!file || retryUpload }); }, [busy, pending, file, retryUpload, onStateChange]);
   useEffect(() => {
     if (!pending || !file) return;
     const controller = new AbortController();
@@ -39,7 +40,7 @@ function AvatarEditorContent({ profile, onChange, children }: AvatarEditorProps)
     return () => { controller.abort(); clearTimeout(timer); };
   }, [file, pending, revision]);
   async function action(run: (signal: AbortSignal) => Promise<void>) {
-    if (actionLock.current) return;
+    if (actionLock.current || disabled) return;
     actionLock.current = true; setBusy(true); setError(undefined);
     try { await run(lifetime.current.signal); }
     catch (cause) { if (!lifetime.current.signal.aborted) { setError(safeAccountError(cause)); if (cause instanceof ApiError && cause.code === 'CONCURRENCY_CONFLICT') setNeedsReload(true); } }
@@ -81,17 +82,17 @@ function AvatarEditorContent({ profile, onChange, children }: AvatarEditorProps)
     <div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={64} />{children}</div>
     <Typography.Text type="secondary">{t('仅本人可见，JPEG/PNG，最大 2 MiB。')}</Typography.Text>
     {error ? <Alert type="error" showIcon title={t(error)} role="alert" /> : null}
-    {needsReload ? <Button disabled={busy} onClick={() => void reloadAccount()}>{t('重新加载账号')}</Button> : null}
+    {needsReload ? <Button disabled={disabled || busy} onClick={() => void reloadAccount()}>{t('重新加载账号')}</Button> : null}
     <Space wrap>
-      <label>{t('选择头像')} <input type="file" aria-label={t('选择头像')} accept="image/jpeg,image/png" disabled={busy || pending || retryUpload} onChange={(event) => { const next = event.target.files?.[0]; event.target.value = ''; if (next) void upload(next); }} /></label>
-      {current.avatarFileId ? <Button disabled={busy || pending || needsReload} onClick={() => void save(null)}>{t('移除头像')}</Button> : null}
+      <label>{t('选择头像')} <input type="file" aria-label={t('选择头像')} accept="image/jpeg,image/png" disabled={disabled || busy || pending || retryUpload} onChange={(event) => { const next = event.target.files?.[0]; event.target.value = ''; if (next) void upload(next); }} /></label>
+      {current.avatarFileId ? <Button disabled={disabled || busy || pending || needsReload} onClick={() => void save(null)}>{t('移除头像')}</Button> : null}
       {busy ? <Spin aria-label={t('正在处理头像')} /> : null}
-      {retryUpload ? <><Button disabled={busy} onClick={() => void upload()}>{t('重试上传')}</Button><Button disabled={busy} onClick={() => { attempt.current = undefined; setRetryUpload(false); setFile(undefined); }}>{t('放弃重试')}</Button></> : null}
+      {retryUpload ? <><Button disabled={disabled || busy} onClick={() => void upload()}>{t('重试上传')}</Button><Button disabled={disabled || busy} onClick={() => { attempt.current = undefined; setRetryUpload(false); setFile(undefined); }}>{t('放弃重试')}</Button></> : null}
     </Space>
     {file ? <Space wrap><span role="status">{t(status)}</span>
-      <Button disabled={busy} onClick={() => void action(async (signal) => { const next = await readAttachment(file.id, signal); if (!signal.aborted) { setFile(next); setRevision((value) => value + 1); } })}>{t('刷新头像状态')}</Button>
-      {clean ? <Button type="primary" disabled={busy || needsReload} onClick={() => void save(file.id)}>{t('设为头像')}</Button> : null}
-      {file.scanStatus === 'ERROR' ? <Button disabled={busy} onClick={() => void action(async (signal) => { const next = await retryScanAttachment(file); if (!signal.aborted) setFile(next); })}>{t('重试安全扫描')}</Button> : null}
+      <Button disabled={disabled || busy} onClick={() => void action(async (signal) => { const next = await readAttachment(file.id, signal); if (!signal.aborted) { setFile(next); setRevision((value) => value + 1); } })}>{t('刷新头像状态')}</Button>
+      {clean ? <Button type="primary" disabled={disabled || busy || needsReload} onClick={() => void save(file.id)}>{t('设为头像')}</Button> : null}
+      {file.scanStatus === 'ERROR' ? <Button disabled={disabled || busy} onClick={() => void action(async (signal) => { const next = await retryScanAttachment(file); if (!signal.aborted) setFile(next); })}>{t('重试安全扫描')}</Button> : null}
     </Space> : null}
   </Space>;
 }

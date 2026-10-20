@@ -97,7 +97,7 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'outbox-operations', name: '通知运行监控', status: 'active', operations: [operation('outbox:read', '查看失败事件'), operation('outbox:retry', '重试失败事件')] },
     { key: 'permission-context', name: '当前权限上下文', status: 'active', operations: [operation('system:permissions:read', '查看当前权限')] },
     { key: 'users', name: '用户管理', status: 'active', operations: [
-      operation('account:users:read', '查看用户'), operation('account:users:create', '创建用户'), operation('account:users:update', '编辑邮箱'),
+      operation('account:users:read', '查看用户'), operation('account:users:create', '创建用户'), operation('account:users:update', '编辑姓名、电话和邮箱'),
       operation('account:users:status', '启用 / 停用'), operation('account:users:transfer', '变更组织 / 账号类型'), operation('account:users:reset', '重置凭证'),
     ] },
     { key: 'roles', name: '角色管理', status: 'active', operations: [
@@ -112,7 +112,7 @@ export const ACTIVE_PERMISSION_CODES = PERMISSION_CATALOG.flatMap((group) => gro
 export function userUpdatePermissions(fields: object): string[] {
   const submitted = fields as Record<string, unknown>;
   const permissions: string[] = [];
-  if (submitted.email !== undefined) permissions.push('account:users:update');
+  if (submitted.email !== undefined || submitted.fullName !== undefined || submitted.phone !== undefined) permissions.push('account:users:update');
   if (submitted.status !== undefined) permissions.push('account:users:status');
   if (submitted.organizationId !== undefined || submitted.accountType !== undefined) permissions.push('account:users:transfer');
   return permissions.length ? permissions : ['account:users:update'];

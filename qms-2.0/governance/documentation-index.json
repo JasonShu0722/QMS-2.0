@@ -88,7 +88,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -234,9 +234,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 30,
-        "reason": "复核能力状态新增已批准人工反馈返修及本地边界；机器人仍只读分析，状态更新不扩大源码修改、批准或生产操作权限。",
+        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "21e81e9856f53213243188e8930ab637de17e06add78cf463fe2787688432334"
+            "sha256": "7a78a1cbce9109c66e94a55cbf445d5700ee7f1bdce09e2ce971f3ae0201682e"
           },
           {
             "path": "README.md",
@@ -390,9 +390,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（账号与全页密度返修）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
-        "reason": "复核已批准人工反馈返修：单张账号概览、历史接口统一会话清单及全页共享留白减半；保留标准控件、粗指针目标、原安全弹窗及真实登录验收边界。当前仅本地，实施和审查结果见返修计划。",
+        "reason": "复核REQ-0022/0023实际本地实现与两区账号、个人设置、只读角色详情及冲突草稿保护；保留原密度与门户边界。后端已测与前端待验分开记录，不把源码存在或历史部署当作上线证据。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -408,7 +408,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "138b149400f1bf33f5969c0c27763b0fbce1e95722adfa23a38ee90da81766dc"
+            "sha256": "198e5e1dbe3d275c5d80a4552094258c24931e2dbf8f5ddd2dd48c490445cde9"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -417,6 +417,14 @@
           {
             "path": "../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md",
             "sha256": "797b276289f507c3eaea5899ef6d3a7dc1c70fdbc5926ee3adb33c2d29ebdbd1"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-19-qms-profile-position-role-design.md",
+            "sha256": "13c7919727f674cea9eba0f79be89fcc4d66b1bbb44ca45f6bae466742442cf3"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-19-qms-profile-position-role.md",
+            "sha256": "b4abceaaf6750bac519e6f2de22d7679fbab02593319050ad29fbb395455aaed"
           }
         ]
       }
@@ -552,7 +560,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。",
         "sources": [
@@ -626,11 +634,11 @@
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
         "reviewedOn": "2026-10-19",
         "maxAgeDays": 90,
-        "reason": "复核 MAINT-001 来源随账号返修变化，记录已移除的账号弃用用法及仍需升级前全局检查的边界，保持开放；MAINT-003 的本地告警证据与生产边界不变。",
+        "reason": "复核MAINT-001在REQ-0022账号两区与设置改动后的来源，保留已通过局部回归、未完成联合门禁及其余Ant Design提示的区别，不关闭全局事项；MAINT-002容量和MAINT-003生产观测边界未变。",
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "5532d1be7e2b906bd882f5d14067a934e91cd76fd5e256c80b9ecc0a6a51c791"
+            "sha256": "ed928201f24212bfa5a4133b0a3920d2255e8c70f37e03db5be6eea85c961ba3"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -696,7 +704,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -734,7 +742,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -768,7 +776,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [
@@ -798,7 +806,7 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-20",
         "maxAgeDays": 90,
         "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
         "sources": [

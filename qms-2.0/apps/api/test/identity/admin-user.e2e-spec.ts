@@ -17,6 +17,7 @@ describe('administrator user lifecycle HTTP contract', () => {
     organization: { status: 'ACTIVE' },
   };
   const prisma = {
+    userPosition: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (work: (transaction: unknown) => Promise<unknown>) => work(prisma)),
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     user: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -38,7 +39,7 @@ describe('administrator user lifecycle HTTP contract', () => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue(user);
     prisma.organization.findUnique.mockResolvedValue({ status: 'ACTIVE' });
-    prisma.userRole.findMany.mockResolvedValue([{ role: { permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }]);
+    prisma.userRole.findMany.mockImplementation(async ({ where }) => where.organizationId && where.organizationId !== user.organizationId ? [] : [{ organizationId: user.organizationId, role: { id: 'admin-role', organizationId: user.organizationId, permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:users:status', 'account:users:transfer', 'account:users:reset'].map((code) => ({ permission: { code } })) } }]);
     prisma.session.findUnique.mockResolvedValue({
       id: 'session-1', mfaVerifiedAt: new Date(), reauthenticatedAt: new Date(), expiresAt: new Date(Date.now() + 60_000), revokedAt: null, user,
     });
@@ -51,7 +52,7 @@ describe('administrator user lifecycle HTTP contract', () => {
 
   it('requires account permission before listing users', async () => {
     await request(app.getHttpServer()).get('/api/v1/admin/users').set('Cookie', 'qms_session=browser-token').expect(200);
-    prisma.userRole.count.mockResolvedValue(0);
+    prisma.userRole.findMany.mockResolvedValue([{ organizationId: user.organizationId, role: { id: 'reader', organizationId: user.organizationId, permissions: [] } }]);
     await request(app.getHttpServer()).get('/api/v1/admin/users').set('Cookie', 'qms_session=browser-token').expect(403);
   });
 
@@ -66,8 +67,7 @@ describe('administrator user lifecycle HTTP contract', () => {
     { name: 'transfer-only', body: { accountType: 'SUPPLIER' }, granted: [], denied: 'account:users:transfer' },
     { name: 'mixed email and status', body: { email: 'private@example.test', status: 'DISABLED' }, granted: ['account:users:update'], denied: 'account:users:status' },
   ])('audits the denied operation for a $name PATCH', async ({ body, granted, denied }) => {
-    prisma.userRole.count.mockImplementation(async ({ where }) =>
-      granted.includes(where.role.permissions.some.permission.code) ? 1 : 0);
+    prisma.userRole.findMany.mockResolvedValue([{ organizationId: user.organizationId, role: { id: 'patch-role', organizationId: user.organizationId, permissions: granted.map((code) => ({ permission: { code } })) } }]);
 
     const response = await request(app.getHttpServer()).patch(`/api/v1/admin/users/${user.id}`)
       .set('Cookie', 'qms_session=browser-token; qms_csrf=csrf-token')

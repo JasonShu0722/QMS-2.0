@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsEmail, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class OrganizationSummaryDto {
@@ -14,6 +14,18 @@ export class OrganizationSummaryDto {
 }
 
 export class AccountProfileDto {
+  @ApiProperty({ type: String, nullable: true, maxLength: 100 })
+  fullName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, maxLength: 40 })
+  phone!: string | null;
+
+  @ApiProperty({ minimum: 1, maximum: 2147483647 })
+  profileVersion!: number;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  emailVerifiedAt!: string | null;
+
   @ApiProperty()
   id!: string;
 
@@ -53,12 +65,29 @@ export class UpdateAccountAvatarDto {
   expectedVersion!: number;
 }
 
-export class UpdateAccountProfileDto {
+export class ProfileFieldsDto {
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() || null : value)
+  @IsOptional() @IsString() @MaxLength(100)
+  fullName?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 40 })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() || null : value)
+  @IsOptional() @IsString() @MaxLength(40)
+  phone?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 254 })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() || null : value)
   @IsOptional()
   @IsEmail()
   @MaxLength(254)
   email?: string | null;
+}
+
+export class UpdateAccountProfileDto extends ProfileFieldsDto {
+  @ApiProperty({ minimum: 1, maximum: 2147483647 })
+  @IsInt() @Min(1) @Max(2147483647)
+  expectedProfileVersion!: number;
 }
 
 export class ChangePasswordDto {

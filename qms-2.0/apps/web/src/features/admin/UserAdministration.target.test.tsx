@@ -6,7 +6,7 @@ import type { AdminOrganization } from './admin';
 
 const organization: AdminOrganization = { id: '10000000-0000-4000-8000-000000000001', code: 'A', name: '组织 A', type: 'INTERNAL', permissions: ['account:users:read'] };
 const targetUserId = '20000000-0000-4000-8000-000000000001';
-const user = { id: targetUserId, username: 'target-alice', email: 'private@example.test', accountType: 'INTERNAL', status: 'DISABLED', organizationId: organization.id, organization: { id: organization.id, code: 'A', name: organization.name }, mfaEnabled: false, createdAt: '2026-10-18', updatedAt: '2026-10-18' };
+const user = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: targetUserId, username: 'target-alice', email: 'private@example.test', accountType: 'INTERNAL', status: 'DISABLED', organizationId: organization.id, organization: { id: organization.id, code: 'A', name: organization.name }, mfaEnabled: false, createdAt: '2026-10-18', updatedAt: '2026-10-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
 

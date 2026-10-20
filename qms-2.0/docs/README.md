@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [个人资料、岗位授权与角色清单规格](../../docs/superpowers/specs/2026-10-19-qms-profile-position-role-design.md) | REQ-0022／0023 自动生效、资料与签名边界、角色摘要及来源；已本地实现，最终联合验收及上线待完成 |
+| [个人资料、岗位授权与角色清单计划](../../docs/superpowers/plans/2026-10-19-qms-profile-position-role.md) | 角色清单／完整岗位授权／资料账号中心三单元、调用方清单、TDD／联合验收与交付接续 |
 | [个人账号与全页密度返修规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md) | 人工验收后确认的账号整合、单一会话表及全页留白减半 |
 | [个人账号与全页密度返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md) | V0.0.21 本地实现、验证、审查、云端边界及新一轮人工检查 |
 | [紧凑界面与账号、主数据、审计设计](../../docs/superpowers/specs/2026-10-18-qms-compact-account-master-audit-design.md) | REQ-0017～0021 的已批准目标、独立评审及最小实现边界 |

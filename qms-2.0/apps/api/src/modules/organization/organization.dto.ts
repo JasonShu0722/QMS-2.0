@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { AdminRoleDto } from '../authorization/admin-role.dto.js';
 
 export class OrganizationDto {
   @ApiProperty()
@@ -73,6 +74,19 @@ export class UpdatePositionDto {
 export class ReplaceUserPositionsDto {
   @ApiProperty({ type: [String], maxItems: 100 }) @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true }) positionIds!: string[];
   @ApiProperty({ type: [String], maxItems: 100 }) @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true }) expectedPositionIds!: string[];
+}
+
+export class ReplacePositionRolesDto {
+  @ApiProperty({ type: [String], maxItems: 100 }) @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true }) roleIds!: string[];
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedRoleVersion!: number;
+}
+
+export class PositionRolesDto {
+  @ApiProperty() positionId!: string;
+  @ApiProperty() roleVersion!: number;
+  @ApiProperty({ type: [AdminRoleDto] }) roles!: AdminRoleDto[];
+  @ApiProperty({ description: 'Distinct users with currently effective appointments' }) effectiveAssigneeCount!: number;
+  @ApiProperty({ description: 'The committed mutation invalidated the acting session; reauthenticate without resubmitting' }) selfSessionRevoked!: boolean;
 }
 
 export class DepartmentDto {
