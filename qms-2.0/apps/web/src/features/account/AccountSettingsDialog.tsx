@@ -87,4 +87,3 @@ export function AccountSettingsDialog({ profile, overview, onProfile, onAvatar, 
     {open && <SignatureSettings accountType={profile.accountType} permissions={overview?.permissions} disabled={saving || avatarState.busy} onStateChange={setSignatureState} />}
   </Modal>;
 }
-
