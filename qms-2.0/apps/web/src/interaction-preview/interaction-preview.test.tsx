@@ -11,6 +11,35 @@ import { ThemeProvider } from '../theme/ThemeProvider';
 const render = (children: ReactNode) => testingRender(<ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>);
 
 describe('local interaction preview', () => {
+  it('syncs the directory with the initial hash and hashchange including coverage and invalid hash fallback', () => {
+    const originalUrl = window.location.href;
+    localStorage.clear();
+    window.history.replaceState(null, '', '#sample-05');
+    const view = render(<LanguageProvider><ThemeProvider><InteractionPreview /></ThemeProvider></LanguageProvider>);
+    try {
+      const directory = screen.getByRole('navigation', { name: '样例目录' });
+      expect(directory.querySelector('.is-active')).toHaveAttribute('href', '#sample-05');
+      for (const [hash, expected] of [
+        ['#sample-08', '#sample-08'],
+        ['#coverage', '#coverage'],
+        ['#sample-05', '#sample-05'],
+        ['#sample-99', '#sample-01'],
+        ['#sample-05-extra', '#sample-01'],
+        ['#preview-content', '#sample-01'],
+        ['', '#sample-01'],
+      ]) {
+        window.history.replaceState(null, '', hash || window.location.pathname + window.location.search);
+        fireEvent(window, new HashChangeEvent('hashchange'));
+        expect(directory.querySelectorAll('.is-active')).toHaveLength(1);
+        expect(directory.querySelector('.is-active')).toHaveAttribute('href', expected);
+      }
+    } finally {
+      view.unmount();
+      window.history.replaceState(null, '', originalUrl);
+      localStorage.clear();
+    }
+  });
+
   it('exposes eight reviewable groups and planned domain boundaries without business navigation', () => {
     localStorage.clear();
     render(<LanguageProvider><ThemeProvider><InteractionPreview /></ThemeProvider></LanguageProvider>);

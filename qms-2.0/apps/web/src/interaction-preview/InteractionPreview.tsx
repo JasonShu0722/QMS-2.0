@@ -1,6 +1,6 @@
 import { Button, ConfigProvider, Radio, Segmented, Select, Tag } from 'antd';
 import { ArrowDown, ArrowUpRight, Check, ChevronRight, Layers3, Monitor, Smartphone } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLanguage } from '../i18n/Language';
 import { useAppearance } from '../theme/ThemeProvider';
 import type { Accent, AppearanceMode } from '../theme/tokens';
@@ -41,13 +41,25 @@ const domains = [
   ['D20', '索赔、计量、成本等扩展', 'Claims, metrology, cost & extensions', '03 / 04 / 05 / 06 / 07 / 08', true],
 ] as const;
 
+function activeGroupFromHash() {
+  const hash = window.location.hash;
+  if (hash === '#coverage') return 'coverage';
+  return groups.find(([, , number]) => hash === `#sample-${number}`)?.[2] ?? '01';
+}
+
 export function InteractionPreview() {
   const { locale, setLocale } = useLanguage();
   const { preferences, setPreferences } = useAppearance();
   const english = locale === 'en-US';
   const text = (zh: string, en: string) => english ? en : zh;
   const [phone, setPhone] = useState(false);
-  const [active, setActive] = useState('01');
+  const [active, setActive] = useState(activeGroupFromHash);
+
+  useEffect(() => {
+    const syncActive = () => setActive(activeGroupFromHash());
+    window.addEventListener('hashchange', syncActive);
+    return () => window.removeEventListener('hashchange', syncActive);
+  }, []);
 
   return <ConfigProvider theme={{ components: {
     Segmented: { trackPadding: 3 },
@@ -65,10 +77,10 @@ export function InteractionPreview() {
       <aside className="preview-sidebar" aria-label={text('样例导航', 'Example navigation')}>
         <div className="preview-sidebar-label">{text('基础交互', 'FOUNDATIONS')}</div>
         <nav aria-label={text('样例目录', 'Example directory')}>
-          {groups.map(([zh, en, number, hintZh, hintEn]) => <a key={number} href={`#sample-${number}`} onClick={() => setActive(number)} className={active === number ? 'is-active' : ''}>
+          {groups.map(([zh, en, number, hintZh, hintEn]) => <a key={number} href={`#sample-${number}`} className={active === number ? 'is-active' : ''}>
             <span className="preview-nav-number">{number}</span><span><strong>{english ? en : zh}</strong><small>{english ? hintEn : hintZh}</small></span><ChevronRight size={13} aria-hidden="true" />
           </a>)}
-          <a href="#coverage" onClick={() => setActive('coverage')} className={active === 'coverage' ? 'is-active' : ''}><span className="preview-nav-number">D</span><span><strong>{text('领域适用矩阵', 'Domain coverage')}</strong><small>{text('当前与未来 20 组场景', '20 current & future domain groups')}</small></span><ChevronRight size={13} aria-hidden="true" /></a>
+          <a href="#coverage" className={active === 'coverage' ? 'is-active' : ''}><span className="preview-nav-number">D</span><span><strong>{text('领域适用矩阵', 'Domain coverage')}</strong><small>{text('当前与未来 20 组场景', '20 current & future domain groups')}</small></span><ChevronRight size={13} aria-hidden="true" /></a>
         </nav>
         <div className="preview-sidebar-foot"><span>REVIEW / 01</span><p>{text('先确认细节，再推广到正式页面。', 'Review the details before migrating business pages.')}</p><small>React 19 · Ant Design · Vite</small></div>
       </aside>
