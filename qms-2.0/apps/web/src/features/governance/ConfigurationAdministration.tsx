@@ -40,7 +40,12 @@ export function ConfigurationAdministration({ organization }: { organization: Ad
   }, [organization.id, revision, settingsForm]);
   function refresh() {
     if (saving || loading) return;
-    requestLeave(() => setRevision((value) => value + 1));
+    requestLeave(() => {
+      setRuleEditor(undefined); setCategoryEditor(undefined);
+      ruleForm.resetFields(); categoryForm.resetFields();
+      setRuleDirty(false); setCategoryDirty(false);
+      setRevision((value) => value + 1);
+    });
   }
   async function saveSettings(values: Pick<Settings, 'notificationLocale' | 'exportRetentionMinutes'>) {
     if (!settings) return;
