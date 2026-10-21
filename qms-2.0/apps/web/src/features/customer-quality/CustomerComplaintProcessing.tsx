@@ -20,7 +20,7 @@ const categories: { value: Category; label: string }[] = [
   { value: 'OTHER', label: '其他' },
 ];
 
-export function CustomerComplaintProcessing({ complaint, canWrite, refresh }: { complaint: Complaint; canWrite: boolean; refresh: () => Promise<void> }) {
+export function CustomerComplaintProcessing({ complaint, canWrite, refresh }: { complaint: Complaint; canWrite: boolean; refresh: () => Promise<Complaint | undefined> }) {
   const [events, setEvents] = useState<Event[]>([]);
   const [assignees, setAssignees] = useState<Assignees>();
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -63,6 +63,24 @@ export function CustomerComplaintProcessing({ complaint, canWrite, refresh }: { 
     return () => { active = false; };
   }, [complaint.id, complaint.version, canWrite]);
 
+  async function discardAndRefresh() {
+    if (busy) return;
+    setBusy(true); setError(undefined);
+    try {
+      const latest = await refresh();
+      if (!latest) return;
+      const nextCategory = (latest.category as Category | null) ?? 'PRODUCT_QUALITY';
+      const nextCategoryNote = String(latest.category_note ?? '');
+      const nextDepartmentId = String(latest.responsible_department_id ?? '');
+      const nextOwnerId = String(latest.owner_user_id ?? '');
+      setCategory(nextCategory); setCategoryNote(nextCategoryNote);
+      setDepartmentId(nextDepartmentId); setOwnerId(nextOwnerId);
+      setSavedAssignment(JSON.stringify([nextCategory, nextCategoryNote, nextDepartmentId, nextOwnerId]));
+      setNote(''); setReadyFileId(undefined);
+    } catch (cause) { setError(cause); }
+    finally { setBusy(false); }
+  }
+
   async function mutate(action: 'triage' | 'progress' | 'resolve' | 'close' | 'reopen' | 'archive') {
     if (busy) return;
     if (!note.trim() && action !== 'archive') return;
@@ -92,7 +110,7 @@ export function CustomerComplaintProcessing({ complaint, canWrite, refresh }: { 
   return <section aria-label="客诉处理">
     <Typography.Title level={4}>处理与关闭</Typography.Title>
     <Space wrap><Tag>{complaint.status}</Tag><Typography.Text>分类：{categories.find((item) => item.value === String(complaint.category))?.label ?? '未分诊'}</Typography.Text><Typography.Text>责任部门：{assignees?.departments?.find((item) => item.id === departmentId)?.name ?? (departmentId || '未分配')}</Typography.Text></Space>
-    {error ? <Alert type={error instanceof ApiError && error.status === 403 ? 'warning' : 'error'} showIcon title={error instanceof ApiError ? safeAccountError(error) : '处理资料加载失败，请重试'} action={<Button disabled={busy} onClick={() => requestLeave(() => void refresh())}>刷新</Button>} /> : null}
+    {error ? <Alert type={error instanceof ApiError && error.status === 403 ? 'warning' : 'error'} showIcon title={error instanceof ApiError ? safeAccountError(error) : '处理资料加载失败，请重试'} action={<Button disabled={busy} onClick={() => requestLeave(() => void discardAndRefresh())}>刷新</Button>} /> : null}
     {canWrite && !loading && ['OPEN', 'IN_ANALYSIS'].includes(complaint.status) ? <Space orientation="vertical" style={{ width: '100%' }}>
       <Select disabled={busy} aria-label="业务分类" value={category} options={categories} onChange={setCategory} />
       {category === 'OTHER' ? <Input disabled={busy} aria-label="其他分类说明" value={categoryNote} onChange={(event) => setCategoryNote(event.target.value)} maxLength={200} /> : null}

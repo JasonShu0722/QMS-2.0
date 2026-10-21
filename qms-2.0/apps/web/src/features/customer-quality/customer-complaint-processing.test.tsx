@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
-import { apiRequest, csrfToken } from '../../api/client';
+import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { CustomerComplaintProcessing } from './CustomerComplaintProcessing';
+import { CustomerQualityPage } from './CustomerQualityPage';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
 import { MemoryRouter, Link } from 'react-router-dom';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
@@ -118,3 +119,125 @@ it('offers a restored file after polling observes a clean scan without a page re
   fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/complaints/complaint-1/progress', expect.objectContaining({ body: JSON.stringify({ expectedVersion: 2, note: '扫描恢复完成', evidenceFileObjectId: 'pending' }) })));
 });
+
+const latestComplaint = {
+  ...complaint, version: 7, category: 'OTHER', category_note: '服务端最新分类说明',
+  responsible_department_id: 'department-server', owner_user_id: 'user-server',
+} as unknown as typeof complaint;
+
+function mockRefreshAssignment() {
+  const previous = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init) => path.endsWith('/assignees') ? Promise.resolve({
+    departments: [{ id: 'department-1', name: '质量部' }, { id: 'department-draft', name: '草稿部门' }, { id: 'department-server', name: '最新部门' }],
+    users: [{ id: 'user-1', username: '经办人' }, { id: 'user-draft', username: '草稿经办人' }, { id: 'user-server', username: '最新经办人' }],
+  }) : previous(path, init));
+}
+
+async function chooseProcessingOption(label: string, option: string) {
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: label }));
+  fireEvent.click(await screen.findByText(option, { selector: '.ant-select-item-option-content' }));
+}
+
+async function editProcessingDraft() {
+  await chooseProcessingOption('业务分类', '其他');
+  fireEvent.change(screen.getByLabelText('其他分类说明'), { target: { value: '未保存的分类说明' } });
+  await chooseProcessingOption('业务分类', '交付');
+  await chooseProcessingOption('责任部门', '草稿部门');
+  await chooseProcessingOption('经办人', '草稿经办人');
+  fireEvent.change(screen.getByLabelText('处理说明'), { target: { value: '未保存的处理说明' } });
+  fireEvent.click(screen.getByRole('button', { name: '恢复附件扫描完成' }));
+  await chooseProcessingOption('进展附件证据', '恢复附件.txt');
+}
+
+it('discards drafts only after confirmed error refresh and uses the same-id server assignment in the next write', async () => {
+  mockRefreshAssignment();
+  const previous = vi.mocked(apiRequest).getMockImplementation()!;
+  let failProgress = true;
+  vi.mocked(apiRequest).mockImplementation((path, init) => {
+    if (path.endsWith('/progress') && failProgress) { failProgress = false; return Promise.reject(new ApiError({ code: 'CONFLICT', message: '版本冲突' }, 409)); }
+    return previous(path, init);
+  });
+  const refresh = vi.fn();
+  const content = (current: typeof complaint) => <MemoryRouter><UnsavedChangesProvider><CustomerComplaintProcessing key={current.id} complaint={current} canWrite refresh={refresh} /></UnsavedChangesProvider></MemoryRouter>;
+  const view = render(content(complaint));
+  refresh.mockImplementation(async () => { view.rerender(content(latestComplaint)); return latestComplaint; });
+  await screen.findByText(/已分诊/);
+  fireEvent.change(screen.getByLabelText('处理说明'), { target: { value: '触发冲突' } });
+  fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
+  await screen.findByRole('alert');
+  await editProcessingDraft();
+  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(refresh).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('处理说明')).toHaveValue('未保存的处理说明');
+  expect(screen.getByLabelText('业务分类').closest('.ant-select')).toHaveTextContent('交付');
+  expect(screen.getByLabelText('责任部门').closest('.ant-select')).toHaveTextContent('草稿部门');
+  expect(screen.getByRole('combobox', { name: '经办人' }).closest('.ant-select')).toHaveTextContent('草稿经办人');
+  expect(screen.getByLabelText('进展附件证据').closest('.ant-select')).toHaveTextContent('恢复附件.txt');
+  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByRole('button', { name: '恢复附件扫描完成' })).toBeEnabled());
+  expect.soft(screen.getByLabelText('处理说明')).toHaveValue('');
+  expect.soft(screen.getByLabelText('业务分类').closest('.ant-select')).toHaveTextContent('其他');
+  expect.soft(screen.queryByLabelText('其他分类说明')).toHaveValue('服务端最新分类说明');
+  expect.soft(screen.getByLabelText('责任部门').closest('.ant-select')).toHaveTextContent('最新部门');
+  expect.soft(screen.getByRole('combobox', { name: '经办人' }).closest('.ant-select')).toHaveTextContent('最新经办人');
+  expect.soft(screen.getByLabelText('进展附件证据').closest('.ant-select')).not.toHaveTextContent(/恢复附件.txt|pending/);
+  fireEvent.change(screen.getByLabelText('处理说明'), { target: { value: '基于最新分派继续处理' } });
+  fireEvent.click(screen.getByRole('button', { name: '分诊或改派' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining('/triage'), expect.anything()));
+  const triage = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/triage'))!;
+  expect.soft(JSON.parse(String(triage[1]?.body))).toEqual({ expectedVersion: 7, category: 'OTHER', categoryNote: '服务端最新分类说明', responsibleDepartmentId: 'department-server', ownerUserId: 'user-server', note: '基于最新分派继续处理' });
+  await waitFor(() => expect(screen.getByLabelText('处理说明')).toHaveValue(''));
+  await waitFor(() => expect(screen.getByRole('button', { name: '恢复附件扫描完成' })).toBeEnabled());
+  fireEvent.change(screen.getByLabelText('处理说明'), { target: { value: '新进展不复用旧证据' } });
+  fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining('/progress'), expect.objectContaining({ body: JSON.stringify({ expectedVersion: 7, note: '新进展不复用旧证据' }) })));
+}, 60_000);
+
+it('keeps unsaved assignment fields during ordinary same-id readback and progress save refresh', async () => {
+  mockRefreshAssignment();
+  const refresh = vi.fn();
+  const view = render(<CustomerComplaintProcessing complaint={complaint} canWrite refresh={refresh} />);
+  await screen.findByText(/已分诊/);
+  await editProcessingDraft();
+  view.rerender(<CustomerComplaintProcessing complaint={latestComplaint} canWrite refresh={refresh} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '恢复附件扫描完成' })).toBeEnabled());
+  expect(screen.getByLabelText('处理说明')).toHaveValue('未保存的处理说明');
+  expect(screen.getByLabelText('进展附件证据').closest('.ant-select')).toHaveTextContent('恢复附件.txt');
+  refresh.mockResolvedValue(latestComplaint);
+  fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  expect(screen.getByLabelText('业务分类').closest('.ant-select')).toHaveTextContent('交付');
+  expect(screen.getByLabelText('责任部门').closest('.ant-select')).toHaveTextContent('草稿部门');
+  expect(screen.getByRole('combobox', { name: '经办人' }).closest('.ant-select')).toHaveTextContent('草稿经办人');
+  await chooseProcessingOption('业务分类', '其他');
+  expect(screen.getByLabelText('其他分类说明')).toHaveValue('未保存的分类说明');
+}, 60_000);
+
+it('returns the refreshed server detail through the real parent error-refresh callback', async () => {
+  mockRefreshAssignment();
+  const previous = vi.mocked(apiRequest).getMockImplementation()!;
+  let detailReads = 0;
+  vi.mocked(apiRequest).mockImplementation((path, init) => {
+    if (path.endsWith('/my-permissions')) return Promise.resolve({ permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] });
+    if (path.endsWith('/customers')) return Promise.resolve([]);
+    if (path.endsWith('/complaints')) return Promise.resolve([complaint]);
+    if (path.endsWith('/complaints/complaint-1')) return Promise.resolve(++detailReads === 1 ? complaint : latestComplaint);
+    if (path.endsWith('/progress')) return Promise.reject(new Error('offline'));
+    return previous(path, init);
+  });
+  render(<MemoryRouter><UnsavedChangesProvider><CustomerQualityPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'CQ-1' }));
+  fireEvent.change(await screen.findByLabelText('处理说明'), { target: { value: '失败后丢弃' } });
+  fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
+  const alert = await screen.findByRole('alert');
+  fireEvent.click(alert.querySelector('button')!);
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(detailReads).toBe(2));
+  await waitFor(() => expect(screen.getByLabelText('处理说明')).toHaveValue(''));
+  expect(screen.getByLabelText('其他分类说明')).toHaveValue('服务端最新分类说明');
+  expect(screen.getByLabelText('责任部门').closest('.ant-select')).toHaveTextContent('最新部门');
+  expect(screen.getByRole('combobox', { name: '经办人' }).closest('.ant-select')).toHaveTextContent('最新经办人');
+}, 60_000);
