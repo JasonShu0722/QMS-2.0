@@ -57,7 +57,7 @@ it.each(['success', 'error'] as const)('keeps event B receipts when the closed e
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   const secondDialog = await openHistory(user, 'b');
   await act(async () => { second.resolve(json(attempts('B'))); });
-  expect(await within(secondDialog).findByText('RECEIPT_B')).toBeVisible();
+  await waitFor(() => expect(within(secondDialog).getByText('RECEIPT_B')).toBeVisible());
 
   await act(async () => { first.resolve(result === 'success' ? json(attempts('A')) : json({ code: 'FEATURE_PERMISSION_DENIED', traceId: 'stale-attempt-error' }, 403)); });
   expect(within(secondDialog).getByText('RECEIPT_B')).toBeVisible();
