@@ -40,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         fontFamily: '"Segoe UI", "Microsoft YaHei", sans-serif',
       },
       components: {
-        Button: { primaryColor: tokens['on-accent'] },
+        Button: { primaryColor: tokens['on-accent'], paddingInline: 14, fontWeight: 500, defaultShadow: 'none', primaryShadow: 'none', dangerShadow: 'none' },
         Card: { bodyPadding: 8, bodyPaddingSM: 8, headerPadding: 8, headerPaddingSM: 8, headerHeight: 44, headerHeightSM: 44 },
         Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 },
         Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface },

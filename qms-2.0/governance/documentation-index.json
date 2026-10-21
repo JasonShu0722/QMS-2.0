@@ -392,7 +392,7 @@
         "owner": "QMS 工程维护者（基础交互体系设计评审）",
         "reviewedOn": "2026-10-21",
         "maxAgeDays": 90,
-        "reason": "复核负责人已批准方向与全面场景覆盖要求，增加基础交互专项设计入口；区分现有切片、规划模式、未来扩展、样例与实际业务证据。当前仅设计评审，不改变既有交付或生产验收事实。",
+        "reason": "负责人初步认可样例后批准第一批共享交互本地迁移；复核统一规格新增控件及动作基准、样例／正式来源关系和本地计划。按最新要求推送前等待负责人仓库处理，不更改既有业务能力／安全或验收事实。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -408,7 +408,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "198e5e1dbe3d275c5d80a4552094258c24931e2dbf8f5ddd2dd48c490445cde9"
+            "sha256": "a98eb1fc668804bf1d3e12d659f860a88db9c021f63ca6c0bc7e60f1c081b2f2"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -432,7 +432,11 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md",
-            "sha256": "199efb5acc44a2b409efeaac307e053daab7ca3e7f148fe64493cc0a905b10fd"
+            "sha256": "7c4f222092b5f82177a883cfa0f9d9f4949f4df0033e74df2b8ac98197e8d79d"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-21-qms-interaction-foundation.md",
+            "sha256": "4faf3dd878fdb17ff914b0f5501506d49ee3db147b8f9aa8627b2f0b4fd822f4"
           }
         ]
       }

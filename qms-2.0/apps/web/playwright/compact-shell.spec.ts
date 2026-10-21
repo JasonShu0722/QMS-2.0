@@ -13,7 +13,10 @@ async function checkRow(page: Page, width: number) {
   await expect(header).toHaveCount(1);
   await expect(header).toBeVisible();
   await expect(header.getByRole('button', { name: '外观设置', exact: true })).toHaveCount(1);
-  await expect(header.getByRole('button', { name: 'Language / 语言' })).toBeVisible();
+  const language = header.getByRole('radiogroup', { name: 'Language / 语言' });
+  await expect(language).toBeVisible();
+  await expect(language.locator('label').filter({ has: page.getByRole('radio', { name: 'EN', exact: true }) })).toBeVisible();
+  await expect(language.getByRole('radio', { name: 'CN', exact: true })).toBeChecked();
   await expect(page.locator('.qms-main > .qms-work-tabs')).toHaveCount(0);
   await expect(page.locator('.qms-topbar-location')).toHaveCount(0);
   await expect(async () => {
@@ -21,7 +24,7 @@ async function checkRow(page: Page, width: number) {
     expect(bounds).not.toBeNull();
     if (!bounds) throw new Error('Visible compact header has no layout bounds');
     expect(bounds.height).toBeLessThanOrEqual(72);
-    for (const control of await header.locator('button:visible, a:visible').all()) {
+    for (const control of await header.locator('button:visible, a:visible, label.ant-radio-button-wrapper:visible').all()) {
       const box = await control.boundingBox();
       expect(box).not.toBeNull();
       if (!box) throw new Error('Visible header control has no layout bounds');
@@ -94,21 +97,27 @@ for (const supplier of [false, true]) {
     await expect(navigation).not.toBeVisible();
     await header.getByRole('button', { name: '外观设置' }).click();
     for (const mode of ['浅色', '深色']) {
-      await page.getByRole('button', { name: mode, exact: true }).click();
+      await page.getByRole('radio', { name: mode, exact: true }).focus();
+      await page.getByRole('radio', { name: mode, exact: true }).press('Space');
       for (const accent of ['晴空蓝', '湖水青', '鸢尾紫']) {
-        await page.getByRole('button', { name: accent, exact: true }).click();
+        await page.getByRole('radio', { name: accent, exact: true }).focus();
+        await page.getByRole('radio', { name: accent, exact: true }).press('Space');
+        await expect(page.getByRole('radio', { name: accent, exact: true })).toBeChecked();
         await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
         await checkRow(page, 390);
         await header.getByRole('button', { name: '外观设置' }).click();
       }
     }
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
-    await header.getByRole('button', { name: 'Language / 语言' }).click();
-    await page.getByRole('menuitemradio', { name: 'English', exact: true }).click();
+    const language = header.getByRole('radiogroup', { name: 'Language / 语言' });
+    await language.getByRole('radio', { name: 'EN', exact: true }).focus();
+    await language.getByRole('radio', { name: 'EN', exact: true }).press('Space');
+    await expect(language.getByRole('radio', { name: 'EN', exact: true })).toBeChecked();
     await expect(header.getByRole('button', { name: 'Appearance settings', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Requirement feedback', exact: true })).toBeVisible();
-    await header.getByRole('button', { name: 'Language / 语言' }).click();
-    await page.getByRole('menuitemradio', { name: '简体中文', exact: true }).click();
+    await language.getByRole('radio', { name: 'CN', exact: true }).focus();
+    await language.getByRole('radio', { name: 'CN', exact: true }).press('Space');
+    await expect(language.getByRole('radio', { name: 'CN', exact: true })).toBeChecked();
     if (!supplier) {
       await page.goto('/app/problem-workspace/00000000-0000-4000-8000-000000000001');
       await page.getByRole('button', { name: '专注处理', exact: true }).click();

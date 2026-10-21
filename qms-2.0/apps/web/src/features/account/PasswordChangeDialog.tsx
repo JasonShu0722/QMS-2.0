@@ -37,7 +37,7 @@ export function PasswordChangeDialog({ onClose, onSuccess, afterClose }: { onClo
     finally { pending.current = false; if (current()) setBusy(false); }
   }
   return <>
-    <Modal open={open} title={t('修改密码')} width={440} centered className="qms-password-dialog" destroyOnHidden keyboard={!busy} closable={!busy} mask={{ closable: !busy }} onCancel={requestClose} afterClose={() => { onClose(); afterClose(); }} footer={<><Button disabled={busy} onClick={requestClose}>{t('取消')}</Button><Button type="primary" loading={busy} onClick={() => form.submit()}>{t('修改密码')}</Button></>}>
+    <Modal open={open} title={t('修改密码')} width={440} centered className="qms-password-dialog" destroyOnHidden keyboard={!busy} closable={!busy} mask={{ closable: !busy }} onCancel={requestClose} afterClose={() => { onClose(); afterClose(); }} footer={<div className="qms-dialog-actions" role="group" aria-label={t('修改密码')}><Button disabled={busy} onClick={requestClose}>{t('取消')}</Button><Button type="primary" loading={busy} onClick={() => form.submit()}>{t('修改密码')}</Button></div>}>
       <GovernanceFeedback error={error} />
       <Form form={form} layout="vertical" disabled={busy} preserve={false} clearOnDestroy onFinish={submit} onValuesChange={(_, values) => setDirty(!!values.currentPassword || !!values.newPassword)}>
         <Form.Item name="currentPassword" label={t('当前密码')} rules={[{ required: true, message: t('请输入当前密码') }]}><Input.Password autoFocus autoComplete="current-password" /></Form.Item>

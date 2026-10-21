@@ -15,17 +15,38 @@
 .qms-content h1.ant-typography,
 .qms-content .ant-typography + h1.ant-typography { margin: 0 0 var(--qms-section-gap); }
 :is(.qms-content, .ant-modal, .ant-drawer) .ant-table-wrapper .ant-table-pagination.ant-pagination { margin: var(--qms-section-gap) 0; }
+.qms-dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qms-dialog-actions > .ant-btn { max-width: 100%; height: auto; min-height: 36px; white-space: normal; overflow-wrap: anywhere; }
+.ant-modal-footer .qms-dialog-actions > .ant-btn + .ant-btn { margin-inline-start: 0; }
+.qms-topbar-language { display: inline-flex; flex: none; white-space: nowrap; }
+.qms-topbar-language .ant-radio-button-wrapper { height: 36px; min-width: 36px; padding-inline: 9px; line-height: 34px; text-align: center; }
+@media (max-width: 760px) {
+  .qms-topbar-language .ant-radio-button-wrapper { padding-inline: 6px; }
+}
 @media (pointer: coarse) {
   :is(.qms-content, .ant-modal, .ant-drawer) :is(.ant-btn, .ant-modal-close, .ant-drawer-close, .ant-select, .ant-input-affix-wrapper, .ant-input-number, select,
     input:where(:not([type]), [type="text"], [type="search"], [type="email"], [type="password"], [type="tel"], [type="url"], [type="number"], [type="date"], [type="datetime-local"], [type="time"], [type="month"], [type="week"]):not(.ant-select-input, .ant-input-number-input, .ant-input-affix-wrapper input)) { min-height: 44px; }
   :is(.qms-content, .ant-modal, .ant-drawer) :is(.ant-btn-icon-only, .ant-modal-close, .ant-drawer-close) { min-width: 44px; }
+  .qms-dialog-actions > .ant-btn { min-width: 44px; min-height: 44px; }
+  .qms-topbar-language .ant-radio-button-wrapper { min-width: 44px; min-height: 44px; line-height: 42px; }
 }
 .qms-appearance-trigger.ant-btn { color: var(--qms-text); background: var(--qms-accent-soft); }
 .qms-appearance-settings { color: var(--qms-text); }
 .qms-appearance-settings h3 { font-size: 16px; margin: var(--qms-section-gap) 0; }
 .qms-appearance-settings p { color: var(--qms-muted); line-height: 1.7; margin: var(--qms-section-gap) 0; }
-.qms-appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--qms-section-gap); margin-bottom: var(--qms-section-gap); }
-.qms-appearance-options button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 94px; padding: 12px 8px; border: 1px solid var(--qms-border); border-radius: 8px; color: var(--qms-text); background: var(--qms-surface); font: inherit; cursor: pointer; }
-.qms-appearance-options button[aria-pressed="true"] { background: var(--qms-accent-soft); border-color: var(--qms-accent); color: var(--qms-text); }
+.qms-appearance-options.ant-radio-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--qms-section-gap); margin-bottom: var(--qms-section-gap); }
+.qms-appearance-options .ant-radio-wrapper { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 94px; margin: 0; padding: 12px 8px; border: 1px solid var(--qms-border); border-radius: 8px; color: var(--qms-text); background: var(--qms-surface); text-align: center; transition: background-color 150ms, border-color 150ms, box-shadow 150ms; }
+.qms-appearance-options .ant-radio-wrapper > .ant-radio { position: absolute; inset-block-start: 12px; inset-inline-start: 8px; }
+.qms-appearance-options .ant-radio-wrapper > .ant-radio + span { min-width: 0; width: 100%; padding-inline: 0; }
+.qms-appearance-option-content { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow-wrap: anywhere; }
+.qms-appearance-options .ant-radio-wrapper:hover { border-color: var(--qms-accent); background: var(--qms-surface-tint); }
+.qms-appearance-options .ant-radio-wrapper.ant-radio-wrapper-checked { background: var(--qms-accent-soft); border-color: var(--qms-accent); color: var(--qms-text); }
+.qms-appearance-options .ant-radio-wrapper:active { box-shadow: inset 0 0 0 1px var(--qms-accent); }
+.qms-appearance-options .ant-radio-wrapper:focus-within { outline: 2px solid var(--qms-accent-action); outline-offset: 2px; }
 .qms-color-swatch { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; }
 .qms-appearance-note { padding: var(--qms-card-padding); border-radius: 8px; background: var(--qms-surface-tint); }
+@media (prefers-reduced-motion: reduce) {
+  .qms-appearance-options .ant-radio-wrapper,
+  .qms-appearance-options .ant-radio,
+  .qms-appearance-options .ant-radio::after { transition: none; }
+}

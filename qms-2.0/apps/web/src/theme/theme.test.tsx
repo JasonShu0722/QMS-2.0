@@ -154,10 +154,10 @@ describe('shared appearance', () => {
     render(<ThemeProvider><AppearanceButton /></ThemeProvider>);
     expect(screen.getByRole('button', { name: '外观设置' })).toHaveTextContent('外观');
     fireEvent.click(screen.getByRole('button', { name: '外观设置' }));
-    fireEvent.click(await screen.findByRole('button', { name: '鸢尾紫' }));
+    fireEvent.click(await screen.findByRole('radio', { name: '鸢尾紫' }));
     expect(document.documentElement.dataset.qmsAppearance).toBe('dark');
     expect(document.documentElement.dataset.qmsAccent).toBe('purple');
-    fireEvent.click(screen.getByRole('button', { name: '浅色' }));
+    fireEvent.click(screen.getByRole('radio', { name: '浅色' }));
     expect(document.documentElement.dataset.qmsAccent).toBe('purple');
     await waitFor(() => expect(JSON.parse(localStorage.getItem(preferenceKey)!)).toEqual({ mode: 'light', accent: 'purple' }));
   });
@@ -169,7 +169,7 @@ describe('shared appearance', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     render(<ThemeProvider><AppearanceButton /></ThemeProvider>);
     fireEvent.click(screen.getByRole('button', { name: '外观设置' }));
-    fireEvent.click(await screen.findByRole('button', { name: '跟随系统' }));
+    fireEvent.click(await screen.findByRole('radio', { name: '跟随系统' }));
     act(() => { media.matches = true; change?.(); });
     expect(document.documentElement.dataset.qmsAppearance).toBe('dark');
     expect(document.documentElement.dataset.qmsAccent).toBe('blue');

@@ -50,7 +50,6 @@ export function InteractionPreview() {
   const [active, setActive] = useState('01');
 
   return <ConfigProvider theme={{ components: {
-    Button: { paddingInline: 14, defaultShadow: 'none', primaryShadow: 'none', dangerShadow: 'none', fontWeight: 500 },
     Segmented: { trackPadding: 3 },
   } }}>
     <div className="interaction-preview">

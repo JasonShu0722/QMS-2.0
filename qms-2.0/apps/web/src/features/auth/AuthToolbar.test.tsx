@@ -69,8 +69,8 @@ describe('authentication toolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
     fireEvent.click(await screen.findByRole('menuitemradio', { name: 'English' }));
     fireEvent.click(screen.getByRole('button', { name: 'Appearance settings' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Dark' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Iris purple' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Dark' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Iris purple' }));
     await waitFor(() => expect(JSON.parse(localStorage.getItem(preferenceKey)!)).toEqual({ mode: 'dark', accent: 'purple' }));
     expect(localStorage.getItem('qms:locale:v1')).toBe('en-US');
 
@@ -80,7 +80,7 @@ describe('authentication toolbar', () => {
     expect(document.documentElement.dataset.qmsAppearance).toBe('dark');
     expect(document.documentElement.dataset.qmsAccent).toBe('purple');
     fireEvent.click(screen.getByRole('button', { name: 'Appearance settings' }));
-    expect(await screen.findByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Iris purple' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByRole('radio', { name: 'Dark' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Iris purple' })).toBeChecked();
   });
 });
