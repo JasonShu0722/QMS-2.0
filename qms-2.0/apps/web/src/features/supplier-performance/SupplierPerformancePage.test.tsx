@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { SupplierPerformancePage } from './SupplierPerformancePage';
 
 vi.mock('../../api/client', async () => {
@@ -9,6 +11,20 @@ vi.mock('../../api/client', async () => {
 });
 
 beforeEach(() => { vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset(); vi.mocked(csrfToken).mockResolvedValue('csrf-test'); });
+
+it('preserves the internal appeal review note when closing is declined', async () => {
+  vi.mocked(apiRequest).mockImplementation(async (path) => path === '/api/v1/supplier-performance/appeals'
+    ? { items: [{ id: 'appeal-1', cardId: 'card-1', reason: '批次需复核', status: 'SUBMITTED', version: 2 }], total: 1 } as never
+    : { items: [], total: 0 } as never);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierPerformancePage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '复核申诉' }));
+  const modal = screen.getByRole('dialog', { name: '绩效申诉复核' });
+  fireEvent.change(within(modal).getByRole('textbox', { name: '复核说明' }), { target: { value: '正在核对原始检验记录' } });
+  fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(within(modal).getByRole('textbox', { name: '复核说明' })).toHaveValue('正在核对原始检验记录');
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PUT' }));
+});
 
 it('shows a source-backed monthly card and its scoring policy', async () => {
   vi.mocked(apiRequest)

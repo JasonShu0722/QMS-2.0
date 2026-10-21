@@ -2,7 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Card, Drawer, Empty, Form, Input, List, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
-import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './audit-standards.css';
 
 type StandardPage = components['schemas']['AuditStandardPageDto'];
@@ -41,6 +41,7 @@ export function AuditStandardsPage() {
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const requestLeave = useNavigationGuard();
   useUnsavedChanges(dirty);
+  useNavigationBusy(busy);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -73,6 +74,7 @@ export function AuditStandardsPage() {
   }
 
   async function act(action: () => Promise<void>) {
+    if (busy) return;
     setBusy(true);
     setActionError(undefined);
     try { await action(); setRevision((value) => value + 1); }
@@ -115,7 +117,7 @@ export function AuditStandardsPage() {
         <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
       </Space>
       {Boolean(loadError) && <Alert showIcon type={denied(loadError) ? 'warning' : 'error'} title={denied(loadError) ? '暂无审核标准访问权限' : '审核标准加载失败，请重试'} description={safeAccountError(loadError)} />}
-      {loading ? <div className="audit-standards-loading"><Spin /></div> : !loadError && <List dataSource={catalog?.items ?? []} locale={{ emptyText: <Empty description="暂无审核标准" /> }} renderItem={(standard: StandardItem) => <List.Item key={standard.id} actions={[<Button key="detail" onClick={() => void showDetail(standard.id)}>查看版本</Button>]}><List.Item.Meta title={<Space wrap><span>{standard.name}</span><Tag>{auditTypes.find((item) => item.value === standard.auditType)?.label}</Tag><Tag color={standard.status === 'PUBLISHED' ? 'green' : 'orange'}>{standard.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag></Space>} description={`最新生效版本 v${standard.latestVersion} · 编辑版本 ${standard.version}`} /></List.Item>} />}
+      {loading ? <div className="audit-standards-loading"><Spin /></div> : !loadError && <List dataSource={catalog?.items ?? []} locale={{ emptyText: <Empty description="暂无审核标准" /> }} renderItem={(standard: StandardItem) => <List.Item key={standard.id} actions={[<Button key="detail" onClick={() => requestLeave(() => { setEditor(undefined); setDirty(false); void showDetail(standard.id); })}>查看版本</Button>]}><List.Item.Meta title={<Space wrap><span>{standard.name}</span><Tag>{auditTypes.find((item) => item.value === standard.auditType)?.label}</Tag><Tag color={standard.status === 'PUBLISHED' ? 'green' : 'orange'}>{standard.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag></Space>} description={`最新生效版本 v${standard.latestVersion} · 编辑版本 ${standard.version}`} /></List.Item>} />}
     </section>
     {Boolean(actionError) && !detail && !editor && <Alert showIcon type="error" title={safeAccountError(actionError)} />}
     <Drawer title={detail?.name ?? '标准详情'} open={!!detail || detailLoading} onClose={() => { setDetail(undefined); setActionError(undefined); }} width={680}>
@@ -129,12 +131,12 @@ export function AuditStandardsPage() {
         <List dataSource={detail.versions} locale={{ emptyText: <Empty description="尚未发布版本" /> }} renderItem={(version) => <List.Item key={version.id}><Card className="audit-standards-version" size="small" title={`v${version.version}`} extra={<Typography.Text type="secondary">{new Date(version.publishedAt).toLocaleString('zh-CN')}</Typography.Text>}><ChecklistItems definition={version.definition} /><Typography.Text type="secondary" copyable>{version.id}</Typography.Text></Card></List.Item>} />
       </Space>}
     </Drawer>
-    <Drawer title={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} open={!!editor} onClose={() => requestLeave(() => { setEditor(undefined); setDirty(false); }, true)} width={620} destroyOnHidden>
+    <Drawer aria-label={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} title={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} open={!!editor} onClose={() => requestLeave(() => { setEditor(undefined); setDirty(false); }, true)} width={620} destroyOnHidden>
       {editor && <Form<EditorValues> key={`${editor}-${detail?.id ?? 'new'}`} layout="vertical" disabled={busy} onValuesChange={() => setDirty(true)} onFinish={(values) => void save(values)} initialValues={editor === 'new' ? { auditType: 'PROCESS', items: [{ key: '', text: '' }] } : { name: detail?.name, auditType: detail?.auditType, items: items(detail?.draftDefinition ?? { items: [] }) }}>
         {Boolean(actionError) && <Alert type="error" showIcon title={safeAccountError(actionError)} />}
         {editor === 'new' && <><Form.Item name="name" label="标准名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item><Form.Item name="auditType" label="审核类型" rules={[{ required: true }]}><Select options={auditTypes} /></Form.Item></>}
         <Form.List name="items">{(fields, { add, remove }) => <Space orientation="vertical" className="audit-standards-column">{fields.map((field) => <Space key={field.key} align="baseline" className="audit-standards-item-editor"><Form.Item name={[field.name, 'key']} rules={[{ required: true, whitespace: true }]}><Input placeholder="检查项编号" maxLength={120} /></Form.Item><Form.Item name={[field.name, 'text']} rules={[{ required: true, whitespace: true }]}><Input.TextArea placeholder="检查内容" maxLength={2000} autoSize={{ minRows: 1, maxRows: 4 }} /></Form.Item><Button onClick={() => remove(field.name)} disabled={fields.length === 1}>删除</Button></Space>)}<Button onClick={() => add({ key: '', text: '' })}>添加检查项</Button></Space>}</Form.List>
-        <Form.Item className="audit-standards-submit"><Button type="primary" htmlType="submit" loading={busy}>保存</Button></Form.Item>
+        <Form.Item className="audit-standards-submit"><div className="qms-dialog-actions" role="group" aria-label={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'}><Button type="primary" htmlType="submit" loading={busy}>保存</Button></div></Form.Item>
       </Form>}
     </Drawer>
   </main>;

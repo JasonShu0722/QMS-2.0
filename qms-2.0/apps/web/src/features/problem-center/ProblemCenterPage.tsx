@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Select, Space, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Popconfirm, Select, Space, Table, Tag, Typography, type TableColumnsType } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
@@ -385,7 +385,17 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
           <Button disabled={!selectedView} onClick={() => selectedView && applyConfiguration(selectedView.configuration, selectedView.name)}>{t('应用视图')}</Button>
           <Button type="primary" disabled={disabledWrites} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
           <Button disabled={disabledWrites || !selectedView} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
-          <Button danger disabled={disabledWrites || !selectedView} loading={mutating} onClick={removeView}>{t('删除视图')}</Button>
+          <Popconfirm
+            title="删除个人保存视图"
+            description={selectedView ? `将删除“${selectedView.name}”个人视图及其问题筛选、排序和显示列配置。` : undefined}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            disabled={disabledWrites || !selectedView}
+            onConfirm={removeView}
+          >
+            <Button danger disabled={disabledWrites || !selectedView} loading={mutating}>{t('删除视图')}</Button>
+          </Popconfirm>
           {conflicted ? <Button disabled={viewsLoading} loading={viewsLoading} onClick={reloadConflictedView}>{t('重新加载保存视图')}</Button> : null}
         </Space>
       </div>

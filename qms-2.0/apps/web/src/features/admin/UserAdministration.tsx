@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation, getAdminUser, safeAccountError } from '../../api/client';
-import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
-import { allows, randomResetCode, scopePath, type AdminOrganization, type AdminRole, type AdminUser, type UserRoles } from './admin';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { allows, permissionChanges, randomResetCode, scopePath, type AdminOrganization, type AdminRole, type AdminUser, type UserRoles } from './admin';
 import { UserBatchCreate } from './UserBatchCreate';
 import { UserTemporaryPassword } from './UserTemporaryPassword';
 import { UserMfaPolicy } from './UserMfaPolicy';
@@ -31,17 +31,21 @@ export function UserAdministration({ organization, organizations, targetUserId }
   const errorDescription = traceId ? <span>{t('追踪标识')}: <code>{traceId}</code></span> : undefined;
   const [success, setSuccess] = useState<string>();
   const [editing, setEditing] = useState<AdminUser | 'new'>();
-  const [assignment, setAssignment] = useState<{ user: AdminUser; roles: AdminRole[]; selected: string[]; global: AdminRole[]; effective: UserRoles['effectiveRoles'] }>();
+  const [assignment, setAssignment] = useState<{ user: AdminUser; roles: AdminRole[]; selected: string[]; original: string[]; global: AdminRole[]; effective: UserRoles['effectiveRoles'] }>();
   const [reset, setReset] = useState<{ user: AdminUser; code: string; issued?: ResetIssued }>();
   const [temporary, setTemporary] = useState<AdminUser>();
   const [mfa, setMfa] = useState<{ user: AdminUser; organizationId: string }>();
   const [batch, setBatch] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const batchPending = useRef(false);
+  const reportBatchBusy = useCallback((value: boolean) => { batchPending.current = value; setBatchBusy(value); }, []);
   const [form] = Form.useForm<UserForm>();
   const [dirty, setDirty] = useState(false);
   const [profileConflict, setProfileConflict] = useState(false);
   const actionLock = useRef(false);
   const scopeGeneration = useRef(0);
-  useUnsavedChanges(!!editing && dirty);
+  useUnsavedChanges((!!editing && dirty) || (!!assignment && permissionChanges(assignment.original, assignment.selected) > 0));
+  useNavigationBusy(busy);
   const requestLeave = useNavigationGuard();
   const [target, setTarget] = useState<{ organizationId: string; userId: string; user?: AdminUser; error?: string }>();
   const editor = useRef(editing);
@@ -147,7 +151,7 @@ export function UserAdministration({ organization, organizations, targetUserId }
     setError(undefined); setBusy(true);
     try {
       const [roles, assigned] = await Promise.all([apiRequest<AdminRole[]>(scopePath('roles', organization.id)), apiRequest<UserRoles>(scopePath(`users/${user.id}/roles`, organization.id))]);
-      if (alive.current && scope.current === organizationId && operationGeneration === scopeGeneration.current && operationEpoch === accountAvatarEpoch()) { mutate.current = createAdminMutation(); setAssignment({ user, effective: assigned.effectiveRoles, roles: roles.filter((role) => role.organizationId !== null), selected: assigned.roles.filter((role) => role.organizationId !== null).map((role) => role.id), global: assigned.roles.filter((role) => role.organizationId === null) }); }
+      if (alive.current && scope.current === organizationId && operationGeneration === scopeGeneration.current && operationEpoch === accountAvatarEpoch()) { const original = assigned.roles.filter((role) => role.organizationId !== null).map((role) => role.id); mutate.current = createAdminMutation(); setAssignment({ user, effective: assigned.effectiveRoles, roles: roles.filter((role) => role.organizationId !== null), selected: original, original, global: assigned.roles.filter((role) => role.organizationId === null) }); }
     } catch (cause) { if (alive.current && scope.current === organizationId && operationGeneration === scopeGeneration.current && operationEpoch === accountAvatarEpoch()) { setFailure(cause); if (editor.current && editor.current !== 'new' && cause instanceof ApiError && cause.code === 'CONCURRENCY_CONFLICT') setProfileConflict(true); } }
     finally { actionLock.current = false; if (alive.current && scope.current === organizationId && operationGeneration === scopeGeneration.current && operationEpoch === accountAvatarEpoch()) setBusy(false); }
   }
@@ -205,8 +209,8 @@ export function UserAdministration({ organization, organizations, targetUserId }
       </Space> },
     ]} />}
     {mfa && canRead && mfa.organizationId === organization.id && <UserMfaPolicy key={`${organization.id}:${mfa.user.id}`} user={mfa.user} organizationId={organization.id} canWrite={canReset} onClose={() => setMfa(undefined)} onSaved={() => { setRevision((value) => value + 1); setSuccess('MFA 设置已保存'); }} />}
-    <Modal title={t('批量创建账号')} open={batch && canCreate} onCancel={() => setBatch(false)} footer={null} destroyOnHidden width={950}>
-      {batch && canCreate && <UserBatchCreate organizationId={organization.id} canReadPasswords={canReset} />}
+    <Modal title={t('批量创建账号')} open={batch && canCreate} closable={!batchBusy} keyboard={!batchBusy} mask={{ closable: !batchBusy }} onCancel={() => { if (batchPending.current) return; requestLeave(() => setBatch(false)); }} footer={null} destroyOnHidden width={950}>
+      {batch && canCreate && <UserBatchCreate organizationId={organization.id} canReadPasswords={canReset} busyChanged={reportBatchBusy} />}
     </Modal>
     <Modal title={temporary ? `${temporary.username} · ${t('临时密码')}` : t('临时密码')} open={!!temporary && canReset} onCancel={() => setTemporary(undefined)} footer={null} destroyOnHidden>
       {temporary && canReset && <UserTemporaryPassword key={`${organization.id}:${temporary.id}`} user={temporary} organizationId={organization.id} />}
@@ -222,10 +226,10 @@ export function UserAdministration({ organization, organizations, targetUserId }
         {(editing === 'new' || canTransfer) && <><Form.Item name="accountType" label={t('账号类型')} rules={[{ required: true }]}><Select options={[{ value: 'INTERNAL', label: t('内部账号') }, { value: 'SUPPLIER', label: t('供应商账号') }]} /></Form.Item>
         <Form.Item name="organizationId" label={t('主组织')} rules={[{ required: true }]}><Select options={organizationOptions} /></Form.Item></>}
         {editing !== 'new' && canStatus && <Form.Item name="status" label={t('状态')}><Select options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></Form.Item>}
-        <Button htmlType="submit" type="primary" disabled={profileConflict} loading={busy}>{t('保存用户')}</Button>
+        <div className="qms-dialog-actions" role="group" aria-label={editing === 'new' ? t('创建用户') : t('编辑用户')}><Button htmlType="submit" type="primary" disabled={profileConflict} loading={busy}>{t('保存用户')}</Button></div>
       </Form>
     </Modal>
-    <Modal title={assignment ? `${assignment.user.username} · ${t('组织角色')}` : t('组织角色')} open={!!assignment} onCancel={() => setAssignment(undefined)} footer={null} destroyOnHidden>
+    <Modal title={assignment ? `${assignment.user.username} · ${t('组织角色')}` : t('组织角色')} open={!!assignment} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} onCancel={() => { if (actionLock.current) return; requestLeave(() => { setAssignment(undefined); mutate.current = createAdminMutation(); }); }} footer={null} destroyOnHidden>
       {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
       {assignment && canReadRoles && <Space orientation="vertical" className="admin-form-stack">
         <Select aria-label={t('组织角色')} mode="multiple" value={assignment.selected} disabled={!canAssign || busy || assignment.global.length > 0} options={assignment.roles.map((role) => ({ value: role.id, label: role.name }))} onChange={(selected) => setAssignment({ ...assignment, selected })} />

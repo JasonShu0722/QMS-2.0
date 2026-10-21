@@ -1,11 +1,86 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render as renderView, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
+import { LanguageProvider } from '../../i18n/Language';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { SupplierPcnPage } from './SupplierPcnPage';
 vi.mock('../../api/client', async () => { const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client'); return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn().mockResolvedValue('csrf') }; });
-vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: () => null }));
-beforeEach(() => vi.mocked(apiRequest).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 } as never));
+vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: vi.fn(() => null) }));
+const render = (ui: ReactElement) => renderView(ui, { wrapper: LanguageProvider });
+beforeEach(() => {
+  // Keep rc-component Drawer and Select IDs unique, as in existing admin tests.
+  vi.stubEnv('NODE_ENV', 'development');
+  localStorage.setItem('qms:locale:v1', 'zh-CN');
+  vi.mocked(AttachmentPanel).mockReset().mockImplementation(() => <></>);
+  vi.mocked(apiRequest).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 } as never);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+it('keeps the selected PCN evidence when closing the draft is declined', async () => {
+  const user = userEvent.setup();
+  const file = { id: 'f1', originalName: '变更验证.pdf', status: 'AVAILABLE', scanStatus: 'CLEAN' } as Parameters<NonNullable<Parameters<typeof AttachmentPanel>[0]['onReady']>>[0];
+  vi.mocked(AttachmentPanel).mockImplementation(({ onReady }) => <button onClick={() => onReady?.(file)}>选择已扫描 PCN 证据</button>);
+  const row = { id: 'p1', title: '待提交变更', status: 'DRAFT', version: 1, events: [], workflow: null };
+  vi.mocked(apiRequest).mockImplementation(async (path) => String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage portal /></UnsavedChangesProvider></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: '待提交变更' }));
+  const drawer = await screen.findByRole('dialog', { name: '待提交变更' });
+  await waitFor(() => expect(drawer).toBeVisible());
+  await user.click(await within(drawer).findByRole('button', { name: '选择已扫描 PCN 证据' }));
+  await user.click(within(drawer).getByRole('button', { name: '关闭' }));
+  const confirmation = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
+  await waitFor(() => expect(confirmation).toBeVisible());
+  await user.click(within(confirmation).getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(confirmation).not.toBeVisible());
+  expect(drawer).toBeVisible();
+  const evidence = within(drawer).getByRole('combobox', { name: '提交证据' });
+  expect(evidence).toBeEnabled();
+  expect(evidence.closest('.ant-select')).toHaveTextContent('变更验证.pdf');
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
+});
+
+it.each([
+  { field: '审批意见', workflow: { nodeType: 'APPROVAL' } },
+  { field: '流程定义 ID', workflow: null },
+  { field: '流程版本 ID', workflow: null },
+])('keeps the PCN $field when closing is declined', async ({ field, workflow }) => {
+  const row = { id: 'p1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow };
+  vi.mocked(apiRequest).mockImplementation(async (path) => String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
+  const drawer = await screen.findByRole('dialog', { name: '待审批变更' });
+  const input = field === '审批意见' ? await within(drawer).findByLabelText(field) : await within(drawer).findByPlaceholderText(field);
+  fireEvent.change(input, { target: { value: '尚未提交的处理输入' } });
+  fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(input).toHaveValue('尚未提交的处理输入');
+  expect(input).toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
+});
+
+it('does not offer to discard the PCN while approval is pending', async () => {
+  const row = { id: 'p1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow: { nodeType: 'APPROVAL', version: 1, problemVersion: 1, currentNodeId: 'n1' } };
+  let finish!: () => void;
+  const pending = new Promise<never>((resolve) => { finish = () => resolve(row as never); });
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => init?.method === 'POST' ? pending : String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
+  const drawer = await screen.findByRole('dialog', { name: '待审批变更' });
+  fireEvent.change(await screen.findByLabelText('审批意见'), { target: { value: '资料已核验' } });
+  fireEvent.click(screen.getByRole('button', { name: '审批通过' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/review', expect.objectContaining({ method: 'POST' })));
+  try {
+    const close = within(drawer).queryByRole('button', { name: '关闭' });
+    if (close) fireEvent.click(close);
+    expect(screen.getByRole('dialog', { name: '待审批变更' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '放弃修改并关闭' })).not.toBeInTheDocument();
+  } finally { await act(async () => { finish(); await pending; }); }
+});
+
 it('renders the real PCN ledger with status and category', async () => {
   vi.mocked(apiRequest).mockResolvedValueOnce({ items: [{ id: 'p1', profileId: 'pr1', ownerOrganizationId: 'o1', supplierOrganizationId: 's1', supplierName: '供应商甲', changeType: 'PROCESS', title: '工艺变更', materialCode: 'M-1', beforeChange: '旧', afterChange: '新', reason: '优化', riskControl: '验证', plannedDate: '2026-10-15', status: 'SUBMITTED', version: 2, fileId: null, problemIndexId: null, reviewNote: null, createdAt: '2026-09-26T00:00:00Z', updatedAt: '2026-09-26T00:00:00Z' }], total: 1, page: 1, pageSize: 50 });
   render(<SupplierPcnPage />);

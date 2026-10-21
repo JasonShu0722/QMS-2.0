@@ -1,6 +1,7 @@
 import { Alert, Button, Descriptions, Empty, Form, Input, InputNumber, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
+import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { createSupplierMutation, severityLabels, statusLabels, supplierApi, supplierError, supplierPath, type ProblemDraft, type ProblemPage, type ProblemQuery, type ResponseContent, type SupplierProblem } from './supplierQuality';
@@ -56,6 +57,8 @@ function ProblemForm({ record, saved }: { record?: SupplierProblem; saved: (valu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);
+  useNavigationBusy(busy);
   async function submit(values: ProblemDraft) {
     setBusy(true); setError(undefined);
     const body: ProblemDraft = { profileId: values.profileId, title: values.title, materialCode: values.materialCode, materialCategory: values.materialCategory, defectDescription: values.defectDescription, defectQuantity: values.defectQuantity, severity: values.severity, responseForm: values.responseForm, replyMode: values.replyMode, ...(values.replyMode === 'INTERNAL' ? { internalResponderId: values.internalResponderId } : {}) };
@@ -105,6 +108,9 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
   const [error, setError] = useState<string>();
   const [evidenceFileIds, setEvidenceFileIds] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(record.canEditResponse && (dirty || evidenceFileIds.length > 0));
+  useNavigationBusy(busy);
   const completion = record.responseDraft.completionTime ? new Date(record.responseDraft.completionTime) : undefined;
   const localCompletion = completion ? new Date(completion.getTime() - completion.getTimezoneOffset() * 60000).toISOString().slice(0, 19) : undefined;
   const fields = responseFields.filter((field) => record.responseForm === 'EIGHT_D' || ['containmentAction', 'rootCause', 'correctiveAction'].includes(field.key) || record.responseDraft[field.key]);
@@ -112,7 +118,7 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
   async function saveDraft() {
     if (busy) return;
     setBusy(true); setError(undefined);
-    try { saved(await mutate<SupplierProblem>(`${supplierApi(portal)}/problems/${record.id}/response-draft`, 'PUT', { expectedVersion: record.version, content: content(form.getFieldsValue()) }), '回复草稿已保存'); }
+    try { const result = await mutate<SupplierProblem>(`${supplierApi(portal)}/problems/${record.id}/response-draft`, 'PUT', { expectedVersion: record.version, content: content(form.getFieldsValue()) }); setDirty(false); saved(result, '回复草稿已保存'); }
     catch (cause) { setError(supplierError(cause)); }
     finally { setBusy(false); }
   }
@@ -125,6 +131,7 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
         expectedContentVersion: record.version, content: content(values), evidenceFileIds, evidencePurpose: 'RESPONSE',
       });
       setSubmitted(true);
+      setDirty(false); setEvidenceFileIds([]);
       saved(result, '回复已提交');
     } catch (cause) { setError(supplierError(cause)); }
     finally { setBusy(false); }
@@ -135,7 +142,7 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
   return <section className="supplier-card"><Typography.Title level={3}>{record.responseForm === 'BRIEF' ? '简报' : '8D'}回复草稿</Typography.Title>
     <Typography.Paragraph type="secondary">可分次保存草稿；正式提交后当前修订不可编辑。仅扫描通过的附件可作为证据。</Typography.Paragraph>
     {error ? <Alert type="error" showIcon title={error} /> : null}
-    <Form form={form} layout="vertical" initialValues={{ ...record.responseDraft, completionTime: localCompletion }} onFinish={submit} disabled={busy}>
+    <Form form={form} layout="vertical" initialValues={{ ...record.responseDraft, completionTime: localCompletion }} onValuesChange={() => setDirty(true)} onFinish={submit} disabled={busy}>
       {fields.map((field) => <Form.Item key={field.key} name={field.key} label={field.label} rules={record.responseForm === 'EIGHT_D' || ['rootCause', 'correctiveAction'].includes(field.key) ? required : undefined}><Input.TextArea rows={3} maxLength={10000} showCount /></Form.Item>)}
       <Form.Item name="completionTime" label="完成时间" extra="按当前设备所在时区填写" rules={record.responseForm === 'BRIEF' ? required : undefined}><Input type="datetime-local" step={1} /></Form.Item>
       <Space wrap><Button onClick={() => void saveDraft()} loading={busy}>保存回复草稿</Button>{record.availableActions?.includes('SUBMIT') ? <Button type="primary" htmlType="submit" loading={busy}>正式提交回复</Button> : null}</Space>

@@ -3,6 +3,7 @@ import { Alert, Button, Card, Empty, Space, Spin, Tag, Typography } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import * as api from './workflow-api';
 import { workflowLabel } from './workflow-labels';
 import './workflows.css';
@@ -21,11 +22,22 @@ export function WorkflowListPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createdPath, setCreatedPath] = useState<string>();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const draftDirty = creating && Boolean(code.trim() || name.trim());
+  const requestLeave = useNavigationGuard();
+  useUnsavedChanges(draftDirty);
+  useNavigationBusy(busy);
   const lock = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (!createdPath || busy) return;
+    // The guard registrations above must clear before entering the created draft.
+    setCreatedPath(undefined);
+    navigate(createdPath);
+  }, [busy, createdPath, navigate]);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError(undefined);
@@ -46,7 +58,7 @@ export function WorkflowListPage() {
         if (alive.current) setHistory(result);
       } else {
         const result = await api.createWorkflow({ code: code.trim(), name: name.trim(), ...api.initialGraph() });
-        if (alive.current) navigate(api.workflowPath(result));
+        if (alive.current) { setCreating(false); setCode(''); setName(''); setCreatedPath(api.workflowPath(result)); }
       }
     } catch (cause) { if (alive.current) setActionError(cause); }
     finally { lock.current = false; if (alive.current) setBusy(false); }
@@ -54,7 +66,10 @@ export function WorkflowListPage() {
   const displayedError = actionError ?? error;
   return <section className="workflow-list">
     <header className="workflow-heading"><Typography.Title level={2}>{t('受控流程列表')}</Typography.Title>
-      <Button type="primary" disabled={busy || !!error} onClick={() => setCreating((value) => !value)}>{t('新建流程')}</Button></header>
+      <Button type="primary" disabled={busy || !!error} onClick={() => {
+        if (creating) requestLeave(() => { setCreating(false); setCode(''); setName(''); });
+        else setCreating(true);
+      }}>{t('新建流程')}</Button></header>
     {!!displayedError && <Alert type="error" title={t(safeAccountError(displayedError))} description={displayedError instanceof ApiError && displayedError.traceId ? <code>{displayedError.traceId}</code> : undefined}
       action={error ? <Button aria-label={t('重试')} onClick={() => setRevision((value) => value + 1)}>{t('重试')}</Button> : undefined} />}
     <Space wrap className="workflow-list__filters"><label>{t('搜索流程')}<input aria-label={t('搜索流程')} value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></label>

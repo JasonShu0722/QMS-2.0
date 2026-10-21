@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { AuditManagementPage } from './AuditManagementPage';
 
@@ -43,6 +44,18 @@ function fillIssueForm() {
 }
 
 beforeEach(() => { vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf-token'); });
+
+it('protects an unfinished audit issue when navigating away', async () => {
+  mockWithIssuePermissions(acceptedPage);
+  render(<MemoryRouter><UnsavedChangesProvider><AuditManagementPage /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '发起正式问题' }));
+  fillIssueForm();
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('实例标识')).toHaveValue('audit-import-cust-001');
+});
 
 it('loads a plan after the user enters its identifier', async () => {
   vi.mocked(apiRequest).mockResolvedValue(plan);

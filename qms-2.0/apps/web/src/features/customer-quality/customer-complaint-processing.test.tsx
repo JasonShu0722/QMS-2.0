@@ -4,6 +4,8 @@ import type { components } from '@qms/contracts';
 import { apiRequest, csrfToken } from '../../api/client';
 import { CustomerComplaintProcessing } from './CustomerComplaintProcessing';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
+import { MemoryRouter, Link } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ onReady, onFilesChanged, readOnly }: { onReady?: (file: { id: string; status: string; scanStatus: string }) => void; onFilesChanged?: (files: unknown[]) => void; readOnly?: boolean }) => readOnly ? null : <><button onClick={() => onReady?.({ id: 'scanned-file', status: 'AVAILABLE', scanStatus: 'CLEAN' })}>模拟扫描完成</button><button onClick={() => onFilesChanged?.([{ id: 'pending', originalName: '恢复附件.txt', status: 'AVAILABLE', scanStatus: 'CLEAN' }])}>恢复附件扫描完成</button></> }));
 
@@ -53,6 +55,28 @@ it('registers a complaint with the supplied severity policy snapshot', async () 
   fireEvent.click(screen.getByRole('button', { name: '登 记' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/complaints', expect.objectContaining({ method: 'POST', body: expect.stringContaining('"severitySnapshot":{"level":"LOW","policyVersion":"policy-1"}') })));
   expect(created).toHaveBeenCalledWith('new-complaint');
+});
+
+it('protects an unsaved complaint entry when leaving through page navigation', async () => {
+  render(<MemoryRouter><UnsavedChangesProvider><CustomerComplaintEntry onCreated={vi.fn()} /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: '人工登记客诉' }));
+  fireEvent.change(await screen.findByLabelText('不良描述'), { target: { value: '尚未登记的不良描述' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('不良描述')).toHaveValue('尚未登记的不良描述');
+});
+
+it('protects an unfinished complaint progress note when navigating away', async () => {
+  render(<MemoryRouter><UnsavedChangesProvider><CustomerComplaintProcessing complaint={complaint} canWrite refresh={vi.fn()} /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  await screen.findByText(/已分诊/);
+  fireEvent.change(screen.getByLabelText('处理说明'), { target: { value: '尚未提交的处理记录' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('处理说明')).toHaveValue('尚未提交的处理记录');
 });
 
 it('binds only a scanned complaint attachment to a progress event', async () => {

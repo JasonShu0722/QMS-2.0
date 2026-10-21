@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest } from '../../api/client';
 import { QualityDataPage } from './QualityDataPage';
@@ -8,7 +8,7 @@ vi.mock('../../api/client', async () => {
   return { ...actual, apiRequest: vi.fn() };
 });
 
-beforeEach(() => vi.mocked(apiRequest).mockReset());
+beforeEach(() => { vi.mocked(apiRequest).mockReset(); });
 
 it('renders the four-domain dashboard from the scoped dashboard endpoint', async () => {
   vi.mocked(apiRequest)
@@ -24,6 +24,28 @@ it('renders the four-domain dashboard from the scoped dashboard endpoint', async
   expect(within(dashboard).getByText('连续红灯 2 期')).toBeVisible();
   expect(fetch).toHaveBeenCalledWith('/api/v1/quality-data/dashboard?limit=100', { credentials: 'include' });
   vi.unstubAllGlobals();
+});
+
+it('distinguishes a real zero from missing values and identifies a missing unit', async () => {
+  vi.mocked(apiRequest).mockImplementation((path) => Promise.resolve(String(path).endsWith('/metrics') ? [{ id: 'metric-zero', code: 'ZERO', name: '零值指标', unit: '', numeratorLabel: '分子', denominatorLabel: '分母', formulaVersion: 'v1', active: true, version: 1 }] : []));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    domains: [], cards: [
+      { domain: 'PROCESS', metricCode: 'ZERO', metricName: '真实零值', unit: '%', latestValue: 0 },
+      { domain: 'PROCESS', metricCode: 'NULL', metricName: '缺失数值', unit: '%', latestValue: null },
+      { domain: 'PROCESS', metricCode: 'EMPTY', metricName: '无效空文本', unit: '%', latestValue: '' },
+    ],
+  }) }));
+  try {
+    render(<QualityDataPage />);
+    const dashboard = screen.getByRole('region', { name: '四域综合看板' });
+    const zero = (await within(dashboard).findByText('真实零值 (ZERO)')).closest('tr')!;
+    expect(within(zero).getByText('0%')).toBeVisible();
+    for (const label of ['缺失数值 (NULL)', '无效空文本 (EMPTY)']) {
+      const row = within(dashboard).getByText(label).closest('tr')!;
+      expect(within(row).queryByText('0%')).not.toBeInTheDocument();
+    }
+    expect(screen.getByText('未配置单位')).toBeVisible();
+  } finally { vi.unstubAllGlobals(); }
 });
 
 it('shows metric definition and source-backed trend values', async () => {
@@ -94,4 +116,39 @@ it('explains a stale metric version without showing old detail', async () => {
   expect(await screen.findByText('指标口径已变化，请刷新后查看。')).toBeVisible();
   expect(screen.queryByText('尚无可核实的来源关联')).not.toBeInTheDocument();
   vi.unstubAllGlobals();
+});
+
+it('does not display a previous metric fact under a newly selected metric after failure', async () => {
+  const metric = { id: 'metric-1', code: 'A', name: '指标甲', unit: '%', numeratorLabel: '甲分子', denominatorLabel: '甲分母', formulaVersion: 'v1', active: true, version: 1 };
+  vi.mocked(apiRequest).mockImplementation(async (url) => {
+    if (url.endsWith('/metrics')) return [metric, { ...metric, id: 'metric-2', code: 'B', name: '指标乙', numeratorLabel: '乙分子' }];
+    if (url.includes('/trend?') && url.includes('metric-1')) return [{ id: 'fact-A', metricDefinitionId: 'metric-1', periodStart: '2026-09-01', periodEnd: '2026-09-30', numerator: 95, denominator: 100, value: 0.95, sourceSystem: 'MANUAL', sourceRecordKey: 'A-only' }];
+    if (url.includes('/trend?')) throw new Error('offline');
+    return [];
+  });
+  render(<QualityDataPage />);
+  await screen.findByText('A-only');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '选择质量指标' }));
+  fireEvent.click(await screen.findByText('指标乙 (B)'));
+  await screen.findByText('趋势加载失败，请重试。');
+  await waitFor(() => expect(screen.queryByText('A-only')).not.toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: '查看事实明细' })).not.toBeInTheDocument();
+});
+
+it('clears old facts when refreshing the catalog automatically selects another metric', async () => {
+  const metric = { id: 'metric-A', code: 'A', name: '指标甲', unit: '%', numeratorLabel: '甲分子', denominatorLabel: '甲分母', formulaVersion: 'v1', active: true, version: 1 };
+  let catalogs = 0;
+  vi.mocked(apiRequest).mockImplementation(async (url) => {
+    if (url.endsWith('/metrics')) return [++catalogs === 1 ? metric : { ...metric, id: 'metric-B', code: 'B', name: '指标乙' }];
+    if (url.includes('/trend?') && url.includes('metric-A')) return [{ id: 'fact-A', metricDefinitionId: 'metric-A', periodStart: '2026-09-01', periodEnd: '2026-09-30', numerator: 95, denominator: 100, value: 0.95, sourceSystem: 'MANUAL', sourceRecordKey: 'A-only' }];
+    if (url.includes('/trend?')) throw new Error('offline');
+    return [];
+  });
+  render(<QualityDataPage />);
+  await screen.findByText('A-only');
+  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  await screen.findByText('指标乙 (B)');
+  await screen.findByText('趋势加载失败，请重试。');
+  expect(screen.queryByText('A-only')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '查看事实明细' })).not.toBeInTheDocument();
 });

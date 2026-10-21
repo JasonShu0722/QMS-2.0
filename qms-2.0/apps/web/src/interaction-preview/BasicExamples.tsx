@@ -14,6 +14,7 @@ export function BasicExamples({ english }: { english: boolean }) {
   const [saveFails, setSaveFails] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error' | 'success'>('idle');
   const [action, setAction] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -115,12 +116,12 @@ export function BasicExamples({ english }: { english: boolean }) {
       <div className="preview-split">
         <div className="preview-example">
           <h3>{pick('动作层级与更多菜单', 'Action hierarchy and overflow menu')}</h3>
-          <p className="preview-note">{pick('新建是当前主动作；取消、返回与帮助使用较轻层级。危险动作只演示意图。', 'Create is primary; cancel, back and help have less emphasis. The danger action only previews intent.')}</p>
+          <p className="preview-note">{pick('新建是当前主动作；取消、返回与帮助使用较轻层级。删除须确认影响范围，仅演示本地反馈。', 'Create is primary; cancel, back and help have less emphasis. Deletion requires impact confirmation and only shows local feedback.')}</p>
           <div className="preview-actions">
             <Button type="primary" icon={<Plus size={16} aria-hidden="true" />} onClick={() => setAction('create')}>{pick('新建样例', 'Create sample')}</Button>
             <Button onClick={() => setAction('cancel')}>{pick('取消动作', 'Cancel action')}</Button>
             <Button type="text" icon={<ArrowLeft size={16} aria-hidden="true" />} onClick={() => setAction('back')}>{pick('返回', 'Back')}</Button>
-            <Button danger icon={<Trash2 size={16} aria-hidden="true" />} onClick={() => setAction('remove')}>{pick('删除样例演示', 'Preview sample deletion')}</Button>
+            <Button danger icon={<Trash2 size={16} aria-hidden="true" />} onClick={() => setDeleteOpen(true)}>{pick('删除样例演示', 'Preview sample deletion')}</Button>
             <Tooltip title={pick('查看样例帮助', 'View sample help')}>
               <Button aria-label={pick('查看样例帮助', 'View sample help')} icon={<HelpCircle size={16} aria-hidden="true" />} onClick={() => setAction('help')} />
             </Tooltip>
@@ -129,7 +130,7 @@ export function BasicExamples({ english }: { english: boolean }) {
                 { key: 'copy', label: pick('复制样例演示', 'Preview sample copy'), icon: <Copy size={16} aria-hidden="true" /> },
                 { key: 'remove', label: pick('删除样例演示', 'Preview sample deletion'), danger: true, icon: <Trash2 size={16} aria-hidden="true" /> },
               ],
-              onClick: ({ key }) => setAction(key),
+              onClick: ({ key }) => { if (key === 'remove') setDeleteOpen(true); else setAction(key); },
             }}>
               <Button icon={<Ellipsis size={16} aria-hidden="true" />}>{pick('更多动作', 'More actions')}</Button>
             </Dropdown>
@@ -156,6 +157,13 @@ export function BasicExamples({ english }: { english: boolean }) {
           </div>
         </div>
       </div>
+      <Modal rootClassName="preview-modal" open={deleteOpen} title={pick('确认删除本地样例', 'Confirm local sample deletion')}
+        onCancel={() => setDeleteOpen(false)} cancelText={pick('取消', 'Cancel')}
+        closable={{ 'aria-label': pick('关闭删除确认', 'Close deletion confirmation') }}
+        okText={pick('确认删除样例', 'Confirm sample deletion')} okButtonProps={{ danger: true }}
+        onOk={() => { if (deleteOpen) { setAction('remove'); setDeleteOpen(false); } }}>
+        <p>{pick('影响范围：仅当前页面的删除交互演示。取消会保留样例；确认只显示本地反馈，不删除任何记录，不调用 API，不构成签名或批准。', 'Impact: the deletion interaction demo on this page only. Cancel preserves the sample; confirmation only shows local feedback. No records are deleted, no API is called, and no signature or approval occurs.')}</p>
+      </Modal>
     </section>
 
     <section id="sample-02" className="preview-section" aria-label={pick('S02 选择与切换', 'S02 Selection and switching')}>

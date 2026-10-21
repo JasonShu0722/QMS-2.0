@@ -51,7 +51,7 @@ export function WorkTabs({ mode = 'auto', homePath = '/app/workbench' }: { mode?
         }}>{t(tab.title)}</Link>
         <Button aria-label={`${t('关闭')} ${t(tab.title)}`} icon={<X size={13} />} size="small" type="text" onClick={() => closeAndNavigate(tab.id)} />
       </div>)}</div>}
-      <Button className="qms-all-tabs" aria-label={t('全部标签')} icon={<List size={15} />} type="text" onClick={() => setOpen(true)}>
+      <Button className="qms-all-tabs" aria-label={t('全部标签')} aria-haspopup="dialog" aria-expanded={open} icon={<List size={15} aria-hidden="true" />} type="text" onClick={() => setOpen(true)}>
         <span>{t('全部已打开')}</span><span>{overflowTabs.length && shouldShowStrip ? `+${overflowTabs.length}` : tabs.length}</span>
       </Button>
     </nav>

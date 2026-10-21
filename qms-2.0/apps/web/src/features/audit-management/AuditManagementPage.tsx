@@ -7,6 +7,7 @@ import { AuditExcelImport } from './AuditExcelImport';
 import { AuditMobileExecution } from './AuditMobileExecution';
 import { AuditNcClosurePanel } from './AuditNcClosurePanel';
 import './audit-management.css';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
 type AuditPlan = components['schemas']['AuditPlanResponseDto'];
 type AuditImportPage = components['schemas']['AuditImportRowPageDto'];
@@ -23,8 +24,8 @@ function errorMessage(cause: unknown) {
 }
 
 function permissionDenied(cause: unknown) {
-  if (cause instanceof ApiError) return cause.status === 403 || cause.code === 'FEATURE_PERMISSION_DENIED' || cause.code === 'ORGANIZATION_SCOPE_DENIED';
-  return typeof cause === 'object' && cause !== null && ((cause as { status?: number }).status === 403 || ['FEATURE_PERMISSION_DENIED', 'ORGANIZATION_SCOPE_DENIED'].includes((cause as { code?: string }).code ?? ''));
+  if (cause instanceof ApiError) return cause.status === 401 || cause.status === 403 || cause.code === 'FEATURE_PERMISSION_DENIED' || cause.code === 'ORGANIZATION_SCOPE_DENIED';
+  return typeof cause === 'object' && cause !== null && ([401, 403].includes((cause as { status?: number }).status ?? 0) || ['FEATURE_PERMISSION_DENIED', 'ORGANIZATION_SCOPE_DENIED'].includes((cause as { code?: string }).code ?? ''));
 }
 
 const statusLabels: Record<AuditPlan['status'], string> = {
@@ -81,6 +82,12 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
   const importRequestId = useRef(0);
   const importController = useRef<AbortController | undefined>(undefined);
   const issueRequestId = useRef(0);
+  const [issueDirty, setIssueDirty] = useState(false);
+  const requestLeave = useNavigationGuard();
+  useUnsavedChanges(issueDirty);
+  useNavigationBusy(issueBusy || Boolean(importBusyId));
+  function discardIssue() { setIssueDirty(false); setIssueRow(undefined); issueRowRef.current = undefined; issueForm.resetFields(); issueMutation.current = undefined; }
+  function refreshImports() { setImportRevision((value) => value + 1); }
 
   function canIssueWith(row: AuditImportRow, granted?: Permissions) {
     return row.status === 'ACCEPTED' && granted?.organizationId === row.organization_id
@@ -104,6 +111,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     setPermissions(undefined);
     setPermissionError(undefined);
     setIssueRow(undefined);
+    setIssueDirty(false);
     issueRowRef.current = undefined;
     issueForm.resetFields();
     setIssueError(undefined);
@@ -119,10 +127,11 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     setIssueDenied(fromIssue);
   }
 
-  function closeIssue() {
+  function closeIssueNow() {
     if (issueBusy) return;
     const refresh = issueConflict;
     setIssueRow(undefined);
+    setIssueDirty(false);
     issueRowRef.current = undefined;
     setIssueError(undefined);
     setIssueConflict(false);
@@ -130,6 +139,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     issueMutation.current = undefined;
     if (refresh) setImportRevision((value) => value + 1);
   }
+  function closeIssue() { if (!issueBusy) requestLeave(closeIssueNow, true); }
 
   async function load(id = planId) {
     const value = id.trim();
@@ -155,7 +165,6 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     setImportLoading(true);
     setImportError(undefined);
     setIssueDenied(false);
-    setPermissions(undefined);
     setPermissionError(undefined);
     apiRequest<AuditImportPage>(`/api/v1/audit-management/imports?${params}`, { signal: controller.signal })
       .then((page) => {
@@ -169,16 +178,19 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
               issueRequestId.current += 1;
               issueRowRef.current = undefined;
               setIssueRow(undefined);
+              setIssueDirty(false);
               issueForm.resetFields();
               issueMutation.current = undefined;
               setIssueError(undefined);
             }
           } })
           .catch((cause) => { if (current()) {
+            if (permissionDenied(cause)) { clearImportAccess(cause); return; }
             setPermissionError(cause);
             issueRequestId.current += 1;
             issueRowRef.current = undefined;
             setIssueRow(undefined);
+            setIssueDirty(false);
             issueForm.resetFields();
             issueMutation.current = undefined;
             setIssueError(undefined);
@@ -190,7 +202,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
   }, [importRevision, importSource, importStatus]);
 
   async function reviewImport(row: AuditImportRow, decision: 'ACCEPTED' | 'REJECTED') {
-    if (!canReview(row)) return;
+    if (!canReview(row) || importBusyId || issueBusy) return;
     const path = `/api/v1/audit-management/imports/${row.id}/review`;
     const body = { expectedVersion: row.version, decision };
     const signature = JSON.stringify([path, body]);
@@ -215,14 +227,17 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
 
   function openIssue(row: AuditImportRow) {
     if (!canIssue(row)) return;
-    issueForm.resetFields();
-    issueRowRef.current = row;
-    setIssueRow(row);
-    setIssueError(undefined);
-    setIssueConflict(false);
-    setIssueSucceeded(false);
-    setIssued(undefined);
-    issueMutation.current = undefined;
+    requestLeave(() => {
+      setIssueDirty(false);
+      issueForm.resetFields();
+      issueRowRef.current = row;
+      setIssueRow(row);
+      setIssueError(undefined);
+      setIssueConflict(false);
+      setIssueSucceeded(false);
+      setIssued(undefined);
+      issueMutation.current = undefined;
+    });
   }
 
   async function issueImport(values: IssueFields) {
@@ -253,6 +268,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
       issueMutation.current = undefined;
       issueRowRef.current = undefined;
       setIssueRow(undefined);
+      setIssueDirty(false);
       issueForm.resetFields();
       setImportRevision((value) => value + 1);
     } catch (cause) {
@@ -288,30 +304,30 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
       ]} /> : <Empty description={planId ? '未找到审核计划' : '输入审核计划 ID 后查看详情'} />}
     </section>
     <AuditMobileExecution />
-    <Button onClick={() => setShowNcClosure((value) => !value)}>{showNcClosure ? '收起整改记录' : '查看审核整改'}</Button>
+    <Button onClick={() => requestLeave(() => setShowNcClosure((value) => !value))}>{showNcClosure ? '收起整改记录' : '查看审核整改'}</Button>
     {showNcClosure ? <AuditNcClosurePanel /> : null}
     <section className="audit-management-card audit-import-card" aria-label="审核导入行">
       <div className="audit-import-heading">
         <div><Typography.Title level={3}>外部审核导入</Typography.Title><Typography.Text type="secondary">逐行复核客户和第二方审核数据，复核动作按版本号提交。</Typography.Text></div>
-        <Button onClick={() => setImportRevision((value) => value + 1)} loading={importLoading}>刷新导入</Button>
+        <Button onClick={refreshImports} loading={importLoading}>刷新导入</Button>
       </div>
       <Space wrap className="audit-import-filters">
-        <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={setImportSource} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
-        <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={setImportStatus} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
+        <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={(value) => requestLeave(() => { discardIssue(); setImportSource(value); })} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
+        <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={(value) => requestLeave(() => { discardIssue(); setImportStatus(value); })} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
       </Space>
-      {permissionError && !importError ? <Alert type="warning" showIcon title="无法验证发单权限" action={<Button onClick={() => setImportRevision((value) => value + 1)}>重试</Button>} /> : null}
-      {permissions?.organizationId && !permissionError && !importError ? <AuditExcelImport organizationId={permissions.organizationId} onImported={() => setImportRevision((value) => value + 1)} onDenied={(cause) => clearImportAccess(cause)} /> : null}
+      {permissionError && !importError ? <Alert type="warning" showIcon title="无法验证发单权限" action={<Button onClick={refreshImports}>重试</Button>} /> : null}
+      {permissions?.organizationId && permissions.permissions.includes('audit-management:write') ? <AuditExcelImport key={permissions.organizationId} organizationId={permissions.organizationId} onImported={() => setImportRevision((value) => value + 1)} onDenied={(cause) => clearImportAccess(cause)} /> : null}
       {issueSucceeded ? <Alert type="success" showIcon title={issued ? `问题 ${issued.problem.reportNumber} 已发起` : '审核导入行已发单'} action={issued ? <Link to={`/app/problem-workspace/${issued.problem.id}?organizationId=${encodeURIComponent(issued.source.organizationId)}`}>查看问题 {issued.problem.reportNumber}</Link> : undefined} /> : null}
-      {importError ? <Alert type={permissionDenied(importError) ? 'warning' : 'error'} showIcon title={permissionDenied(importError) ? issueDenied ? '暂无发单权限' : '暂无导入行访问或复核权限' : '导入行加载或复核失败'} description={safeAccountError(importError)} action={!permissionDenied(importError) ? <Button onClick={() => setImportRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
+      {importError ? <Alert type={permissionDenied(importError) ? 'warning' : 'error'} showIcon title={permissionDenied(importError) ? issueDenied ? '暂无发单权限' : '暂无导入行访问或复核权限' : '导入行加载或复核失败'} description={safeAccountError(importError)} action={!permissionDenied(importError) ? <Button onClick={refreshImports}>重试</Button> : undefined} /> : null}
       {importLoading ? <div className="audit-management-loading"><Spin /></div> : !importError ? <List dataSource={imports?.items ?? []} locale={{ emptyText: <Empty description="暂无导入行" /> }} renderItem={(row) => <List.Item key={row.id} actions={canReview(row) ? [<Button key="accept" size="small" type="primary" loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'ACCEPTED')}>接受</Button>, <Button key="reject" size="small" danger loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'REJECTED')}>拒绝</Button>] : canIssue(row) ? [<Button key="issue" size="small" type="primary" onClick={() => openIssue(row)}>发起正式问题</Button>] : undefined}>
         <List.Item.Meta title={<Space wrap><Typography.Text strong>{row.external_key}</Typography.Text><Tag>{sourceLabels[row.source_system]}</Tag><Tag color={importStatusColor(row.status)}>{importStatusLabels[row.status]}</Tag></Space>} description={<Space orientation="vertical" size={0}><Typography.Text type="secondary">版本 v{row.version} · {new Date(row.created_at).toLocaleString('zh-CN')}</Typography.Text>{optionalText(row.review_note) ? <Typography.Text type="secondary">复核备注：{optionalText(row.review_note)}</Typography.Text> : null}{optionalText(row.problem_index_id) ? <Link to={`/app/problem-workspace/${optionalText(row.problem_index_id)}?organizationId=${encodeURIComponent(row.organization_id)}`}>已关联问题：{optionalText(row.problem_index_id)}</Link> : null}</Space>} />
       </List.Item>} /> : null}
     </section>
-    <Drawer title="审核导入行发单" open={Boolean(issueRow)} onClose={closeIssue} width="min(620px, 100vw)" destroyOnHidden={false}>
+    <Drawer title="审核导入行发单" open={Boolean(issueRow)} onClose={closeIssue} closable={!issueBusy} keyboard={!issueBusy} mask={{ closable: !issueBusy }} width="min(620px, 100vw)" destroyOnHidden={false}>
       {issueRow ? <>
         <Typography.Paragraph>来源：{sourceLabels[issueRow.source_system]} · {issueRow.external_key} · 版本 v{issueRow.version}。请选择已发布且适用于审核问题的流程定义和版本。</Typography.Paragraph>
         {issueError ? <Alert className="audit-import-issue-error" type={permissionDenied(issueError) ? 'warning' : 'error'} showIcon title={permissionDenied(issueError) ? '暂无发单权限' : issueError instanceof ApiError && issueError.status === 409 ? '来源版本已变化；请关闭并刷新导入行后重新选择。' : issueError instanceof ApiError ? safeAccountError(issueError) : '发单失败，请重试。'} description={issueError instanceof ApiError && issueError.traceId ? `追踪标识：${issueError.traceId}` : undefined} action={issueConflict ? <Button onClick={closeIssue}>关闭并刷新导入行</Button> : undefined} /> : null}
-        <Form<IssueFields> form={issueForm} layout="vertical" initialValues={{ responseForm: 'BRIEF' }} onFinish={(values) => void issueImport(values)}>
+        <Form<IssueFields> form={issueForm} layout="vertical" disabled={issueBusy} onValuesChange={() => setIssueDirty(true)} initialValues={{ responseForm: 'BRIEF' }} onFinish={(values) => void issueImport(values)}>
           <Form.Item name="problemType" label="问题类型" rules={[{ required: true, whitespace: true, message: '请输入问题类型' }, { max: 100, message: '最多 100 个字符' }]}><Input maxLength={100} /></Form.Item>
           <Form.Item name="responseForm" label="响应形式" rules={[{ required: true, message: '请选择响应形式' }]}><Select options={[{ value: 'BRIEF', label: '问题简报' }, { value: 'EIGHT_D', label: '8D' }]} /></Form.Item>
           <Form.Item name="responsibleScope" label="责任范围" rules={[{ required: true, whitespace: true, message: '请输入责任范围' }, { max: 100, message: '最多 100 个字符' }]}><Input maxLength={100} /></Form.Item>
@@ -319,7 +335,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
           <Form.Item name="workflowDefinitionId" label="流程定义 ID" rules={[{ required: true, message: '请输入流程定义 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
           <Form.Item name="workflowVersionId" label="流程版本 ID" rules={[{ required: true, message: '请输入流程版本 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
           <Form.Item name="instanceKey" label="实例标识" rules={[{ required: true, whitespace: true, message: '请输入实例标识' }, { max: 200, message: '最多 200 个字符' }]}><Input maxLength={200} /></Form.Item>
-          <Button type="primary" htmlType="submit" loading={issueBusy} disabled={issueConflict || !canIssue(issueRow)}>确认发单</Button>
+          <div className="qms-dialog-actions" role="group" aria-label="审核导入行发单"><Button type="primary" htmlType="submit" loading={issueBusy} disabled={issueConflict || !canIssue(issueRow)}>确认发单</Button></div>
         </Form>
       </> : null}
     </Drawer>

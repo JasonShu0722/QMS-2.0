@@ -48,7 +48,7 @@ export function RequiredPasswordChangePage() {
     <Typography.Paragraph>{t('请设置个人密码，完成前不能访问业务功能。')}</Typography.Paragraph>
     {error && <Alert type="error" showIcon title={t(error)} description={traceId ? <code>{traceId}</code> : undefined} />}
     {!ready && !error && <Spin />}
-    {ready && <Form form={form} layout="vertical" onFinish={submit} autoComplete="off">
+    {ready && <Form form={form} layout="vertical" onFinish={submit} autoComplete="off" disabled={busy}>
       <Form.Item name="newPassword" label={t('新密码')} rules={[{ required: true }, { min: 12, max: 256, message: t('密码须为 12–256 位') }]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Form.Item name="confirmation" label={t('确认新密码')} dependencies={['newPassword']} rules={[{ required: true }, ({ getFieldValue }) => ({ validator: (_, value) => value === getFieldValue('newPassword') ? Promise.resolve() : Promise.reject(new Error(t('两次密码不一致'))) })]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Space wrap><Button type="primary" htmlType="submit" loading={busy}>{t('保存新密码')}</Button></Space>

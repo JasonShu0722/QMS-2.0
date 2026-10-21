@@ -55,7 +55,7 @@ it.each([200, 409])('keeps the user editor busy until saving with status %s sett
   expect(screen.getByLabelText('用户名')).toHaveValue('next-user');
 }, 15_000);
 
-it.each([200, 409])('blocks creating a role until a closed editor finishes saving with status %s', async (status) => {
+it.each([200, 409])('keeps the role editor open and blocks another role while saving with status %s', async (status) => {
   const role: AdminRole = { mfaRequired: false, id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, permissions: [] };
   let resolveSave: ((response: Response) => void) | undefined;
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string, init: RequestInit) => {
@@ -69,14 +69,21 @@ it.each([200, 409])('blocks creating a role until a closed editor finishes savin
   await userEvent.type(screen.getByLabelText('角色名称'), 'Pending Role');
   await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
   await waitFor(() => expect(resolveSave).toBeDefined());
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const editor = screen.getByRole('dialog');
+  expect(within(editor).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  expect(within(editor).getByLabelText('角色名称')).toBeDisabled();
+  fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
   const create = screen.getByRole('button', { name: '创建角色' });
   expect(create).toBeDisabled();
   await userEvent.click(create);
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toBe(editor);
   resolveSave!(status === 200 ? json(role) : json({ code: 'CONFLICT' }, status));
   await waitFor(() => expect(create).toBeEnabled());
+  if (status === 409) {
+    expect(within(editor).getByLabelText('角色名称')).toHaveValue('Pending Role');
+    await userEvent.click(within(editor).getByRole('button', { name: 'Close' }));
+  }
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await userEvent.click(create);
   await userEvent.type(screen.getByLabelText('角色名称'), 'Next Role');
   expect(screen.getByLabelText('角色名称')).toHaveValue('Next Role');
@@ -240,6 +247,7 @@ it('clears permission details after organization or access changes and role dele
   await userEvent.click(within(deletedRow).getByRole('button', { name: /Reader Role.*详情/ }));
   expect(await screen.findByRole('dialog')).toBeInTheDocument();
   await userEvent.click(within(deletedRow).getByRole('button', { name: '删除角色' }));
+  await userEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByText(role.name)).not.toBeInTheDocument();
 });

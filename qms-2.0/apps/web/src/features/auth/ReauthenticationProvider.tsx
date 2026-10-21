@@ -11,6 +11,7 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>();
   const [form] = Form.useForm();
+  const submitting = useRef(false);
   const pending = useRef<{ promise: Promise<void>; resolve: () => void; reject: (cause: Error) => void } | undefined>(undefined);
   useEffect(() => {
     const unregister = registerReauthentication(() => {
@@ -29,12 +30,14 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
     pending.current = undefined; form.resetFields(); setOpen(false);
   }
   async function submit(values: components['schemas']['ReauthenticateDto']) {
+    if (submitting.current) return;
+    submitting.current = true;
     setSaving(true); setError(undefined);
     try {
       const token = await csrfToken();
       await apiRequest('/api/v1/me/reauthenticate', { method: 'POST', headers: { 'x-csrf-token': token }, body: JSON.stringify(values) });
       pending.current?.resolve(); pending.current = undefined; form.resetFields(); setOpen(false);
-    } catch (cause) { setError(cause); } finally { setSaving(false); }
+    } catch (cause) { setError(cause); } finally { submitting.current = false; setSaving(false); }
   }
   return <>{children}<Modal open={open} title={t('重新验证身份')} onOk={() => form.submit()} onCancel={cancel} okText={t('验证')} cancelText={t('取消')} confirmLoading={saving} closable={!saving} maskClosable={false} cancelButtonProps={{ disabled: saving }} destroyOnHidden>
     <GovernanceFeedback error={error} /><Form form={form} layout="vertical" onFinish={submit} disabled={saving}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Tabs } from 'antd';
 import { Link } from 'react-router-dom';
 import type { components } from '@qms/contracts';
@@ -12,14 +12,17 @@ export function PasswordRecoveryPage() {
   const [error, setError] = useState<unknown>();
   const [message, setMessage] = useState<string>();
   const [form] = Form.useForm();
+  const pending = useRef(false);
   async function submit(path: string, body: components['schemas']['PasswordRecoveryDto'] | components['schemas']['CompletePasswordRecoveryDto']) {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true); setError(undefined); setMessage(undefined);
     try {
       const token = await csrfToken();
       await apiRequest(`/api/v1/auth/${path}`, { method: 'POST', headers: { 'x-csrf-token': token }, body: JSON.stringify(body) });
       setMessage(path.endsWith('/complete') ? '密码已重置，请重新登录' : '如果账号绑定了已确认邮箱，将收到一次性找回凭证。');
       if (path.endsWith('/complete')) form.resetFields();
-    } catch (cause) { setError(cause); } finally { setBusy(false); }
+    } catch (cause) { setError(cause); } finally { pending.current = false; setBusy(false); }
   }
   return <main className="security-page"><Card title={t('找回密码')}><GovernanceFeedback error={error} />{message ? <Alert type="success" role="status" title={t(message)} /> : null}
     <Tabs items={[

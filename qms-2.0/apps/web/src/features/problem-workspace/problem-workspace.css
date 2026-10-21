@@ -4,7 +4,7 @@
 .problem-header > div { min-width: 0; }
 .problem-header h2 { font-size: 22px; line-height: 1.5; margin: var(--qms-section-gap) 0 0; overflow-wrap: anywhere; }
 .problem-header > a { flex-shrink: 0; }
-.problem-tabs { display: flex; gap: var(--qms-section-gap); margin: var(--qms-section-gap) 0; padding-bottom: var(--qms-section-gap); border-bottom: 1px solid var(--qms-border); flex-wrap: wrap; }
+.problem-tabs { margin: var(--qms-section-gap) 0; }
 .problem-section, .problem-upgrade { padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 10px; margin: var(--qms-section-gap) 0; background: var(--qms-surface); }
 .problem-section > h3, .problem-upgrade > h2 { font-size: 18px; margin: 0 0 var(--qms-section-gap); }
 .problem-workspace dl { margin: var(--qms-section-gap) 0 0; }

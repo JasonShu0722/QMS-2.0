@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, getSession } from '../../api/client';
 import { NewProductQualityPage } from './NewProductQualityPage';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client');
@@ -28,6 +30,18 @@ it('loads a project and renders its stages', async () => {
   expect(await screen.findByText('电驱平台项目')).toBeVisible();
   expect(screen.getByText('设计验证')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/new-product-quality/projects/${project.id}`);
+});
+
+it('protects an unsigned handover risk statement when navigating away', async () => {
+  vi.mocked(apiRequest).mockResolvedValue(project);
+  render(<MemoryRouter><UnsavedChangesProvider><NewProductQualityPage projectId={project.id} /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '量产移交' }));
+  fireEvent.change(screen.getByLabelText('遗留风险说明'), { target: { value: '尚未签署的移交风险' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('遗留风险说明')).toHaveValue('尚未签署的移交风险');
 });
 
 it('shows an explicit empty state after a successful lookup with no project', async () => {

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { Alert, Breadcrumb, Button, Card, Space, Spin, Tag, Typography } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -19,6 +19,7 @@ function Designer({ definitionId, versionId }: Props) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
+  const requestLeave = useNavigationGuard();
   const openTab = useWorkTabsStore((state) => state.openTab);
   const [baseline, setBaseline] = useState<api.WorkflowDefinition>();
   const [graph, setGraph] = useState<api.WorkflowGraph>({ nodes: [], transitions: [] });
@@ -43,7 +44,7 @@ function Designer({ definitionId, versionId }: Props) {
     const controller = new AbortController();
     setBusy(true); setError(undefined);
     api.getWorkflowVersion(definitionId, versionId, controller.signal).then((result) => {
-      if (!controller.signal.aborted) { accept(result); setDenied(false); setDiagnostics([]); }
+      if (!controller.signal.aborted) { accept(result); setChangeNote(''); setDenied(false); setDiagnostics([]); }
     }).catch((cause) => { if (!controller.signal.aborted) setError(cause); }).finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
   }, [definitionId, versionId, revision]);
@@ -55,8 +56,10 @@ function Designer({ definitionId, versionId }: Props) {
     }, 200);
     return () => { controller.abort(); clearTimeout(timer); };
   }, [directorySearch]);
-  const dirty = !!baseline && (JSON.stringify(graph) !== JSON.stringify(baseline.version.structureSnapshot) || description !== (baseline.description ?? ''));
+  const draftDirty = !!baseline && (JSON.stringify(graph) !== JSON.stringify(baseline.version.structureSnapshot) || description !== (baseline.description ?? ''));
+  const dirty = draftDirty || (baseline?.version.status === 'DRAFT' && changeNote.length > 0);
   useUnsavedChanges(dirty);
+  useNavigationBusy(busy);
   const frozen = baseline?.version.status !== 'DRAFT';
   const readOnly = frozen || denied || busy;
   useEffect(() => {
@@ -80,14 +83,14 @@ function Designer({ definitionId, versionId }: Props) {
         setDiagnostics(validation.errors);
         if (!validation.valid || action === 'validate') return;
       }
-      if (action === 'save' || (action === 'publish' && dirty)) {
+      if (action === 'save' || (action === 'publish' && draftDirty)) {
         current = await api.saveWorkflow(definitionId, { ...editableWorkflowGraph(graph), description, draftVersionId: current.version.id, expectedRevision: current.revision });
         if (!alive.current) return;
         accept(current);
       }
       if (action === 'publish') {
         const published = await api.publishWorkflow(definitionId, { draftVersionId: current.version.id, expectedRevision: current.revision, changeNote });
-        if (alive.current) accept(published);
+        if (alive.current) { accept(published); setChangeNote(''); }
       }
       if (action === 'copy') {
         const copied = await api.copyWorkflow(definitionId, { sourceVersionId: current.version.id, expectedRevision: current.revision, description });
@@ -130,7 +133,7 @@ function Designer({ definitionId, versionId }: Props) {
       {baseline?.version.status === 'PUBLISHED' && <Button disabled={busy || denied} onClick={() => void act('copy')}>{t('复制为新草稿')}</Button>}
     </Space></header>
     {!!error && <Alert type="error" title={t(conflict ? '流程已被修改，本地草稿仍保留，请确认后重新加载。' : safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
-    {(error || baseline) && <Button disabled={busy} onClick={() => { if (!dirty || window.confirm(t('重新加载会放弃当前未保存的草稿，是否继续？'))) setRevision((value) => value + 1); }}>{t('重新加载流程')}</Button>}
+    {(error || baseline) && <Button disabled={busy} onClick={() => requestLeave(() => setRevision((value) => value + 1))}>{t('重新加载流程')}</Button>}
     {frozen && baseline && <Alert type="info" title={t('已发布版本只读；如需修改，请复制为新草稿。')} />}
     {busy && <Spin aria-label={t('加载中')} />}
     {baseline && <>

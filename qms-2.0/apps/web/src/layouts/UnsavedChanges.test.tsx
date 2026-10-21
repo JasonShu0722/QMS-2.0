@@ -81,6 +81,19 @@ function dataView(initialEntries = ['/app/before', '/app/edit', '/app/after'], i
   return router;
 }
 
+it('protects browser refresh while a clean page has an active write', () => {
+  dataView();
+  fireEvent.click(screen.getByRole('button', { name: 'finish clean save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'start save' }));
+  const pendingRefresh = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(pendingRefresh);
+  expect(pendingRefresh.defaultPrevented).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'end save' }));
+  const cleanRefresh = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(cleanRefresh);
+  expect(cleanRefresh.defaultPrevented).toBe(false);
+});
+
 it.each(['PUSH', 'REPLACE', 'Back', 'Forward'] as const)('blocks %s before changing the route and preserves the draft when cancelled', async kind => {
   const router = dataView();
   fireEvent.change(screen.getByRole('textbox', { name: 'draft' }), { target: { value: 'keep my draft' } });

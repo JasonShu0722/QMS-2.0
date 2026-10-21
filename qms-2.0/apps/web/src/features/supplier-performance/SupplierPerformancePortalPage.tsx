@@ -2,7 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Empty, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
-import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-performance.css';
 
 type Card = components['schemas']['SupplierPerformanceCardDto'];
@@ -26,7 +26,14 @@ export function SupplierPerformancePortalPage() {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
+  const requestLeave = useNavigationGuard();
   useUnsavedChanges(Boolean(selectedCard && reason.trim()));
+  useNavigationBusy(busy);
+
+  function closeAppeal() {
+    if (busy) return;
+    requestLeave(() => { setSelectedCard(undefined); setReason(''); setMutationError(undefined); pending.current = undefined; }, true);
+  }
 
   useEffect(() => {
     let active = true;
@@ -89,7 +96,7 @@ export function SupplierPerformancePortalPage() {
         ]} />
       </section>
     </>}
-    <Modal title={`申诉 ${selectedCard?.month ?? ''} 绩效卡`} open={Boolean(selectedCard)} onCancel={() => { if (!busy) { setSelectedCard(undefined); setReason(''); } }} footer={null} destroyOnHidden>
+    <Modal title={`申诉 ${selectedCard?.month ?? ''} 绩效卡`} open={Boolean(selectedCard)} onCancel={closeAppeal} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null} destroyOnHidden>
       {mutationError && <Alert type="error" showIcon title={mutationError} />}
       <Space orientation="vertical" className="supplier-performance-appeal-form"><label htmlFor="supplier-performance-appeal-reason">申诉说明</label><Input.TextArea id="supplier-performance-appeal-reason" aria-label="申诉说明" rows={5} maxLength={4000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} /><Button type="primary" onClick={() => void createAppeal()} disabled={!reason.trim()} loading={busy}>保存申诉草稿</Button></Space>
     </Modal>

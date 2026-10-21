@@ -135,7 +135,7 @@ function InternalShell() {
         {location.pathname.startsWith('/app/workflow-designer') ? workflowRoute ? <WorkflowDesignerPage definitionId={workflowRoute[1]!} versionId={workflowRoute[2]!} /> : <WorkflowListPage /> : null}
         {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage key={problemRoute?.[1]} problemId={problemRoute?.[1]} /> : null}
         {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
-        {location.pathname.startsWith('/app/supplier-quality') ? <SupplierQualityPage /> : null}
+        {location.pathname === '/app/supplier-quality' || location.pathname.startsWith('/app/supplier-quality/') ? <SupplierQualityPage /> : null}
         {location.pathname.startsWith('/app/supplier-incoming') ? <SupplierIncomingPage /> : null}
         {location.pathname.startsWith('/app/supplier-concession') ? <SupplierConcessionPage /> : null}
         {location.pathname.startsWith('/app/supplier-admission') ? <SupplierAdmissionPage /> : null}

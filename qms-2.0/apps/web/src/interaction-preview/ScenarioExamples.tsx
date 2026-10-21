@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Empty, Input, Modal, Progress, Radio, Skeleton, Steps, Tabs, Tag } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Empty, Input, Modal, Progress, Radio, Skeleton, Steps, Tabs, Tag } from 'antd';
 import type { InputRef } from 'antd';
 import { Download, RotateCcw, ScanLine, ShieldAlert } from 'lucide-react';
 
@@ -12,6 +12,11 @@ export function ScenarioExamples({ english }: { english: boolean }) {
   const [reason, setReason] = useState('');
   const [workflow, setWorkflow] = useState<'review' | 'returned' | 'verified' | 'voided'>('review');
   const [confirmation, setConfirmation] = useState<'verify' | 'void' | null>(null);
+  const [workflowDraft, setWorkflowDraft] = useState('');
+  const [savedDraft, setSavedDraft] = useState<{ description: string; version: number } | null>(null);
+  const [draftSaveFails, setDraftSaveFails] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'error' | 'saved'>('idle');
+  const [submittedDraft, setSubmittedDraft] = useState<{ description: string; version: number } | null>(null);
   const [rows, setRows] = useState<ImportStatus[]>(['pending', 'pending', 'pending']);
   const [importMode, setImportMode] = useState<'pending' | 'failed' | null>(null);
   const [started, setStarted] = useState(false);
@@ -72,6 +77,8 @@ export function ScenarioExamples({ english }: { english: boolean }) {
   const busy = importMode !== null;
   const processingRow = importMode ? rows.findIndex((status) => status === importMode) : -1;
   const cannotProcess = viewer || workflow !== 'review';
+  const workflowDirty = savedDraft === null || workflowDraft !== savedDraft.description;
+  const cannotSubmitDraft = cannotProcess || workflowDirty || draftSaveState !== 'saved';
   const workflowStatus = {
     review: pick('验证中', 'Verification in progress'),
     returned: pick('待补充', 'Awaiting supplements'),
@@ -94,7 +101,10 @@ export function ScenarioExamples({ english }: { english: boolean }) {
       <div className="preview-split">
         <div className="preview-example">
           <h3>{pick('处理资格与前置条件', 'Eligibility and prerequisites')}</h3>
-          {workflow !== 'review' && <Button size="small" onClick={() => { setWorkflow('review'); setReason(''); setConfirmation(null); }}>{pick('重置流程样例', 'Reset workflow example')}</Button>}
+          {workflow !== 'review' && <Button size="small" onClick={() => {
+            setWorkflow('review'); setReason(''); setConfirmation(null);
+            setWorkflowDraft(''); setSavedDraft(null); setDraftSaveFails(false); setDraftSaveState('idle'); setSubmittedDraft(null);
+          }}>{pick('重置流程样例', 'Reset workflow example')}</Button>}
           <Radio.Group
             aria-label={pick('样例处理身份', 'Sample processing role')}
             value={viewer ? 'viewer' : 'handler'}
@@ -117,7 +127,7 @@ export function ScenarioExamples({ english }: { english: boolean }) {
           <p className="preview-note">{viewer
             ? pick('只读身份无处理资格，仅可查看样例。', 'This read-only role can view the sample but cannot process it.')
             : workflow === 'voided'
-              ? pick('作废样例不能继续处理；刷新页面可重新演示。', 'A voided sample cannot be processed. Refresh the page to restart the demo.')
+              ? pick('作废样例不能继续处理；使用“重置流程样例”重新演示。', 'A voided sample cannot be processed. Use Reset workflow example to restart the demo.')
               : !reason.trim()
                 ? pick('缺项提示：尚未填写退回理由，退回补充不可用。', 'Missing prerequisite: enter a reason to enable returning for supplements.')
                 : pick('退回理由已填写，可演示退回。', 'A return reason is present; returning can be demonstrated.')}</p>
@@ -139,6 +149,36 @@ export function ScenarioExamples({ english }: { english: boolean }) {
             {pick('作废样例', 'Void sample')}
           </Button>
           <p role="status">{workflow === 'voided' ? pick('样例已作废，仅影响当前页面。', 'Sample voided on this page only.') : pick('尚未作废。', 'Sample has not been voided.')}</p>
+        </div>
+      </div>
+      <div className="preview-example">
+        <h3>{pick('草稿保存与版本提交', 'Draft saving and version submission')}</h3>
+        <p className="preview-note">{pick('独立的本地版本子例：当前输入有未保存修改，先保存草稿再提交已保存版本。保存、提交与失败均为本页内存演示，无真实 API、签名或批准；刷新即清除。', 'A separate local version example: save current edits as a draft before submitting the saved version. Saving, submission and failures are in-memory demonstrations only, with no real API, signature or approval. Refreshing clears them.')}</p>
+        <label htmlFor="preview-workflow-draft">{pick('流程草稿说明', 'Workflow draft description')}</label>
+        <Input.TextArea id="preview-workflow-draft" aria-label={pick('流程草稿说明', 'Workflow draft description')}
+          value={workflowDraft} rows={3} disabled={cannotProcess}
+          onChange={event => { setWorkflowDraft(event.target.value); setDraftSaveState('idle'); }} />
+        <div className="preview-actions">
+          <Checkbox checked={draftSaveFails} disabled={cannotProcess} onChange={event => setDraftSaveFails(event.target.checked)}>{pick('模拟草稿保存失败', 'Simulate draft save failure')}</Checkbox>
+          <Button type={workflowDirty || draftSaveState === 'error' ? 'primary' : 'default'} disabled={cannotProcess || !workflowDraft.trim()} onClick={() => {
+            if (cannotProcess || !workflowDraft.trim()) return;
+            if (draftSaveFails) { setDraftSaveState('error'); return; }
+            setSavedDraft({ description: workflowDraft, version: (savedDraft?.version ?? 0) + 1 });
+            setDraftSaveState('saved');
+          }}>{pick('保存流程草稿', 'Save workflow draft')}</Button>
+          <Button type={workflowDirty || draftSaveState === 'error' ? 'default' : 'primary'} disabled={cannotSubmitDraft}
+            aria-describedby="preview-workflow-submit-help" onClick={() => {
+              if (cannotSubmitDraft || !savedDraft) return;
+              setSubmittedDraft(savedDraft);
+            }}>{pick('提交已保存版本', 'Submit saved version')}</Button>
+        </div>
+        <p id="preview-workflow-submit-help" className="preview-note">{workflowDirty
+          ? pick('当前输入尚未保存，提交不可用；先保存草稿，不能直接提交旧版本。', 'Current input is unsaved, so submission is disabled. Save the draft first; the old version cannot be submitted directly.')
+          : pick('仅提交与当前输入一致且已保存成功的版本；保存失败时先重试保存，处理资格仍适用。', 'Only a successfully saved version matching current input can be submitted. Retry saving after failure; processing eligibility still applies.')}</p>
+        <div role="status" aria-live="polite">
+          {draftSaveState === 'error' && <Alert type="error" showIcon title={pick('本地草稿保存失败，输入已保留。', 'Local draft save failed. Input has been preserved.')} />}
+          {draftSaveState === 'saved' && savedDraft && <p>{pick(`本地草稿版本 ${savedDraft.version} 已保存。`, `Local draft version ${savedDraft.version} saved.`)}</p>}
+          {submittedDraft && <p>{pick(`本地已提交版本 ${submittedDraft.version}：${submittedDraft.description}；未发出业务请求。`, `Locally submitted version ${submittedDraft.version}: ${submittedDraft.description}; no business request was sent.`)}</p>}
         </div>
       </div>
       <Modal open={confirmation !== null} title={confirmation === 'void' ? pick('确认作废本地样例', 'Confirm voiding the local sample') : pick('确认本地验证演示', 'Confirm local verification demo')}
@@ -164,6 +204,7 @@ export function ScenarioExamples({ english }: { english: boolean }) {
       <div className="preview-split">
         <div className="preview-example">
           <h3>{pick('三行导入、停止与失败行重试', 'Three-row import, stop and failed-row retry')}</h3>
+          <p className="preview-note">{pick('正式页面规则：台账刷新保留未完成行及原请求键；每行成功立即更新显示与版本。指标切换按对象清理旧事实，不能套用新口径解释旧数据。此样例只演示当前页面内存状态。', 'Production rule: refreshing the ledger preserves unfinished rows and their request keys. Apply each successful row and its version immediately. Switching metrics clears old facts instead of interpreting them with a new definition. This sample uses page-local state only.')}</p>
           <p className="preview-note">{pick('每行演示耗时 150 ms；第 2 行首次固定失败。停止仅停止本地循环，保留完成结果；继续只处理未处理行，重试只处理失败行。', 'Each sample row takes 150 ms. Row 2 fails on its first attempt. Stopping halts the local loop and preserves results. Continue handles pending rows; retry handles failed rows only.')}</p>
           <div className="preview-actions">
             <Button type="primary" disabled={started || busy} onClick={() => { if (!started && !busy) { setStarted(true); setImportMode('pending'); } }}>

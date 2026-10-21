@@ -8,6 +8,9 @@ import { problemWorkspaceTranslations } from '../features/problem-workspace/prob
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
 
 const translations: Record<string, string> = {
+  '必读公告': 'Mandatory announcements',
+  '{count} 条必读公告未读': '{count} mandatory announcements unread',
+  '未配置单位': 'Unit not configured',
   "只新增供应商档案，不创建企业或账号；重复编码跳过，不覆盖名称或联系人。编码请使用文本保留前导 0。": "Add supplier profiles only, without creating organizations or accounts. Duplicate codes are skipped without changing names or contacts. Use text codes to preserve leading zeroes.",
   "只新增客户编码和名称；重复编码跳过，不覆盖已有名称或关系。编码请使用文本保留前导 0。": "Add customer codes and names only. Duplicate codes are skipped without changing existing names or relationships. Use text codes to preserve leading zeroes.",
   "只新增物料编码和名称；重复编码跳过，不覆盖已有名称。编码请使用文本保留前导 0。": "Add material codes and names only. Duplicate codes are skipped without changing existing names. Use text codes to preserve leading zeroes.",

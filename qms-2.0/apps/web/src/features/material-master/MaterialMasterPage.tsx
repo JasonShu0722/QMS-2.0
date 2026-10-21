@@ -141,14 +141,14 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
       <Form.Item name="materialCode" rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料编码')} placeholder={t('物料编码')} maxLength={100} disabled={busy} /></Form.Item>
       <Form.Item name="materialName" rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料名称')} placeholder={t('物料名称')} maxLength={200} disabled={busy} /></Form.Item>
       {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} /> : null}
-      <Button htmlType="submit" loading={busy}>{t('保存')}</Button>
+      <div className="qms-dialog-actions" role="group" aria-label={t('新增物料')}><Button htmlType="submit" loading={busy}>{t('保存')}</Button></div>
     </Form></Modal> : null}
     {canRead ? <Table<Material> loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} pagination={{ pageSize: 20 }} columns={[{ title: t('物料编码'), dataIndex: 'materialCode' }, { title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
     <Modal title={t('修改物料名称')} open={Boolean(edit)} onCancel={cancelEdit} footer={null} destroyOnHidden>
       <Typography.Paragraph>{edit?.item.materialCode}</Typography.Paragraph>
       <Input aria-label={t('编辑物料名称')} maxLength={200} disabled={busy || loading} value={edit?.materialName ?? ''} onChange={(event) => setEdit((current) => current ? { ...current, materialName: event.target.value } : current)} />
       {error ? <Alert type="error" title={t(safeAccountError(error))} description={error instanceof ApiError && error.code === 'CONCURRENCY_CONFLICT' ? t('物料已更新，请重新加载版本后保存。当前名称草稿会保留。') : undefined} /> : null}
-      <Space><Button onClick={cancelEdit} disabled={busy}>{t('取消')}</Button>{canRead ? <Button disabled={busy} loading={loading} onClick={() => void refresh(true)}>{t('重新加载物料版本')}</Button> : null}<Button type="primary" onClick={() => void save()} disabled={!edit?.materialName.trim() || loading} loading={busy}>{t('保存')}</Button></Space>
+      <div className="qms-dialog-actions" role="group" aria-label={t('修改物料名称')}><Button onClick={cancelEdit} disabled={busy}>{t('取消')}</Button>{canRead ? <Button disabled={busy} loading={loading} onClick={() => void refresh(true)}>{t('重新加载物料版本')}</Button> : null}<Button type="primary" onClick={() => void save()} disabled={!edit?.materialName.trim() || loading} loading={busy}>{t('保存')}</Button></div>
     </Modal>
   </section>;
 }

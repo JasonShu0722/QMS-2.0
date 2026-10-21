@@ -1,8 +1,10 @@
 import { expect, it, vi, afterEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { SupplierQualityTargetsPage } from './SupplierQualityTargetsPage';
 import * as client from '../../api/client';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
 vi.mock('../../api/client', async (importOriginal) => ({ ...(await importOriginal<typeof client>()), apiRequest: vi.fn(), csrfToken: vi.fn().mockResolvedValue('csrf') }));
 const request = vi.mocked(client.apiRequest);
@@ -11,6 +13,27 @@ function server(permissions: string[], row = target) {
   request.mockImplementation(async (path) => path === '/api/v1/system/my-permissions' ? { permissions, organizationId: 'org-1' } as never : path.includes('/actuals') ? { items: [], total: 0, latestVersion: 0 } as never : { items: [row], total: 1 } as never);
 }
 afterEach(() => vi.clearAllMocks());
+
+it('keeps the target drawer open while approval is pending', async () => {
+  let finish!: () => void;
+  const pending = new Promise<never>((resolve) => { finish = () => resolve(target as never); });
+  request.mockImplementation(async (path) => {
+    if (path.endsWith('/approve')) return pending;
+    if (path === '/api/v1/system/my-permissions') return { permissions: ['supplier-quality:targets:read', 'supplier-quality:targets:approve'] } as never;
+    return path.includes('/actuals') ? { items: [], total: 0 } as never : { items: [target], total: 1 } as never;
+  });
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierQualityTargetsPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '实际与流程' }));
+  fireEvent.click(await screen.findByRole('button', { name: '批准目标' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-quality-targets/target-1/approve', expect.objectContaining({ method: 'POST' })));
+  try {
+    const drawer = screen.getByRole('dialog', { name: '目标实际与流程' });
+    const close = within(drawer).queryByRole('button', { name: 'Close' });
+    if (close) fireEvent.click(close);
+    expect(screen.getByRole('dialog', { name: '目标实际与流程' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '放弃修改并关闭' })).not.toBeInTheDocument();
+  } finally { await act(async () => { finish(); await pending; }); }
+});
 
 it('offers approval only with approval permission and sends the current version', async () => {
   server(['supplier-quality:targets:read', 'supplier-quality:targets:approve']);

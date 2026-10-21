@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import './process-quality.css';
 import { ProcessShipmentReportPanel } from './ProcessShipmentReportPanel';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
 type Defect = components['schemas']['ProcessDefectDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
@@ -47,6 +48,14 @@ export function ProcessDefectLedgerPage() {
   const [issueError, setIssueError] = useState<unknown>();
   const [issued, setIssued] = useState<IssueResult>();
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
+  const [issueDirty, setIssueDirty] = useState(false);
+  const requestLeave = useNavigationGuard();
+  useUnsavedChanges(issueDirty);
+  useNavigationBusy(issuing);
+  function closeIssue() {
+    if (issuing) return;
+    requestLeave(() => { setIssueOpen(false); setIssueDirty(false); form.resetFields(); pending.current = undefined; }, true);
+  }
 
   useEffect(() => {
     let active = true;
@@ -90,6 +99,7 @@ export function ProcessDefectLedgerPage() {
   }
 
   async function issue(values: IssueValues) {
+    if (issuing) return;
     const sources = Object.values(selected).map((record) => ({ defectId: record.id, expectedVersion: record.version }));
     if (!sources.length) return;
     const body: IssueBody = {
@@ -113,13 +123,14 @@ export function ProcessDefectLedgerPage() {
       setIssueOpen(false);
       setSelected({});
       form.resetFields();
+      setIssueDirty(false);
       pending.current = undefined;
     } catch (cause) { setIssueError(cause); }
     finally { setIssuing(false); }
   }
 
   const columns: TableColumnsType<Defect> = [
-    { title: '选择', key: 'select', width: 64, render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} checked={Boolean(selected[record.id])} onChange={(event) => toggle(record, event.target.checked)} /> },
+    { title: '选择', key: 'select', width: 64, render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={issuing} checked={Boolean(selected[record.id])} onChange={(event) => { const checked = event.target.checked; if (issueDirty) requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(record, checked); }); else toggle(record, checked); }} /> },
     { title: '发生时间', dataIndex: 'occurredAt', width: 165, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
     { title: '失效现象', dataIndex: 'description', ellipsis: true, render: (value: string, record) => <Button type="link" className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value}</Button> },
     { title: '类型', dataIndex: 'defectTypeCode', width: 115 },
@@ -132,13 +143,13 @@ export function ProcessDefectLedgerPage() {
   return <main className="process-quality-page">
     <header className="process-quality-heading">
       <div><Typography.Text type="secondary">制程质量</Typography.Text><Typography.Title level={1}>不良品台账</Typography.Title><Typography.Paragraph type="secondary">核对来源事实，选择一条或多条不良记录发起正式问题。</Typography.Paragraph></div>
-      <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
+      <Button disabled={issuing} onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
     </header>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card">
       <Space className="process-quality-toolbar" wrap>
         <Input.Search aria-label="搜索制程不良" placeholder="搜索现象、批次或工单" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
-        <Button type="primary" disabled={!Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button>
+        <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button>
         <Typography.Text type="secondary">已选择 {Object.keys(selected).length} 条来源</Typography.Text>
       </Space>
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
@@ -162,19 +173,19 @@ export function ProcessDefectLedgerPage() {
         <List dataSource={linked} locale={{ emptyText: <Empty description="尚未关联正式问题" /> }} renderItem={(problem) => <List.Item><Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link></List.Item>} />
         <Typography.Title level={4}>可用证据</Typography.Title>
         <List dataSource={detail.evidence ?? []} locale={{ emptyText: <Empty description="暂无已扫描证据" /> }} renderItem={(evidence) => <List.Item>{evidence.originalName}</List.Item>} />
-        {!detail.archivedAt ? <Button type="primary" onClick={() => { toggle(detail, true); setDetailOpen(false); setIssueError(undefined); setIssueOpen(true); }}>选择此条并发起问题</Button> : null}
+        {!detail.archivedAt ? <Button type="primary" disabled={issuing} onClick={() => requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(detail, true); setDetailOpen(false); setIssueError(undefined); setIssueOpen(true); })}>选择此条并发起问题</Button> : null}
       </> : null}
     </Drawer>
-    <Drawer title="发起制程问题" open={issueOpen} onClose={() => setIssueOpen(false)} width="min(620px, 100vw)" destroyOnHidden={false}>
+    <Drawer title="发起制程问题" open={issueOpen} onClose={closeIssue} closable={!issuing} keyboard={!issuing} mask={{ closable: !issuing }} width="min(620px, 100vw)" destroyOnHidden={false}>
       <Typography.Paragraph>已选择 {Object.keys(selected).length} 条来源。当前支持问题简报；请选择已发布的 PROCESS_BRIEF 流程定义和版本。</Typography.Paragraph>
       {issueError ? <Alert className="process-quality-issue-error" type={isDenied(issueError) ? 'warning' : 'error'} showIcon title={isDenied(issueError) ? '暂无发单权限' : issueError instanceof ApiError && issueError.status === 409 ? '来源版本已变化或流程配置不可用；请核对后重试。' : errorText(issueError, '发单失败，请重试。')} /> : null}
-      <Form<IssueValues> form={form} layout="vertical" initialValues={{ severity: 'MEDIUM' }} onFinish={(values) => void issue(values)}>
+      <Form<IssueValues> form={form} layout="vertical" disabled={issuing} onValuesChange={() => setIssueDirty(true)} initialValues={{ severity: 'MEDIUM' }} onFinish={(values) => void issue(values)}>
         <Form.Item name="severity" label="严重度" rules={[{ required: true, message: '请选择严重度' }, { pattern: /^(LOW|MEDIUM|HIGH|CRITICAL)$/, message: '使用 LOW、MEDIUM、HIGH 或 CRITICAL' }]}><Input list="process-severity-options" /></Form.Item>
         <datalist id="process-severity-options"><option value="LOW" /><option value="MEDIUM" /><option value="HIGH" /><option value="CRITICAL" /></datalist>
         <Form.Item name="workflowDefinitionId" label="流程定义 ID" rules={[{ required: true, message: '请输入流程定义 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
         <Form.Item name="workflowVersionId" label="流程版本 ID" rules={[{ required: true, message: '请输入流程版本 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
         <Form.Item name="instanceKey" label="实例标识" rules={[{ required: true, whitespace: true, message: '请输入实例标识' }, { max: 128, message: '最多 128 个字符' }]}><Input /></Form.Item>
-        <Button type="primary" htmlType="submit" loading={issuing} disabled={!Object.keys(selected).length}>确认发单</Button>
+        <div className="qms-dialog-actions" role="group" aria-label="发起制程问题"><Button type="primary" htmlType="submit" loading={issuing} disabled={!Object.keys(selected).length}>确认发单</Button></div>
       </Form>
     </Drawer>
   </main>;

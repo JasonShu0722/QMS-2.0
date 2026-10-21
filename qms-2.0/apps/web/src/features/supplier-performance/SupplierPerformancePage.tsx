@@ -2,7 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
-import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-performance.css';
 
 type Card = components['schemas']['SupplierPerformanceCardDto'];
@@ -48,7 +48,13 @@ export function SupplierPerformancePage() {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState<string>();
   const reviewPending = useRef<{ signature: string; key: string } | undefined>(undefined);
-  useUnsavedChanges(dirty);
+  const requestLeave = useNavigationGuard();
+  useUnsavedChanges(dirty || !!reviewAppeal && !!reviewNote.trim());
+  useNavigationBusy(saving || !!publishingId || reviewBusy);
+  function closeReview() {
+    if (reviewBusy) return;
+    requestLeave(() => { setReviewAppeal(undefined); setReviewNote(''); setReviewError(undefined); reviewPending.current = undefined; }, true);
+  }
 
   useEffect(() => {
     let active = true;
@@ -173,7 +179,7 @@ export function SupplierPerformancePage() {
         <Space><Button type="primary" htmlType="submit" loading={saving}>保存绩效卡</Button>{dirty ? <Typography.Text type="secondary">有未保存内容</Typography.Text> : null}</Space>
       </Form>
     </section>
-    <Modal title="绩效申诉复核" open={Boolean(reviewAppeal)} onCancel={() => { if (!reviewBusy) setReviewAppeal(undefined); }} footer={null} destroyOnHidden>
+    <Modal title="绩效申诉复核" open={Boolean(reviewAppeal)} onCancel={closeReview} closable={!reviewBusy} keyboard={!reviewBusy} mask={{ closable: !reviewBusy }} footer={null} destroyOnHidden>
       <Typography.Paragraph>{reviewAppeal?.reason}</Typography.Paragraph>
       {reviewError ? <Alert type="error" showIcon title={reviewError} /> : null}
       <Space orientation="vertical" className="supplier-performance-appeal-form"><label htmlFor="supplier-performance-review-note">复核说明</label><Input.TextArea id="supplier-performance-review-note" aria-label="复核说明" rows={4} maxLength={4000} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} disabled={reviewBusy} /><Space><Button type="primary" disabled={!reviewNote.trim()} loading={reviewBusy} onClick={() => void decideAppeal('ACCEPTED')}>采纳申诉</Button><Button danger disabled={!reviewNote.trim()} loading={reviewBusy} onClick={() => void decideAppeal('REJECTED')}>驳回申诉</Button></Space></Space>

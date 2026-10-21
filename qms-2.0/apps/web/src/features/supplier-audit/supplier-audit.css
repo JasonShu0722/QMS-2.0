@@ -1,7 +1,7 @@
-.supplier-audit-page { display: grid; gap: var(--qms-section-gap);  min-width: 0; }
+.supplier-audit-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-section-gap);  min-width: 0; }
 .supplier-audit-heading { display: flex; justify-content: space-between; gap: var(--qms-section-gap); align-items: flex-start; }
 .supplier-audit-heading h1 { margin: 0 0 var(--qms-section-gap); }
-.supplier-audit-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); }
+.supplier-audit-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); min-width: 0; }
 .supplier-audit-actions { margin-top: var(--qms-section-gap); }
 .supplier-audit-item { display: grid; gap: var(--qms-section-gap); padding: var(--qms-card-padding) 0; border-bottom: 1px solid var(--qms-border); }
 .supplier-audit-plan-select { display: grid; gap: var(--qms-section-gap); }

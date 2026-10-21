@@ -2,6 +2,7 @@ import { Alert, Button, Form, Input, InputNumber, Modal, Select, Switch } from '
 import { useEffect, useState } from 'react';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
 type Customer = components['schemas']['CustomerMasterDto'];
 type CreateComplaint = components['schemas']['CreateComplaintDto'];
@@ -15,6 +16,14 @@ export function CustomerComplaintEntry({ onCreated }: { onCreated: (id: string) 
   const [error, setError] = useState<unknown>();
   const [form] = Form.useForm<FormValues>();
   const complaintType = Form.useWatch('complaintType', form);
+  const [dirty, setDirty] = useState(false);
+  const requestLeave = useNavigationGuard();
+  useUnsavedChanges(dirty);
+  useNavigationBusy(busy);
+  function close() {
+    if (busy) return;
+    requestLeave(() => { setOpen(false); form.resetFields(); setDirty(false); }, true);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -26,6 +35,7 @@ export function CustomerComplaintEntry({ onCreated }: { onCreated: (id: string) 
   }, [open]);
 
   async function save(values: FormValues) {
+    if (busy) return;
     setBusy(true); setError(undefined);
     try {
       const parsed: unknown = JSON.parse(values.severitySnapshotText);
@@ -35,16 +45,16 @@ export function CustomerComplaintEntry({ onCreated }: { onCreated: (id: string) 
       const created = await apiRequest<Complaint>('/api/v1/customer-quality/complaints', {
         method: 'POST', headers: { 'x-csrf-token': await csrfToken(), 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body),
       });
-      setOpen(false); form.resetFields(); await onCreated(created.id);
+      setOpen(false); form.resetFields(); setDirty(false); await onCreated(created.id);
     } catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
 
   return <>
     <Button type="primary" onClick={() => { setError(undefined); setOpen(true); }}>人工登记客诉</Button>
-    <Modal open={open} title="人工登记客诉" width={720} okText="登记" onOk={() => void form.submit()} okButtonProps={{ loading: busy }} cancelButtonProps={{ disabled: busy }} onCancel={() => { if (!busy) setOpen(false); }}>
+    <Modal open={open} title="人工登记客诉" width={720} okText="登记" onOk={() => void form.submit()} okButtonProps={{ loading: busy }} cancelButtonProps={{ disabled: busy }} onCancel={close} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={(_, { CancelBtn, OkBtn }) => <div className="qms-dialog-actions" role="group" aria-label="人工登记客诉"><CancelBtn /><OkBtn /></div>}>
       {error ? <Alert type="error" showIcon title={error instanceof ApiError ? safeAccountError(error) : error instanceof Error ? error.message : '登记失败'} /> : null}
-      <Form form={form} layout="vertical" onFinish={(values) => void save(values)} initialValues={{ complaintType: 'ZERO_KM', severity: 'LOW', returnRequired: false, physicalAnalysisRequired: false }}>
+      <Form form={form} layout="vertical" disabled={busy} onValuesChange={() => setDirty(true)} onFinish={(values) => void save(values)} initialValues={{ complaintType: 'ZERO_KM', severity: 'LOW', returnRequired: false, physicalAnalysisRequired: false }}>
         <Form.Item name="customerId" label="客户" rules={[{ required: true, message: '请选择客户' }]}><Select aria-label="登记客户" showSearch optionFilterProp="label" options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} /></Form.Item>
         <Form.Item name="complaintType" label="客诉类型" rules={[{ required: true }]}><Select aria-label="客诉类型" options={[{ value: 'ZERO_KM', label: '0KM' }, { value: 'AFTER_SALES', label: '售后' }]} /></Form.Item>
         <Form.Item name="defectDescription" label="不良描述" rules={[{ required: true }]}><Input.TextArea aria-label="不良描述" rows={3} maxLength={10000} /></Form.Item>

@@ -18,6 +18,47 @@ function mount() {
 beforeEach(() => { localStorage.clear(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
 
+async function pendingLogin() {
+  let finish!: (response: Response) => void;
+  const response = new Promise<Response>(resolve => { finish = resolve; });
+  const fetcher = vi.fn(async (path: string) => path.endsWith('/session') ? json({ code: 'AUTH_SESSION_REQUIRED' }, 401)
+    : path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : (await response).clone());
+  vi.stubGlobal('fetch', fetcher);
+  mount();
+  await waitFor(() => expect(screen.getByRole('button', { name: '登录' })).toBeEnabled());
+  fireEvent.change(screen.getByLabelText('账号'), { target: { value: 'alice' } });
+  fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'correct-password' } });
+  const form = screen.getByLabelText('账号').closest('form')!;
+  return { form, finish, writes: () => fetcher.mock.calls.filter(([path]) => path === '/api/v1/auth/login') };
+}
+
+it('freezes login inputs and the remember option while authentication is pending', async () => {
+  const { form, finish, writes } = await pendingLogin();
+  fireEvent.submit(form);
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  try {
+    for (const label of ['账号', '密码']) expect(screen.getByLabelText(label)).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: '记住登录' })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('密码'), 'changed');
+    expect(screen.getByLabelText('密码')).toHaveValue('correct-password');
+  } finally {
+    await act(async () => finish(json({ code: 'AUTH_INVALID_CREDENTIALS' }, 401)));
+  }
+  expect(await screen.findByText('用户名或密码错误')).toBeInTheDocument();
+  expect(screen.getByLabelText('密码')).toHaveValue('correct-password');
+  expect(screen.getByLabelText('密码')).toBeEnabled();
+});
+
+it('sends one login request for repeated form submissions until authentication settles', async () => {
+  const { form, finish, writes } = await pendingLogin();
+  await act(async () => { fireEvent.submit(form); fireEvent.submit(form); });
+  await waitFor(() => expect(writes().length).toBeGreaterThan(0));
+  await act(async () => { fireEvent.submit(form); });
+  await act(async () => finish(json({ code: 'AUTH_INVALID_CREDENTIALS' }, 401)));
+  await screen.findByText('用户名或密码错误');
+  expect(writes()).toHaveLength(1);
+});
+
 describe('remember login', () => {
   it.each([false, true])('submits explicit rememberMe=%s without storing credentials', async rememberMe => {
     const fetch = vi.fn<typeof globalThis.fetch>(async path => {

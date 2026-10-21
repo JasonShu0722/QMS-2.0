@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { apiRequest, csrfToken } from '../../api/client';
 import { ProcessShipmentReportPanel } from './ProcessShipmentReportPanel';
 
@@ -25,6 +26,17 @@ it('opens a report and shows its traceable source sections', async () => {
   expect(screen.getByText('客户关联')).toBeVisible();
   expect(screen.getByText('正式问题')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/shipment-reports/${report.id}`);
+});
+
+it('protects an unfinished shipment report when navigating away', async () => {
+  render(<MemoryRouter><UnsavedChangesProvider><ProcessShipmentReportPanel /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '新建出货报告' }));
+  fireEvent.change(screen.getByLabelText('报告编号'), { target: { value: 'SHIP-DRAFT' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('报告编号')).toHaveValue('SHIP-DRAFT');
 });
 
 it('archives using the current report version and an idempotency key', async () => {

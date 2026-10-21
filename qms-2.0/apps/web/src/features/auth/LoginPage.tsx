@@ -1,6 +1,6 @@
 import type { LoginRequest } from '@qms/contracts';
 import { Alert, Button, Checkbox, Form, Input, Spin, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import { ApiError, getSession, login, safeAccountError } from '../../api/client';
@@ -10,6 +10,7 @@ export function LoginPage() {
   const { t } = useLanguage();
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   const [retryCount, setRetryCount] = useState(0);
   const [sessionState, setSessionState] = useState<'checking' | 'unauthenticated' | 'error'>('checking');
@@ -28,7 +29,8 @@ export function LoginPage() {
   }, [navigate, retryCount]);
 
   async function submit(values: LoginRequest) {
-    if (sessionState !== 'unauthenticated') return;
+    if (sessionState !== 'unauthenticated' || pending.current) return;
+    pending.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -41,6 +43,7 @@ export function LoginPage() {
           : new ApiError({ code: 'CLIENT_ERROR', message: '登录请求失败' }),
       );
     } finally {
+      pending.current = false;
       setLoading(false);
     }
   }
@@ -95,7 +98,7 @@ export function LoginPage() {
                 }
               />
             ) : null}
-            <Form layout="vertical" onFinish={submit} initialValues={{ rememberMe: false }} className="login-form">
+            <Form layout="vertical" onFinish={submit} initialValues={{ rememberMe: false }} className="login-form" disabled={loading}>
               <Form.Item label={t('账号')} name="identifier" rules={[{ required: true, message: t('请输入账号') }]}>
                 <Input autoComplete="username" size="large" />
               </Form.Item>

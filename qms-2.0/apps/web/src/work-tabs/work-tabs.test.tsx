@@ -106,8 +106,12 @@ describe('work tabs store', () => {
     );
 
     const overflowTab = useWorkTabsStore.getState().overflowTabs[0];
-    screen.getByRole('button', { name: '全部标签' }).focus();
+    const allTabs = screen.getByRole('button', { name: '全部标签' });
+    expect(allTabs).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(allTabs).toHaveAttribute('aria-expanded', 'false');
+    allTabs.focus();
     await userEvent.keyboard('{Enter}');
+    expect(allTabs).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(await screen.findByRole('button', { name: overflowTab.title }));
 
     const state = useWorkTabsStore.getState();

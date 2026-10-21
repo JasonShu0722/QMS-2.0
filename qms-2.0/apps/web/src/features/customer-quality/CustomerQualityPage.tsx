@@ -7,6 +7,7 @@ import { CustomerMasterSection } from './CustomerMasterSection';
 import { CustomerComplaintProcessing } from './CustomerComplaintProcessing';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
 import './customer-quality.css';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 type Complaint = components['schemas']['CustomerComplaintDto'];
 type ComplaintDetail = components['schemas']['CustomerComplaintDetailDto'];
@@ -35,6 +36,7 @@ export function CustomerQualityPage() {
   const [permissionError, setPermissionError] = useState<unknown>();
   const importKey = useRef('');
   const detailRequestId = useRef(0);
+  const requestLeave = useNavigationGuard();
 
   async function loadPermissions() {
     setPermissions(undefined); setPermissionError(undefined);
@@ -53,7 +55,6 @@ export function CustomerQualityPage() {
   async function openDetail(id: string) {
     const requestId = ++detailRequestId.current;
     setDetailLoading(true); setDetailError(undefined);
-    setSelected(undefined);
     try { const detail = await apiRequest<ComplaintDetail>(`/api/v1/customer-quality/complaints/${id}`); if (requestId === detailRequestId.current) setSelected(detail); }
     catch (cause) { if (requestId === detailRequestId.current) { setSelected(undefined); setDetailError(cause); } }
     finally { if (requestId === detailRequestId.current) setDetailLoading(false); }
@@ -96,7 +97,7 @@ export function CustomerQualityPage() {
     {error ? <Alert type={error instanceof ApiError && error.status === 403 ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 403 ? '暂无客诉台账访问权限' : error instanceof ApiError ? safeAccountError(error) : '客诉台账加载失败，请重试。'} description={error instanceof ApiError ? error.traceId : undefined} action={error instanceof ApiError && error.status === 403 ? undefined : <Button onClick={() => void load()}>重试</Button>} /> : null}
     <section className="customer-quality-card"><Space className="customer-quality-toolbar" wrap><Input.Search aria-label="搜索客诉" placeholder="搜索编号、产品、VIN 或描述" allowClear onSearch={setSearch} onChange={(event) => setSearch(event.target.value)} /><Typography.Text type="secondary">共 {filtered.length} 条</Typography.Text></Space>
       {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? null : <Table<Complaint> rowKey="id" dataSource={filtered} scroll={{ x: 900 }} locale={{ emptyText: <Empty description={search ? '没有匹配的客诉' : '暂无客诉记录'} /> }} columns={[
-        { title: '客诉编号', dataIndex: 'complaint_number', render: (value: string, row) => <Button type="link" onClick={() => void openDetail(row.id)}>{value}</Button> },
+        { title: '客诉编号', dataIndex: 'complaint_number', render: (value: string, row) => <Button type="link" onClick={() => requestLeave(() => { setSelected(undefined); void openDetail(row.id); })}>{value}</Button> },
         { title: '类型', dataIndex: 'complaint_type', render: (value: Complaint['complaint_type']) => typeLabels[value] },
         { title: '产品', dataIndex: 'product_code', render: (value?: string | null) => value || '未填写' },
         { title: '严重度', dataIndex: 'severity', render: (value: string) => <Tag color={value === 'CRITICAL' || value === 'HIGH' ? 'red' : 'blue'}>{value}</Tag> },
@@ -106,7 +107,7 @@ export function CustomerQualityPage() {
     </section>
     {permissionError && !(error instanceof ApiError && error.status === 403) ? <Alert type="warning" showIcon title="无法验证客诉导入权限" action={<Button onClick={() => void loadPermissions()}>重试</Button>} /> : null}
     <CustomerMasterSection />
-    {permissions?.permissions.includes('customer-quality:complaints:write') ? <section className="customer-quality-card"><CustomerComplaintEntry onCreated={async (id) => { await Promise.all([load(), openDetail(id)]); }} /></section> : null}
+    {permissions?.permissions.includes('customer-quality:complaints:write') ? <section className="customer-quality-card"><CustomerComplaintEntry onCreated={async (id) => { await load(); requestLeave(() => { setSelected(undefined); void openDetail(id); }); }} /></section> : null}
     {permissions?.permissions.includes('customer-quality:complaints:write') && !(error instanceof ApiError && error.status === 403) ? <section className="customer-quality-card customer-quality-import" aria-live="polite">
       <Typography.Title level={3}>Excel 批量导入</Typography.Title>
       <Typography.Paragraph type="secondary">选择 .xlsx 文件的首个工作表。首行为英文契约列名：{importFields.slice(0, 9).join('、')}。每次最多 100 条；文件只在本地解析，提交时发送 JSON。</Typography.Paragraph>
@@ -123,6 +124,6 @@ export function CustomerQualityPage() {
         { title: 'Excel 行', dataIndex: 'rowNumber' }, { title: '结果', dataIndex: 'status', render: (status: string) => ({ CREATED: '已创建', DUPLICATE: '重复', REJECTED: '已拒绝' })[status as 'CREATED' | 'DUPLICATE' | 'REJECTED'] }, { title: '客诉编号', dataIndex: 'complaintNumber', render: (value: string | null) => value ?? '—' }, { title: '错误代码', dataIndex: 'errorCode', render: (value: string | null) => value ?? '—' },
       ]} /></> : null}
     </section> : null}
-    {selected || detailLoading || detailError ? <section className="customer-quality-card" aria-live="polite"><Typography.Title level={3}>客诉详情</Typography.Title>{detailError ? <Alert type="error" showIcon title={detailError instanceof ApiError ? safeAccountError(detailError) : '客诉详情加载失败，请重试。'} description={detailError instanceof ApiError ? detailError.traceId : undefined} /> : null}{detailLoading ? <Spin /> : selected ? <Descriptions column={{ xs: 1, sm: 2 }} items={[{ key: 'number', label: '编号', children: selected.complaint_number }, { key: 'type', label: '类型', children: typeLabels[selected.complaint_type] }, { key: 'severity', label: '严重度', children: selected.severity }, { key: 'status', label: '状态', children: selected.status }, { key: 'description', label: '不良描述', span: 2, children: selected.defect_description }, { key: 'analysis', label: '解析状态', children: selected.currentAnalysis?.status ?? '未记录' }, { key: 'disposition', label: '实物处置', children: selected.currentDisposition?.status ?? '未记录' }]} /> : null}{selected ? <CustomerComplaintProcessing key={selected.id} complaint={selected} canWrite={Boolean(permissions?.permissions.includes('customer-quality:complaints:write'))} refresh={async () => { await Promise.all([load(), openDetail(selected.id)]); }} /> : null}</section> : null}
+    {selected || detailLoading || detailError ? <section className="customer-quality-card" aria-live="polite"><Typography.Title level={3}>客诉详情</Typography.Title>{detailError ? <Alert type="error" showIcon title={detailError instanceof ApiError ? safeAccountError(detailError) : '客诉详情加载失败，请重试。'} description={detailError instanceof ApiError ? detailError.traceId : undefined} /> : null}{detailLoading && !selected ? <Spin /> : selected ? <Descriptions column={{ xs: 1, sm: 2 }} items={[{ key: 'number', label: '编号', children: selected.complaint_number }, { key: 'type', label: '类型', children: typeLabels[selected.complaint_type] }, { key: 'severity', label: '严重度', children: selected.severity }, { key: 'status', label: '状态', children: selected.status }, { key: 'description', label: '不良描述', span: 2, children: selected.defect_description }, { key: 'analysis', label: '解析状态', children: selected.currentAnalysis?.status ?? '未记录' }, { key: 'disposition', label: '实物处置', children: selected.currentDisposition?.status ?? '未记录' }]} /> : null}{selected ? <CustomerComplaintProcessing key={selected.id} complaint={selected} canWrite={Boolean(permissions?.permissions.includes('customer-quality:complaints:write'))} refresh={async () => { await Promise.all([load(), openDetail(selected.id)]); }} /> : null}</section> : null}
   </main>;
 }
