@@ -1,11 +1,24 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RequiredPasswordChangePage } from './RequiredPasswordChangePage';
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
-afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); localStorage.clear(); });
+beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
+afterEach(async () => {
+  try {
+    cleanup();
+    // Ant Design form feedback leaves delayed state updates after unmount.
+    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+    localStorage.clear();
+  }
+});
 
 async function pendingChange() {
   let finish!: (response: Response) => void;
