@@ -4,6 +4,7 @@ import { ApiError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { previewUpgrade, submitUpgrade, type UpgradeRequest } from './problem-workspace-api';
 import { ProblemError, useProblemRead } from './problem-read';
+import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
 export function ProblemUpgradePanel({ problemId, organizationId, onSuccess, onClose }: { problemId: string; organizationId: string; onSuccess: () => void; onClose: () => void }) {
   const { t } = useLanguage();
@@ -20,6 +21,8 @@ export function ProblemUpgradePanel({ problemId, organizationId, onSuccess, onCl
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const attempt = useRef<{ body: UpgradeRequest; key: string } | undefined>(undefined);
   const preview = state.data;
+  useUnsavedChanges(reason.length > 0);
+  useNavigationBusy(state.loading || pending);
   async function upgrade() {
     if (writing.current || !preview?.canUpgrade || !preview.instanceId || !preview.currentNodeId || preview.expectedInstanceVersion === null || preview.expectedDomainVersion === null || !reason.trim() || conflict || denied) return;
     if (!attempt.current) attempt.current = { key: crypto.randomUUID(), body: { organizationId, instanceId: preview.instanceId, currentNodeId: preview.currentNodeId, expectedProblemVersion: preview.expectedProblemVersion, expectedInstanceVersion: preview.expectedInstanceVersion, expectedDomainVersion: preview.expectedDomainVersion, reason: reason.trim() } };

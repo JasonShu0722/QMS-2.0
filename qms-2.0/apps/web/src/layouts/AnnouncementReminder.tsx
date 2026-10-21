@@ -2,10 +2,12 @@ import type { components } from '@qms/contracts';
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { useLanguage } from '../i18n/Language';
 
 type MinePage = components['schemas']['AnnouncementMinePageDto'];
 
 export function AnnouncementReminder() {
+  const { t } = useLanguage();
   const { pathname } = useLocation();
   const [count, setCount] = useState(0);
 
@@ -36,5 +38,5 @@ export function AnnouncementReminder() {
     };
   }, [pathname]);
 
-  return count > 0 ? <Link className="qms-announcement-reminder" to="/app/announcements" aria-label={`${count} 条必读公告未读`}>必读公告 <strong>{count}</strong></Link> : null;
+  return count > 0 ? <Link className="qms-announcement-reminder" to="/app/announcements" aria-label={t('{count} 条必读公告未读').replace('{count}', String(count))}>{t('必读公告')} <strong>{count}</strong></Link> : null;
 }

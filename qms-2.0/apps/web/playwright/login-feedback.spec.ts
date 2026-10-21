@@ -36,14 +36,17 @@ test('login toolbar shares keyboard language and appearance across viewport size
   await language.click(); await page.getByRole('menuitemradio', { name: '简体中文' }).click();
   await page.getByRole('button', { name: '外观设置' }).click();
   for (const [mode, value] of [['浅色', 'light'], ['深色', 'dark']]) {
-    await page.getByRole('button', { name: mode, exact: true }).click();
+    const modeOption = page.getByRole('radio', { name: mode, exact: true });
+    await modeOption.focus(); await modeOption.press('Space');
     for (const [name, accent] of [['晴空蓝', 'blue'], ['湖水青', 'teal'], ['鸢尾紫', 'purple']]) {
-      await page.getByRole('button', { name, exact: true }).click();
+      const accentOption = page.getByRole('radio', { name, exact: true });
+      await accentOption.focus(); await accentOption.press('Space');
       await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', value);
       await expect(page.locator('html')).toHaveAttribute('data-qms-accent', accent);
     }
   }
-  await page.getByRole('button', { name: '跟随系统', exact: true }).click();
+  const systemOption = page.getByRole('radio', { name: '跟随系统', exact: true });
+  await systemOption.focus(); await systemOption.press('Space');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'dark');
   await page.reload();

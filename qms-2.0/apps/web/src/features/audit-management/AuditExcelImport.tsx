@@ -97,11 +97,6 @@ export function AuditExcelImport({ organizationId, onImported, onDenied }: {
     }
   }
 
-  function submitFromButton() {
-    if (rows.some((row) => row.state === 'RETRY')) active.current = false;
-    void submit();
-  }
-
   return <section className="audit-excel-import" aria-label="审核 Excel 导入">
     <Typography.Title level={4}>Excel 逐行导入</Typography.Title>
     <Typography.Paragraph type="secondary">支持 .xlsx，最多 2 MB、100 行。必填列：sourceSystem、externalKey、finding。客户或二方来源键保存在 customerKey，供复核追溯。错误行保留反馈，成功行不重复提交。</Typography.Paragraph>
@@ -109,7 +104,7 @@ export function AuditExcelImport({ organizationId, onImported, onDenied }: {
     <Space wrap>
       <input ref={input} type="file" aria-label="审核 Excel 文件" accept=".xlsx" disabled={busy || loading || blocked || rows.length > 0} onChange={(event) => void selectFile(event.target.files?.[0])} />
       {rows.length > 0 ? <Popconfirm title={dirty ? '清除预览将丢失未成功行的重试记录。确定清除？' : '确定清除预览？'} onConfirm={clear} disabled={busy}><Button disabled={busy}>清除预览</Button></Popconfirm> : null}
-      <Button type="primary" disabled={!hasPending || blocked} onClick={submitFromButton}>{rows.some((row) => row.state === 'RETRY') ? '重试未成功行' : '导入待处理行'}</Button>
+      <Button aria-label={rows.some((row) => row.state === 'RETRY') ? '重试未成功行' : '导入待处理行'} type="primary" loading={busy} disabled={busy || loading || !hasPending || blocked} onClick={() => void submit()}>{rows.some((row) => row.state === 'RETRY') ? '重试未成功行' : '导入待处理行'}</Button>
     </Space>
     {error ? <Alert type="error" showIcon title={error} /> : null}
     {rows.length ? <Table<PreviewRow> rowKey="key" size="small" dataSource={rows} pagination={false} scroll={{ x: 780 }} columns={[

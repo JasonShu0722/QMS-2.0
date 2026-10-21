@@ -25,8 +25,8 @@ function formatRatio(value: number) {
 }
 
 function formatMetric(value: unknown, unit: string) {
-  if (value == null || !Number.isFinite(Number(value))) return '—';
-  return unit === '%' ? `${formatRatio(Number(value) * 100)}%` : `${formatRatio(Number(value))} ${unit}`;
+  if (value == null || typeof value === 'string' && !value.trim() || !Number.isFinite(Number(value))) return '—';
+  return unit === '%' ? `${formatRatio(Number(value) * 100)}%` : `${formatRatio(Number(value))} ${unit?.trim() || '未配置单位'}`;
 }
 
 const signalLabels = { GREEN: '绿灯', YELLOW: '黄灯', RED: '红灯', NO_DATA: '未配置阈值' } as const;
@@ -114,6 +114,7 @@ export function QualityDataPage() {
   useEffect(() => {
     if (!selectedId || metricError) { setFacts([]); return; }
     let active = true;
+    setFacts([]);
     setLoadingFacts(true);
     setTrendLoaded(false);
     setTrendError(undefined);
@@ -169,10 +170,10 @@ export function QualityDataPage() {
       <label className="quality-data-label" htmlFor="quality-data-metric">指标</label>
       <Select id="quality-data-metric" aria-label="选择质量指标" className="quality-data-select" value={selectedId} onChange={setSelectedId} disabled={loadingMetrics || Boolean(metricError) || metrics.length === 0} options={metrics.map((metric) => ({ label: `${metric.name} (${metric.code})${metric.active ? '' : ' · 已停用'}`, value: metric.id }))} placeholder="选择指标" />
       {loadingMetrics ? <div className="quality-data-loading"><Spin /></div> : !metricError && metrics.length === 0 ? <Empty description="暂无指标定义" /> : null}
-      {selected ? <dl className="quality-data-definition"><div><dt>指标代码</dt><dd>{selected.code}</dd></div><div><dt>定义单位</dt><dd>{selected.unit}</dd></div><div><dt>计算口径</dt><dd>{selected.numeratorLabel} / {selected.denominatorLabel}</dd></div><div><dt>口径版本</dt><dd>{selected.formulaVersion}</dd></div><div><dt>阈值方向</dt><dd>{selected.resolvedThresholdDirection === 'LTE' ? '越低越好' : '越高越好'}</dd></div><div><dt>达标 / 预警阈值</dt><dd>{selected.resolvedGreenThreshold == null || selected.resolvedYellowThreshold == null ? '未配置' : `${formatMetric(selected.resolvedGreenThreshold, selected.unit)} / ${formatMetric(selected.resolvedYellowThreshold, selected.unit)}`}</dd></div></dl> : null}
+      {selected ? <dl className="quality-data-definition"><div><dt>指标代码</dt><dd>{selected.code}</dd></div><div><dt>定义单位</dt><dd>{selected.unit?.trim() || '未配置单位'}</dd></div><div><dt>计算口径</dt><dd>{selected.numeratorLabel} / {selected.denominatorLabel}</dd></div><div><dt>口径版本</dt><dd>{selected.formulaVersion}</dd></div><div><dt>阈值方向</dt><dd>{selected.resolvedThresholdDirection === 'LTE' ? '越低越好' : '越高越好'}</dd></div><div><dt>达标 / 预警阈值</dt><dd>{selected.resolvedGreenThreshold == null || selected.resolvedYellowThreshold == null ? '未配置' : `${formatMetric(selected.resolvedGreenThreshold, selected.unit)} / ${formatMetric(selected.resolvedYellowThreshold, selected.unit)}`}</dd></div></dl> : null}
     </section>
     <section className="quality-data-card qms-display-card" aria-label="四域综合看板">
-      <div className="quality-data-section-heading"><div><Typography.Title level={2}>四域综合看板</Typography.Title><Typography.Text type="secondary">跨供应商、制程、客户和新品指标；未核实来源只显示状态，不参与数值汇总。</Typography.Text></div><div><Button loading={exporting === 'xlsx'} onClick={() => void exportReport('xlsx')}>下载 Excel</Button><Button loading={exporting === 'pdf'} onClick={() => void exportReport('pdf')} style={{ marginLeft: 8 }}>下载 PDF</Button></div></div>
+      <div className="quality-data-section-heading"><div><Typography.Title level={2}>四域综合看板</Typography.Title><Typography.Text type="secondary">跨供应商、制程、客户和新品指标；未核实来源只显示状态，不参与数值汇总。</Typography.Text></div><div className="qms-dialog-actions" role="group" aria-label="四域综合看板"><Button loading={exporting === 'xlsx'} onClick={() => void exportReport('xlsx')}>下载 Excel</Button><Button loading={exporting === 'pdf'} onClick={() => void exportReport('pdf')}>下载 PDF</Button></div></div>
       {dashboardError ? <Alert type="error" showIcon title="综合看板加载失败，请重试。" action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : dashboardLoading ? <div className="quality-data-loading"><Spin /></div> : dashboard ? <>
         <div className="quality-data-domain-grid">{dashboard.domains.map((domain) => <div className="quality-data-domain" key={domain.domain}><Typography.Text type="secondary">{domain.label}</Typography.Text><strong>{domain.factCount} / {domain.metricCount}</strong><span>有事实 / 指标</span></div>)}</div>
         {dashboard.cards.length ? <Table rowKey={(card) => `${card.domain}-${card.metricCode}`} dataSource={dashboard.cards} pagination={false} scroll={{ x: 1000 }} columns={[{ title: '领域', dataIndex: 'domain' }, { title: '指标', dataIndex: 'metricName', render: (value, card) => `${value} (${card.metricCode})` }, { title: '来源状态', dataIndex: 'status' }, { title: '阈值状态', key: 'signal', render: (_, card) => <Tag color={card.signal === 'RED' ? 'error' : card.signal === 'YELLOW' ? 'warning' : card.signal === 'GREEN' ? 'success' : 'default'}>{signalLabels[card.signal ?? 'NO_DATA']}</Tag> }, { title: '最新值', dataIndex: 'latestValue', render: (value, card) => formatMetric(value, card.unit) }, { title: '异常期间', key: 'abnormal', render: (_, card) => card.consecutiveRedPeriods ? `连续红灯 ${card.consecutiveRedPeriods} 期` : card.abnormalPeriods ? `${card.abnormalPeriods} 期异常` : '—' }, { title: '来源', dataIndex: 'sourceSystem', render: (value) => value ?? '—' }, { title: '统计期间', render: (_, card) => card.periodStart ? `${new Date(String(card.periodStart)).toLocaleDateString('zh-CN')} – ${new Date(String(card.periodEnd)).toLocaleDateString('zh-CN')}` : '—' }]} /> : <Empty description="暂无看板指标" />}

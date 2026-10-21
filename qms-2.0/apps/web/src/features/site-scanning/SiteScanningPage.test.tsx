@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
 import { SiteScanningPage } from './SiteScanningPage';
@@ -53,4 +53,45 @@ it('requires a published rule and a matching code length', async () => {
   fireEvent.click(screen.getByRole('button', { name: '确认扫码' }));
   expect(await screen.findByText('条码格式与规则不符')).toBeVisible();
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/supplier-barcode/scan')).toHaveLength(0));
+});
+
+it('does not send another scan when Enter is pressed while the first scan is pending', async () => {
+  let resolveScan: ((value: unknown) => void) | undefined;
+  let resolveCsrf!: (value: string) => void;
+  vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(resolve => { resolveCsrf = resolve; }));
+  vi.mocked(apiRequest).mockImplementation((path) => {
+    if (path === '/api/v1/system/my-permissions') return Promise.resolve({ permissions: ['supplier-barcode:scan'], organizationId: 'org-1' }) as never;
+    if (path.startsWith('/api/v1/supplier-barcode?')) return Promise.resolve({ items: [rule], total: 1, page: 1, pageSize: 100 }) as never;
+    if (path === '/api/v1/supplier-barcode/scan') return new Promise((resolve) => { resolveScan = resolve; }) as never;
+    throw new Error(`unexpected ${path}`);
+  });
+  render(<SiteScanningPage />);
+  const barcode = await screen.findByLabelText('条码');
+  fireEvent.change(barcode, { target: { value: 'MAT00001' } });
+  fireEvent.keyDown(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  fireEvent.keyUp(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  fireEvent.keyDown(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  fireEvent.keyUp(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  expect(vi.mocked(csrfToken)).toHaveBeenCalledTimes(1);
+  expect(barcode).toBeDisabled();
+  expect(screen.getByLabelText('批次（可选）')).toBeDisabled();
+  expect(screen.getByLabelText('条码规则')).toBeDisabled();
+  expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/supplier-barcode/scan')).toHaveLength(0);
+  await act(async () => resolveCsrf('csrf-token'));
+  await waitFor(() => expect(resolveScan).toBeDefined());
+  fireEvent.keyDown(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  fireEvent.keyUp(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  await waitFor(() => expect(vi.mocked(csrfToken)).toHaveBeenCalled());
+  expect(vi.mocked(csrfToken)).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/supplier-barcode/scan')).toHaveLength(1);
+  await act(async () => resolveScan!({ id: 'scan-1' }));
+  expect(await screen.findByText('MAT00001 已归档')).toBeVisible();
+  fireEvent.change(barcode, { target: { value: 'MAT00002' } });
+  fireEvent.keyDown(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  fireEvent.keyUp(barcode, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/supplier-barcode/scan')).toHaveLength(2));
+  const scans = vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/supplier-barcode/scan');
+  expect(scans[1]?.[1]?.headers).not.toEqual(scans[0]?.[1]?.headers);
+  await act(async () => resolveScan!({ id: 'scan-2' }));
+  expect(await screen.findByText('MAT00002 已归档')).toBeVisible();
 });

@@ -1,6 +1,5 @@
 import { Radio } from 'antd';
 import { useLanguage } from './Language';
-import '../features/account/account.css';
 
 export function TopbarLanguageSwitcher() {
   const { locale, setLocale } = useLanguage();

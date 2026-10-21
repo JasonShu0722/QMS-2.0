@@ -79,7 +79,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     if (pending && !busy.current.size && !dirty.current.size) runConfirmed(pending);
   }, [pending, busyVersion, runConfirmed]);
   useEffect(() => {
-    const protect = (event: BeforeUnloadEvent) => { if (dirty.current.size) { event.preventDefault(); event.returnValue = ''; } };
+    const protect = (event: BeforeUnloadEvent) => { if (dirty.current.size || busy.current.size) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, []);

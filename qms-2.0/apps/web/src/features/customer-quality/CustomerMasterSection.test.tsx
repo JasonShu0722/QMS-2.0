@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
 import { CustomerMasterSection } from './CustomerMasterSection';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
 const spreadsheet = vi.hoisted(() => ({ rows: [] as unknown[][], columns: [{ numFmt: '' }, { numFmt: '' }], writeBuffer: vi.fn(async () => new Uint8Array([1])) }));
 vi.mock('exceljs', () => ({ default: { Workbook: class {
@@ -241,6 +243,18 @@ it('REQ0019 opens create in a modal and never requests a list for write-only per
   fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
   expect(await screen.findByRole('dialog')).toBeInTheDocument();
   expect(apiRequest).not.toHaveBeenCalled();
+});
+
+it('protects an unfinished customer relation when navigating away', async () => {
+  render(<MemoryRouter><UnsavedChangesProvider><CustomerMasterSection /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  await selectCustomer('C-1 · 客户一');
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/customers/customer-1/relations'));
+  fireEvent.change(screen.getByLabelText('关系代码'), { target: { value: 'UNSAVED-PRODUCT' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('关系代码')).toHaveValue('UNSAVED-PRODUCT');
 });
 
 it('REQ0019 saves two write-only customers without requesting a forbidden list', async () => {

@@ -1,7 +1,7 @@
-.supplier-quality-targets-page { display: grid; gap: var(--qms-section-gap);  min-width: 0; }
+.supplier-quality-targets-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-section-gap);  min-width: 0; }
 .supplier-quality-targets-heading { display: flex; justify-content: space-between; gap: var(--qms-section-gap); align-items: flex-start; }
 .supplier-quality-targets-heading h1 { margin: 0 0 var(--qms-section-gap); }
-.supplier-quality-targets-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); }
+.supplier-quality-targets-card { background: var(--qms-surface, #fff); border: 1px solid var(--qms-border, #e1e7ef); border-radius: 10px; padding: var(--qms-card-padding); min-width: 0; }
 .supplier-quality-targets-card .ant-input { margin-top: var(--qms-section-gap); }
 .supplier-quality-targets-flow { margin: var(--qms-section-gap) 0; padding-bottom: var(--qms-section-gap); border-bottom: 1px solid var(--qms-border); }
 .supplier-quality-targets-flow .ant-input { max-width: 220px; }

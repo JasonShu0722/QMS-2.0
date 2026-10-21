@@ -29,20 +29,26 @@ test('shared appearance covers real internal pages and responsive navigation', a
   await page.screenshot({ path: join(tmpdir(), 'qms-ui-workbench-light.png') });
   await page.getByRole('button', { name: '外观设置' }).click();
   for (const mode of ['浅色', '深色']) {
-    await page.getByRole('button', { name: mode, exact: true }).click();
+    await page.getByRole('radio', { name: mode, exact: true }).focus();
+    await page.getByRole('radio', { name: mode, exact: true }).press('Space');
     for (const [name, value] of [['晴空蓝', 'blue'], ['湖水青', 'teal'], ['鸢尾紫', 'purple']]) {
-      await page.getByRole('button', { name, exact: true }).click();
+      await page.getByRole('radio', { name, exact: true }).focus();
+      await page.getByRole('radio', { name, exact: true }).press('Space');
+      await expect(page.getByRole('radio', { name, exact: true })).toBeChecked();
       await expect(page.locator('html')).toHaveAttribute('data-qms-accent', value);
       await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', mode === '浅色' ? 'light' : 'dark');
     }
   }
-  await page.getByRole('button', { name: '晴空蓝', exact: true }).click();
-  await page.getByRole('button', { name: '跟随系统', exact: true }).click();
+  await page.getByRole('radio', { name: '晴空蓝', exact: true }).focus();
+  await page.getByRole('radio', { name: '晴空蓝', exact: true }).press('Space');
+  await page.getByRole('radio', { name: '跟随系统', exact: true }).focus();
+  await page.getByRole('radio', { name: '跟随系统', exact: true }).press('Space');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'light');
-  await page.getByRole('button', { name: '深色', exact: true }).click();
+  await page.getByRole('radio', { name: '深色', exact: true }).focus();
+  await page.getByRole('radio', { name: '深色', exact: true }).press('Space');
   await page.getByRole('dialog').getByRole('button', { name: /close|关闭/i }).click();
   for (const [domain, label, heading] of [['问题中心', '问题管理面板', '问题管理面板'], ['问题中心', '我的待办', '我的待办'], ['供应商质量', '供应商问题台账', '供应商问题台账'], ['供应商质量', '关键件条码校验', '关键件条码校验'], ['制程质量', '不良品台账', '不良品台账'], ['系统服务', '流程设计', '受控流程列表'], ['系统服务', '个人账号', '个人账号'], ['系统服务', '平台管理', '平台管理']]) {
     await page.getByRole('navigation', { name: /内部领域/ }).getByRole('link', { name: domain, exact: true }).click();

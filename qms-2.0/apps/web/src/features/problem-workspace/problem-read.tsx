@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Space, Tag } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -8,9 +8,12 @@ import { attachmentDownload } from '../attachments/attachments';
 export function useProblemRead<Value>(read: (signal: AbortSignal) => Promise<Value>, identity: string) {
   const [state, setState] = useState<{ data?: Value; error?: unknown; loading: boolean }>({ loading: true });
   const [revision, setRevision] = useState(0);
+  const previousIdentity = useRef(identity);
   useEffect(() => {
     const controller = new AbortController();
-    setState({ loading: true });
+    const sameIdentity = previousIdentity.current === identity;
+    previousIdentity.current = identity;
+    setState((current) => ({ data: sameIdentity ? current.data : undefined, loading: true }));
     read(controller.signal).then((data) => { if (!controller.signal.aborted) setState({ data, loading: false }); })
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ error, loading: false }); });
     return () => controller.abort();

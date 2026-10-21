@@ -85,7 +85,7 @@ function AuditAdministrationPanel({ organization }: { organization: AdminOrganiz
       { title: t('详情'), render: (_value, entry) => <Button onClick={() => setSelected(entry)}>{t('详情')}</Button> },
     ]} />
     <div className="governance-toolbar"><Typography.Text>{t('总数')}: {error ? '—' : page?.total ?? '—'}</Typography.Text><Button disabled={loading} onClick={() => { setCursor(undefined); setRevision((value) => value + 1); }}>{t('刷新')}</Button><Button disabled={loading || !!error || !page?.nextCursor} onClick={() => setCursor(page?.nextCursor ?? undefined)}>{t('下一页')}</Button></div>
-    <Modal open={!!selected} title={t('详情')} onCancel={() => setSelected(undefined)} footer={<Button onClick={() => setSelected(undefined)}>{t('关闭')}</Button>}>
+    <Modal open={!!selected} title={t('详情')} onCancel={() => setSelected(undefined)} footer={<div className="qms-dialog-actions" role="group" aria-label={t('详情')}><Button onClick={() => setSelected(undefined)}>{t('关闭')}</Button></div>}>
       {selected ? <Descriptions column={1} items={[{ key: 'summary', label: t('操作人'), children: actorSummary(selected) }, { key: 'actor', label: t('操作者 ID'), children: selected.actorUserId ?? t('未记录操作人') }, { key: 'resource', label: t('资源 ID'), children: selected.resourceId ?? '—' }, { key: 'trace', label: t('追踪标识'), children: <code>{selected.traceId}</code> }, { key: 'metadata', label: t('详情'), children: <pre>{JSON.stringify(selected.metadata, null, 2)}</pre> }]} /> : null}
     </Modal>
   </section>;

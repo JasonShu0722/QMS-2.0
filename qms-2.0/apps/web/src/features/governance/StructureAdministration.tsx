@@ -38,6 +38,7 @@ function StructureScope({ organization }: { organization: AdminOrganization }) {
   const [error, setError] = useState<unknown>();
   const [editor, setEditor] = useState<{ kind: 'department' | 'position'; record?: Department | Position }>();
   const [saving, setSaving] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
   const [userId, setUserId] = useState('');
   const [loadedUserId, setLoadedUserId] = useState<string>();
   const [assignments, setAssignments] = useState<UserPosition[]>([]);
@@ -64,6 +65,7 @@ function StructureScope({ organization }: { organization: AdminOrganization }) {
   const writeRoles = readRoles && manage && organization.permissions.includes('account:roles:assign');
   const readUsers = organization.permissions.includes('account:users:read');
   useNavigationBusy(saving);
+  useUnsavedChanges(!!editor && editorDirty);
   useUnsavedChanges(!!loadedUserId && JSON.stringify([...selectedPositions].sort()) !== JSON.stringify([...expectedPositions].sort()));
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
@@ -88,7 +90,7 @@ function StructureScope({ organization }: { organization: AdminOrganization }) {
     return () => { active = false; controller.abort(); };
   }, [organization.id, organization.permissions, revision]);
   function edit(kind: 'department' | 'position', record?: Department | Position) {
-    form.resetFields(); form.setFieldsValue(record ?? { status: 'ACTIVE' }); setError(undefined); setEditor({ kind, record });
+    form.resetFields(); form.setFieldsValue(record ?? { status: 'ACTIVE' }); setEditorDirty(false); setError(undefined); setEditor({ kind, record });
   }
   async function save(values: { code: string; name: string; parentId?: string; departmentId: string; categoryId?: string; status: 'ACTIVE' | 'DISABLED' }) {
     if (!editor || !manage || pending.current) return;
@@ -99,7 +101,7 @@ function StructureScope({ organization }: { organization: AdminOrganization }) {
     try {
       if (editor.record) await mutate(`${base}/${editor.record.id}`, 'PATCH', { name: values.name, ...detail, status: values.status, expectedVersion: editor.record.version });
       else await mutate(base, 'POST', { code: values.code, name: values.name, ...detail });
-      if (alive.current) { setEditor(undefined); setRevision((value) => value + 1); }
+      if (alive.current) { setEditor(undefined); setEditorDirty(false); form.resetFields(); setRevision((value) => value + 1); }
     } catch (cause) { if (alive.current) setError(cause); } finally { pending.current = false; if (alive.current) setSaving(false); }
   }
   function effectivePositions(entries: UserPosition[]) {
@@ -159,8 +161,8 @@ function StructureScope({ organization }: { organization: AdminOrganization }) {
       { key: 'assignments', label: t('用户任职'), children: <div className="governance-panel"><GovernanceFeedback error={usersError} retry={() => setRevision((value) => value + 1)} />{readUsers ? <Select aria-label={t('用户')} showSearch={{ filterOption: false, onSearch: setUserSearch }} value={userId || undefined} onChange={selectUser} loading={usersLoading} disabled={saving} placeholder={t('用户')} options={users.map((user) => ({ value: user.id, label: `${user.username}${user.email ? ` · ${user.email}` : ''}`, disabled: user.status !== 'ACTIVE' }))} /> : <label>{t('用户')} ID<Input aria-label={`${t('用户')} ID`} value={userId} onChange={(event) => selectUser(event.target.value)} disabled={saving} /></label>}<Button disabled={saving || loading || !userId.trim()} onClick={() => requestLeave(() => void loadAssignments())}>{t('查看任职')}</Button>{loadedUserId ? <><Select aria-label={t('岗位')} mode="multiple" value={selectedPositions} onChange={setSelectedPositions} disabled={!assign || saving || loading || !!assignmentRefreshError} options={positions.map((entry) => ({ value: entry.id, label: entry.name, disabled: entry.status !== 'ACTIVE' || departments.find((department) => department.id === entry.departmentId)?.status !== 'ACTIVE' }))} />{assign ? <Button disabled={saving || loading || !!assignmentRefreshError} loading={saving} onClick={() => void saveAssignments()}>{t('保存任职')}</Button> : null}<Table scroll={{ x: 600 }} rowKey="id" dataSource={assignments} columns={[{ title: t('岗位'), render: (_value, entry) => entry.position.name }, { title: t('开始时间'), dataIndex: 'startedAt', render: (value: string) => new Date(value).toLocaleString(locale) }, { title: t('结束时间'), dataIndex: 'endedAt', render: (value: string | null) => value ? new Date(value).toLocaleString(locale) : t('当前') }]} /></> : null}</div> },
     ]} />
     {rolePosition && readRoles && <PositionRolesDrawer organization={organization} position={rolePosition} canWrite={writeRoles} onClose={() => setRolePosition(undefined)} afterClose={() => roleTrigger.current?.focus()} />}
-    <Modal open={!!editor} title={t(editor?.kind === 'department' ? '部门' : '岗位')} onOk={() => form.submit()} onCancel={() => { if (!pending.current) setEditor(undefined); }} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }}>
-      <GovernanceFeedback error={error} /><Form name="organization-structure-editor" form={form} layout="vertical" onFinish={save} disabled={saving}>
+    <Modal open={!!editor} title={t(editor?.kind === 'department' ? '部门' : '岗位')} onOk={() => form.submit()} onCancel={() => { if (pending.current) return; requestLeave(() => { setEditor(undefined); setEditorDirty(false); form.resetFields(); }); }} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }}>
+      <GovernanceFeedback error={error} /><Form name="organization-structure-editor" form={form} layout="vertical" onValuesChange={() => setEditorDirty(true)} onFinish={save} disabled={saving}>
         {!editor?.record ? <Form.Item name="code" label={t('代码')} rules={[{ required: true }, { pattern: /^[A-Za-z0-9][A-Za-z0-9._-]*$/ }]}><Input maxLength={64} /></Form.Item> : null}
         <Form.Item name="name" label={t('名称')} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
         {editor?.kind === 'department' ? <Form.Item name="parentId" label={t('上级部门')}><Select allowClear options={departments.filter((entry) => entry.status === 'ACTIVE' && entry.id !== editor.record?.id).map((entry) => ({ value: entry.id, label: entry.name }))} /></Form.Item> : <><Form.Item name="departmentId" label={t('部门')} rules={[{ required: true }]}><Select options={departments.filter((entry) => entry.status === 'ACTIVE').map((entry) => ({ value: entry.id, label: entry.name }))} /></Form.Item><Form.Item name="categoryId" label={t('岗位类别')}><Select allowClear options={categories.filter((entry) => entry.status === 'ACTIVE').map((entry) => ({ value: entry.id, label: entry.name }))} /></Form.Item></>}

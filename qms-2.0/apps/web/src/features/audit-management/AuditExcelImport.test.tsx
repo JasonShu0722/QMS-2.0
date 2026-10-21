@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { AuditExcelImport } from './AuditExcelImport';
@@ -33,7 +33,9 @@ it('previews real workbook rows and retries only failed rows with the same key',
   const attempts = vi.mocked(apiRequest).mock.calls;
   expect(attempts).toHaveLength(2);
   const failedKey = (attempts[1]![1]!.headers as Record<string, string>)['Idempotency-Key'];
-  fireEvent.click(screen.getByRole('button', { name: /重试未成功行/ }));
+  const retryButton = screen.getByRole('button', { name: /重试未成功行/ });
+  await waitFor(() => { expect(retryButton).toBeEnabled(); expect(retryButton).not.toHaveClass('ant-btn-loading'); });
+  fireEvent.click(retryButton);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(3));
   expect((vi.mocked(apiRequest).mock.calls[2]![1]!.headers as Record<string, string>)['Idempotency-Key']).toBe(failedKey);
   expect(JSON.parse(vi.mocked(apiRequest).mock.calls[2]![1]!.body as string)).toMatchObject({ externalKey: 'b', organizationId: 'org-a' });
@@ -60,4 +62,26 @@ it('stops the remaining rows and clears workbook data on permission denial', asy
   await waitFor(() => expect(denied).toHaveBeenCalled());
   expect(apiRequest).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('敏感发现')).toBeNull();
+});
+
+it('blocks another retry while the original failed row is still being retried', async () => {
+  let completeRetry!: (value: unknown) => void;
+  const retry = new Promise((resolve) => { completeRetry = resolve; });
+  vi.mocked(apiRequest).mockRejectedValueOnce(new Error('offline')).mockReturnValue(retry);
+  render(<AuditExcelImport organizationId="org-a" onImported={vi.fn()} onDenied={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText('审核 Excel 文件'), { target: { files: [await workbookFile([['CUSTOMER', 'a', '重试发现']])] } });
+  await screen.findByText('重试发现');
+  fireEvent.click(screen.getByRole('button', { name: '导入待处理行' }));
+  await screen.findByText('结果未知，请使用原请求重试');
+  const button = screen.getByRole('button', { name: '重试未成功行' });
+  await waitFor(() => { expect(button).toBeEnabled(); expect(button).not.toHaveClass('ant-btn-loading'); });
+  fireEvent.click(button);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(2));
+  const disabledDuringRetry = button.hasAttribute('disabled');
+  await act(async () => { fireEvent.click(button); });
+  const attemptsDuringRetry = vi.mocked(apiRequest).mock.calls.length;
+  await act(async () => { completeRetry({ id: 'row-a' }); await retry; });
+  await screen.findByText('已导入');
+  expect(disabledDuringRetry).toBe(true);
+  expect(attemptsDuringRetry).toBe(2);
 });

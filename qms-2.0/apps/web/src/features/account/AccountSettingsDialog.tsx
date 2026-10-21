@@ -70,7 +70,7 @@ export function AccountSettingsDialog({ profile, overview, onProfile, onAvatar, 
     finally { if (current(request)) { pending.current = false; setSaving(false); } }
   }
   function close() { if (!pending.current && !avatarState.busy && !signatureState.busy) requestLeave(() => setOpen(false), true); }
-  return <Modal open={open} title={t('个人信息设置')} width={680} destroyOnHidden onCancel={close} afterClose={() => { onClose(); afterClose(); }} keyboard={!busy} closable={!busy} mask={{ closable: !busy }} footer={<Button aria-label={t('关闭个人信息设置')} disabled={busy} onClick={close}>{t('关闭')}</Button>} className="qms-account-settings">
+  return <Modal open={open} title={t('个人信息设置')} width={680} destroyOnHidden onCancel={close} afterClose={() => { onClose(); afterClose(); }} keyboard={!busy} closable={!busy} mask={{ closable: !busy }} footer={<div className="qms-dialog-actions" role="group" aria-label={t('个人信息设置')}><Button aria-label={t('关闭个人信息设置')} disabled={busy} onClick={close}>{t('关闭')}</Button></div>} className="qms-account-settings">
     <GovernanceFeedback error={error} />
     {conflict && <Button disabled={busy} onClick={() => void reloadBaseline()}>{t('读取最新资料基线')}</Button>}
     {success && <Alert type="success" title={t('资料已保存')} role="status" />}

@@ -2,7 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Timeline, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
-import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-concession.css';
 
 type Concession = components['schemas']['ConcessionRecordDto'];
@@ -87,9 +87,19 @@ function CreateConcessionModal({ close, saved }: { close: () => void; saved: () 
   const [error, setError] = useState<string>();
   const [dirty, setDirty] = useState(false);
   const key = useRef<string | undefined>(undefined);
+  const pending = useRef(false);
+  const requestLeave = useNavigationGuard();
   useUnsavedChanges(dirty);
+  useNavigationBusy(busy);
+
+  function cancel() {
+    if (busy || pending.current) return;
+    requestLeave(() => { form.resetFields(); setDirty(false); setError(undefined); key.current = undefined; close(); }, true);
+  }
 
   async function create(values: CreateConcession) {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true); setError(undefined);
     try {
       key.current ??= crypto.randomUUID();
@@ -98,17 +108,17 @@ function CreateConcessionModal({ close, saved }: { close: () => void; saved: () 
       await mutation<Concession>(basePath, { ...values, expiresAt: expiresAt.toISOString() }, key.current);
       key.current = undefined; setDirty(false); form.resetFields(); saved();
     } catch (cause) { setError(errorText(cause, '特采申请创建失败，请重试')); }
-    finally { setBusy(false); }
+    finally { pending.current = false; setBusy(false); }
   }
 
-  return <Modal open title="发起特采申请" footer={null} onCancel={close} closable={!busy} mask={{ closable: false }}>
+  return <Modal open title="发起特采申请" footer={null} onCancel={cancel} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
     <Typography.Paragraph type="secondary">填写已完成且结论为 NG 的 IQC 检验记录 ID；审批仅针对该检验版本、批次、数量和有效期。提交后由另一名有权限的人员审批。</Typography.Paragraph>
     {error ? <Alert type="error" showIcon title={error} /> : null}
     <Form form={form} layout="vertical" disabled={busy} onValuesChange={() => { setDirty(true); key.current = undefined; }} onFinish={(values) => void create(values)}>
       <Form.Item name="inspectionId" label="IQC 检验记录 ID" rules={[{ required: true, message: '请输入 IQC 检验记录 ID' }, { type: 'string', pattern: /^[0-9a-f-]{36}$/i, message: '请输入有效的 UUID' }]}><Input placeholder="已完成的 NG 检验 UUID" /></Form.Item>
       <div className="supplier-concession-form-grid"><Form.Item name="quantity" label="特采数量" rules={[{ required: true, type: 'number', min: 1, message: '请输入特采数量' }]}><InputNumber min={1} precision={0} /></Form.Item><Form.Item name="expiresAt" label="有效期至" rules={[{ required: true, message: '请选择有效期' }]}><Input type="datetime-local" /></Form.Item></div>
       <Form.Item name="reason" label="偏差及风险评估依据" rules={[{ required: true, whitespace: true, message: '请填写特采依据' }]}><Input.TextArea rows={4} maxLength={2000} showCount /></Form.Item>
-      <Space><Button onClick={close}>取消</Button><Button type="primary" htmlType="submit" loading={busy}>保存草稿</Button></Space>
+      <Space><Button disabled={busy} onClick={cancel}>取消</Button><Button type="primary" htmlType="submit" loading={busy}>保存草稿</Button></Space>
     </Form>
   </Modal>;
 }
@@ -122,7 +132,18 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
   const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const key = useRef<string | undefined>(undefined);
+  const pending = useRef(false);
+  const requestLeave = useNavigationGuard();
   useUnsavedChanges(!!action && !!note.trim());
+  useNavigationBusy(busy);
+  function closeDrawer() {
+    if (busy || pending.current) return;
+    requestLeave(close, true);
+  }
+  function cancelAction() {
+    if (busy || pending.current) return;
+    requestLeave(() => { setAction(undefined); setNote(''); setActionError(undefined); key.current = undefined; }, true);
+  }
 
   async function load() {
     setLoading(true); setError(undefined);
@@ -133,7 +154,8 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
   useEffect(() => { void load(); }, [id]);
 
   async function run(target: Action, decisionNote?: string) {
-    if (!record) return;
+    if (!record || pending.current) return;
+    pending.current = true;
     setBusy(true); setActionError(undefined);
     try {
       key.current ??= crypto.randomUUID();
@@ -141,12 +163,12 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
       await mutation<Concession>(`${basePath}/${id}/${target}`, body, key.current);
       key.current = undefined; setAction(undefined); setNote(''); await load(); changed();
     } catch (cause) { setActionError(errorText(cause, '操作失败，请重试')); }
-    finally { setBusy(false); }
+    finally { pending.current = false; setBusy(false); }
   }
 
   const actions = record ? <Space wrap>{record.canSubmit ? <Button type="primary" disabled={busy} onClick={() => void run('submit')}>提交审批</Button> : null}{record.canApprove ? <><Button type="primary" disabled={busy} onClick={() => { setAction('approve'); setActionError(undefined); }}>批准</Button><Button danger disabled={busy} onClick={() => { setAction('reject'); setActionError(undefined); }}>驳回</Button></> : null}{record.canRelease ? <Button type="primary" disabled={busy} onClick={() => { setAction('release'); setActionError(undefined); }}>登记批次放行</Button> : null}{record.canWithdraw ? <Button disabled={busy} onClick={() => void run('withdraw')}>撤回申请</Button> : null}</Space> : null;
 
-  return <Drawer open title="特采申请详情" width={680} onClose={close}>
+  return <Drawer open title="特采申请详情" width={680} onClose={closeDrawer} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
     {loading ? <div className="supplier-concession-loading"><Spin /></div> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => void load()}>重试</Button>} /> : record ? <div className="supplier-concession-detail">
       {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
       <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" items={[
@@ -161,9 +183,9 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
       {actions}
       <section><Typography.Title level={4}>操作轨迹</Typography.Title><Timeline items={record.events.map((event) => ({ children: <span>{labels[event.eventType] ?? event.eventType} · 第 {event.requestVersion} 版 · {new Date(event.createdAt).toLocaleString('zh-CN')}{event.note ? ` · ${event.note}` : ''}</span> }))} /></section>
     </div> : <Empty description="特采申请不存在或无权访问" />}
-    <Modal open={!!action} title={action === 'approve' ? '批准特采申请' : action === 'reject' ? '驳回特采申请' : '登记批次放行'} onCancel={() => { if (!busy) { setAction(undefined); setNote(''); key.current = undefined; } }} onOk={() => { if (action && note.trim()) void run(action, note); }} okButtonProps={{ disabled: !note.trim(), loading: busy }} okText="确认" cancelText="取消" mask={{ closable: false }}>
+    <Modal open={!!action} title={action === 'approve' ? '批准特采申请' : action === 'reject' ? '驳回特采申请' : '登记批次放行'} onCancel={cancelAction} closable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => { if (action && note.trim()) void run(action, note); }} okButtonProps={{ disabled: !note.trim(), loading: busy }} okText="确认" cancelText="取消" mask={{ closable: false }}>
       {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
-      <Input.TextArea aria-label="处理意见" rows={4} maxLength={2000} showCount placeholder="请说明审批结论或批次放行依据" value={note} onChange={(event) => { setNote(event.target.value); key.current = undefined; }} />
+      <Input.TextArea aria-label="处理意见" disabled={busy} rows={4} maxLength={2000} showCount placeholder="请说明审批结论或批次放行依据" value={note} onChange={(event) => { setNote(event.target.value); key.current = undefined; }} />
     </Modal>
   </Drawer>;
 }

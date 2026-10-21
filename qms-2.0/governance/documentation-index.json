@@ -389,10 +389,10 @@
       "canonical": true,
       "status": "active",
       "review": {
-        "owner": "QMS 工程维护者（账号与全页密度返修）",
-        "reviewedOn": "2026-10-20",
+        "owner": "QMS 工程维护者（基础交互体系设计评审）",
+        "reviewedOn": "2026-10-21",
         "maxAgeDays": 90,
-        "reason": "复核REQ-0022/0023实际本地实现与两区账号、个人设置、只读角色详情及冲突草稿保护；保留原密度与门户边界。后端已测与前端待验分开记录，不把源码存在或历史部署当作上线证据。",
+        "reason": "负责人批准全量现有页面在本地展开；已复核统一规范的恢复与提交边界、102个正式TSX覆盖记录及8组样例来源。单元、源码审查、真实浏览器与人工业务验收分层记录；推送前等待负责人仓库处理确认，不更改远端可见性、计费或生产。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -408,7 +408,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "198e5e1dbe3d275c5d80a4552094258c24931e2dbf8f5ddd2dd48c490445cde9"
+            "sha256": "a812f28a5406b8e80ce75112906bd1688a38af6311d703929696513fcee7c781"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -425,6 +425,22 @@
           {
             "path": "../docs/superpowers/plans/2026-10-19-qms-profile-position-role.md",
             "sha256": "b4abceaaf6750bac519e6f2de22d7679fbab02593319050ad29fbb395455aaed"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-21-qms-interaction-system-design.md",
+            "sha256": "f44350b01f49d404d90ddcb1c9a19ac223b44b063583acfee6e47d11d1496085"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md",
+            "sha256": "7c4f222092b5f82177a883cfa0f9d9f4949f4df0033e74df2b8ac98197e8d79d"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-21-qms-interaction-foundation.md",
+            "sha256": "9f8b9c09ed9ecc34d3fc6bd07f471676e0c9985dfc7991d76aeb701d795ce7ec"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-21-qms-all-pages-interaction.md",
+            "sha256": "99b30e5649e7185e59d59fbf443c385503699c8f8d0b3102d36260f1313a399e"
           }
         ]
       }

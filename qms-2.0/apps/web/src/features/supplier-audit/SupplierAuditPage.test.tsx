@@ -1,8 +1,10 @@
 import { expect, it, vi, afterEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { SupplierAuditPage } from './SupplierAuditPage';
 import * as client from '../../api/client';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
 vi.mock('../../api/client', async (importOriginal) => ({ ...(await importOriginal<typeof client>()), apiRequest: vi.fn(), csrfToken: vi.fn().mockResolvedValue('csrf') }));
 const request = vi.mocked(client.apiRequest);
@@ -19,6 +21,37 @@ function server(permissions: string[]) {
   });
 }
 afterEach(() => vi.clearAllMocks());
+
+it('keeps the audit closure note when closing the drawer is declined', async () => {
+  server(['supplier-audit:records:read', 'supplier-audit:records:close']);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierAuditPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '检查项与动作' }));
+  const drawer = await screen.findByRole('dialog', { name: '供应商审核检查项' });
+  fireEvent.change(await within(drawer).findByLabelText('关闭说明'), { target: { value: '已完成现场核查，尚待最终确认' } });
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(within(drawer).getByLabelText('关闭说明')).toHaveValue('已完成现场核查，尚待最终确认');
+  expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/close'), expect.objectContaining({ method: 'PUT' }));
+});
+
+it('keeps the audit drawer open while closure is pending', async () => {
+  server(['supplier-audit:records:read', 'supplier-audit:records:close']);
+  const original = request.getMockImplementation()!;
+  let finish!: () => void;
+  const pending = new Promise<never>((resolve) => { finish = () => resolve(record as never); });
+  request.mockImplementation(async (path, init, ...rest) => path.endsWith('/close') ? pending : original(path, init, ...rest));
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierAuditPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '检查项与动作' }));
+  fireEvent.change(await screen.findByLabelText('关闭说明'), { target: { value: '现场证据完整' } });
+  fireEvent.click(screen.getByRole('button', { name: '关闭审核' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/records/record-1/close', expect.objectContaining({ method: 'PUT' })));
+  try {
+    const close = within(screen.getByRole('dialog', { name: '供应商审核检查项' })).queryByRole('button', { name: 'Close' });
+    if (close) fireEvent.click(close);
+    expect(screen.getByRole('dialog', { name: '供应商审核检查项' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '放弃修改并关闭' })).not.toBeInTheDocument();
+  } finally { await act(async () => { finish(); await pending; }); }
+});
 
 it('shows the plan workflow and uses the audit conclusion contract', async () => {
   server(['supplier-audit:plans:read', 'supplier-audit:plans:write', 'supplier-audit:records:read', 'supplier-audit:records:write', 'supplier-audit:records:close']);

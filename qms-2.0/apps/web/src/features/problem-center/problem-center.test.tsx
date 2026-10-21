@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
@@ -193,4 +193,17 @@ it('does not duplicate a pending write or render its result after switching orga
 
   await waitFor(() => expect(screen.queryByRole('option', { name: '迟到视图' })).not.toBeInTheDocument());
   expect(screen.getByLabelText('组织上下文')).toHaveValue('organization-c');
+});
+
+it('names the personal view and explains the delete scope before sending DELETE', async () => {
+  vi.mocked(api.getProblemViews).mockResolvedValue({ items: [savedView], total: 1 });
+  renderPage('/app/problem-center?organizationId=organization-b');
+  fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
+  fireEvent.click(screen.getByRole('button', { name: '删除视图' }));
+  const dialog = await screen.findByRole('tooltip');
+  expect(dialog).toHaveTextContent('我的逾期问题');
+  expect(dialog).toHaveTextContent('个人视图');
+  expect(dialog).toHaveTextContent('问题');
+  fireEvent.click(within(dialog).getByRole('button', { name: /^取\s*消$/ }));
+  expect(api.deleteProblemView).not.toHaveBeenCalled();
 });

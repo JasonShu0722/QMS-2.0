@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { SupplierQualityPage } from './SupplierQualityPage';
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -51,6 +52,31 @@ it('keeps an unsaved internal response when the separate problem form is saved',
 
 const issuedProblem = { id: '11111111-1111-4111-8111-111111111111', version: 3, profileId: '22222222-2222-4222-8222-222222222222', supplierOrganizationId: '33333333-3333-4333-8333-333333333333', supplierName: '企业', title: '来料问题', materialCode: 'MAT', defectDescription: '氧化', defectQuantity: 2, severity: 'HIGH', responseForm: 'BRIEF', replyMode: 'SUPPLIER', stage: 'ISSUED', problemStatus: 'OPEN', updatedAt: new Date().toISOString(), canEditFacts: false, canEditResponse: true, availableActions: ['SUBMIT'], responseDraft: {} };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+it('protects the supplier response when returning to the ledger and leaves only after discard', async () => {
+  const fetchMock = vi.fn(async (path: string, _options?: RequestInit) => json(path.includes(issuedProblem.id) ? issuedProblem : { items: [], total: 0, canCreateDraft: false }));
+  vi.stubGlobal('fetch', fetchMock);
+  render(<MemoryRouter initialEntries={[`/supplier/corrections/problems/${issuedProblem.id}`]}><UnsavedChangesProvider><SupplierQualityPage portal /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText('根本原因'), { target: { value: '尚未提交的根本原因' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回台账' }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('根本原因')).toHaveValue('尚未提交的根本原因');
+  fireEvent.click(screen.getByRole('link', { name: '返回台账' }));
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  expect(await screen.findByText('尚未收到问题单')).toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+});
+
+it('protects unsaved problem facts when returning to the ledger', async () => {
+  const draft = { ...issuedProblem, stage: 'DRAFT', canEditFacts: true, canEditResponse: false, problemStatus: undefined };
+  vi.stubGlobal('fetch', vi.fn(async () => json(draft)));
+  render(<MemoryRouter initialEntries={[`/app/supplier-quality/problems/${draft.id}`]}><UnsavedChangesProvider><SupplierQualityPage /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText('问题标题'), { target: { value: '尚未保存的问题事实' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回台账' }));
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('问题标题')).toHaveValue('尚未保存的问题事实');
+  expect(screen.getByRole('button', { name: '正式发单' })).toBeDisabled();
+});
 
 it('submits a supplier reply with the generated contract and refreshes to read-only progress', async () => {
   let submitted = false;

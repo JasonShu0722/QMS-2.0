@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { ProcessDefectLedgerPage } from './ProcessDefectLedgerPage';
 
@@ -31,6 +32,19 @@ it('loads the defect ledger and opens source detail with linked issues', async (
   expect(await screen.findByText('来源详情')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`);
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`);
+});
+
+it('protects an unfinished process issue when navigating away', async () => {
+  render(<MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
+  await screen.findByText('表面划伤');
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择制程不良 表面划伤' }));
+  fireEvent.click(screen.getByRole('button', { name: '发起问题' }));
+  fireEvent.change(screen.getByLabelText('实例标识'), { target: { value: '尚未发单' } });
+  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
+  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
+  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByLabelText('实例标识')).toHaveValue('尚未发单');
 });
 
 it('keeps selected sources and form entries after a version conflict, then reuses the idempotency key', async () => {

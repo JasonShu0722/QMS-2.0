@@ -1,8 +1,9 @@
 import { Alert, Button, Card, Empty, Input, Select, Space, Spin, Tag, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { components } from '@qms/contracts';
 import { useLanguage } from '../../i18n/Language';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
+import { useNavigationBusy } from '../../layouts/UnsavedChanges';
 import './site-scanning.css';
 
 type Rule = { id: string; title: string; materialCode: string; prefix: string; codeLength: number; status: string; version: number };
@@ -20,6 +21,8 @@ export function SiteScanningPage() {
   const [error, setError] = useState<unknown>();
   const [result, setResult] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  useNavigationBusy(busy);
   const [retryBody, setRetryBody] = useState<{ ruleId: string; barcode: string; batchCode?: string }>();
   const [key, setKey] = useState<string>();
   const available = useMemo(() => rules.filter((rule) => rule.status === 'PUBLISHED'), [rules]);
@@ -36,23 +39,25 @@ export function SiteScanningPage() {
   }, []);
 
   async function scan(body = retryBody ?? { ruleId: selected!, barcode: code.trim(), ...(batch.trim() ? { batchCode: batch.trim() } : {}) }) {
+    if (pending.current) return;
     const rule = available.find((item) => item.id === body.ruleId);
     if (!rule || body.barcode.length !== rule.codeLength || !body.barcode.startsWith(rule.prefix)) { setError(new Error('条码格式与规则不符')); return; }
+    pending.current = true;
     const nextKey = key ?? crypto.randomUUID(); setKey(nextKey); setRetryBody(body); setBusy(true); setError(undefined);
     try {
       await apiRequest('/api/v1/supplier-barcode/scan', { method: 'POST', headers: { 'x-csrf-token': await csrfToken(), 'Idempotency-Key': nextKey }, body: JSON.stringify(body) });
       setResult(`${body.barcode} 已归档`); setCode(''); setBatch(''); setRetryBody(undefined); setKey(undefined);
-    } catch (cause) { setError(cause); } finally { setBusy(false); }
+    } catch (cause) { setError(cause); } finally { pending.current = false; setBusy(false); }
   }
 
   if (loading) return <main className="site-scanning-page"><Spin /> </main>;
   if (error && denied(error)) return <main className="site-scanning-page"><Alert type="warning" showIcon title="暂无现场扫码权限" /></main>;
   return <main className="site-scanning-page"><Typography.Title level={1}>{t('关键件条码校验')}</Typography.Title>
-    {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}
+    {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button disabled={busy} onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}
     <Card><Space orientation="vertical" style={{ width: '100%' }} size={6}>
-      {!available.length ? <Empty description="暂无已发布条码规则" /> : <><Select aria-label="条码规则" value={selected} onChange={setSelected} options={available.map((rule) => ({ value: rule.id, label: `${rule.title} · ${rule.materialCode}` }))} />
-        <Input aria-label="条码" autoFocus value={code} onChange={(event) => setCode(event.target.value)} onPressEnter={() => void scan()} placeholder="扫描或输入条码" />
-        <Input aria-label="批次（可选）" value={batch} onChange={(event) => setBatch(event.target.value)} placeholder="批次（可选）" />
+      {!available.length ? <Empty description="暂无已发布条码规则" /> : <><Select aria-label="条码规则" disabled={busy} value={selected} onChange={setSelected} options={available.map((rule) => ({ value: rule.id, label: `${rule.title} · ${rule.materialCode}` }))} />
+        <Input aria-label="条码" disabled={busy} autoFocus value={code} onChange={(event) => setCode(event.target.value)} onPressEnter={() => void scan()} placeholder="扫描或输入条码" />
+        <Input aria-label="批次（可选）" disabled={busy} value={batch} onChange={(event) => setBatch(event.target.value)} placeholder="批次（可选）" />
         <Button type="primary" disabled={!code.trim() || busy} loading={busy} onClick={() => void scan()}>确认扫码</Button></>}
       {result ? <Tag color="green">{result}</Tag> : null}
     </Space></Card></main>;

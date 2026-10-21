@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Modal, Table, Typography } from 'antd';
 import { apiRequest, csrfToken } from '../../api/client';
 import type { AdminOrganization } from '../admin/admin';
@@ -17,6 +17,11 @@ export function OutboxAdministration({ organization }: { organization: AdminOrga
   const [selected, setSelected] = useState<string>();
   const [history, setHistory] = useState<{ id: string; attemptNumber: number; outcome: string; reasonCode?: string; occurredAt: string; retryAt?: string }[]>();
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyGeneration = useRef(0);
+  useEffect(() => {
+    setHistory(undefined); setSelected(undefined); setHistoryLoading(false);
+    return () => { historyGeneration.current += 1; };
+  }, [organization.id]);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
@@ -34,12 +39,17 @@ export function OutboxAdministration({ organization }: { organization: AdminOrga
     finally { setRetrying(false); }
   }
   async function showHistory(id: string) {
+    const generation = ++historyGeneration.current;
     setHistoryLoading(true); setError(undefined); setSelected(id); setHistory([]);
     try {
       const result = await apiRequest<{ items: typeof history }>(`/api/v1/outbox/failures/${id}/attempts?organizationId=${organization.id}`);
-      setHistory(result.items ?? []);
-    } catch (cause) { setError(cause); }
-    finally { setHistoryLoading(false); }
+      if (generation === historyGeneration.current) setHistory(result.items ?? []);
+    } catch (cause) { if (generation === historyGeneration.current) setError(cause); }
+    finally { if (generation === historyGeneration.current) setHistoryLoading(false); }
+  }
+  function closeHistory() {
+    historyGeneration.current += 1;
+    setHistory(undefined); setSelected(undefined); setHistoryLoading(false);
   }
   return <section className="governance-panel" aria-label={t('失败队列')}>
     <GovernanceFeedback error={error} retry={() => setRevision((value) => value + 1)} />
@@ -51,7 +61,7 @@ export function OutboxAdministration({ organization }: { organization: AdminOrga
     ]} />
     <div className="governance-toolbar"><Typography.Text>{t('总数')}: {error ? '—' : page?.total ?? '—'}</Typography.Text><Button disabled={loading || retrying} onClick={() => setRevision((value) => value + 1)}>{t('刷新')}</Button><Button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 25))}>{t('上一页')}</Button><Button disabled={loading || !!error || offset + 25 >= (page?.total ?? 0)} onClick={() => setOffset(offset + 25)}>{t('下一页')}</Button></div>
     <Modal open={!!selected && !history} title={t('确认重试此事件？')} okText={t('重试')} cancelText={t('取消')} confirmLoading={retrying} cancelButtonProps={{ disabled: retrying }} closable={!retrying} maskClosable={!retrying} onCancel={() => setSelected(undefined)} onOk={() => void retry()}><GovernanceFeedback error={error} />{t('提交后由后台任务重新处理。')}</Modal>
-    <Modal open={!!history} title={t('通知尝试回执')} footer={null} onCancel={() => { setHistory(undefined); setSelected(undefined); }}>
+    <Modal open={!!history} title={t('通知尝试回执')} footer={null} onCancel={closeHistory}>
       <Table rowKey="id" loading={historyLoading} pagination={false} dataSource={history ?? []} columns={[{ title: t('尝试'), dataIndex: 'attemptNumber' }, { title: t('结果'), dataIndex: 'outcome' }, { title: t('原因'), dataIndex: 'reasonCode' }, { title: t('时间'), dataIndex: 'occurredAt', render: (value: string) => new Date(value).toLocaleString(locale) }]} />
     </Modal>
   </section>;

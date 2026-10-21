@@ -6,6 +6,7 @@ import { readXlsxFile } from '../imports/read-xlsx';
 import { scopePath } from './admin';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
 type Row = components['schemas']['AdminUserBatchRowDto'];
 type Body = components['schemas']['CreateAdminUserBatchDto'];
@@ -32,12 +33,14 @@ export function parseUserBatchRows(sheet: readonly (readonly unknown[])[]): Row[
 
 function safeCell(value: string) { return /^[=+\-@]/.test(value) ? `'${value}` : value; }
 
-export function UserBatchCreate({ organizationId, canReadPasswords = true }: { organizationId: string; canReadPasswords?: boolean }) {
+type BatchProps = { organizationId: string; canReadPasswords?: boolean; busyChanged?: (busy: boolean) => void };
+
+export function UserBatchCreate({ organizationId, canReadPasswords = true, busyChanged }: BatchProps) {
   const identity = useWorkTabsStore((state) => state.sessionScope);
-  return <BatchForm key={`${identity}:${organizationId}:${canReadPasswords}`} organizationId={organizationId} canReadPasswords={canReadPasswords} />;
+  return <BatchForm key={`${identity}:${organizationId}:${canReadPasswords}`} organizationId={organizationId} canReadPasswords={canReadPasswords} busyChanged={busyChanged} />;
 }
 
-function BatchForm({ organizationId, canReadPasswords }: { organizationId: string; canReadPasswords: boolean }) {
+function BatchForm({ organizationId, canReadPasswords, busyChanged }: BatchProps & { canReadPasswords: boolean }) {
   const { t } = useLanguage();
   const [rows, setRows] = useState<Row[]>([]);
   const [result, setResult] = useState<Result>();
@@ -47,7 +50,11 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
   const inFlight = useRef(false);
   const requestVersion = useRef(0);
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
+  useUnsavedChanges(rows.length > 0 && !result);
+  useNavigationBusy(busy);
+  function reportBusy(value: boolean) { setBusy(value); busyChanged?.(value); }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; requestVersion.current++; }; }, []);
+  useEffect(() => () => busyChanged?.(false), [busyChanged]);
   async function readFile(file: File) {
     const version = ++requestVersion.current;
     setRows([]); setResult(undefined); setError(undefined); pending.current = undefined;
@@ -57,7 +64,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
   async function submit() {
     if (inFlight.current || !rows.length || result) return;
     inFlight.current = true;
-    setBusy(true); setError(undefined);
+    reportBusy(true); setError(undefined);
     try {
       const body: Body = { organizationId, rows };
       const signature = JSON.stringify(body);
@@ -65,7 +72,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
       const response = await apiRequest<Result>('/api/v1/admin/users/batch', { method: 'POST', headers: { 'x-csrf-token': await csrfToken(), 'Idempotency-Key': pending.current.key }, body: signature });
       if (mounted.current) setResult(response);
     } catch (cause) { if (mounted.current) setError(safeAccountError(cause)); }
-    finally { inFlight.current = false; if (mounted.current) setBusy(false); }
+    finally { inFlight.current = false; if (mounted.current) reportBusy(false); }
   }
   async function currentPassword(row: ResultRow): Promise<TemporaryPassword> {
     if (!row.userId || !canReadPasswords) throw new Error('无权读取临时密码');
@@ -76,7 +83,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
   }
   async function copy(row: ResultRow, password: boolean) {
     if (inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError(undefined);
+    inFlight.current = true; reportBusy(true); setError(undefined);
     try {
       const refreshed = password ? await currentPassword(row) : undefined;
       if (refreshed && refreshed.status !== 'AVAILABLE') return;
@@ -89,7 +96,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
         setError(safeAccountError(cause));
       }
     }
-    finally { inFlight.current = false; if (mounted.current) setBusy(false); }
+    finally { inFlight.current = false; if (mounted.current) reportBusy(false); }
   }
   async function saveWorkbook(values: (string | number)[][], name: string) {
     const ExcelJS = (await import('exceljs')).default;
@@ -108,7 +115,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
   }
   async function download(passwordsOnly: boolean) {
     if (!result || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError(undefined);
+    inFlight.current = true; reportBusy(true); setError(undefined);
     try {
       const values: (string | number)[][] = [passwordsOnly ? ['行号', '用户名', '临时密码'] : ['行号', '用户名', '状态', '错误']];
       for (const row of result.rows) {
@@ -120,7 +127,7 @@ function BatchForm({ organizationId, canReadPasswords }: { organizationId: strin
       }
       await saveWorkbook(values, passwordsOnly ? '有效临时密码.xlsx' : '账号清单.xlsx');
     } catch (cause) { if (mounted.current) setError(safeAccountError(cause)); }
-    finally { inFlight.current = false; if (mounted.current) setBusy(false); }
+    finally { inFlight.current = false; if (mounted.current) reportBusy(false); }
   }
   return <section aria-label="批量创建账号">
     <Typography.Paragraph>上传首表，按行创建内部账号。有效临时密码仅在当前受保护页面显示，不写入浏览器存储。</Typography.Paragraph>

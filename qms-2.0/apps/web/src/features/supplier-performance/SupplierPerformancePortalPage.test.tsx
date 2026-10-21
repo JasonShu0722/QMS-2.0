@@ -1,6 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { fireEvent, render as renderView, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
+import { LanguageProvider } from '../../i18n/Language';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { SupplierPerformancePortalPage } from './SupplierPerformancePortalPage';
 
 vi.mock('../../api/client', async () => {
@@ -8,7 +13,42 @@ vi.mock('../../api/client', async () => {
   return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn() };
 });
 
-beforeEach(() => { vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset(); vi.mocked(csrfToken).mockResolvedValue('csrf-test'); });
+const render = (ui: ReactElement) => renderView(ui, { wrapper: LanguageProvider });
+beforeEach(() => {
+  // rc-component uses duplicate IDs in test mode, unlike the application.
+  vi.stubEnv('NODE_ENV', 'development');
+  localStorage.setItem('qms:locale:v1', 'zh-CN');
+  vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset(); vi.mocked(csrfToken).mockResolvedValue('csrf-test');
+});
+afterEach(() => vi.unstubAllEnvs());
+
+it('keeps the supplier appeal reason when closing is cancelled and discards only after confirmation', async () => {
+  const user = userEvent.setup();
+  vi.mocked(apiRequest).mockImplementation(async (path) => String(path).includes('/cards?')
+    ? { items: [{ id: 'card-1', month: '2026-09', status: 'PUBLISHED', sourceInspections: [] }], total: 1 } as never
+    : { items: [], total: 0 } as never);
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierPerformancePortalPage /></UnsavedChangesProvider></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: '提出申诉' }));
+  const modal = await screen.findByRole('dialog', { name: '申诉 2026-09 绩效卡' });
+  await waitFor(() => expect(modal).toBeVisible());
+  await user.click(within(modal).getByRole('textbox', { name: '申诉说明' }));
+  await user.paste('待核查的检验批次');
+  expect(within(modal).getByRole('textbox', { name: '申诉说明' })).toHaveValue('待核查的检验批次');
+  await user.click(within(modal).getByRole('button', { name: '关闭' }));
+  const confirmation = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
+  await waitFor(() => expect(confirmation).toBeVisible());
+  await user.click(within(confirmation).getByRole('button', { name: '继续编辑' }));
+  await waitFor(() => expect(confirmation).not.toBeVisible());
+  expect(within(modal).getByRole('textbox', { name: '申诉说明' })).toHaveValue('待核查的检验批次');
+  await user.click(within(modal).getByRole('button', { name: '关闭' }));
+  await user.click(await screen.findByRole('button', { name: '放弃修改并关闭' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '申诉 2026-09 绩效卡' })).not.toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: '提出申诉' }));
+  const reopened = await screen.findByRole('dialog', { name: '申诉 2026-09 绩效卡' });
+  await waitFor(() => expect(reopened).toBeVisible());
+  expect(within(reopened).getByRole('textbox', { name: '申诉说明' })).toHaveValue('');
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
+});
 
 it('shows published cards and submits a supplier appeal with CSRF', async () => {
   vi.mocked(apiRequest).mockImplementation(async (path) => {
