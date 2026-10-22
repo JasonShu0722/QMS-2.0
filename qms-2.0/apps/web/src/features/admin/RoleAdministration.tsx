@@ -10,7 +10,7 @@ import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../
 
 type RoleForm = components['schemas']['CreateAdminRoleDto'];
 
-export function RoleAdministration({ organization }: { organization: AdminOrganization }) {
+export function RoleAdministration({ organization, readOnly = false }: { organization: AdminOrganization; readOnly?: boolean }) {
   const { t, locale } = useLanguage();
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogGroup[]>([]);
@@ -38,9 +38,9 @@ export function RoleAdministration({ organization }: { organization: AdminOrgani
   const scope = useRef(organization.id);
   scope.current = organization.id;
   const canRead = allows(organization, 'roles:read');
-  const canCreate = canRead && allows(organization, 'roles:create');
-  const canUpdate = canRead && allows(organization, 'roles:update');
-  const canDelete = canRead && allows(organization, 'roles:delete');
+  const canCreate = !readOnly && canRead && allows(organization, 'roles:create');
+  const canUpdate = !readOnly && canRead && allows(organization, 'roles:update');
+  const canDelete = !readOnly && canRead && allows(organization, 'roles:delete');
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     let current = true; setLoading(true); setError(undefined); setRoles([]); setCatalog([]);
@@ -96,6 +96,7 @@ export function RoleAdministration({ organization }: { organization: AdminOrgani
     finally { if (alive.current && scope.current === organizationId) setBusy(false); }
   }
   return <>
+    {readOnly && <Alert type="info" showIcon title={t('新授权请在岗位中维护；历史记录仅供查看。')} />}
     {error && !editing && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
     {success && <Alert type="success" title={t(success)} showIcon />}
       {canCreate && <div className="admin-toolbar"><Button type="primary" disabled={busy || loading} onClick={() => edit('new')}>{t('创建角色')}</Button></div>}

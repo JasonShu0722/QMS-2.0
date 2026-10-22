@@ -18,11 +18,15 @@ const render = (ui: ReactNode) => renderUI(ui, { wrapper: MemoryRouter });
 function assignment(id: string, target: typeof position, startedAt = '2020-01-01T00:00:00Z', endedAt: string | null = null): components['schemas']['UserPositionDto'] {
   return { id, userId: user.id, organizationId: org.id, positionId: target.id, position: target, startedAt, endedAt };
 }
+const preview = (positionIds: string[], authorizationBaseline = 'preview-baseline'): components['schemas']['PositionAuthorizationPreviewDto'] => ({
+  authorizationBaseline, positions: positionIds.map(id => ({ id, code: position.code, name: position.name, department: { id: department.id, code: department.code, name: department.name }, version: 1, roleVersion: 1, permissionCodes: [], mfaRequired: false, historicalSources: [] })), effectivePermissionCodes: [], effectiveMfaRequired: false, retainedSources: [],
+});
 function stub(entries: components['schemas']['UserPositionDto'][] = [], positions = [position], departments = [department]) {
   const requests: Array<[string, RequestInit | undefined]> = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input); requests.push([path, init]);
     if (path.includes('/admin/users?')) return json([user]);
+    if (path.endsWith('/position-authorization/preview')) return json(preview(JSON.parse(init!.body as string).positionIds));
     if (path.includes('/users/') && path.includes('/positions')) return json(entries);
     if (path.endsWith('/departments?limit=100&offset=0')) return json(departments);
     if (path.endsWith('/positions?limit=100&offset=0')) return json(positions);
@@ -63,16 +67,20 @@ it('uses temporal and enabled structure facts for both selection and the CAS bas
   await openAssignments();
   await userEvent.type(screen.getByRole('textbox', { name: '用户 ID' }), user.id);
   await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
-  const selector = await screen.findByRole('combobox', { name: '岗位' });
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
   const selected = selector.closest('.ant-select')!;
-  expect(within(selected as HTMLElement).getByText(position.name)).toBeInTheDocument();
-  expect(within(selected as HTMLElement).queryByText(future.name)).not.toBeInTheDocument();
-  expect(within(selected as HTMLElement).queryByText(ended.name)).not.toBeInTheDocument();
-  expect(within(selected as HTMLElement).queryByText(disabled.name)).not.toBeInTheDocument();
-  expect(within(selected as HTMLElement).queryByText(blocked.name)).not.toBeInTheDocument();
+  expect(within(selected as HTMLElement).getByText(`${position.name} · ${position.code}`)).toBeInTheDocument();
+  expect(within(selected as HTMLElement).queryByText(`${future.name} · ${future.code}`)).not.toBeInTheDocument();
+  expect(within(selected as HTMLElement).queryByText(`${ended.name} · ${ended.code}`)).not.toBeInTheDocument();
+  expect(within(selected as HTMLElement).queryByText(`${disabled.name} · ${disabled.code}`)).not.toBeInTheDocument();
+  expect(within(selected as HTMLElement).queryByText(`${blocked.name} · ${blocked.code}`)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '保存任职' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled());
   await userEvent.click(screen.getByRole('button', { name: '保存任职' }));
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(true));
-  expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string)).toEqual({ positionIds: [position.id], expectedPositionIds: [position.id] });
+  expect(JSON.parse(requests.find(([path]) => path.endsWith('/position-authorization/preview'))![1]!.body as string)).toEqual({ positionIds: [position.id], targetUserId: user.id });
+  expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string)).toEqual({ positionIds: [position.id], expectedPositionIds: [position.id], authorizationBaseline: 'preview-baseline' });
 });
 
 it('ignores appointment reads from the previous organization and clears the selected user', async () => {
@@ -105,8 +113,8 @@ it('follows all structure pages before determining the assignment baseline', asy
   await openAssignments();
   await userEvent.type(screen.getByRole('textbox', { name: '用户 ID' }), user.id);
   await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
-  const selector = await screen.findByRole('combobox', { name: '岗位' });
-  expect(within(selector.closest('.ant-select') as HTMLElement).getByText(position.name)).toBeInTheDocument();
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
+  expect(within(selector.closest('.ant-select') as HTMLElement).getByText(`${position.name} · ${position.code}`)).toBeInTheDocument();
   expect(requests.some(([path]) => path.endsWith('/departments?limit=100&offset=100'))).toBe(true);
 });
 
@@ -156,12 +164,15 @@ async function removeCurrentAssignment() {
   await openAssignments();
   await userEvent.type(screen.getByRole('textbox', { name: '用户 ID' }), user.id);
   await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
-  const selector = await screen.findByRole('combobox', { name: '岗位' });
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
   const selection = selector.closest('.ant-select') as HTMLElement;
-  expect(within(selection).getByText(position.name)).toBeInTheDocument();
+  expect(within(selection).getByText(`${position.name} · ${position.code}`)).toBeInTheDocument();
   await userEvent.click(selector);
   await userEvent.keyboard('{Backspace}{Escape}');
-  await waitFor(() => expect(within(selection).queryByText(position.name)).not.toBeInTheDocument());
+  await waitFor(() => expect(within(selection).queryByText(`${position.name} · ${position.code}`)).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: '保存任职' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled());
   await userEvent.click(screen.getByRole('button', { name: '保存任职' }));
 }
 
@@ -211,9 +222,63 @@ it('accepts the committed appointment baseline before a temporary refresh failur
   expect(await screen.findByText('任职已保存，但列表刷新失败。请重新加载任职后再编辑。')).toBeInTheDocument();
   const save = screen.getByRole('button', { name: '保存任职' });
   expect(save).toBeDisabled();
-  expect(screen.getByRole('combobox', { name: '岗位' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: '任职岗位' })).toBeDisabled();
   await userEvent.click(save);
   expect(api.requests.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
   expect(screen.getByLabelText('route')).toHaveTextContent(/^\/$/);
   expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org-a:administrator');
+}, 30000);
+
+
+it('reloads a concurrently changed appointment baseline without discarding the assignment draft', async () => {
+  const concurrent = { ...position, id: 'position-b', code: 'QB', name: '并发新任职' };
+  const { requests, fetchMock } = stub([assignment('active', position)], [position, concurrent]);
+  const original = fetchMock.getMockImplementation()!;
+  let previews = 0;
+  let writes = 0;
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input).endsWith('/position-authorization/preview')) {
+      requests.push([String(input), init]);
+      return Promise.resolve(json(preview(JSON.parse(init!.body as string).positionIds, `preview-${++previews}`)));
+    }
+    if (init?.method === 'PUT') { requests.push([String(input), init]); return Promise.resolve(++writes === 1 ? json({ code: 'CONCURRENCY_CONFLICT' }, 409) : json([])); }
+    if (writes && String(input).includes('/users/user-a/positions')) {
+      requests.push([String(input), init]);
+      return Promise.resolve(json(writes === 1 ? [assignment('concurrent', concurrent)] : []));
+    }
+    return original(input, init);
+  });
+  render(<LanguageProvider><StructureAdministration organization={org} /></LanguageProvider>);
+  await openAssignments();
+  await userEvent.type(screen.getByRole('textbox', { name: '用户 ID' }), user.id);
+  await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
+  const save = screen.getByRole('button', { name: '保存任职' });
+  expect(save).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(save).toBeEnabled());
+  await userEvent.click(selector);
+  await userEvent.keyboard('{Backspace}{Escape}');
+  expect(save).toBeDisabled();
+  expect(screen.queryByRole('region', { name: '权限预览' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(save).toBeEnabled());
+  await userEvent.click(save);
+  await waitFor(() => expect(requests.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1));
+  await waitFor(() => expect(save).toBeDisabled());
+  expect(within(selector.closest('.ant-select') as HTMLElement).queryByText(`${position.name} · ${position.code}`)).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: '权限预览' })).not.toBeInTheDocument();
+  expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string)).toEqual({ positionIds: [], expectedPositionIds: [position.id], authorizationBaseline: 'preview-2' });
+  await userEvent.click(await screen.findByRole('button', { name: '读取最新任职基线' }));
+  await screen.findByRole('cell', { name: concurrent.name });
+  expect(within(selector.closest('.ant-select') as HTMLElement).queryByText(`${concurrent.name} · ${concurrent.code}`)).not.toBeInTheDocument();
+  expect(save).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(save).toBeEnabled());
+  expect(previews).toBe(3);
+  await userEvent.click(save);
+  await waitFor(() => expect(writes).toBe(2));
+  expect(JSON.parse(requests.filter(([, init]) => init?.method === 'PUT')[1][1]!.body as string)).toEqual({ positionIds: [], expectedPositionIds: [concurrent.id], authorizationBaseline: 'preview-3' });
+  await waitFor(() => expect(save).toBeDisabled());
+  expect(screen.queryByRole('button', { name: '读取最新任职基线' })).not.toBeInTheDocument();
 }, 30000);

@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { AdminRoleDto } from '../authorization/admin-role.dto.js';
 
 export class OrganizationDto {
@@ -76,6 +76,12 @@ export class ReplaceUserPositionsDto {
   @ApiProperty({ type: [String], maxItems: 100 }) @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true }) expectedPositionIds!: string[];
 }
 
+export class ReplaceUserPositionsWithPreviewDto extends ReplaceUserPositionsDto {
+  @ApiProperty({ minLength: 1, maxLength: 256, description: '岗位授权预览返回的完整基线。' })
+  @IsString() @Length(1, 256)
+  authorizationBaseline!: string;
+}
+
 export class ReplacePositionRolesDto {
   @ApiProperty({ type: [String], maxItems: 100 }) @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true }) roleIds!: string[];
   @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedRoleVersion!: number;
@@ -85,6 +91,24 @@ export class PositionRolesDto {
   @ApiProperty() positionId!: string;
   @ApiProperty() roleVersion!: number;
   @ApiProperty({ type: [AdminRoleDto] }) roles!: AdminRoleDto[];
+  @ApiProperty({ description: 'Distinct users with currently effective appointments' }) effectiveAssigneeCount!: number;
+  @ApiProperty({ description: 'The committed mutation invalidated the acting session; reauthenticate without resubmitting' }) selfSessionRevoked!: boolean;
+}
+
+export class UpdatePositionPermissionsDto {
+  @ApiProperty({ type: [String], maxItems: 500 }) @IsArray() @ArrayMaxSize(500) @ArrayUnique() @IsString({ each: true }) @Length(1, 150, { each: true }) permissionCodes!: string[];
+  @ApiProperty({ type: [String], maxItems: 500 }) @IsArray() @ArrayMaxSize(500) @ArrayUnique() @IsString({ each: true }) @Length(1, 150, { each: true }) expectedPermissionCodes!: string[];
+  @ApiProperty() @IsBoolean() mfaRequired!: boolean;
+  @ApiProperty() @IsBoolean() expectedMfaRequired!: boolean;
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedRoleVersion!: number;
+}
+
+export class PositionPermissionsDto {
+  @ApiProperty() positionId!: string;
+  @ApiProperty() roleVersion!: number;
+  @ApiProperty({ type: [String] }) permissionCodes!: string[];
+  @ApiProperty() mfaRequired!: boolean;
+  @ApiProperty({ type: [AdminRoleDto] }) legacyRoles!: AdminRoleDto[];
   @ApiProperty({ description: 'Distinct users with currently effective appointments' }) effectiveAssigneeCount!: number;
   @ApiProperty({ description: 'The committed mutation invalidated the acting session; reauthenticate without resubmitting' }) selfSessionRevoked!: boolean;
 }

@@ -5,6 +5,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import type { components } from '@qms/contracts';
 import { completeMfa } from './mfa-login';
 import { fillSecret } from './secret-input';
+import { createPositionGrant, createPositionUser, positionWrite, replacePositionAppointments, retirePositionGrant, type PositionGrant } from './position-fixture';
 import { mailCredential } from '../playwright-security/mail-credential.mjs';
 
 type Schema = components['schemas'];
@@ -73,6 +74,7 @@ test('D/F/H real configuration, position hierarchy, audit export and language na
     await page.locator('.ant-select-item-option').filter({ hasText: categoryName }).click();
     const position = await saveDialog(page, '/positions') as Schema['PositionDto']; expect(position.departmentId).toBe(department.id);
     await page.getByRole('tab', { name: '管理审计', exact: true }).click();
+    await page.getByRole('button', { name: '更多筛选', exact: true }).click();
     await page.getByLabel('资源 ID', { exact: true }).fill(department.id);
     const filtered = page.waitForResponse((entry) => entry.url().includes('/audit-events?') && entry.url().includes(department.id));
     await page.getByRole('button', { name: /^查\s*询$/ }).click(); expect((await filtered).status()).toBe(200);
@@ -81,8 +83,7 @@ test('D/F/H real configuration, position hierarchy, audit export and language na
     const stream = await (await download).createReadStream(); expect(Boolean(stream)).toBe(true);
     const bytes: Buffer[] = []; for await (const chunk of stream!) bytes.push(Buffer.from(chunk));
     const csv = Buffer.concat(bytes).toString(); expect(csv).toContain(department.id); expect(csv).not.toMatch(/passwordHash|encryptedSecret|tokenHash/);
-    await page.getByRole('button', { name: 'Language / 语言' }).click();
-    await page.getByRole('menuitemradio', { name: 'English' }).click();
+    await page.getByRole('radiogroup', { name: 'Language / 语言' }).getByRole('radio', { name: 'EN', exact: true }).check();
     await expect(page.getByRole('tab', { name: 'Audit log', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Users', exact: true }).click(); await expect(page.getByRole('button', { name: 'Create user', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Language / 语言' }).click();
@@ -108,11 +109,10 @@ async function mailToken(email: string, subject: string) {
 test('E real MFA enrollment, verified email and SMTP password recovery preserve MFA', async ({ page, playwright }) => {
   const client = await playwright.request.newContext({ baseURL }); const organization = await admin(client);
   const username = `mail_${unique()}`; const email = `${username}@example.test`; const password = `${randomUUID()}Aa9!`;
-  let user: Schema['AdminUserDto'] | undefined; let role: Schema['AdminRoleDto'] | undefined;
+  let user: Schema['AdminUserDto'] | undefined; let grant: PositionGrant | undefined;
   try {
-    const created = await write(client, 'admin/users', 'POST', { username, email, initialPassword: password, organizationId: organization.id, accountType: 'INTERNAL' }); expect(created.status()).toBe(201); user = await created.json();
-    const roleResponse = await write(client, 'admin/roles', 'POST', { organizationId: organization.id, code: `MAIL_${unique()}`, name: username, mfaRequired: true, permissionCodes: [] }); expect(roleResponse.status()).toBe(201); role = await roleResponse.json();
-    expect((await write(client, `admin/users/${user!.id}/roles?organizationId=${organization.id}`, 'PUT', { roleIds: [role!.id] })).status()).toBe(200);
+    grant = await createPositionGrant(client, organization.id, { name: username, mfaRequired: true, permissionCodes: [] });
+    user = await createPositionUser(client, organization.id, [grant.position.id], { username, email, initialPassword: password });
     await login(page, username, password); await page.goto('/mfa');
     const requested = page.waitForResponse((entry) => entry.url().endsWith('/me/email-verification'));
     await page.getByRole('button', { name: '发送确认邮件', exact: true }).click(); expect((await requested).status()).toBe(202);
@@ -130,7 +130,12 @@ test('E real MFA enrollment, verified email and SMTP password recovery preserve 
     const status = await page.request.get('/api/v1/me/security'); expect(status.status()).toBe(200); expect((await status.json()).mfaEnabled).toBe(true);
     expect((await write(page.request, 'auth/password-recovery/complete', 'POST', { token, newPassword: `${randomUUID()}Cc7!` })).status()).toBe(400);
   } finally {
-    if (user) { await write(client, `admin/users/${user.id}/roles?organizationId=${organization.id}`, 'PUT', { roleIds: [] }); await write(client, `admin/users/${user.id}?organizationId=${organization.id}`, 'PATCH', { status: 'DISABLED' }); }
-    if (role) await write(client, `admin/roles/${role.id}?organizationId=${organization.id}`, 'DELETE'); await client.dispose();
+    try {
+      if (user) {
+        await replacePositionAppointments(client, organization.id, user.id, []);
+        await positionWrite(client, `/api/v1/admin/users/${user.id}?organizationId=${organization.id}`, 'PATCH', { status: 'DISABLED' });
+      }
+      if (grant) await retirePositionGrant(client, organization.id, grant);
+    } finally { await client.dispose(); }
   }
 });

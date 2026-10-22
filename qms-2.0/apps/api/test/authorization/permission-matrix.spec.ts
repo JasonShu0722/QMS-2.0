@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
+import { AdminMutationService, assertAdminAccess } from '../../src/common/security/admin-mutation.service.js';
 import { AdminRoleService } from '../../src/modules/authorization/admin-role.service.js';
 import { AdminUserService } from '../../src/modules/identity/admin-user.service.js';
 import { ADMIN_PERMISSIONS } from '../../src/modules/authorization/permission-catalog.js';
@@ -27,7 +27,12 @@ describe('granular administration permissions', () => {
   const passwords = { hash: jest.fn() };
   const resets = { issue: jest.fn() };
   const mutations = new AdminMutationService(prisma as never, audit as never);
-  const users = new AdminUserService(prisma as never, passwords as never, audit as never, mutations, resets as never);
+  const appointmentPermissions = ['organization:structure:read', 'organization:positions:assign', 'account:roles:read', 'account:roles:assign'];
+  const onboarding = {
+    authorizeInitialPositions: () => assertAdminAccess(prisma as never, actor, actor.organizationId, appointmentPermissions),
+    createWithInitialPositions: async (_tx: unknown, _actor: unknown, _org: unknown, _input: unknown, _trace: unknown, create: () => Promise<unknown>) => create(),
+  };
+  const users = new AdminUserService(prisma as never, passwords as never, audit as never, mutations, resets as never, undefined as never, onboarding as never);
   const roles = new AdminRoleService(prisma as never, audit as never, mutations);
   beforeEach(() => {
     jest.resetAllMocks();
@@ -53,7 +58,6 @@ describe('granular administration permissions', () => {
   });
 
   const userActions = {
-    create: () => users.create(actor, { organizationId: 'org', username: 'new', accountType: 'INTERNAL', initialPassword: 'password' }, 'trace', 'matrix-key'),
     update: () => users.update(actor, 'target', { email: 'new@example.test', expectedProfileVersion: 1 }, 'org', 'trace', 'matrix-key'),
     status: () => users.update(actor, 'target', { status: 'DISABLED' }, 'org', 'trace', 'matrix-key'),
     transfer: () => users.update(actor, 'target', { accountType: 'INTERNAL' }, 'org', 'trace', 'matrix-key'),
@@ -65,6 +69,14 @@ describe('granular administration permissions', () => {
     for (const other of Object.keys(userActions) as (keyof typeof userActions)[]) {
       if (other !== operation) await expect(userActions[other]()).rejects.toMatchObject({ status: 403 });
     }
+  });
+  it('does not treat account creation permission as authority to assign a position', async () => {
+    const create = () => users.create(actor, { organizationId: 'org', username: 'new', accountType: 'INTERNAL', initialPassword: 'password', positionIds: ['position'], authorizationBaseline: 'preview' }, 'trace', 'matrix-key');
+    granted = ['account:users:create'];
+    await expect(create()).rejects.toMatchObject({ status: 403 });
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    granted.push(...appointmentPermissions);
+    await expect(create()).resolves.toBeDefined();
   });
   const roleActions = {
     create: () => roles.create(actor, { organizationId: 'org', code: 'NEW', name: 'New', permissionCodes: [] }, 'trace', 'matrix-key'),

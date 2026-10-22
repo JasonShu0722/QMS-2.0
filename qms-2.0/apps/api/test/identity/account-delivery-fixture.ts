@@ -31,6 +31,19 @@ export async function accountDeliveryFixture() {
   const cookie = `qms_session=${sessionToken}; qms_csrf=${csrf}`;
   const post = (path: string, body: object = {}, key = randomUUID(), customCookie = cookie) => request(app.getHttpServer()).post(`/api/v1${path}`).set('Cookie', customCookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
   const target = () => prisma.user.create({ data: { organizationId: organization.id, username: `target-${randomUUID()}`, accountType: 'INTERNAL', passwordHash: actor.passwordHash } });
+  let initialPositionId: string | undefined;
+  const onboarding = async () => {
+    for (const code of ['organization:structure:read', 'organization:positions:assign']) {
+      const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
+      await prisma.rolePermission.upsert({ where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } }, create: { roleId: role.id, permissionId: permission.id }, update: {} });
+    }
+    if (!initialPositionId) {
+      const department = await prisma.department.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Delivery department' } });
+      initialPositionId = (await prisma.position.create({ data: { organizationId: organization.id, departmentId: department.id, code: randomUUID(), name: 'Empty legacy position' } })).id;
+    }
+    const response = await post(`/organizations/${organization.id}/position-authorization/preview`, { positionIds: [initialPositionId] }).expect(200);
+    return { positionIds: [initialPositionId], authorizationBaseline: response.body.authorizationBaseline as string };
+  };
   const reset = (userId: string, body: object = {}, key = randomUUID()) => post(`/admin/users/${userId}/temporary-password/reset`, body, key);
   const read = (userId: string) => post(`/admin/users/${userId}/temporary-password/read`);
   const login = (identifier: string, suppliedPassword: string) => post('/auth/login', { identifier, password: suppliedPassword });
@@ -40,11 +53,15 @@ export async function accountDeliveryFixture() {
   };
   const close = async () => {
     await prisma.auditEvent.deleteMany({ where: { organizationId: organization.id } });
+    await prisma.userPosition.deleteMany({ where: { organizationId: organization.id } });
+    await prisma.positionRole.deleteMany({ where: { organizationId: organization.id } });
+    await prisma.position.deleteMany({ where: { organizationId: organization.id } });
+    await prisma.department.deleteMany({ where: { organizationId: organization.id } });
     await prisma.user.deleteMany({ where: { organizationId: organization.id } });
     await prisma.organization.delete({ where: { id: organization.id } });
     await app.close();
   };
-  return { app, prisma, actor, organization, password, cookie, csrf, post, target, reset, read, login, challengeCookie, close };
+  return { app, prisma, actor, organization, password, cookie, csrf, post, target, reset, read, login, challengeCookie, close, onboarding };
 }
 
 export type AccountDeliveryFixture = Awaited<ReturnType<typeof accountDeliveryFixture>>;

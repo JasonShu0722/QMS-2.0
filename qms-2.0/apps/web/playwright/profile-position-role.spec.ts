@@ -4,6 +4,7 @@ import { test as base, expect, type APIRequestContext, type Locator, type Page }
 import type { components } from '@qms/contracts';
 import { completeMfa } from './mfa-login';
 import { fillSecret } from './secret-input';
+import { choosePosition, confirmPositionPreview, createPositionGrant, createPositionUser, replacePositionAppointments, retirePositionGrant, type PositionGrant } from './position-fixture';
 
 // 仅供已启动的一次性真实网关；从 apps/web 使用既有 config，主代理以单 worker 执行。
 // 必需：QMS_ACCEPTANCE_BASE_URL（或 PLAYWRIGHT_BASE_URL）、DATABASE_URL、两门户 seed 密码、Git 外加密 MFA cache 和密钥。
@@ -77,6 +78,8 @@ async function rowWith(scope: Locator, page: Page, name: string) {
     const next = scope.getByTitle('下一页', { exact: true });
     if (!await next.count() || (await next.getAttribute('class'))?.includes('ant-pagination-disabled')) break;
     const active = await scope.locator('.ant-pagination-item-active').getAttribute('title');
+    await next.scrollIntoViewIfNeeded();
+    await page.mouse.wheel(0, 180);
     await next.click();
     await expect(scope.locator('.ant-pagination-item-active')).not.toHaveAttribute('title', active!);
   }
@@ -116,8 +119,8 @@ const test = base.extend<{ admin: Schema['AdminOrganizationDto'] }>({
     const organizations = await read<Schema['AdminOrganizationDto'][]>(page.request, '/api/v1/admin/organizations');
     const organization = organizations.find(entry => entry.id === me.organization.id && entry.type === 'INTERNAL');
     const required = ['organization:structure:read', 'organization:structure:manage', 'organization:positions:assign',
-      'account:users:read', 'account:users:create', 'account:users:status', 'account:roles:read', 'account:roles:create',
-      'account:roles:delete', 'account:roles:assign', 'task:read'];
+      'account:users:read', 'account:users:create', 'account:users:status', 'account:roles:read', 'account:roles:update',
+      'account:roles:assign', 'task:read'];
     if (!organization || required.some(code => !organization.permissions.includes(code))) {
       throw new Error('Internal seed must have the required same-organization structure, appointment, user and role permissions.');
     }
@@ -262,181 +265,188 @@ test('REQ22 internal: signature summary exposes label/status/times without finge
   }
 });
 
-test('REQ22 C2: save position roles and appointments in UI; direct/position sources; revoke old session', async ({ page, browser, admin }) => {
+// 历史 DIRECT + POSITION 同角色去重/逐源撤销由真实 PG effective-role-consumers、position-role-governance 保留；不重开旧写 API。
+test('REQ22/24 C2: UI position permissions and concurrent appointments; distinct POSITION sources, deduplicated permissions and session revocation', async ({ page, browser, admin }) => {
   test.setTimeout(240_000);
   const client = page.request;
   const organizationPath = `/api/v1/organizations/${admin.id}`;
   const secret = `${randomUUID()}Aa9!`;
-  const created: { user?: Schema['AdminUserDto']; department?: Schema['DepartmentDto']; position?: Schema['PositionDto']; role?: Schema['AdminRoleDto'] } = {};
+  const created: { user?: Schema['AdminUserDto']; grants: PositionGrant[] } = { grants: [] };
   let hasPrimaryError = false;
-  let phase = '准备真实角色、账号、部门和岗位';
+  let phase = '准备真实部门和岗位自有权限';
   const probe = await browser.newContext({ baseURL });
   try {
-    const { role, user, position } = await test.step(phase, async () => {
-      const role = created.role = await writeJSON<Schema['AdminRoleDto']>(client, '/api/v1/admin/roles', 'POST', { organizationId: admin.id, code: unique('BrowserRole'), name: unique('Browser Role'), permissionCodes: ['task:read'], mfaRequired: false }, 201);
-      const user = created.user = await writeJSON<Schema['AdminUserDto']>(client, '/api/v1/admin/users', 'POST', { organizationId: admin.id, username: unique('browser_user'), initialPassword: secret, accountType: 'INTERNAL' }, 201);
-      const department = created.department = await writeJSON<Schema['DepartmentDto']>(client, `${organizationPath}/departments`, 'POST', { code: unique('BDEP'), name: unique('Browser Department') }, 201);
-      const position = created.position = await writeJSON<Schema['PositionDto']>(client, `${organizationPath}/positions`, 'POST', { code: unique('BPOS'), name: unique('Browser Position'), departmentId: department.id }, 201);
-      await writeJSON<Schema['AdminUserRolesDto']>(client, pathFor(`users/${user.id}/roles`, admin.id), 'PUT', { roleIds: [role.id] });
-      return { role, user, position };
+    const [first, second] = await test.step(phase, async () => {
+      const first = await createPositionGrant(client, admin.id, { name: unique('Browser Position A'), permissionCodes: [] });
+      created.grants.push(first);
+      const second = await createPositionGrant(client, admin.id, { name: unique('Browser Position B'), permissionCodes: ['task:read'] });
+      created.grants.push(second);
+      return [first, second] as const;
     });
-    const mappingPath = `${organizationPath}/positions/${position.id}/roles`;
-    const openMapping = async () => {
-      const positionRow = await rowWith(page.getByRole('tabpanel', { name: '岗位', exact: true }), page, position.name);
-      await positionRow.getByRole('button', { name: '岗位角色', exact: true }).click();
-      const drawer = page.getByRole('dialog', { name: `${position.name} · 岗位角色`, exact: true });
-      await expect(drawer.getByRole('combobox', { name: '岗位角色', exact: true })).toBeEnabled();
-      return drawer;
-    };
-    await test.step(phase = '通过管理界面保存岗位角色映射', async () => {
+    await test.step(phase = '通过岗位权限界面授予任务读取权限', async () => {
       await page.goto('/app/admin');
       await page.getByRole('tab', { name: '部门岗位', exact: true }).click();
       await page.getByRole('tab', { name: '岗位', exact: true }).click();
-      const drawer = await openMapping();
-      await expect(drawer.getByText('岗位角色保存后，当前有效任职会自动生效。', { exact: true })).toBeVisible();
-      await drawer.getByRole('combobox', { name: '岗位角色', exact: true }).click();
-      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: role.name }).click();
-      await drawer.getByText('岗位角色保存后，当前有效任职会自动生效。', { exact: true }).click();
-      const pending = page.waitForResponse(response => new URL(response.url()).pathname === mappingPath && response.request().method() === 'PUT');
+      const positionRow = await rowWith(page.getByRole('tabpanel', { name: '岗位', exact: true }), page, first.position.name);
+      await positionRow.getByRole('button', { name: '岗位权限', exact: true }).click();
+      const drawer = page.getByRole('dialog', { name: `${first.position.name} · 岗位权限`, exact: true });
+      await expect(drawer.getByText('岗位权限保存后，当前有效任职会自动生效。', { exact: true })).toBeVisible();
+      await drawer.getByRole('textbox', { name: '搜索权限', exact: true }).fill('task:read');
+      await drawer.getByRole('checkbox', { name: /任务.*查看授权任务/ }).check();
+      const permissionPath = `${organizationPath}/positions/${first.position.id}/permissions`;
+      const pending = page.waitForResponse(response => new URL(response.url()).pathname === permissionPath && response.request().method() === 'PUT');
       await drawer.getByRole('button', { name: '保存', exact: true }).click();
       expect((await pending).status()).toBe(200);
-      const configuration = await read<Schema['PositionRolesDto']>(client, mappingPath);
-      expect(configuration.roles.map(entry => entry.id)).toEqual([role.id]);
-      await drawer.getByRole('combobox', { name: '岗位角色', exact: true }).focus();
+      expect((await read<Schema['PositionPermissionsDto']>(client, permissionPath)).permissionCodes).toEqual(['task:read']);
+      await drawer.getByRole('textbox', { name: '搜索权限', exact: true }).focus();
       await page.keyboard.press('Escape');
       await expect(drawer).not.toBeVisible();
     });
-    await test.step(phase = '通过管理界面保存任职并核对双来源', async () => {
-      await page.getByRole('tab', { name: '用户任职', exact: true }).click();
-      const userSelect = page.getByRole('combobox', { name: '用户', exact: true });
-      await userSelect.fill(user.username);
-      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: user.username }).click();
-      await page.getByRole('button', { name: '查看任职', exact: true }).click();
-      await page.getByRole('combobox', { name: '岗位', exact: true }).click();
-      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: position.name }).click();
-      await page.getByRole('combobox', { name: '岗位', exact: true }).press('Escape');
-      const assignmentPath = `${organizationPath}/users/${user.id}/positions`;
-      const pending = page.waitForResponse(response => new URL(response.url()).pathname === assignmentPath && response.request().method() === 'PUT');
-      await page.getByRole('button', { name: '保存任职', exact: true }).click();
-      expect((await pending).status()).toBe(200);
-      await expect(page.getByRole('tabpanel', { name: '用户任职', exact: true }).getByRole('row').filter({ has: page.getByText(position.name, { exact: true }) })).toBeVisible();
+    const user = created.user = await createPositionUser(client, admin.id, [first.position.id], { username: unique('browser_user'), initialPassword: secret });
+    await page.goto('/app/admin');
+    await page.getByRole('tab', { name: '用户', exact: true }).click();
+    await page.getByLabel('搜索用户', { exact: true }).fill(user.username);
+    await page.getByLabel('搜索用户', { exact: true }).press('Enter');
+    const userRow = page.getByRole('row').filter({ has: page.getByText(user.username, { exact: true }) });
+    const openAppointments = async () => {
+      await userRow.getByRole('button', { name: /^调\s*岗$/ }).click();
+      const dialog = page.getByRole('dialog', { name: `${user.username} · 用户任职`, exact: true });
+      await expect(dialog.getByRole('combobox', { name: '任职岗位', exact: true })).toBeEnabled();
+      return dialog;
+    };
+    const saveAppointments = async (dialog: Locator, expectedPositionIds: string[], positionIds: string[]) => {
+      await confirmPositionPreview(page, dialog, admin.id);
+      const pending = page.waitForResponse(response => new URL(response.url()).pathname === `${organizationPath}/users/${user.id}/positions` && response.request().method() === 'PUT');
+      await dialog.getByRole('button', { name: '保存任职', exact: true }).click();
+      const saved = await pending;
+      expect(saved.status()).toBe(200);
+      const body = saved.request().postDataJSON() as Schema['ReplaceUserPositionsWithPreviewDto'];
+      expect([...body.expectedPositionIds].sort()).toEqual([...expectedPositionIds].sort());
+      expect([...body.positionIds].sort()).toEqual([...positionIds].sort());
+      expect(body.authorizationBaseline).toBeTruthy();
+      await expect(dialog).not.toBeVisible();
+    };
+    await test.step(phase = '通过管理界面兼岗并核对两岗位来源及权限去重', async () => {
+      const dialog = await openAppointments();
+      await choosePosition(page, dialog, second.position);
+      await saveAppointments(dialog, [first.position.id], [first.position.id, second.position.id]);
       const roles = await read<Schema['AdminUserRolesDto']>(client, pathFor(`users/${user.id}/roles`, admin.id));
-      expect(roles.roles.map(entry => entry.id)).toEqual([role.id]);
-      expect(roles.effectiveRoles.filter(entry => entry.id === role!.id)).toHaveLength(1);
-      expect(roles.effectiveRoles.find(entry => entry.id === role!.id)?.sources).toEqual(expect.arrayContaining([{ kind: 'DIRECT' }, expect.objectContaining({ kind: 'POSITION', positionId: position.id })]));
-    });
-    await test.step(phase = '核对管理页直接与岗位继承来源', async () => {
-      // 管理页也须显示继承来源，并明确继承不写入直接角色选择器。
-      await page.getByRole('tab', { name: '用户', exact: true }).click();
-      await page.getByLabel('搜索用户', { exact: true }).fill(user.username);
-      await page.getByLabel('搜索用户', { exact: true }).press('Enter');
-      const userRow = page.getByRole('row').filter({ has: page.getByText(user.username, { exact: true }) });
-      await userRow.getByRole('button', { name: '分配角色', exact: true }).click();
-      const sources = page.getByRole('dialog', { name: `${user.username} · 组织角色`, exact: true });
-      await expect(sources.getByText('岗位继承角色只读，不会保存为直接分配。', { exact: true })).toBeVisible();
-      await expect(sources.getByText('直接分配', { exact: true })).toBeVisible();
-      await expect(sources.getByText(`岗位继承 · ${position.id}`, { exact: true })).toBeVisible();
+      expect(roles.roles).toEqual([]);
+      expect(roles.permissions).toEqual(['task:read']);
+      expect(roles.effectiveRoles).toHaveLength(2);
+      for (const grant of [first, second]) {
+        expect(roles.effectiveRoles.find(role => role.id === grant.role.id)?.sources).toEqual([expect.objectContaining({ kind: 'POSITION', positionId: grant.position.id })]);
+      }
+      await userRow.getByRole('button', { name: '查看授权来源', exact: true }).click();
+      const sources = page.getByRole('dialog', { name: `${user.username} · 授权来源`, exact: true });
+      await expect(sources.getByText('历史授权仅供查看，内部用户请通过调岗管理权限。', { exact: true })).toBeVisible();
+      for (const grant of [first, second]) await expect(sources.getByText(`岗位继承 · ${grant.position.id}`, { exact: true })).toBeVisible();
+      await expect(sources.getByText('task:read', { exact: true })).toHaveCount(1);
+      await expect(sources.getByRole('combobox')).toHaveCount(0);
+      await expect(sources.getByRole('button', { name: /保存|分配/ })).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(sources).not.toBeVisible();
-      await page.getByRole('tab', { name: '部门岗位', exact: true }).click();
     });
-    const target = await test.step(phase = '真实账号登录并核对来源和任务权限', async () => {
+    const target = await test.step(phase = '真实账号登录并核对两岗位来源和任务权限', async () => {
       const target = await probe.newPage();
       await login(target, false, user.username, secret);
       await target.goto('/app/account');
+      const overview = await read<Schema['AccountOverviewDto']>(probe.request, '/api/v1/me/overview');
+      expect(overview.permissions).toEqual(['task:read']);
+      expect(overview.effectiveRoles).toHaveLength(2);
       const authorization = target.getByRole('region', { name: '账号与授权', exact: true });
       await authorization.getByText('角色与权限来源', { exact: true }).click();
-      await expect(authorization.getByText(role.name, { exact: true })).toHaveCount(1);
-      await expect(authorization.getByText('直接分配', { exact: true })).toBeVisible();
-      await expect(authorization.getByText(`岗位继承 · ${position.name}`, { exact: true })).toBeVisible();
+      for (const grant of [first, second]) {
+        await expect(authorization.getByText(grant.role.name, { exact: true })).toHaveCount(1);
+        await expect(authorization.getByText(`岗位继承 · ${grant.position.name}`, { exact: true })).toBeVisible();
+        expect(overview.effectiveRoles.find(role => role.id === grant.role.id)?.sources).toEqual([expect.objectContaining({ kind: 'POSITION', positionId: grant.position.id })]);
+      }
+      await expect(authorization.getByText('直接分配', { exact: true })).toHaveCount(0);
+      await expect(authorization.getByText('task:read', { exact: true })).toHaveCount(1);
       expect((await probe.request.get(`/api/v1/tasks?organizationId=${admin.id}`, { timeout: 15_000 })).status()).toBe(200);
       return target;
     });
-    await test.step(phase = '撤销岗位映射及直接角色并核对旧会话失效', async () => {
-      await page.getByRole('tab', { name: '岗位', exact: true }).click();
-      const drawer = await openMapping();
-      await expect(drawer.getByText('当前有效任职人数：1', { exact: true })).toBeVisible();
-      await drawer.getByRole('combobox', { name: '岗位角色', exact: true }).focus();
-      await page.keyboard.press('Backspace');
-      await expect(drawer.locator('.ant-select-selection-item')).toHaveCount(0);
-      const pending = page.waitForResponse(response => new URL(response.url()).pathname === mappingPath && response.request().method() === 'PUT');
-      await drawer.getByRole('button', { name: '保存', exact: true }).click();
-      expect((await pending).status()).toBe(200);
-      expect((await read<Schema['PositionRolesDto']>(client, mappingPath)).roles).toHaveLength(0);
+    await test.step(phase = '撤销一岗仍保留任务权限，撤销最后岗位失效旧会话并拒绝任务访问', async () => {
+      const removePosition = async (grant: PositionGrant, expectedPositionIds: string[], remainingIds: string[]) => {
+        const dialog = await openAppointments();
+        await dialog.locator('.ant-select-selection-item').filter({ hasText: `${grant.position.name} · ${grant.position.code}` }).locator('.ant-select-selection-item-remove').click();
+        await saveAppointments(dialog, expectedPositionIds, remainingIds);
+      };
+      await removePosition(first, [first.position.id, second.position.id], [second.position.id]);
       expect((await probe.request.get('/api/v1/me', { timeout: 15_000 })).status()).toBe(401);
       await login(target, false, user.username, secret);
       const remaining = await read<Schema['AccountOverviewDto']>(probe.request, '/api/v1/me/overview');
-      expect(remaining.effectiveRoles.find(entry => entry.id === role!.id)?.sources).toEqual([{ kind: 'DIRECT' }]);
+      expect(remaining.effectiveRoles).toHaveLength(1);
+      expect(remaining.effectiveRoles[0]).toMatchObject({ id: second.role.id, sources: [expect.objectContaining({ kind: 'POSITION', positionId: second.position.id })] });
+      expect(remaining.permissions).toEqual(['task:read']);
       expect((await probe.request.get(`/api/v1/tasks?organizationId=${admin.id}`, { timeout: 15_000 })).status()).toBe(200);
-      await writeJSON<Schema['AdminUserRolesDto']>(client, pathFor(`users/${user.id}/roles`, admin.id), 'PUT', { roleIds: [] });
+      await removePosition(second, [second.position.id], []);
       expect((await probe.request.get('/api/v1/me', { timeout: 15_000 })).status()).toBe(401);
       await login(target, false, user.username, secret);
+      const revoked = await read<Schema['AccountOverviewDto']>(probe.request, '/api/v1/me/overview');
+      expect(revoked.effectiveRoles).toEqual([]);
+      expect(revoked.permissions).toEqual([]);
       expect((await probe.request.get(`/api/v1/tasks?organizationId=${admin.id}`, { timeout: 15_000 })).status()).toBe(403);
     });
   } catch (error) {
     hasPrimaryError = true;
-    console.warn(`[REQ22 C2] ${phase} failed; details redacted.`);
+    console.warn(`[REQ22/24 C2] ${phase} failed; details redacted.`);
     throw error;
   } finally {
     try {
-      await test.step('清理一次性授权并停用夹具', async () => {
-        const { role, user, position, department } = created;
+      await test.step('清理一次性任职并停用账号、岗位和部门', async () => {
         await probe.close();
-        // 一次性记录只撤销授权并停用；结构/审计历史由主代理销毁整套一次性资源。
-        if (position) {
-          const mapping = await read<Schema['PositionRolesDto']>(client, `${organizationPath}/positions/${position.id}/roles`);
-          await writeJSON<Schema['PositionRolesDto']>(client, `${organizationPath}/positions/${position.id}/roles`, 'PUT', { roleIds: [], expectedRoleVersion: mapping.roleVersion });
+        // 一次性记录只撤任职并停用；canonical 角色和审计历史随整套一次性资源销毁。
+        if (created.user) {
+          await replacePositionAppointments(client, admin.id, created.user.id, []);
+          await writeJSON<Schema['AdminUserDto']>(client, pathFor(`users/${created.user.id}`, admin.id), 'PATCH', { status: 'DISABLED' });
         }
-        if (user) {
-          const appointments = await read<Schema['UserPositionDto'][]>(client, `${organizationPath}/users/${user.id}/positions`);
-          const now = Date.now();
-          const activeIds = [...new Set(appointments.filter(entry => Date.parse(entry.startedAt) <= now && (!entry.endedAt || Date.parse(entry.endedAt) > now)).map(entry => entry.positionId))];
-          await writeJSON<Schema['UserPositionDto'][]>(client, `${organizationPath}/users/${user.id}/positions`, 'PUT', { positionIds: [], expectedPositionIds: activeIds });
-          await writeJSON<Schema['AdminUserRolesDto']>(client, pathFor(`users/${user.id}/roles`, admin.id), 'PUT', { roleIds: [] });
-          await writeJSON<Schema['AdminUserDto']>(client, pathFor(`users/${user.id}`, admin.id), 'PATCH', { status: 'DISABLED' });
-        }
-        if (role) expect((await write(client, pathFor(`roles/${role.id}`, admin.id), 'DELETE')).status()).toBe(204);
-        if (position) await writeJSON<Schema['PositionDto']>(client, `${organizationPath}/positions/${position.id}`, 'PATCH', { status: 'DISABLED', expectedVersion: position.version });
-        if (department) await writeJSON<Schema['DepartmentDto']>(client, `${organizationPath}/departments/${department.id}`, 'PATCH', { status: 'DISABLED', expectedVersion: department.version });
+        for (const grant of created.grants) await retirePositionGrant(client, admin.id, grant);
       }, { timeout: 60_000 });
     } catch (error) {
       if (!hasPrimaryError) throw error;
-      console.warn('[REQ22 C2] 清理一次性授权并停用夹具失败；保留主错误，详情已脱敏。');
+      console.warn('[REQ22/24 C2] 清理一次性任职并停用夹具失败；保留主错误，详情已脱敏。');
     }
   }
 });
 
-test('REQ23: real role count, searchable read-only permission Drawer and focus restoration', async ({ page, admin }) => {
-  const role = await writeJSON<Schema['AdminRoleDto']>(page.request, '/api/v1/admin/roles', 'POST', { organizationId: admin.id, code: unique('DetailRole'), name: unique('Browser Details'), permissionCodes: ['task:read'], mfaRequired: false }, 201);
+test('REQ23/24: existing legacy role count, searchable read-only permission Drawer and focus restoration without writes', async ({ page, admin }) => {
+  const rolesPath = pathFor('roles', admin.id);
+  const role = (await read<Schema['AdminRoleDto'][]>(page.request, rolesPath)).find(entry => entry.code === 'LOCAL_MEMBER' && entry.organizationId === admin.id);
+  if (!role || !role.permissions.some(permission => permission.code === 'task:read')) throw new Error('Disposable seed must retain its existing LOCAL_MEMBER role with task:read; no legacy role writes are allowed.');
+  const permissionCodes = [...new Set(role.permissions.map(permission => permission.code))];
+  let writes = 0;
+  const countWrites = (request: import('@playwright/test').Request) => {
+    const path = new URL(request.url()).pathname;
+    if ((path.startsWith('/api/v1/admin/') || path.startsWith('/api/v1/organizations/')) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes++;
+  };
+  page.on('request', countWrites);
   try {
     await page.goto('/app/admin');
-    await page.getByRole('tab', { name: '角色', exact: true }).click();
-    const row = await rowWith(page.getByRole('tabpanel', { name: '角色', exact: true }), page, role.name);
-    await expect(row.getByText(/^权限 1 项/)).toBeVisible();
+    await page.getByRole('tab', { name: '历史授权', exact: true }).click();
+    const list = page.getByRole('tabpanel', { name: '历史授权', exact: true });
+    await expect(list.getByText('新授权请在岗位中维护；历史记录仅供查看。', { exact: true })).toBeVisible();
+    await expect(list.getByRole('button', { name: /创建角色|编辑角色|删除角色|复制模板/ })).toHaveCount(0);
+    const row = await rowWith(list, page, role.name);
+    await expect(row.getByText(new RegExp(`^权限 ${permissionCodes.length} 项`))).toBeVisible();
     const trigger = row.getByRole('button', { name: `${role.name} · 详情`, exact: true });
-    let writes = 0;
-    const countWrites = (request: import('@playwright/test').Request) => {
-      if (new URL(request.url()).pathname.startsWith('/api/v1/admin/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes++;
-    };
-    page.on('request', countWrites);
-    try {
-      await trigger.click();
-      const drawer = page.getByRole('dialog', { name: `${role.name} · 详情`, exact: true });
-      await expect(drawer.getByText('task:read', { exact: true })).toBeVisible();
-      await expect(drawer.locator('.permission-operation')).toHaveCount(1);
-      await expect(drawer.getByRole('checkbox')).toHaveCount(0);
-      await expect(drawer.getByRole('button', { name: /保存|编辑|删除/ })).toHaveCount(0);
-      const search = drawer.getByRole('textbox', { name: '搜索权限', exact: true });
-      await search.fill('no_matching_permission');
-      await expect(drawer.getByText('无匹配权限', { exact: true })).toBeVisible();
-      await search.fill('task:read');
-      await expect(drawer.locator('.permission-operation')).toHaveCount(1);
-      await drawer.getByRole('textbox', { name: '搜索权限', exact: true }).focus();
-      await page.keyboard.press('Escape');
-      await expect(drawer).not.toBeVisible();
-      await expect(trigger).toBeFocused();
-      expect(writes).toBe(0);
-    } finally { page.off('request', countWrites); }
-    expect((await read<Schema['AdminRoleDto'][]>(page.request, pathFor('roles', admin.id))).find(entry => entry.id === role.id)).toEqual(role);
-  } finally { expect((await write(page.request, pathFor(`roles/${role.id}`, admin.id), 'DELETE')).status()).toBe(204); }
+    await trigger.click();
+    const drawer = page.getByRole('dialog', { name: `${role.name} · 详情`, exact: true });
+    for (const code of permissionCodes) await expect(drawer.getByText(code, { exact: true })).toBeVisible();
+    await expect(drawer.locator('.permission-operation')).toHaveCount(permissionCodes.length);
+    await expect(drawer.getByRole('checkbox')).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: /保存|编辑|删除/ })).toHaveCount(0);
+    const search = drawer.getByRole('textbox', { name: '搜索权限', exact: true });
+    await search.fill('no_matching_permission');
+    await expect(drawer.getByText('无匹配权限', { exact: true })).toBeVisible();
+    await search.fill('task:read');
+    await expect(drawer.locator('.permission-operation')).toHaveCount(1);
+    await expect(drawer.getByText('task:read', { exact: true })).toBeVisible();
+    await search.focus();
+    await page.keyboard.press('Escape');
+    await expect(drawer).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    expect((await read<Schema['AdminRoleDto'][]>(page.request, rolesPath)).find(entry => entry.id === role.id)).toEqual(role);
+    expect(writes).toBe(0);
+  } finally { page.off('request', countWrites); }
 });

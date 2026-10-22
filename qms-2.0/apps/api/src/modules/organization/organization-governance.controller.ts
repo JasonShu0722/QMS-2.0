@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
-import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
+import { AdminMutationService, adminError } from '../../common/security/admin-mutation.service.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { OrganizationService } from './organization.service.js';
-import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DepartmentDto, OrganizationDto, OrganizationListQueryDto, PositionDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UserPositionDto } from './organization.dto.js';
+import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DepartmentDto, OrganizationDto, OrganizationListQueryDto, PositionDto, PositionPermissionsDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsWithPreviewDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UpdatePositionPermissionsDto, UserPositionDto } from './organization.dto.js';
 
 const scope = { source: 'params' as const, field: 'organizationId', optional: false };
 
@@ -14,7 +15,7 @@ const scope = { source: 'params' as const, field: 'organizationId', optional: fa
 @ApiCookieAuth('qms_session')
 @ApiResponse({ status: 'default', type: ErrorResponse, description: 'Controlled API error' })
 export class OrganizationGovernanceController {
-  constructor(private readonly organizations: OrganizationService) {}
+  constructor(private readonly organizations: OrganizationService, private readonly mutations: AdminMutationService) {}
 
   @Get('tree')
   @ApiOkResponse({ type: OrganizationDto, isArray: true })
@@ -81,12 +82,32 @@ export class OrganizationGovernanceController {
   }
 
   @Put(':organizationId/positions/:positionId/roles')
+  @ApiOperation({ deprecated: true, description: 'Legacy position role mappings are read-only; configure position permissions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Legacy position role mappings are read-only.' })
   @ApiOkResponse({ type: PositionRolesDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'organization:structure:manage', featurePermissions: () => ['organization:structure:manage', 'account:roles:read', 'account:roles:assign'], organizationScope: scope })
   replacePositionRoles(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Body() dto: ReplacePositionRolesDto, @Req() request: Request) {
-    return this.organizations.replacePositionRoles(this.actor(request), organizationId, positionId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.mutations.run<never>({ actor: this.actor(request), organizationId, key: request.get('Idempotency-Key'), action: 'LEGACY_POSITION_ROLES_HTTP_WRITE_REJECTED', payload: { positionId, dto }, permission: ['organization:structure:manage', 'account:roles:read', 'account:roles:assign'], traceId: requestTraceId(request) },
+      async () => adminError('FEATURE_PERMISSION_DENIED', 403),
+      async () => adminError('FEATURE_PERMISSION_DENIED', 403));
+  }
+
+  @Get(':organizationId/positions/:positionId/permissions')
+  @ApiOkResponse({ type: PositionPermissionsDto })
+  @RequireAccess({ featurePermission: 'organization:structure:read', featurePermissions: () => ['organization:structure:read', 'account:roles:read'], organizationScope: scope })
+  positionPermissions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Req() request: Request) {
+    return this.organizations.positionPermissions(this.actor(request), organizationId, positionId);
+  }
+
+  @Put(':organizationId/positions/:positionId/permissions')
+  @ApiOkResponse({ type: PositionPermissionsDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', featurePermissions: () => ['organization:structure:manage', 'account:roles:read', 'account:roles:update', 'account:roles:assign'], organizationScope: scope })
+  updatePositionPermissions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Body() dto: UpdatePositionPermissionsDto, @Req() request: Request) {
+    return this.organizations.updatePositionPermissions(this.actor(request), organizationId, positionId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Post(':organizationId/positions')
@@ -119,7 +140,7 @@ export class OrganizationGovernanceController {
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'organization:positions:assign', organizationScope: scope })
-  replaceUserPositions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: ReplaceUserPositionsDto, @Req() request: Request) {
+  replaceUserPositions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: ReplaceUserPositionsWithPreviewDto, @Req() request: Request) {
     return this.organizations.replaceUserPositions(this.actor(request), organizationId, userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 

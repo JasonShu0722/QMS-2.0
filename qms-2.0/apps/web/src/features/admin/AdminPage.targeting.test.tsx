@@ -13,11 +13,6 @@ vi.mock('./UserAdministration', () => ({ UserAdministration: ({ organization, ta
   useUnsavedChanges(dirty);
   return <div data-testid="users">{organization.id}:{targetUserId ?? 'no-target'}<button onClick={() => setDirty(true)}>编辑账号草稿</button>{dirty && <span>账号草稿未保存</span>}</div>;
 } }));
-vi.mock('./PermissionMatrix', () => ({ PermissionMatrix: ({ onBusyChange }: { onBusyChange: (value: boolean) => void }) => {
-  const [dirty, setDirty] = useState(false);
-  useUnsavedChanges(dirty);
-  return <><button onClick={() => setDirty(true)}>编辑矩阵草稿</button>{dirty && <span data-testid="matrix-dirty">矩阵草稿未保存</span>}<button onClick={() => onBusyChange(true)}>矩阵保存中</button><button onClick={() => onBusyChange(false)}>矩阵保存结束</button></>;
-} }));
 vi.mock('./RoleAdministration', () => ({ RoleAdministration: () => <div>角色内容</div> }));
 vi.mock('../governance/OrganizationAdministration', () => ({ OrganizationAdministration: () => null }));
 vi.mock('../governance/StructureAdministration', () => ({ StructureAdministration: () => null }));
@@ -248,80 +243,6 @@ it('guards manual organization changes with the shared account draft confirmatio
   await switchOrganization('乙组织 · b');
   await userEvent.click(screen.getByRole('button', { name: '放弃修改' }));
   await waitFor(() => expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:no-target`));
-});
-
-it.each(['programmatic', 'link'] as const)('protects a dirty matrix from %s query changes and can cancel or discard', async (kind) => {
-  view([org(orgA, ['account:roles:read']), org(orgB)]);
-  const change = async () => { if (kind === 'link') await userEvent.click(screen.getByRole('link', { name: '另一审计账号' })); else await act(async () => navigate(`/app/admin${target()}`)); };
-  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
-  fireEvent.click(screen.getByRole('button', { name: '编辑矩阵草稿' }));
-  await change();
-  expect(await screen.findByRole('dialog')).toHaveTextContent('当前草稿尚未保存，继续将放弃修改。');
-  expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  expect(screen.queryByTestId('users')).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: '继续编辑' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByRole('tab', { name: '权限矩阵' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByTestId('matrix-dirty')).toBeVisible();
-  expect(screen.getByTestId('url').textContent).toBe('');
-  await change();
-  const confirmation = within(await screen.findByRole('dialog'));
-  expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  await userEvent.click(confirmation.getByRole('button', { name: '放弃修改' }));
-  expect(await screen.findByTestId('users')).toHaveTextContent(`${orgB}:${kind === 'link' ? userB : userA}`);
-});
-
-it.each(['programmatic', 'link'] as const)('does not change the account scope on %s navigation while a matrix save is busy', async (kind) => {
-  view([org(orgA, ['account:roles:read']), org(orgB)]);
-  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
-  if (kind === 'link') await userEvent.click(screen.getByRole('link', { name: '另一审计账号' }));
-  else await act(async () => navigate(`/app/admin${target()}`));
-  expect(screen.queryByTestId('users')).not.toBeInTheDocument();
-  expect(screen.getByTestId('url').textContent).toBe('');
-  expect(screen.getByRole('combobox', { name: '管理组织' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
-  expect(await screen.findByTestId('users')).toHaveTextContent(`${orgB}:${kind === 'link' ? userB : userA}`);
-});
-
-it('allows hash-only navigation during a matrix save without changing the scope', async () => {
-  view([org(orgA, ['account:roles:read']), org(orgB)]);
-  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
-  await act(async () => navigate('/app/admin#detail'));
-  expect(screen.getByLabelText('route hash')).toHaveTextContent('#detail');
-  expect(screen.getByRole('tab', { name: '权限矩阵' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  // The next relative hash change must start from the already accepted location.
-  await act(async () => navigate('#next'));
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
-  expect(screen.getByRole('tab', { name: '权限矩阵' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-});
-
-it('confirms the latest queued busy target once after saving, preserving the draft on cancel', async () => {
-  view([org(orgA, ['account:roles:read']), org(orgB)]);
-  fireEvent.click(screen.getByRole('tab', { name: '权限矩阵' }));
-  fireEvent.click(screen.getByRole('button', { name: '编辑矩阵草稿' }));
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
-  await act(async () => navigate(`/app/admin${target(orgB, userA)}`));
-  await act(async () => navigate(`/app/admin${target(orgB, userB)}`));
-  expect(screen.getByTestId('url').textContent).toBe('');
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
-  expect(await screen.findByRole('dialog')).toHaveTextContent('当前草稿尚未保存');
-  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByTestId('matrix-dirty')).toBeVisible();
-  expect(screen.getByTestId('url').textContent).toBe('');
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存中' }));
-  await act(async () => navigate(`/app/admin${target(orgB, userA)}`));
-  await act(async () => navigate(`/app/admin${target(orgB, userB)}`));
-  fireEvent.click(screen.getByRole('button', { name: '矩阵保存结束' }));
-  await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
-  fireEvent.click(screen.getByRole('button', { name: '放弃修改' }));
-  await waitFor(() => expect(screen.getByTestId('users')).toHaveTextContent(`${orgB}:${userB}`));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 });
 import { transferableAbortController } from 'node:util';

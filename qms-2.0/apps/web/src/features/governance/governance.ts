@@ -11,9 +11,10 @@ export type AuditPage = components['schemas']['AuditPageDto'];
 export type FailurePage = components['schemas']['OutboxFailurePageDto'];
 export type GovernanceBody = components['schemas']['CreateOrganizationDto'] | components['schemas']['UpdateOrganizationDto'] |
   components['schemas']['CreateDepartmentDto'] | components['schemas']['UpdateDepartmentDto'] | components['schemas']['CreatePositionDto'] |
-  components['schemas']['UpdatePositionDto'] | components['schemas']['ReplaceUserPositionsDto'] | components['schemas']['UpdatePlatformSettingsDto'] |
+  components['schemas']['UpdatePositionDto'] | components['schemas']['UpdatePlatformSettingsDto'] |
   components['schemas']['UpdateNotificationRuleDto'] | components['schemas']['CreatePositionCategoryDto'] | components['schemas']['UpdatePositionCategoryDto'] |
-  components['schemas']['ReplacePositionRolesDto'];
+  components['schemas']['ReplacePositionRolesDto'] | components['schemas']['UpdatePositionPermissionsDto'] |
+  components['schemas']['ReplaceUserPositionsWithPreviewDto'];
 
 export const organizationPath = (organizationId: string, path = '') => `/api/v1/organizations/${encodeURIComponent(organizationId)}${path}`;
 export const configurationPath = (organizationId: string, path: string) => `/api/v1/admin/configuration/${path}?organizationId=${encodeURIComponent(organizationId)}`;

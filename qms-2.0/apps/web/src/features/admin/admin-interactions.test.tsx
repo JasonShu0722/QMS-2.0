@@ -368,7 +368,7 @@ it('switches permissions with organization and ignores the previous organization
   await waitFor(() => expect(resolveUsers).toBeDefined());
   await userEvent.click(screen.getByRole('combobox', { name: '管理组织' }));
   await userEvent.click(screen.getByText('Organization B · b'));
-  expect(await screen.findByRole('tab', { name: '角色' })).toBeInTheDocument();
+  expect(await screen.findByRole('tab', { name: '历史授权' })).toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: '用户' })).not.toBeInTheDocument();
   resolveUsers!(json([user]));
   await waitFor(() => expect(screen.queryByText('alice')).not.toBeInTheDocument());

@@ -26,9 +26,10 @@ import { FileManagementModule } from '../file-management/file-management.module.
 import { AccountAvatarService } from './account-avatar.service.js';
 import { AccountAvatarFileResourceAdapter } from './account-avatar-file-resource.adapter.js';
 import { SupplierAccountIdentityService } from './supplier-account-identity.service.js';
+import { OrganizationModule } from '../organization/organization.module.js';
 
 @Module({
-  imports: [AuditLogModule, AdminMutationModule, FileManagementModule],
+  imports: [AuditLogModule, AdminMutationModule, FileManagementModule, OrganizationModule],
   controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
     PasswordHasherService,

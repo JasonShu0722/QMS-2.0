@@ -4,6 +4,7 @@ import type { components } from '@qms/contracts';
 import ExcelJS from 'exceljs';
 import { completeMfa } from './mfa-login';
 import { fillSecret } from './secret-input';
+import { createPositionGrant, createPositionUser, positionWrite, replacePositionAppointments, retirePositionGrant, type PositionGrant } from './position-fixture';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
@@ -14,7 +15,7 @@ if (!baseURL || !internalPassword || !databaseURL || !process.env.QMS_ACCEPTANCE
 if (new URL(databaseURL).port === '55440') throw new Error('Complaint import acceptance must not use the preserved preview PostgreSQL on port 55440.');
 
 type Schema = components['schemas'];
-type WriteBody = Schema['LoginDto'] | Schema['CreateCustomerDto'] | Schema['CreateAdminUserDto'] | Schema['CreateAdminRoleDto'] | Schema['AssignAdminRolesDto'];
+type WriteBody = Schema['LoginDto'] | Schema['CreateCustomerDto'];
 const unique = (prefix: string) => `${prefix}_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 
 async function write(client: APIRequestContext, path: string, method: string, data: WriteBody) {
@@ -84,21 +85,19 @@ test('previews Excel errors and creates a complaint with a row result through th
 test('hides Excel import from a business role with complaint read access only', async ({ browser, playwright }) => {
   const admin = await playwright.request.newContext({ baseURL });
   const reader = await browser.newContext({ baseURL });
+  let organizationId: string | undefined;
+  let grant: PositionGrant | undefined;
+  let user: Schema['AdminUserDto'] | undefined;
   try {
-    const login = await write(admin, '/api/v1/auth/login', 'POST', { identifier: 'local.internal', password: internalPassword! });
+    const login = await write(admin, '/api/v1/auth/login', 'POST', { identifier: 'local.internal', password: internalPassword!, rememberMe: false });
     await completeMfa(admin, login, 'local.internal');
     const session = await admin.get('/api/v1/auth/session');
     expect(session.status()).toBe(200);
-    const organizationId = (await session.json() as Schema['SessionResponseDto']).user.organizationId;
-    const roleResponse = await write(admin, '/api/v1/admin/roles', 'POST', { organizationId, code: unique('complaint_reader'), name: '客诉只读验收', permissionCodes: ['customer-quality:complaints:read'] });
-    expect(roleResponse.status(), JSON.stringify(await roleResponse.json())).toBe(201);
-    const role = await roleResponse.json() as Schema['AdminRoleDto'];
+    organizationId = (await session.json() as Schema['SessionResponseDto']).user.organizationId;
+    grant = await createPositionGrant(admin, organizationId, { name: '客诉只读验收', permissionCodes: ['customer-quality:complaints:read'] });
     const username = unique('complaint_reader');
     const password = `${randomUUID()}Aa9!`;
-    const userResponse = await write(admin, '/api/v1/admin/users', 'POST', { username, initialPassword: password, organizationId, accountType: 'INTERNAL' });
-    expect(userResponse.status()).toBe(201);
-    const user = await userResponse.json() as Schema['AdminUserDto'];
-    expect((await write(admin, `/api/v1/admin/users/${user.id}/roles?organizationId=${organizationId}`, 'PUT', { roleIds: [role.id] })).status()).toBe(200);
+    user = await createPositionUser(admin, organizationId, [grant.position.id], { username, initialPassword: password });
 
     const page = await reader.newPage();
     await uiLogin(page, username, password);
@@ -107,7 +106,15 @@ test('hides Excel import from a business role with complaint read access only', 
     await expect(page.getByRole('heading', { name: 'Excel 批量导入' })).toHaveCount(0);
     await expect(page.getByLabel('选择客诉 Excel 文件')).toHaveCount(0);
   } finally {
-    await reader.close();
-    await admin.dispose();
+    try {
+      if (user && organizationId) {
+        await replacePositionAppointments(admin, organizationId, user.id, []);
+        await positionWrite(admin, `/api/v1/admin/users/${user.id}?organizationId=${organizationId}`, 'PATCH', { status: 'DISABLED' });
+      }
+      if (grant && organizationId) await retirePositionGrant(admin, organizationId, grant);
+    } finally {
+      await reader.close();
+      await admin.dispose();
+    }
   }
 });

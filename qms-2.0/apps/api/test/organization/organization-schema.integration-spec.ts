@@ -127,17 +127,31 @@ describe('organization governance PostgreSQL', () => {
     await send('post', `/${organizationId}/positions`, { departmentId: randomUUID(), code: randomUUID(), name: 'Invalid' }).expect(404);
   });
 
-  it('preserves appointment history on replacement, prevents stale replacements and never grants roles', async () => {
+  it('requires role authority for canonical appointments and preserves replacement history', async () => {
     const department = (await send('post', `/${organizationId}/departments`, { code: randomUUID(), name: 'Quality' }).expect(201)).body;
     const position = (await send('post', `/${organizationId}/positions`, { departmentId: department.id, code: randomUUID(), name: 'Engineer' }).expect(201)).body;
-    const rolesBefore = await prisma.userRole.count({ where: { userId } });
-    await send('put', `/${organizationId}/users/${userId}/positions`, { positionIds: [position.id], expectedPositionIds: [] }).expect(200);
-    await send('put', `/${organizationId}/users/${userId}/positions`, { positionIds: [], expectedPositionIds: [] }).expect(409);
-    await send('put', `/${organizationId}/users/${userId}/positions`, { positionIds: [], expectedPositionIds: [position.id] }).expect(200);
-    const response = await request(app.getHttpServer()).get(`/api/v1/organizations/${organizationId}/users/${userId}/positions`).set('Cookie', cookie).expect(200);
+    const target = await prisma.user.create({ data: { organizationId, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'unused' } });
+    const rolesBefore = await prisma.userRole.count({ where: { userId: target.id } });
+    const service = app.get(OrganizationService);
+    let actor = { id: userId, organizationId, sessionId, accountType: 'INTERNAL' as const };
+    await expect(service.replaceUserPositions(actor, organizationId, target.id, { positionIds: [position.id], expectedPositionIds: [] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.userPosition.count({ where: { userId: target.id } })).toBe(0);
+    const assignment = await prisma.userRole.findFirstOrThrow({ where: { userId, organizationId } });
+    for (const code of ['account:roles:read', 'account:roles:assign']) {
+      const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
+      await prisma.rolePermission.create({ data: { roleId: assignment.roleId, permissionId: permission.id } });
+    }
+    const token = await app.get(SessionService).create(userId, prisma, { mfaVerified: true, reauthenticated: true });
+    cookie = `qms_session=${token}; qms_csrf=${csrf}`;
+    sessionId = (await app.get(SessionService).resolve(token))!.id;
+    actor = { ...actor, sessionId };
+    await service.replaceUserPositions(actor, organizationId, target.id, { positionIds: [position.id], expectedPositionIds: [] }, randomUUID(), randomUUID());
+    await expect(service.replaceUserPositions(actor, organizationId, target.id, { positionIds: [], expectedPositionIds: [] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await service.replaceUserPositions(actor, organizationId, target.id, { positionIds: [], expectedPositionIds: [position.id] }, randomUUID(), randomUUID());
+    const response = await request(app.getHttpServer()).get(`/api/v1/organizations/${organizationId}/users/${target.id}/positions`).set('Cookie', cookie).expect(200);
     expect(response.body).toHaveLength(1);
     expect(response.body[0].endedAt).toBeTruthy();
-    expect(await prisma.userRole.count({ where: { userId } })).toBe(rolesBefore);
+    expect(await prisma.userRole.count({ where: { userId: target.id } })).toBe(rolesBefore);
   });
 
   it('rolls back structure writes and idempotency when audit persistence fails', async () => {

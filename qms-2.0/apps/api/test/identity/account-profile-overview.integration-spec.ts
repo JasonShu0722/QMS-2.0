@@ -259,6 +259,7 @@ describe('account profile and own overview with real PostgreSQL and HTTP', () =>
     const f = await fixture();
     const other = await organization();
     await grant(f.user.id, f.org.id, ['account:users:create', 'account:users:update']);
+    if (action === 'create') await grant(f.user.id, f.org.id, ['organization:structure:read', 'organization:positions:assign']);
     const cookie = await login(f.user.id);
     const target = await person(f.org.id);
     type Projection = { mutationProjection(actor: AdminActor, userId: string, organizationId: string, targetOrganizationId: string, permissions: string[]): Promise<unknown> };
@@ -267,11 +268,20 @@ describe('account profile and own overview with real PostgreSQL and HTTP', () =>
     let transferredId = '';
     const spy = jest.spyOn(service, 'mutationProjection').mockImplementationOnce(async (...args) => {
       transferredId = args[1];
+      // Simulate a trusted migration racing the response, including its organization-bound appointments.
+      await prisma.userPosition.deleteMany({ where: { userId: transferredId } });
       await prisma.user.update({ where: { id: transferredId }, data: { organizationId: other.id } });
       return original(...args);
     });
     const key = randomUUID();
-    const body = action === 'create' ? { username: randomUUID(), accountType: 'INTERNAL', organizationId: f.org.id, initialPassword: 'test-password-123', fullName: 'Private name', phone: 'Private extension' } : { phone: 'Private extension', expectedProfileVersion: 1 };
+    let initialPositions = {};
+    if (action === 'create') {
+      const department = await prisma.department.create({ data: { organizationId: f.org.id, code: randomUUID(), name: 'Projection fixture' } });
+      const position = await prisma.position.create({ data: { organizationId: f.org.id, departmentId: department.id, code: randomUUID(), name: 'Empty projection position' } });
+      const response = await request(app.getHttpServer()).post(`/api/v1/organizations/${f.org.id}/position-authorization/preview`).set('Cookie', cookie).set('x-csrf-token', csrf).send({ positionIds: [position.id] }).expect(200);
+      initialPositions = { positionIds: [position.id], authorizationBaseline: response.body.authorizationBaseline };
+    }
+    const body = action === 'create' ? { username: randomUUID(), accountType: 'INTERNAL', organizationId: f.org.id, initialPassword: 'test-password-123', fullName: 'Private name', phone: 'Private extension', ...initialPositions } : { phone: 'Private extension', expectedProfileVersion: 1 };
     const path = action === 'create' ? '/api/v1/admin/users' : `/api/v1/admin/users/${target.id}`;
     const send = () => request(app.getHttpServer())[action === 'create' ? 'post' : 'patch'](path).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
     try { await send().expect(404); } finally { spy.mockRestore(); }

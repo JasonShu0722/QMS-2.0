@@ -10,6 +10,7 @@ import { TemporaryPasswordService } from './temporary-password.service.js';
 import { assertRecentAuthentication, mfaPolicy } from '../../common/security/session-security.js';
 import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
 import { profileData } from './profile-fields.js';
+import { PositionOnboardingService } from '../organization/position-onboarding.service.js';
 
 export type AdminUserActor = AdminActor;
 const USER_SELECT = {
@@ -21,25 +22,31 @@ const USER_SELECT = {
 
 @Injectable()
 export class AdminUserService {
-  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService, private readonly resets: PasswordResetService, private readonly temporaryPasswords: TemporaryPasswordService) {}
+  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService, private readonly resets: PasswordResetService, private readonly temporaryPasswords: TemporaryPasswordService, private readonly onboarding: PositionOnboardingService) {}
 
   async list(actor: AdminUserActor, query: AdminUserListQueryDto) {
     const organizationId = query.organizationId ?? actor.scopeOrganizationId ?? actor.organizationId;
     await assertAdminAccess(this.prisma, actor, organizationId, 'account:users:read');
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: { organizationId,
         ...(query.status ? { status: query.status } : {}),
         ...(query.accountType ? { accountType: query.accountType } : {}),
         ...(query.search ? { OR: [{ username: { contains: query.search, mode: 'insensitive' } }, { email: { contains: query.search, mode: 'insensitive' } }] } : {}),
       }, select: USER_SELECT, orderBy: [{ status: 'asc' }, { username: 'asc' }],
     });
+    const summaries = new Map<string, { positions: Awaited<ReturnType<PositionOnboardingService['summariesForUsers']>>[number]['positions']; totalPositions: number }>();
+    for (let offset = 0; offset < users.length; offset += 100) {
+      for (const { userId, ...summary } of await this.onboarding.summariesForUsers(this.prisma, organizationId, users.slice(offset, offset + 100).map(({ id }) => id))) summaries.set(userId, summary);
+    }
+    return users.map((user) => ({ ...user, ...summaries.get(user.id) }));
   }
 
   async detail(actor: AdminUserActor, userId: string, organizationId = actor.scopeOrganizationId ?? actor.organizationId) {
     await assertAdminAccess(this.prisma, actor, organizationId, 'account:users:read');
     const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId }, select: USER_SELECT });
     if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
-    return user;
+    const [summary] = await this.onboarding.summariesForUsers(this.prisma, organizationId, [user.id]);
+    return { ...user, ...(summary ? { positions: summary.positions, totalPositions: summary.totalPositions } : {}) };
   }
 
   async getMfaPolicy(actor: AdminUserActor, userId: string, organizationId = actor.scopeOrganizationId ?? actor.organizationId) {
@@ -79,10 +86,16 @@ export class AdminUserService {
   async create(actor: AdminUserActor, dto: CreateAdminUserDto, traceId: string, key?: string) {
     const receipt = await this.mutations.run({ actor, organizationId: dto.organizationId, key, action: 'USER_CREATED', payload: dto, permission: 'account:users:create', traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
       await this.assertOrganizationAccountType(transaction, dto.organizationId, dto.accountType);
-      const passwordHash = await this.passwords.hash(dto.initialPassword);
-      const user = await transaction.user.create({ data: { organizationId: dto.organizationId, username: dto.username.trim(), ...profileData(dto), accountType: dto.accountType, passwordHash }, select: USER_SELECT });
-      await this.record(transaction, actor, dto.organizationId, user.id, 'USER_CREATED', traceId);
+      const createUser = async () => {
+        const passwordHash = await this.passwords.hash(dto.initialPassword);
+        const user = await transaction.user.create({ data: { organizationId: dto.organizationId, username: dto.username.trim(), ...profileData(dto), accountType: dto.accountType, passwordHash }, select: USER_SELECT });
+        await this.record(transaction, actor, dto.organizationId, user.id, 'USER_CREATED', traceId);
+        return user;
+      };
+      const user = dto.accountType === 'INTERNAL' ? await this.onboarding.createWithInitialPositions(transaction, actor, dto.organizationId, { positionIds: dto.positionIds!, authorizationBaseline: dto.authorizationBaseline! }, traceId, createUser) : await createUser();
       return { userId: user.id, profileVersion: user.profileVersion, organizationId: user.organizationId };
+    }, async (transaction) => {
+      if (dto.accountType === 'INTERNAL') await this.onboarding.authorizeInitialPositions(transaction, actor, dto.organizationId, { positionIds: dto.positionIds!, authorizationBaseline: dto.authorizationBaseline! });
     });
     const userId = receipt.userId ?? (receipt as unknown as { id?: string }).id;
     if (!userId) adminError('ADMIN_USER_NOT_FOUND', 404);

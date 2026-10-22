@@ -91,11 +91,17 @@ describe('controlled platform configuration', () => {
     const assignment = await prisma.userRole.findFirstOrThrow({ where: { userId } });
     const permission = await prisma.permission.upsert({ where: { code: 'organization:structure:manage' }, create: { code: 'organization:structure:manage', name: 'Structure' }, update: {} });
     await prisma.rolePermission.create({ data: { roleId: assignment.roleId, permissionId: permission.id } });
-    const structures = new OrganizationService(prisma, new AdminMutationService(prisma, audit), audit);
+    const structures = new OrganizationService(prisma, new AdminMutationService(prisma, audit), audit, undefined as never);
     const department = await structures.createDepartment(actor, organizationId, { code: 'QA', name: 'QA' }, 'config-test', randomUUID());
     const category = await service.createCategory(actor, organizationId, { code: 'ENGINEERING', name: 'Engineering', sortOrder: 0 }, 'config-test', randomUUID());
     const position = await structures.createPosition(actor, organizationId, { code: 'QE', name: 'Engineer', departmentId: department.id, categoryId: category.id }, 'config-test', randomUUID());
     expect(position).toMatchObject({ categoryId: category.id });
+    await expect(structures.updatePosition(actor, organizationId, position.id, { expectedVersion: 1, status: 'DISABLED' }, 'config-test', randomUUID())).rejects.toMatchObject({ status: 403 });
+    expect(await prisma.position.findUniqueOrThrow({ where: { id: position.id } })).toMatchObject({ status: 'ACTIVE', version: 1 });
+    for (const code of ['account:roles:read', 'account:roles:assign']) {
+      const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
+      await prisma.rolePermission.create({ data: { roleId: assignment.roleId, permissionId: permission.id } });
+    }
     await structures.updatePosition(actor, organizationId, position.id, { expectedVersion: 1, status: 'DISABLED' }, 'config-test', randomUUID());
     await service.updateCategory(actor, organizationId, category.id, { expectedVersion: 1, status: 'DISABLED' }, 'config-test', randomUUID());
     await expect(structures.updatePosition(actor, organizationId, position.id, { expectedVersion: 2, status: 'ACTIVE' }, 'config-test', randomUUID())).rejects.toMatchObject({ status: 409 });

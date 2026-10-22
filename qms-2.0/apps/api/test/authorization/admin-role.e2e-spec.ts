@@ -86,11 +86,13 @@ describe('administrator role HTTP contract', () => {
     }
   });
 
-  it('rejects management without CSRF and accepts a valid role creation', async () => {
+  it('rejects management without CSRF and freezes even a valid independent role creation without writes', async () => {
     const body = { organizationId, code: 'QUALITY', name: 'Quality', permissionCodes: [] };
     await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).send(body).expect(403);
-    await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send(body).expect(201);
-    expect(prisma.role.create).toHaveBeenCalledTimes(1);
+    const rejected = await request(app.getHttpServer()).post('/api/v1/admin/roles').set('Cookie', cookies).set('x-csrf-token', 'csrf-token').set('Idempotency-Key', 'test-key-1').send(body).expect(403);
+    expect(rejected.body.code).toBe('FEATURE_PERMISSION_DENIED');
+    expect(prisma.role.create).not.toHaveBeenCalled();
+    expect(prisma.adminMutation.create).not.toHaveBeenCalled();
   });
 
   it('rejects UUID, blank name, duplicate permissions and unrecognized fields', async () => {

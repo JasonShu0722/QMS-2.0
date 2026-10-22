@@ -139,6 +139,7 @@ export function safeAccountError(cause: unknown): string {
     AUTH_PASSWORD_POLICY_INVALID: '密码不符合安全要求，请使用至少 12 位的强密码',
     VALIDATION_FAILED: '请检查填写内容',
     FEATURE_PERMISSION_DENIED: '无权执行此操作',
+    POSITION_GRANT_CEILING_DENIED: '所选岗位包含无权授予的权限',
     ORGANIZATION_SCOPE_DENIED: '无权访问该组织',
     CSRF_INVALID: '安全校验失败，请重试',
     RATE_LIMITED: '操作过于频繁，请稍后重试',

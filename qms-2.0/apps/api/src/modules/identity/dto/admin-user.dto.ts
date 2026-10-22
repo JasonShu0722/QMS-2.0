@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { OrganizationSummaryDto, ProfileFieldsDto } from './account.dto.js';
+import { UserPositionSummaryDto } from '../../organization/position-onboarding.dto.js';
 
 const ACCOUNT_TYPES = ['INTERNAL', 'SUPPLIER'] as const;
 const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
@@ -64,6 +65,16 @@ export class AdminUserListQueryDto {
 }
 
 export class CreateAdminUserDto extends ProfileFieldsDto {
+  @ApiPropertyOptional({ type: [String], minItems: 1, maxItems: 100, description: '内部账号必填；供应商专用开通不要求内部岗位。' })
+  @ValidateIf((object: CreateAdminUserDto, value) => object.accountType === 'INTERNAL' || value !== undefined)
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true })
+  positionIds?: string[];
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 256, description: '内部账号必填，使用岗位授权预览返回的完整基线。' })
+  @ValidateIf((object: CreateAdminUserDto, value) => object.accountType === 'INTERNAL' || value !== undefined)
+  @IsString() @Length(1, 256)
+  authorizationBaseline?: string;
+
   @ApiProperty()
   @IsString()
   @Length(1, 100)
@@ -135,6 +146,12 @@ export class CompletePasswordResetDto extends ResetAdminUserPasswordDto {
 }
 
 export class AdminUserDto {
+  @ApiPropertyOptional({ type: [UserPositionSummaryDto], maxItems: 3, description: '最多展示三个有效任职，完整数量见 totalPositions。' })
+  positions?: UserPositionSummaryDto[];
+
+  @ApiPropertyOptional({ minimum: 0 })
+  totalPositions?: number;
+
   @ApiProperty({ type: String, nullable: true, maxLength: 100 })
   fullName!: string | null;
 

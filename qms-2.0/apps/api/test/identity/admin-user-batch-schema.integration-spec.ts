@@ -9,11 +9,12 @@ describe('account batch PostgreSQL partial commit and replay', () => {
   afterAll(async () => { await f?.close(); });
 
   it('commits a valid row and records duplicate and invalid email errors without persisting secrets', async () => {
+    const initial = await f.onboarding();
     const username = `batch-${randomUUID()}`;
     const body = { organizationId: f.organization.id, rows: [
-      { rowNumber: 2, username, accountType: 'INTERNAL' },
-      { rowNumber: 3, username, accountType: 'INTERNAL' },
-      { rowNumber: 4, username: `bad-${randomUUID()}`, email: 'invalid-email', accountType: 'INTERNAL' },
+      { rowNumber: 2, username, accountType: 'INTERNAL', ...initial },
+      { rowNumber: 3, username, accountType: 'INTERNAL', ...initial },
+      { rowNumber: 4, username: `bad-${randomUUID()}`, email: 'invalid-email', accountType: 'INTERNAL', ...initial },
     ] };
     const key = randomUUID();
     const first = await f.post('/admin/users/batch', body, key).expect(201);
@@ -42,9 +43,10 @@ describe('account batch PostgreSQL partial commit and replay', () => {
   });
 
   it('keeps unsupported account types and invalid usernames as row errors without rejecting valid neighbors', async () => {
+    const initial = await f.onboarding();
     const username = `mixed-${randomUUID()}`;
     const response = await f.post('/admin/users/batch', { organizationId: f.organization.id, rows: [
-      { rowNumber: 2, username, accountType: 'INTERNAL' },
+      { rowNumber: 2, username, accountType: 'INTERNAL', ...initial },
       { rowNumber: 3, username: 'bad username', accountType: 'INTERNAL' },
       { rowNumber: 4, username: `supplier-${randomUUID()}`, accountType: 'SUPPLIER' },
       { rowNumber: 5, username: `unknown-${randomUUID()}`, accountType: 'UNKNOWN' },
@@ -54,12 +56,13 @@ describe('account batch PostgreSQL partial commit and replay', () => {
     expect(await f.prisma.user.count({ where: { username } })).toBe(1);
   });
 
-  it('lets create-only actors create without exposing reset-protected temporary passwords', async () => {
+  it('lets account creators with explicit position grants create without reset-protected temporary passwords', async () => {
+    const initial = await f.onboarding();
     const assignment = await f.prisma.rolePermission.findFirstOrThrow({ where: { roleId: (await f.prisma.userRole.findFirstOrThrow({ where: { userId: f.actor.id } })).roleId, permission: { code: 'account:users:reset' } } });
     await f.prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: assignment.roleId, permissionId: assignment.permissionId } } });
     try {
       const username = `create-only-${randomUUID()}`;
-      const response = await f.post('/admin/users/batch', { organizationId: f.organization.id, rows: [{ rowNumber: 2, username, accountType: 'INTERNAL' }] }).expect(201);
+      const response = await f.post('/admin/users/batch', { organizationId: f.organization.id, rows: [{ rowNumber: 2, username, accountType: 'INTERNAL', ...initial }] }).expect(201);
       expect(response.body.rows[0]).toMatchObject({ username, status: 'SUCCESS', temporaryPassword: { status: 'UNAVAILABLE' } });
       expect(response.body.rows[0].temporaryPassword).not.toHaveProperty('temporaryPassword');
       expect(await f.prisma.user.count({ where: { username } })).toBe(1);
@@ -67,7 +70,8 @@ describe('account batch PostgreSQL partial commit and replay', () => {
   });
 
   it('resumes after a later row audit failure without duplicating previously committed users', async () => {
-    const rows = [2, 3, 4].map((rowNumber) => ({ rowNumber, username: `resume-${randomUUID()}`, accountType: 'INTERNAL' }));
+    const initial = await f.onboarding();
+    const rows = [2, 3, 4].map((rowNumber) => ({ rowNumber, username: `resume-${randomUUID()}`, accountType: 'INTERNAL', ...initial }));
     const body = { organizationId: f.organization.id, rows };
     const key = randomUUID();
     const audit = f.app.get(AuditLogService);

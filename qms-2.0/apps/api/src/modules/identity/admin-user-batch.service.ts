@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -13,18 +13,23 @@ import { PasswordService } from './password.service.js';
 import { TemporaryPasswordService } from './temporary-password.service.js';
 import { CreateAdminUserDto } from './dto/admin-user.dto.js';
 import type { AdminUserBatchResultDto, AdminUserBatchResultRowDto, CreateAdminUserBatchDto } from './dto/admin-user-batch.dto.js';
+import { PositionGrantCeilingDenied, PositionOnboardingService } from '../organization/position-onboarding.service.js';
+import type { PlatformErrorCode } from '../../common/contracts/platform-error.js';
 
 type Receipt = Omit<AdminUserBatchResultRowDto, 'temporaryPassword'>;
 
 @Injectable()
 export class AdminUserBatchService {
-  constructor(private readonly prisma: PrismaService, private readonly users: AdminUserService, private readonly passwords: PasswordService, private readonly temporary: TemporaryPasswordService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly users: AdminUserService, private readonly passwords: PasswordService, private readonly temporary: TemporaryPasswordService, private readonly audit: AuditLogService, private readonly onboarding: PositionOnboardingService) {}
 
   async create(actor: AdminActor, input: CreateAdminUserBatchDto, traceId: string, key?: string): Promise<AdminUserBatchResultDto> {
     if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
     if (new Set(input.rows.map((row) => row.rowNumber)).size !== input.rows.length) adminError('ADMIN_BATCH_ROW_INVALID', 400);
-    const rows = input.rows.map((row) => ({ rowNumber: row.rowNumber, username: typeof row.username === 'string' ? row.username.trim() : row.username, email: typeof row.email === 'string' ? row.email.trim().toLowerCase() || null : row.email ?? null, accountType: row.accountType }));
-    const digests = adminMutationDigests(JSON.stringify({ organizationId: input.organizationId, rows }), process.env.QMS_RATE_LIMIT_SECRET?.trim() ?? 'qms-development-rate-limit-secret-not-for-production');
+    const legacyRows = input.rows.map((row) => ({ rowNumber: row.rowNumber, username: typeof row.username === 'string' ? row.username.trim() : row.username, email: typeof row.email === 'string' ? row.email.trim().toLowerCase() || null : row.email ?? null, accountType: row.accountType }));
+    const rows = legacyRows.map((row, index) => ({ ...row, positionIds: input.rows[index]!.positionIds, authorizationBaseline: input.rows[index]!.authorizationBaseline }));
+    const secret = process.env.QMS_RATE_LIMIT_SECRET?.trim() ?? 'qms-development-rate-limit-secret-not-for-production';
+    const digests = adminMutationDigests(JSON.stringify({ purpose: 'account-batch-initial-positions:v1', organizationId: input.organizationId, rows }), secret);
+    const legacyDigests = input.rows.every((row) => row.positionIds === undefined && row.authorizationBaseline === undefined) ? adminMutationDigests(JSON.stringify({ organizationId: input.organizationId, rows: legacyRows }), secret) : [];
     const identity = { actorId: actor.id, organizationId: input.organizationId, key };
     const lock = `account-batch:${actor.id}:${input.organizationId}:${key}`;
     const authorize = async (transaction: AdminTransaction) => {
@@ -36,7 +41,7 @@ export class AdminUserBatchService {
     const batch = await this.prisma.$transaction(async (transaction) => {
       await authorize(transaction);
       const existing = await transaction.accountBatch.findUnique({ where: { actorId_organizationId_key: identity } });
-      if (existing && !digests.includes(existing.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
+      if (existing && !digests.includes(existing.requestDigest) && !legacyDigests.includes(existing.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
       return existing ?? transaction.accountBatch.create({ data: { ...identity, requestDigest: digests[0]! } });
     });
     for (const row of rows) {
@@ -44,25 +49,37 @@ export class AdminUserBatchService {
         await this.prisma.$transaction(async (transaction) => {
           await authorize(transaction);
           const where = { batchId_rowNumber: { batchId: batch.id, rowNumber: row.rowNumber } };
-          if (await transaction.accountBatchRow.findUnique({ where })) return;
+          const existing = await transaction.accountBatchRow.findUnique({ where });
+          if (existing) {
+            if ((existing.result as Receipt).status === 'SUCCESS' && row.positionIds !== undefined && row.authorizationBaseline !== undefined) {
+              await this.onboarding.authorizeInitialPositions(transaction, actor, input.organizationId, { positionIds: row.positionIds, authorizationBaseline: row.authorizationBaseline });
+            }
+            return;
+          }
           const password = randomBytes(18).toString('base64url');
           const dto = plainToInstance(CreateAdminUserDto, { ...row, organizationId: input.organizationId, initialPassword: password });
           let result: Receipt;
           if (row.accountType !== 'INTERNAL' || validateSync(dto).length) {
             result = { rowNumber: row.rowNumber, username: typeof row.username === 'string' ? row.username.slice(0, 100) : '', status: 'ERROR', code: 'ADMIN_BATCH_ROW_INVALID' };
           } else {
-            const user = await transaction.user.create({ data: { organizationId: input.organizationId, username: dto.username, email: dto.email, accountType: dto.accountType, mustChangePassword: true, passwordHash: await this.passwords.hash(password) } });
-            await this.temporary.store(transaction, user.id, user.credentialVersion, password);
-            await this.audit.record({ actorUserId: actor.id, organizationId: input.organizationId, action: 'USER_CREATED', resourceType: 'User', resourceId: user.id, outcome: 'SUCCESS', traceId, metadata: { batchId: batch.id, rowNumber: row.rowNumber } }, transaction);
+            const user = await this.onboarding.createWithInitialPositions(transaction, actor, input.organizationId, { positionIds: dto.positionIds!, authorizationBaseline: dto.authorizationBaseline! }, traceId, async () => {
+              const user = await transaction.user.create({ data: { organizationId: input.organizationId, username: dto.username, email: dto.email, accountType: dto.accountType, mustChangePassword: true, passwordHash: await this.passwords.hash(password) } });
+              await this.temporary.store(transaction, user.id, user.credentialVersion, password);
+              await this.audit.record({ actorUserId: actor.id, organizationId: input.organizationId, action: 'USER_CREATED', resourceType: 'User', resourceId: user.id, outcome: 'SUCCESS', traceId, metadata: { batchId: batch.id, rowNumber: row.rowNumber } }, transaction);
+              return user;
+            });
             result = { rowNumber: row.rowNumber, username: user.username, status: 'SUCCESS', userId: user.id, credentialVersion: user.credentialVersion };
           }
           await transaction.accountBatchRow.create({ data: { batchId: batch.id, rowNumber: row.rowNumber, result: result as Prisma.InputJsonObject } });
         }, { timeout: 15000 });
       } catch (error) {
-        if ((error as { code?: string }).code !== 'P2002') throw error;
+        // Only expected business failures become row receipts; auth, DB and audit failures stop the batch.
+        const ceilingDenied = error instanceof PositionGrantCeilingDenied;
+        const code = ceilingDenied ? 'FEATURE_PERMISSION_DENIED' : (error as { code?: string }).code === 'P2002' ? 'ADMIN_USER_DUPLICATE' : error instanceof HttpException && [400, 404, 409].includes(error.getStatus()) ? (error.getResponse() as { code?: PlatformErrorCode }).code : undefined;
+        if (!code || (!ceilingDenied && !['ADMIN_USER_DUPLICATE', 'STRUCTURE_NOT_FOUND', 'STRUCTURE_DISABLED', 'STRUCTURE_REFERENCE_INVALID', 'CONCURRENCY_CONFLICT', 'ADMIN_PERMISSION_NOT_FOUND', 'ADMIN_ROLE_NOT_FOUND'].includes(code))) throw error;
         await this.prisma.$transaction(async (transaction) => {
           await authorize(transaction);
-          const result: Receipt = { rowNumber: row.rowNumber, username: row.username, status: 'ERROR', code: 'ADMIN_USER_DUPLICATE' };
+          const result: Receipt = { rowNumber: row.rowNumber, username: typeof row.username === 'string' ? row.username.slice(0, 100) : '', status: 'ERROR', code };
           await transaction.accountBatchRow.upsert({ where: { batchId_rowNumber: { batchId: batch.id, rowNumber: row.rowNumber } }, update: {}, create: { batchId: batch.id, rowNumber: row.rowNumber, result: result as Prisma.InputJsonObject } });
         });
       }
