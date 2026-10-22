@@ -441,6 +441,10 @@
           {
             "path": "../docs/superpowers/plans/2026-10-21-qms-all-pages-interaction.md",
             "sha256": "90c56a211217d0e5bbfbf41973b63af71b46dcf8bdb9e22febdc75b78c84ef0f"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-22-qms-position-as-role-design.md",
+            "sha256": "c3963505baefa082e69e5021ee4abded31ecfe44255aa1d96acafaaf137bbf9e"
           }
         ]
       }

@@ -10,6 +10,8 @@
 | [可视化样例先行计划](../../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md) | Issue #58、8 组独立交互样例、预览入口、TDD／构建排除／视觉确认及实际进度 |
 | [第一批共享交互迁移计划](../../docs/superpowers/plans/2026-10-21-qms-interaction-foundation.md) | Issue #60、共享按钮／外观／语言／弹窗、本地验证及统一推送前的负责人仓库处理门禁 |
 | [全部现有页面交互展开计划](../../docs/superpowers/plans/2026-10-21-qms-all-pages-interaction.md) | 102个正式TSX／真实路由及子面板盘点，分批红绿回归、审查、规范与样例回收；全部覆盖后才通知统一推送 |
+| [岗位即角色设计](../../docs/superpowers/specs/2026-10-22-qms-position-as-role-design.md) | REQ-0024 岗位直接维护权限、创建即任职、历史授权与流程引用兼容；设计阶段，不代表已实现 |
+| [岗位即角色实施计划](../../docs/superpowers/plans/2026-10-22-qms-position-as-role.md) | Issue #62，A～D交付单元、独立评审、真实资源验收与迁移授权边界 |
 | [个人资料、岗位授权与角色清单规格](../../docs/superpowers/specs/2026-10-19-qms-profile-position-role-design.md) | REQ-0022／0023 自动生效、资料与签名边界、角色摘要及来源；已本地实现，最终联合验收及上线待完成 |
 | [个人资料、岗位授权与角色清单计划](../../docs/superpowers/plans/2026-10-19-qms-profile-position-role.md) | 角色清单／完整岗位授权／资料账号中心三单元、调用方清单、TDD／联合验收与交付接续 |
 | [个人账号与全页密度返修规格](../../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md) | 人工验收后确认的账号整合、单一会话表及全页留白减半 |
