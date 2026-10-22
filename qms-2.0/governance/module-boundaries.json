@@ -21,6 +21,7 @@
     "identity -> audit-log",
     "identity -> authorization",
     "identity -> file-management",
+    "identity -> organization",
     "material-master -> audit-log",
     "material-master -> authorization",
     "organization -> audit-log",

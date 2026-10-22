@@ -25,7 +25,7 @@ describe('temporary password PostgreSQL lifecycle', () => {
     expect(JSON.stringify(await f.prisma.auditEvent.findMany({ where: { resourceId: target.id } }))).not.toContain(reset.body.temporaryPassword);
     const raw = await f.prisma.$queryRaw<Array<{ encrypted_value: string }>>`SELECT encrypted_value FROM user_temporary_passwords WHERE user_id = ${target.id}::uuid`;
     expect(raw[0].encrypted_value).not.toContain(reset.body.temporaryPassword);
-    expect((await f.post('/admin/users', { organizationId: f.organization.id, username: `plain-${randomUUID()}`, accountType: 'INTERNAL', initialPassword: 'existing-single-user-password' }).expect(201)).body).not.toHaveProperty('passwordHash');
+    expect((await f.post('/admin/users', { organizationId: f.organization.id, username: `plain-${randomUUID()}`, accountType: 'INTERNAL', initialPassword: 'existing-single-user-password', ...await f.onboarding() }).expect(201)).body).not.toHaveProperty('passwordHash');
   });
 
   it('expires immediately for reads and login regardless of maintenance scheduling', async () => {

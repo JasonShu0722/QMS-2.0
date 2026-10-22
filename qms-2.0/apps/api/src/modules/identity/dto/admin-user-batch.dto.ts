@@ -20,6 +20,14 @@ export class AdminUserBatchRowDto {
   @ApiProperty({ type: String, description: 'Raw account type; unsupported values produce a per-row error.' })
   @Allow()
   accountType!: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Raw positions; invalid or missing internal positions produce a per-row error.' })
+  @Allow()
+  positionIds?: string[];
+
+  @ApiPropertyOptional({ type: String })
+  @Allow()
+  authorizationBaseline?: string;
 }
 
 export class CreateAdminUserBatchDto {

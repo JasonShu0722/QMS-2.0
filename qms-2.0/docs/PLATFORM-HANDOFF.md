@@ -1,5 +1,15 @@
 # 平台与供应商质量接口交接
 
+## REQ-0024 本地接续（2026-10-22，未推送／上线）
+
+负责人确认“岗位就是角色”。新内部岗位自动拥有唯一内部角色存储，管理员仅从岗位权限入口维护自有权限与MFA；`PositionRole.isCanonical`及局部唯一索引表达所有权，历史标记默认false，不自动合并／删除旧授权或改变固定流程roleCode。历史来源单列只读，仍可能保留相同权限，取消自有权限不代表撤清全部来源。
+
+新增岗位 `/positions/:positionId/permissions` GET/PUT与 `POST /organizations/:organizationId/position-authorization/preview`；预览覆盖完整结构、实际角色权限/MFA与目标来源基线。内部建号要求岗位及预览，账号、任职、审计和回执同事务；批量逐行提交，预览的岗位授予上限拒绝使用固定错误码 `POSITION_GRANT_CEILING_DENIED`，仅该类可转换为行错误，身份／组织／全局权限失败不能吞掉。公网调岗使用 `ReplaceUserPositionsWithPreviewDto`，新执行比较CAS与预览；合法回执不再写任职，但重放前仍重新核对目标读取及授予权限。
+
+通用独立角色create/copy/update/delete/直接assign及旧岗位角色映射HTTP写已冻结为受控403，保留拒绝审计与回放前授权。可信内部服务继续承担历史领域回归、组织引导与供应商专用开通，不是客户端豁免。供应商固定门户角色及白名单不套内部岗位必填。部署须同批迁移与契约／Web上线，不得只上前端或先存canonical再回退到无保护旧接口。
+
+本次真实一次性PG／Worker／浏览器及各批结果由[专项计划](../../docs/superpowers/plans/2026-10-22-qms-position-as-role.md)记账；不是生产发布或人工验收。负责人已完成开源操作并授权继续提交／PR；代理只读确认可见性，没有自行更改。当前Draft前限制为一条旧治理浏览器语言切换未通过，不得直接合并部署。历史迁移仅有受控设计，生产逐ID转换与回退仍需独立授权。
+
 当前整合状态（2026-09-20）：已验收成果及后续P2c/P3/P4/P5均已进入 `D:/WorkSpace/QMS-2.0/qms-2.0`。最终P6完整PASS：PG404/API381/Web135/Worker3/browser17，另安全输入1；主/测试Swagger、构建、两Compose和归档隔离PASS，0 skipped。主目录原有修改保留；尚未Git提交、推送或生产部署。以下来源工作树及“未整合”描述保留其交付时点含义，当前状态以本段和FOUNDATION最新记录为准。未通过其他用户任务同步。
 
 日期：2026-09-19。共同基线 `54621e09a8c4b469070c00497e55e58ea237da72` 已由用户提供的交接文本确认。早期成果来自 `D:/WorkSpace/QMS-2-platform-remaining`，现已整合并继续在主目录开发；按用户指令不读取、通知或等待其他任务。本文件用于本地交接，最终阶段二验收状态见 FOUNDATION。

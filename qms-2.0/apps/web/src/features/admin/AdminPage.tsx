@@ -4,7 +4,6 @@ import { Alert, Select, Spin, Tabs, Typography } from 'antd';
 import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
-import { PermissionMatrix } from './PermissionMatrix';
 import { OrganizationAdministration } from '../governance/OrganizationAdministration';
 import { StructureAdministration } from '../governance/StructureAdministration';
 import { ConfigurationAdministration } from '../governance/ConfigurationAdministration';
@@ -14,7 +13,7 @@ import { useLanguage } from '../../i18n/Language';
 import { CustomerMasterSection } from '../customer-quality/CustomerMasterSection';
 import { MaterialMasterPage } from '../material-master/MaterialMasterPage';
 import { SupplierProfilesPage } from '../supplier-quality/SupplierProfilesPage';
-import { useNavigationBusy, useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 type AdminPageProps = { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void };
 type AdminLocation = Pick<Location, 'pathname' | 'search' | 'hash'>;
@@ -33,11 +32,9 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [selectedId, setSelectedId] = useState<string>();
-  const [matrixBusy, setMatrixBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<string>();
   const [acceptedLocation, setAcceptedLocation] = useState(location);
   const [targetConsumed, setTargetConsumed] = useState(false);
-  useNavigationBusy(matrixBusy);
   const query = new URLSearchParams(acceptedLocation?.search);
   const targeting = !targetConsumed && ['organizationId', 'section', 'userId'].some((key) => query.has(key));
   const organizationId = query.get('organizationId') ?? '';
@@ -49,7 +46,6 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     : organizations?.find((entry) => entry.id === selectedId) ?? organizations?.find((entry) => entry.type === 'INTERNAL') ?? organizations?.[0];
   const targetUserId = targeting && validTarget ? userId.toLowerCase() : undefined;
   function changeScope(action: () => void) {
-    if (matrixBusy) return;
     requestLeave(action);
   }
 
@@ -79,14 +75,14 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
   ];
-  const activeTabAllowed = (activeTab === 'users' && users) || ((activeTab === 'roles' || activeTab === 'matrix') && roles) || additionalTabs.some((entry) => entry.key === activeTab);
+  const activeTabAllowed = (activeTab === 'users' && users) || (activeTab === 'roles' && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">
       <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
-      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} disabled={matrixBusy} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
+      <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
     <Tabs key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
       ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} /> }] : []),
-      ...(roles ? [{ key: 'roles', label: t('角色'), children: <RoleAdministration organization={organization} /> }, { key: 'matrix', label: t('权限矩阵'), children: <PermissionMatrix organization={organization} onBusyChange={setMatrixBusy} /> }] : []),
+      ...(roles ? [{ key: 'roles', label: t('历史授权'), children: <RoleAdministration organization={organization} readOnly /> }] : []),
       ...additionalTabs,
     ]} />
   </section>;

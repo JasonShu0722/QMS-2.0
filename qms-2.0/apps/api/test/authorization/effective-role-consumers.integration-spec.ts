@@ -32,10 +32,10 @@ describe('effective-role consumers with real PostgreSQL', () => {
   const roles = new AdminRoleService(prisma, audit, mutations);
   const authorization = new AuthorizationService(prisma);
   const scopes = new OrganizationScopeService(prisma);
-  const organizations = new OrganizationService(prisma, mutations, audit);
+  const organizations = new OrganizationService(prisma, mutations, audit, undefined as never);
   const directory = new AdminOrganizationController(prisma);
   const sessions = new SessionService(prisma, audit);
-  const users = new AdminUserService(prisma, undefined as never, audit, mutations, undefined as never, undefined as never);
+  const users = new AdminUserService(prisma, undefined as never, audit, mutations, undefined as never, undefined as never, undefined as never);
   const organizationIds: string[] = [];
   const allCodes = [...new Set([...ADMIN_PERMISSIONS, ...SUPPLIER_PORTAL_PERMISSIONS, 'workbench:read', 'organization:read', 'organization:manage', 'organization:structure:read'])];
 

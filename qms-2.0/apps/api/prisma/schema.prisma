@@ -330,6 +330,7 @@ model PositionRole {
   organizationId String @map("organization_id") @db.Uuid
   positionId String @map("position_id") @db.Uuid
   roleId String @map("role_id") @db.Uuid
+  isCanonical Boolean @default(false) @map("is_canonical")
   position Position @relation(fields: [organizationId, positionId], references: [organizationId, id], onDelete: Cascade, onUpdate: Restrict)
   role Role @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
 

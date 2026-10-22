@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import type { components } from '@qms/contracts';
 import { completeMfa } from './mfa-login';
 import { fillSecret } from './secret-input';
+import { createPositionGrant, createPositionUser, positionWrite, replacePositionAppointments, retirePositionGrant, type PositionGrant } from './position-fixture';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
@@ -83,16 +84,13 @@ test('registers, processes, independently closes and archives a complaint throug
 
   const reviewerName = unique('d2_reviewer');
   const reviewerPassword = `${randomUUID()}Aa9!`;
-  const roleResponse = await write(page.request, '/api/v1/admin/roles', 'POST', { organizationId: currentUser.organizationId, code: unique('D2_ROLE'), name: 'D2 验收复核', permissionCodes: ['workbench:read', 'customer-quality:complaints:read', 'customer-quality:complaints:write'] } satisfies Schema['CreateAdminRoleDto']);
-  expect(roleResponse.status(), JSON.stringify(await roleResponse.json())).toBe(201);
-  const role = await roleResponse.json() as Schema['AdminRoleDto'];
-  const userResponse = await write(page.request, '/api/v1/admin/users', 'POST', { username: reviewerName, initialPassword: reviewerPassword, organizationId: currentUser.organizationId, accountType: 'INTERNAL' } satisfies Schema['CreateAdminUserDto']);
-  expect(userResponse.status()).toBe(201);
-  const reviewer = await userResponse.json() as Schema['AdminUserDto'];
-  expect((await write(page.request, `/api/v1/admin/users/${reviewer.id}/roles?organizationId=${currentUser.organizationId}`, 'PUT', { roleIds: [role.id] } satisfies Schema['AssignAdminRolesDto'])).status()).toBe(200);
+  let grant: PositionGrant | undefined;
+  let reviewer: Schema['AdminUserDto'] | undefined;
 
   const reviewerContext = await browser.newContext({ baseURL });
   try {
+    grant = await createPositionGrant(page.request, currentUser.organizationId, { name: 'D2 验收复核', permissionCodes: ['workbench:read', 'customer-quality:complaints:read', 'customer-quality:complaints:write'] });
+    reviewer = await createPositionUser(page.request, currentUser.organizationId, [grant.position.id], { username: reviewerName, initialPassword: reviewerPassword });
     const reviewerPage = await reviewerContext.newPage();
     await uiLogin(reviewerPage, reviewerName, reviewerPassword);
     await reviewerPage.goto('/app/customer-quality');
@@ -107,5 +105,13 @@ test('registers, processes, independently closes and archives a complaint throug
     const archiving = reviewerPage.waitForResponse((response) => response.url().endsWith('/archive') && response.request().method() === 'PUT');
     await reviewerPage.getByRole('button', { name: /归\s*档/ }).click();
     expect((await archiving).status()).toBe(200);
-  } finally { await reviewerContext.close(); }
+  } finally {
+    try {
+      if (reviewer) {
+        await replacePositionAppointments(page.request, currentUser.organizationId, reviewer.id, []);
+        await positionWrite(page.request, `/api/v1/admin/users/${reviewer.id}?organizationId=${currentUser.organizationId}`, 'PATCH', { status: 'DISABLED' });
+      }
+      if (grant) await retirePositionGrant(page.request, currentUser.organizationId, grant);
+    } finally { await reviewerContext.close(); }
+  }
 });

@@ -4,11 +4,13 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { ADMIN_PERMISSIONS, AdminMutationService, adminError, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { PositionOnboardingService } from './position-onboarding.service.js';
 import { grantSupplierBoundaryCaretaker } from '../authorization/supplier-account-authorization.js';
 import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
-import { assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
+import { assertLegacyPositionRoleWrite, assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
-import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, ReplacePositionRolesDto, ReplaceUserPositionsDto } from './organization.dto.js';
+import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
+import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto } from './organization.dto.js';
 
 const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
 const organizationSelect = { id: true, code: true, name: true, type: true, parentId: true, status: true, version: true } as const;
@@ -18,7 +20,7 @@ type PositionRolePolicy = { positionIds: string[]; roles: Awaited<ReturnType<typ
 
 @Injectable()
 export class OrganizationService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly onboarding: PositionOnboardingService) {}
 
   lookup(id: string, transaction: Prisma.TransactionClient = this.prisma) {
     return transaction.organization.findUnique({ where: { id }, select: { id: true, name: true, code: true, type: true } });
@@ -175,11 +177,53 @@ export class OrganizationService {
     return this.positionRoleResult(this.prisma, organizationId, positionId);
   }
 
+  async positionPermissions(actor: AdminActor, organizationId: string, positionId: string) {
+    await assertAdminAccess(this.prisma, actor, organizationId, ['organization:structure:read', 'account:roles:read']);
+    return this.positionPermissionResult(this.prisma, organizationId, positionId);
+  }
+
+  updatePositionPermissions(actor: AdminActor, organizationId: string, positionId: string, dto: UpdatePositionPermissionsDto, traceId: string, key?: string) {
+    const permission = ['organization:structure:manage', 'account:roles:read', 'account:roles:update', 'account:roles:assign'];
+    return this.mutations.run({ actor, organizationId, key, action: 'POSITION_PERMISSIONS_CHANGED', payload: { organizationId, positionId, ...dto }, permission, traceId }, async (transaction) => {
+      await this.lockOrganization(transaction, organizationId);
+      const organization = await this.activeOrganization(transaction, organizationId);
+      if (organization.type !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
+      await this.lockPositions(transaction, organizationId, [positionId]);
+      const current = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { id: true, name: true, roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
+      if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      const roles = await positionRoleDefinitions(transaction, organizationId, current.roles.map(({ roleId }) => roleId), true);
+      await this.lockPositionAssignees(transaction, organizationId, [positionId]);
+      const granted = await this.refreshPositionAccess(transaction, actor, organizationId, permission, { positionIds: [positionId], roles, grantableRoles: [] });
+      const canonicalId = current.roles.find(({ isCanonical }) => isCanonical)?.roleId;
+      const own = roles.find(({ id }) => id === canonicalId);
+      const codes = own?.permissions.map(({ code }) => code).sort() ?? [];
+      if (current.roleVersion !== dto.expectedRoleVersion || current.roleVersion >= 2147483647
+        || JSON.stringify(codes) !== JSON.stringify([...new Set(dto.expectedPermissionCodes)].sort())
+        || (own?.mfaRequired ?? false) !== dto.expectedMfaRequired) adminError('CONCURRENCY_CONFLICT', 409);
+      const nextCodes = [...new Set(dto.permissionCodes)];
+      if (nextCodes.some((code) => !ACTIVE_PERMISSION_CODES.includes(code))) adminError('ADMIN_PERMISSION_NOT_FOUND', 400);
+      const permissions = await transaction.permission.findMany({ where: { code: { in: nextCodes } }, select: { id: true } });
+      if (permissions.length !== nextCodes.length) adminError('ADMIN_PERMISSION_NOT_FOUND', 400);
+      if (nextCodes.some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
+      const roleId = canonicalId ?? (await this.createCanonicalRole(transaction, organizationId, current)).id;
+      await transaction.role.update({ where: { id: roleId }, data: { mfaRequired: dto.mfaRequired } });
+      await transaction.rolePermission.deleteMany({ where: { roleId } });
+      if (permissions.length) await transaction.rolePermission.createMany({ data: permissions.map(({ id }) => ({ roleId, permissionId: id })) });
+      const changed = await transaction.position.updateMany({ where: { organizationId, id: positionId, roleVersion: dto.expectedRoleVersion }, data: { roleVersion: { increment: 1 } } });
+      if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+      const affected = await this.effectivePositionUsers(transaction, organizationId, [positionId]);
+      const selfSessionRevoked = await this.invalidatePositionUsers(transaction, actor, organizationId, affected, granted);
+      await this.record(transaction, actor, organizationId, 'POSITION_PERMISSIONS_CHANGED', 'Position', positionId, traceId, dto.expectedRoleVersion + 1);
+      return this.positionPermissionResult(transaction, organizationId, positionId, selfSessionRevoked);
+    });
+  }
+
   replacePositionRoles(actor: AdminActor, organizationId: string, positionId: string, dto: ReplacePositionRolesDto, traceId: string, key?: string) {
     const roleIds = [...new Set(dto.roleIds)].sort();
     return this.mutations.run({ actor, organizationId, key, action: 'POSITION_ROLES_CHANGED', payload: { organizationId, positionId, roleIds, expectedRoleVersion: dto.expectedRoleVersion }, permission: ['organization:structure:manage', 'account:roles:read', 'account:roles:assign'], traceId }, async (transaction) => {
       await this.lockOrganization(transaction, organizationId);
       await this.lockPositions(transaction, organizationId, [positionId]);
+      await assertLegacyPositionRoleWrite(transaction, organizationId, positionId, roleIds);
       const current = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { roleVersion: true, roles: { select: { roleId: true } } } });
       if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
       if (current.roleVersion >= 2147483647) adminError('CONCURRENCY_CONFLICT', 409);
@@ -199,15 +243,16 @@ export class OrganizationService {
       const selfSessionRevoked = await this.invalidatePositionUsers(transaction, actor, organizationId, affected, granted);
       await this.record(transaction, actor, organizationId, 'POSITION_ROLES_CHANGED', 'Position', positionId, traceId, dto.expectedRoleVersion + 1);
       return this.positionRoleResult(transaction, organizationId, positionId, selfSessionRevoked);
-    });
+    }, (transaction) => assertLegacyPositionRoleWrite(transaction, organizationId, positionId, roleIds));
   }
 
   createPosition(actor: AdminActor, organizationId: string, dto: CreatePositionDto, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId, key, action: 'POSITION_CREATED', payload: { organizationId, ...dto }, permission: 'organization:structure:manage', traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
-      await this.activeOrganization(transaction, organizationId);
+      const organization = await this.activeOrganization(transaction, organizationId);
       await this.activeDepartment(transaction, organizationId, dto.departmentId);
       if (dto.categoryId) await this.activeCategory(transaction, organizationId, dto.categoryId);
       const result = await transaction.position.create({ data: { ...dto, name: dto.name.trim(), organizationId }, select: positionSelect });
+      if (organization.type === 'INTERNAL') await this.createCanonicalRole(transaction, organizationId, result);
       await this.record(transaction, actor, organizationId, 'POSITION_CREATED', 'Position', result.id, traceId, result.version);
       return result;
     });
@@ -237,6 +282,10 @@ export class OrganizationService {
       const before = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
       const changed = await transaction.position.updateMany({ where: { organizationId, id: positionId, version: dto.expectedVersion }, data: { name: dto.name?.trim(), departmentId: dto.departmentId, categoryId: dto.categoryId, status: dto.status, version: { increment: 1 } } });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+      if (dto.name !== undefined) {
+        const canonical = await transaction.positionRole.findFirst({ where: { organizationId, positionId, isCanonical: true }, select: { roleId: true } });
+        if (canonical) await transaction.role.update({ where: { id: canonical.roleId }, data: { name: [...dto.name.trim()].slice(0, 150).join('') } });
+      }
       const after = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
       const beforeSet = new Set(before);
       const afterSet = new Set(after);
@@ -255,7 +304,7 @@ export class OrganizationService {
     return this.prisma.userPosition.findMany({ where: { organizationId, userId }, include: { position: { select: positionSelect } }, orderBy: [{ startedAt: 'desc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 });
   }
 
-  replaceUserPositions(actor: AdminActor, organizationId: string, userId: string, dto: ReplaceUserPositionsDto, traceId: string, key?: string) {
+  replaceUserPositions(actor: AdminActor, organizationId: string, userId: string, dto: ReplaceUserPositionsDto & { authorizationBaseline?: string }, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId, key, action: 'USER_POSITIONS_REPLACED', payload: { organizationId, userId, ...dto }, permission: 'organization:positions:assign', traceId }, async (transaction) => {
       await this.lockOrganization(transaction, organizationId);
       await this.activeOrganization(transaction, organizationId);
@@ -265,6 +314,7 @@ export class OrganizationService {
       const positionIds = [...new Set([...candidates.map(({ positionId }) => positionId), ...dto.positionIds])];
       await this.lockPositions(transaction, organizationId, positionIds);
       await this.lockPositionRoles(transaction, organizationId, positionIds);
+      if (dto.authorizationBaseline !== undefined) await this.onboarding.verifyAdjustment(transaction, actor, organizationId, { ...dto, authorizationBaseline: dto.authorizationBaseline, targetUserId: userId });
       await this.lockUsers(transaction, [userId]);
       await transaction.$queryRaw`SELECT id FROM user_positions WHERE organization_id = ${organizationId}::uuid AND user_id = ${userId}::uuid AND (ended_at IS NULL OR ended_at > ${new Date()}) ORDER BY id FOR UPDATE`;
       const now = new Date();
@@ -286,6 +336,8 @@ export class OrganizationService {
       if (before || after) await this.invalidatePositionUsers(transaction, actor, organizationId, [userId], granted);
       await this.record(transaction, actor, organizationId, 'USER_POSITIONS_REPLACED', 'User', userId, traceId);
       return transaction.userPosition.findMany({ where: { organizationId, userId, ...effectivePositionAssignmentWhere() }, include: { position: { select: positionSelect } }, orderBy: [{ positionId: 'asc' }, { id: 'asc' }] });
+    }, async (transaction) => {
+      if (dto.authorizationBaseline !== undefined) await this.onboarding.authorizeAdjustment(transaction, actor, organizationId, { ...dto, authorizationBaseline: dto.authorizationBaseline, targetUserId: userId });
     });
   }
 
@@ -295,6 +347,23 @@ export class OrganizationService {
     const roles = await positionRoleDefinitions(transaction, organizationId, position.roles.map(({ roleId }) => roleId));
     const users = await this.effectivePositionUsers(transaction, organizationId, [positionId]);
     return { positionId, roleVersion: position.roleVersion, roles, effectiveAssigneeCount: users.length, selfSessionRevoked };
+  }
+
+  private async createCanonicalRole(transaction: AdminTransaction, organizationId: string, position: { id: string; name: string }) {
+    const role = await transaction.role.create({ data: { organizationId, code: `POS_${randomUUID()}`, name: [...position.name].slice(0, 150).join('') } });
+    await transaction.positionRole.create({ data: { organizationId, positionId: position.id, roleId: role.id, isCanonical: true } });
+    return role;
+  }
+
+  private async positionPermissionResult(transaction: AdminTransaction, organizationId: string, positionId: string, selfSessionRevoked = false) {
+    const position = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
+    if (!position) adminError('STRUCTURE_NOT_FOUND', 404);
+    const roles = await positionRoleDefinitions(transaction, organizationId, position.roles.map(({ roleId }) => roleId));
+    const canonicalId = position.roles.find(({ isCanonical }) => isCanonical)?.roleId;
+    const own = roles.find(({ id }) => id === canonicalId);
+    const legacyIds = new Set(position.roles.filter(({ isCanonical }) => !isCanonical).map(({ roleId }) => roleId));
+    const users = await this.effectivePositionUsers(transaction, organizationId, [positionId]);
+    return { positionId, roleVersion: position.roleVersion, permissionCodes: own?.permissions.map(({ code }) => code).sort() ?? [], mfaRequired: own?.mfaRequired ?? false, legacyRoles: roles.filter(({ id }) => legacyIds.has(id)), effectiveAssigneeCount: users.length, selfSessionRevoked };
   }
 
   private async lockPositionRoles(transaction: AdminTransaction, organizationId: string, positionIds: string[], grantPositionIds: string[] = []): Promise<PositionRolePolicy> {

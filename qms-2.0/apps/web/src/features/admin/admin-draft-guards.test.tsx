@@ -14,7 +14,7 @@ import type { AdminOrganization, AdminRole, AdminUser } from './admin';
 vi.mock('../imports/read-xlsx', () => ({ readXlsxFile: vi.fn() }));
 const render = (children: ReactNode) => testingRender(<ConfigProvider locale={zhCN} theme={{ token: { motion: false } }}>{children}</ConfigProvider>);
 
-const organization: AdminOrganization = { id: 'org-a', code: 'A', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:roles:read', 'account:roles:update', 'account:roles:assign'] };
+const organization: AdminOrganization = { id: 'org-a', code: 'A', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:roles:read', 'account:roles:update', 'account:roles:assign', 'organization:structure:read', 'organization:positions:assign'] };
 const account: AdminUser = { id: 'user-a', username: 'alice', fullName: 'Alice', phone: null, email: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, code: organization.code, name: organization.name }, mfaEnabled: false, createdAt: '', updatedAt: '' };
 const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, mfaRequired: false, permissions: [] };
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
@@ -47,46 +47,35 @@ it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled clo
   expect(writes).toEqual([]);
 }, 30000);
 
-it('guards unsaved direct role assignment without submitting selected roles on close', async () => {
+it('opens legacy user authorization as read-only and closes without a draft or write', async () => {
   const user = baseUserEvent.setup();
   const writes: RequestInit[] = [];
-  let finishRoles!: (response: Response) => void;
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (init.method && init.method !== 'GET') writes.push(init);
-    if (path.includes('/users/user-a/roles?')) return json({ roles: [], effectiveRoles: [] });
-    if (path.includes('/roles?')) return new Promise<Response>(resolve => { finishRoles = resolve; });
+    if (path.includes('/users/user-a/roles?')) return json({ roles: [role], effectiveRoles: [{ ...role, sources: [{ kind: 'DIRECT' }] }], permissions: [] });
     return json([account]);
   }));
   render(<MemoryRouter><UnsavedChangesProvider><UserAdministration organization={organization} organizations={[organization]} /></UnsavedChangesProvider></MemoryRouter>);
-  await user.click(await screen.findByRole('button', { name: '分配角色' }));
-  await waitFor(() => expect(finishRoles).toBeDefined());
-  await act(async () => finishRoles(json([role])));
-  const editor = await screen.findByRole('dialog', { name: 'alice · 组织角色' });
-  const selector = within(editor).getByRole('combobox', { name: '组织角色' }).closest('.ant-select');
-  await waitFor(() => expect(selector).toBeVisible());
-  await user.click(selector as HTMLElement);
-  const option = await screen.findByText(role.name, { selector: '.ant-select-item-option-content' });
-  await waitFor(() => expect(option).toBeVisible());
-  await user.click(option);
+  await user.click(await screen.findByRole('button', { name: '查看授权来源' }));
+  const editor = await screen.findByRole('dialog', { name: 'alice · 授权来源' });
   await waitFor(() => expect(within(editor).getByText(role.name)).toBeVisible());
+  expect(within(editor).queryByRole('combobox')).not.toBeInTheDocument();
+  expect(within(editor).queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
   await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
-  await waitFor(() => expect(within(editor).getByText(role.name)).toBeVisible());
-  await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(writes).toEqual([]);
 }, 30000);
 
 it('keeps the batch account modal open while creation is pending and allows closing after settlement', async () => {
   const user = baseUserEvent.setup();
-  vi.mocked(readXlsxFile).mockResolvedValue([['用户名', '邮箱', '账号类型'], ['new.user', '', 'INTERNAL']]);
+  vi.mocked(readXlsxFile).mockResolvedValue([['用户名', '邮箱', '账号类型', '岗位代码'], ['new.user', '', 'INTERNAL', 'QA']]);
   let finish!: (response: Response) => void;
   const writes: RequestInit[] = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.includes('/departments?')) return json([{ id: 'd1', status: 'ACTIVE' }]);
+    if (path.includes('/positions?')) return json([{ id: 'p1', departmentId: 'd1', code: 'QA', status: 'ACTIVE' }]);
+    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'baseline-1', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false });
     if (path === '/api/v1/admin/users/batch') { writes.push(init); return new Promise<Response>(resolve => { finish = resolve; }); }
     return json([account]);
   }));

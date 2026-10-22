@@ -50,6 +50,18 @@ describe('administrator role management', () => {
     expect(prisma.permission.findMany).toHaveBeenCalledWith({ select: { id: true, code: true, name: true }, orderBy: { code: 'asc' } });
   });
 
+  it.each(['update', 'remove', 'copy', 'assign'] as const)('refuses canonical role %s before an old successful idempotency replay', async (operation) => {
+    prisma.positionRole.count.mockResolvedValue(1);
+    prisma.adminMutation.findUnique.mockResolvedValue({ action: 'OLD_SUCCESS', response: { value: { leaked: true } } });
+    const change = operation === 'update' ? service.update(actor, role.id, { name: 'Bypass' }, 'trace', 'canonical-key')
+      : operation === 'remove' ? service.remove(actor, role.id, 'trace', 'canonical-key')
+        : operation === 'copy' ? service.copy(actor, role.id, { code: 'COPY', name: 'Copy' }, 'trace', 'canonical-key')
+          : service.assign(actor, 'target-user', { roleIds: [role.id] }, 'trace', 'canonical-key');
+    await expect(change).rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(prisma.adminMutation.findUnique).not.toHaveBeenCalled();
+    expect(prisma.positionRole.count).toHaveBeenCalledWith({ where: { isCanonical: true, roleId: { in: [role.id] } } });
+  });
+
   it('requires the read MFA baseline and rejects stale policy changes before mutation', async () => {
     await expect(service.update(actor, role.id, { mfaRequired: true }, 'trace', 'test-key-mfa')).rejects.toMatchObject({ status: 400 });
     await expect(service.update(actor, role.id, { mfaRequired: false, expectedMfaRequired: true }, 'trace', 'test-key-mfa')).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
@@ -75,7 +87,7 @@ describe('administrator role management', () => {
   it('lists and reads roles only inside the server-authorized organization', async () => {
     await service.list(actor);
     await service.detail(actor, 'role-a');
-    expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a' } }));
+    expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', positions: { none: { isCanonical: true } } } }));
     expect(prisma.role.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'role-a', organizationId: 'org-a' } }));
   });
 

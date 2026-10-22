@@ -151,7 +151,7 @@ it.each(['organization', 'permission'] as const)('drops a pending admin write af
   expect(screen.queryByText('Late account name')).not.toBeInTheDocument();
   expect(writes).toBe(1);
 }, 30000);
-it('shows effective sources but never promotes inherited roles into the direct assignment write', async () => {
+it('shows effective sources as historical read-only authorization without any direct assignment write', async () => {
   const direct = { id: 'r1', code: 'D', name: 'Direct role', organizationId: 'org', permissions: [], mfaRequired: false };
   const inherited = { ...direct, id: 'r2', name: 'Inherited role', sources: [{ kind: 'POSITION', positionId: 'p1' }] };
   let body: unknown;
@@ -162,9 +162,10 @@ it('shows effective sources but never promotes inherited roles into the direct a
     return json(path.includes('/admin/roles') ? [direct, inherited] : [user]);
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(await screen.findByRole('button', { name: '分配角色' }));
+  await userEvent.click(await screen.findByRole('button', { name: '查看授权来源' }));
   const dialog = within(await screen.findByRole('dialog'));
   await waitFor(() => expect(dialog.getByText('岗位继承 · p1')).toBeVisible());
-  await userEvent.click(dialog.getByRole('button', { name: '保存角色分配' }));
-  await waitFor(() => expect(body).toEqual({ roleIds: ['r1'] }));
+  expect(dialog.queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
+  expect(dialog.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(body).toBeUndefined();
 });

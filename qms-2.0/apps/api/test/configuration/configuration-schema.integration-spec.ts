@@ -91,7 +91,7 @@ describe('controlled platform configuration', () => {
     const assignment = await prisma.userRole.findFirstOrThrow({ where: { userId } });
     const permission = await prisma.permission.upsert({ where: { code: 'organization:structure:manage' }, create: { code: 'organization:structure:manage', name: 'Structure' }, update: {} });
     await prisma.rolePermission.create({ data: { roleId: assignment.roleId, permissionId: permission.id } });
-    const structures = new OrganizationService(prisma, new AdminMutationService(prisma, audit), audit);
+    const structures = new OrganizationService(prisma, new AdminMutationService(prisma, audit), audit, undefined as never);
     const department = await structures.createDepartment(actor, organizationId, { code: 'QA', name: 'QA' }, 'config-test', randomUUID());
     const category = await service.createCategory(actor, organizationId, { code: 'ENGINEERING', name: 'Engineering', sortOrder: 0 }, 'config-test', randomUUID());
     const position = await structures.createPosition(actor, organizationId, { code: 'QE', name: 'Engineer', departmentId: department.id, categoryId: category.id }, 'config-test', randomUUID());

@@ -3,6 +3,17 @@ import { adminError, type AdminTransaction } from './admin-mutation.service.js';
 import { SUPPLIER_PORTAL_PERMISSIONS } from '../../modules/authorization/supplier-account-authorization.js';
 import { ACTIVE_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
 
+export async function assertNoCanonicalRole(transaction: AdminTransaction, roleIds: string[]) {
+  if (roleIds.length && await transaction.positionRole.count({ where: { isCanonical: true, roleId: { in: roleIds } } })) {
+    adminError('FEATURE_PERMISSION_DENIED', 403);
+  }
+}
+
+export async function assertLegacyPositionRoleWrite(transaction: AdminTransaction, organizationId: string, positionId: string, roleIds: string[]) {
+  if (await transaction.positionRole.count({ where: { organizationId, positionId, isCanonical: true } })) adminError('FEATURE_PERMISSION_DENIED', 403);
+  await assertNoCanonicalRole(transaction, roleIds);
+}
+
 // Public transactional projection; OrganizationModule must not import AuthorizationModule.
 export async function positionRoleDefinitions(transaction: AdminTransaction, organizationId: string, roleIds: string[], lock = false) {
   const ids = [...new Set(roleIds)].sort();

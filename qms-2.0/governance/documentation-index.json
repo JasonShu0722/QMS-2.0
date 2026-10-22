@@ -144,9 +144,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-22",
         "maxAgeDays": 90,
-        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。",
+        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
@@ -162,7 +162,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -178,9 +178,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（工作流整合实际复核）",
-        "reviewedOn": "2026-10-12",
+        "reviewedOn": "2026-10-22",
         "maxAgeDays": 90,
-        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。",
+        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
           }
         ]
       }
@@ -200,9 +200,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-22",
         "maxAgeDays": 30,
-        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。",
+        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
         "sources": [
           {
             "path": "package.json",
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -234,9 +234,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-22",
         "maxAgeDays": 30,
-        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。",
+        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "7a78a1cbce9109c66e94a55cbf445d5700ee7f1bdce09e2ce971f3ae0201682e"
+            "sha256": "caa758966054b04fd663816052b20d7aba3b02d8c8156d068b1507be48523a1b"
           },
           {
             "path": "README.md",
@@ -444,7 +444,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-10-22-qms-position-as-role-design.md",
-            "sha256": "c3963505baefa082e69e5021ee4abded31ecfe44255aa1d96acafaaf137bbf9e"
+            "sha256": "5f068b2a4ec0a9061e120fe09980b1abe2cad9b49294e6896f77d4bf463b76e9"
           }
         ]
       }
@@ -762,9 +762,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-22",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -772,7 +772,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "c77a94811c845913ebabbb1077f72eb3b588113723e969daf1ee1d4fe423d9a4"
+            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

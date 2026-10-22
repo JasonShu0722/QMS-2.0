@@ -27,7 +27,8 @@ describe('admin user lifecycle service', () => {
   };
   const passwords = { hash: jest.fn() };
   const audit = { record: jest.fn() };
-  const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never), {} as never);
+  const onboarding = { summariesForUsers: jest.fn(async (_tx: unknown, _organizationId: string, ids: string[]) => ids.map((userId) => ({ userId, positions: [], totalPositions: 0 }))), authorizeInitialPositions: jest.fn(), createWithInitialPositions: jest.fn(async (_tx: unknown, _actor: unknown, _organizationId: unknown, _input: unknown, _traceId: unknown, createUser: () => Promise<unknown>) => createUser()) };
+  const service = new AdminUserService(prisma as never, passwords as never, audit as never, new AdminMutationService(prisma as never, audit as never), new PasswordResetService(prisma as never, passwords as never, audit as never), {} as never, onboarding as never);
   const actor = { id: 'admin-1', sessionId: 'session-admin', organizationId: 'org-a', accountType: 'INTERNAL' as const };
 
   beforeEach(() => {
@@ -51,6 +52,15 @@ describe('admin user lifecycle service', () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a' } }));
   });
 
+  it('requests bounded summaries in chunks rather than truncating a user list at 100', async () => {
+    const users = Array.from({ length: 205 }, (_, index) => ({ id: `user-${index}`, organizationId: 'org-a' }));
+    prisma.user.findMany.mockResolvedValue(users);
+    const result = await service.list(actor, { organizationId: 'org-a' });
+    expect(result).toHaveLength(205);
+    expect(onboarding.summariesForUsers.mock.calls.map((call) => call[2].length)).toEqual([100, 100, 5]);
+    expect(result[204]).toMatchObject({ id: 'user-204', positions: [], totalPositions: 0 });
+  });
+
   it('rejects a supplier actor from creating a user in another organization', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'supplier-1', organizationId: 'supplier-a', accountType: 'SUPPLIER', status: 'ACTIVE', organization: { status: 'ACTIVE' } });
     await expect(service.create(
@@ -65,10 +75,11 @@ describe('admin user lifecycle service', () => {
     const created = { id: 'user-2', organizationId: 'org-a', username: 'bob', email: null, fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: 'Org A' } };
     prisma.user.create.mockResolvedValue(created);
     prisma.user.findFirst.mockResolvedValue(created);
-    const result = await service.create(actor, { organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', initialPassword: 'password-1234' }, 'trace-1', 'test-key-1');
+    const result = await service.create(actor, { organizationId: 'org-a', username: 'bob', accountType: 'INTERNAL', initialPassword: 'password-1234', positionIds: ['position-1'], authorizationBaseline: 'preview' }, 'trace-1', 'test-key-1');
     expect(result).toMatchObject({ id: 'user-2', username: 'bob' });
     expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordHash: 'hashed-password' }) }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'USER_CREATED', resourceId: 'user-2' }), prisma);
+    expect(onboarding.createWithInitialPositions).toHaveBeenCalledWith(prisma, actor, 'org-a', { positionIds: ['position-1'], authorizationBaseline: 'preview' }, 'trace-1', expect.any(Function));
   });
 
   it('updates status and organization within the authorized scope', async () => {

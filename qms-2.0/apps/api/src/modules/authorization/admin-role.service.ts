@@ -5,10 +5,11 @@ import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../../common/co
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { AdminUserActor } from '../identity/admin-user.service.js';
 import type { AssignAdminRolesDto, CopyAdminRoleDto, CreateAdminRoleDto, UpdateAdminRoleDto } from './admin-role.dto.js';
-import { AdminMutationService, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
+import { AdminMutationService, adminError, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
 import { ACTIVE_PERMISSION_CODES, ADMIN_PERMISSIONS, PERMISSION_CATALOG } from './permission-catalog.js';
 import { effectivePositionAssignmentWhere, effectiveRoleGrants, type EffectiveRoleGrant } from '../../common/security/effective-role-grants.js';
 import { SUPPLIER_PORTAL_PERMISSIONS } from './supplier-account-authorization.js';
+import { assertNoCanonicalRole } from '../../common/security/position-role-policy.js';
 
 type Transaction = Prisma.TransactionClient;
 const ROLE_INCLUDE = { permissions: { include: { permission: true } } } as const;
@@ -32,13 +33,20 @@ export class AdminRoleService {
   async list(actor: AdminUserActor) {
     const organizationId = this.scope(actor);
     await this.assertRead(actor);
-    const roles = await this.prisma.role.findMany({ where: { organizationId }, include: ROLE_INCLUDE, orderBy: { code: 'asc' } });
+    const roles = await this.prisma.role.findMany({ where: { organizationId, positions: { none: { isCanonical: true } } }, include: ROLE_INCLUDE, orderBy: { code: 'asc' } });
     return roles.map((role) => this.serialize(role));
   }
 
   async detail(actor: AdminUserActor, roleId: string) {
     await this.assertRead(actor);
     return this.serialize(await this.role(this.prisma, roleId, this.scope(actor)));
+  }
+
+  rejectIndependentWrite(actor: AdminUserActor, permission: string, traceId: string, key?: string): Promise<never> {
+    // Freeze the HTTP surface before receipts replay; trusted internal recovery retains the methods below.
+    return this.mutations.run<never>({ actor, organizationId: this.scope(actor), key, action: 'LEGACY_ROLE_HTTP_WRITE_REJECTED', payload: {}, permission, traceId },
+      async () => adminError('FEATURE_PERMISSION_DENIED', 403),
+      async () => adminError('FEATURE_PERMISSION_DENIED', 403));
   }
 
   create(actor: AdminUserActor, dto: CreateAdminRoleDto, traceId: string, key?: string) {
@@ -66,7 +74,7 @@ export class AdminRoleService {
       });
       await this.record(transaction, actor, 'ROLE_CREATED', role.id, role.code, traceId);
       return this.serialize(role);
-    });
+    }, (transaction) => assertNoCanonicalRole(transaction, [roleId]));
   }
 
   update(actor: AdminUserActor, roleId: string, dto: UpdateAdminRoleDto, traceId: string, key?: string) {
@@ -101,7 +109,7 @@ export class AdminRoleService {
       await this.assertNotLocked(transaction, actor, granted);
       await this.record(transaction, actor, 'ROLE_UPDATED', roleId, existing.code, traceId);
       return this.serialize(role);
-    });
+    }, (transaction) => assertNoCanonicalRole(transaction, [roleId]));
   }
 
   remove(actor: AdminUserActor, roleId: string, traceId: string, key?: string) {
@@ -112,7 +120,7 @@ export class AdminRoleService {
       if (await transaction.userRole.count({ where: { roleId } }) || await transaction.positionRole.count({ where: { roleId } })) this.fail('ADMIN_ROLE_IN_USE', 409);
       await transaction.role.delete({ where: { id: roleId } });
       await this.record(transaction, actor, 'ROLE_DELETED', roleId, existing.code, traceId);
-    });
+    }, (transaction) => assertNoCanonicalRole(transaction, [roleId]));
   }
 
   async assignments(actor: AdminUserActor, userId: string) {
@@ -143,11 +151,11 @@ export class AdminRoleService {
       await this.assertNotLocked(transaction, actor, granted);
       await this.audit.record({ actorUserId: actor.id, organizationId, action: 'USER_ROLES_CHANGED', resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId, metadata: { targetUserId: userId } }, transaction);
       return this.userRoles(userId, organizationId, await effectiveRoleGrants(transaction, userId, organizationId));
-    });
+    }, (transaction) => assertNoCanonicalRole(transaction, dto.roleIds));
   }
 
-  private mutate<Result>(actor: AdminUserActor, input: { action: string; permission: string; payload: unknown; traceId: string; key?: string }, work: (transaction: Transaction, granted: string[]) => Promise<Result>): Promise<Result> {
-    return this.mutations.run({ ...input, key: input.key, actor, organizationId: this.scope(actor), duplicateCode: 'ADMIN_ROLE_DUPLICATE' }, work);
+  private mutate<Result>(actor: AdminUserActor, input: { action: string; permission: string; payload: unknown; traceId: string; key?: string }, work: (transaction: Transaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: Transaction) => Promise<void>): Promise<Result> {
+    return this.mutations.run({ ...input, key: input.key, actor, organizationId: this.scope(actor), duplicateCode: 'ADMIN_ROLE_DUPLICATE' }, work, authorizeResource);
   }
 
   private scope(actor: AdminUserActor): string {

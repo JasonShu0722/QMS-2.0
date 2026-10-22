@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
-import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiNoContentResponse, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
@@ -44,40 +44,48 @@ export class AdminRoleController {
   }
 
   @Post('roles')
+  @ApiOperation({ deprecated: true, description: 'Legacy independent role writes are disabled; configure position permissions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Independent role writes are read-only.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiCreatedResponse({ type: AdminRoleDto })
   @RequireAccess({ featurePermission: 'account:roles:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
   create(@Body() dto: CreateAdminRoleDto, @Req() request: Request) {
-    return this.roles.create(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.roles.rejectIndependentWrite(this.actor(request), 'account:roles:create', requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Post('roles/:roleId/copy')
+  @ApiOperation({ deprecated: true, description: 'Legacy independent role writes are disabled; configure position permissions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Independent role writes are read-only.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiCreatedResponse({ type: AdminRoleDto })
   @RequireAccess({ featurePermission: 'account:roles:create', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   copy(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: CopyAdminRoleDto, @Req() request: Request) {
-    return this.roles.copy(this.actor(request), roleId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.roles.rejectIndependentWrite(this.actor(request), 'account:roles:create', requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Patch('roles/:roleId')
+  @ApiOperation({ deprecated: true, description: 'Legacy independent role writes are disabled; configure position permissions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Independent role writes are read-only.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminRoleDto })
   @RequireAccess({ featurePermission: 'account:roles:update', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   update(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: UpdateAdminRoleDto, @Req() request: Request) {
-    return this.roles.update(this.actor(request), roleId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.roles.rejectIndependentWrite(this.actor(request), 'account:roles:update', requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Delete('roles/:roleId')
+  @ApiOperation({ deprecated: true, description: 'Legacy independent role writes are disabled; configure position permissions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Independent role writes are read-only.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @HttpCode(204)
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiNoContentResponse()
   @RequireAccess({ featurePermission: 'account:roles:delete', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   remove(@Param('roleId', ParseUUIDPipe) roleId: string, @Query() _query: AdminRoleScopeQueryDto, @Req() request: Request) {
-    return this.roles.remove(this.actor(request), roleId, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.roles.rejectIndependentWrite(this.actor(request), 'account:roles:delete', requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Get('users/:userId/roles')
@@ -88,12 +96,14 @@ export class AdminRoleController {
   }
 
   @Put('users/:userId/roles')
+  @ApiOperation({ deprecated: true, description: 'Legacy independent role assignments are disabled; maintain user positions instead.' })
+  @ApiForbiddenResponse({ type: ErrorResponse, description: 'Independent role assignments are read-only.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminUserRolesDto })
   @RequireAccess({ featurePermission: 'account:roles:assign', organizationScope: { source: 'query', field: 'organizationId', optional: true } })
   assign(@Param('userId', ParseUUIDPipe) userId: string, @Query() _query: AdminRoleScopeQueryDto, @Body() dto: AssignAdminRolesDto, @Req() request: Request) {
-    return this.roles.assign(this.actor(request), userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+    return this.roles.rejectIndependentWrite(this.actor(request), 'account:roles:assign', requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   private actor(request: Request) {

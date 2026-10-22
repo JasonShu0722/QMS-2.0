@@ -181,12 +181,13 @@ export class WorkflowDefinitionService {
       await this.access(tx, { organizationId: actor.organizationId, userId: actor.id, actor });
       const search = query.search?.trim();
       const textFilter = search ? { OR: [{ code: { contains: search, mode: 'insensitive' as const } }, { name: { contains: search, mode: 'insensitive' as const } }] } : {};
+      const roleTextFilter = search ? { OR: [...textFilter.OR!, { positions: { some: { isCanonical: true, position: { name: { contains: search, mode: 'insensitive' as const } } } } }] } : {};
       const [roles, users, permissions] = await Promise.all([
-        tx.role.findMany({ where: { AND: [{ OR: [{ organizationId: actor.organizationId }, { organizationId: null }] }, textFilter] }, select: { code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: limit }),
+        tx.role.findMany({ where: { AND: [{ OR: [{ organizationId: actor.organizationId }, { organizationId: null }] }, roleTextFilter] }, select: { code: true, name: true, positions: { where: { isCanonical: true }, select: { position: { select: { name: true } } }, take: 1 } }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: limit }),
         tx.user.findMany({ where: { organizationId: actor.organizationId, status: 'ACTIVE', ...(search ? { username: { contains: search, mode: 'insensitive' as const } } : {}) }, select: { id: true, username: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], take: limit }),
         tx.permission.findMany({ where: { code: { in: ACTIVE_PERMISSION_CODES }, ...textFilter }, select: { code: true, name: true }, orderBy: { code: 'asc' } }),
       ]);
-      return { roles, users: users.map((user) => ({ id: user.id, name: user.username })), permissions };
+      return { roles: roles.map(({ code, name, positions }) => ({ code, name: positions[0]?.position.name ?? name })), users: users.map((user) => ({ id: user.id, name: user.username })), permissions };
     }, 'RepeatableRead');
   }
 
