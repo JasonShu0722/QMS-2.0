@@ -4,6 +4,12 @@
 
 ## 当前摘要（2026-10-22，Asia/Taipei）
 
+> **CI 返修（V0.0.27-fix3）：** PR #63 的 run `39776584703` 在真实 PostgreSQL 集成步骤为 2 suites／3 tests FAIL、88 suites／1094 tests PASS；后续 Worker／Compose 步骤未运行，foundation 汇总随之失败。本地精确两套件复现相同 3 FAIL／20 PASS。根因为配置分类测试缺少岗位状态变更所需的授权读取／分配权限，以及历史物料迁移测试手动前置 schema 缺少 `is_canonical`。本次仅修这两个测试夹具：先验证无权停岗返回 403 且状态／版本不变，再局部授予两项权限；历史 schema 只补 canonical 增量迁移，保留原权限不变断言和物料修复迁移首次执行顺序。不修改生产代码、权限校验、历史迁移文件或浏览器测试；推送仍仅更新原 Draft PR，不合并／部署。
+
+本次实现代理 `ci_fixture_repair` 仅写上述两个测试文件；主代理冻结源码后独立运行原失败套件及岗位权限／旧授权 HTTP 相邻回归，真实一次性 PG（loopback57624，非55440）4 suites／54 tests 全部通过，37.178s／exit0，证据 `ci-fixture-green-complete.log`；此前因会话中断未完成的运行不算通过。完整云端 CI 仍需新提交验证，原语言切换浏览器限制继续保留。
+
+独立 `ci_fixture_review` 先规格后质量审查均通过，无 P1／P2；审查范围为基线 `0cbb08c` 的两处测试差异，不冒充全 PR 重审。治理检查通过，原失败、定向复测及新云端结果分别保留，不把尚未完成的 CI 写成成功。
+
 > **已提交 Draft PR：[#63](https://github.com/JasonShu0722/QMS-2.0/pull/63)**，关联 Issue #62。实现提交 `4eae689d56a1d48157c81c19eecae7b8790f7e23` 已推送 `codex/req-0024-position-role`，base 为 main／`5b01f39d0c6ce4cc6210c5a747be2d68aa4b56ab`。当前仅完成草案提交检查点；已知语言切换浏览器失败保留，云端 CI 与审查结论待确认，不合并、不部署、不关闭或回填需求。以下“准备 PR／PR 尚未创建”等描述均为历史检查点。
 
 > **最新接续：准备Draft PR，不合并／部署。** 负责人已明确“开源了，继续”，随后确认按“最后两条复测、整理提交及PR”继续；只读GitHub API确认仓库public，未由代理更改可见性。该授权取代下方历史推送前等待条件，不扩大为部署或历史数据转换。实际活动路径为 `D:/WorkSpace/QMS-2.0/qms-2.0`（Get-Location与根AGENTS一致）；下方历史摘要中C盘实施的描述错误，以本句为准；Git外环境与日志保存在独立local目录。

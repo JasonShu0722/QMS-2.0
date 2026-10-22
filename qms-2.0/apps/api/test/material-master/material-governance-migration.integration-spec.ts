@@ -108,7 +108,7 @@ describe('global material governance forward migration with real PostgreSQL', ()
     const userRoles = await client.query('SELECT * FROM user_roles ORDER BY user_id, role_id, organization_id');
     const rolePermissions = await client.query('SELECT * FROM role_permissions ORDER BY role_id, permission_id');
     // Only add service-required schema; repairSql must first run in the forward-repair hook below.
-    for (const migration of ['20261020010000_position_roles', '20261020020000_account_profile']) {
+    for (const migration of ['20261020010000_position_roles', '20261020020000_account_profile', '20261022010000_position_canonical_permissions']) {
       await client.query(readFileSync(new URL(`${migration}/migration.sql`, migrations), 'utf8'));
       expect((await client.query('SELECT * FROM user_roles ORDER BY user_id, role_id, organization_id')).rows).toEqual(userRoles.rows);
       expect((await client.query('SELECT * FROM role_permissions ORDER BY role_id, permission_id')).rows).toEqual(rolePermissions.rows);
