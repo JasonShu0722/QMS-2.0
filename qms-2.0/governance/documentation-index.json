@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "3f76224402fdd75e1c8598bff78e4afa6415f41845f1a39d828d9fb54a3a0d3d"
+            "sha256": "af1825d982f65ad70696d72586aee7b4dda6ed5188e21b86c3e5fc0f8cf2cf95"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
+            "sha256": "097b7084468541b6ddfc2ede0d95cc1bfc93263032a00b454c48cd341bcb5d73"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
+            "sha256": "097b7084468541b6ddfc2ede0d95cc1bfc93263032a00b454c48cd341bcb5d73"
           }
         ]
       }
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
+            "sha256": "097b7084468541b6ddfc2ede0d95cc1bfc93263032a00b454c48cd341bcb5d73"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "01a9a7ce0cfc79dfb093ed4920d4024b8576732f9e3729b9a7023db3af49f9d2"
+            "sha256": "727954d465dc730917f94cff96950ccb9503d136e34e61561f2e26a0624bb292"
           },
           {
             "path": "README.md",
@@ -448,7 +448,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "d090084d2e07cd5a03cee256051ff759c6cf3001f2dcdd648e37d746cd86c6d5"
+            "sha256": "8c76db2a10d5637516f4862c29aeceaac1a7bea9d508d28b170638fe71413a64"
           },
           {
             "path": "apps/web/organization-preview.html",
@@ -576,7 +576,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "d090084d2e07cd5a03cee256051ff759c6cf3001f2dcdd648e37d746cd86c6d5"
+            "sha256": "8c76db2a10d5637516f4862c29aeceaac1a7bea9d508d28b170638fe71413a64"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md",
@@ -588,7 +588,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md",
-            "sha256": "a0a62556c8e98412687d655485408fd99f55624832b309e6cfd0927ba589349c"
+            "sha256": "c43232e79b10bbc517aa45cc9caeb1f7991b798b1a40c9afcba1ec0765cccd99"
           }
         ]
       }
@@ -876,7 +876,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
+            "sha256": "097b7084468541b6ddfc2ede0d95cc1bfc93263032a00b454c48cd341bcb5d73"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

@@ -8,14 +8,14 @@
 | --- | --- |
 | 核对日期 | 2026-10-24，Asia/Taipei |
 | 授权来源 | 负责人确认先优化基础管理再上线问题管理，随后确认“按照整合的方案来策划，管理员可以作为一个全量权限的组织岗位”；范围包括统一组织与岗位入口、组织 / 部门代码编辑、受控删除及管理员岗位授权策划 |
-| 当前产物 | N1 正式后端 / Web 已实现并通过独立规格 / 质量复核；Issue #64，分支 codex/qms-n1-organization，V0.0.28 实现提交 `f87be3889d48493e6c1027d78931b2cc407b4971`，已推送并创建 [PR #65](https://github.com/JasonShu0722/QMS-2.0/pull/65)。API 626 单测、233 真实 PostgreSQL 集成及前端分层回归为本地证据；云端检查另查 PR 最新 head，不把原型认可作为正式业务验收 |
-| 基线 | 活动 checkout `D:/WorkSpace/QMS-2.0`；PR base main `784735deaeb0e1c2269d5870434b2d9ea0619a01`，本单元功能分支保留已认可草稿与样例，不重写基线历史 |
+| 当前产物 | V0.0.28 / [PR #65](https://github.com/JasonShu0722/QMS-2.0/pull/65) 已合并并实际部署；main / 镜像 / 部署标记一致为 `b4e51150e934314889287980d062fe389a89561b`。PR fix3 与 main 各自完整 9 项检查成功；部署、备份、服务健康及生产 HTTP / 新契约 / 前端资源已核验，见第 4.6 节；正式页面人工业务验收仍待完成 |
+| 基线 | 活动 checkout `D:/WorkSpace/QMS-2.0`；原 base `784735d`，fix3 head `c1d3d63`，squash 后 main / 生产为 `b4e5115`。功能分支保留历史，发布证据文档本地归档，不向已合并 PR 继续推送或为归档触发重复部署 |
 | 业务来源 | [研讨草稿第 9.8～9.10 节](../specs/2026-10-23-qms-domain-problem-management-discussion-draft.md)，前置顺序以本计划接续 |
 | 非目标 | 问题管理页面 / 8D 运行时实现、IMS / AI 联调、指标面板、生产误建对象转换或删除、历史授权批量迁移 |
 | 交付映射 | 本前置对应 REQ-0025 / reczz28RDS4BlbBs；其余四条见五条提单记录。不覆盖原 P0/P1 A～G 历史分解，不重开已结束 REQ-0024。正式源码实施前接续实际 Issue / 分支 / PR，版本依交付流程核对后分配，不猜编号 |
-| 生产边界 | 生产组织 / 岗位维护、误建对象清理、合并发布及业务开通分别核对授权；本轮没有执行这些动作 |
+| 生产边界 | 已按负责人继续授权完成 N1 合并与自动生产部署；没有维护生产组织 / 岗位、清理误建对象、关闭 Issue 或回写飞书。业务开通及数据维护不随应用发布自动放行 |
 | 证据限制 | 生产引用及正式浏览器矩阵未读取 / 执行。三项维护事项经第 4.2 节事实复核仍开放；提 PR 前治理重跑通过。当前差异凭据格式检查不能替代全历史公开安全审计 |
-| 下一检查点 | O1 已满足，M1 / 自动发布继续授权已明确。fix3 及同根因补充已完成，主代理真实 PG 53 项、API build / lint / 契约及独立规格 / 质量复核通过；提交 V0.0.28-fix3 并更新原 PR #65，核对最新 head CI / 审查后直接接续已授权 M1 / D1 并提醒闭源，不重复确认。生产误建清理与依赖 D1 的 N2 不提前执行 |
+| 下一检查点 | M1 / D1 机器发布核验完成；23:40（Asia/Taipei）核对无排队 / 运行 Actions，已提醒本轮可恢复私有，代理不改可见性。接续最终 SHA 的正式页面人工验收及真实架构配置，再按路线推进 N2；REQ-0025 尚含映射清单，不因 N1 上线整条关闭 |
 
 ## 1. 前置交付的结果
 
@@ -275,3 +275,14 @@ Dalton 对上述补充逐类真实 PG TDD：来料与申诉各 1 项有效红灯
 Hilbert 规格复核、Lagrange 后续质量 / 安全复核对冻结两文件完整 delta 均无明确 P1 / P2；局部 SQL 13 行、真实回归 232 行，生产聚合、其他表条件和历史引用保护未变。两份均仅静态审查，不计作审查者亲自取得数据库证据。
 
 最后统一同步两份计划的来源摘要并重跑治理 / 差异检查；只清理精确任务容器 `qms-n1-fix3-20261024-postgres` 及其匿名卷，核对标签和无 host bind 后执行，删除 Git 外临时环境秘密文件，不动预览或其他资源。修复及机器 / 静态审查证据不代替正式页面人工验收；该项仍待绑定最终部署 SHA。
+
+### 4.6 N1 合并、部署与闭源提醒（2026-10-24，Asia/Taipei）
+
+- 最新 PR head `c1d3d6307eb2c153b72fa809b339ca692ff6c8bc` 的 [Foundation 40104974588](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40104974588) 完整 9 / 9 成功；云端 API 626、真实 PostgreSQL 1153、真实 Worker 8 项及 Web 四分片均通过。fix3 自动审查无新增行内问题；两项原意见已逐线程回复，不因旧提交绿色直接合并。
+- 23:17 按继续授权 squash 合并 [PR #65](https://github.com/JasonShu0722/QMS-2.0/pull/65)，标题 V0.0.28 组织岗位一体化与受控生命周期；最终 main `b4e51150e934314889287980d062fe389a89561b`。[main Foundation 40106313309](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40106313309) 再次完整 9 项成功后，自动触发 [deploy 40107237343](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40107237343)。
+- 23:35 部署日志实际出现对应完整 SHA 的 `Pre-migration encrypted database snapshot verified`、`No pending migrations to apply`、API / Worker / Web 启动及基础服务 Healthy、最终 `Deployment successful`。API / Worker 镜像 `qms2-foundation-api:<同SHA>`、Web `qms2-foundation-web:<同SHA>`；Worker ready 由现有部署脚本成功门禁核对，不复制成新的浏览器验收结果。
+- 23:39 外网独立只读核验 `/login` 与 `/api/v1/openapi.json` 为 200，出现两个新增生命周期 GET、对应组织 / 部门 DELETE，两个更新 DTO 均包含 code。主资源更新为 `/assets/index-XlfA8kUd.js` 与 `/assets/index-DOcry2yZ.css`，JS 200 且包含统一组织与岗位和 lifecycle 调用；不凭资源文本推断登录后交互均通过。
+- 23:40 回读 main 与部署 SHA 一致，查询 queued / in_progress / waiting / requested / pending 均无运行，已明确提醒本轮可以闭源；当时 API 核对仍 public，代理没有修改可见性。后续 N2 发布若仍需公开 CI，依新检查点再提醒，不把这次公开视为永久选择。
+- [Issue #64](https://github.com/JasonShu0722/QMS-2.0/issues/64) 保持开放；正式页面人工验收清单位于 Git 外 `D:/WorkSpace/QMS-2.0-local/n1-ci-2026-10-24/manual-acceptance.md`，绑定上述最终 SHA。生产误建组织清理、真实任职维护、飞书状态回填均未执行；REQ-0025 仍有 N2 项目映射部分。
+
+原始秘密与业务数据未入 Git；仅本地保存脱敏机器汇总。发布后本节及能力 / 验收文档同步作本地文档归档，不继续向已合并 PR 推送，也不为记录更新触发重复生产部署。后续业务变更按新交付单元接续。

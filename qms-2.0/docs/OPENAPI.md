@@ -26,7 +26,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 ## 管理员接口
 
-### N1 组织生命周期契约（本地增量，未发布）
+### N1 组织生命周期契约（V0.0.28已部署）
 
 - `UpdateOrganizationDto`、`UpdateDepartmentDto` 增加可选 `code`，格式与创建相同，仍需 `expectedVersion`。
 - `GET /api/v1/organizations/:organizationId/lifecycle` 及 `.../departments/:departmentId/lifecycle` 返回 `OrganizationLifecycleDto` 的 `deleteBlockers` / `disableBlockers`；读取行政依赖提示要求相应治理权限，不是普通成员目录。
@@ -34,7 +34,7 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 - 部门创建 / 子组织创建的原幂等键不能在对象已删除后假报创建成功或重建。Web 删除结果未知时只按原 path / body / key 恢复，不改版本或借新身份重放。
 - 内部 `organization:read` 单权限可见其管理目录基本信息，但不能借此调用生命周期或写接口；不把该权限添加到全量管理权限集合改变授予 / 自锁语义。
 
-精确 DTO / 路由由当前 Swagger 生成；本节不构成生产接口已升级声明，验证与部署状态见[基础管理前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。
+精确 DTO / 路由由当前 Swagger 生成；最终SHA b4e51150e934314889287980d062fe389a89561b的生产OpenAPI已独立核验上述新增路由和code字段，人工业务验收仍待完成；验证与部署状态见[基础管理前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。
 
 REQ-0020 开发增量：审计事件增加 `actionLabel` 与可空 `actorSummary`（`username/accountType/organizationName`），保留原动作与操作人 UUID。`actionLabel` 对当前实际发出的已知动作提供中文说明，未知动作仍原码回退；不是对任意字符串自动翻译。摘要仅限操作人当前主组织匹配事件授权组织，不能视为历史身份快照。CSV 使用同一安全读取模型并保留既有权限、列、数量与下载边界；本轮状态见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。
 
