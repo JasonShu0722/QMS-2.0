@@ -144,9 +144,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-22",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
+        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "5ea05c08632b706d0da1686b7c49796c9cf5b9050663ff2b4d97683441f06502"
+            "sha256": "3f76224402fdd75e1c8598bff78e4afa6415f41845f1a39d828d9fb54a3a0d3d"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
+            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -178,9 +178,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（工作流整合实际复核）",
-        "reviewedOn": "2026-10-22",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
+        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
+            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
           }
         ]
       }
@@ -200,9 +200,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-22",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 30,
-        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
+        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "package.json",
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
+            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -234,9 +234,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-22",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 30,
-        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
+        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "caa758966054b04fd663816052b20d7aba3b02d8c8156d068b1507be48523a1b"
+            "sha256": "01a9a7ce0cfc79dfb093ed4920d4024b8576732f9e3729b9a7023db3af49f9d2"
           },
           {
             "path": "README.md",
@@ -390,9 +390,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（基础交互体系设计评审）",
-        "reviewedOn": "2026-10-21",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "负责人批准全量现有页面在本地展开；已复核统一规范的恢复与提交边界、102个正式TSX覆盖记录及8组样例来源。单元、源码审查、真实浏览器与人工业务验收分层记录；推送前等待负责人仓库处理确认，不更改远端可见性、计费或生产。",
+        "reason": "负责人批准全量现有页面在本地展开；已复核统一规范的恢复与提交边界、102个正式TSX覆盖记录及8组样例来源。单元、源码审查、真实浏览器与人工业务验收分层记录；推送前等待负责人仓库处理确认，不更改远端可见性、计费或生产。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -428,7 +428,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-10-21-qms-interaction-system-design.md",
-            "sha256": "f44350b01f49d404d90ddcb1c9a19ac223b44b063583acfee6e47d11d1496085"
+            "sha256": "bd9628696b7551e39b66f34a88bf23277d86def483b06d0e6023714e4cd9c5c0"
           },
           {
             "path": "../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md",
@@ -445,6 +445,90 @@
           {
             "path": "../docs/superpowers/specs/2026-10-22-qms-position-as-role-design.md",
             "sha256": "5f068b2a4ec0a9061e120fe09980b1abe2cad9b49294e6896f77d4bf463b76e9"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
+            "sha256": "6f93d3fb054d8a2e60e011d131abafa242cd8ca4b1c3bb41980aa522bad05ddb"
+          },
+          {
+            "path": "apps/web/organization-preview.html",
+            "sha256": "d398d0ca34fe599e26b65fb23e4c1e21a663054be409c2b016dfa2293a1ff1c5"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/main.tsx",
+            "sha256": "743eb86d0724d485a19fc4282a709aed21a3a98be001513f7b0d84f0edc0d221"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/OrganizationPreview.tsx",
+            "sha256": "300473adf836d20505402758ae706079def56f1274c101145b20a43bacdfea75"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/organization.css",
+            "sha256": "237f6f17f00d90ad49aa2daa49b140f304a1693869e2dc378a0d039f3f483a56"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/model.ts",
+            "sha256": "7dca90b3823aa63648c81e7e16c0f3e5eec6918d199dd73578859046b342da8d"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/model.test.ts",
+            "sha256": "596897f4ac7ded86369cbba6f388f1f88464f1b32cb461789bcceeb57c52385a"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/organization/OrganizationPreview.test.tsx",
+            "sha256": "a4623301ff30e6b6193339f4de5579e921d8e95e729922e0d2d9e4d0edecf8e7"
+          },
+          {
+            "path": "apps/web/src/features/admin/AdminPage.tsx",
+            "sha256": "562a9f980b05c79fae61314cde1e2a1860e74786e249c300aabb33026f88f5bd"
+          },
+          {
+            "path": "apps/web/src/features/admin/AdminPage.targeting.test.tsx",
+            "sha256": "1df62af478aa10824ca14ccb89135dcef531335c41df0fcde1f93ef2fd261631"
+          },
+          {
+            "path": "apps/web/src/features/governance/OrganizationAdministration.tsx",
+            "sha256": "a3f1f080bb236ef3be87dd554dcc6513e2a938f269b1bf06ffe8d66877f93a5c"
+          },
+          {
+            "path": "apps/web/src/features/governance/StructureAdministration.tsx",
+            "sha256": "4cda64c4a5ddf1c103965992976cc59027c92849b2e5a883116bf27928382924"
+          },
+          {
+            "path": "apps/web/src/features/governance/OrganizationWorkspace.tsx",
+            "sha256": "c4d5ff899c3e00a413a5d1606998ac982e05830c66a688e82db8cee8875676c5"
+          },
+          {
+            "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
+            "sha256": "ffa49f55fea6973213739a0f1794186accb0a12e4c27c28c1e9bb6d82c632ae9"
+          },
+          {
+            "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
+            "sha256": "666b24e9ea4d705b12a8c7cf08105ccc6a35dc00a865b4f807b806ec2ca3a877"
+          },
+          {
+            "path": "apps/web/src/features/governance/governance.ts",
+            "sha256": "487d028dc4c704b4112c1d643c4251a563e29233b0b67777977f1c3d8278635e"
+          },
+          {
+            "path": "apps/web/src/features/governance/PositionRolesDrawer.tsx",
+            "sha256": "d40709cc119e754ca91e121fc3dc98b320648e4aab381f76665a6b1291ad9a92"
+          },
+          {
+            "path": "apps/web/src/features/governance/StructureAdministration.test.tsx",
+            "sha256": "b906c92a491cac231d6f689c1ddf0d8ae9e106ca2bd88403ce547c5cb5951370"
+          },
+          {
+            "path": "apps/web/src/features/governance/StructureAssignments.test.tsx",
+            "sha256": "965c5e3aa300e59a2b392c4846b7f4248dd9a5165a909b6aec568794d94c6060"
+          },
+          {
+            "path": "apps/web/src/features/governance/governance-draft-guards.test.tsx",
+            "sha256": "0a1e2482c1443c7b6e155ade56c39f7f623a1e808be8f0d212da7dfd74373937"
+          },
+          {
+            "path": "apps/web/src/i18n/Language.tsx",
+            "sha256": "02fa5392c1678bbd209698fdfe9d7ca79198dcee502616e8e1f0202f4f9d0250"
           }
         ]
       }
@@ -473,10 +557,10 @@
       "canonical": true,
       "status": "active",
       "review": {
-        "owner": "QMS 工程维护者（阶段四启动策划）",
-        "reviewedOn": "2026-09-24",
+        "owner": "QMS 工程维护者（跨板块问题管理研讨准备）",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "以 QMS 1.0 业务记录为参考，冻结阶段四四个领域的来源台账、正式问题链和外部接口预留边界。",
+        "reason": "于 Asia/Taipei 2026-10-23 对照原阶段四设计、计划与当前源码，保留原阶段历史结论；登记跨板块研讨草稿，明确过程8D、客户合单报告归属、FAE与IMS未闭环；结合负责人IMS截图补充成品编码映射与AI描述提炼，区分明确需求、建议和未确认粒度，不将建议或旧PASS改为批准实施、当前验收或线上事实。复核日期按UTC记录。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 负责人认可样例交互，74细项聚合提交飞书REQ-0025至0029并回读50字段；工程细化/接入资料/上线准备不再整包列为业务待确认。 负责人调整五条需求为开发中后明确先规划后停等；已核对PR/自动部署边界，新增六主节点与开源提醒，不启动实现或云端操作。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md",
@@ -485,6 +569,26 @@
           {
             "path": "../docs/superpowers/plans/2026-09-24-qms-2.0-phase-4-domain-quality.md",
             "sha256": "89ed1e73ca6efd0f317fce58b170db7f2ebbb0fc892bd830eba04e20c9a74afe"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-23-qms-domain-problem-management-discussion-draft.md",
+            "sha256": "bf011a784ba571542eebb3dcc126027411973897285b0cbdf87c30533bc1db09"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
+            "sha256": "6f93d3fb054d8a2e60e011d131abafa242cd8ca4b1c3bb41980aa522bad05ddb"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md",
+            "sha256": "e7dc42d4d51ecf7c5d419501b68ee8df060e45f6f771c381ee0407751aab1055"
+          },
+          {
+            "path": "../docs/superpowers/specs/2026-10-24-qms-five-requirement-submission.md",
+            "sha256": "5c62a609f12692bb32ae3192b008e62476cd23715c79281fe8d3397d67a4cb9a"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md",
+            "sha256": "36dda9e62f297d1c08af73c572f4d4ebd83568f15f577c66f8b59c8a3e250e83"
           }
         ]
       }
@@ -652,13 +756,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "复核MAINT-001在REQ-0022账号两区与设置改动后的来源，保留已通过局部回归、未完成联合门禁及其余Ant Design提示的区别，不关闭全局事项；MAINT-002容量和MAINT-003生产观测边界未变。",
+        "reason": "复核MAINT-001在REQ-0022账号两区与设置改动后的来源，保留已通过局部回归、未完成联合门禁及其余Ant Design提示的区别，不关闭全局事项；MAINT-002容量和MAINT-003生产观测边界未变。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "ed928201f24212bfa5a4133b0a3920d2255e8c70f37e03db5be6eea85c961ba3"
+            "sha256": "3eb039bcb1edcdce7a4dc6d28107cba043be6873c9cb64eaccdec764cdc107f4"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -762,9 +866,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-22",
+        "reviewedOn": "2026-10-24",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -772,7 +876,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "f34b8f3a570a3b324243ea041a529066a3320fe46f4580fae08625f7686e0207"
+            "sha256": "23bcad2d4774f1e4bbfb375f0e513d1cfae87de4ce6a84156e719fd0c5a8984a"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
@@ -856,6 +960,12 @@
           }
         ]
       }
+    },
+    {
+      "path": "docs/N1-MAINTENANCE-REVIEW-2026-10-24.md",
+      "topic": "maintenance-register",
+      "canonical": false,
+      "status": "active"
     }
   ]
 }

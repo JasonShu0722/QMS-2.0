@@ -44,6 +44,7 @@
     "customer-quality -> audit-log",
     "customer-quality -> authorization",
     "customer-quality -> file-management",
+    "customer-quality -> organization",
     "customer-quality -> problem-index",
     "customer-quality -> workflow",
     "coordinate-inspection -> audit-log",

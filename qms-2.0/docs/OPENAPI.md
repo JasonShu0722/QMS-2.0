@@ -26,6 +26,16 @@ NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /ap
 
 ## 管理员接口
 
+### N1 组织生命周期契约（本地增量，未发布）
+
+- `UpdateOrganizationDto`、`UpdateDepartmentDto` 增加可选 `code`，格式与创建相同，仍需 `expectedVersion`。
+- `GET /api/v1/organizations/:organizationId/lifecycle` 及 `.../departments/:departmentId/lifecycle` 返回 `OrganizationLifecycleDto` 的 `deleteBlockers` / `disableBlockers`；读取行政依赖提示要求相应治理权限，不是普通成员目录。
+- 对应 `DELETE` 接受 `DeleteStructureDto { expectedVersion }`，携带 CSRF / Idempotency-Key，返回 `DeleteStructureResultDto { id, deleted }`。GET 检查不替代最终事务内复验；组织删除首执验证目标及冻结父范围，回执位于仍存在的父范围，并在重放前重新授权。
+- 部门创建 / 子组织创建的原幂等键不能在对象已删除后假报创建成功或重建。Web 删除结果未知时只按原 path / body / key 恢复，不改版本或借新身份重放。
+- 内部 `organization:read` 单权限可见其管理目录基本信息，但不能借此调用生命周期或写接口；不把该权限添加到全量管理权限集合改变授予 / 自锁语义。
+
+精确 DTO / 路由由当前 Swagger 生成；本节不构成生产接口已升级声明，验证与部署状态见[基础管理前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。
+
 REQ-0020 开发增量：审计事件增加 `actionLabel` 与可空 `actorSummary`（`username/accountType/organizationName`），保留原动作与操作人 UUID。`actionLabel` 对当前实际发出的已知动作提供中文说明，未知动作仍原码回退；不是对任意字符串自动翻译。摘要仅限操作人当前主组织匹配事件授权组织，不能视为历史身份快照。CSV 使用同一安全读取模型并保留既有权限、列、数量与下载边界；本轮状态见[实现计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)。
 
 下表路径统一以 `/api/v1/admin` 为前缀。query 中的 `organizationId` 为可选 UUID，省略时使用会话主组织；`POST /users` 与 `POST /roles` 则由必填 body.organizationId 选择组织。其他组织的权限不能补充所选组织中缺失的权限；供应商只能本企业。路径中的 userId/roleId 为 UUID。

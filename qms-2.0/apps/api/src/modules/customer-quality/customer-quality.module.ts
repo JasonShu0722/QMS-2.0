@@ -9,6 +9,7 @@ import { ProblemIndexModule } from '../problem-index/problem-index.module.js';
 import { WorkflowModule } from '../workflow/workflow.module.js';
 import { FileManagementModule } from '../file-management/file-management.module.js';
 import { CustomerComplaintFileResourceAdapter } from './customer-complaint-file-resource.adapter.js';
+import { OrganizationModule } from '../organization/organization.module.js';
 
-@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule], controllers: [CustomerQualityController], providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter], exports: [CustomerQualityService, CustomerIssueService] })
+@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule, OrganizationModule], controllers: [CustomerQualityController], providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter], exports: [CustomerQualityService, CustomerIssueService] })
 export class CustomerQualityModule {}

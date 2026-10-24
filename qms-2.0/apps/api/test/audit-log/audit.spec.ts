@@ -79,4 +79,15 @@ describe('audit log foundation', () => {
       expect(service.safeMetadata({ changedFields })).toEqual({});
     }
   });
+
+  it('preserves bounded structure snapshots and the initializer role ID, never arbitrary metadata or secrets', () => {
+    const service = new AuditLogService({} as never);
+    const snapshot = { structureCode: 'QMS-2.0', structurePreviousCode: 'QMS_OLD', structureName: 'Quality department', structurePreviousName: 'Former department name', structureGovernorRoleId: '10000000-0000-4000-8000-000000000001' };
+    expect(service.safeMetadata({ ...snapshot, secret: 'private', password: 'private', cookie: 'private', structurePassword: 'private', snapshot: { password: 'private' } })).toEqual(snapshot);
+    expect(service.safeMetadata({ structureCode: 'bad/code', structurePreviousCode: 'a'.repeat(65), structureName: 'n'.repeat(201), structureGovernorRoleId: 'not-a-role-id' })).toEqual({});
+    expect(service.safeMetadata({ structureCode: null, structurePreviousCode: true, structureName: {}, structureGovernorRoleId: [] })).toEqual({});
+    for (const structurePreviousName of ['', ' ', 'n'.repeat(201), null, false, ['name'], { name: 'private' }]) {
+      expect(service.safeMetadata({ structurePreviousName })).toEqual({});
+    }
+  });
 });

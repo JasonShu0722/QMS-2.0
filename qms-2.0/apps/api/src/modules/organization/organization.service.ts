@@ -10,7 +10,8 @@ import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../com
 import { assertLegacyPositionRoleWrite, assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
-import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto } from './organization.dto.js';
+import { structureBusinessReferences } from './organization-lifecycle.read-model.js';
+import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
 const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
 const organizationSelect = { id: true, code: true, name: true, type: true, parentId: true, status: true, version: true } as const;
@@ -85,13 +86,21 @@ export class OrganizationService {
   createChild(actor: AdminActor, parentId: string, dto: CreateOrganizationDto, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId: parentId, key, action: 'ORGANIZATION_CREATED', payload: { parentId, ...dto }, permission: ['organization:manage', 'organization:read'], traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction, granted) => {
       if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+      await this.lockOrganization(transaction, parentId);
       const parent = await this.activeOrganization(transaction, parentId);
       const child = await transaction.organization.create({ data: { parentId, code: dto.code, name: dto.name.trim(), type: parent.type }, select: organizationSelect });
       const permissions = await transaction.permission.findMany({ where: { code: { in: governancePermissions.filter((code) => granted.includes(code)) } } });
       const role = await transaction.role.create({ data: { organizationId: child.id, code: 'ORGANIZATION_GOVERNOR', name: '组织治理', permissions: { create: permissions.map(({ id }) => ({ permissionId: id })) } } });
       await transaction.userRole.create({ data: { userId: actor.id, roleId: role.id, organizationId: child.id } });
-      await this.record(transaction, actor, child.id, 'ORGANIZATION_CREATED', 'Organization', child.id, traceId, child.version);
+      await this.audit.record({ actorUserId: actor.id, organizationId: child.id, action: 'ORGANIZATION_CREATED', resourceType: 'Organization', resourceId: child.id, outcome: 'SUCCESS', traceId,
+        metadata: { organizationId: child.id, resourceVersion: child.version, structureCode: child.code, structureName: child.name, structureGovernorRoleId: role.id, permissionCode: permissions.map(({ code }) => code).sort().join(',') } }, transaction);
       return child;
+    }, async (transaction) => {
+      const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId: parentId, key } } }) : null;
+      if (previous?.action === 'ORGANIZATION_CREATED') {
+        const childId = this.receiptValue(previous.response)?.id;
+        if (!childId || !await transaction.organization.findUnique({ where: { id: childId }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
     });
   }
 
@@ -100,24 +109,31 @@ export class OrganizationService {
     const additionalAccess = dto.parentId
       ? [...new Set([dto.parentId, dto.expectedParentId].filter((parentId): parentId is string => typeof parentId === 'string'))].map((parentId) => ({ organizationId: parentId, permission: 'organization:manage' }))
       : [];
-    return this.mutations.run({ actor, organizationId, key, action: 'ORGANIZATION_UPDATED', payload: { organizationId, ...dto }, permission: 'organization:manage', additionalAccess, traceId }, async (transaction) => {
+    return this.mutations.run({ actor, organizationId, key, action: 'ORGANIZATION_UPDATED', payload: { organizationId, ...dto }, permission: 'organization:manage', additionalAccess, traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR UPDATE`;
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
       const current = await transaction.organization.findUnique({ where: { id: organizationId } });
       if (!current) adminError('ORGANIZATION_NOT_FOUND', 404);
-      if (dto.status === 'DISABLED' && organizationId === actor.organizationId) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
+      if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      if (dto.status === 'DISABLED') {
+        const lifecycle = await this.organizationLifecycleState(transaction, actor, current);
+        if (lifecycle.disableBlockers.length) adminError(lifecycle.protected ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
+      }
       if (dto.parentId) {
         if (dto.expectedParentId !== current.parentId) adminError('CONCURRENCY_CONFLICT', 409);
         const parent = await this.activeOrganization(transaction, dto.parentId);
         if (parent.type !== current.type) adminError('ORGANIZATION_TYPE_MISMATCH', 409);
         await this.noCycle(transaction, organizationId, dto.parentId);
       }
-      const changed = await transaction.organization.updateMany({ where: { id: organizationId, version: dto.expectedVersion, ...(dto.parentId ? { parentId: dto.expectedParentId } : {}) }, data: { name: dto.name?.trim(), parentId: dto.parentId, status: dto.status, version: { increment: 1 } } });
+      const changed = await transaction.organization.updateMany({ where: { id: organizationId, version: dto.expectedVersion, ...(dto.parentId ? { parentId: dto.expectedParentId } : {}) }, data: { code: dto.code, name: dto.name?.trim(), parentId: dto.parentId, status: dto.status, version: { increment: 1 } } });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.status === 'DISABLED') {
         await transaction.session.updateMany({ where: { user: { organizationId }, revokedAt: null }, data: { revokedAt: new Date() } });
         await transaction.mfaChallenge.updateMany({ where: { user: { organizationId }, consumedAt: null }, data: { consumedAt: new Date() } });
       }
       const result = await transaction.organization.findUniqueOrThrow({ where: { id: organizationId }, select: organizationSelect });
-      await this.record(transaction, actor, organizationId, 'ORGANIZATION_UPDATED', 'Organization', organizationId, traceId, result.version);
+      await this.record(transaction, actor, organizationId, 'ORGANIZATION_UPDATED', 'Organization', organizationId, traceId, result.version, { structurePreviousCode: current.code, structureCode: result.code, structurePreviousName: current.name, structureName: result.name });
       return result;
     });
   }
@@ -129,21 +145,30 @@ export class OrganizationService {
 
   createDepartment(actor: AdminActor, organizationId: string, dto: CreateDepartmentDto, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId, key, action: 'DEPARTMENT_CREATED', payload: { organizationId, ...dto }, permission: 'organization:structure:manage', traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
+      await this.lockOrganization(transaction, organizationId);
       await this.activeOrganization(transaction, organizationId);
+      if (dto.parentId) await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.parentId}::uuid FOR SHARE`;
       if (dto.parentId) await this.activeDepartment(transaction, organizationId, dto.parentId);
       const result = await transaction.department.create({ data: { ...dto, name: dto.name.trim(), organizationId }, select: departmentSelect });
       await this.record(transaction, actor, organizationId, 'DEPARTMENT_CREATED', 'Department', result.id, traceId, result.version);
       return result;
+    }, async (transaction) => {
+      const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId, key } } }) : null;
+      if (previous?.action === 'DEPARTMENT_CREATED') {
+        const departmentId = this.receiptValue(previous.response)?.id;
+        if (!departmentId || !await transaction.department.findFirst({ where: { id: departmentId, organizationId }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
     });
   }
 
   updateDepartment(actor: AdminActor, organizationId: string, departmentId: string, dto: UpdateDepartmentDto, traceId: string, key?: string) {
-    return this.mutations.run({ actor, organizationId, key, action: 'DEPARTMENT_UPDATED', payload: { organizationId, departmentId, ...dto }, permission: 'organization:structure:manage', traceId }, async (transaction) => {
+    return this.mutations.run({ actor, organizationId, key, action: 'DEPARTMENT_UPDATED', payload: { organizationId, departmentId, ...dto }, permission: 'organization:structure:manage', traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
       await this.lockOrganization(transaction, organizationId);
       await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${departmentId}::uuid FOR UPDATE`;
       await this.activeOrganization(transaction, organizationId);
       const current = await transaction.department.findFirst({ where: { organizationId, id: departmentId } });
       if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.parentId) {
         await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.parentId}::uuid FOR SHARE`;
         await this.activeDepartment(transaction, organizationId, dto.parentId);
@@ -157,14 +182,190 @@ export class OrganizationService {
       const granted = await this.refreshPositionAccess(transaction, actor, organizationId, ['organization:structure:manage'], policy);
       const now = new Date();
       const before = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
-      const changed = await transaction.department.updateMany({ where: { organizationId, id: departmentId, version: dto.expectedVersion }, data: { name: dto.name?.trim(), parentId: dto.parentId, status: dto.status, version: { increment: 1 } } });
+      if (dto.status === 'DISABLED' && (await this.departmentLifecycleState(transaction, organizationId, departmentId)).disableBlockers.length) adminError(before.includes(actor.id) ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
+      const changed = await transaction.department.updateMany({ where: { organizationId, id: departmentId, version: dto.expectedVersion }, data: { code: dto.code, name: dto.name?.trim(), parentId: dto.parentId, status: dto.status, version: { increment: 1 } } });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       const after = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
       await this.invalidatePositionUsers(transaction, actor, organizationId, [...before, ...after], granted);
       const result = await transaction.department.findUniqueOrThrow({ where: { id: departmentId }, select: departmentSelect });
-      await this.record(transaction, actor, organizationId, 'DEPARTMENT_UPDATED', 'Department', departmentId, traceId, result.version);
+      await this.record(transaction, actor, organizationId, 'DEPARTMENT_UPDATED', 'Department', departmentId, traceId, result.version, { structurePreviousCode: current.code, structureCode: result.code, structurePreviousName: current.name, structureName: result.name });
       return result;
     });
+  }
+
+  organizationLifecycle(actor: AdminActor, organizationId: string): Promise<OrganizationLifecycleDto> {
+    return this.prisma.$transaction(async (transaction) => {
+      // Dependency hints are administrative information, not a member directory capability.
+      await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
+      const current = await transaction.organization.findUniqueOrThrow({ where: { id: organizationId } });
+      const { deleteBlockers, disableBlockers } = await this.organizationLifecycleState(transaction, actor, current);
+      return { deleteBlockers, disableBlockers };
+    }, { isolationLevel: 'RepeatableRead' });
+  }
+
+  departmentLifecycle(actor: AdminActor, organizationId: string, departmentId: string): Promise<OrganizationLifecycleDto> {
+    return this.prisma.$transaction(async (transaction) => {
+      await assertAdminAccess(transaction, actor, organizationId, 'organization:structure:manage');
+      if (!await transaction.department.findFirst({ where: { id: departmentId, organizationId }, select: { id: true } })) adminError('STRUCTURE_NOT_FOUND', 404);
+      return this.departmentLifecycleState(transaction, organizationId, departmentId);
+    }, { isolationLevel: 'RepeatableRead' });
+  }
+
+  async deleteOrganization(actor: AdminActor, organizationId: string, dto: DeleteStructureDto, traceId: string, key?: string) {
+    const target = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { parentId: true } });
+    let parentId = target?.parentId;
+    if (target && !parentId) {
+      await assertAdminAccess(this.prisma, actor, organizationId, 'organization:manage');
+      adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
+    }
+    if (!target) {
+      // Only this actor's committed delete receipt may recover the frozen parent after deletion.
+      const receipt = key ? await this.prisma.adminMutation.findFirst({ where: { actorUserId: actor.id, key, action: 'ORGANIZATION_DELETED', response: { path: ['value', 'id'], equals: organizationId } } }) : null;
+      if (!receipt || this.receiptValue(receipt.response)?.deleted !== true) adminError('ORGANIZATION_NOT_FOUND', 404);
+      parentId = receipt.organizationId;
+    }
+    if (!parentId) adminError('ORGANIZATION_NOT_FOUND', 404);
+    const frozenParentId = parentId;
+    return this.mutations.run({ actor, organizationId: frozenParentId, key, action: 'ORGANIZATION_DELETED', payload: { organizationId, parentId: frozenParentId, ...dto }, permission: 'organization:manage',
+      additionalAccess: target ? [{ organizationId, permission: 'organization:manage' }] : [], traceId }, async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR UPDATE`;
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, frozenParentId, 'organization:manage');
+      await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
+      const current = await transaction.organization.findUnique({ where: { id: organizationId } });
+      if (!current) adminError('ORGANIZATION_NOT_FOUND', 404);
+      if (current.parentId !== frozenParentId || current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      const lifecycle = await this.organizationLifecycleState(transaction, actor, current);
+      if (lifecycle.deleteBlockers.length) adminError(lifecycle.protected ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
+      const initialization = await this.initializationAttachments(transaction, actor, current);
+      if (initialization.roleId) {
+        await transaction.userRole.deleteMany({ where: { organizationId, roleId: initialization.roleId, userId: actor.id } });
+        await transaction.rolePermission.deleteMany({ where: { roleId: initialization.roleId } });
+        await transaction.role.delete({ where: { id: initialization.roleId } });
+      }
+      // Move only verified governance evidence into its surviving parent scope, retaining original facts.
+      for (const event of initialization.events) await transaction.auditEvent.update({ where: { id: event.id }, data: { organizationId: frozenParentId, metadata: { ...event.metadata as Prisma.InputJsonObject, organizationId } } });
+      if (initialization.mutationIds.length) await transaction.adminMutation.deleteMany({ where: { id: { in: initialization.mutationIds }, organizationId } });
+      await this.record(transaction, actor, frozenParentId, 'ORGANIZATION_DELETED', 'Organization', organizationId, traceId, current.version,
+        { organizationId, structureCode: current.code, structureName: current.name, status: current.status });
+      await transaction.organization.delete({ where: { id: organizationId } });
+      return { id: organizationId, deleted: true };
+    }, async (transaction) => {
+      const current = await transaction.organization.findUnique({ where: { id: organizationId }, select: { parentId: true } });
+      if (current) {
+        if (current.parentId !== frozenParentId) adminError('CONCURRENCY_CONFLICT', 409);
+        await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
+      } else {
+        const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId: frozenParentId, key } } }) : null;
+        const response = this.receiptValue(previous?.response);
+        if (previous?.action !== 'ORGANIZATION_DELETED' || response?.id !== organizationId || response.deleted !== true) adminError('ORGANIZATION_NOT_FOUND', 404);
+      }
+    });
+  }
+
+  deleteDepartment(actor: AdminActor, organizationId: string, departmentId: string, dto: DeleteStructureDto, traceId: string, key?: string) {
+    return this.mutations.run({ actor, organizationId, key, action: 'DEPARTMENT_DELETED', payload: { organizationId, departmentId, ...dto }, permission: 'organization:structure:manage', traceId }, async (transaction) => {
+      await this.lockOrganization(transaction, organizationId);
+      await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${departmentId}::uuid FOR UPDATE`;
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, 'organization:structure:manage');
+      const current = await transaction.department.findFirst({ where: { id: departmentId, organizationId } });
+      if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      if ((await this.departmentLifecycleState(transaction, organizationId, departmentId)).deleteBlockers.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      await this.record(transaction, actor, organizationId, 'DEPARTMENT_DELETED', 'Department', departmentId, traceId, current.version,
+        { structureCode: current.code, structureName: current.name, status: current.status });
+      await transaction.department.delete({ where: { id: departmentId } });
+      return { id: departmentId, deleted: true };
+    });
+  }
+
+  private receiptValue(response: unknown): { id: string; deleted?: boolean } | undefined {
+    const value = (response as { value?: { id?: unknown; deleted?: unknown } } | undefined)?.value;
+    return typeof value?.id === 'string' ? { id: value.id, deleted: value.deleted === true } : undefined;
+  }
+
+  private async initializationAttachments(transaction: AdminTransaction, actor: AdminActor, organization: { id: string; parentId: string | null }) {
+    const organizationId = organization.id;
+    const events = await transaction.auditEvent.findMany({ where: { organizationId } });
+    const creations = events.filter((event) => event.resourceId === organizationId && event.resourceType === 'Organization' && event.action === 'ORGANIZATION_CREATED' && event.outcome === 'SUCCESS');
+    const event = creations.length === 1 ? creations[0] : undefined;
+    const roles = await transaction.role.findMany({ where: { organizationId }, include: { permissions: { include: { permission: true } }, userRoles: true, positions: true } });
+    const grants = await transaction.userRole.findMany({ where: { organizationId } });
+    const receipts = event && organization.parentId ? await transaction.adminMutation.findMany({ where: { organizationId: organization.parentId, actorUserId: event.actorUserId ?? undefined, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: organizationId } } }) : [];
+    const metadata = event?.metadata as Record<string, unknown> | undefined;
+    const created = receipts.length === 1 ? (receipts[0]!.response as { value?: Record<string, Prisma.JsonValue> })?.value : undefined;
+    const role = roles.length === 1 ? roles[0] : undefined;
+    const initialized = event?.actorUserId === actor.id && created?.id === organizationId && created.parentId === organization.parentId && created.version === 1
+      && metadata?.resourceVersion === 1 && metadata.organizationId === organizationId && metadata.structureCode === created.code && metadata.structureName === created.name && role
+      && role.id === metadata?.structureGovernorRoleId && role.code === 'ORGANIZATION_GOVERNOR' && !role.mfaRequired
+      && role.permissions.map(({ permission }) => permission.code).sort().join(',') === metadata?.permissionCode
+      && role.permissions.every(({ permission }) => governancePermissions.includes(permission.code))
+      && role.positions.length === 0 && role.userRoles.length === 1 && grants.length === 1
+      && grants[0]!.roleId === role.id && grants[0]!.userId === actor.id
+      && role.userRoles[0]!.organizationId === organizationId && role.userRoles[0]!.userId === actor.id;
+    const mutations = await transaction.adminMutation.findMany({ where: { organizationId } });
+    // Only this initializer's name/code/status maintenance of the same object and unchanged parent is ancillary.
+    const maintenance = mutations.every((mutation) => {
+      const value = (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value;
+      return initialized && mutation.actorUserId === actor.id && mutation.action === 'ORGANIZATION_UPDATED'
+        && value?.id === organizationId && value.parentId === organization.parentId && value.type === created?.type
+        && typeof value.version === 'number' && value.version > 1
+        && events.some((entry) => entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS'
+          && entry.actorUserId === actor.id && entry.resourceType === 'Organization' && entry.resourceId === organizationId
+          && (entry.metadata as Record<string, unknown> | null)?.resourceVersion === value.version);
+    });
+    const audited = events.every((entry) => {
+      const details = entry.metadata as Record<string, unknown> | null;
+      if (details?.organizationId !== undefined && details.organizationId !== organizationId) return false;
+      if (entry.action === 'ACTION_REJECTED' && entry.outcome === 'DENIED' && ['Administration', 'Authorization'].includes(entry.resourceType)) return true;
+      if (entry.id === event?.id) return Boolean(initialized);
+      return initialized && entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS' && entry.actorUserId === actor.id
+        && entry.resourceType === 'Organization' && entry.resourceId === organizationId
+        && mutations.some((mutation) => (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value?.version === details?.resourceVersion);
+    });
+    const blocked = !maintenance || !audited || Boolean((roles.length || grants.length) && !initialized);
+    return { blocked, roleId: initialized ? role.id : undefined, events: blocked ? [] : events, mutationIds: blocked ? [] : mutations.map(({ id }) => id) };
+  }
+
+  private async organizationLifecycleState(transaction: AdminTransaction, actor: AdminActor, current: { id: string; parentId: string | null }) {
+    const organizationId = current.id;
+    const deleteBlockers: string[] = [];
+    const disableBlockers: string[] = [];
+    const protectedOrganization = current.parentId === null || organizationId === actor.organizationId;
+    if (protectedOrganization) { deleteBlockers.push('根组织或当前主组织受自锁保护'); disableBlockers.push('根组织或当前主组织受自锁保护'); }
+    const children = await transaction.organization.findMany({ where: { parentId: organizationId }, select: { status: true } });
+    if (children.length) deleteBlockers.push('存在下级组织');
+    if (children.some(({ status }) => status === 'ACTIVE')) disableBlockers.push('存在启用的下级组织');
+    const departments = await transaction.department.findMany({ where: { organizationId }, select: { status: true } });
+    if (departments.length) deleteBlockers.push('存在部门');
+    if (departments.some(({ status }) => status === 'ACTIVE')) disableBlockers.push('存在启用的部门');
+    if (await transaction.position.count({ where: { organizationId } })) deleteBlockers.push('存在岗位');
+    if (await transaction.position.count({ where: { organizationId, status: 'ACTIVE' } })) disableBlockers.push('存在启用的岗位');
+    if (await transaction.user.count({ where: { organizationId } })) deleteBlockers.push('存在用户账号');
+    if (await transaction.user.count({ where: { organizationId, status: 'ACTIVE' } })) disableBlockers.push('存在启用的用户账号');
+    if (await transaction.userPosition.count({ where: { organizationId } })) deleteBlockers.push('存在任职历史');
+    if (await transaction.userPosition.count({ where: { organizationId, OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] } })) disableBlockers.push('存在有效或待生效任职');
+    if ((await this.initializationAttachments(transaction, actor, current)).blocked) deleteBlockers.push('存在非初始化授权或管理使用记录');
+    const business = await structureBusinessReferences(transaction, organizationId, 'organization');
+    if (business.referenced) deleteBlockers.push('存在业务、配置或历史引用');
+    if (business.live) disableBlockers.push('存在有效配置或在途业务引用');
+    return { deleteBlockers, disableBlockers, protected: protectedOrganization };
+  }
+
+  private async departmentLifecycleState(transaction: AdminTransaction, organizationId: string, departmentId: string): Promise<OrganizationLifecycleDto> {
+    const deleteBlockers: string[] = [];
+    const disableBlockers: string[] = [];
+    const children = await transaction.department.findMany({ where: { organizationId, parentId: departmentId }, select: { status: true } });
+    if (children.length) deleteBlockers.push('存在下级部门');
+    if (children.some(({ status }) => status === 'ACTIVE')) disableBlockers.push('存在启用的下级部门');
+    if (await transaction.position.count({ where: { organizationId, departmentId } })) deleteBlockers.push('存在岗位或任职历史');
+    if (await transaction.position.count({ where: { organizationId, departmentId, status: 'ACTIVE' } })) disableBlockers.push('存在启用的岗位');
+    if (await transaction.userPosition.count({ where: { organizationId, position: { organizationId, departmentId }, OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] } })) disableBlockers.push('存在有效或待生效任职');
+    const business = await structureBusinessReferences(transaction, departmentId, 'department');
+    if (business.referenced) deleteBlockers.push('存在业务或历史引用');
+    if (business.live) disableBlockers.push('存在有效配置或在途业务引用');
+    return { deleteBlockers, disableBlockers };
   }
 
   async positions(organizationId: string, query: OrganizationListQueryDto) {
@@ -205,6 +406,7 @@ export class OrganizationService {
       const permissions = await transaction.permission.findMany({ where: { code: { in: nextCodes } }, select: { id: true } });
       if (permissions.length !== nextCodes.length) adminError('ADMIN_PERMISSION_NOT_FOUND', 400);
       if (nextCodes.some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
+      if (canonicalId && JSON.stringify([...nextCodes].sort()) === JSON.stringify(codes) && dto.mfaRequired === (own?.mfaRequired ?? false)) return this.positionPermissionResult(transaction, organizationId, positionId);
       const roleId = canonicalId ?? (await this.createCanonicalRole(transaction, organizationId, current)).id;
       await transaction.role.update({ where: { id: roleId }, data: { mfaRequired: dto.mfaRequired } });
       await transaction.rolePermission.deleteMany({ where: { roleId } });
@@ -248,7 +450,9 @@ export class OrganizationService {
 
   createPosition(actor: AdminActor, organizationId: string, dto: CreatePositionDto, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId, key, action: 'POSITION_CREATED', payload: { organizationId, ...dto }, permission: 'organization:structure:manage', traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
+      await this.lockOrganization(transaction, organizationId);
       const organization = await this.activeOrganization(transaction, organizationId);
+      await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.departmentId}::uuid FOR SHARE`;
       await this.activeDepartment(transaction, organizationId, dto.departmentId);
       if (dto.categoryId) await this.activeCategory(transaction, organizationId, dto.categoryId);
       const result = await transaction.position.create({ data: { ...dto, name: dto.name.trim(), organizationId }, select: positionSelect });
@@ -280,6 +484,7 @@ export class OrganizationService {
       const granted = await this.refreshPositionAccess(transaction, actor, organizationId, ['organization:structure:manage'], policy);
       const now = new Date();
       const before = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
+      if (dto.status === 'DISABLED' && await transaction.userPosition.count({ where: { organizationId, positionId, OR: [{ endedAt: null }, { endedAt: { gt: now } }] } })) adminError(before.includes(actor.id) ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
       const changed = await transaction.position.updateMany({ where: { organizationId, id: positionId, version: dto.expectedVersion }, data: { name: dto.name?.trim(), departmentId: dto.departmentId, categoryId: dto.categoryId, status: dto.status, version: { increment: 1 } } });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.name !== undefined) {
@@ -312,6 +517,8 @@ export class OrganizationService {
       if (!user) adminError('STRUCTURE_NOT_FOUND', 404);
       const candidates = await transaction.userPosition.findMany({ where: { organizationId, userId, OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { positionId: true } });
       const positionIds = [...new Set([...candidates.map(({ positionId }) => positionId), ...dto.positionIds])];
+      // Department status and appointment writes share the same parent -> position lock order.
+      if (positionIds.length) await transaction.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (SELECT department_id FROM positions WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(positionIds.map((id) => Prisma.sql`${id}::uuid`))})) ORDER BY id FOR SHARE`);
       await this.lockPositions(transaction, organizationId, positionIds);
       await this.lockPositionRoles(transaction, organizationId, positionIds);
       if (dto.authorizationBaseline !== undefined) await this.onboarding.verifyAdjustment(transaction, actor, organizationId, { ...dto, authorizationBaseline: dto.authorizationBaseline, targetUserId: userId });
@@ -388,6 +595,14 @@ export class OrganizationService {
     return transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR SHARE`;
   }
 
+  async lockActiveDepartment(transaction: AdminTransaction, organizationId: string, departmentId: string | null) {
+    if (!departmentId) return null;
+    await this.lockOrganization(transaction, organizationId);
+    if ((await transaction.organization.findUnique({ where: { id: organizationId }, select: { status: true } }))?.status !== 'ACTIVE') return null;
+    await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${departmentId}::uuid FOR SHARE`;
+    return transaction.department.findFirst({ where: { id: departmentId, organizationId, status: 'ACTIVE' } });
+  }
+
   private async lockPositions(transaction: AdminTransaction, organizationId: string, positionIds: string[]) {
     const ids = [...new Set(positionIds)].sort();
     if (ids.length) await transaction.$queryRaw(Prisma.sql`SELECT id FROM positions WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
@@ -460,7 +675,7 @@ export class OrganizationService {
     }
   }
 
-  private record(transaction: AdminTransaction, actor: AdminActor, organizationId: string, action: string, resourceType: string, resourceId: string, traceId: string, version?: number) {
-    return this.audit.record({ actorUserId: actor.id, organizationId, action, resourceType, resourceId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: version } }, transaction);
+  private record(transaction: AdminTransaction, actor: AdminActor, organizationId: string, action: string, resourceType: string, resourceId: string, traceId: string, version?: number, metadata: Prisma.InputJsonObject = {}) {
+    return this.audit.record({ actorUserId: actor.id, organizationId, action, resourceType, resourceId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: version, ...metadata } }, transaction);
   }
 }

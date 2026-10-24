@@ -81,7 +81,15 @@ export class AdminMutationService {
       const mappedCode = isSecurityConcurrencyConflict(error) ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
       const rejection = mappedCode ? new HttpException({ code: mappedCode, message: PLATFORM_ERROR_MESSAGES[mappedCode] }, 409) : error;
       if (rejection instanceof HttpException && [400, 401, 403, 404, 409].includes(rejection.getStatus())) {
-        await this.audit.record({ actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED', traceId: input.traceId, metadata: { permissionCode: Array.isArray(input.permission) ? input.permission.join(',') : input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } });
+        const event = { actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED' as const, traceId: input.traceId, metadata: { permissionCode: Array.isArray(input.permission) ? input.permission.join(',') : input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } };
+        try {
+          await this.audit.record(event);
+        } catch (auditError) {
+          // A queued mutation may be rejected after its scope was deleted; preserve the denial without an orphaned FK.
+          if ((auditError as { code?: string }).code !== 'P2003'
+            || await this.prisma.organization.findUnique({ where: { id: input.organizationId }, select: { id: true } })) throw auditError;
+          await this.audit.record({ ...event, organizationId: input.actor.organizationId, metadata: { ...event.metadata, organizationId: input.organizationId } });
+        }
       }
       throw rejection;
     }

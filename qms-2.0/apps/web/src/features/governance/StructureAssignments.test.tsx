@@ -1,4 +1,5 @@
-import { act, render as renderUI, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render as renderUI, screen, waitFor, within } from '@testing-library/react';
+import { ConfigProvider } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
@@ -8,6 +9,9 @@ import { LanguageProvider } from '../../i18n/Language';
 import { StructureAdministration } from './StructureAdministration';
 import type { AdminOrganization, AdminUser } from '../admin/admin';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+
+vi.setConfig({ testTimeout: 30000 });
 
 const org: AdminOrganization = { id: 'org-a', code: 'A', name: '甲组织', type: 'INTERNAL', permissions: ['organization:structure:read', 'organization:positions:assign'] };
 const department: components['schemas']['DepartmentDto'] = { id: 'dept-a', organizationId: org.id, parentId: null, code: 'QA', name: '质量部', status: 'ACTIVE', version: 1 };
@@ -38,6 +42,94 @@ function stub(entries: components['schemas']['UserPositionDto'][] = [], position
 }
 async function openAssignments() { await userEvent.click(await screen.findByRole('tab', { name: '用户任职' })); }
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); });
+
+it('does not queue a tab change with the old appointment baseline while a save is pending', async () => {
+  const api = stub([assignment('active', position)]);
+  const original = api.fetchMock.getMockImplementation()!;
+  let finishWrite!: (response: Response) => void;
+  let saved = false;
+  let writes = 0;
+  api.fetchMock.mockImplementation((input, init) => {
+    if (String(input).includes('/users/user-a/positions') && init?.method === 'PUT') {
+      writes++;
+      return new Promise<Response>(resolve => { finishWrite = response => { saved = true; resolve(response); }; });
+    }
+    if (saved && String(input).includes('/users/user-a/positions')) return Promise.resolve(json([]));
+    return original(input, init);
+  });
+  render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><UnsavedChangesProvider><StructureAdministration organization={org} workspace={{ departments: [department], departmentId: department.id, onRefresh: vi.fn(), onChanged: vi.fn() }} /></UnsavedChangesProvider></LanguageProvider></ConfigProvider>);
+  await openAssignments();
+  fireEvent.change(screen.getByRole('textbox', { name: '用户 ID' }), { target: { value: user.id } });
+  await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
+  await userEvent.click(selector); await userEvent.keyboard('{Backspace}{Escape}');
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled());
+  await userEvent.click(screen.getByRole('button', { name: '保存任职' }));
+  await waitFor(() => expect(finishWrite).toBeTypeOf('function'));
+  await userEvent.click(screen.getByRole('tab', { name: /基本信息$/ }));
+  await act(async () => finishWrite(json([])));
+  await waitFor(() => expect(screen.getByRole('tab', { name: '用户任职' })).toHaveAttribute('aria-selected', 'true'));
+  expect(screen.getByRole('button', { name: '保存任职' })).toBeDisabled();
+  expect(within(selector.closest('.ant-select') as HTMLElement).queryByText(`${position.name} · ${position.code}`)).not.toBeInTheDocument();
+  const unload = new Event('beforeunload', { cancelable: true }); fireEvent(window, unload);
+  expect(unload.defaultPrevented).toBe(false);
+  expect(writes).toBe(1);
+}, 30000);
+
+it('guards internal tabs and restores the appointment baseline only after confirmed discard without unmounting the editor', async () => {
+  const { requests } = stub([assignment('active', position)]);
+  render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><UnsavedChangesProvider><StructureAdministration organization={{ ...org, permissions: [...org.permissions, 'organization:structure:manage'] }} workspace={{ departments: [department], departmentId: department.id, onRefresh: vi.fn(), onChanged: vi.fn() }} /></UnsavedChangesProvider></LanguageProvider></ConfigProvider>);
+  await openAssignments();
+  fireEvent.change(screen.getByRole('textbox', { name: '用户 ID' }), { target: { value: user.id } });
+  await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
+  const selection = selector.closest('.ant-select') as HTMLElement;
+  await userEvent.click(selector); await userEvent.keyboard('{Backspace}{Escape}');
+  await waitFor(() => expect(within(selection).queryByText(`${position.name} · ${position.code}`)).not.toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled());
+  await userEvent.click(screen.getByRole('tab', { name: /基本信息$/ }));
+  let guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
+  await userEvent.click(within(guard).getByRole('button', { name: '继续编辑' }));
+  expect(screen.getByRole('tab', { name: '用户任职' })).toHaveAttribute('aria-selected', 'true');
+  expect(within(selection).queryByText(`${position.name} · ${position.code}`)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled();
+  await userEvent.click(screen.getByRole('tab', { name: /基本信息$/ }));
+  guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
+  await userEvent.click(within(guard).getByRole('button', { name: '放弃修改' }));
+  await waitFor(() => expect(screen.getByRole('tab', { name: /基本信息$/ })).toHaveAttribute('aria-selected', 'true'));
+  await openAssignments();
+  expect(screen.getByRole('combobox', { name: '任职岗位' })).toBe(selector);
+  expect(within(selection).getByText(`${position.name} · ${position.code}`)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '保存任职' })).toBeDisabled();
+  expect(screen.queryByRole('region', { name: '权限预览' })).not.toBeInTheDocument();
+  const unload = new Event('beforeunload', { cancelable: true }); fireEvent(window, unload);
+  expect(unload.defaultPrevented).toBe(false);
+  expect(requests.some(([, init]) => init?.method === 'PUT' || init?.method === 'PATCH')).toBe(false);
+}, 30000);
+
+it('filters appointment choices to the selected department while retaining other department appointments in the full preview and CAS', async () => {
+  const outsideDepartment = { ...department, id: 'dept-b', code: 'BUY', name: '采购部' };
+  const outsidePosition = { ...position, id: 'outside', code: 'BUY', name: '采购专员', departmentId: outsideDepartment.id };
+  const entries = [assignment('active-a', position), assignment('active-b', outsidePosition)];
+  const { requests } = stub(entries, [position, outsidePosition], [department, outsideDepartment]);
+  render(<LanguageProvider><StructureAdministration organization={org} workspace={{ departments: [department, outsideDepartment], departmentId: department.id, onRefresh: vi.fn(), onChanged: vi.fn() }} /></LanguageProvider>);
+  await openAssignments();
+  await userEvent.type(screen.getByLabelText('用户 ID'), user.id);
+  await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
+  const selector = await screen.findByRole('combobox', { name: '任职岗位' });
+  await userEvent.click(selector);
+  expect(await screen.findByRole('option', { name: '质量工程师 · QA' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: '采购专员 · BUY' })).not.toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  await userEvent.click(screen.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存任职' })).toBeEnabled());
+  expect(JSON.parse(requests.find(([path]) => path.endsWith('/position-authorization/preview'))![1]!.body as string).positionIds).toEqual([position.id, outsidePosition.id]);
+  await userEvent.click(screen.getByRole('button', { name: '保存任职' }));
+  await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(true));
+  expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string)).toMatchObject({ positionIds: [position.id, outsidePosition.id], expectedPositionIds: [position.id, outsidePosition.id], authorizationBaseline: 'preview-baseline' });
+}, 30000);
 
 it('uses identifiable scoped users only with users:read and retains the controlled ID path otherwise', async () => {
   const { requests } = stub();
@@ -140,7 +232,7 @@ it('preserves department creation and versioned editing alongside the new role e
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PATCH')).toBe(true));
   const [updatePath, update] = requests.find(([, init]) => init?.method === 'PATCH')!;
   expect(updatePath).toBe('/api/v1/organizations/org-a/departments/dept-a');
-  expect(JSON.parse(update!.body as string)).toEqual({ name: '更新质量部', parentId: null, status: 'ACTIVE', expectedVersion: 1 });
+  expect(JSON.parse(update!.body as string)).toEqual({ code: department.code, name: '更新质量部', parentId: null, expectedVersion: 1 });
 }, 30000);
 
 function RouteDestination() { return <output aria-label="route">{useLocation().pathname}</output>; }

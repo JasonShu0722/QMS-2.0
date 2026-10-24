@@ -30,7 +30,7 @@ it.each(['organization', 'department', 'position'] as const)('guards the %s edit
     return json(path.includes('/tree?') ? [record] : path.includes('/departments?') ? [department] : path.includes('/positions?') ? [position] : []);
   }));
   render(<MemoryRouter><UnsavedChangesProvider>{kind === 'organization'
-    ? <OrganizationAdministration organization={organization} organizations={[organization]} />
+    ? <OrganizationAdministration organization={organization} organizations={[organization]} items={[record]} />
     : <StructureAdministration organization={organization} />}</UnsavedChangesProvider></MemoryRouter>);
   if (kind === 'position') await user.click(screen.getByRole('tab', { name: '岗位' }));
   await user.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));

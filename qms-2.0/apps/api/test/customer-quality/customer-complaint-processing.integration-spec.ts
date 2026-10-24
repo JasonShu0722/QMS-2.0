@@ -10,6 +10,8 @@ import { CustomerComplaintFileResourceAdapter } from '../../src/modules/customer
 import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
 import { createObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
+import { OrganizationService } from '../../src/modules/organization/organization.service.js';
+import { PositionOnboardingService } from '../../src/modules/organization/position-onboarding.service.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || new URL(databaseUrl).port === '55440') {
@@ -53,7 +55,7 @@ describe('customer complaint processing on PostgreSQL', () => {
   const resources = new FileResourceAccess([]);
   new CustomerComplaintFileResourceAdapter(resources).onModuleInit();
   const files = new FileLifecycleService(prisma, new FilePolicyService(), createObjectStorage(), audit, resources);
-  const service = new CustomerComplaintProcessingService(prisma, mutations, audit, files);
+  const service = new CustomerComplaintProcessingService(prisma, mutations, audit, files, new OrganizationService(prisma, mutations, audit, new PositionOnboardingService(prisma, audit)));
   const organizationId = randomUUID();
   const userId = randomUUID();
   const reviewerId = randomUUID();

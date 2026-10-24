@@ -681,10 +681,26 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["OrganizationGovernanceController_delete"];
         options?: never;
         head?: never;
         patch: operations["OrganizationGovernanceController_update"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_lifecycle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/organizations/{organizationId}/departments": {
@@ -713,10 +729,26 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["OrganizationGovernanceController_deleteDepartment"];
         options?: never;
         head?: never;
         patch: operations["OrganizationGovernanceController_updateDepartment"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/departments/{departmentId}/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationGovernanceController_departmentLifecycle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/organizations/{organizationId}/positions": {
@@ -5853,6 +5885,7 @@ export interface components {
         };
         UpdateOrganizationDto: {
             expectedVersion: number;
+            code?: string;
             name?: string;
             /** Format: uuid */
             parentId?: string;
@@ -5863,6 +5896,17 @@ export interface components {
             expectedParentId?: string | null;
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
+        };
+        OrganizationLifecycleDto: {
+            deleteBlockers: string[];
+            disableBlockers: string[];
+        };
+        DeleteStructureDto: {
+            expectedVersion: number;
+        };
+        DeleteStructureResultDto: {
+            id: string;
+            deleted: boolean;
         };
         DepartmentDto: {
             id: string;
@@ -5882,6 +5926,7 @@ export interface components {
         };
         UpdateDepartmentDto: {
             expectedVersion: number;
+            code?: string;
             name?: string;
             /** Format: uuid */
             parentId?: string | null;
@@ -12287,6 +12332,43 @@ export interface operations {
             };
         };
     };
+    OrganizationGovernanceController_delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteStructureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteStructureResultDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     OrganizationGovernanceController_update: {
         parameters: {
             query?: never;
@@ -12311,6 +12393,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_lifecycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationLifecycleDto"];
                 };
             };
             /** @description Controlled API error */
@@ -12395,6 +12507,44 @@ export interface operations {
             };
         };
     };
+    OrganizationGovernanceController_deleteDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteStructureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteStructureResultDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     OrganizationGovernanceController_updateDepartment: {
         parameters: {
             query?: never;
@@ -12420,6 +12570,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepartmentDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationGovernanceController_departmentLifecycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationLifecycleDto"];
                 };
             };
             /** @description Controlled API error */

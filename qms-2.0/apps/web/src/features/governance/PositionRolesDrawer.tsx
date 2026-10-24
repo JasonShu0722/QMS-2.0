@@ -37,13 +37,24 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
   const completed = useRef(false);
   const mutate = useRef(createAdminMutation());
   const path = organizationPath(organization.id, `/positions/${encodeURIComponent(position.id)}/permissions`);
+  const grantable = catalog.filter(group => group.status !== 'planned').flatMap(group => group.modules.filter(module => module.status !== 'planned').flatMap(module => module.operations.filter(operation => operation.grantable).map(operation => operation.code)));
   const dirty = !!configuration && (mfaRequired !== configuration.mfaRequired || JSON.stringify([...selected].sort()) !== JSON.stringify([...configuration.permissionCodes].sort()));
   useUnsavedChanges(open && dirty);
   useNavigationBusy(busy);
 
+  function endExpiredSession(cause: unknown) {
+    if (!(cause instanceof ApiError) || cause.status !== 401) return false;
+    completed.current = true; generation.current++; reading.current?.abort();
+    setOpen(false); setDiscard(false); setConfiguration(undefined); setSelected([]); setBusy(false); setLoading(false);
+    completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
+    return true;
+  }
+
   async function load(preserveDraft = false) {
-    if (pending.current) return;
+    if (pending.current || completed.current) return;
     const requestGeneration = ++generation.current;
+    const session = useWorkTabsStore.getState().sessionScope;
+    const current = () => alive.current && generation.current === requestGeneration && useWorkTabsStore.getState().sessionScope === session;
     reading.current?.abort();
     const controller = new AbortController();
     reading.current = controller;
@@ -52,12 +63,12 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
       const [next, candidates] = await Promise.all([
         apiRequest<components['schemas']['PositionPermissionsDto']>(path, { signal: controller.signal }), apiRequest<PermissionCatalogGroup[]>(scopePath('permission-catalog', organization.id), { signal: controller.signal }),
       ]);
-      if (!alive.current || generation.current !== requestGeneration) return;
+      if (!current()) return;
       setConfiguration(next); setCatalog(candidates); setConflict(false);
       if (!preserveDraft) { setSelected(next.permissionCodes); setMfaRequired(next.mfaRequired); }
       mutate.current = createAdminMutation();
-    } catch (cause) { if (alive.current && generation.current === requestGeneration) setError(cause); }
-    finally { if (alive.current && generation.current === requestGeneration) setLoading(false); }
+    } catch (cause) { if (current() && !endExpiredSession(cause)) setError(cause); }
+    finally { if (current()) setLoading(false); }
   }
   useEffect(() => {
     alive.current = true;
@@ -85,6 +96,7 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
       setConfiguration(result); setSelected(result.permissionCodes); setMfaRequired(result.mfaRequired);
     } catch (cause) {
       if (alive.current && generation.current === requestGeneration && useWorkTabsStore.getState().sessionScope === sessionScope) {
+        if (endExpiredSession(cause)) return;
         setError(cause);
         if (cause instanceof ApiError && cause.status === 409) setConflict(true);
       }
@@ -105,6 +117,7 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
           <span>{t('角色版本')}：{configuration.roleVersion}</span>
           <span>{t('当前有效任职人数')}：{configuration.effectiveAssigneeCount}</span>
           <Typography.Title level={4}>{t('岗位自有权限')}</Typography.Title>
+          {canWrite && <Button disabled={busy || conflict || !grantable.length} onClick={() => setSelected([...new Set([...selected, ...grantable])])}>{t('选择全部可授予权限')}</Button>}
           {!selected.length && !configuration.legacyRoles.some((role) => role.permissions.length) && <Alert type="warning" showIcon title={t('该岗位未配置系统权限')} />}
           <GroupedPermissionSelector catalog={catalog} value={selected} onChange={setSelected} disabled={!canWrite || busy || conflict} />
           <Space><span>{t('要求 MFA')}</span><Switch aria-label={t('要求 MFA')} checked={mfaRequired} onChange={setMfaRequired} disabled={!canWrite || busy || conflict} /></Space>

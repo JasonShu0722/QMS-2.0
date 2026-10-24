@@ -68,7 +68,7 @@ describe('organization governance PostgreSQL', () => {
     await send('patch', `/${child.id}`, { parentId: organizationId, expectedParentId: null, expectedVersion: 1 }).expect(409);
     const results = await Promise.all(['First', 'Second'].map((name) => send('patch', `/${child.id}`, { name, expectedVersion: 1 })));
     expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
-    await send('patch', `/${child.id}`, { code: 'IMMUTABLE', expectedVersion: 2 }).expect(400);
+    await send('patch', `/${child.id}`, { code: `EDITABLE-${randomUUID()}`, expectedVersion: 2 }).expect(200);
     await send('patch', `/${child.id}`, { parentId: null, expectedVersion: 2 }).expect(400);
   });
 
@@ -165,12 +165,18 @@ describe('organization governance PostgreSQL', () => {
     expect(await prisma.adminMutation.count({ where: { actorUserId: userId, key } })).toBe(0);
   });
 
-  it('rejects existing sessions when the home organization is disabled', async () => {
+  it('requires accounts to be disabled first and preserves organization session-revocation safeguards', async () => {
     const child = (await send('post', `/${organizationId}/children`, { code: randomUUID(), name: 'Disabled home' }).expect(201)).body;
     const password = 'Organization-disabled-login-test';
     const user = await prisma.user.create({ data: { organizationId: child.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: await app.get(PasswordService).hash(password) } });
     const token = await app.get(SessionService).create(user.id);
+    const userSession = (await app.get(SessionService).resolve(token))!;
+    await send('patch', `/${child.id}`, { status: 'DISABLED', expectedVersion: 1 }).expect(409);
+    expect(await app.get(SessionService).resolve(token)).not.toBeNull();
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: userSession.id } })).revokedAt).toBeNull();
+    await prisma.user.update({ where: { id: user.id }, data: { status: 'DISABLED' } });
     await send('patch', `/${child.id}`, { status: 'DISABLED', expectedVersion: 1 }).expect(200);
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: userSession.id } })).revokedAt).not.toBeNull();
     expect(await app.get(SessionService).resolve(token)).toBeNull();
     await request(app.getHttpServer()).post('/api/v1/auth/login').set('Cookie', `qms_csrf=${csrf}`).set('x-csrf-token', csrf).send({ identifier: user.username, password }).expect(401);
     await request(app.getHttpServer()).get(`/api/v1/organizations/${child.id}/departments`).set('Cookie', cookie).expect(403);

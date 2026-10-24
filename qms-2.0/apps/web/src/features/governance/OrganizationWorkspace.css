@@ -1,0 +1,11 @@
+.organization-workspace { display: grid; grid-template-columns: minmax(210px, 28%) minmax(0, 1fr); gap: var(--qms-section-gap); align-items: start; }
+.organization-workspace-tree { border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface-tint); padding: var(--qms-card-padding); min-width: 0; }
+.organization-workspace-context { min-width: 0; }
+.organization-workspace-tree nav { max-height: 65vh; overflow: auto; }
+.organization-workspace-tree ul { list-style: none; padding: 0; margin: 0; }
+.organization-workspace-tree li ul { padding-inline-start: 14px; border-inline-start: 1px solid var(--qms-border); }
+.organization-workspace-tree li > button { height: auto; width: 100%; justify-content: start; padding: 6px; white-space: normal; text-align: start; }
+.organization-workspace-tree button small { color: var(--qms-muted); overflow-wrap: anywhere; }
+.organization-workspace-tree button[aria-pressed="true"] { background: var(--qms-accent-soft); color: var(--qms-accent); }
+.organization-workspace-tree button:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 1px; }
+@media (max-width: 760px) { .organization-workspace { grid-template-columns: minmax(0, 1fr); } .organization-workspace-tree nav { max-height: 35vh; } }

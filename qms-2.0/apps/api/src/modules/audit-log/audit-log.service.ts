@@ -48,6 +48,11 @@ const SAFE_METADATA_KEYS = new Set([
   'previousClaimedByUserId',
   'claimedByUserId',
   'changedFields',
+  'structureCode',
+  'structurePreviousCode',
+  'structureName',
+  'structurePreviousName',
+  'structureGovernorRoleId',
 ]);
 
 @Injectable()
@@ -74,6 +79,9 @@ export class AuditLogService {
     return Object.fromEntries(
       Object.entries(metadata)
         .filter(([key, value]) => SAFE_METADATA_KEYS.has(key) && this.isSafeValue(value)
+          && (!['structureCode', 'structurePreviousCode'].includes(key) || (typeof value === 'string' && value.length <= 64 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)))
+          && (!['structureName', 'structurePreviousName'].includes(key) || (typeof value === 'string' && value.length <= 200 && /\S/.test(value)))
+          && (key !== 'structureGovernorRoleId' || (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)))
           && (key !== 'changedFields' || (typeof value === 'string' && /^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value))))
         .map(([key, value]) => [key, value]),
     ) as Prisma.InputJsonObject;

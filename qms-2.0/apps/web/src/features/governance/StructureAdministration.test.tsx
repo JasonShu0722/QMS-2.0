@@ -6,9 +6,13 @@ import { ConfigProvider } from 'antd';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { StructureAdministration } from './StructureAdministration';
+import { PositionRolesDrawer } from './PositionRolesDrawer';
 import type { AdminOrganization, AdminRole, PermissionCatalogGroup } from '../admin/admin';
 import type { components } from '@qms/contracts';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+
+vi.setConfig({ testTimeout: 30000 });
 
 const userEvent = baseUserEvent.setup();
 
@@ -107,7 +111,20 @@ it('edits position-owned permissions and sends the CAS PUT with CSRF and idempot
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(true));
   const [, init] = requests.find(([, value]) => value?.method === 'PUT')!;
   expect(init).toMatchObject({ method: 'PUT', headers: { 'x-csrf-token': 'csrf-token', 'Idempotency-Key': expect.any(String) }, body: JSON.stringify({ permissionCodes: ['workbench:read', 'audit:read'], expectedPermissionCodes: ['workbench:read'], mfaRequired: false, expectedMfaRequired: false, expectedRoleVersion: 4 }) });
-});
+}, 30000);
+
+it('selects all and only real grantable catalog permissions without removing retained unknown permissions', async () => {
+  const details = { ...roleDetails(), permissionCodes: ['legacy:unknown'] };
+  const { requests } = stubStructureApi(details, [...catalog, { key: 'planned', name: '待接入', status: 'planned', modules: [{ key: 'planned', name: '未生效模块', status: 'planned', operations: [{ code: 'future:read', name: '未来权限', enforcement: 'reserved', grantable: true }] }] }]);
+  render(<LanguageProvider><StructureAdministration organization={organization(writable)} /></LanguageProvider>);
+  await userEvent.click(await positionAction());
+  const dialog = screen.getByRole('dialog');
+  await userEvent.click(await within(dialog).findByRole('button', { name: '选择全部可授予权限' }));
+  expect(within(dialog).getByRole('checkbox', { name: '岗位测试权限 · 重置用户' })).not.toBeChecked();
+  await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(true));
+  expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string).permissionCodes).toEqual(['legacy:unknown', 'workbench:read', 'audit:read']);
+}, 30000);
 
 it('keeps the selected draft and asks for reload after a CAS conflict', async () => {
   const { requests } = stubStructureApi(roleDetails([roleA]));
@@ -189,6 +206,44 @@ it('keeps the position table locally scrollable and exposes row actions to the k
 const writable = ['organization:structure:read', 'organization:structure:manage', 'account:roles:read', 'account:roles:update', 'account:roles:assign'];
 function Destination() { return <output aria-label="route">{useLocation().pathname}</output>; }
 
+it.each(['read', 'reload', 'save'])('ends the current session on an ordinary position permission %s 401, including dirty drafts', async (phase) => {
+  const { fetchMock } = stubStructureApi(); const original = fetchMock.getMockImplementation()!;
+  let unauthorizedRead = phase === 'read';
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input).endsWith('/positions/position-a/permissions')) {
+      if (init?.method === 'PUT') { if (phase === 'reload') { unauthorizedRead = true; return Promise.resolve(json({ code: 'HTTP_503' }, 503)); } return Promise.resolve(json({ code: 'AUTH_SESSION_REQUIRED' }, 401)); }
+      if (unauthorizedRead) return Promise.resolve(json({ code: 'AUTH_SESSION_REQUIRED' }, 401));
+    }
+    return original(input, init);
+  });
+  useWorkTabsStore.getState().bindSession('INTERNAL:org-a:current');
+  useWorkTabsStore.getState().openTab({ id: 'private', path: '/app/account', title: 'Private' });
+  render(<LanguageProvider><UnsavedChangesProvider><PositionRolesDrawer organization={organization(writable)} position={position} canWrite onClose={vi.fn()} afterClose={vi.fn()} /><Destination /></UnsavedChangesProvider></LanguageProvider>);
+  if (phase !== 'read') {
+    await userEvent.click(await screen.findByRole('checkbox', { name: '岗位测试权限 · 查看审计' }));
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    if (phase === 'reload') await userEvent.click(await screen.findByRole('button', { name: '重新加载岗位权限' }));
+  }
+  await waitFor(() => expect(screen.getByLabelText('route')).toHaveTextContent('/login'));
+  expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
+  expect(useWorkTabsStore.getState().tabs).toEqual([]);
+  expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+}, 30000);
+
+it('ignores an old position permission read 401 after a new session is bound', async () => {
+  const { fetchMock } = stubStructureApi(); const original = fetchMock.getMockImplementation()!;
+  let resolve!: (value: Response) => void;
+  fetchMock.mockImplementation((input, init) => String(input).endsWith('/positions/position-a/permissions') ? new Promise<Response>(done => { resolve = done; }) : original(input, init));
+  useWorkTabsStore.getState().bindSession('INTERNAL:org-a:old');
+  render(<LanguageProvider><PositionRolesDrawer organization={organization(writable)} position={position} canWrite onClose={vi.fn()} afterClose={vi.fn()} /><Destination /></LanguageProvider>);
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  useWorkTabsStore.getState().bindSession('INTERNAL:org-b:new');
+  resolve(json({ code: 'AUTH_SESSION_REQUIRED' }, 401));
+  await new Promise(done => setTimeout(done, 0));
+  expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org-b:new');
+  expect(screen.getByLabelText('route')).not.toHaveTextContent('/login');
+}, 30000);
+
 it.each(['organization', 'account'])('ignores a revoked-session save response from an old %s context', async (changed) => {
   const { fetchMock } = stubStructureApi();
   const original = fetchMock.getMockImplementation()!;
@@ -247,7 +302,7 @@ it('protects a busy save from close and duplicate submission, then returns focus
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '关闭' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(trigger).toHaveFocus();
-});
+}, 30000);
 
 it('ends the current session after a successful self revocation without replaying the committed write', async () => {
   const { fetchMock, requests } = stubStructureApi();

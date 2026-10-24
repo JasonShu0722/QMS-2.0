@@ -1,13 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AdminMutationService, adminError } from '../../common/security/admin-mutation.service.js';
-import { RequireAccess } from '../authorization/access.decorator.js';
+import { RequireAccess, RequireAuthenticated } from '../authorization/access.decorator.js';
 import { OrganizationService } from './organization.service.js';
-import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DepartmentDto, OrganizationDto, OrganizationListQueryDto, PositionDto, PositionPermissionsDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsWithPreviewDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UpdatePositionPermissionsDto, UserPositionDto } from './organization.dto.js';
+import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DeleteStructureDto, DeleteStructureResultDto, DepartmentDto, OrganizationDto, OrganizationLifecycleDto, OrganizationListQueryDto, PositionDto, PositionPermissionsDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsWithPreviewDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UpdatePositionPermissionsDto, UserPositionDto } from './organization.dto.js';
 
 const scope = { source: 'params' as const, field: 'organizationId', optional: false };
 
@@ -42,6 +42,23 @@ export class OrganizationGovernanceController {
     return this.organizations.update(this.actor(request), organizationId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
+  @Get(':organizationId/lifecycle')
+  @ApiOkResponse({ type: OrganizationLifecycleDto })
+  @RequireAccess({ featurePermission: 'organization:manage', organizationScope: scope })
+  lifecycle(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Req() request: Request) {
+    return this.organizations.organizationLifecycle(this.actor(request), organizationId);
+  }
+
+  @Delete(':organizationId')
+  @ApiOkResponse({ type: DeleteStructureResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAuthenticated()
+  delete(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Body() dto: DeleteStructureDto, @Req() request: Request) {
+    // The service authorizes target + frozen parent, including the target's post-delete receipt path.
+    return this.organizations.deleteOrganization(this.actor(request), organizationId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
   @Get(':organizationId/departments')
   @ApiOkResponse({ type: DepartmentDto, isArray: true })
   @RequireAccess({ featurePermission: 'organization:structure:read', organizationScope: scope })
@@ -65,6 +82,22 @@ export class OrganizationGovernanceController {
   @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
   updateDepartment(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('departmentId', ParseUUIDPipe) departmentId: string, @Body() dto: UpdateDepartmentDto, @Req() request: Request) {
     return this.organizations.updateDepartment(this.actor(request), organizationId, departmentId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
+  @Get(':organizationId/departments/:departmentId/lifecycle')
+  @ApiOkResponse({ type: OrganizationLifecycleDto })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
+  departmentLifecycle(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('departmentId', ParseUUIDPipe) departmentId: string, @Req() request: Request) {
+    return this.organizations.departmentLifecycle(this.actor(request), organizationId, departmentId);
+  }
+
+  @Delete(':organizationId/departments/:departmentId')
+  @ApiOkResponse({ type: DeleteStructureResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
+  deleteDepartment(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('departmentId', ParseUUIDPipe) departmentId: string, @Body() dto: DeleteStructureDto, @Req() request: Request) {
+    return this.organizations.deleteDepartment(this.actor(request), organizationId, departmentId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Get(':organizationId/positions')

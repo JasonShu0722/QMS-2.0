@@ -4,8 +4,7 @@ import { Alert, Select, Spin, Tabs, Typography } from 'antd';
 import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
-import { OrganizationAdministration } from '../governance/OrganizationAdministration';
-import { StructureAdministration } from '../governance/StructureAdministration';
+import { OrganizationWorkspace } from '../governance/OrganizationWorkspace';
 import { ConfigurationAdministration } from '../governance/ConfigurationAdministration';
 import { AuditAdministration } from '../governance/AuditAdministration';
 import { OutboxAdministration } from '../governance/OutboxAdministration';
@@ -69,8 +68,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)) ? [{ key: 'supplier-master', label: t('供应商清单'), children: <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(customerMaster ? [{ key: 'customer-master', label: t('客户清单'), children: <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['material-master:read', 'material-master:write', 'material-master:import'].includes(code)) ? [{ key: 'material-master', label: t('物料清单'), children: <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
-    ...(organization.permissions.includes('organization:read') ? [{ key: 'organizations', label: t('组织结构'), children: <OrganizationAdministration organization={organization} organizations={organizations} onChanged={onDirectoryChange} /> }] : []),
-    ...(organization.permissions.includes('organization:structure:read') ? [{ key: 'structure', label: t('部门岗位'), children: <StructureAdministration organization={organization} /> }] : []),
+    ...(organization.permissions.some((code) => ['organization:read', 'organization:structure:read'].includes(code)) ? [{ key: 'organizations', label: t('组织与岗位'), children: <OrganizationWorkspace organization={organization} organizations={organizations} onChanged={onDirectoryChange} onSelectOrganization={(id) => { setSelectedId(id); setTargetConsumed(true); }} /> }] : []),
     ...(organization.permissions.includes('configuration:read') ? [{ key: 'configuration', label: t('平台配置'), children: <ConfigurationAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
@@ -80,7 +78,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
       <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
       <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
-    <Tabs key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={setActiveTab} items={[
+    <Tabs destroyOnHidden key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={(key) => changeScope(() => setActiveTab(key))} items={[
       ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} /> }] : []),
       ...(roles ? [{ key: 'roles', label: t('历史授权'), children: <RoleAdministration organization={organization} readOnly /> }] : []),
       ...additionalTabs,

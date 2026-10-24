@@ -112,6 +112,10 @@ QMS 的信息架构、主题、组件、业务语义和验收以本指南、前�
 
 负责人已确认[专项设计](../../docs/superpowers/specs/2026-10-21-qms-interaction-system-design.md)，要求覆盖当前及未来可能场景，并进一步明确先建立可视化确认的样例库。[样例先行计划](../../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md)接续 Issue #58：独立开发入口 `apps/web/interaction-preview.html`，8 组真实控件本地演示、20 组领域映射，复用当前主题和语言；正式页面和共享主题保持原状，确认样例后再迁移。样例运行不是全站迁移或业务验收完成记录。
 
+2026-10-24 按[基础管理前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)增加独立入口 `apps/web/organization-preview.html`，实现位于 `src/interaction-preview/organization/`。复用主题 / 语言及 Ant Design，左树右侧基本信息 / 岗位 / 任职，演示建架构、权限、兼岗和分管、改码及删除 / 停用依赖检查。所有数据仅在页面内存，刷新重置，不接入正式路由、真实 API 或生产默认入口；预览不证明真实授权 / 在途流程 / 审计实现。用户视觉评审及浏览器检查分别记录于前置计划，不以模型单元测试替代。
+
+同日负责人正式启动 N1，正式实现入口为 `features/governance/OrganizationWorkspace.tsx`，复用 `OrganizationAdministration`、`StructureAdministration` 及 `PositionRolesDrawer`，由 `AdminPage` 单一“组织与岗位”页签挂载；不导入原型模型或 CSS。按部门定位过滤岗位，任职编辑保留完整跨部门基线，不能用局部可选项覆盖其他任职。架构读取刷新与组织目录变更区分，未保存 / busy / 401 / 旧范围响应各自处理；删除结果未知只使用原请求身份、版本和幂等键恢复。当前仅为本地实现和审查验证状态，尚无 PR / 部署；完整机器结果与专项人工检查继续以基础管理前置计划为准。
+
 后续实现继续复用当前 Ant Design、主题、语言、路由、未保存保护、附件和导入机制。未来模式覆盖不等于新增业务获准开发，已有切片、占位入口、外部系统预留与实际验收分别记录；“关闭”“保存”“提交”等动作依领域语义判断，不机械统一成同一种按钮。实现与交付要求仍以本指南、统一规格和交付流程为准。
 
 ## 5. 前端验收清单

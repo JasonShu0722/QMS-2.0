@@ -16,6 +16,7 @@ vi.mock('./UserAdministration', () => ({ UserAdministration: ({ organization, ta
 vi.mock('./RoleAdministration', () => ({ RoleAdministration: () => <div>角色内容</div> }));
 vi.mock('../governance/OrganizationAdministration', () => ({ OrganizationAdministration: () => null }));
 vi.mock('../governance/StructureAdministration', () => ({ StructureAdministration: () => null }));
+vi.mock('../governance/OrganizationWorkspace', () => ({ OrganizationWorkspace: () => <div>组织工作区</div> }));
 vi.mock('../governance/ConfigurationAdministration', () => ({ ConfigurationAdministration: () => null }));
 vi.mock('../governance/AuditAdministration', () => ({ AuditAdministration: () => <div>审计内容</div> }));
 vi.mock('../governance/OutboxAdministration', () => ({ OutboxAdministration: () => null }));
@@ -62,7 +63,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe('C master navigation', () => {
 it('places authorized supplier, customer and material tabs together in that order', () => {
   view([org(orgA, ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'organization:read', 'audit:read'])]);
-  expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['供应商清单', '客户清单', '物料清单', '组织结构', '管理审计']);
+  expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['供应商清单', '客户清单', '物料清单', '组织与岗位', '管理审计']);
+});
+
+it.each([{ permissions: ['organization:read'] }, { permissions: ['organization:structure:read'] }, { permissions: ['organization:read', 'organization:structure:read'] }])('exposes one unified entry for partial permissions $permissions', ({ permissions }) => {
+  view([org(orgA, permissions)]);
+  expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['组织与岗位']);
+  expect(screen.getByText('组织工作区')).toBeVisible();
 });
 
 it('allows a customer write-only entry without adding unauthorized supplier or material entries', async () => {
