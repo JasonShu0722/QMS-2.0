@@ -416,6 +416,20 @@ describe('administrator security PostgreSQL regression', () => {
     expect(response.body).toEqual([expect.objectContaining({ id: actor.organizationId, type: 'INTERNAL', permissions: expect.arrayContaining(permissionCodes) })]);
   });
 
+  it.each(['organization:read', 'organization:structure:read'])('exposes read-only organization structure for %s without granting management', async (code) => {
+    const role = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId, code: 'security-reader' } });
+    const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+    try {
+      const response = await request(app.getHttpServer()).get('/api/v1/admin/organizations').set('Cookie', cookie).expect(200);
+      expect(response.body.find((entry: { id: string }) => entry.id === otherOrganizationId)).toMatchObject({ id: otherOrganizationId, permissions: [code] });
+      await request(app.getHttpServer()).get(`/api/v1/organizations/${otherOrganizationId}/lifecycle`).set('Cookie', cookie).expect(403);
+      await request(app.getHttpServer()).post(`/api/v1/organizations/${otherOrganizationId}/children`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ code: randomUUID(), name: 'Forbidden child' }).expect(403);
+    } finally {
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } } });
+    }
+  });
+
   it('exposes customer master organizations without granting platform administration tabs', async () => {
     const role = await prisma.role.findFirstOrThrow({ where: { organizationId: otherOrganizationId, code: 'security-reader' } });
     const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'customer-quality:complaints:read' } });

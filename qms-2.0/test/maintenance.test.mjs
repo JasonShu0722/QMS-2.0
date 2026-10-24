@@ -32,11 +32,11 @@ test('开放事项有真实来源、未到期时通过', async (context) => {
 test('重复 ID、空触发条件和虚假开放关闭字段失败', async (context) => {
   const current = await fixture(context);
   await current.save([current.item, current.item]);
-  await assert.rejects(checkMaintenance(current.root), /重复/);
+  await assert.rejects(checkMaintenance(current.root, new Date('2026-09-24T00:00:00Z')), /重复/);
   await current.save([{ ...current.item, trigger: '' }]);
-  await assert.rejects(checkMaintenance(current.root), /trigger/);
+  await assert.rejects(checkMaintenance(current.root, new Date('2026-09-24T00:00:00Z')), /trigger/);
   await current.save([{ ...current.item, closedOn: '2026-09-23' }]);
-  await assert.rejects(checkMaintenance(current.root), /开放事项/);
+  await assert.rejects(checkMaintenance(current.root, new Date('2026-09-24T00:00:00Z')), /开放事项/);
 });
 
 test('来源变化、复核到期和未来复核日期失败', async (context) => {

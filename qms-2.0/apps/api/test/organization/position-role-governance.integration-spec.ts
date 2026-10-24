@@ -251,7 +251,7 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
 
   it.each(['mapping', 'disabled-mapping', 'appointment', 'position', 'department'] as const)('allows removing legacy unknown permissions through %s without demanding new grantability', async (kind) => {
     const f = await fixture();
-    await legacyPermission(f);
+    const legacy = await legacyPermission(f);
     await seedMapping(f);
     if (kind === 'disabled-mapping') await prisma.position.update({ where: { id: f.position.id }, data: { status: 'DISABLED' } });
     if (kind === 'mapping' || kind === 'disabled-mapping') {
@@ -260,6 +260,12 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
     } else if (kind === 'appointment') {
       await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
     } else {
+      if (kind === 'department' || kind === 'position') {
+        await send(f, 'patch', kind === 'position' ? `/positions/${f.position.id}` : `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+        expect(await permissions(f)).toEqual([legacy.code, 'workbench:read'].sort());
+        await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
+        if (kind === 'department') await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+      }
       await send(f, 'patch', kind === 'position' ? `/positions/${f.position.id}` : `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     }
     expect(await permissions(f)).toEqual([]);
@@ -330,6 +336,9 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
     const f = await fixture(['organization:read', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign']);
     await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
     await trustedAppointments(f, f.user.id, { positionIds: [f.position.id], expectedPositionIds: [] }).expect(200);
+    await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await send(f, 'patch', `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
     await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     await send(f, 'patch', `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: f.user.id } })).securityVersion).toBe(f.user.securityVersion);
@@ -339,6 +348,9 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
     const f = await fixture();
     await seedMapping(f);
     let old = await login(f.user.id);
+    await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    expect(await sessions.resolve(old.token)).not.toBeNull();
+    await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
     await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     expect(await permissions(f)).toEqual([]);
     expect(await sessions.resolve(old.token)).toBeNull();
@@ -346,12 +358,20 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
     await trustedConfigure(f, [f.grant.id], 2).expect(200);
     expect(await permissions(f)).toEqual([]);
     await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 2, status: 'ACTIVE' }).expect(200);
+    await trustedAppointments(f, f.user.id, { positionIds: [f.position.id], expectedPositionIds: [] }).expect(200);
     expect(await permissions(f)).toEqual(['workbench:read']);
     old = await login(f.user.id);
+    await send(f, 'patch', `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    expect(await permissions(f)).toEqual(['workbench:read']);
+    expect(await sessions.resolve(old.token)).not.toBeNull();
+    await trustedAppointments(f, f.user.id, { positionIds: [], expectedPositionIds: [f.position.id] }).expect(200);
+    await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 3, status: 'DISABLED' }).expect(200);
     await send(f, 'patch', `/departments/${f.department.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     expect(await permissions(f)).toEqual([]);
     expect(await sessions.resolve(old.token)).toBeNull();
     await send(f, 'patch', `/departments/${f.department.id}`, { expectedVersion: 2, status: 'ACTIVE' }).expect(200);
+    await send(f, 'patch', `/positions/${f.position.id}`, { expectedVersion: 4, status: 'ACTIVE' }).expect(200);
+    await trustedAppointments(f, f.user.id, { positionIds: [f.position.id], expectedPositionIds: [] }).expect(200);
     expect(await permissions(f)).toEqual(['workbench:read']);
   });
 
@@ -383,7 +403,9 @@ describe('trusted legacy position governance with real PostgreSQL; HTTP reads an
     const parent = await prisma.department.create({ data: { organizationId: f.org.id, code: randomUUID(), name: 'Parent' } });
     await prisma.department.update({ where: { id: f.department.id }, data: { parentId: parent.id } });
     await seedMapping(f);
-    await send(f, 'patch', `/departments/${parent.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    await send(f, 'patch', `/departments/${parent.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    // Imported historical states still resolve grants by the immediate department; new unsafe transitions are rejected.
+    await prisma.department.update({ where: { id: parent.id }, data: { status: 'DISABLED' } });
     expect(await permissions(f)).toEqual(['workbench:read']);
     await prisma.userPosition.create({ data: { organizationId: f.org.id, userId: f.user.id, positionId: f.position.id, endedAt: new Date(Date.now() + 60_000) } });
     const future = await person(f.org.id);

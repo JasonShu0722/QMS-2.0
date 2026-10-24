@@ -125,6 +125,27 @@ describe('canonical position permissions with real PostgreSQL and HTTP', () => {
     expect(await prisma.userRole.count({ where: { userId: f.user.id } })).toBe(0);
   });
 
+  it('keeps same-value permission saves idempotent without advancing versions, consuming resets or revoking assignee/actor sessions', async () => {
+    const f = await fixture();
+    await send(f, 'put', own(f), body()).expect(200);
+    await prisma.userPosition.create({ data: { organizationId: f.org.id, userId: f.admin.id, positionId: f.position.id } });
+    const employeeSession = await login(f.user.id);
+    const actorSession = await login(f.admin.id);
+    const before = await prisma.user.findMany({ where: { id: { in: [f.admin.id, f.user.id] } }, orderBy: { id: 'asc' } });
+    const reset = await prisma.passwordReset.create({ data: { userId: f.user.id, codeHash: 'd'.repeat(64), expiresAt: new Date(Date.now() + 60_000) } });
+    const key = randomUUID();
+    const dto = body(['workbench:read'], 2, ['workbench:read']);
+    const saved = await send(f, 'put', own(f), dto, key, actorSession.cookie).expect(200);
+    expect(saved.body).toMatchObject({ roleVersion: 2, permissionCodes: ['workbench:read'], mfaRequired: false, effectiveAssigneeCount: 2, selfSessionRevoked: false });
+    expect((await send(f, 'put', own(f), dto, key, actorSession.cookie).expect(200)).body).toEqual(saved.body);
+    const after = await prisma.user.findMany({ where: { id: { in: [f.admin.id, f.user.id] } }, orderBy: { id: 'asc' } });
+    expect(after.map(({ securityVersion }) => securityVersion)).toEqual(before.map(({ securityVersion }) => securityVersion));
+    expect((await prisma.passwordReset.findUniqueOrThrow({ where: { id: reset.id } })).consumedAt).toBeNull();
+    expect(await sessions.resolve(employeeSession.token)).not.toBeNull();
+    expect(await sessions.resolve(actorSession.token)).not.toBeNull();
+    expect(await prisma.auditEvent.count({ where: { resourceId: f.position.id, action: 'POSITION_PERMISSIONS_CHANGED' } })).toBe(1);
+  });
+
   it.each([150, 151, 200])('creates and renames a %s-codepoint internal position with one stable canonical role', async (length) => {
     const f = await fixture();
     const name = '岗'.repeat(length - 1) + '😀';

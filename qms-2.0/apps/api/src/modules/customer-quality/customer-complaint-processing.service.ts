@@ -8,6 +8,7 @@ import { FileLifecycleService } from '../file-management/file-lifecycle.service.
 import { validateEightDContent, type CustomerComplaintEightDContent } from './customer-complaint-8d.rules.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
+import { OrganizationService } from '../organization/organization.service.js';
 
 type Row = Record<string, any>;
 export type ComplaintCategory = 'PRODUCT_QUALITY' | 'DELIVERY' | 'SERVICE' | 'OTHER';
@@ -23,7 +24,7 @@ function version(value: number) { if (!Number.isSafeInteger(value) || value < 1)
 
 @Injectable()
 export class CustomerComplaintProcessingService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly files: FileLifecycleService, private readonly runtime?: WorkflowRuntimeService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly files: FileLifecycleService, private readonly organizations: OrganizationService, private readonly runtime?: WorkflowRuntimeService) {}
 
   private scope(actor: AdminActor) {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
@@ -90,7 +91,7 @@ export class CustomerComplaintProcessingService {
     const departmentId = validUuid(input.responsibleDepartmentId); const ownerId = validUuid(input.ownerUserId); const description = note(input.note);
     return this.mutate(actor, id, input.expectedVersion, 'CUSTOMER_COMPLAINT_TRIAGED', { ...input, categoryNote, note: description }, traceId, key, async (tx, organizationId, complaint) => {
       if (!['OPEN', 'IN_ANALYSIS'].includes(complaint.status)) fail('CUSTOMER_COMPLAINT_TRANSITION_INVALID', 409);
-      const department = await tx.department.findFirst({ where: { id: departmentId, organizationId, status: 'ACTIVE' } });
+      const department = await this.organizations.lockActiveDepartment(tx, organizationId, departmentId);
       const owner = await tx.user.findFirst({ where: { id: ownerId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } });
       if (!department || !owner) fail('CUSTOMER_COMPLAINT_RESPONSIBILITY_INVALID', 400);
       const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET category = ${category}, category_note = ${categoryNote}, responsible_department_id = ${departmentId}::uuid, owner_user_id = ${ownerId}::uuid, status = 'IN_ANALYSIS', version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaint.id}::uuid RETURNING *`;
@@ -154,7 +155,7 @@ export class CustomerComplaintProcessingService {
     const description = note(input.note);
     return this.mutate(actor, id, input.expectedVersion, 'CUSTOMER_COMPLAINT_REOPENED', { expectedVersion: input.expectedVersion, note: description }, traceId, key, async (tx, organizationId, complaint) => {
       if (!['RESOLVED', 'CLOSED'].includes(complaint.status)) fail('CUSTOMER_COMPLAINT_TRANSITION_INVALID', 409);
-      const department = await tx.department.findFirst({ where: { id: complaint.responsible_department_id, organizationId, status: 'ACTIVE' } });
+      const department = await this.organizations.lockActiveDepartment(tx, organizationId, complaint.responsible_department_id);
       const owner = await tx.user.findFirst({ where: { id: complaint.owner_user_id, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } });
       if (!department || !owner) fail('CUSTOMER_COMPLAINT_RESPONSIBILITY_INVALID', 409);
       const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET status = 'IN_ANALYSIS', resolution_summary = NULL, resolved_at = NULL, resolved_by_id = NULL, closed_at = NULL, closed_by_id = NULL, closure_note = NULL, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaint.id}::uuid RETURNING *`;

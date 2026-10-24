@@ -40,6 +40,7 @@ export class CreateOrganizationDto {
 
 export class UpdateOrganizationDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiPropertyOptional({ maxLength: 64 }) @ValidateIf((_object, value) => value !== undefined) @IsString() @Length(1, 64) @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]*$/) code?: string;
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @Length(1, 200) @Matches(/\S/) name?: string;
   @ApiPropertyOptional({ format: 'uuid' }) @ValidateIf((_object, value) => value !== undefined) @IsUUID() parentId?: string;
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'Required when moving; the original parent, or null for a root organization' })
@@ -53,9 +54,24 @@ export class CreateDepartmentDto extends CreateOrganizationDto {
 
 export class UpdateDepartmentDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiPropertyOptional({ maxLength: 64 }) @ValidateIf((_object, value) => value !== undefined) @IsString() @Length(1, 64) @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]*$/) code?: string;
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @Length(1, 200) @Matches(/\S/) name?: string;
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' }) @IsOptional() @IsUUID() parentId?: string | null;
   @ApiPropertyOptional({ enum: ['ACTIVE', 'DISABLED'] }) @ValidateIf((_object, value) => value !== undefined) @IsIn(['ACTIVE', 'DISABLED']) status?: 'ACTIVE' | 'DISABLED';
+}
+
+export class OrganizationLifecycleDto {
+  @ApiProperty({ type: [String] }) deleteBlockers!: string[];
+  @ApiProperty({ type: [String] }) disableBlockers!: string[];
+}
+
+export class DeleteStructureDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+}
+
+export class DeleteStructureResultDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() deleted!: boolean;
 }
 
 export class CreatePositionDto extends CreateOrganizationDto {

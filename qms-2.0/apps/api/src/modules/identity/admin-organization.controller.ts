@@ -31,6 +31,6 @@ export class AdminOrganizationController {
       entry.permissions = [...new Set([...entry.permissions, ...assignment.role.permissions.map((item) => item.permission.code)])].sort();
       result.set(organization.id, entry);
     }
-    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code)) || (actor.accountType === 'INTERNAL' && entry.type === 'INTERNAL' && entry.permissions.some((code) => ['customer-quality:complaints:read', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)))).sort((first, second) => first.code.localeCompare(second.code));
+    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code)) || (actor.accountType === 'INTERNAL' && entry.type === 'INTERNAL' && entry.permissions.some((code) => ['organization:read', 'customer-quality:complaints:read', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)))).sort((first, second) => first.code.localeCompare(second.code));
   }
 }

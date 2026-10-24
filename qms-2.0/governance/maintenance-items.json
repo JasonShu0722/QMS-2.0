@@ -6,16 +6,28 @@
       "category": "deprecation",
       "status": "open",
       "owner": "QMS Web 维护者",
-      "fact": "2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-20 REQ-0022账号改为两区概览和独立设置，继续使用Card/Table和Space，账号31项及资料返修24项通过；本轮仍出现其他页面Drawer width、Spin tip提示及useForm连接警告，升级前须分别核对。",
-      "impact": "未来升级 Ant Design 时可能产生兼容性改动；当前测试通过，不据此判断生产故障。",
-      "trigger": "升级 Ant Design 前，或弃用提示升级为构建/测试失败时处理。",
-      "nextAction": "升级 Ant Design 前核对官方迁移说明和其余页面弃用用法；REQ-0022最终Web门禁和真实浏览器尚未完成，见联合实施计划，不据此关闭全局维护事项。",
-      "reviewedOn": "2026-10-20",
-      "reviewDue": "2026-10-23",
+      "fact": "历史记录：2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-20 REQ-0022账号改为两区概览和独立设置，继续使用Card/Table和Space，账号31项及资料返修24项通过；本轮仍出现其他页面Drawer width、Spin tip提示及useForm连接警告，升级前须分别核对。2026-10-24 重新复核：AccountCenterPage 仍使用 Card/Descriptions/Space；仅运行 AccountCenter.u3.test.tsx，20/20 通过、退出码0，本次输出未出现 warning。静态读取仍发现审核标准页使用 List/Drawer width、新产品质量页使用 Space direction；已安装 Ant Design 的 List/Space 实现仍有对应弃用分支，不能据账号单文件无警告认定全站已消除。",
+      "impact": "全站仍有组件弃用用法，未来升级 Ant Design 可能需要兼容性修改；账号单文件测试通过不证明其他页面无警告、真实浏览器已验收或生产存在/不存在故障。",
+      "trigger": "升级 Ant Design 前、相关来源变化或警告升级为构建/测试失败时提前复核；无新触发时30天复核。",
+      "nextAction": "升级前核对官方迁移说明并逐页验证 List、Space direction、Drawer width 及历史 Spin tip/useForm 提示；本轮仅确认账号所选文件无警告，不修改业务代码，不据此关闭全局事项。命令、退出码和未覆盖范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。",
+      "reviewedOn": "2026-10-24",
+      "reviewDue": "2026-11-23",
       "sources": [
         {
           "path": "apps/web/src/features/account/AccountCenterPage.tsx",
           "sha256": "de158980c3f610a1de1e6370e91cac681c2f094c82827a4caeac5525649e9cca"
+        },
+        {
+          "path": "apps/web/src/features/account/AccountCenter.u3.test.tsx",
+          "sha256": "06b642c0ad4d64e7e8be2dc6ef1a2847bb24d77efd214ac7af4af167cdd3cb0c"
+        },
+        {
+          "path": "apps/web/src/features/audit-standards/AuditStandardsPage.tsx",
+          "sha256": "41dc3bccc873a7ca0f3ffda31fc5dee9cbceffc5d65ff0dd14eaa192f96e4400"
+        },
+        {
+          "path": "apps/web/src/features/new-product-quality/NewProductQualityPage.tsx",
+          "sha256": "bdca4ce2226f68ceb1ab10fd9c1ec9b1e47a6b24378f589df34d8bc735063d86"
         }
       ]
     },
@@ -24,16 +36,24 @@
       "category": "capacity",
       "status": "open",
       "owner": "QMS 平台维护者",
-      "fact": "当前备份工具对 dump 与对象累计设置 256 MiB 上限，对序列化包设置 512 MiB 上限。",
-      "impact": "数据量接近上限时备份会失败；该工具不是大容量在线备份方案。",
-      "trigger": "试点容量规划或实际备份接近上限时评估替代方案。",
-      "nextAction": "测量隔离环境数据规模，设计有界扩展或分段备份，并以真实 PostgreSQL/对象存储恢复验证。",
-      "reviewedOn": "2026-09-23",
-      "reviewDue": "2026-10-23",
+      "fact": "当前备份工具对 dump 与对象累计设置 256 MiB 上限，对序列化包设置 512 MiB 上限。2026-10-24 重新读取实现确认 dump 与全部对象版本原始字节分别受256 MiB限制，JSON/Base64序列化包受512 MiB限制，读取密文包上限另加33字节封装；5项静态容量守卫断言及现有5项对象引用/恢复映射测试通过，但没有执行接近上限的大包备份或真实恢复。",
+      "impact": "Base64和JSON开销使序列化包可能先于两个原始字节上限耗尽；超限仍会失败，阈值不是内存峰值保证，也不是大容量在线备份方案。生产数据量与容量余量未核实。",
+      "trigger": "试点容量规划、实际备份接近任一上限或数据保护来源变化时提前复核；无新触发时30天复核。",
+      "nextAction": "在获准的一次性环境测量dump、对象全部版本及序列化包规模，评估有界扩展/分段方案并执行真实PostgreSQL/对象存储恢复；本轮不运行备份CLI、不连接预览或生产，保留open。命令与边界见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。",
+      "reviewedOn": "2026-10-24",
+      "reviewDue": "2026-11-23",
       "sources": [
         {
           "path": "apps/api/scripts/data-protection.mjs",
           "sha256": "20d663ade8212d4e37b987cd3a1c89a726f2b2423edaa3e78a7cee1c84ff4899"
+        },
+        {
+          "path": "apps/api/scripts/data-protection-objects.mjs",
+          "sha256": "d82f354994f468824a4ea20636c19496e5425668cfb0c5e5e1156ad65b3de2e1"
+        },
+        {
+          "path": "apps/api/test/operations/data-protection-objects.test.mjs",
+          "sha256": "3a1e5148d2c3ab1d6e3f047bc594f6c6c71a94be7f8dc27dcae36bcab9f37443"
         }
       ]
     },
@@ -42,16 +62,40 @@
       "category": "operability",
       "status": "open",
       "owner": "QMS 平台与运维维护者",
-      "fact": "当前仓库提供一次性数据库聚合快照、版本化告警判定和隔离触发/恢复演练，尚未部署生产指标采集、告警阈值或通知渠道。",
-      "impact": "试点环境若发生关键操作失败、Worker 积压或扫描滞留，缺少持续自动发现与通知证据。",
-      "trigger": "供应商试点准备或目标环境运行架构确定时，必须完成观测与故障注入验证。",
-      "nextAction": "在目标运行架构中确定指标出口、只读授权、采样频率、阈值、责任人和通知渠道；复用 MAINT-003 判定器完成关键操作失败与积压场景的真实故障注入、处置和恢复验证。",
-      "reviewedOn": "2026-09-23",
-      "reviewDue": "2026-10-23",
+      "fact": "历史登记：当前仓库提供一次性数据库聚合快照、版本化告警判定和隔离触发/恢复演练，尚未部署生产指标采集、告警阈值或通知渠道。2026-10-24 重新读取运维手册、演练说明、snapshot/alerts实现及版本化阈值，现有快照目标/聚合2项、告警判定及CLI6项测试通过；本轮没有数据库采样或故障注入，只确认本地判定基础存在，生产采集、定时采样和通知状态未知，不将历史未部署描述当作本轮生产核查。",
+      "impact": "本地规则能判定失败、积压与扫描滞留，不证明Worker存活、生产持续自动发现或通知送达；目标运行架构的观测与处置闭环仍缺少本轮证据。",
+      "trigger": "供应商试点准备、目标运行架构确定或观测/阈值来源变化时提前复核并补真实故障注入；无新触发时30天复核。",
+      "nextAction": "由平台与运维维护者在获准的目标架构确定指标出口、只读授权、采样频率、阈值责任人和通知渠道，再验证失败/积压触发、处置与恢复；本轮不建监控服务、不访问生产，保留open。具体本地证据和未知范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。",
+      "reviewedOn": "2026-10-24",
+      "reviewDue": "2026-11-23",
       "sources": [
         {
           "path": "docs/OPERATIONS-RUNBOOK.md",
           "sha256": "ce19c7fc8276f16fb45ff0556e60281a7e859ed203a59e49ddc643808e6cbafb"
+        },
+        {
+          "path": "docs/OPERABILITY-READINESS.md",
+          "sha256": "15dd0100296242f606cf69d8fc39f68280515afcd3be61ed934f23f032fe8f3c"
+        },
+        {
+          "path": "apps/api/scripts/operations-snapshot.mjs",
+          "sha256": "f5d6e5d3f55c0f307ad669256e33c840ec5fd4207ad3f57a5f16b63e663be5e1"
+        },
+        {
+          "path": "scripts/operations-alerts.mjs",
+          "sha256": "fbb35c6451a65c82949acf326ae8030a71c63845ffe5985fe59ae749abcb4673"
+        },
+        {
+          "path": "governance/operability-alerts.json",
+          "sha256": "f7c878054f615d4cedb7dabf8e0bd2afdbf1eec93a3570d59be00883da218167"
+        },
+        {
+          "path": "test/operations-alerts.test.mjs",
+          "sha256": "2dfd192282528b5869e6f1126e8ad9af0afa27ac3938eae725bf34609f2c821f"
+        },
+        {
+          "path": "test/operations-snapshot.test.mjs",
+          "sha256": "3b99558bfc46770e46660dd72550b26bca94e95e5eddfb5a4d8ccc21c778bd06"
         }
       ]
     }
