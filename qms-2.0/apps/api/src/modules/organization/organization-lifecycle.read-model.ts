@@ -20,6 +20,24 @@ const historyOnly = new Set([
 const inactiveStatuses = ['DISABLED', 'RETIRED', 'ARCHIVED', 'CLOSED', 'COMPLETED', 'CANCELLED', 'RESOLVED', 'REJECTED', 'DELETED'];
 const identifier = (value: string) => Prisma.raw(`"${value.replaceAll('"', '""')}"`);
 
+// Uses alias t so individual dependencies can be checked without other live references masking them.
+export function structureReferenceLiveCondition(tableName: string) {
+  return tableName === 'workflow_versions'
+    ? Prisma.sql`to_jsonb(t)->>'status' = 'PUBLISHED'`
+    : tableName === 'audit_import_rows'
+    ? Prisma.sql`to_jsonb(t)->>'status' IN ('PENDING_REVIEW', 'ACCEPTED')`
+    : tableName === 'audit_postponements'
+    ? Prisma.sql`to_jsonb(t)->>'status' = 'PENDING'`
+    : tableName === 'supplier_concession_requests'
+    ? Prisma.sql`to_jsonb(t)->>'status' NOT IN ('REJECTED', 'WITHDRAWN')`
+    : Prisma.sql`CASE
+        WHEN to_jsonb(t) ? 'enabled' THEN to_jsonb(t)->>'enabled' = 'true'
+        WHEN to_jsonb(t) ? 'active' THEN to_jsonb(t)->>'active' = 'true'
+        WHEN to_jsonb(t)->>'archived_at' IS NOT NULL THEN false
+        WHEN to_jsonb(t)->>'status' IS NOT NULL THEN to_jsonb(t)->>'status' NOT IN (${Prisma.join(inactiveStatuses)})
+        ELSE true END`;
+}
+
 // A dependency projection, including migration-owned tables absent from Prisma and UUIDs without FKs.
 // It only reports existence; business details and identifiers never leave this read model.
 export async function structureBusinessReferences(transaction: AdminTransaction, targetId: string, kind: 'organization' | 'department') {
@@ -37,22 +55,10 @@ export async function structureBusinessReferences(transaction: AdminTransaction,
   const rows = await transaction.$queryRaw<{ referenced: boolean; live: boolean }[]>(Prisma.sql`
     SELECT bool_or(referenced) AS referenced, bool_or(live) AS live FROM (${Prisma.join(references.map(({ tableName, columnName }) => {
       const scope = Prisma.sql`${identifier(columnName)} = ${targetId}::uuid`;
-      const liveCondition = tableName === 'workflow_versions'
-        ? Prisma.sql`to_jsonb(t)->>'status' = 'PUBLISHED'`
-        : tableName === 'audit_import_rows'
-        ? Prisma.sql`to_jsonb(t)->>'status' IN ('PENDING_REVIEW', 'ACCEPTED')`
-        : tableName === 'audit_postponements'
-        ? Prisma.sql`to_jsonb(t)->>'status' = 'PENDING'`
-        : Prisma.sql`CASE
-            WHEN to_jsonb(t) ? 'enabled' THEN to_jsonb(t)->>'enabled' = 'true'
-            WHEN to_jsonb(t) ? 'active' THEN to_jsonb(t)->>'active' = 'true'
-            WHEN to_jsonb(t)->>'archived_at' IS NOT NULL THEN false
-            WHEN to_jsonb(t)->>'status' IS NOT NULL THEN to_jsonb(t)->>'status' NOT IN (${Prisma.join(inactiveStatuses)})
-            ELSE true END`;
       const live = historyOnly.has(tableName)
         ? Prisma.sql`false`
         : Prisma.sql`EXISTS (SELECT 1 FROM ${identifier(tableName)} t WHERE ${scope}
-            AND (${liveCondition}))`;
+            AND (${structureReferenceLiveCondition(tableName)}))`;
       return Prisma.sql`SELECT EXISTS (SELECT 1 FROM ${identifier(tableName)} WHERE ${scope}) AS referenced, ${live} AS live`;
     }), ' UNION ALL ')} ) dependencies`);
   const result = rows[0] ?? { referenced: false, live: false };

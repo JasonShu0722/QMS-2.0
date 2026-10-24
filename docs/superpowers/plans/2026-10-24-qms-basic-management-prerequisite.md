@@ -15,7 +15,7 @@
 | 交付映射 | 本前置对应 REQ-0025 / reczz28RDS4BlbBs；其余四条见五条提单记录。不覆盖原 P0/P1 A～G 历史分解，不重开已结束 REQ-0024。正式源码实施前接续实际 Issue / 分支 / PR，版本依交付流程核对后分配，不猜编号 |
 | 生产边界 | 生产组织 / 岗位维护、误建对象清理、合并发布及业务开通分别核对授权；本轮没有执行这些动作 |
 | 证据限制 | 生产引用及正式浏览器矩阵未读取 / 执行。三项维护事项经第 4.2 节事实复核仍开放；提 PR 前治理重跑通过。当前差异凭据格式检查不能替代全历史公开安全审计 |
-| 下一检查点 | O1 已由负责人“已开源，继续，弄好了可以闭源的时候再跟我说”接续；实际 API 核对 public。跟进 PR 最新 head 的完整检查至 M1，单独核对合并 / 生产发布授权；需要公开的任务结束后提醒负责人，不自行变更可见性，不提前推进依赖 D1 的 N2 |
+| 下一检查点 | O1 已满足；原 head `c40f8fa` 云端 9 项通过后的审查 P2 已同目标 fix2 修正；主代理真实 PG 45 项及 API build / lint / 契约检查通过，独立规格 / 质量复核无新 P1 / P2，见第 4.4 节。推送后仍须核对 PR 最新 head CI，满足后到 M1 单独核对合并 / 生产发布授权；公开任务结束后提醒，不自行改变可见性，不提前推进依赖 D1 的 N2 |
 
 ## 1. 前置交付的结果
 
@@ -224,3 +224,23 @@ N1 当前不合并 main、不部署、不执行线上误建对象清理、不将
 - 首轮 Foundation [run 40098561360](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40098561360) 已启动，初查 scope 成功，其余 checks、API、Web 四分片及 integration 未结束。后续提交将替换旧 head 检查，最终结论始终从 PR 最新 head 查询，不沿用被取消或旧 SHA 的绿色结果。
 - 同范围交付记录补齐使用 `V0.0.28-fix1`，不修改运行代码、测试或部署配置。公开任务完成和可闭源提醒以实际最新 run 为准；若先闭源而稍后仍需 main CI / 部署，须说明再次公开或可用私有 CI 的条件。
 - M1 只在最新 head 检查全部满足后进入；合并 main 会触发完整 Foundation 后生产部署。本次继续授权覆盖推送 / PR / CI，不自动替代 M1 合并 / 发布核权。不执行生产架构维护、误建对象删除、Issue 关闭或飞书写回。
+
+### 4.4 PR 自动审查补充与 fix2
+
+原 head `c40f8fad40765e15b17cd149fd3660802c12b188` 的 [run 40098735653](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40098735653) 已 9 / 9 job 成功：API 626 单测、Web 四分片、真实集成 92 suites / 1145 tests，以及独立真实 Worker 生命周期 1 suite / 8 tests 均通过。该结果属于原 head，不自动覆盖下述修复。
+
+收尾核查 [自动审查 P2](https://github.com/JasonShu0722/QMS-2.0/pull/65#discussion_r4367283627) 时确认：`SupplierConcessionService.withdraw()` 写入 `WITHDRAWN`，既有迁移 `20260924180001_supplier_concession_withdrawal` 也将其排除于活动申请索引；生命周期读取模型未识别该终态，错误地将已撤回申请本身计为在途。撤回历史应继续阻止真实删除，不能直接忽略整张表。
+
+进一步核对真实复合外键发现：合法让步申请依赖同范围供应商档案，而供应商档案本身仍是有效配置，不能为了证明撤回判定就删除档案、关闭约束或承诺整个组织可停用。因此本次回归分别验证申请自身的实际 SQL 投影与完整组织守卫；其他有效配置继续阻止停用。允许仅在现有读模型内提取原逐表 SQL 谓词形成小测试接缝，生产聚合与真实 PostgreSQL 断言使用同一份谓词，不模拟数据库或表目录。
+
+fix2 仅修正该终态投影并增加真实 PostgreSQL 回归，不修改供应商业务流程、DTO、迁移或部署配置。另建带本任务标签的一次性 PostgreSQL `qms-n1-fix2-20261024-postgres`，仅回环 `55472`，应用原 104 份迁移，不连接 `55440`。初次 Windows pnpm exec shim 失败，改用直接 Node 调用；入口脚本会重置工作目录，因此明确切到 `apps/api` 后执行成功，未通过修改依赖或迁移绕过。
+
+实现代理 Epicurus 已完成并冻结两文件：先无行为变化提取原 SQL 谓词，整文件基线 41 / 41；新增同一精确命令回归在 `WITHDRAWN` 预期 false、实际 true 处红灯（1 failed，41 项因定向筛选未执行），最小局部特判后绿灯，再整文件 42 / 42 通过。早先 fixture 400 仅是夹具错误，不计作有效红灯。真实 `withdraw()`、四类有效状态、两个终态、完整组织仍因其他有效配置拒绝停用 / 删除及原记录 / 事件保留均有断言。
+
+主代理独立运行同一数据库上的完整生命周期文件与供应商让步文件：`node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/organization/organization-lifecycle.integration-spec.ts test/supplier-concession/supplier-concession.integration-spec.ts`，2 suites / 45 tests 全通过，35.814 秒，退出 0；两覆盖文件执行前后 SHA-256 一致。新增行为只在局部表谓词，不扩大全局 inactive 状态列表。
+
+主代理随后 API build / lint、`contracts:check` 退出 0，无 DTO 或生成契约差异。Dewey 规格复核与 Anscombe 后续质量 / 安全复核均未发现明确 P1 / P2；规格轴针对当前文件，质量轴另核相对 `c40f8fa` 的完整两文件 diff 及首尾摘要，确认原其他表条件与聚合保留。两份均为静态复核，不冒充审查者独立运行数据库。
+
+fix2 只含上述两文件及本次计划 / 来源索引记录，修复号接续 V0.0.28-fix2；本地 PG 证据与正式页面待人工验收清单保存在 Git 外 `D:/WorkSpace/QMS-2.0-local/n1-ci-2026-10-24/`。临时 PG 及其匿名卷按精确名称 / 标签清理；环境秘密文件删除，不使用全局 prune，不接触保留预览资源。原 VM Modules 与 pg 弃用警告不在本修复扩展处理。
+
+CI 始终核对 PR 最新 head。旧 head 的 M1 绿色记录已在 PR / Issue 顶部注明暂未放行，不因绿色 CI 忽略有效审查意见；本节机器证据不代替接续的规格 / 质量静态复核或正式浏览器验收。

@@ -13,6 +13,8 @@ import { SessionService } from '../../src/modules/identity/session.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { ADMIN_PERMISSIONS } from '../../src/modules/authorization/permission-catalog.js';
 import { OrganizationService } from '../../src/modules/organization/organization.service.js';
+import { structureReferenceLiveCondition } from '../../src/modules/organization/organization-lifecycle.read-model.js';
+import { SupplierConcessionService } from '../../src/modules/supplier-concession/supplier-concession.service.js';
 import { CustomerQualityService } from '../../src/modules/customer-quality/customer-quality.service.js';
 import { CustomerComplaintProcessingService } from '../../src/modules/customer-quality/customer-complaint-processing.service.js';
 
@@ -109,6 +111,54 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     await f.send('post', path, dto, key).expect(409);
     expect(await prisma.department.count({ where: { organizationId: f.root.id, code: dto.code } })).toBe(0);
     expect(await prisma.auditEvent.count({ where: { resourceId: department.id, action: 'DEPARTMENT_CREATED' } })).toBe(1);
+  });
+
+  it('quality P2 excludes withdrawn supplier concessions from live references while retaining other organization blockers', async () => {
+    const f = await fixture([...ADMIN_PERMISSIONS, 'organization:read', 'supplier-concession:requests:write', 'supplier-incoming:inspections:read']);
+    const org = await f.child();
+    const governor = await prisma.role.findFirstOrThrow({ where: { organizationId: org.id, code: 'ORGANIZATION_GOVERNOR' } });
+    const permissions = await prisma.permission.findMany({ where: { code: { in: ['supplier-concession:requests:write', 'supplier-incoming:inspections:read'] } } });
+    await prisma.rolePermission.createMany({ data: permissions.map(({ id }) => ({ roleId: governor.id, permissionId: id })) });
+    const profile = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: org.id, businessCode: randomUUID(), displayName: 'Independent concession supplier' } });
+    const inspectionId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO supplier_incoming_inspections (id, owner_organization_id, profile_id, supplier_organization_id,
+        supplier_business_code, supplier_name, material_code, incoming_batch, received_quantity, sampled_quantity,
+        conclusion, status, inspector_id, source_system, source_snapshot, inspected_at, created_by_id)
+      VALUES (${inspectionId}::uuid, ${org.id}::uuid, ${profile.id}::uuid, NULL,
+        ${profile.businessCode}, ${profile.displayName}, 'N1-CONCESSION', 'N1-BATCH', 100, 10,
+        'NG', 'COMPLETED', ${f.actor.id}::uuid, 'MANUAL', '{}'::jsonb, CURRENT_TIMESTAMP, ${f.actor.id}::uuid)`;
+    const actor = { id: f.actor.id, organizationId: f.root.id, scopeOrganizationId: org.id, accountType: 'INTERNAL' as const, sessionId: f.sessionId };
+    const service = app.get(SupplierConcessionService);
+    const concession = await service.create(actor, { inspectionId, quantity: 10, reason: 'Lifecycle regression', expiresAt: new Date(Date.now() + 86400000) }, randomUUID(), randomUUID());
+    const approver = await prisma.user.create({ data: { organizationId: f.root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    // The real profile remains live, so test the same SQL predicate per request without hiding dependencies.
+    const reference = () => prisma.$queryRaw<{ id: string; status: string; live: boolean }[]>`
+      SELECT t.id, t.status, (${structureReferenceLiveCondition('supplier_concession_requests')}) AS live
+      FROM supplier_concession_requests t WHERE t.id = ${concession.id}::uuid`;
+    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED', 'RELEASED', 'REJECTED']) {
+      await prisma.$executeRaw`
+        UPDATE supplier_concession_requests SET status = ${status}, approved_by_id = ${approver.id}::uuid,
+          approved_at = CURRENT_TIMESTAMP, released_by_id = ${approver.id}::uuid, released_at = CURRENT_TIMESTAMP
+        WHERE id = ${concession.id}::uuid`;
+      expect(await reference()).toEqual([{ id: concession.id, status, live: status !== 'REJECTED' }]);
+    }
+    await prisma.$executeRaw`
+      UPDATE supplier_concession_requests SET status = 'DRAFT', approved_by_id = NULL, approved_at = NULL,
+        released_by_id = NULL, released_at = NULL WHERE id = ${concession.id}::uuid`;
+    expect(await service.withdraw(actor, concession.id, { expectedVersion: 1 }, randomUUID(), randomUUID())).toMatchObject({ id: concession.id, status: 'WITHDRAWN', version: 2 });
+    expect(await reference()).toEqual([{ id: concession.id, status: 'WITHDRAWN', live: false }]);
+    const retained = await prisma.$queryRaw`SELECT * FROM supplier_concession_requests WHERE id = ${concession.id}::uuid`;
+    const lifecycle = (await f.send('get', `/${org.id}/lifecycle`).expect(200)).body;
+    expect(lifecycle.disableBlockers).toContain('存在有效配置或在途业务引用');
+    expect(lifecycle.deleteBlockers).toContain('存在业务、配置或历史引用');
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ status: 'ACTIVE', version: 1 });
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_concession_requests WHERE id = ${concession.id}::uuid`).toEqual(retained);
+    expect(await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: profile.id } })).toEqual(profile);
+    expect(await prisma.$queryRaw`SELECT id, status FROM supplier_incoming_inspections WHERE id = ${inspectionId}::uuid`).toEqual([{ id: inspectionId, status: 'COMPLETED' }]);
+    expect(await prisma.$queryRaw`SELECT event_type, request_version FROM supplier_concession_events WHERE request_id = ${concession.id}::uuid ORDER BY request_version`).toEqual([{ event_type: 'CREATED', request_version: 1 }, { event_type: 'WITHDRAWN', request_version: 2 }]);
   });
 
   it.each(['PENDING_REVIEW', 'ACCEPTED'])('quality P2 treats %s audit import rows as live work before issue creation', async (status) => {
