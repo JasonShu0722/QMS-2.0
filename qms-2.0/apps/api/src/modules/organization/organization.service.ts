@@ -10,7 +10,7 @@ import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../com
 import { assertLegacyPositionRoleWrite, assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
-import { structureBusinessReferences } from './organization-lifecycle.read-model.js';
+import { ministerAssignmentReferences, positionManagementReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
 const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
@@ -485,6 +485,10 @@ export class OrganizationService {
       const now = new Date();
       const before = await this.effectivePositionUsers(transaction, organizationId, policy.positionIds, now);
       if (dto.status === 'DISABLED' && await transaction.userPosition.count({ where: { organizationId, positionId, OR: [{ endedAt: null }, { endedAt: { gt: now } }] } })) adminError(before.includes(actor.id) ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
+      if ((dto.status === 'DISABLED' || (dto.departmentId !== undefined && dto.departmentId !== current.departmentId))
+        && await positionManagementReferences(transaction, organizationId, positionId, now)) {
+        adminError(before.includes(actor.id) ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
+      }
       const changed = await transaction.position.updateMany({ where: { organizationId, id: positionId, version: dto.expectedVersion }, data: { name: dto.name?.trim(), departmentId: dto.departmentId, categoryId: dto.categoryId, status: dto.status, version: { increment: 1 } } });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.name !== undefined) {
@@ -529,6 +533,8 @@ export class OrganizationService {
       const current = await transaction.userPosition.findMany({ where: { organizationId, userId, ...temporal }, select: { id: true, positionId: true } });
       const effective = await transaction.userPosition.findMany({ where: { organizationId, userId, ...effectivePositionAssignmentWhere(now) }, select: { positionId: true } });
       if (JSON.stringify([...new Set(effective.map((entry) => entry.positionId))].sort()) !== JSON.stringify([...new Set(dto.expectedPositionIds)].sort())) adminError('CONCURRENCY_CONFLICT', 409);
+      const removedAssignments = current.filter(({ positionId }) => !dto.positionIds.includes(positionId)).map(({ id }) => id);
+      if (await ministerAssignmentReferences(transaction, organizationId, removedAssignments, now)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       const positions = await transaction.position.findMany({ where: { id: { in: dto.positionIds }, organizationId, status: 'ACTIVE', department: { status: 'ACTIVE' } } });
       if (positions.length !== dto.positionIds.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       const existing = new Set(current.map((entry) => entry.positionId));

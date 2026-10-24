@@ -23,6 +23,7 @@ vi.mock('../governance/OutboxAdministration', () => ({ OutboxAdministration: () 
 vi.mock('../supplier-quality/SupplierProfilesPage', () => ({ SupplierProfilesPage: () => <div>供应商页面</div> }));
 vi.mock('../customer-quality/CustomerMasterSection', () => ({ CustomerMasterSection: () => <div>客户页面</div> }));
 vi.mock('../material-master/MaterialMasterPage', () => ({ MaterialMasterPage: () => <div>物料页面</div> }));
+vi.mock('../governance/ComponentProjectAdministration', () => ({ ComponentProjectAdministration: () => <div>组件项目映射页面</div> }));
 
 const orgA = '11111111-1111-4111-8111-111111111111';
 const orgB = '22222222-2222-4222-8222-222222222222';
@@ -30,6 +31,12 @@ const userA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const userB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const org = (id: string, permissions = ['account:users:read']): AdminOrganization => ({ id, name: id === orgA ? '甲组织' : '乙组织', code: id === orgA ? 'a' : 'b', type: 'INTERNAL', permissions });
 const target = (organizationId = orgB, userId = userA) => `?organizationId=${organizationId}&section=users&userId=${userId}`;
+
+it('opens component mapping for its own read grant without platform configuration access', async () => {
+  view([org(orgA, ['component-project:read'])]);
+  expect(await screen.findByText('组件项目映射页面')).toBeVisible();
+  expect(screen.queryByRole('tab', { name: '平台配置' })).not.toBeInTheDocument();
+});
 let navigate: ReturnType<typeof useNavigate>;
 function RouteControls() {
   navigate = useNavigate();

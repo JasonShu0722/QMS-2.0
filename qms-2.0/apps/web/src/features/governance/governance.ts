@@ -15,7 +15,12 @@ export type GovernanceBody = components['schemas']['CreateOrganizationDto'] | co
   components['schemas']['UpdatePositionDto'] | components['schemas']['UpdatePlatformSettingsDto'] |
   components['schemas']['UpdateNotificationRuleDto'] | components['schemas']['CreatePositionCategoryDto'] | components['schemas']['UpdatePositionCategoryDto'] |
   components['schemas']['ReplacePositionRolesDto'] | components['schemas']['UpdatePositionPermissionsDto'] |
-  components['schemas']['ReplaceUserPositionsWithPreviewDto'] | components['schemas']['DeleteStructureDto'];
+  components['schemas']['ReplaceUserPositionsWithPreviewDto'] | components['schemas']['DeleteStructureDto'] |
+  components['schemas']['CreateComponentProjectRecordDto'] | components['schemas']['UpdateComponentProjectRecordDto'] |
+  components['schemas']['CreateComponentProjectMappingDto'] | components['schemas']['UpdateComponentProjectMappingDto'] |
+  components['schemas']['CreateManagementBindingDto'] | components['schemas']['UpdateManagementBindingDto'] |
+  components['schemas']['CreateMinisterScopeDto'] | components['schemas']['UpdateMinisterScopeDto'] |
+  components['schemas']['ComponentProjectBulkPreviewDto'] | components['schemas']['ComponentProjectBulkApplyDto'];
 
 export async function allStructurePages<Entry>(path: string, signal?: AbortSignal) {
   const result: Entry[] = [];

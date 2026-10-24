@@ -38,6 +38,8 @@ export function structureReferenceLiveCondition(tableName: string) {
     ? Prisma.sql`to_jsonb(t)->>'status' IN ('DRAFT', 'SUBMITTED')`
     : tableName === 'new_product_stages'
     ? Prisma.sql`to_jsonb(t)->>'status' = 'OPEN'`
+    : tableName === 'department_minister_scopes'
+    ? Prisma.sql`t.status = 'ACTIVE' AND (t.valid_to IS NULL OR t.valid_to > CURRENT_TIMESTAMP)`
     : tableName === 'customer_quality_physical_dispositions' || tableName === 'customer_quality_physical_analyses'
     ? Prisma.sql`t.status NOT IN ('CLOSED', 'COMPLETED') AND NOT EXISTS (
         SELECT 1 FROM ${identifier(tableName)} newer
@@ -49,6 +51,26 @@ export function structureReferenceLiveCondition(tableName: string) {
         WHEN to_jsonb(t)->>'archived_at' IS NOT NULL THEN false
         WHEN to_jsonb(t)->>'status' IS NOT NULL THEN to_jsonb(t)->>'status' NOT IN (${Prisma.join(inactiveStatuses)})
         ELSE true END`;
+}
+
+export async function positionManagementReferences(transaction: AdminTransaction, organizationId: string, positionId: string, at = new Date()) {
+  const [row] = await transaction.$queryRaw<{ referenced: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM department_management_bindings
+      WHERE organization_id = ${organizationId}::uuid AND position_id = ${positionId}::uuid AND status = 'ACTIVE')
+    OR EXISTS (SELECT 1 FROM department_minister_scopes s JOIN user_positions p
+      ON p.organization_id = s.organization_id AND p.id = s.minister_assignment_id
+      WHERE s.organization_id = ${organizationId}::uuid AND p.position_id = ${positionId}::uuid
+        AND s.status = 'ACTIVE' AND (s.valid_to IS NULL OR s.valid_to > ${at})) AS referenced`;
+  return row?.referenced ?? false;
+}
+
+export async function ministerAssignmentReferences(transaction: AdminTransaction, organizationId: string, assignmentIds: string[], at = new Date()) {
+  if (!assignmentIds.length) return false;
+  const [row] = await transaction.$queryRaw<{ referenced: boolean }[]>(Prisma.sql`
+    SELECT EXISTS (SELECT 1 FROM department_minister_scopes WHERE organization_id = ${organizationId}::uuid
+      AND minister_assignment_id IN (${Prisma.join(assignmentIds.map((id) => Prisma.sql`${id}::uuid`))})
+      AND status = 'ACTIVE' AND (valid_to IS NULL OR valid_to > ${at})) AS referenced`);
+  return row?.referenced ?? false;
 }
 
 // A dependency projection, including migration-owned tables absent from Prisma and UUIDs without FKs.

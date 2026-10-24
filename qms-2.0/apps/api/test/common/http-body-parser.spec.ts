@@ -15,7 +15,16 @@ class BodyLimitController {
   other(@Body() body: { rows: string[] }) { return { rows: body.rows.length }; }
 }
 
-@Module({ controllers: [BodyLimitController] })
+@Controller('api/v1/admin/configuration/component-project-mappings')
+class ComponentImportBodyController {
+  @Post('import')
+  receive(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
+
+  @Post('other')
+  other(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
+}
+
+@Module({ controllers: [BodyLimitController, ComponentImportBodyController] })
 class BodyLimitModule {}
 
 it('accepts a legal complaint import JSON batch while bounding oversized bodies', async () => {
@@ -33,4 +42,22 @@ it('accepts a legal complaint import JSON batch while bounding oversized bodies'
   } finally {
     await app.close();
   }
+});
+
+it('accepts the Unicode component batch boundary only on the bounded import route', async () => {
+  const app = (await Test.createTestingModule({ imports: [BodyLimitModule] }).compile())
+    .createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
+  configureHttpBodyParser(app);
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  await app.init();
+  try {
+    const rows = Array.from({ length: 100 }, (_, index) => ({ rowNumber: index + 1,
+      componentCode: '\u{20000}'.repeat(97) + String(index).padStart(3, '0'), componentName: '\u{20000}'.repeat(200) }));
+    const path = '/api/v1/admin/configuration/component-project-mappings';
+    await request(app.getHttpServer()).post(`${path}/import`).send({ rows }).expect(201);
+    const escaped = JSON.stringify({ rows }).replace(/[^\x00-\x7f]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    await request(app.getHttpServer()).post(`${path}/import`).set('content-type', 'application/json').send(escaped).expect(201);
+    await request(app.getHttpServer()).post(`${path}/other`).send({ rows }).expect(413);
+    await request(app.getHttpServer()).post(`${path}/import`).send({ rows: ['x'.repeat(513 * 1024)] }).expect(413);
+  } finally { await app.close(); }
 });

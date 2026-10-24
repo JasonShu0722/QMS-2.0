@@ -851,6 +851,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organizationId}/management-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationResponsibilityController_listManagementBindings"];
+        put?: never;
+        post: operations["OrganizationResponsibilityController_createManagementBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/management-bindings/{bindingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OrganizationResponsibilityController_updateManagementBinding"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/minister-scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationResponsibilityController_listMinisterScopes"];
+        put?: never;
+        post: operations["OrganizationResponsibilityController_createMinisterScope"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/minister-scopes/{scopeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OrganizationResponsibilityController_updateMinisterScope"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/management-responsibilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationResponsibilityController_managementResponsibilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/responsibility-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationResponsibilityController_responsibilityAssignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/my-permissions": {
         parameters: {
             query?: never;
@@ -1141,6 +1237,150 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["PlatformConfigurationController_updateCategory"];
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ComponentProjectController_listProjects"];
+        put?: never;
+        post: operations["ComponentProjectController_createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-records/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ComponentProjectController_project"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ComponentProjectController_updateProject"];
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ComponentProjectController_listMappings"];
+        put?: never;
+        post: operations["ComponentProjectController_createMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ComponentProjectController_importComponents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ComponentProjectController_updateMapping"];
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ComponentProjectController_resolve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/engineer-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ComponentProjectController_engineerAssignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/bulk-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ComponentProjectBulkController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/configuration/component-project-mappings/bulk-apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ComponentProjectBulkController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/outbox/failures": {
@@ -6055,6 +6295,169 @@ export interface components {
             effectiveMfaRequired: boolean;
             retainedSources?: components["schemas"]["PositionAuthorizationSourceDto"][];
         };
+        ManagementBindingDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            departmentId: string;
+            /** @enum {string} */
+            responsibility: "SECTION_MANAGER" | "MINISTER";
+            /** Format: uuid */
+            positionId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: uuid */
+            updatedBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateManagementBindingDto: {
+            /** Format: uuid */
+            departmentId: string;
+            /** @enum {string} */
+            responsibility: "SECTION_MANAGER" | "MINISTER";
+            /** Format: uuid */
+            positionId: string;
+        };
+        UpdateManagementBindingDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            positionId?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        MinisterScopeDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            departmentId: string;
+            /** Format: uuid */
+            sectionDepartmentId: string;
+            /** Format: uuid */
+            ministerAssignmentId: string;
+            /** Format: date-time */
+            validFrom: string;
+            /** Format: date-time */
+            validTo: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: uuid */
+            updatedBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateMinisterScopeDto: {
+            /** Format: uuid */
+            departmentId: string;
+            /** Format: uuid */
+            sectionDepartmentId: string;
+            /** Format: uuid */
+            ministerAssignmentId: string;
+            /**
+             * Format: date-time
+             * @description Defaults to the transaction time; explicit bounds must fit the appointment.
+             */
+            validFrom?: string;
+            /**
+             * Format: date-time
+             * @description Exclusive upper bound; null is unbounded.
+             */
+            validTo?: string | null;
+        };
+        UpdateMinisterScopeDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            sectionDepartmentId?: string;
+            /** Format: uuid */
+            ministerAssignmentId?: string;
+            /** Format: date-time */
+            validFrom?: string;
+            /** Format: date-time */
+            validTo?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        ResolvedManagementResponsibilityDto: {
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            /** Format: uuid */
+            positionId: string;
+            positionName: string;
+            positionVersion: number;
+            /** Format: uuid */
+            departmentId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+            /** @enum {string} */
+            responsibility: "SECTION_MANAGER" | "MINISTER";
+            /** Format: uuid */
+            bindingId: string;
+            bindingVersion: number;
+            /** Format: uuid */
+            scopeId: string | null;
+            scopeVersion: number | null;
+            departmentVersion: number;
+            sectionDepartmentVersion: number;
+            organizationVersion: number;
+        };
+        ManagementResponsibilityIssueDto: {
+            /** @enum {string} */
+            responsibility: "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            code: "STRUCTURE_INACTIVE" | "BINDING_MISSING" | "BINDING_AMBIGUOUS" | "ASSIGNMENT_MISSING" | "ASSIGNMENT_AMBIGUOUS" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS";
+        };
+        ManagementResponsibilitiesDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            sectionDepartmentId: string;
+            /** Format: date-time */
+            at: string;
+            responsibilities: components["schemas"]["ResolvedManagementResponsibilityDto"][];
+            issues: components["schemas"]["ManagementResponsibilityIssueDto"][];
+        };
+        ResponsibilityAssignmentDto: {
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            /** Format: uuid */
+            positionId: string;
+            positionName: string;
+            positionVersion: number;
+            /** Format: uuid */
+            departmentId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+        };
+        ResponsibilityAssignmentsDto: {
+            items: components["schemas"]["ResponsibilityAssignmentDto"][];
+            total: number;
+        };
         PermissionsResponseDto: {
             organizationId: string;
             permissions: string[];
@@ -6272,6 +6675,264 @@ export interface components {
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
             sortOrder?: number;
+        };
+        Object: Record<string, never>;
+        ComponentProjectRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: uuid */
+            updatedByUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** Format: uuid */
+            customerEngineerAssignmentId: string | null;
+            /** Format: uuid */
+            projectEngineerAssignmentId: string | null;
+        };
+        ComponentProjectRecordsPageDto: {
+            total: number;
+            page: number;
+            pageSize: number;
+            items: components["schemas"]["ComponentProjectRecordDto"][];
+        };
+        CreateComponentProjectRecordDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** Format: uuid */
+            customerEngineerAssignmentId?: string | null;
+            /** Format: uuid */
+            projectEngineerAssignmentId?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        UpdateComponentProjectRecordDto: {
+            code?: string;
+            name?: string;
+            /** @enum {string} */
+            stage?: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** Format: uuid */
+            customerEngineerAssignmentId?: string | null;
+            /** Format: uuid */
+            projectEngineerAssignmentId?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+            expectedVersion: number;
+        };
+        ComponentEngineerAssignmentDto: {
+            /** Format: uuid */
+            assignmentId: string | null;
+            /** Format: uuid */
+            userId: string | null;
+            username: string | null;
+            fullName: string | null;
+            /** Format: uuid */
+            positionId: string | null;
+            positionName: string | null;
+            /** Format: uuid */
+            departmentId: string | null;
+            departmentName: string | null;
+            valid: boolean;
+            issues: string[];
+        };
+        ComponentProjectSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            customerEngineer: components["schemas"]["ComponentEngineerAssignmentDto"];
+            projectEngineer: components["schemas"]["ComponentEngineerAssignmentDto"];
+        };
+        ComponentProjectMappingListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: uuid */
+            updatedByUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            componentCode: string;
+            componentName: string | null;
+            /** Format: uuid */
+            projectRecordId: string | null;
+            productCategory: string | null;
+            productSubcategory: string | null;
+            project: components["schemas"]["ComponentProjectSummaryDto"] | null;
+        };
+        ComponentProjectMappingsPageDto: {
+            total: number;
+            page: number;
+            pageSize: number;
+            items: components["schemas"]["ComponentProjectMappingListItemDto"][];
+        };
+        ComponentProjectImportRowDto: {
+            rowNumber: number;
+            componentCode: string;
+            componentName: string;
+        };
+        ComponentProjectImportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            rows: components["schemas"]["ComponentProjectImportRowDto"][];
+        };
+        ComponentProjectImportItemDto: {
+            rowNumber: number;
+            code: string;
+            /** @enum {string} */
+            status: "CREATED" | "SKIPPED_DUPLICATE" | "FAILED";
+            errorCode?: string;
+        };
+        ComponentProjectImportResultDto: {
+            items: components["schemas"]["ComponentProjectImportItemDto"][];
+            created: number;
+            skipped: number;
+            failed: number;
+        };
+        CreateComponentProjectMappingDto: {
+            componentCode: string;
+            componentName?: string | null;
+            /** Format: uuid */
+            projectRecordId: string;
+            productCategory: string;
+            productSubcategory?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+        };
+        ComponentProjectMappingDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: uuid */
+            updatedByUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            componentCode: string;
+            componentName: string | null;
+            /** Format: uuid */
+            projectRecordId: string | null;
+            productCategory: string | null;
+            productSubcategory: string | null;
+        };
+        UpdateComponentProjectMappingDto: {
+            componentCode?: string;
+            componentName?: string | null;
+            /** Format: uuid */
+            projectRecordId?: string;
+            productCategory?: string;
+            productSubcategory?: string | null;
+            /** @enum {string} */
+            status?: "ACTIVE" | "DISABLED";
+            expectedVersion: number;
+        };
+        ComponentProjectResolutionDto: {
+            /** @enum {string} */
+            outcome: "matched" | "unmapped" | "inactive";
+            componentCode: string;
+            mapping: components["schemas"]["ComponentProjectMappingDto"] | null;
+            project: components["schemas"]["ComponentProjectRecordDto"] | null;
+            customerEngineer: components["schemas"]["ComponentEngineerAssignmentDto"];
+            projectEngineer: components["schemas"]["ComponentEngineerAssignmentDto"];
+            /** Format: uuid */
+            suggestedQualityEngineerId: string | null;
+            /** Format: uuid */
+            effectiveQualityEngineerId: string | null;
+            engineerDifference: boolean;
+            issues: string[];
+        };
+        ComponentEngineerAssignmentsPageDto: {
+            total: number;
+            page: number;
+            pageSize: number;
+            items: components["schemas"]["ComponentEngineerAssignmentDto"][];
+            selected: components["schemas"]["ComponentEngineerAssignmentDto"] | null;
+        };
+        ComponentProjectBulkSelectionDto: {
+            /** Format: uuid */
+            id: string;
+            expectedVersion: number;
+        };
+        ComponentProjectBulkChangesDto: {
+            /** Format: uuid */
+            projectRecordId?: string;
+            /** @enum {string} */
+            stage?: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** Format: uuid */
+            customerEngineerAssignmentId?: string | null;
+            /** Format: uuid */
+            projectEngineerAssignmentId?: string | null;
+            productCategory?: string;
+            productSubcategory?: string | null;
+        };
+        ComponentProjectBulkPreviewDto: {
+            selection: components["schemas"]["ComponentProjectBulkSelectionDto"][];
+            changes: components["schemas"]["ComponentProjectBulkChangesDto"];
+        };
+        ComponentProjectBulkAffectedProjectDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION";
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            version: number;
+            selectedComponentCount: number;
+            /** @description Component count after the proposed reassignment, including unselected components. */
+            totalComponentCount: number;
+            /** @description Unselected components sharing this project; shared edits affect these components too. */
+            otherComponentCount: number;
+        };
+        ComponentProjectBulkPreviewResultDto: {
+            selectedCount: number;
+            affectedMappingsCount: number;
+            affectedProjects: components["schemas"]["ComponentProjectBulkAffectedProjectDto"][];
+            previewToken: string;
+        };
+        ComponentProjectBulkApplyDto: {
+            selection: components["schemas"]["ComponentProjectBulkSelectionDto"][];
+            changes: components["schemas"]["ComponentProjectBulkChangesDto"];
+            /** @description Configuration snapshot fingerprint, not an authorization token. */
+            previewToken: string;
+        };
+        ComponentProjectBulkApplyResultDto: {
+            updatedMappingCount: number;
+            updatedProjectCount: number;
+            affectedComponentCount: number;
         };
         OutboxFailureDto: {
             /** Format: uuid */
@@ -6979,7 +7640,6 @@ export interface components {
             /** Format: date-time */
             upgradedAt: string;
         };
-        Object: Record<string, never>;
         SupplierProfileDto: {
             id: string;
             version: number;
@@ -12979,6 +13639,291 @@ export interface operations {
             };
         };
     };
+    OrganizationResponsibilityController_listManagementBindings: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                departmentId?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagementBindingDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_createManagementBinding: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateManagementBindingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagementBindingDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_updateManagementBinding: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                bindingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateManagementBindingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagementBindingDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_listMinisterScopes: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                departmentId?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinisterScopeDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_createMinisterScope: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMinisterScopeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinisterScopeDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_updateMinisterScope: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                scopeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMinisterScopeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinisterScopeDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_managementResponsibilities: {
+        parameters: {
+            query: {
+                sectionDepartmentId: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagementResponsibilitiesDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_responsibilityAssignments: {
+        parameters: {
+            query: {
+                limit?: number;
+                offset?: number;
+                departmentId: string;
+                search?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsibilityAssignmentsDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     PermissionsController_myPermissions: {
         parameters: {
             query?: never;
@@ -13773,6 +14718,422 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionCategoryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_listProjects: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                status?: "ACTIVE" | "DISABLED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectRecordsPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_createProject: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentProjectRecordDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_project: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_updateProject: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentProjectRecordDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectRecordDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_listMappings: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                status?: "ACTIVE" | "DISABLED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectMappingsPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_createMapping: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentProjectMappingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectMappingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_importComponents: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentProjectImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectImportResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_updateMapping: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentProjectMappingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectMappingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_resolve: {
+        parameters: {
+            query: {
+                organizationId?: string;
+                componentCode: string;
+                currentQualityEngineerId?: string | null;
+                currentQualityEngineerSource?: "MANUAL" | "MAPPING";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectResolutionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectController_engineerAssignments: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                status?: "ACTIVE" | "DISABLED";
+                selectedAssignmentId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentEngineerAssignmentsPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectBulkController_preview: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentProjectBulkPreviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectBulkPreviewResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentProjectBulkController_apply: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentProjectBulkApplyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentProjectBulkApplyResultDto"];
                 };
             };
             default: {

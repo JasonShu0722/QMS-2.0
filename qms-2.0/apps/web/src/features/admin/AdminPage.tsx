@@ -5,6 +5,7 @@ import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
 import { OrganizationWorkspace } from '../governance/OrganizationWorkspace';
+import { ComponentProjectAdministration } from '../governance/ComponentProjectAdministration';
 import { ConfigurationAdministration } from '../governance/ConfigurationAdministration';
 import { AuditAdministration } from '../governance/AuditAdministration';
 import { OutboxAdministration } from '../governance/OutboxAdministration';
@@ -65,6 +66,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   const roles = allows(organization, 'roles:read');
   const customerMaster = organization.permissions.some((code) => ['customer-quality:complaints:read', 'customer-quality:complaints:write'].includes(code));
   const additionalTabs = [
+    ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['component-project:read', 'component-project:manage'].includes(code)) ? [{ key: 'component-project', label: t('组件项目映射'), children: <ComponentProjectAdministration organization={organization} /> }] : []),
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)) ? [{ key: 'supplier-master', label: t('供应商清单'), children: <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(customerMaster ? [{ key: 'customer-master', label: t('客户清单'), children: <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['material-master:read', 'material-master:write', 'material-master:import'].includes(code)) ? [{ key: 'material-master', label: t('物料清单'), children: <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),

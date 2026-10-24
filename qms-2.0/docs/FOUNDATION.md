@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## N2-A 本地配置回归（2026-10-25，未发布）
+
+Issue #66 / 候选 V0.0.29，基线 `c479b0e` 加本轮配置增量。主代理最终冻结686份API源码 / 测试 / 迁移，前后SHA-256一致：组织、配置及身份schema邻接21 suites / 335项通过（真实PG与DTO / 控制器unit混合，不全称PG用例）；API全部unit66 suites / 677项通过，API build/lint退出0。契约重新生成及同步、归档隔离、根工具71项、Compose foundation + production + scanning静态配置通过；Compose只使用临时占位配置且未启动服务，不表示运行健康。
+
+一次性PG仅本任务55473 / 55474，原104迁移升级108；最终已按精确身份清理容器 / 匿名卷及两份Git外环境文件，未连接55440或生产。Web独立双审通过；主代理按文件分组完成20文件285项受影响回归、build/lint及生产入口隔离检查。最初组件 / 父入口联合134项有1项10000ms预算超时；仅该多层UI新增用例按邻近用例采用30000ms，整份Workspace30项复验通过，其余3文件104项源码未变且已通过，不能改称最初联合一次全绿。完整证据与限制见 [N2 计划第6节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。尚无N2 PR / CI / 部署或正式页面人工验收。
+
+未运行完整 `acceptance:phase-1/2`、全系统PG / Worker / 存储 / 扫描链及真实浏览器矩阵；没有以Mock或Skip替代这些门禁。动态流程 / 新8D及IMS / AI未在N2-A启用。生产权限首次初始化、合并部署和人工验收另行受控，不扩用N1发布授权。
+
 ## N1 组织治理发布核验（2026-10-24）
 
 V0.0.28 / PR #65 已合并并部署，最终 SHA `b4e51150e934314889287980d062fe389a89561b`；PR fix3与main Foundation各完整9项成功，deploy 40107237343成功。实际日志确认迁移前加密快照核验、无待执行迁移、同SHA的API / Worker / Web镜像及服务启动健康；外网login/OpenAPI为200，生命周期/删除契约和code字段已出现，JS/CSS资源已更新。部署成功不代表人工业务验收；具体链接及范围见[前置计划4.6](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。

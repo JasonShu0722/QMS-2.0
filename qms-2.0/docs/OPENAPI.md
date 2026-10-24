@@ -2,6 +2,25 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
+## N2-A 本地契约增量（2026-10-25，未部署）
+
+以下为 Issue #66 / 候选 V0.0.29 的源码契约，不表示生产已提供；实现及验证见 [N2 计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+| 路径（均带 `/api/v1`） | 行为 |
+| --- | --- |
+| `GET/POST /admin/configuration/component-project-records`；`GET/PATCH .../:id` | 分页 / 读取 / 新增 / 版本更新项目，阶段必须明确，工程师引用具体任职 |
+| `GET/POST /admin/configuration/component-project-mappings`；`PATCH .../:id` | 一行一个组件；列表含项目摘要和两类工程师有效性，基础导入行允许项目 / 分类未配置 |
+| `POST /admin/configuration/component-project-mappings/import` | body 组织范围；每批 1～100 行，新增 / 重复跳过 / 失败回执；仅此 JSON 路径提升为 512kb 以容纳合法 Unicode 上限，其他普通路径仍 100kb |
+| `POST /admin/configuration/component-project-mappings/bulk-preview`；`.../bulk-apply` | query 组织范围；选择及版本、明确修改字段、共享影响指纹；预览不写，应用原子且幂等 |
+| `GET /admin/configuration/component-project-mappings/resolve`；`.../engineer-assignments` | 只读解析与分页有效任职候选，保留人工非空人员 / 失效身份及原因 |
+| `GET/POST /organizations/:orgId/management-bindings`；`PATCH .../:id` | 管理职责绑定已有部门岗位 |
+| `GET/POST /organizations/:orgId/minister-scopes`；`PATCH .../:id` | 具体部长任职的分管有效区间，同科室同期排斥重叠 |
+| `GET /organizations/:orgId/management-responsibilities`；`.../responsibility-assignments` | 职责预览及有效任职候选；缺项不自动指给管理员 |
+
+配置读取 / 管理与组织结构读取 / 管理沿各自权限，所有写入保留 CSRF、幂等、组织范围、CAS 及审计；新权限代码不自动授予存量角色。旧流程授权与任务契约未在此增量变更。
+
+## 既有端点
+
 | 当前端点 | 行为 |
 | --- | --- |
 | `GET /api/v1/auth/csrf` | 返回 `csrfToken` 并设置可供客户端读取的 CSRF Cookie |
