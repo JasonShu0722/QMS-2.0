@@ -15,7 +15,7 @@
 | 交付映射 | 本前置对应 REQ-0025 / reczz28RDS4BlbBs；其余四条见五条提单记录。不覆盖原 P0/P1 A～G 历史分解，不重开已结束 REQ-0024。正式源码实施前接续实际 Issue / 分支 / PR，版本依交付流程核对后分配，不猜编号 |
 | 生产边界 | 生产组织 / 岗位维护、误建对象清理、合并发布及业务开通分别核对授权；本轮没有执行这些动作 |
 | 证据限制 | 生产引用及正式浏览器矩阵未读取 / 执行。三项维护事项经第 4.2 节事实复核仍开放；提 PR 前治理重跑通过。当前差异凭据格式检查不能替代全历史公开安全审计 |
-| 下一检查点 | O1 已满足；原 head `c40f8fa` 云端 9 项通过后的审查 P2 已同目标 fix2 修正；主代理真实 PG 45 项及 API build / lint / 契约检查通过，独立规格 / 质量复核无新 P1 / P2，见第 4.4 节。推送后仍须核对 PR 最新 head CI，满足后到 M1 单独核对合并 / 生产发布授权；公开任务结束后提醒，不自行改变可见性，不提前推进依赖 D1 的 N2 |
+| 下一检查点 | O1 已满足，M1 / 自动发布继续授权已明确。fix3 及同根因补充已完成，主代理真实 PG 53 项、API build / lint / 契约及独立规格 / 质量复核通过；提交 V0.0.28-fix3 并更新原 PR #65，核对最新 head CI / 审查后直接接续已授权 M1 / D1 并提醒闭源，不重复确认。生产误建清理与依赖 D1 的 N2 不提前执行 |
 
 ## 1. 前置交付的结果
 
@@ -244,3 +244,34 @@ fix2 仅修正该终态投影并增加真实 PostgreSQL 回归，不修改供应
 fix2 只含上述两文件及本次计划 / 来源索引记录，修复号接续 V0.0.28-fix2；本地 PG 证据与正式页面待人工验收清单保存在 Git 外 `D:/WorkSpace/QMS-2.0-local/n1-ci-2026-10-24/`。临时 PG 及其匿名卷按精确名称 / 标签清理；环境秘密文件删除，不使用全局 prune，不接触保留预览资源。原 VM Modules 与 pg 弃用警告不在本修复扩展处理。
 
 CI 始终核对 PR 最新 head。旧 head 的 M1 绿色记录已在 PR / Issue 顶部注明暂未放行，不因绿色 CI 忽略有效审查意见；本节机器证据不代替接续的规格 / 质量静态复核或正式浏览器验收。
+
+### 4.5 M1 继续授权与同根因终态核查
+
+fix2 提交 `4fbb374dc11247695b5c7b7d3915bea90f157157` 的 [run 40101596418](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40101596418) 已 9 / 9 job 成功：API 626、真实 PostgreSQL 1146、真实 Worker 生命周期 8 项及 Web 四分片均通过。负责人随后直接确认“通过了，继续”，本会话已明确接续 M1 合并并跟进自动生产部署，公开保持至所需检查 / 部署核验完成。
+
+最后合并守卫读取到 [新自动审查 P2](https://github.com/JasonShu0722/QMS-2.0/pull/65#discussion_r4367390682)：`SupplierMeetingsService.concludeTopic()` 将议题永久置为 `CONCLUDED`，但原生命周期投影仍计其为 live。尚未执行合并，不能以该 head 的绿色机器检查忽略新增有效审查。
+
+同目标 fix3 复用已有单表 SQL 测试接缝，纠正已确认终态，并核对同根因的实际迁移状态与服务结束语义；不机械排除所有 `APPROVED / ACCEPTED / PUBLISHED / VERIFIED`，不将已完成会议等同于其所有议题 / 行动项均完成。有效配置与历史删除保护继续保留。
+
+新建 `qms-n1-fix3-20261024-postgres`，本任务标签、回环 `55472`，原 104 份迁移应用成功。另在生产仅做上线前只读 HTTP 基线：`/login`、`/api/v1/openapi.json` 为 200，尚无生命周期路由；主 JS `/assets/index-ala7O1xu.js`、CSS `/assets/index-CxhmqMBm.css`。曾试探未定义 `/api/v1/health` 得到 404，不作为线上故障；正式健康状态按容器 health、Worker ready 及部署规定路径核验。
+
+Mencius 已完成会议议题定向红绿及整文件 43 / 43 回归，代码冻结；`CONCLUDED` 仅局部不计 live，已完成会议中仍 OPEN 的议题与独立行动项继续 live。Confucius 对固定 `4fbb374` 迁移 / 模型 / 服务作只读同根因核查：源码推导匹配 119 张结构 UUID 相关表，不是 119 张表的运行测试。除会议外，确认下列补充由 Dalton 在原两文件内按 TDD 落实；没有修改旧领域业务服务。
+
+| 同根因对象 | 已核实依据与修复边界 |
+| --- | --- |
+| `supplier_incoming_inspections` | `CORRECTED` 与 `COMPLETED` 同属完成检验事实；更正不重开办理，DRAFT 保持在途 |
+| `supplier_performance_appeals` | `ACCEPTED / REJECTED` 同属申诉裁决终态；DRAFT / SUBMITTED 保持在途，不全局排除 ACCEPTED |
+| `new_product_stages` | PASSED / REJECTED 结束本阶段评审，OPEN 保持在途；活动项目及其其他未完成对象独立判断 |
+| `customer_quality_physical_dispositions / customer_quality_physical_analyses` | 按组织 / 客诉追加版本；只由最新版本判断在途，旧 PENDING / IN_PROGRESS 历史不能遮蔽最新 CLOSED / COMPLETED，全部历史继续阻止删除 |
+
+ASN RECEIVED 因缺少真实服务收货结束路径证据，不扩展处理；准入 ACCEPTED、PPAP APPROVED / ACCEPTED、已发布规范等可能属于持续有效配置，继续保守阻停。新品 VERIFIED / 初期流动 APPROVED 等仍有后续关闭 / 放行动作，不擅自视为历史。本轮不是为了消除所有阻止提示，而是纠正有实际状态 / 版本语义证据的错误投影。
+
+Dalton 对上述补充逐类真实 PG TDD：来料与申诉各 1 项有效红灯后绿灯，阶段 1 失败 / 1 原有通过后 2 项绿灯，两张实物表旧版本各 1 项有效红灯后 2 项绿灯。保留 Mencius 原会议修复，最终整生命周期文件 49 / 49、0 跳过；两文件验证前后摘要一致。初次治理检查因主代理计划已更新而来源摘要尚未同步失败，未由子代理越权改索引；最终由主代理统一同步后再过门禁。
+
+主代理独立命令 `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/organization/organization-lifecycle.integration-spec.ts test/supplier-quality/supplier-meetings.integration-spec.ts test/supplier-concession/supplier-concession.integration-spec.ts`：3 suites、53 / 53、0 跳过，40.759 秒，退出 0；覆盖两文件执行前后 SHA-256 一致。随后 API build / lint、`contracts:check` 均退出 0，无 DTO、生成契约或迁移改动。
+
+负责人在本轮问答中明确解释不应中断已授权推进，并再次要求“本地修改测试完就推 PR”；沿用原 PR #65，提交 V0.0.28-fix3 后重验最新 head，再接续已授权合并 / 部署，不重新创建 PR 或索取同一授权。
+
+Hilbert 规格复核、Lagrange 后续质量 / 安全复核对冻结两文件完整 delta 均无明确 P1 / P2；局部 SQL 13 行、真实回归 232 行，生产聚合、其他表条件和历史引用保护未变。两份均仅静态审查，不计作审查者亲自取得数据库证据。
+
+最后统一同步两份计划的来源摘要并重跑治理 / 差异检查；只清理精确任务容器 `qms-n1-fix3-20261024-postgres` 及其匿名卷，核对标签和无 host bind 后执行，删除 Git 外临时环境秘密文件，不动预览或其他资源。修复及机器 / 静态审查证据不代替正式页面人工验收；该项仍待绑定最终部署 SHA。

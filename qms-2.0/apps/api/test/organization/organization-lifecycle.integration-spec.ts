@@ -8,6 +8,7 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
+import { Prisma } from '../../src/generated/prisma/client.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
@@ -15,6 +16,7 @@ import { ADMIN_PERMISSIONS } from '../../src/modules/authorization/permission-ca
 import { OrganizationService } from '../../src/modules/organization/organization.service.js';
 import { structureReferenceLiveCondition } from '../../src/modules/organization/organization-lifecycle.read-model.js';
 import { SupplierConcessionService } from '../../src/modules/supplier-concession/supplier-concession.service.js';
+import { SupplierMeetingsService } from '../../src/modules/supplier-meetings/supplier-meetings.service.js';
 import { CustomerQualityService } from '../../src/modules/customer-quality/customer-quality.service.js';
 import { CustomerComplaintProcessingService } from '../../src/modules/customer-quality/customer-complaint-processing.service.js';
 
@@ -159,6 +161,236 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     expect(await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: profile.id } })).toEqual(profile);
     expect(await prisma.$queryRaw`SELECT id, status FROM supplier_incoming_inspections WHERE id = ${inspectionId}::uuid`).toEqual([{ id: inspectionId, status: 'COMPLETED' }]);
     expect(await prisma.$queryRaw`SELECT event_type, request_version FROM supplier_concession_events WHERE request_id = ${concession.id}::uuid ORDER BY request_version`).toEqual([{ event_type: 'CREATED', request_version: 1 }, { event_type: 'WITHDRAWN', request_version: 2 }]);
+  });
+
+  it('fix3 treats completed and corrected incoming inspections as history while keeping drafts live', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    const supplier = await prisma.organization.create({ data: { code: randomUUID(), name: 'Inspection supplier', type: 'SUPPLIER' } });
+    const profile = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: org.id, supplierOrganizationId: supplier.id, businessCode: randomUUID(), displayName: 'Inspection history supplier' } });
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO supplier_incoming_inspections (id, owner_organization_id, profile_id, supplier_organization_id,
+        supplier_business_code, supplier_name, material_code, incoming_batch, received_quantity, sampled_quantity,
+        inspector_id, created_by_id)
+      VALUES (${id}::uuid, ${org.id}::uuid, ${profile.id}::uuid, ${supplier.id}::uuid,
+        ${profile.businessCode}, ${profile.displayName}, 'N1-INCOMING', 'N1-BATCH', 100, 10,
+        ${f.actor.id}::uuid, ${f.actor.id}::uuid)`;
+    for (const status of ['DRAFT', 'COMPLETED', 'CORRECTED']) {
+      await prisma.$executeRaw`
+        UPDATE supplier_incoming_inspections SET status = ${status}, conclusion = 'PASS',
+          inspected_at = CURRENT_TIMESTAMP, correction_reason = 'Lifecycle correction'
+        WHERE id = ${id}::uuid`;
+      expect(await prisma.$queryRaw`
+        SELECT t.status, (${structureReferenceLiveCondition('supplier_incoming_inspections')}) AS live
+        FROM supplier_incoming_inspections t WHERE t.id = ${id}::uuid`
+      ).toEqual([{ status, live: status === 'DRAFT' }]);
+      if (status === 'DRAFT') await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    }
+    const retained = await prisma.$queryRaw`SELECT * FROM supplier_incoming_inspections WHERE id = ${id}::uuid`;
+    // The valid supplier profile remains an independent live dependency.
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toMatchObject({
+      disableBlockers: expect.arrayContaining(['存在有效配置或在途业务引用']),
+      deleteBlockers: expect.arrayContaining(['存在业务、配置或历史引用']),
+    });
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_incoming_inspections WHERE id = ${id}::uuid`).toEqual(retained);
+    expect(await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: profile.id } })).toEqual(profile);
+  });
+
+  it('fix3 treats accepted and rejected performance appeals as history while keeping undecided appeals live', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    const supplier = await prisma.organization.create({ data: { code: randomUUID(), name: 'Appeal supplier', type: 'SUPPLIER' } });
+    const profile = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: org.id, supplierOrganizationId: supplier.id, businessCode: randomUUID(), displayName: 'Appeal history supplier' } });
+    const cardId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO supplier_performance_cards (id, owner_organization_id, profile_id, supplier_organization_id,
+        supplier_name, score_month, inspection_count, pass_count, incoming_score, cooperation_score,
+        incoming_weight, cooperation_weight, cooperation_note, total_score, source_inspections, created_by_id,
+        status, published_by_id, published_at)
+      VALUES (${cardId}::uuid, ${org.id}::uuid, ${profile.id}::uuid, ${supplier.id}::uuid,
+        ${profile.displayName}, '2026-10-01'::date, 1, 1, 100, 100, 50, 50, 'Lifecycle score', 100, '[]'::jsonb,
+        ${f.actor.id}::uuid, 'PUBLISHED', ${f.actor.id}::uuid, CURRENT_TIMESTAMP)`;
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO supplier_performance_appeals (id, owner_organization_id, card_id, supplier_organization_id, reason, created_by_id)
+      VALUES (${id}::uuid, ${org.id}::uuid, ${cardId}::uuid, ${supplier.id}::uuid, 'Lifecycle appeal', ${f.actor.id}::uuid)`;
+    for (const status of ['DRAFT', 'SUBMITTED', 'REJECTED', 'ACCEPTED']) {
+      await prisma.$executeRaw`
+        UPDATE supplier_performance_appeals SET status = ${status}, decision_note = 'Lifecycle decision',
+          decided_by_id = ${f.actor.id}::uuid, decided_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid`;
+      expect(await prisma.$queryRaw`
+        SELECT t.status, (${structureReferenceLiveCondition('supplier_performance_appeals')}) AS live
+        FROM supplier_performance_appeals t WHERE t.id = ${id}::uuid`
+      ).toEqual([{ status, live: ['DRAFT', 'SUBMITTED'].includes(status) }]);
+      if (['DRAFT', 'SUBMITTED'].includes(status)) await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    }
+    const retained = await prisma.$queryRaw`SELECT * FROM supplier_performance_appeals WHERE id = ${id}::uuid`;
+    const card = await prisma.$queryRaw`SELECT * FROM supplier_performance_cards WHERE id = ${cardId}::uuid`;
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toMatchObject({
+      disableBlockers: expect.arrayContaining(['存在有效配置或在途业务引用']),
+      deleteBlockers: expect.arrayContaining(['存在业务、配置或历史引用']),
+    });
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_performance_appeals WHERE id = ${id}::uuid`).toEqual(retained);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_performance_cards WHERE id = ${cardId}::uuid`).toEqual(card);
+    expect(await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: profile.id } })).toEqual(profile);
+  });
+
+  it.each(['PASSED', 'REJECTED'])('fix3 keeps %s stage review history without hiding open stages or active projects', async (status) => {
+    const f = await fixture();
+    const org = await f.child();
+    const projectId = randomUUID();
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO new_product_projects (id, organization_id, code, name, product_code, created_by_id)
+      VALUES (${projectId}::uuid, ${org.id}::uuid, ${randomUUID()}, 'Lifecycle project', 'N1-PRODUCT', ${f.actor.id}::uuid)`;
+    await prisma.$executeRaw`
+      INSERT INTO new_product_stages (id, organization_id, project_id, code, name, created_by_id)
+      VALUES (${id}::uuid, ${org.id}::uuid, ${projectId}::uuid, 'REVIEW', 'Lifecycle review', ${f.actor.id}::uuid)`;
+    const reference = () => prisma.$queryRaw`
+      SELECT t.status, (${structureReferenceLiveCondition('new_product_stages')}) AS live
+      FROM new_product_stages t WHERE t.id = ${id}::uuid`;
+    expect(await reference()).toEqual([{ status: 'OPEN', live: true }]);
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await prisma.$executeRaw`
+      UPDATE new_product_stages SET status = ${status}, reviewed_by_id = ${f.actor.id}::uuid,
+        reviewed_at = CURRENT_TIMESTAMP, version = 2 WHERE id = ${id}::uuid`;
+    expect(await reference()).toEqual([{ status, live: false }]);
+    const retained = await prisma.$queryRaw`SELECT * FROM new_product_stages WHERE id = ${id}::uuid`;
+    // Finishing the stage does not finish the independently active project.
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body.disableBlockers).toContain('存在有效配置或在途业务引用');
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await prisma.$executeRaw`UPDATE new_product_projects SET status = 'ARCHIVED' WHERE id = ${projectId}::uuid`;
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toEqual({
+      disableBlockers: [], deleteBlockers: ['存在业务、配置或历史引用'],
+    });
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 2 }).expect(409);
+    expect(await prisma.$queryRaw`SELECT * FROM new_product_stages WHERE id = ${id}::uuid`).toEqual(retained);
+    expect(await prisma.$queryRaw`SELECT status FROM new_product_projects WHERE id = ${projectId}::uuid`).toEqual([{ status: 'ARCHIVED' }]);
+  });
+
+  it.each([
+    ['customer_quality_physical_dispositions', ['PENDING', 'RECEIVED', 'REPAIRED', 'SCRAPPED'], 'CLOSED'],
+    ['customer_quality_physical_analyses', ['MISSING', 'IN_PROGRESS'], 'COMPLETED'],
+  ] as const)('fix3 evaluates only the latest %s version per organization and complaint while retaining all history', async (tableName, activeStatuses, terminal) => {
+    const f = await fixture();
+    const org = await f.child();
+    const otherOrg = await f.child();
+    const table = Prisma.raw(`"${tableName}"`);
+    const complaint = async (organizationId: string) => {
+      const customer = await prisma.customerQualityCustomer.create({ data: { organizationId, code: randomUUID(), name: 'Historical customer', active: false, createdById: f.actor.id, updatedById: f.actor.id } });
+      return prisma.customerQualityComplaint.create({ data: { organizationId, customerId: customer.id, complaintNumber: randomUUID(), complaintType: 'ZERO_KM', defectDescription: 'Version history', severity: 'LOW', severityPolicyVersion: 'v1', severitySnapshot: {}, status: 'ARCHIVED', archivedAt: new Date(), createdById: f.actor.id, updatedById: f.actor.id } });
+    };
+    const append = async (record: { id: string; organizationId: string }, status: string, version: number) => {
+      const content = tableName === 'customer_quality_physical_dispositions'
+        ? Prisma.sql`action, notes` : Prisma.sql`summary, evidence_summary`;
+      const value = tableName === 'customer_quality_physical_dispositions'
+        ? status === 'SCRAPPED' ? 'SCRAP' : 'REPAIR' : 'Lifecycle physical analysis';
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO ${table} (id, organization_id, complaint_id, status, version, created_by_id, updated_at, ${content})
+        VALUES (${randomUUID()}::uuid, ${record.organizationId}::uuid, ${record.id}::uuid, ${status}, ${version},
+          ${f.actor.id}::uuid, CURRENT_TIMESTAMP, ${value}, 'Retain this version')`);
+    };
+    const projection = (record: { id: string; organizationId: string }) => prisma.$queryRaw<{ version: number; status: string; live: boolean }[]>(Prisma.sql`
+      SELECT t.version, t.status, (${structureReferenceLiveCondition(tableName)}) AS live
+      FROM ${table} t WHERE t.organization_id = ${record.organizationId}::uuid AND t.complaint_id = ${record.id}::uuid
+      ORDER BY t.version`);
+    const first = await complaint(org.id);
+    await append(first, activeStatuses[0], 1);
+    expect(await projection(first)).toEqual([{ version: 1, status: activeStatuses[0], live: true }]);
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    for (const [index, status] of activeStatuses.entries()) {
+      if (index > 0) await append(first, status, index + 1);
+      expect((await projection(first)).at(-1)).toEqual({ version: index + 1, status, live: true });
+    }
+    await append(first, terminal, activeStatuses.length + 1);
+    expect(await projection(first)).toEqual([...activeStatuses, terminal].map((status, index) => ({ version: index + 1, status, live: false })));
+    // A different organization's higher, still-active version must not block this organization.
+    const external = await complaint(otherOrg.id);
+    await append(external, activeStatuses[0], 20);
+    expect(await projection(external)).toEqual([{ version: 20, status: activeStatuses[0], live: true }]);
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toEqual({
+      disableBlockers: [], deleteBlockers: ['存在业务、配置或历史引用'],
+    });
+    // A lower-version pending complaint in the same organization must not be shadowed.
+    const second = await complaint(org.id);
+    const pending = tableName === 'customer_quality_physical_dispositions' ? 'PENDING' : 'IN_PROGRESS';
+    await append(second, pending, 1);
+    expect(await projection(second)).toEqual([{ version: 1, status: pending, live: true }]);
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body.disableBlockers).toContain('存在有效配置或在途业务引用');
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await append(second, terminal, 2);
+    expect(await projection(second)).toEqual([{ version: 1, status: pending, live: false }, { version: 2, status: terminal, live: false }]);
+    const retained = await prisma.$queryRaw(Prisma.sql`SELECT * FROM ${table} WHERE organization_id = ${org.id}::uuid ORDER BY id`);
+    expect(retained).toHaveLength(activeStatuses.length + 3);
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 2 }).expect(409);
+    expect(await prisma.$queryRaw(Prisma.sql`SELECT * FROM ${table} WHERE organization_id = ${org.id}::uuid ORDER BY id`)).toEqual(retained);
+    expect(await prisma.customerQualityComplaint.findUniqueOrThrow({ where: { id: first.id } })).toEqual(first);
+    expect(await prisma.customerQualityComplaint.findUniqueOrThrow({ where: { id: second.id } })).toEqual(second);
+  });
+
+  it('fix3 excludes concluded meeting topics without hiding open topics, independent actions or other organization blockers', async () => {
+    const codes = ['supplier-meetings:write', 'supplier-meetings:conclude', 'supplier-meetings:actions'];
+    const f = await fixture([...ADMIN_PERMISSIONS, 'organization:read', ...codes]);
+    const org = await f.child();
+    const governor = await prisma.role.findFirstOrThrow({ where: { organizationId: org.id, code: 'ORGANIZATION_GOVERNOR' } });
+    const permissions = await prisma.permission.findMany({ where: { code: { in: codes } } });
+    await prisma.rolePermission.createMany({ data: permissions.map(({ id }) => ({ roleId: governor.id, permissionId: id })) });
+    const supplier = await prisma.organization.create({ data: { code: randomUUID(), name: 'Meeting supplier', type: 'SUPPLIER' } });
+    const profile = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: org.id, supplierOrganizationId: supplier.id, businessCode: randomUUID(), displayName: 'Lifecycle meeting supplier' } });
+    const assignee = await prisma.user.create({ data: { organizationId: org.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    const actor = { id: f.actor.id, organizationId: f.root.id, scopeOrganizationId: org.id, accountType: 'INTERNAL' as const, sessionId: f.sessionId };
+    const service = app.get(SupplierMeetingsService);
+    const meeting = await service.create(actor, { profileId: profile.id, title: 'Lifecycle meeting', scheduledStart: '2026-11-01T09:00:00.000Z', scheduledEnd: '2026-11-01T10:00:00.000Z' }, randomUUID(), randomUUID());
+    const topic = await service.createTopic(actor, meeting.id, { title: 'Concluded topic' }, randomUUID(), randomUUID());
+    const openTopic = await service.createTopic(actor, meeting.id, { title: 'Independent open topic' }, randomUUID(), randomUUID());
+    const action = await service.createAction(actor, meeting.id, { title: 'Independent action', assigneeUserId: assignee.id, dueDate: '2026-11-15' }, randomUUID(), randomUUID());
+    await service.start(actor, meeting.id, { expectedVersion: 1 }, randomUUID(), randomUUID());
+    expect(await service.complete(actor, meeting.id, { expectedVersion: 2 }, randomUUID(), randomUUID())).toMatchObject({ status: 'COMPLETED', version: 3 });
+    // The legal profile stays live; isolate the production SQL predicate without removing its FKs.
+    const topics = () => prisma.$queryRaw<{ id: string; status: string; live: boolean }[]>`
+      SELECT t.id, t.status, (${structureReferenceLiveCondition('supplier_meeting_topics')}) AS live
+      FROM supplier_meeting_topics t WHERE t.meeting_id = ${meeting.id}::uuid ORDER BY t.sequence`;
+    const actions = () => prisma.$queryRaw<{ id: string; status: string; live: boolean }[]>`
+      SELECT t.id, t.status, (${structureReferenceLiveCondition('supplier_meeting_actions')}) AS live
+      FROM supplier_meeting_actions t WHERE t.id = ${action.id}::uuid`;
+    expect(await topics()).toEqual([{ id: topic.id, status: 'OPEN', live: true }, { id: openTopic.id, status: 'OPEN', live: true }]);
+    expect(await actions()).toEqual([{ id: action.id, status: 'OPEN', live: true }]);
+    expect(await service.concludeTopic(actor, meeting.id, topic.id, { expectedVersion: 1, conclusion: 'Retain this conclusion' }, randomUUID(), randomUUID())).toMatchObject({ id: topic.id, status: 'CONCLUDED', conclusion: 'Retain this conclusion', version: 2 });
+    expect(await topics()).toEqual([{ id: topic.id, status: 'CONCLUDED', live: false }, { id: openTopic.id, status: 'OPEN', live: true }]);
+    await service.concludeTopic(actor, meeting.id, openTopic.id, { expectedVersion: 1, conclusion: 'Second conclusion' }, randomUUID(), randomUUID());
+    expect(await topics()).toEqual([{ id: topic.id, status: 'CONCLUDED', live: false }, { id: openTopic.id, status: 'CONCLUDED', live: false }]);
+    expect(await actions()).toEqual([{ id: action.id, status: 'OPEN', live: true }]);
+    await service.completeAction(actor, meeting.id, action.id, { expectedVersion: 1 }, randomUUID(), randomUUID());
+    expect(await actions()).toEqual([{ id: action.id, status: 'COMPLETED', live: false }]);
+    const retainedTopics = await prisma.$queryRaw`SELECT * FROM supplier_meeting_topics WHERE meeting_id = ${meeting.id}::uuid ORDER BY sequence`;
+    const retainedActions = await prisma.$queryRaw`SELECT * FROM supplier_meeting_actions WHERE meeting_id = ${meeting.id}::uuid ORDER BY id`;
+    const retainedMeeting = await prisma.$queryRaw`SELECT * FROM supplier_meetings WHERE id = ${meeting.id}::uuid`;
+    const retainedEvents = await prisma.$queryRaw<{ entity_id: string; event_type: string; entity_version: number; note: string | null }[]>`
+      SELECT entity_id, event_type, entity_version, note FROM supplier_meeting_events WHERE meeting_id = ${meeting.id}::uuid ORDER BY id`;
+    expect(retainedEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entity_id: topic.id, event_type: 'TOPIC_CREATED', entity_version: 1 }),
+      { entity_id: topic.id, event_type: 'TOPIC_CONCLUDED', entity_version: 2, note: 'Retain this conclusion' },
+      { entity_id: openTopic.id, event_type: 'TOPIC_CONCLUDED', entity_version: 2, note: 'Second conclusion' },
+    ]));
+    const lifecycle = (await f.send('get', `/${org.id}/lifecycle`).expect(200)).body;
+    expect(lifecycle.disableBlockers).toContain('存在有效配置或在途业务引用');
+    expect(lifecycle.deleteBlockers).toContain('存在业务、配置或历史引用');
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ status: 'ACTIVE', version: 1 });
+    expect(await prisma.supplierBusinessProfile.findUniqueOrThrow({ where: { id: profile.id } })).toEqual(profile);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_meeting_topics WHERE meeting_id = ${meeting.id}::uuid ORDER BY sequence`).toEqual(retainedTopics);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_meeting_actions WHERE meeting_id = ${meeting.id}::uuid ORDER BY id`).toEqual(retainedActions);
+    expect(await prisma.$queryRaw`SELECT * FROM supplier_meetings WHERE id = ${meeting.id}::uuid`).toEqual(retainedMeeting);
+    expect(await prisma.$queryRaw`SELECT entity_id, event_type, entity_version, note FROM supplier_meeting_events WHERE meeting_id = ${meeting.id}::uuid ORDER BY id`).toEqual(retainedEvents);
+    expect(await prisma.auditEvent.count({ where: { organizationId: org.id, resourceId: { in: [topic.id, openTopic.id] }, action: 'SUPPLIER_MEETING_TOPIC_CONCLUDED' } })).toBe(2);
   });
 
   it.each(['PENDING_REVIEW', 'ACCEPTED'])('quality P2 treats %s audit import rows as live work before issue creation', async (status) => {

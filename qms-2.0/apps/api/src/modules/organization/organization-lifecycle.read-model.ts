@@ -30,6 +30,19 @@ export function structureReferenceLiveCondition(tableName: string) {
     ? Prisma.sql`to_jsonb(t)->>'status' = 'PENDING'`
     : tableName === 'supplier_concession_requests'
     ? Prisma.sql`to_jsonb(t)->>'status' NOT IN ('REJECTED', 'WITHDRAWN')`
+    : tableName === 'supplier_meeting_topics'
+    ? Prisma.sql`to_jsonb(t)->>'status' = 'OPEN'`
+    : tableName === 'supplier_incoming_inspections'
+    ? Prisma.sql`to_jsonb(t)->>'status' = 'DRAFT'`
+    : tableName === 'supplier_performance_appeals'
+    ? Prisma.sql`to_jsonb(t)->>'status' IN ('DRAFT', 'SUBMITTED')`
+    : tableName === 'new_product_stages'
+    ? Prisma.sql`to_jsonb(t)->>'status' = 'OPEN'`
+    : tableName === 'customer_quality_physical_dispositions' || tableName === 'customer_quality_physical_analyses'
+    ? Prisma.sql`t.status NOT IN ('CLOSED', 'COMPLETED') AND NOT EXISTS (
+        SELECT 1 FROM ${identifier(tableName)} newer
+        WHERE newer.organization_id = t.organization_id AND newer.complaint_id = t.complaint_id
+          AND newer.version > t.version)`
     : Prisma.sql`CASE
         WHEN to_jsonb(t) ? 'enabled' THEN to_jsonb(t)->>'enabled' = 'true'
         WHEN to_jsonb(t) ? 'active' THEN to_jsonb(t)->>'active' = 'true'

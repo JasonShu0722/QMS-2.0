@@ -448,7 +448,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "0aefb48e26b98673525f7c3ec3cc3dd84b777a6ebf4fb263c2a7f97a5fd1b19d"
+            "sha256": "d090084d2e07cd5a03cee256051ff759c6cf3001f2dcdd648e37d746cd86c6d5"
           },
           {
             "path": "apps/web/organization-preview.html",
@@ -576,7 +576,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "0aefb48e26b98673525f7c3ec3cc3dd84b777a6ebf4fb263c2a7f97a5fd1b19d"
+            "sha256": "d090084d2e07cd5a03cee256051ff759c6cf3001f2dcdd648e37d746cd86c6d5"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md",
@@ -588,7 +588,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md",
-            "sha256": "3eb1b6603c98236fb4db9af8ecc775cfc648db2c2c707abbcc929c6cae4ec63b"
+            "sha256": "a0a62556c8e98412687d655485408fd99f55624832b309e6cfd0927ba589349c"
           }
         ]
       }
