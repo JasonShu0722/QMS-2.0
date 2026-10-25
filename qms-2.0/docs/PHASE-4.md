@@ -2,7 +2,7 @@
 
 ## 问题管理重建接续（2026-10-25）
 
-本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：N2-A配置已部署V0.0.29 / 70fdbab，[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)原head2b84ed2的Foundation40179811037全部9项成功；负责人已批准继续合并及随后自动发布核验，当前先处理云端职责私表越界意见，V0.0.30-fix1真实PG回归 / 双审后还须新head CI与审查，尚未部署。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
+本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：N2-A配置已部署V0.0.29 / 70fdbab，[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)的职责私表越界fix1已修复并获新head云端无发现；Foundation40184202581另有Web4两文件三项可见性失败，fix2只修测试同步，仍须新head完整CI / 审查。负责人已批准通过后合并及随后自动发布核验，尚未部署。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
 
 ## 当前状态
 

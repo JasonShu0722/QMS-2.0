@@ -14,7 +14,7 @@
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
 | 公开边界 | 负责人已临时公开，O2实查满足，main仍70fdbab；PR #68新head必须重新CI / 审查，通过后按本轮新授权合并并跟进自动部署，不自行更改可见性，全部发布核验完成前不提醒闭源 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | N2-A生产保持70fdbab。PR #68 / head2b84ed2的Foundation40179811037全部9项成功；负责人已批准继续合并及随后自动发布核验，但合并前实查云端审查仍有组织私表跨模块读取意见，确认成立，先按V0.0.30-fix1修复并重验 / 重审 / 新head CI，不在意见未关闭时合并。生产adapter为空，不放行新8D或代配生产岗位 |
+| 当前进度 | N2-A生产保持70fdbab。PR #68的fix1已推dbbbf9b，云端同head复核无发现，API / 集成 / 三组Web成功，但Foundation40184202581的Web4两文件三项可见性断言失败，未合并。当前按fix2仅修两处测试同步、双审并重新完整CI，随后接续已批准合并及自动发布核验。生产adapter为空，不放行新8D或代配生产岗位 |
 
 ## 1. 范围与结构
 
@@ -384,3 +384,13 @@ O2停止点：V0.0.30仍为同Issue #66 / REQ-0026 / N2-B，提交前已只读�
 Darwin已最小实现公开revalidateLockedManagementResponsibilities并移除workflow私表读取，新边界测试先2项红、后2项绿；没有新DTO或迁移。Gauss独立规格及Einstein独立质量均无确定P1/P2，三份受审源码前后指纹一致；其静态意见不冒充主代理真实回归。主代理冻结641份API源 / 测试 / 迁移后，亲跑API build / 标准lint、完整unit72 suites / 804项，以及14份相关完整集成文件220项，分5/5/4文件串行批次102/48/70项，无pending / skip，覆盖真实锁等待到期、未来第二任职、HTTP权限、待办投影与compiled closure Worker。110迁移从新空库应用并seed成功，验证未连接55440。
 
 契约重新导出检查一致，归档隔离通过；根工具先按package明确11文件选择通过66项，再按根目录完整集合12文件核对72项全部通过，不把两次结果重复累计。Web、DTO、迁移及生产行为规则未改，原Web机器证据不声称本轮重跑，云端PR仍执行全量门禁。冻结API641份hash复核不变；本任务PG完整ID / 标签 / 回环55477 / mounts / stopped状态核对后仅移除该容器及匿名卷，并删除唯一验证过的Git外环境JSON，无prune或生产操作。接下来单次提交推送fix1，回复原审查并请求新head复核；没有提前合并。
+
+### 9.13 fix1云端失败与fix2弹层测试同步
+
+fix1实际提交dbbbf9bf67d1ab0f8a6af94451e94bff1938fe08已推同PR，原comment4370304227已技术回复并解决；对新head请求云端复核，摘要明确completed / has_any_findings=false / has_unresolved_findings=false。新[Foundation40184202581](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40184202581)最终failure：scope / checks / API / integration / Web1～3成功，Web4的32文件中2文件 / 3项失败、30文件 / 302项通过，foundation因上游失败拒绝；没有盲重跑或合并。
+
+真实失败来自UserAdministration.positions权限不足警告及AuditNcClosurePanel的response / verify两类409保稿警告，ant-alert-title已在DOM但即时toBeVisible失败。主代理未改原样两文件本地12项通过，不称本地复现CI。Socrates受控帧队列探针观察三处Modal祖先prepare样式opacity为0，此时dialog查询及输入enabled均已满足；仅释放原生帧回调、不改DOM / CSS / API数据后自然可见。此实验说明同步条件不足，CI原日志没有祖先样式快照，不能断言其精确时序已原样重现。
+
+fix2只把上述两处可见性断言包入默认waitFor，仍检查实际可见，保留权限禁用 / 无写入、409保稿 / 禁止重提 / 刷新二次确认全部断言；无生产源码、固定sleep、timeout、skip或mock修改。实现者Socrates整份两文件12项 / Web lint通过，探针已全部移除。Beauvoir独立规格、Carver独立质量通过；主代理维护的五份文档归档已确认不属于受审源码变化，Carver再次核对两份文件指纹不变。主代理冻结330份Web源码 / 测试后跑完整shard4；负责人中断等待后，实查原Vitest及新生成的子Worker仍在，恢复只接续该次运行，不重复启动，不用局部通过替代完整CI。
+
+该次完整shard4最终32文件 / 305项：304项通过，另有UserAdministration.positions的self=true任职保存用例约10.8秒失败，JSON只给Vitest超时包装器STACK_TRACE_ERROR栈，不把它归为环境或改timeout；原三项提示可见性已通过。主代理随后不改源码，使用默认及JSON双reporter整份复验两文件12项全部通过。逐文件 / 用例名称集合核对，无删除 / 重复计数，最新整文件结果覆盖32文件305项；不是一次完整shard命令全绿，原失败与复验分别保留在Git外n2b-fix2-*证据。新head仍必须独立通过云端全量CI，不能用本地组合证据替代。

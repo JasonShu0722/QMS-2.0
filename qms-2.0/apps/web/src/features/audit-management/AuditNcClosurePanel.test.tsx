@@ -60,7 +60,7 @@ it.each(['response', 'verify'] as const)('keeps the %s draft visible after 409 u
   const dialog = await screen.findByRole('dialog', { name: action === 'response' ? '提交整改回复' : '独立验证整改' });
   await waitFor(() => expect(within(dialog).getByLabelText(label)).toBeEnabled());
   expect(within(dialog).getByLabelText(label)).toHaveValue('冲突后仍需保留的长说明');
-  expect(within(dialog).getByText(/版本.*输入已保留/)).toBeVisible();
+  await waitFor(() => expect(within(dialog).getByText(/版本.*输入已保留/)).toBeVisible());
   expect(within(dialog).getByRole('button', { name: action === 'response' ? '确认提交' : '验证通过' })).toBeDisabled();
   expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith('/ncs'))).toHaveLength(1);
   fireEvent.click(within(dialog).getByRole('button', { name: '放弃输入并刷新记录' }));
