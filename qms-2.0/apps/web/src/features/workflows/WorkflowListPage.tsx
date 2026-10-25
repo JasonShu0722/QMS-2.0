@@ -6,10 +6,11 @@ import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import * as api from './workflow-api';
 import { workflowLabel } from './workflow-labels';
+import { WorkflowClosureTemplateDialog } from './WorkflowClosureTemplateDialog';
 import './workflows.css';
 
 export function WorkflowListPage() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const navigate = useNavigate();
   const [page, setPage] = useState<Awaited<ReturnType<typeof api.getWorkflows>>>();
   const [history, setHistory] = useState<Awaited<ReturnType<typeof api.getWorkflow>>>();
@@ -22,6 +23,8 @@ export function WorkflowListPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [createdPath, setCreatedPath] = useState<string>();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -66,10 +69,12 @@ export function WorkflowListPage() {
   const displayedError = actionError ?? error;
   return <section className="workflow-list">
     <header className="workflow-heading"><Typography.Title level={2}>{t('受控流程列表')}</Typography.Title>
-      <Button type="primary" disabled={busy || !!error} onClick={() => {
+      <Space wrap><Button disabled={busy || templateBusy || !!error} onClick={() => requestLeave(() => { setCreating(false); setCode(''); setName(''); setTemplateOpen(true); })}>{locale === 'en-US' ? 'Initialize closure review template' : '初始化关闭审核模板'}</Button>
+      <Button type="primary" disabled={busy || templateBusy || templateOpen || !!error} onClick={() => {
         if (creating) requestLeave(() => { setCreating(false); setCode(''); setName(''); });
         else setCreating(true);
-      }}>{t('新建流程')}</Button></header>
+      }}>{t('新建流程')}</Button></Space></header>
+    {templateOpen && <WorkflowClosureTemplateDialog onClose={() => setTemplateOpen(false)} onBusyChange={setTemplateBusy} onCreated={result => { setTemplateOpen(false); setCreatedPath(api.workflowPath(result)); }} />}
     {!!displayedError && <Alert type="error" title={t(safeAccountError(displayedError))} description={displayedError instanceof ApiError && displayedError.traceId ? <code>{displayedError.traceId}</code> : undefined}
       action={error ? <Button aria-label={t('重试')} onClick={() => setRevision((value) => value + 1)}>{t('重试')}</Button> : undefined} />}
     <Space wrap className="workflow-list__filters"><label>{t('搜索流程')}<input aria-label={t('搜索流程')} value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></label>

@@ -27,6 +27,14 @@ type Assignment = Prisma.UserPositionGetPayload<{ include: typeof assignmentIncl
 export class OrganizationResponsibilityService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
 
+  // Minimal directory projection for an already-authorized workflow configuration transaction.
+  async workflowDepartmentOptions(tx: AdminTransaction, organizationId: string, search: string | undefined, take: number, skip: number) {
+    await this.activeOrganization(tx, organizationId);
+    const where: Prisma.DepartmentWhereInput = { organizationId, status: 'ACTIVE', ...(search ? { OR: [{ code: { contains: search, mode: 'insensitive' } }, { name: { contains: search, mode: 'insensitive' } }] } : {}) };
+    const [items, total] = await Promise.all([tx.department.findMany({ where, select: { id: true, code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take, skip }), tx.department.count({ where })]);
+    return { items, total };
+  }
+
   async listManagementBindings(organizationId: string, query: ManagementConfigurationQueryDto): Promise<ManagementBindingDto[]> {
     await this.activeOrganization(this.prisma, organizationId);
     return this.bindings(this.prisma, organizationId, Prisma.sql`${query.departmentId ? Prisma.sql`department_id = ${query.departmentId}::uuid` : Prisma.sql`TRUE`}
@@ -174,6 +182,33 @@ export class OrganizationResponsibilityService {
       if (isSecurityConcurrencyConflict(error)) adminError('CONCURRENCY_CONFLICT', 409);
       throw error;
     }
+  }
+
+  // Recheck only the resolver's locked identities; never resolve or lock new users here.
+  async revalidateLockedManagementResponsibilities(tx: AdminTransaction, management: ManagementResponsibilitiesDto, at: Date): Promise<Set<string>> {
+    const { organizationId, sectionDepartmentId } = management;
+    const validSources = new Set<string>();
+    for (const source of management.responsibilities) {
+      const assignment = await tx.userPosition.findFirst({ where: { id: source.assignmentId, organizationId,
+        userId: source.userId, positionId: source.positionId, ...this.effectiveAssignmentWhere(organizationId, at),
+        position: { organizationId, departmentId: source.departmentId, status: 'ACTIVE', department: { status: 'ACTIVE' } } }, select: { id: true } });
+      if (!assignment) continue;
+      if (source.responsibility === 'SECTION_MANAGER' && await tx.userPosition.count({ where: {
+        organizationId, positionId: source.positionId, ...this.effectiveAssignmentWhere(organizationId, at),
+        position: { status: 'ACTIVE', department: { status: 'ACTIVE' } },
+      } }) !== 1) continue;
+      const [binding] = await tx.$queryRaw<{ id: string }[]>`SELECT b.id FROM department_management_bindings b
+        WHERE b.id = ${source.bindingId}::uuid AND b.organization_id = ${organizationId}::uuid AND b.status = 'ACTIVE'
+          AND b.version = ${source.bindingVersion} AND b.position_id = ${source.positionId}::uuid
+          AND b.department_id = ${source.departmentId}::uuid AND b.responsibility = ${source.responsibility}
+          AND (${source.scopeId}::uuid IS NULL OR EXISTS (SELECT 1 FROM department_minister_scopes s
+            WHERE s.id = ${source.scopeId}::uuid AND s.organization_id = b.organization_id AND s.status = 'ACTIVE'
+              AND s.version = ${source.scopeVersion} AND s.department_id = b.department_id
+              AND s.section_department_id = ${sectionDepartmentId}::uuid AND s.minister_assignment_id = ${source.assignmentId}::uuid
+              AND s.valid_from <= ${at} AND (s.valid_to IS NULL OR s.valid_to > ${at})))`;
+      if (binding) validSources.add(source.bindingId);
+    }
+    return validSources;
   }
 
   private async resolveLockedResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at: Date): Promise<ManagementResponsibilitiesDto> {

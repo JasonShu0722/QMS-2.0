@@ -54,7 +54,7 @@ it('does not create an unassigned internal account when the administrator lacks 
   render(<UserAdministration organization={restricted} organizations={[restricted]} />);
   await userEvent.click(screen.getByRole('button', { name: '创建用户' }));
   const dialog = within(await screen.findByRole('dialog', { name: '创建用户' }));
-  expect(dialog.getByText('缺少岗位授权所需权限，无法创建内部账号')).toBeVisible();
+  await waitFor(() => expect(dialog.getByText('缺少岗位授权所需权限，无法创建内部账号')).toBeVisible());
   expect(dialog.getByRole('button', { name: '保存用户' })).toBeDisabled();
   expect(writes).toEqual([]);
 });

@@ -2,6 +2,31 @@ import { afterEach, expect, it, vi } from 'vitest';
 import * as client from './client';
 
 afterEach(() => vi.unstubAllGlobals());
+it.each([false, true])('preserves default replay and supports an explicit opt-out: replay=%s', async replay => {
+  let recent = false;
+  const writes: RequestInit[] = [];
+  const unregister = client.registerReauthentication(async () => { recent = true; });
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+    if (path.endsWith('/csrf')) return new Response(JSON.stringify({ csrfToken: 'csrf' }), { headers: { 'content-type': 'application/json' } });
+    writes.push(init);
+    return new Response(JSON.stringify(recent ? { saved: true } : { code: 'AUTH_REAUTHENTICATION_REQUIRED' }),
+      { status: recent ? 200 : 403, headers: { 'content-type': 'application/json' } });
+  }));
+  try {
+    const mutation = replay ? client.createAdminMutation() : client.createAdminMutation({ replayAfterReauthentication: false });
+    const save = () => mutation('/api/v1/admin/users/user', 'PATCH', { email: 'one@example.test' });
+    if (replay) await expect(save()).resolves.toEqual({ saved: true });
+    else {
+      await expect(save()).rejects.toMatchObject({ code: 'CLIENT_REAUTHENTICATION_COMPLETED' });
+      expect(writes).toHaveLength(1);
+      await expect(save()).resolves.toEqual({ saved: true });
+    }
+    expect(writes).toHaveLength(2);
+    expect(writes[1].body).toBe(writes[0].body);
+    expect((writes[1].headers as Record<string, string>)['Idempotency-Key']).toBe((writes[0].headers as Record<string, string>)['Idempotency-Key']);
+  } finally { unregister(); }
+});
+
 it('does not dispatch a scope-bound mutation after its pending CSRF read is aborted', async () => {
   let finish!: (response: Response) => void;
   const fetch = vi.fn((path: string, _init?: RequestInit) => path.endsWith('/csrf')

@@ -10,6 +10,10 @@ export function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+export function isClosureReviewNode(node: { config: unknown }): boolean {
+  return Object.hasOwn(jsonObject(node.config), 'closureReview');
+}
+
 export function forwardAction(type: string): WorkflowAction {
   if (type === 'APPROVAL') return 'APPROVE';
   if (type === 'VERIFICATION') return 'VERIFY';

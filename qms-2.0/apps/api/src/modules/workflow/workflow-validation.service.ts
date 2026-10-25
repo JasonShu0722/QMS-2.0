@@ -55,7 +55,14 @@ export class WorkflowValidationService {
       if (!this.text(node.name, 200)) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
       const config = node.config ?? {};
       if (node.config === null || !this.object(config)) { errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`); continue; }
-      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition', 'closureReview'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (config.closureReview !== undefined) {
+        const review = config.closureReview;
+        if (!this.object(review) || Object.keys(review).some(key => !['schemaVersion', 'policy', 'domainCode'].includes(key))
+          || review.schemaVersion !== 1 || (review.policy !== 'INTERNAL' && review.policy !== 'SUPPLIER')
+          || !this.text(review.domainCode, 100) || !/^\S(?:.*\S)?$/.test(review.domainCode)) errors.push(`WORKFLOW_CLOSURE_CONFIG_INVALID:${node.id}`);
+        if (node.type !== 'APPROVAL' || config.isStart === true || config.isEnd === true || config.assignment !== undefined || config.escalation !== undefined) errors.push(`WORKFLOW_CLOSURE_NODE_INVALID:${node.id}`);
+      }
       for (const field of ['isStart', 'isEnd', 'requireIndependentVerification']) if (config[field] !== undefined && typeof config[field] !== 'boolean') errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`);
       if (config.requireIndependentVerification !== undefined && node.type !== 'CLOSE') errors.push(`WORKFLOW_VERIFICATION_POLICY_INVALID:${node.id}`);
       if (config.assignment !== undefined && !this.hasAssignment(config)) errors.push(`WORKFLOW_ASSIGNMENT_REQUIRED:${node.id}`);
@@ -108,7 +115,7 @@ export class WorkflowValidationService {
       const config = node.config ?? {};
       if (config.requireIndependentVerification !== undefined && (node.type !== 'CLOSE' || typeof config.requireIndependentVerification !== 'boolean')) errors.push(`WORKFLOW_VERIFICATION_POLICY_INVALID:${node.id}`);
       if (!node.name?.trim()) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
-      if (ASSIGNMENT_NODES.has(node.type as WorkflowNodeType) && !this.hasAssignment(config)) {
+      if (ASSIGNMENT_NODES.has(node.type as WorkflowNodeType) && config.closureReview === undefined && !this.hasAssignment(config)) {
         errors.push(`WORKFLOW_ASSIGNMENT_REQUIRED:${node.id}`);
       }
       this.validateTiming(node.id, config, errors);
@@ -153,8 +160,22 @@ export class WorkflowValidationService {
     for (const transition of backward) {
       if (!this.walk(transition.to, outgoing).has(transition.from)) errors.push(`WORKFLOW_BACKWARD_TARGET_INVALID:${transition.id}`);
     }
+    for (const node of nodes.filter(node => node.config?.closureReview !== undefined)) {
+      const edges = transitions.filter(edge => edge.from === node.id);
+      const returns = edges.filter(edge => edge.action === 'RETURN');
+      const approvals = edges.filter(edge => edge.action === 'APPROVE');
+      if (returns.length !== 1 || returns.some(edge => byId.get(edge.to)?.type !== 'ACTION' || !this.walk(edge.to, outgoing).has(node.id) || Object.keys(edge.condition ?? {}).length > 0)) errors.push(`WORKFLOW_CLOSURE_RETURN_REQUIRED:${node.id}`);
+      const closes = nodes.filter(candidate => candidate.type === 'CLOSE');
+      if (closes.length !== 1 || approvals.length !== 1 || approvals.some(edge => edge.to !== closes[0]!.id || Object.keys(edge.condition ?? {}).length > 0)) errors.push(`WORKFLOW_CLOSURE_APPROVE_REQUIRED:${node.id}`);
+      if (edges.some(edge => edge.action !== 'APPROVE' && edge.action !== 'RETURN')) errors.push(`WORKFLOW_CLOSURE_TRANSITION_INVALID:${node.id}`);
+    }
     if (this.hasCycle(outgoing)) errors.push('WORKFLOW_CYCLE_NOT_ALLOWED');
     if (starts.length === 1 && ends.length === 1) {
+      const closureIds = new Set(nodes.filter(node => node.config?.closureReview !== undefined).map(node => node.id));
+      if (closureIds.size) {
+        const withoutClosure = new Map([...outgoing].filter(([id]) => !closureIds.has(id)).map(([id, targets]) => [id, targets.filter(target => !closureIds.has(target))]));
+        if (this.walk(starts[0]!.id, withoutClosure).has(ends[0]!.id)) errors.push('WORKFLOW_CLOSURE_BYPASS_NOT_ALLOWED');
+      }
       const reachable = this.walk(starts[0]!.id, outgoing);
       const canClose = this.walk(ends[0]!.id, incoming);
       for (const node of nodes) {

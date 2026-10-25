@@ -124,6 +124,7 @@
     "task-notification -> platform-configuration",
     "task-notification -> workflow",
     "workflow -> audit-log",
+    "workflow -> organization",
     "workflow -> authorization",
     "workflow -> problem-index",
     "workflow -> task-notification",

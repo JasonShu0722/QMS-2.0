@@ -6,7 +6,7 @@ import type { AuthorizedSessionUser } from '../authorization/authorization.servi
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
-import { actionAllowed, canonical, forwardAction, jsonObject, matchesCondition, workflowError } from './workflow-runtime-policy.js';
+import { actionAllowed, canonical, forwardAction, isClosureReviewNode, jsonObject, matchesCondition, workflowError } from './workflow-runtime-policy.js';
 import type { WorkflowAction } from './workflow.types.js';
 import { assertWorkflowFeature, canProcessWorkflowNode } from './workflow-access-policy.js';
 import { assertActiveAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
@@ -93,7 +93,7 @@ export class WorkflowRuntimeService {
       if (instance.workflowVersionId !== input.workflowVersionId) workflowError('WORKFLOW_VERSION_MISMATCH', 409);
       if (instance.version !== input.expectedVersion || problem.version !== input.expectedProblemVersion || instance.currentNodeId !== input.currentNodeId) workflowError('CONCURRENCY_CONFLICT', 409);
       const node = instance.currentNode;
-      if (!node) workflowError('WORKFLOW_ACTION_INVALID', 409);
+      if (!node || isClosureReviewNode(node)) workflowError('WORKFLOW_ACTION_INVALID', 409);
       const [task] = await tx.$queryRaw<{ claimed_by_user_id: string | null }[]>`
         SELECT claimed_by_user_id FROM workflow_tasks
         WHERE organization_id = ${input.organizationId}::uuid AND workflow_instance_id = ${instance.id}::uuid
@@ -122,6 +122,7 @@ export class WorkflowRuntimeService {
         const matches = transitions.filter((edge) => (edge.action ?? forwardAction(node.type)) === input.action && matchesCondition(edge.condition, problem));
         if (matches.length !== 1) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
         target = matches[0]!.toNode;
+        if (isClosureReviewNode(target) && !domainAccess) workflowError('WORKFLOW_ACTION_INVALID', 409);
         if (['REJECT', 'RETURN', 'REOPEN'].includes(input.action)) {
           const visited = await tx.workflowMutation.count({ where: { organizationId: input.organizationId, instanceId: instance.id, nodeId: target.id } });
           if (!visited) workflowError('WORKFLOW_ACTION_INVALID', 409);
@@ -199,6 +200,7 @@ export class WorkflowRuntimeService {
     if (checkNode) {
       const node = await tx.workflowNode.findFirst({ where: { id: existing.nodeId, organizationId: input.organizationId } });
       if (!node) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+      if (isClosureReviewNode(node)) workflowError('WORKFLOW_ACTION_INVALID', 409);
       await this.authorizeNode(tx, input, node, participant);
     }
     return existing.response as unknown as WorkflowActionResult;

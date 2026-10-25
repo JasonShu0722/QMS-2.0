@@ -11,6 +11,9 @@ import { ReportingModule } from './modules/reporting/reporting.module.js';
 import { ProblemIndexModule } from './modules/problem-index/problem-index.module.js';
 import { ProblemSavedViewModule } from './modules/problem-index/problem-saved-view.module.js';
 import { WorkflowModule } from './modules/workflow/workflow.module.js';
+import { APPLICATION_OUTBOX_HANDLER, type AtomicOutboxHandler } from './modules/task-notification/outbox-worker.service.js';
+import { WorkflowEventHandler } from './modules/task-notification/workflow-event.handler.js';
+import { ClosureEventHandler } from './modules/task-notification/closure-event.handler.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
@@ -36,6 +39,11 @@ import { SupplierAsnModule } from './modules/supplier-asn/supplier-asn.module.js
 import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js';
 
 @Module({
+  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler],
+    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler): AtomicOutboxHandler => ({
+      eventTypes: [...legacy.eventTypes, ...closure.eventTypes],
+      handle: (tx, event) => closure.eventTypes.includes(event.eventType) ? closure.handle(tx, event) : legacy.handle(tx, event),
+    }) }],
   imports: [
     DatabaseModule,
     IdentityModule,

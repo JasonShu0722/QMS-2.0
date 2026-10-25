@@ -7,7 +7,7 @@ import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { WorkflowListPage } from './WorkflowListPage';
 import * as api from './workflow-api';
 
-vi.mock('./workflow-api', () => ({ getWorkflows: vi.fn(), getWorkflow: vi.fn(), createWorkflow: vi.fn(), initialGraph: vi.fn(), workflowPath: vi.fn() }));
+vi.mock('./workflow-api', async (importOriginal) => ({ ...await importOriginal<typeof import('./workflow-api')>(), getWorkflows: vi.fn(), getWorkflow: vi.fn(), createWorkflow: vi.fn(), initialGraph: vi.fn(), workflowPath: vi.fn(), getWorkflowClosureTemplates: vi.fn(), createWorkflowClosureTemplate: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear();
   vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
@@ -89,4 +89,22 @@ it('requires explicit discard before closing a filled new-workflow form', async 
   fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
   await waitFor(() => expect(screen.queryByLabelText('流程代码')).not.toBeInTheDocument());
   expect(api.createWorkflow).not.toHaveBeenCalled();
+});
+
+it('initializes a candidate as a draft and navigates only after clearing its unsaved guard', async () => {
+  vi.mocked(api.getWorkflows).mockResolvedValue({ items: [], total: 0 });
+  vi.mocked(api.getWorkflowClosureTemplates).mockResolvedValue({ items: [{ policy: 'INTERNAL', name: '内部关闭审核' }, { policy: 'SUPPLIER', name: '供应商关闭审核' }] });
+  vi.mocked(api.createWorkflowClosureTemplate).mockResolvedValue({ id: 'definition', version: { id: 'version', status: 'DRAFT' } } as api.WorkflowDefinition);
+  vi.mocked(api.workflowPath).mockReturnValue('/app/workflow-designer/definition/version');
+  renderGuardedList();
+  fireEvent.click(await screen.findByRole('button', { name: '初始化关闭审核模板' }));
+  fireEvent.change(await screen.findByLabelText('模板领域代码'), { target: { value: 'INTERNAL_QUALITY' } });
+  fireEvent.change(screen.getByLabelText('模板流程代码'), { target: { value: 'INTERNAL-CLOSE' } });
+  fireEvent.change(screen.getByLabelText('模板流程名称'), { target: { value: '内部关闭流程' } });
+  fireEvent.change(screen.getByLabelText('模板策略'), { target: { value: 'INTERNAL' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
+  expect(await screen.findByText('Workflow designer')).toBeVisible();
+  expect(api.createWorkflowClosureTemplate).toHaveBeenCalledTimes(1);
+  expect(api.createWorkflow).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

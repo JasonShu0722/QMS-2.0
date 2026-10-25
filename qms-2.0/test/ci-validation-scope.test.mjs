@@ -223,6 +223,8 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   assert.match(checks, /name: CI scope and result gate tests\r?\n\s+if: needs.scope.outputs.scope == 'documentation'\r?\n\s+run: node --test test\/ci-validation-scope.test.mjs/);
   const integration = jobBlock(foundation, 'integration');
   for (const retained of ['pnpm --recursive build', 'test:integration', 'test:worker-process:built', 'postgres:18', 'rustfs/rustfs:1.0.0', 'clamav/clamav@sha256:', 'prepare-ci-object-storage.mjs', 'SMTP_PORT=51026', 'docker compose -f deployment/docker-compose.foundation.yml config --quiet', 'Destroy ephemeral integration services']) assert.ok(integration.includes(retained), retained);
+  assert.match(integration, /for shard in 1 2 3 4/);
+  assert.match(integration, /test:integration --shard="\$shard\/4"/);
   assert.equal((integration.match(/pnpm --recursive build/g) ?? []).length, 1);
   assert.doesNotMatch(integration, /test:worker-process\s*$/m);
   const aggregate = jobBlock(foundation, 'foundation');
@@ -244,6 +246,17 @@ test('deploy workflow checks the source attempt before SSH and preserves reposit
   assert.match(deploy, /< qms-2.0\/deployment\/deploy.sh/);
   const runLines = deploy.split(/\r?\n/).filter((line) => line.trimStart().startsWith('run:'));
   assert.ok(runLines.every((line) => !line.includes('${{')), 'event values must reach Node through env, not shell interpolation');
+});
+
+test('serial integration shards cover every configured Jest file exactly once', () => {
+  const args = ['--experimental-vm-modules', 'node_modules/jest/bin/jest.js', '--runInBand', '--listTests', '--json',
+    '--testPathPatterns=integration-spec.ts', '--testPathIgnorePatterns=worker-process-schema.integration-spec.ts'];
+  const list = (extra = []) => JSON.parse(execFileSync(process.execPath, [...args, ...extra], { cwd: join(root, 'apps/api'), encoding: 'utf8' }));
+  const all = list();
+  assert.ok(all.length > 0);
+  const shards = [1, 2, 3, 4].flatMap((shard) => list([`--shard=${shard}/4`]));
+  assert.equal(new Set(shards).size, shards.length);
+  assert.deepEqual(shards.sort(), all.sort());
 });
 
 test('standalone Worker command still builds, while integration invokes only the built test', async () => {

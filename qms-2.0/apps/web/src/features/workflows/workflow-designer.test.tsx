@@ -1,4 +1,5 @@
 import { transferableAbortController } from 'node:util';
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -10,7 +11,7 @@ import { WorkflowProperties } from './WorkflowProperties';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 
-vi.mock('./workflow-api', () => ({ getWorkflowVersion: vi.fn(), getWorkflowOptions: vi.fn(), saveWorkflow: vi.fn(), publishWorkflow: vi.fn(), copyWorkflow: vi.fn(), validateWorkflow: vi.fn(), workflowPath: vi.fn() }));
+vi.mock('./workflow-api', async (importOriginal) => ({ ...await importOriginal<typeof import('./workflow-api')>(), getWorkflowVersion: vi.fn(), getWorkflowOptions: vi.fn(), saveWorkflow: vi.fn(), publishWorkflow: vi.fn(), copyWorkflow: vi.fn(), validateWorkflow: vi.fn(), workflowPath: vi.fn() }));
 vi.mock('./WorkflowCanvas', () => ({ WorkflowCanvas: () => <div>Canvas</div> }));
 
 const graph = { nodes: [
@@ -210,4 +211,110 @@ it('opens the copied draft after copying a published workflow finishes', async (
   expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied-version');
   expect(api.copyWorkflow).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+const closure = { schemaVersion: 1, policy: 'SUPPLIER', domainCode: 'SUPPLIER_QUALITY' } as const;
+function mountProperties(config: NonNullable<api.WorkflowNode['config']> = {}, readOnly = false, type: api.WorkflowNode['type'] = 'APPROVAL') {
+  const changed = vi.fn();
+  function Editor() {
+    const [value, setValue] = useState<api.WorkflowGraph>({ nodes: [{ id: 'review', type, name: '关闭审核', config }], transitions: [] });
+    return <WorkflowProperties graph={value} selected="review" readOnly={readOnly} options={{ roles: [{ code: 'QA', name: '质量' }], users: [{ id: 'person', name: '工程师' }], permissions: [] }} onChange={next => { changed(next); setValue(next); }} onSelect={vi.fn()} />;
+  }
+  render(<LanguageProvider><Editor /></LanguageProvider>);
+  return changed;
+}
+
+it('replaces static assignment and escalation with explicit controlled closure rules without inventing UUIDs', () => {
+  const changed = mountProperties({ assignment: { roleCode: 'QA', assigneeUserId: 'person' }, escalation: { roleCode: 'QA' }, slaMinutes: 60, editorPosition: { x: 10, y: 20 } });
+  fireEvent.click(screen.getByLabelText('受控关闭审核'));
+  expect(screen.getByText(/专业审核与管理审核/)).toBeVisible();
+  expect(screen.queryByLabelText('处理范围 角色')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('超时通知负责人 角色')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('关闭审核策略'), { target: { value: 'SUPPLIER' } });
+  fireEvent.change(screen.getByLabelText('关闭审核领域代码'), { target: { value: 'SUPPLIER_QUALITY' } });
+  expect(screen.getByLabelText('关闭审核领域代码')).toBeRequired();
+  const config = changed.mock.lastCall![0].nodes[0].config;
+  expect(config.closureReview).toEqual(closure);
+  expect(config.assignment).toBeUndefined();
+  expect(config.escalation).toBeUndefined();
+  expect(config.editorPosition).toEqual({ x: 10, y: 20 });
+  fireEvent.click(screen.getByLabelText('受控关闭审核'));
+  expect(screen.getByLabelText('处理范围 角色')).toHaveValue('');
+  expect(screen.getByLabelText('处理范围 处理人')).toHaveValue('');
+  expect(screen.getByText(/关闭后须手动配置普通处理范围/)).toBeVisible();
+});
+
+it.each(['ACTION', 'VERIFICATION', 'CC', 'CLOSE'] as const)('clears closure metadata when switching an approval to %s', type => {
+  const changed = mountProperties({ closureReview: closure });
+  fireEvent.change(screen.getByLabelText('节点类型'), { target: { value: type } });
+  expect(changed.mock.lastCall![0].nodes[0].config.closureReview).toBeUndefined();
+  expect(screen.queryByLabelText('受控关闭审核')).not.toBeInTheDocument();
+});
+
+it.each([{ isStart: true }, { isEnd: true }])('does not offer controlled closure on a boundary approval %j', config => {
+  mountProperties(config);
+  expect(screen.queryByLabelText('受控关闭审核')).not.toBeInTheDocument();
+});
+
+it('reads published closure rules without allowing edits or losing old static directory choices', () => {
+  const changed = mountProperties({ closureReview: closure }, true);
+  expect(screen.getByLabelText('关闭审核策略')).toHaveValue('SUPPLIER');
+  expect(screen.getByLabelText('关闭审核领域代码')).toBeDisabled();
+  expect(screen.getByLabelText('受控关闭审核')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('关闭审核领域代码'), { target: { value: 'BAD' } });
+  expect(changed).not.toHaveBeenCalled();
+});
+
+it('keeps ordinary role and user options available for legacy workflows', () => {
+  mountProperties({ assignment: { roleCode: 'QA', assigneeUserId: 'person' } });
+  expect(screen.getByLabelText('处理范围 角色')).toHaveValue('QA');
+  expect(screen.getByLabelText('处理范围 处理人')).toHaveValue('person');
+});
+
+it('preserves closure metadata through an unrelated edit and the real graph save boundary', async () => {
+  const snapshot = { nodes: [{ id: 'review', name: '关闭审核', type: 'APPROVAL', config: { closureReview: closure, editorPosition: { x: 10, y: 20 } } }], transitions: [] };
+  vi.mocked(api.getWorkflowVersion).mockResolvedValue(response({ ...definition, version: { ...definition.version, structureSnapshot: snapshot } }));
+  vi.mocked(api.saveWorkflow).mockResolvedValue(response({ ...definition, version: { ...definition.version, structureSnapshot: snapshot } }));
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: '编辑节点 关闭审核' }));
+  fireEvent.change(screen.getByLabelText('节点名称'), { target: { value: '保留受控规则' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ nodes: [expect.objectContaining({ name: '保留受控规则', config: { closureReview: closure, editorPosition: { x: 10, y: 20 } } })] })));
+});
+
+it('saves edited closure policy and domain code and reads them back through the designer reload', async () => {
+  let saved = response({ ...definition, version: { ...definition.version, structureSnapshot: {
+    nodes: [...graph.nodes, { id: 'review', name: '关闭审核', type: 'APPROVAL', config: {
+      closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'INTERNAL_QUALITY' }, editorPosition: { x: 10, y: 20 },
+    } }], transitions: graph.transitions,
+  } } });
+  vi.mocked(api.getWorkflowVersion).mockImplementation(async () => structuredClone(saved));
+  vi.mocked(api.saveWorkflow).mockImplementation(async (_id, body) => {
+    saved = response({ ...saved, revision: 4, version: { ...saved.version, structureSnapshot: {
+      nodes: structuredClone(body.nodes), transitions: structuredClone(body.transitions),
+    } } });
+    return structuredClone(saved);
+  });
+  mountGuarded();
+  fireEvent.click(await screen.findByRole('button', { name: '编辑节点 关闭审核' }));
+  expect(screen.getByLabelText('关闭审核策略')).toHaveValue('INTERNAL');
+  expect(screen.getByLabelText('关闭审核领域代码')).toHaveValue('INTERNAL_QUALITY');
+  fireEvent.change(screen.getByLabelText('关闭审核策略'), { target: { value: 'SUPPLIER' } });
+  fireEvent.change(screen.getByLabelText('关闭审核领域代码'), { target: { value: 'SUPPLIER_QUALITY' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存草稿' })).toBeEnabled());
+  expect(api.saveWorkflow).toHaveBeenCalledExactlyOnceWith('definition', expect.objectContaining({
+    draftVersionId: 'version', expectedRevision: 3,
+    nodes: expect.arrayContaining([expect.objectContaining({ id: 'review', config: {
+      closureReview: closure, editorPosition: { x: 10, y: 20 },
+    } })]),
+  }));
+  expect(screen.queryByText('未保存', { exact: true })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '重新加载流程' }));
+  await waitFor(() => expect(api.getWorkflowVersion).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存草稿' })).toBeEnabled());
+  expect(screen.getByLabelText('关闭审核策略')).toHaveValue('SUPPLIER');
+  expect(screen.getByLabelText('关闭审核领域代码')).toHaveValue('SUPPLIER_QUALITY');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.publishWorkflow).not.toHaveBeenCalled();
 });

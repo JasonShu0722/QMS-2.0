@@ -1,5 +1,36 @@
 # 底座与阶段二平台验收记录
 
+## N2-B 受控关闭审核基础（2026-10-25，本地未发布）
+
+Issue #66 / REQ-0026 / 候选V0.0.30，在生产70fdbab之上追加固定内容审批轮次、多职责待办 / 通知、只读配置预览、候选草稿及设计器发布守卫。生产适配器为空，未启用新8D或供应商门户业务，未授予生产权限。实际实施、红绿返修及独立规格 / 质量记录见[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+- 一次性PG / RustFS / 固定digest ClamAV / Mailpit仅本任务，分别回环55476 / 59076 / 59376 / 58176（邮件查看58076），不连接55440。原108迁移追加两份，从空库执行110迁移及seed成功；保留原始失败和分批清单，不写入秘密 / 原始日志到Git。
+- API最终冻结640份源 / 测试 / 迁移，前后SHA-256一致。真实Jest配置共182文件，与执行结果核对无重复无遗漏：integration **110 suites / 1441项**，标准非integration筛选 **71 suites / 802项**，独立compiled Worker **1 suite / 8项**，均无pending或skip。integration含实际PG / HTTP、存储扫描、邮件及Worker场景，不将全部用例都称为纯数据库测试。
+- 提交前暂存检查发现1份新fixture多余EOF空行，仅清理该空行，真实TypeScript编译输出逐字节相同；原640份受检指纹与提交候选指纹分别保留，其余639份未变，不把清理后字节冒称原始全量快照。
+- API build / lint、Swagger契约生成 / 同步、根工具72项、归档隔离和Compose foundation + production + scanning静态配置通过。Compose使用占位环境且没有启动生产服务，不表示生产健康。Worker新事件的compiled用例证明路由和真实解析失败，成功通知由Nest聚合处理器测试证明，不混为compiled新业务成功。
+- Web按互斥分组与受影响文件复验，实际配置134文件 / 1272项全部有完整通过结果，未删用例、无pending / skip；不是首次宽分组一次全绿。原5文件6项失败及隔离中的间歇失败保留，MFA10 / Targets4原样复验通过；Audit / PCN / Users只修3份测试的真实就绪 / 查询范围，不加timeout、不改供应商生产逻辑，主代理默认forks分别10及26项通过。Kuhn规格及Ohm独立质量未留确定P1/P2。
+- 原330份Web源快照只有上述3份获准fixture变化，生产源码不变；修正后重新冻结330文件，最终26项回归、lint / build前后hash一致。正式UI及仅内存样例完成独立双审；大chunk提示和真实浏览器 / 人工业务验收仍按N2计划接续，不把单元 / 构建替代可视化验收。
+
+全量API单进程曾触及默认4GB堆上限退出134，改为完整清单11文件的独立进程串行运行后完成，不删除或跳过失败用例。前次污染DB的supplier worker失败、两次为已确认P2主动中断Web、一次为UUID修正中断API均不计最终通过。PowerShell单值splat曾把unit筛选拆成字符，发现182文件含111 integration后中止，改为明确参数并重新跑71 unit文件；错误选择的部分结果不计入最终unit统计。
+
+完整`acceptance:phase-1/2`、真实浏览器矩阵、生产发布和人工业务验收未执行。额外全测试`tsconfig.spec.json`类型检查仍非零，未把所有诊断归为历史或宣称通过；标准API build / lint与Jest运行门禁分别列示。来源 / 人员变更的即时后台撤审未交付，N3需接入领域同事务变更钩子；SUPPLIER策略当前仅内部fixture，N5接实际供应商身份。最终O2、资源清理与提交状态由N2计划接续。
+
+## N2-B / B1 本地流程基础回归（2026-10-25，未发布）
+
+从生产main70fdbab接续Issue #66 / REQ-0026，V0.0.30预留。B1纯关闭职责策略67项及只读配置预览HTTP / PG24项已实现并通过规格 / 独立质量审查，尚非实际审批运行时。主代理最终冻结610份API源 / 测试 / 迁移，workflow全目录及组织职责 / 并发邻接 **12 suites / 312项**通过，API全部unit **67 suites / 744项**通过，API build / tsc与Web build / lint通过，contracts生成及同步、根工具71项、归档隔离通过。完整失败及返修见[N2计划9.4～9.5](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+旧升级附件回归曾因缺对象存储失败，后补本任务真实RustFS / 固定digest ClamAV及版本化桶复验，未Mock或Skip。MFA时间生效、真实候选行锁等待后撤会话、权限变更、大写UUID及配置vs执行边界已真实红绿；事务死锁 / 序列化失败409仅有映射未主动实测，未冒充证明。测试后已精确清理本任务55475 / 59075 / 59375的三个容器 / 匿名卷及Git外环境秘密，不触碰55440 / 生产。
+
+没有新增数据库迁移、没有改旧workflow assignment/schema/runtime解释。B2审批轮次、B3待办与B4设计器 / 模板发布绑定仍未实现；本地保存B1，不提交其为完整N2-B PR、不部署或配生产权限。生产仍以70fdbab为准，真实浏览器及完整phase-1/2未执行。
+
+## N2-A 生产发布核验（2026-10-25）
+
+V0.0.29 / [PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)已获本轮明确授权合并并部署至`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。PR Foundation40145157194和main Foundation40149137790各完整9项成功，main再次完成1251真实集成、8项独立Worker及完整API / Web门禁；deploy40150563126成功。已读取部署日志确认迁移前加密快照核验、四份新增迁移Applying及成功、同SHA API / Worker / Web镜像、服务健康、Worker启动与完整部署标记。
+
+公开login/OpenAPI均200，新组件映射 / 导入 / 批量及管理职责 / 分管 / 预览共15条路径出现；main JS从`index-XlfA8kUd.js`更新至`index-CIKtTNNC.js`，实际bundle可读且含新业务路径，匿名清单读取401。09:35 Asia/Taipei核对无活跃Actions，已提醒可闭源。完整链接、核验脚本参数首轮错误及复核、资源前后证据见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+这是机器发布核验，不代替真实账号 / 正式页面人工业务验收或完整phase-1/2脚本；生产新权限首次初始化 / 实际映射与分管配置未执行，N2-B及新8D未开通，Issue #66不关闭、不回填飞书。下方“未发布”保留为发布前本地历史，不覆盖本节。
+
 ## N2-A 本地配置回归（2026-10-25，未发布）
 
 Issue #66 / 候选 V0.0.29，基线 `c479b0e` 加本轮配置增量。主代理最终冻结686份API源码 / 测试 / 迁移，前后SHA-256一致：组织、配置及身份schema邻接21 suites / 335项通过（真实PG与DTO / 控制器unit混合，不全称PG用例）；API全部unit66 suites / 677项通过，API build/lint退出0。契约重新生成及同步、归档隔离、根工具71项、Compose foundation + production + scanning静态配置通过；Compose只使用临时占位配置且未启动服务，不表示运行健康。

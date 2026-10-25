@@ -9,6 +9,7 @@ import * as api from './workflow-api';
 import { WorkflowProperties } from './WorkflowProperties';
 import { editableWorkflowGraph } from './workflow-graph';
 import { workflowLabel } from './workflow-labels';
+import { WorkflowClosurePreview } from './WorkflowClosurePreview';
 import './workflows.css';
 
 const WorkflowCanvas = lazy(() => import('./WorkflowCanvas').then((module) => ({ default: module.WorkflowCanvas })));
@@ -116,6 +117,7 @@ function Designer({ definitionId, versionId }: Props) {
     document.getElementById(node ? 'workflow-properties' : `workflow-edge-${id}`)?.scrollIntoView?.({ block: 'nearest' });
   }
   const conflict = error instanceof ApiError && ['CONCURRENCY_CONFLICT', 'WORKFLOW_VERSION_IMMUTABLE', 'WORKFLOW_DRAFT_EXISTS'].includes(error.code);
+  const selectedClosure = graph.nodes.find(node => node.id === selected && node.type === 'APPROVAL' && node.config?.closureReview);
   return <section className="workflow-editor">
     {baseline && <nav aria-label={t('流程对象层级')}><Breadcrumb items={[
       { title: <Link to="/app/announcements">{t('系统服务')}</Link> },
@@ -147,6 +149,7 @@ function Designer({ definitionId, versionId }: Props) {
         <div id="workflow-properties"><label>{t('搜索处理人和角色')}<input aria-label={t('搜索处理人和角色')} value={directorySearch} onChange={(event) => setDirectorySearch(event.target.value)} /></label>
           {!!directoryError && <Alert type="error" title={t('处理范围选项加载失败')} />}
           <WorkflowProperties graph={graph} selected={selected} readOnly={readOnly} options={options} onChange={edit} onSelect={setSelected} />
+          {selectedClosure?.config?.closureReview && <WorkflowClosurePreview key={selectedClosure.id} policy={selectedClosure.config.closureReview.policy} disabled={busy || denied} />}
         </div></div>
     </>}
   </section>;

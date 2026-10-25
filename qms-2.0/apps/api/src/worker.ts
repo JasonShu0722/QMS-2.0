@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { OUTBOX_HANDLER, OutboxWorkerService, type OutboxHandler } from './modules/task-notification/outbox-worker.service.js';
+import { APPLICATION_OUTBOX_HANDLER, OutboxWorkerService, type OutboxHandler } from './modules/task-notification/outbox-worker.service.js';
 import { parseWorkerOptions, runWorkerLoop } from './worker-runner.js';
 import { AuditExportService } from './modules/audit-log/audit-export.service.js';
 import { RecoveryMailService } from './modules/identity/recovery-mail.service.js';
@@ -19,7 +19,7 @@ async function bootstrap(): Promise<void> {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   try {
-    const handler = app.get<OutboxHandler | null>(OUTBOX_HANDLER);
+    const handler = app.get<OutboxHandler | null>(APPLICATION_OUTBOX_HANDLER);
     if (!handler) throw new Error('WORKER_HANDLER_REQUIRED');
     const mailEnabled = process.env.QMS_RECOVERY_MAIL_ENABLED === 'true';
     if (process.env.QMS_RECOVERY_MAIL_ENABLED && !['true', 'false'].includes(process.env.QMS_RECOVERY_MAIL_ENABLED)) throw new Error('WORKER_CONFIGURATION_INVALID');

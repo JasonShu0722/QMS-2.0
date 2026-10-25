@@ -82,7 +82,8 @@ it.each([{ operation: 'create', status: 401 }, { operation: 'create', status: 40
     return json({ items: [{ id: 'u', organizationId: 's', username: 'alice', email: null, status: 'ACTIVE', securityVersion: 1 }], canCreate: true, canReset: true, canSetStatus: true });
   }));
   render(<SupplierUsersPanel profile={{ ...profile, supplierOrganizationId: 's' }} organizationId="owner" organizationPermissions={permissions} onBound={vi.fn()} onClose={vi.fn()} />);
-  fireEvent.click(await screen.findByRole('button', { name: '临时密码' }));
+  const accountRow = within((await screen.findByText('alice', { selector: 'td' })).closest('tr')!);
+  fireEvent.click(accountRow.getByRole('button', { name: '临时密码' }));
   const password = within(screen.getByLabelText('供应商临时密码'));
   fireEvent.click(password.getByRole('button', { name: '查询临时密码' }));
   await password.findByText('queried-password');
@@ -90,7 +91,16 @@ it.each([{ operation: 'create', status: 401 }, { operation: 'create', status: 40
   fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'retained-draft' } });
   if (operation === 'create') fireEvent.click(screen.getByRole('button', { name: '新增供应商账号' }));
   else if (operation === 'password') fireEvent.click(password.getByRole('button', { name: '查询临时密码' }));
-  else { fireEvent.click(screen.getByRole('button', { name: '停用账号' })); fireEvent.click(await screen.findByRole('button', { name: /^确\s*认$/ })); }
+  else {
+    const toggle = accountRow.getByRole('button', { name: '停用账号' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    const confirmation = within(await screen.findByRole('tooltip'));
+    fireEvent.click(confirmation.getByRole('button', { name: /^确\s*认$/ }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/supplier-quality/profiles/profile-a/accounts/u/status', expect.objectContaining({
+      method: 'PUT', body: JSON.stringify({ organizationId: 'owner', status: 'DISABLED', expectedSecurityVersion: 1 }),
+    })));
+  }
   await waitFor(() => expect(screen.queryByText('queried-password')).not.toBeInTheDocument());
   expect(screen.getByLabelText('用户名')).toHaveValue('retained-draft');
   expect(screen.queryByRole('button', { name: '临时密码' })).not.toBeInTheDocument();
@@ -129,10 +139,16 @@ it.each(['profile', 'organization'])('never shows a late temporary-password resp
   }));
   const props = { organizationId: 'owner', organizationPermissions: permissions, onBound: vi.fn(), onClose: vi.fn() };
   const view = render(<SupplierUsersPanel {...props} profile={profile} />);
-  await userEvent.click(await screen.findByRole('button', { name: '临时密码' }));
-  await userEvent.click(screen.getByRole('button', { name: '查询临时密码' }));
+  const accountRow = within((await screen.findByText('alice', { selector: 'td' })).closest('tr')!);
+  await userEvent.click(accountRow.getByRole('button', { name: '临时密码' }));
+  const password = within(screen.getByLabelText('供应商临时密码'));
+  const query = password.getByRole('button', { name: '查询临时密码' });
+  await waitFor(() => expect(query).toBeEnabled());
+  await userEvent.click(query);
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
   view.rerender(<SupplierUsersPanel {...props} organizationId={scope === 'organization' ? 'new-owner' : props.organizationId} profile={scope === 'profile' ? { ...profile, id: 'profile-b', displayName: '供应商乙' } : profile} />);
-  await screen.findByText(scope === 'profile' ? 'bob' : 'alice');
+  await screen.findByText(scope === 'profile' ? 'bob' : 'alice', { selector: 'td' });
+  if (scope === 'organization') expect(fetch).toHaveBeenCalledWith('/api/v1/supplier-quality/profiles/profile-a/accounts?organizationId=new-owner', expect.anything());
   await act(async () => { resolve(json({ userId: 'u-a', status: 'AVAILABLE', temporaryPassword: 'late-profile-a-password' })); });
   expect(screen.queryByText('late-profile-a-password')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '复制临时密码' })).not.toBeInTheDocument();

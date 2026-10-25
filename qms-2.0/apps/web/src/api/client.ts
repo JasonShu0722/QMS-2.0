@@ -82,16 +82,17 @@ export function getAdminUser(organizationId: string, userId: string): Promise<co
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
   components['schemas']['CreateAdminUserBatchDto'] | components['schemas']['ResetTemporaryPasswordDto'] |
   components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |
-  components['schemas']['UpdateAdminRoleDto'] | components['schemas']['CopyAdminRoleDto'] | components['schemas']['AssignAdminRolesDto'] | GovernanceBody;
+  components['schemas']['UpdateAdminRoleDto'] | components['schemas']['CopyAdminRoleDto'] | components['schemas']['AssignAdminRolesDto'] |
+  components['schemas']['DecideWorkflowClosureRoundDto'] | components['schemas']['CreateWorkflowClosureTemplateDto'] | GovernanceBody;
 
-export function createAdminMutation() {
+export function createAdminMutation(options: { replayAfterReauthentication?: boolean } = {}) {
   let pending: { signature: string; key: string } | undefined;
   return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody, signal?: AbortSignal): Promise<T> {
     const signature = JSON.stringify([path, method, body]);
     if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
     const attempt = pending;
     const token = await csrfToken(signal);
-    const result = await request<T>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const result = await request<T>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) }, options);
     if (pending === attempt) pending = undefined;
     return result;
   };

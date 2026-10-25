@@ -2,7 +2,23 @@
 
 统一依据：[QMS 2.0 前端统一设计规范 v1.3](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
 
-## N2-A 配置页面（2026-10-25，本地未发布）
+## N2-B 流程配置与关闭审核入口（2026-10-25，本地未发布）
+
+沿既有设计器 / 列表 / 我的待办，不另建工作台外壳。`WorkflowClosureTemplateDialog`只显式创建草稿；`WorkflowClosurePreview`只预览当前节点策略、科室与候选人员，不制造审批结果；`ClosureTaskInbox`只在“关闭审核”页签挂载，离开卸载并中止读取。待办来自真实轮次职责，不能泛用claim或跨科室转派，专业及同人双管理职责展示分开。
+
+复用生成契约、CSRF、共享忙时 / 未保存保护。未知写入结果冻结原body与幂等键，仅显式重试；409不覆盖草稿，403隔离写入，401先结束会话并释放busy再完成登录导航，避免父草稿保护挡住登录。变更科室 / 节点 / 会话会清理失效预览，迟到读取不得回填；人员下拉本身不发搜索请求，另用可见搜索框，避免搜索触发loading后禁用其自身。
+
+关闭审核显式关闭重新认证后的POST自动重放；认证完成仍保原body / key，须用户点击原请求重试，旧管理调用默认行为不改。未知 / 在途写期间发生终止403时先使scope失效再中止读取 / 写入，禁止迟到回执回填；解除本页忙态并允许按脏稿保护退出，同时提示先前结果仍需核对，失权不表示服务端请求撤销。
+
+独立[workflow-closure-preview.html](../apps/web/workflow-closure-preview.html)提供仅内存可点场景：内部 / 供应商策略、分级、同人跳过 / 双职责确认、整轮退回与重提。不连接API、不解析真实人员、不持久化业务记录，复用主题偏好；正式路由不导入样例。样例与正式入口并行补齐，未取得样例人工确认，不能补写为“先获认可再实现”。
+
+正式组件单元测试、入口挂载回归和样例均不等于真实浏览器视觉验收，鼠标 / 键盘 / 触屏 / 窄屏仍按[N2计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)的角色 / 页面 / 步骤清单验收；未接领域表单前不开放新8D。
+
+宽回归发现既有供应商测试的全页角色查询可在列表就绪前占用样式计算时间。Audit / PCN / Users仅调整3份测试：先等实际台账行，再在行 / Drawer / 真实确认浮层内查动作；保留全局秘密清理、证据保留及无额外写入断言，新增请求确已发出 / 组织与CAS断言。不改生产逻辑、mock分派、timeout或全局motion。默认forks整份复验及独立双审见N2计划9.10；PCN的fireEvent只证明组件事件链，不等于浏览器指针可点击性。
+
+弹层的dialog已进入DOM或输入enabled，不代表入场prepare阶段已视觉可见；权限及冲突提示测试等待原提示实际toBeVisible后再继续，保留禁用 / 无写入 / 保稿等断言，不以DOM存在替代可见，也不增加固定sleep或timeout。受控帧探针与CI原失败分别记录，不能把因果模拟称为原样复现；本轮两处同步修复见N2计划9.13。
+
+## N2-A 配置页面（2026-10-25，V0.0.29已部署）
 
 `ComponentProjectAdministration` 为正式单表入口，复用平台管理组织范围与生成契约；项目资料使用弹窗，不另设项目台账页签。`ComponentProjectImport` 复用既有 Excel 读取 / 导入批次；跨页多选、启用字段、共享项目影响预览与应用各有独立状态，409 清失效预览，未知结果只重试原请求。工程师未配置中性展示，失效保留原身份并以可聚焦小感叹号支持 hover / focus / click 说明，不自动转派。
 
@@ -18,7 +34,7 @@
 
 ## 1. 当前基线
 
-当前已上线基线为 V0.0.28（PR #65，b4e5115），N1 组织与岗位治理发布证据见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)；N2-A 仍是本地增量。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
+当前已上线基线为 V0.0.29（PR #67，70fdbab），N2-A配置页机器发布核验见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)，真实岗位首次配权 / 正式页面人工验收仍待执行；N1 组织与岗位治理发布历史见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
 
 2026-10-18 REQ-0017～0021 正在功能分支实施：共享密度、个人账号与改密弹窗、主数据弹窗/连续导入、审计可读性。密度由 `theme/theme.css`、`ThemeProvider` 的 Card/Table 配置和共享外壳维护，业务页去除重复外边距。账号/导入/审计沿各自既有授权、失败恢复和秘密清理机制；不因紧凑化删除必要提示或压缩点击目标。四项 Issue、文件边界、验证与部署状态以[实施计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)为准；规范数值不是浏览器实测通过证据。 本轮账号定位历史返修复用既有 React Router 的 data router 与原生 blocker，保留路由地址、认证及门户边界；共享未保存保护在导航前处理确认，避免事后覆盖历史。新增本地回归不替代登录后的业务浏览器验收。
 

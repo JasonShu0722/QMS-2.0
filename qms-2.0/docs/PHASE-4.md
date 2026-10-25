@@ -1,5 +1,9 @@
 # 阶段四业务域策划入口
 
+## 问题管理重建接续（2026-10-25）
+
+本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：N2-A配置已部署V0.0.29 / 70fdbab，[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)的职责私表越界fix1已修复并获新head云端无发现；Foundation40184202581另有Web4两文件三项可见性失败，fix2只修测试同步，仍须新head完整CI / 审查。负责人已批准通过后合并及随后自动发布核验，尚未部署。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
+
 ## 当前状态
 
 阶段三已在提交 `68b526c` 完成开发收尾并标记 PASS。阶段四代码已在提交 `a8216b5` 合并到 `main`，四个业务域的 API、Web 入口、迁移、定向数据库集成和构建门禁已完成。浏览器联合验收、附件扫描失败恢复和外部系统真实接入仍属于环境或后续阶段边界，不能以本地代码合并代替生产上线验收。

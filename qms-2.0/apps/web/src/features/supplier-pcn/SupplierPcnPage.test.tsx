@@ -21,20 +21,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 it('keeps the selected PCN evidence when closing the draft is declined', async () => {
-  const user = userEvent.setup();
   const file = { id: 'f1', originalName: '变更验证.pdf', status: 'AVAILABLE', scanStatus: 'CLEAN' } as Parameters<NonNullable<Parameters<typeof AttachmentPanel>[0]['onReady']>>[0];
   vi.mocked(AttachmentPanel).mockImplementation(({ onReady }) => <button onClick={() => onReady?.(file)}>选择已扫描 PCN 证据</button>);
   const row = { id: 'p1', title: '待提交变更', status: 'DRAFT', version: 1, events: [], workflow: null };
   vi.mocked(apiRequest).mockImplementation(async (path) => String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage portal /></UnsavedChangesProvider></MemoryRouter>);
-  await user.click(await screen.findByRole('button', { name: '待提交变更' }));
+  const ledger = within(screen.getByRole('region', { name: 'PCN 变更台账' }));
+  await ledger.findByText('待提交变更');
+  fireEvent.click(ledger.getByRole('button', { name: '待提交变更' }));
   const drawer = await screen.findByRole('dialog', { name: '待提交变更' });
   await waitFor(() => expect(drawer).toBeVisible());
-  await user.click(await within(drawer).findByRole('button', { name: '选择已扫描 PCN 证据' }));
-  await user.click(within(drawer).getByRole('button', { name: '关闭' }));
+  fireEvent.click(await within(drawer).findByRole('button', { name: '选择已扫描 PCN 证据' }));
+  fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }));
   const confirmation = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
   await waitFor(() => expect(confirmation).toBeVisible());
-  await user.click(within(confirmation).getByRole('button', { name: '继续编辑' }));
+  fireEvent.click(within(confirmation).getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(confirmation).not.toBeVisible());
   expect(drawer).toBeVisible();
   const evidence = within(drawer).getByRole('combobox', { name: '提交证据' });

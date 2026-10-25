@@ -41,7 +41,8 @@ it('keeps the audit drawer open while closure is pending', async () => {
   const pending = new Promise<never>((resolve) => { finish = () => resolve(record as never); });
   request.mockImplementation(async (path, init, ...rest) => path.endsWith('/close') ? pending : original(path, init, ...rest));
   render(<MemoryRouter><UnsavedChangesProvider><SupplierAuditPage /></UnsavedChangesProvider></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: '检查项与动作' }));
+  await screen.findByText(record.summary);
+  fireEvent.click(screen.getByRole('button', { name: '检查项与动作' }));
   fireEvent.change(await screen.findByLabelText('关闭说明'), { target: { value: '现场证据完整' } });
   fireEvent.click(screen.getByRole('button', { name: '关闭审核' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/records/record-1/close', expect.objectContaining({ method: 'PUT' })));

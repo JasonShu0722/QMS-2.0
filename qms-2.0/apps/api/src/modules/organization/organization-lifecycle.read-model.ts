@@ -16,12 +16,14 @@ const historyOnly = new Set([
   'supplier_asn_events', 'supplier_audit_record_events', 'supplier_barcode_rule_events', 'supplier_barcode_scans',
   'supplier_inspection_standard_events', 'supplier_meeting_events', 'supplier_ppap_events',
   'notifications', 'supplier_portal_notifications',
+  'workflow_closure_receipts', 'closure_notifications',
 ]);
 const inactiveStatuses = ['DISABLED', 'RETIRED', 'ARCHIVED', 'CLOSED', 'COMPLETED', 'CANCELLED', 'RESOLVED', 'REJECTED', 'DELETED'];
 const identifier = (value: string) => Prisma.raw(`"${value.replaceAll('"', '""')}"`);
 
 // Uses alias t so individual dependencies can be checked without other live references masking them.
 export function structureReferenceLiveCondition(tableName: string) {
+  if (historyOnly.has(tableName)) return Prisma.sql`false`;
   return tableName === 'workflow_versions'
     ? Prisma.sql`to_jsonb(t)->>'status' = 'PUBLISHED'`
     : tableName === 'audit_import_rows'
@@ -40,6 +42,11 @@ export function structureReferenceLiveCondition(tableName: string) {
     ? Prisma.sql`to_jsonb(t)->>'status' = 'OPEN'`
     : tableName === 'department_minister_scopes'
     ? Prisma.sql`t.status = 'ACTIVE' AND (t.valid_to IS NULL OR t.valid_to > CURRENT_TIMESTAMP)`
+    : tableName === 'workflow_closure_rounds'
+    ? Prisma.sql`t.status = 'PENDING'`
+    : tableName === 'workflow_closure_duties'
+    ? Prisma.sql`t.status IN ('PENDING', 'WAITING') AND EXISTS (
+        SELECT 1 FROM workflow_closure_rounds r WHERE r.organization_id = t.organization_id AND r.id = t.round_id AND r.status = 'PENDING')`
     : tableName === 'customer_quality_physical_dispositions' || tableName === 'customer_quality_physical_analyses'
     ? Prisma.sql`t.status NOT IN ('CLOSED', 'COMPLETED') AND NOT EXISTS (
         SELECT 1 FROM ${identifier(tableName)} newer
@@ -97,6 +104,18 @@ export async function structureBusinessReferences(transaction: AdminTransaction,
       return Prisma.sql`SELECT EXISTS (SELECT 1 FROM ${identifier(tableName)} WHERE ${scope}) AS referenced, ${live} AS live`;
     }), ' UNION ALL ')} ) dependencies`);
   const result = rows[0] ?? { referenced: false, live: false };
+  if (kind === 'department') {
+    // Closure snapshots retain department provenance in JSON, outside the UUID-column projection.
+    const [closure] = await transaction.$queryRaw<{ referenced: boolean; live: boolean }[]>`
+      SELECT EXISTS (SELECT 1 FROM workflow_closure_rounds WHERE lower(context->>'responsibleSectionDepartmentId') = lower(${targetId}))
+        OR EXISTS (SELECT 1 FROM workflow_closure_duties WHERE lower(participant->>'departmentId') = lower(${targetId})) AS referenced,
+      EXISTS (SELECT 1 FROM workflow_closure_rounds WHERE lower(context->>'responsibleSectionDepartmentId') = lower(${targetId}) AND status = 'PENDING')
+        OR EXISTS (SELECT 1 FROM workflow_closure_duties d JOIN workflow_closure_rounds r
+          ON r.organization_id = d.organization_id AND r.id = d.round_id
+          WHERE lower(d.participant->>'departmentId') = lower(${targetId}) AND d.status IN ('PENDING', 'WAITING') AND r.status = 'PENDING') AS live`;
+    result.referenced ||= closure?.referenced ?? false;
+    result.live ||= closure?.live ?? false;
+  }
   if (kind === 'organization') {
     const [notifications] = await transaction.$queryRaw<{ live: boolean }[]>`
       SELECT EXISTS (SELECT 1 FROM notifications n LEFT JOIN workflow_tasks t ON t.id = n.workflow_task_id
