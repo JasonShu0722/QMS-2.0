@@ -8,13 +8,13 @@
 | --- | --- |
 | 目标 | 接续既定 N2，复用 N1 真实组织岗位，交付组件项目映射、管理职责 / 分管及动态流程基础；不启用新问题业务 |
 | 批准来源 | 原讨论 / 路线已批准开发；N2-A的PR #67合并与生产核验已按当轮明确批准完成。负责人2026-10-25明确“已开源，继续”，O2实查满足；PR #68后又明确“继续合并”，接续本单元审查返修、新head CI、合并及随后自动发布核验，不含生产配权 / 业务数据维护 / 关闭回填 |
-| 基线 | N2-A已squash合并至main / 生产`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。当前codex/qms-n2-workflow-foundations从该基线建立，不重引旧实现；受检实现1b30e47及五份交付文档提交2b84ed2已推送，PR #68的base / head及94份文件与本地核对一致 |
+| 基线 | N2-A原生产基线70fdbab。N2-B的PR #68最终head421611c已squash合并main f78617d，整树与受检head一致；因main CI测试失败，从真正origin/main建立codex/qms-n2-postmerge-validation-fix3，保留四份本地文档归档，不重置或重引旧实现 |
 | 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29对应N2-A已部署[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，V0.0.30对应N2-B [PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)，Issue仍开放 |
 | 需求核对 | 启动时user身份revision298、has_more=false，分别开发中/P1及开发中/P2；提交前两实际record_id回读revision300、has_more=false，REQ-0025状态现为“上线验收完成”，REQ-0026仍“开发中”，原范围字段未变。此状态变动不代表尚未部署的N2-A已验收，也不反向改表；本轮组件新要求有直接会话授权。CLI旧版复用已验证token，不更新CLI或改表 |
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
-| 公开边界 | 负责人已临时公开，O2实查满足，main仍70fdbab；PR #68新head必须重新CI / 审查，通过后按本轮新授权合并并跟进自动部署，不自行更改可见性，全部发布核验完成前不提醒闭源 |
+| 公开边界 | 负责人已临时公开，O2实查满足；PR最新head完整CI及云端审查通过后已按本轮授权合并main f78617d，当前跟进主分支CI / 自动部署，不自行更改可见性，全部发布核验完成前不提醒闭源 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | N2-A生产保持70fdbab。PR #68的fix1已推dbbbf9b，云端同head复核无发现，API / 集成 / 三组Web成功，但Foundation40184202581的Web4两文件三项可见性断言失败，未合并。当前按fix2仅修两处测试同步、双审并重新完整CI，随后接续已批准合并及自动发布核验。生产adapter为空，不放行新8D或代配生产岗位 |
+| 当前进度 | PR #68最终fix2 / head421611c完整CI及云端审查通过，已合并main f78617d；main Foundation40188784499的Web2一项读取就绪断言失败，deploy40189920406已跳过，生产未更新。按V0.0.30-fix3独立修复PR接续，不重跑失败掩盖问题；生产70fdbab仍是最后已核验版本，adapter为空，不放行新8D或代配生产岗位 |
 
 ## 1. 范围与结构
 
@@ -394,3 +394,25 @@ fix1实际提交dbbbf9bf67d1ab0f8a6af94451e94bff1938fe08已推同PR，原comment
 fix2只把上述两处可见性断言包入默认waitFor，仍检查实际可见，保留权限禁用 / 无写入、409保稿 / 禁止重提 / 刷新二次确认全部断言；无生产源码、固定sleep、timeout、skip或mock修改。实现者Socrates整份两文件12项 / Web lint通过，探针已全部移除。Beauvoir独立规格、Carver独立质量通过；主代理维护的五份文档归档已确认不属于受审源码变化，Carver再次核对两份文件指纹不变。主代理冻结330份Web源码 / 测试后跑完整shard4；负责人中断等待后，实查原Vitest及新生成的子Worker仍在，恢复只接续该次运行，不重复启动，不用局部通过替代完整CI。
 
 该次完整shard4最终32文件 / 305项：304项通过，另有UserAdministration.positions的self=true任职保存用例约10.8秒失败，JSON只给Vitest超时包装器STACK_TRACE_ERROR栈，不把它归为环境或改timeout；原三项提示可见性已通过。主代理随后不改源码，使用默认及JSON双reporter整份复验两文件12项全部通过。逐文件 / 用例名称集合核对，无删除 / 重复计数，最新整文件结果覆盖32文件305项；不是一次完整shard命令全绿，原失败与复验分别保留在Git外n2b-fix2-*证据。新head仍必须独立通过云端全量CI，不能用本地组合证据替代。
+
+### 9.14 N2-B合并与自动发布接续
+
+fix2实际提交421611c7a60bacdcc302888b636d89915c9f24e7已推同PR，正式Web源码未变；Web lint / build、文档12项及治理通过，641份API与330份Web冻结hash再次一致。[最新PR Foundation40187215679](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40187215679) / attempt1完整9项全部success，没有重跑；云端摘要对应同head并明确无任何发现及无未解决项。原本地及旧CI失败仍保留，不改写为首次全绿。
+
+合并前再次核对public、PR open / ready / mergeable clean、head421611c与base / main70fdbab未变，读取精确run的9项结果、全部reviews、最新审查摘要和全部reviewThreads，无CHANGES_REQUESTED或未解决线程。使用带期望head SHA的squash合并，标题为V0.0.30 受控关闭审核基础与流程设计联动；实际[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)已merged，main / merge SHA均为f78617d686dd16228374cacc9717ab4ce146e3e4。只fetch origin/main，不切分支或重置，git diff确认与受检head整树完全一致。
+
+[main Foundation40188784499](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40188784499)为该merge SHA的push / attempt1，目前运行中；继续核验完整main CI及随后自动deploy，不复用PR绿色冒充main / 发布成功。此阶段及后续归档只保留本地，避免文字推送触发额外主分支验证 / 发布。生产配权、业务开通、人工验收、Issue关闭和飞书回填仍未执行，暂不能闭源。
+
+### 9.15 main门禁失败与独立fix3接续
+
+上述main run最终failure，只有Web2的OrganizationWorkspace.test.tsx:54失败：34文件中33文件通过，390项中389项通过；其余scope / checks / API unit / integration / Web1 / Web3 / Web4均success，汇总foundation据此失败。[deploy40189920406](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40189920406)实际skipped，job无执行步骤，未进入SSH / 迁移 / 发布；公开schema仍无closure增量。记录合并成功但发布未完成，不将相同源码的PR绿色替代main门禁。
+
+失败场景为离开管理职责页签中止读取并隔离迟到预览、再切回新挂载页面；按钮已存在但绑定 / 分管的异步读取尚未完成，测试立即断言enabled。fix3限该测试的读取就绪同步，不改业务、mock语义、timeout或skip，保留abort及迟到结果隔离断言。Wegener负责一个测试文件实现 / 因果验证，主代理继续维护文档；从origin/main f78617d创建独立修复分支，四份归档变化安全保留，未force / reset。已在同Issue #66预留V0.0.30-fix3并核对无同名提交 / 开放PR。
+
+返修属于本轮继续合并及随后自动发布核验的原目标，没有业务或权限扩展；经独立双审、整文件回归与治理后提独立修复PR，新head完整CI / 审查及合并后main / 部署分别核验。未重跑旧失败到绿，不直接push main，不重复合并已merged的PR #68。生产配置、人工验收、关闭和飞书写入边界不变。
+
+Wegener产出取同一previewButton并以默认waitFor等待enabled的最小两行补丁后，主代理收拢并接管最终验证，不采用未回传的探针 / 命令结论；测试最终只有该一行改两行，无探针残留。主代理核对组件确在Promise.all读取绑定 / 分管后finally解除loading，预览按钮据此disabled；真实main红灯及此源码因果链分别记录，不声称本地原样复现CI。Descartes独立规格与Dirac独立质量无确定P1/P2，原abort信号及迟到结果不得回填断言完整保留，原30000ms测试上限未改。
+
+主代理冻结330份Web源 / 测试，整份OrganizationWorkspace.test.tsx的30项通过，默认及JSON双reporter保存于Git外n2b-fix3-workspace.*，不是只跑失败case或增加重试次数。相对fix2快照只有该测试一份变化，其他329份Web及641份API均保持原源，DTO / 迁移 / 生产代码未改；本轮不重建已清理的一次性PG，旧API集成证据仅按同源复用，后续PR / main仍执行完整CI。修复与归档单次提交推送后创建独立fix3 PR，继续核验最新head而不是重复运行旧失败SHA。
+
+主代理Web lint / build及641 / 330冻结hash复核通过。治理先按实际复核同步前端指南所引用的测试来源hash，不改维护期限，最终37文档 / 346链接 / 20来源 / 127模块依赖通过。文档单测首轮11通过1失败，原因为Windows临时fixture的documentation-index.json读取返回EBUSY（并非预期extra.md断言），不改测试或生产代码，另建临时fixture整份复验12项通过；保留原报错，不虚构具体锁占用者或称首轮全绿。
