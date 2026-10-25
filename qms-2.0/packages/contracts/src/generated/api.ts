@@ -1895,6 +1895,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/closure-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowClosurePreviewController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-quality/profiles": {
         parameters: {
             query?: never;
@@ -7639,6 +7655,79 @@ export interface components {
             mappingSummary: components["schemas"]["WorkflowMappingOutcomeDto"][];
             /** Format: date-time */
             upgradedAt: string;
+        };
+        WorkflowClosurePreviewInputDto: {
+            /** @enum {string} */
+            policy: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /**
+             * Format: uuid
+             * @description Configuration test identity only, not the issuer of a running problem.
+             */
+            professionalUserId: string;
+            /**
+             * Format: uuid
+             * @description Required only for INTERNAL; supplier owner identity is not accepted.
+             */
+            ownerUserId?: string;
+        };
+        WorkflowClosureParticipantDto: {
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            /** Format: uuid */
+            assignmentId: string | null;
+            /** Format: uuid */
+            positionId: string | null;
+            /** Format: uuid */
+            departmentId: string | null;
+            /** Format: uuid */
+            bindingId: string | null;
+            /** Format: uuid */
+            scopeId: string | null;
+            bindingVersion: number | null;
+            scopeVersion: number | null;
+        };
+        WorkflowClosurePreviewDutyDto: {
+            /** @enum {string} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            status: "PENDING" | "WAITING" | "SKIPPED_SAME_PERSON";
+            participant: components["schemas"]["WorkflowClosureParticipantDto"] | null;
+        };
+        WorkflowClosureSamePersonGroupDto: {
+            /** Format: uuid */
+            userId: string;
+            duties: ("SECTION_MANAGER" | "MINISTER")[];
+        };
+        WorkflowClosurePreviewIssueDto: {
+            /** @enum {string} */
+            duty: "OWNER" | "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            code: "PARTICIPANT_NOT_ELIGIBLE" | "STRUCTURE_INACTIVE" | "BINDING_MISSING" | "BINDING_AMBIGUOUS" | "ASSIGNMENT_MISSING" | "ASSIGNMENT_AMBIGUOUS" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS";
+        };
+        WorkflowClosurePreviewDto: {
+            /**
+             * @description Always true: read-only configuration preview, never approval or execution authorization.
+             * @example true
+             */
+            readonly previewOnly: boolean;
+            configurationReady: boolean;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            sectionDepartmentId: string;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            executionMode: "PARALLEL" | "PROFESSIONAL_THEN_MANAGEMENT";
+            duties: components["schemas"]["WorkflowClosurePreviewDutyDto"][];
+            samePersonGroups: components["schemas"]["WorkflowClosureSamePersonGroupDto"][];
+            issues: components["schemas"]["WorkflowClosurePreviewIssueDto"][];
         };
         SupplierProfileDto: {
             id: string;
@@ -16315,6 +16404,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowUpgradeResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosurePreviewController_resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowClosurePreviewInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosurePreviewDto"];
                 };
             };
             default: {

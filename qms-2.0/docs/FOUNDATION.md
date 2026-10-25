@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## N2-B / B1 本地流程基础回归（2026-10-25，未发布）
+
+从生产main70fdbab接续Issue #66 / REQ-0026，V0.0.30预留。B1纯关闭职责策略67项及只读配置预览HTTP / PG24项已实现并通过规格 / 独立质量审查，尚非实际审批运行时。主代理最终冻结610份API源 / 测试 / 迁移，workflow全目录及组织职责 / 并发邻接 **12 suites / 312项**通过，API全部unit **67 suites / 744项**通过，API build / tsc与Web build / lint通过，contracts生成及同步、根工具71项、归档隔离通过。完整失败及返修见[N2计划9.4～9.5](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+旧升级附件回归曾因缺对象存储失败，后补本任务真实RustFS / 固定digest ClamAV及版本化桶复验，未Mock或Skip。MFA时间生效、真实候选行锁等待后撤会话、权限变更、大写UUID及配置vs执行边界已真实红绿；事务死锁 / 序列化失败409仅有映射未主动实测，未冒充证明。测试后已精确清理本任务55475 / 59075 / 59375的三个容器 / 匿名卷及Git外环境秘密，不触碰55440 / 生产。
+
+没有新增数据库迁移、没有改旧workflow assignment/schema/runtime解释。B2审批轮次、B3待办与B4设计器 / 模板发布绑定仍未实现；本地保存B1，不提交其为完整N2-B PR、不部署或配生产权限。生产仍以70fdbab为准，真实浏览器及完整phase-1/2未执行。
+
 ## N2-A 生产发布核验（2026-10-25）
 
 V0.0.29 / [PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)已获本轮明确授权合并并部署至`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。PR Foundation40145157194和main Foundation40149137790各完整9项成功，main再次完成1251真实集成、8项独立Worker及完整API / Web门禁；deploy40150563126成功。已读取部署日志确认迁移前加密快照核验、四份新增迁移Applying及成功、同SHA API / Worker / Web镜像、服务健康、Worker启动与完整部署标记。

@@ -14,7 +14,7 @@
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
 | 公开边界 | 负责人已公开且实时核对public，O2满足；合并 / 发布已获本轮后续明确授权并执行检查点。代理未改可见性，等待main完整检查及自动部署逐层核验后才提示可闭源 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | V0.0.29 / PR #67已部署至`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`；main Foundation40149137790九项成功、deploy40150563126成功，备份 / 四迁移 / 同SHA镜像 / 健康及公开HTTP / 契约 / 资源已核验。09:35 Asia/Taipei无活跃Actions并已提醒可闭源；未配生产新权限 / 人工验收 / 关闭回填。N2-B未实现，归档仅本地不触发二次发布 |
+| 当前进度 | N2-A生产保持70fdbab。负责人“继续开发”后N2-B/B1真实关闭职责解析、只读配置预览及纯策略已本地完成，独立规格 / 质量返修关闭；最终流程 / 组织邻接312项、API unit744及构建 / 契约 / 治理通过。分支codex/qms-n2-workflow-foundations、V0.0.30预留，同Issue #66；B2轮次 / B3待办 / B4设计器仍待实现，不发B1为完整N2-B PR，不放行新schema / 新8D |
 
 ## 1. 范围与结构
 
@@ -218,3 +218,62 @@ PR #67确认merged，main / merge commit均为`70fdbabb1a5394c2cbbd5896a4e3068f4
 经理 / 部长职责及映射内容由获准维护者配置；自动部署不填真实组织、分管、项目或业务资料。N2-B动态流程 / 并行轮次 / 模板绑定及新8D未因此启用。Issue #66仍有N2-B及联合验收，保持开放；未关闭REQ / 回填飞书 / 修改用户自行设置的状态。
 
 本轮发布状态沉淀于FOUNDATION / CAPABILITY-STATUS及相关交接，作为本地文档归档，不向main推送制造第二轮未经必要的部署；本地分支保留原实现及PR归档，后续N2-B必须从最新main接续，不能把squash前历史重复合入。
+
+## 9. N2-B 开发接续与小单元计划（2026-10-25）
+
+### 9.1 当前批准与基线
+
+负责人直接“继续开发”，接续已批准N2-B而非重新讨论业务；REQ-0026实际record_id只读回读revision300、has_more=false、仍开发中，全部字段与前次快照一致。Issue #66保持开放并复用，候选V0.0.30远端Issue / PR及本地提交核对无占用。仓库已恢复private；本轮先本地实现，下一推PR检查点先提醒负责人，不自行更改可见性，也不把N2-A发布授权扩用到N2-B。
+
+从最新origin/main70fdbab建立codex/qms-n2-workflow-foundations，原N2-A分支 / 实现提交及本地归档保留；仅cherry-pick5bfd7a7及6bfa72c的纯文档内容，未重复引入squash前实现。活动D盘checkout不另建C/E盘worktree，初始工作区干净，治理37文档 / 334链接 / 20来源 / 126模块依赖通过。当前Prisma单currentNode、任务(instance,entryVersion)唯一及旧SQL授权消费者必须逐项改造，不直接在assignment中加入会被旧代码忽略的键。
+
+### 9.2 实施选择与范围
+
+沿原批准的“领域拥有事实 / 设计器配策略 / 运行时统一强制”方案。相比直接给旧单节点塞并行标志，采用有限的审批职责 / 提交轮次模型；相比另建通用BPMN，不增加无需求的网关 / 任意脚本。按依赖串行：
+
+1. **B1 真实关闭职责解析与纯策略**：复用OrganizationResponsibilityService，内部低中风险专业+经理并行（负责人同经理仅管理侧留痕跳过），高重大专业+分管部长并行；供应商先SQE专业，再低中经理或高重大经理+部长。供应商双管理同人仍保留两份待确认职责，返回可一次确认的职责组，不跳过，不合并专业职责。无效 / 缺少 / 多人不兜底管理员。新增只读配置预览，使用真实岗位 / 任职；输入用于配置测试，不是运行中的发单 / 审批授权，后续实际入口从领域事实取owner / issuer，不能信客户端这些身份。
+2. **B2 固定版本提交轮次与审批记录**：追加受控表和约束，同版本内容锁定，职责逐项记录，通过条件为本轮全部有效职责；任一退回 / 审批人变更取消本轮，旧结果仅历史，重新提交两侧重新解析。真实并发 / 幂等 / 审计失败回滚先红再绿，不自动扩展闭后重开规则。
+3. **B3 待办 / 通知 / workspace**：同问题多职责待办但问题索引一行，读取 / claim / act / transfer / 提醒 / late worker均校验当前轮次及实时资格；修改旧唯一约束时保留旧实例兼容，禁止新结果落入旧消费者。
+4. **B4 设计器 / 候选模板 / 发布绑定**：新受控schema仅在B2/B3实际支持后允许保存 / 发布 / 启动；现有schema / 发布版本不改解释。模板仅草稿、无开发UUID、不自动绑定 / 开通新8D；预览配置 / 真实启动资格与最终发布分别验证，UI先样例再正式页面。
+
+本节是原批准方案的工程细化，不删减N2-B；B1完成不得宣称N2-B或新流程已可用。B1可独立本地验证，最终提交PR必须记录真实覆盖，按需要拆分技术交付仍挂Issue #66。
+
+### 9.3 B1 文件、接口与测试边界
+
+- 新增workflow-closure-policy.ts与对应unit：无数据库纯策略，输入policy / severity / professional / owner / 已解析经理部长身份；输出执行模式、职责列表、同人组。实现者独占该两文件；不编辑runtime/schema/旧assignment。
+- 主代理新增workflow-closure-preview.dto/controller/service.ts及真实PG / HTTP测试，模块注册 / 依赖索引 / generated契约 / 文档由主代理串行。`POST /api/v1/workflows/closure-preview`返回200，只读、workflow:manage、内部当前组织 / 会话，body禁止organizationId或额外字段。INTERNAL必须明确owner；SUPPLIER不收owner（避免以外部账号扩大查询）。专业人员仅作为配置测试身份，必须为本组织有效内部账号及有效任职，当前workflow:act资格不足返回明确缺项。原科室预览不得因只要求部长而缺经理阻塞高风险内部预览。
+- 响应明确`previewOnly: true`、`configurationReady`、scope / 时间 / duty sources / issues / executionMode / samePersonGroups；不返回approve capability、不生成问题 / 待办 / 审计通过、不写审批快照。B2实际消费同一纯策略，身份从受控服务取。
+- 先真实HTTP测试无会话 / 缺权限 / 外部身份 / 跨组织人 / 失效任职 / 多人 / 双部长分管 / 同人 / 中低与高重大四等级，校验无写入；再最小实现。职责resolver在用户 / 结构锁前调用，事务调用者协调actor锁并处理提交并发，不用有锁SQL拼第二组织树。
+- PostgreSQL仅新建本任务disposable loopback资源，不连接55440或生产；先108迁移基线，旧workflow核心unit / 真实schema邻接和治理基线通过后实施。新DTO运行contracts:generate/check，文档状态区分B1本地、N2-B整体和生产70fdbab。
+
+- [x] B1纯策略真实红绿、预览HTTP / PG红绿、独立规格再质量复核与主代理回归；仅该小单元本地完成，不代表N2-B整体或发布。
+- [ ] B2逐项固定受控schema / 表 / 服务接口与实际调用者后执行TDD，不混入领域8D表单。
+- [ ] B3与B4接续，最终完整门禁与O2提醒 / PR / 获准部署分别记录，不关闭Issue #66。
+
+### 9.4 B1实施、返修与证据归属
+
+纯策略由McClintock仅持workflow-closure-policy.ts及unit实现，63项先函数桩Not implemented全红后全绿；追加内部专业不同仍可owner-manager跳过、供应商低中owner-manager不跳过4用例，最终67项。Sagan先规格、Kepler后质量静态核对无P1/P2；输入身份有效性属于解析服务前提，纯输出透传参与人引用，不宣称其为深冻结历史快照。
+
+主代理持preview DTO / Controller / Service、AppModule实际注册邻接测试、模块依赖及契约。首个真实HTTP测试404红灯，最小实现后13项中的两个高风险fixture因部长未在责任科室任职而正确报owner缺项；补真实兼岗fixture，不放宽责任科室边界，13项通过。进一步增加真实组织 / 会话及并发边界。
+
+独立规格Popper发现末尾MFA政策遗漏：通过Guard后，未来有效任职要求MFA在请求期间生效，securityVersion无需变化，原服务200。真实PG / 实时时钟 / 原resolver接缝测试先1红1绿，复用现有无锁mfaPolicy并读取mfaVerifiedAt后两项绿；未接入actor FOR UPDATE，不改变resolver用户先于结构的锁序。真实候选用户FOR UPDATE与pg_blocking_pids确认等待后撤销会话得到401；原resolver返回后撤session / 权限分别401 / 403；不是仅测请求前Guard拒绝，也没有模拟替代实际职责解析。
+
+独立质量Pascal指出并修正两项P2：配置解析误给经理 / 部长附加workflow:act门槛（专业人员仍按原要求检查，管理配置有效不等于其可执行）；合法大写ownerUUID经数据库确认却原样比较导致同人漏跳过。经理 / 部长无act及大写owner三个真实HTTP先全红，分别以专业显式requireWorkflowAct、管理保有效身份来源及数据库规范ownerUserId修复。实际审批时每职责执行资格将在B2/B3重验，不能拿configurationReady授权。
+
+Swagger布尔enum[true]被当前Nest生成器标为number，新增OpenAPI test真实红灯；即便显式type:Boolean与enum并用仍失败，最终采用标准boolean类型、readOnly及example:true说明，runtime仍固定literal true。生成类型由contracts工具更新，不手改或输出错误numeric enum。最后补内部账号误置供应商组织的拒绝，真实200红灯后复用session查询的组织类型明确403，无额外行锁。
+
+扩大workflow邻接时首轮12 suites / 301项有1项因缺QMS_OBJECT_STORAGE_ENDPOINT失败，其余300项通过；未Mock / Skip或归因业务失败。随后为本任务建立真实RustFS与固定digest ClamAV、版本化隔离桶，复验含附件上传 / 真实扫描 / 固定版本保留的旧升级用例。仅PG108迁移，不新增B1数据库迁移，不连接生产或55440。第一次冻结扩大回归12 suites / 308项及API全部67 suites / 744项、API build / tsc通过，610源 / 测试 / 迁移hash一致；此后质量delta需最终第二次冻结重跑，不沿用旧PASS冒称最终。
+
+未实测主动制造死锁 / 序列化失败返回409；已有concurrency映射是防御代码，真实锁等待后401测试不能替代此项证据。B1无并行实际任务，不运行完整phase-1/2或声称B2 / 新schema / 新8D交付。下一动作仍按第9.2节B2→B3→B4，不因B1独立可测就自动提前发PR或部署。
+
+### 9.5 B1最终本地门禁及接续
+
+最终第二次冻结验证退出0：workflow全目录 + organization-responsibility及concurrency两文件 **12 suites / 312项**全部通过，包含B1纯策略67及preview真实HTTP / PG24项，保留旧版本 / 运行时 / 升级 / 固定附件证据兼容。API全部unit **67 suites / 744项**通过，API build及tsc通过；610份API源 / 测试 / 迁移前后SHA-256一致。API源码/测试外未新增迁移，也未修改既有108迁移。
+
+`contracts:generate/check`通过且预览标识schema为标准boolean/readOnly；Web无界面行为改动，build/lint通过，未把编译或旧样例当浏览器验证。根工具71项、归档隔离、治理37文档 / 337链接 / 20来源 / 127模块依赖通过；文档追加链接后最终再复跑治理，不通过改维护日期免检，3项仍开放。实际源码冻结及前后证据位于Git外`n2-evidence/n2b-b1-final2-before.json`，原始失败输出不改写。
+
+Sagan / Popper规格、Kepler / Pascal独立质量分别完成，MFA、配置vs执行权限、UUID规范身份及Swagger返修均已复核，无未关闭确定P1/P2。纯策略的补4矩阵也已在主代理最终67项重跑，worker早期63项不重复累计。B1并未承诺可执行审批；管理侧未获workflow:act不会抹掉有效配置来源，实际操作仍须B2/B3实时校验。
+
+本任务仅使用qms-n2b-20261025-postgres:55475、rustfs:59075、clamav:59375，均有codex.task=qms-n2-workflow及disposable标签。验证结束后精确核对名称 / 标签 / loopback端口 / mounts，删除仅这三个容器及匿名卷；ClamAV只读绑定配置文件保留未删，Git外n2b-environment.json按解析绝对路径删除，任务标签资源已空；没有prune / 55440 / 生产操作。下一单元需新建独立资源，不复用过期秘密文件或依赖本次fixture数据。
+
+本地提交仅保存B1可验证成果，未推送 / 建PR / 触发CI / 部署 / 修改生产权限或飞书状态。候选V0.0.30继续由同N2-B范围使用，B2开工保持本分支并先补实际轮次 / 身份事实接口及受影响调用者，不重做B1或直接向旧单节点塞并行字段。最终B2～B4闭合后再做整体门禁与O2提醒，不以本地小单元完成提前关闭Issue #66。

@@ -2,6 +2,10 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
+## N2-B / B1 本地契约（2026-10-25，未发布）
+
+新增`POST /api/v1/workflows/closure-preview`，返回200，只读配置预览；需CSRF、有效内部当前组织会话及`workflow:manage`，不接受body组织范围或未知字段。输入 / 响应DTO与类型均由Swagger生成，预览人员和缺项语义见[流程设计器](WORKFLOW-DESIGNER.md)。`previewOnly=true`、`configurationReady`不提供执行 / 审批资格，不创建实例 / 轮次 / 待办，也不启用新schema。生产70fdbab不含本路径；B1本地结果不可说成N2-B整体或新8D上线。
+
 ## N2-A 契约增量（2026-10-25，V0.0.29已部署）
 
 以下为 Issue #66 / V0.0.29 的契约，已在PR #67部署70fdbab后从公开OpenAPI核对出现；不表示已配置生产权限或完成人工业务验收。实际组织路径参数名为`{organizationId}`，下表`:orgId`仅作可读缩写，生成契约保持源码准确名称。实现及验证见 [N2 计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。

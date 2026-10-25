@@ -10,11 +10,14 @@ import { TaskNotificationModule } from '../task-notification/task-notification.m
 import { WorkflowUpgradeController } from './workflow-upgrade.controller.js';
 import { WorkflowUpgradeService } from './workflow-upgrade.service.js';
 import { WORKFLOW_UPGRADE_ADAPTERS, WorkflowUpgradeRegistry } from './workflow-upgrade.registry.js';
+import { OrganizationModule } from '../organization/organization.module.js';
+import { WorkflowClosurePreviewController } from './workflow-closure-preview.controller.js';
+import { WorkflowClosurePreviewService } from './workflow-closure-preview.service.js';
 
 @Module({
-  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule],
-  controllers: [WorkflowController, WorkflowUpgradeController],
-  providers: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry,
+  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule],
+  controllers: [WorkflowController, WorkflowUpgradeController, WorkflowClosurePreviewController],
+  providers: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosurePreviewService,
     { provide: WORKFLOW_UPGRADE_ADAPTERS, useValue: [] }],
   exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry],
 })
