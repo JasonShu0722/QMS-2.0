@@ -51,7 +51,8 @@ it('aborts management reads on leaving the tab and rejects a late preview', asyn
   };
   await act(async () => finishPreview(json(late)));
   fireEvent.click(screen.getByRole('tab', { name: '管理职责' }));
-  expect(await screen.findByRole('button', { name: '职责预览' })).toBeEnabled();
+  const previewButton = await screen.findByRole('button', { name: '职责预览' });
+  await waitFor(() => expect(previewButton).toBeEnabled());
   expect(screen.queryByText('科室经理：存在多个有效任职候选')).not.toBeInTheDocument();
 }, 30000);
 function stub() {
