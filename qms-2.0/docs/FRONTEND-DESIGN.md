@@ -2,7 +2,7 @@
 
 统一依据：[QMS 2.0 前端统一设计规范 v1.3](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
 
-## N2-B 流程配置与关闭审核入口（2026-10-25，本地未发布）
+## N2-B 流程配置与关闭审核入口（2026-10-25，V0.0.30含fix3已部署）
 
 沿既有设计器 / 列表 / 我的待办，不另建工作台外壳。`WorkflowClosureTemplateDialog`只显式创建草稿；`WorkflowClosurePreview`只预览当前节点策略、科室与候选人员，不制造审批结果；`ClosureTaskInbox`只在“关闭审核”页签挂载，离开卸载并中止读取。待办来自真实轮次职责，不能泛用claim或跨科室转派，专业及同人双管理职责展示分开。
 

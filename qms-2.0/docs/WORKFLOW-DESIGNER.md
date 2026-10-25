@@ -1,8 +1,8 @@
 # 流程设计器
 
-## N2-B 关闭审核基础（2026-10-25，本地未发布）
+## N2-B 关闭审核基础（2026-10-25，V0.0.30含fix3已部署）
 
-本节接续下方B1历史，实际证据见[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。新轮次、职责待办、通知、草稿模板及正式设计器入口已实现，生产仍为V0.0.29 / 70fdbab；本地门禁结果不代表上线或业务验收。
+本节接续下方B1历史，实际证据见[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。新轮次、职责待办、通知、草稿模板及正式设计器入口已部署a32615c，完整CI与实际发布核验通过；正式页面人工验收及领域业务开通仍独立，不能据本节把完整8D当作已可用。
 
 - 新受控节点仅为非起终点的APPROVAL，配置`closureReview={schemaVersion:1,policy:'INTERNAL'|'SUPPLIER',domainCode}`。发布校验要求唯一无条件APPROVE到CLOSE、RETURN到上游ACTION，不允许其他出口或从起点绕过全部审核节点直接关闭。受控节点不混用静态assignment或escalation。
 - 列表可显式初始化内部 / 供应商候选草稿，幂等且不覆盖已有定义；模板不含开发用户或岗位UUID，不自动发布、绑定或开通业务。节点属性可以选择受控策略 / 领域，并通过真实科室与人员只读预览配置。候选从有界`closure-options`读取，不依赖用户管理权限或暴露邮箱。
@@ -12,9 +12,9 @@
 
 人员 / 内容变更后，读路径立即过滤失效职责；实际取消旧轮并恢复编辑发生在写路径的实时复验，或后续领域变更钩子的同事务取消。N2-B没有交付后台即时扫描撤审，不能据此声称修改任职后已自动通知所有业务责任人重新提交。
 
-## N2-B / B1 关闭职责配置预览（2026-10-25，本地开发）
+## N2-B / B1 关闭职责配置预览（2026-10-25，B1本地历史）
 
-按[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)接续。`POST /api/v1/workflows/closure-preview`为当前内部组织、有效会话及`workflow:manage`可访问的只读配置测试，不是问题发单、审批或流程发布接口；不写实例 / 轮次 / 待办，不发通知。生产70fdbab不包含本增量，正式设计器页面也尚未接入。
+以下为B1当时记录，不替代本页顶部N2-B当前发布状态。按[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)接续，`POST /api/v1/workflows/closure-preview`为内部当前组织、有效会话及`workflow:manage`可访问的只读配置测试，不是问题发单、审批或流程发布接口；不写实例 / 轮次 / 待办，不发通知。当时生产70fdbab不包含本增量，正式设计器页面也尚未接入。
 
 输入明确内部 / 供应商策略、风险、责任科室、专业人员；内部另需责任科室有效负责人，供应商不接受外部负责人身份。专业人员仅为配置测试输入，须本组织有效内部账号 / 任职且具`workflow:act`。将来实际提交必须从领域事实取发单人 / 负责人，不复用客户端试填身份作授权。
 

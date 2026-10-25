@@ -2,9 +2,9 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## N2-B 本地契约（2026-10-25，未发布）
+## N2-B 契约（2026-10-25，V0.0.30含fix3已部署）
 
-在下方B1预览之外新增以下受控接口；生产70fdbab尚不含这些增量。DTO均由Swagger生成，不允许Web自建请求 / 响应模型。
+以下受控接口及下方B1预览已随生产a32615c部署，真实公开schema已核验8条closure相关路径；匿名受限读取401，不代表真实用户业务验收或新8D已启用。DTO均由Swagger生成，不允许Web自建请求 / 响应模型。下方B1的本地结果为当时历史，不作为当前发布状态。
 
 | 方法与路径 | 权限及语义 |
 | --- | --- |

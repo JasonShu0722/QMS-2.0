@@ -1,6 +1,14 @@
 # 底座与阶段二平台验收记录
 
-## N2-B 受控关闭审核基础（2026-10-25，本地未发布）
+## N2-B 生产发布核验（2026-10-25，V0.0.30含fix3）
+
+PR #68及独立fix3 PR #69已合并，最终main / 生产a32615ce245ae2242e8b1607aa6c564c244e0de7。最终PR Foundation40192084766与main Foundation40193745676各9项success，deploy40194990586 / attempt1成功；原main失败及skipped部署不改写。实际日志确认API单测804项、集成1441项、独立Worker8项、Web134文件1272项全部通过。
+
+部署源run / attempt / SHA严格一致，迁移前同SHA加密快照验证先于两份实际Applying迁移，随后全部迁移成功（108→110）。API / Worker / Web同SHA镜像、启动健康及Worker就绪、Deployment successful标记完整；独立外网/login及openapi均200，8条closure新契约真实出现，四类匿名读取401，主JS已变为index-CX439dnC.js且含新模板 / 待办入口。详见[N2计划9.17](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+13:01 UTC回读无运行 / 排队Actions，已告知本轮可以闭源，代理未改可见性。本节为机器发布核验，不代替真实浏览器、正式页面人工业务验收、完整phase-1/2或生产首次配权；生产适配器为空，未放行新8D。下方本地记录按各自原始阶段保留，额外全测试类型检查未通过等限制不被云端绿色抹去；Issue #66不关闭、不回填飞书。发布后文字归档只在本地，不触发新发布。
+
+## N2-B 受控关闭审核基础（2026-10-25，本地验证历史）
 
 Issue #66 / REQ-0026 / 候选V0.0.30，在生产70fdbab之上追加固定内容审批轮次、多职责待办 / 通知、只读配置预览、候选草稿及设计器发布守卫。生产适配器为空，未启用新8D或供应商门户业务，未授予生产权限。实际实施、红绿返修及独立规格 / 质量记录见[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
 

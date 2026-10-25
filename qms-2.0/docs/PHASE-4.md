@@ -2,7 +2,7 @@
 
 ## 问题管理重建接续（2026-10-25）
 
-本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：N2-A最后已核验生产70fdbab；[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)最新head完整CI / 审查通过后已合并main f78617d，但main Foundation40188784499有组织页测试一项失败，deploy40189920406跳过，未发布新版本；V0.0.30-fix3独立修复PR接续。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
+本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：PR #68及独立fix3 [PR #69](https://github.com/JasonShu0722/QMS-2.0/pull/69)已合并并部署a32615c，最终PR / main完整9项、deploy40194990586及备份 / 迁移 / 镜像健康 / 公共新契约与资源已核验。原main失败及skipped部署保留，不改写成首次全绿。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付，生产配权及人工验收独立。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
 
 ## 当前状态
 
