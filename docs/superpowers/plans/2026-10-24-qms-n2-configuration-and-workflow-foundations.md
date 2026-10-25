@@ -7,14 +7,14 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 目标 | 接续既定 N2，复用 N1 真实组织岗位，交付组件项目映射、管理职责 / 分管及动态流程基础；不启用新问题业务 |
-| 批准来源 | 原讨论 / 路线已批准开发；N2-A的PR #67合并与生产核验已按当轮明确批准完成。N2-B本地完成后停O2；负责人2026-10-25明确“已开源，继续”，实查public，接续推送 / PR / CI；不扩为N2-B合并 / 发布、生产配权 / 业务数据维护 / 关闭回填 |
-| 基线 | N2-A已squash合并至main / 生产`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。当前codex/qms-n2-workflow-foundations从该基线建立，仅携带N2-A纯文档归档7fb6979 / a523118及B1本地af038d9，不重引旧实现；N2-B未推送 |
-| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29对应N2-A已部署[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，V0.0.30由同Issue预留给N2-B，尚无该单元PR |
+| 批准来源 | 原讨论 / 路线已批准开发；N2-A的PR #67合并与生产核验已按当轮明确批准完成。负责人2026-10-25明确“已开源，继续”，O2实查满足；PR #68后又明确“继续合并”，接续本单元审查返修、新head CI、合并及随后自动发布核验，不含生产配权 / 业务数据维护 / 关闭回填 |
+| 基线 | N2-A已squash合并至main / 生产`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。当前codex/qms-n2-workflow-foundations从该基线建立，不重引旧实现；受检实现1b30e47及五份交付文档提交2b84ed2已推送，PR #68的base / head及94份文件与本地核对一致 |
+| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29对应N2-A已部署[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，V0.0.30对应N2-B [PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)，Issue仍开放 |
 | 需求核对 | 启动时user身份revision298、has_more=false，分别开发中/P1及开发中/P2；提交前两实际record_id回读revision300、has_more=false，REQ-0025状态现为“上线验收完成”，REQ-0026仍“开发中”，原范围字段未变。此状态变动不代表尚未部署的N2-A已验收，也不反向改表；本轮组件新要求有直接会话授权。CLI旧版复用已验证token，不更新CLI或改表 |
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
-| 公开边界 | 负责人已临时公开，O2实查满足，main仍70fdbab，受检代码提交1b30e47未变；仅补本次交付记录后单次推分支 / 建PR，不自行更改可见性或复用N2-A合并 / 发布授权 |
+| 公开边界 | 负责人已临时公开，O2实查满足，main仍70fdbab；PR #68新head必须重新CI / 审查，通过后按本轮新授权合并并跟进自动部署，不自行更改可见性，全部发布核验完成前不提醒闭源 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | N2-A生产保持70fdbab。N2-B/B1～B4受检代码提交1b30e47，本地双审及分层门禁见9.10；O2已满足，进入PR / CI交付，外部链接及最新状态在同Issue #66接续。生产adapter为空，不放行新8D或代配生产岗位 |
+| 当前进度 | N2-A生产保持70fdbab。PR #68 / head2b84ed2的Foundation40179811037全部9项成功；负责人已批准继续合并及随后自动发布核验，但合并前实查云端审查仍有组织私表跨模块读取意见，确认成立，先按V0.0.30-fix1修复并重验 / 重审 / 新head CI，不在意见未关闭时合并。生产adapter为空，不放行新8D或代配生产岗位 |
 
 ## 1. 范围与结构
 
@@ -368,3 +368,19 @@ O2停止点：V0.0.30仍为同Issue #66 / REQ-0026 / N2-B，提交前已只读�
 负责人明确“已开源，继续”。只读核验仓库public、main仍`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`、本地受检提交`1b30e4709492fba2e396d1b1c947d248be2045b3`及干净工作区，无同分支已有PR。首次PowerShell将REST空数组包装成一项，逐项无number后已正确规范化为0，未因此创建重复PR。
 
 本次只补开源 / 授权 / 交付检查点文档，保存为独立本地文档提交后与已受检代码单次推送，避免为每条中间记录反复触发完整CI。复核640份API候选及330份Web指纹不变，复用同源既有真实回归，不重建已清理资源；文档 / 索引治理另实跑。PR应完整声明原失败、分组 / 复验、浏览器及额外类型检查边界，关联Issue #66而不自动关闭。创建后回读精确base / head并附到当前聊天；CI只跟进该head，不自动重跑或合并 / 部署。当前交付链接及后续运行结果在Issue #66记录，不用本节待执行步骤冒充外部成功。
+
+实际已推送`2b84ed2c79bfd4024349aa261439cce00568246f`并创建[PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)，标题V0.0.30 受控关闭审核基础与流程设计联动；base为main / `70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。PR已附到当前聊天，远端94份变更路径与本地逐项一致。Issue #66已[更新并回读](https://github.com/JasonShu0722/QMS-2.0/issues/66#issuecomment-6395851953)，没有关闭指令或飞书写入。
+
+[PR Foundation40179811037](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40179811037)仅跟踪该head / attempt1，最终**9/9 jobs全部success**，没有重跑。实际日志为API unit71 suites / 802项；真实集成四片串行28/28/27/27 suites，对应483/199/397/362共1441项，独立compiled Worker8项；Web四片34/34/34/32文件，对应286/390/291/305共1272项，覆盖134文件。本次云端完成没有再次OOM，不能据此覆盖本地原失败或额外全测试类型检查 / 浏览器 / 完整阶段验收的限制。
+
+最终回读PR open / 未合并 / mergeable clean、main仍70fdbab，下一动作是取得本单元合并 / 发布授权后再核验main Foundation与实际部署；Issue #66保持开放，生产配权 / 业务开通 / 飞书回填仍未执行。本段及顶部状态是PR创建后的本地归档，暂不为进度文字重新推送触发全量CI；已提交PR里的受检源码不变，暂不能提醒闭源。原始CI摘要及六份单测 / 集成日志保留在Git外n2-evidence，PR正文与Issue同步真实结果。
+
+### 9.12 合并前云端审查返修（2026-10-25）
+
+负责人对明确的合并 / 随后自动生产部署检查点回复“继续合并”。本轮重新核对public、PR / main / 精确head全部9项成功后，实际读取reviews、inline comments及审查摘要，发现comment4370304227仍未关闭：WorkflowClosureRoundService.plan直接读取organization拥有的department_management_bindings / department_minister_scopes，违反API跨模块规则。意见成立，优先级标签不替代源码判断；CI绿色及mergeable clean也不代表审查意见清零。因此尚未执行合并，不复用上轮最终答复的CI结论绕过该意见。
+
+修复限原V0.0.30范围，采用fix1：将锁等待后的实时职责来源复核移回OrganizationResponsibilityService公开接口，保留原事务、锁顺序、只复核已锁身份、任职 / 唯一经理 / binding及scope版本状态 / 分管 / 有效期守卫，不增加业务规则或DTO。Darwin实现写集为组织服务、workflow调用及定向测试；主代理准备新标签qms-n2b-fix1、回环55477隔离PG并串行迁移 / seed。原5份本地归档保留，Git操作及索引由主代理串行。返修后须独立规格 / 质量复核、真实PG相关完整文件回归、API build / lint / 契约与治理，再推fix1并复核新head CI及云端审查，之后接续已批准合并 / 发布。没有生产配置、需求关闭或飞书写入授权。
+
+Darwin已最小实现公开revalidateLockedManagementResponsibilities并移除workflow私表读取，新边界测试先2项红、后2项绿；没有新DTO或迁移。Gauss独立规格及Einstein独立质量均无确定P1/P2，三份受审源码前后指纹一致；其静态意见不冒充主代理真实回归。主代理冻结641份API源 / 测试 / 迁移后，亲跑API build / 标准lint、完整unit72 suites / 804项，以及14份相关完整集成文件220项，分5/5/4文件串行批次102/48/70项，无pending / skip，覆盖真实锁等待到期、未来第二任职、HTTP权限、待办投影与compiled closure Worker。110迁移从新空库应用并seed成功，验证未连接55440。
+
+契约重新导出检查一致，归档隔离通过；根工具先按package明确11文件选择通过66项，再按根目录完整集合12文件核对72项全部通过，不把两次结果重复累计。Web、DTO、迁移及生产行为规则未改，原Web机器证据不声称本轮重跑，云端PR仍执行全量门禁。冻结API641份hash复核不变；本任务PG完整ID / 标签 / 回环55477 / mounts / stopped状态核对后仅移除该容器及匿名卷，并删除唯一验证过的Git外环境JSON，无prune或生产操作。接下来单次提交推送fix1，回复原审查并请求新head复核；没有提前合并。

@@ -252,28 +252,7 @@ export class WorkflowClosureRoundService {
     const management = await this.responsibilities.resolveManagementResponsibilities(tx, c.organizationId, c.responsibleSectionDepartmentId);
     // Resolver time precedes lock waits. Revalidate only its locked identities, never resolve new users after structure locks.
     const now = new Date();
-    const validSources = new Set<string>();
-    for (const source of management.responsibilities) {
-      const assignment = await tx.userPosition.findFirst({ where: { id: source.assignmentId, organizationId: c.organizationId,
-        userId: source.userId, positionId: source.positionId, ...effectivePositionAssignmentWhere(now),
-        user: { organizationId: c.organizationId, status: 'ACTIVE', accountType: 'INTERNAL' },
-        position: { organizationId: c.organizationId, departmentId: source.departmentId, status: 'ACTIVE', department: { status: 'ACTIVE' } } }, select: { id: true } });
-      if (!assignment) continue;
-      if (source.responsibility === 'SECTION_MANAGER' && await tx.userPosition.count({ where: {
-        organizationId: c.organizationId, positionId: source.positionId, ...effectivePositionAssignmentWhere(now),
-        user: { organizationId: c.organizationId, status: 'ACTIVE', accountType: 'INTERNAL' },
-      } }) !== 1) continue;
-      const [binding] = await tx.$queryRaw<{ id: string }[]>`SELECT b.id FROM department_management_bindings b
-        WHERE b.id = ${source.bindingId}::uuid AND b.organization_id = ${c.organizationId}::uuid AND b.status = 'ACTIVE'
-          AND b.version = ${source.bindingVersion} AND b.position_id = ${source.positionId}::uuid
-          AND b.department_id = ${source.departmentId}::uuid AND b.responsibility = ${source.responsibility}
-          AND (${source.scopeId}::uuid IS NULL OR EXISTS (SELECT 1 FROM department_minister_scopes s
-            WHERE s.id = ${source.scopeId}::uuid AND s.organization_id = b.organization_id AND s.status = 'ACTIVE'
-              AND s.version = ${source.scopeVersion} AND s.department_id = b.department_id
-              AND s.section_department_id = ${c.responsibleSectionDepartmentId}::uuid AND s.minister_assignment_id = ${source.assignmentId}::uuid
-              AND s.valid_from <= ${now} AND (s.valid_to IS NULL OR s.valid_to > ${now})))`;
-      if (binding) validSources.add(source.bindingId);
-    }
+    const validSources = await this.responsibilities.revalidateLockedManagementResponsibilities(tx, management, now);
     const professionalActive = await tx.user.findFirst({ where: { id: c.professionalUserId, organizationId: c.organizationId, status: 'ACTIVE', accountType: 'INTERNAL',
       positions: { some: { organizationId: c.organizationId, ...effectivePositionAssignmentWhere(now) } } }, select: { id: true } });
     const professional: WorkflowClosureParticipant | null = professionalActive && await canProcessWorkflowNode(tx, c.professionalUserId, c.organizationId, { assigneeUserId: c.professionalUserId })
