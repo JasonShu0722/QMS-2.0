@@ -2,7 +2,7 @@
 
 统一依据：[QMS 2.0 前端统一设计规范 v1.3](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
 
-## N2-A 配置页面（2026-10-25，本地未发布）
+## N2-A 配置页面（2026-10-25，V0.0.29已部署）
 
 `ComponentProjectAdministration` 为正式单表入口，复用平台管理组织范围与生成契约；项目资料使用弹窗，不另设项目台账页签。`ComponentProjectImport` 复用既有 Excel 读取 / 导入批次；跨页多选、启用字段、共享项目影响预览与应用各有独立状态，409 清失效预览，未知结果只重试原请求。工程师未配置中性展示，失效保留原身份并以可聚焦小感叹号支持 hover / focus / click 说明，不自动转派。
 
@@ -18,7 +18,7 @@
 
 ## 1. 当前基线
 
-当前已上线基线为 V0.0.28（PR #65，b4e5115），N1 组织与岗位治理发布证据见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)；N2-A 仍是本地增量。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
+当前已上线基线为 V0.0.29（PR #67，70fdbab），N2-A配置页机器发布核验见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)，真实岗位首次配权 / 正式页面人工验收仍待执行；N1 组织与岗位治理发布历史见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
 
 2026-10-18 REQ-0017～0021 正在功能分支实施：共享密度、个人账号与改密弹窗、主数据弹窗/连续导入、审计可读性。密度由 `theme/theme.css`、`ThemeProvider` 的 Card/Table 配置和共享外壳维护，业务页去除重复外边距。账号/导入/审计沿各自既有授权、失败恢复和秘密清理机制；不因紧凑化删除必要提示或压缩点击目标。四项 Issue、文件边界、验证与部署状态以[实施计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)为准；规范数值不是浏览器实测通过证据。 本轮账号定位历史返修复用既有 React Router 的 data router 与原生 blocker，保留路由地址、认证及门户边界；共享未保存保护在导航前处理确认，避免事后覆盖历史。新增本地回归不替代登录后的业务浏览器验收。
 

@@ -7,14 +7,14 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 目标 | 接续既定 N2，复用 N1 真实组织岗位，交付组件项目映射、管理职责 / 分管及动态流程基础；不启用新问题业务 |
-| 批准来源 | 本轮业务讨论与整体路线已批准开发；N1发布后负责人明确已闭源并要求继续。不是重新需求访谈或生产配置授权 |
-| 基线 | N1 main / 生产 `b4e51150e934314889287980d062fe389a89561b`；活动分支 `codex/qms-n2-foundations`，基于 origin/main；携带 N1 已有纯文档归档 `c479b0e`，不带原实现分支重复提交 |
+| 批准来源 | 原讨论 / 路线已批准开发；2026-10-25负责人“已开源，继续”接续推PR，随后对明确“合并PR #67并执行生产部署核验”请求回复“继续”，已授权N2-A合并及自动部署；不扩为生产岗位配权 / 业务数据维护 / 关闭回填 |
+| 基线 | N1生产此前为`b4e51150e934314889287980d062fe389a89561b`；N2-A PR #67已squash合并至main `70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`，其源码树与受检head e5b1465一致。活动分支保留本地PR证据归档5bfd7a7，未额外推送 |
 | 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29用于N2-A，[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，head `e5b1465a5e65c5183ff8888d7dbcb57046e9b4d8`，base `b4e51150e934314889287980d062fe389a89561b` |
 | 需求核对 | 启动时user身份revision298、has_more=false，分别开发中/P1及开发中/P2；提交前两实际record_id回读revision300、has_more=false，REQ-0025状态现为“上线验收完成”，REQ-0026仍“开发中”，原范围字段未变。此状态变动不代表尚未部署的N2-A已验收，也不反向改表；本轮组件新要求有直接会话授权。CLI旧版复用已验证token，不更新CLI或改表 |
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
-| 公开边界 | 2026-10-25负责人明确“已开源，继续”，实时GitHub核对public，O2满足；已推送N2-A分支并创建PR #67。代理未改可见性；N2合并/发布另核授权，检查与获准发布结束后才提示适当闭源时机 |
+| 公开边界 | 负责人已公开且实时核对public，O2满足；合并 / 发布已获本轮后续明确授权并执行检查点。代理未改可见性，等待main完整检查及自动部署逐层核验后才提示可闭源 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | PR #67的e5b1465完整Foundation40145157194九项全部成功，128文件 / 1142 Web、98 suites / 1251真实集成、677 API unit、独立Worker8项；云端代码审查同head完成无发现，mergeable clean。未合并 / 部署 / 配置生产 / 人工验收，等待N2-A合并及自动发布明确授权；N2-B未实现。此状态归档仅本地，不推送改变已全绿head |
+| 当前进度 | V0.0.29 / PR #67已部署至`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`；main Foundation40149137790九项成功、deploy40150563126成功，备份 / 四迁移 / 同SHA镜像 / 健康及公开HTTP / 契约 / 资源已核验。09:35 Asia/Taipei无活跃Actions并已提醒可闭源；未配生产新权限 / 人工验收 / 关闭回填。N2-B未实现，归档仅本地不触发二次发布 |
 
 ## 1. 范围与结构
 
@@ -188,4 +188,33 @@ N2-A迁移为追加配置表 / nullable字段及唯一约束，不自动生成�
 
 Web合计128文件 / 1142项，非本地285范围的简单重复累计。GitHub同head代码审查完成、无发现 / 无未解决项；未请求或声称独立云端安全审查。PR最终open / 非draft / mergeable clean，head和base未变，没有自动合并、发布、生产初始化或需求关闭。
 
-当前真实停止点是N2-A合并 / 自动生产部署需明确授权；此前N1发布授权不扩大复用。仓库继续公开，不在还有发布检查点时提示立即闭源。此归档与索引作为后续本地文档提交保留，不推送引发已全绿PR重新跑全量CI；受检实现与PR head保持e5b1465，归档不是新的已发布版本。
+当时真实停止点是N2-A合并 / 自动生产部署需明确授权，后续批准及实际发布见第8节；此前N1发布授权未扩大复用。此归档与索引作为后续本地文档提交保留，不推送引发已全绿PR重新跑全量CI；受检实现与PR head保持e5b1465，归档不是新的已发布版本。
+
+## 8. N2-A 合并与生产发布核验（2026-10-25）
+
+### 8.1 授权、源码与云端检查
+
+负责人对明确“是否继续合并PR #67并执行随后生产部署核验”请求回复“继续”。合并前重新读取PR / main / 精确head检查 / reviews / inline comments及云端审查摘要：head e5b1465、base b4e5115不变，完整9项成功、无要求变更或inline finding、mergeable clean。使用带期望head SHA的squash合并，未推本地文档归档5bfd7a7；合并提交标题为`V0.0.29 交付组件项目映射与组织职责配置`。
+
+PR #67确认merged，main / merge commit均为`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`；拉取origin/main后与e5b1465比较无源码树差异。新的[main Foundation40149137790](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40149137790)完整9项全部成功，非复用PR绿色代替main。实际main integration日志再次确认98 suites / 1251项、独立Worker进程8项成功，全部迁移成功；API与Web四分片和汇总门禁亦全部成功。
+
+### 8.2 部署日志与公开可观察变化
+
+[deploy40150563126](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40150563126)成功，job121041065405各步骤完成。已读取实际SSH部署日志，核对其完整source-run校验而非只看绿色：
+
+- `Pre-migration encrypted database snapshot verified: 70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`，随后才执行Prisma migrate；不将本机迁移前快照称为异地完整灾备。
+- 四份迁移分别实际Applying：`20261024100000_component_project_mapping`、`20261024110000_organization_management_responsibilities`、`20261024120000_component_project_permissions`、`20261025010000_component_catalog_import`；随后`All migrations have been successfully applied.`。
+- `qms2-foundation-api-1`与`worker-1`使用`qms2-foundation-api:70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`，`web-1`使用同SHA web镜像；up --wait日志确认API / Worker / Web及PG / RustFS / ClamAV Healthy。Worker本次启动检查完成后才写部署标记，未单独冒充人工角色验证。
+- 实际`Deployment successful: 70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`标记存在，未出现superseded skip。
+- 外网`/login`及`/api/v1/openapi.json`均200，新增组件 / import / bulk / 职责 / 分管 / 预览15条路径已出现；未登录GET映射清单401，不泄露资料。首轮检查脚本把path参数错写为`{orgId}`而失败，读取Controller确认真实为`{organizationId}`后按准确契约复核通过；这是核验脚本命名错误，不是生产缺接口。
+- 发布前main JS为`/assets/index-XlfA8kUd.js`，发布后变为`/assets/index-CIKtTNNC.js`且实际可取200，内容包含组件、职责、分管新路径；AntD资源更新为`antd-CC7TE26p.js`。共享CSS仍为`index-DOcry2yZ.css`，未修改的CSS不要求伪造指纹变化。
+
+09:35 Asia/Taipei再次读取main / PR / 最新100条Actions，main与merge SHA一致，没有运行 / 排队工作，已向负责人明确本轮可闭源；代理未更改可见性。Git外保存合并JSON、main检查JSON、部署日志与公开前后快照，秘密不入Git。
+
+### 8.3 已发布但尚未完成的事项
+
+机器发布核验通过不等于正式业务人工验收。第6.3节清单以最终70fdbab执行；仍未运行真实登录浏览器矩阵或独立phase-1/2完整脚本，没有替其写PASS。新权限迁移只登记目录，生产管理员岗位的首次read/manage配权及授予上限初始化尚未获准 / 执行；若新入口不可见，不能靠前端刷新或重复seed当作已激活，需按具体组织 / 岗位另作受控初始化。
+
+经理 / 部长职责及映射内容由获准维护者配置；自动部署不填真实组织、分管、项目或业务资料。N2-B动态流程 / 并行轮次 / 模板绑定及新8D未因此启用。Issue #66仍有N2-B及联合验收，保持开放；未关闭REQ / 回填飞书 / 修改用户自行设置的状态。
+
+本轮发布状态沉淀于FOUNDATION / CAPABILITY-STATUS及相关交接，作为本地文档归档，不向main推送制造第二轮未经必要的部署；本地分支保留原实现及PR归档，后续N2-B必须从最新main接续，不能把squash前历史重复合入。

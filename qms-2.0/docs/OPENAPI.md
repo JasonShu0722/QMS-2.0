@@ -2,9 +2,9 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## N2-A 本地契约增量（2026-10-25，未部署）
+## N2-A 契约增量（2026-10-25，V0.0.29已部署）
 
-以下为 Issue #66 / 候选 V0.0.29 的源码契约，不表示生产已提供；实现及验证见 [N2 计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+以下为 Issue #66 / V0.0.29 的契约，已在PR #67部署70fdbab后从公开OpenAPI核对出现；不表示已配置生产权限或完成人工业务验收。实际组织路径参数名为`{organizationId}`，下表`:orgId`仅作可读缩写，生成契约保持源码准确名称。实现及验证见 [N2 计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
 
 | 路径（均带 `/api/v1`） | 行为 |
 | --- | --- |

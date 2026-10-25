@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "3e5f9d3f08e5fa0872040e5aa53633b8bdb031973552cbfc101e6506a01fdbd9"
+            "sha256": "63ca53e489a9657f2b3fe6b7f09d46acb8124482d2f6ffc2b992b9a02b1615bc"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "939524e5b63e9b8280604bd190c4d6184c40d4ffc9dcff484642b219106f5f53"
+            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "939524e5b63e9b8280604bd190c4d6184c40d4ffc9dcff484642b219106f5f53"
+            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
           }
         ]
       }
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "939524e5b63e9b8280604bd190c4d6184c40d4ffc9dcff484642b219106f5f53"
+            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "fa25626dad9cddc76ae88c1d9ed7e352ab0d2d4940eccf3f418794fd7568a7f3"
+            "sha256": "ae5aa8b518352860b640bdd55c1ff63fcbfe241cb899e6e822e9ee7373e79fdb"
           },
           {
             "path": "README.md",
@@ -652,11 +652,11 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md",
-            "sha256": "9051b2215acbcb9a1445c45df853509e71df1adcc685dc9845611c51fed6d859"
+            "sha256": "3484caa278f29fee4c5d1ecaab2040a433f116c43c1997e78da54bea395e50b2"
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md",
-            "sha256": "f450bc74097ac74c2a2c3d3d4d4fbfa6d5e98d4df59701f8e0b8d92df42ab489"
+            "sha256": "70dd24d8c040ce8fc37fa4a187178b1d66ea598afb37b07444d275556719c2fd"
           }
         ]
       }
@@ -944,7 +944,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "939524e5b63e9b8280604bd190c4d6184c40d4ffc9dcff484642b219106f5f53"
+            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

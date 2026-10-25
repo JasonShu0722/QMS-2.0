@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## N2-A 生产发布核验（2026-10-25）
+
+V0.0.29 / [PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)已获本轮明确授权合并并部署至`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。PR Foundation40145157194和main Foundation40149137790各完整9项成功，main再次完成1251真实集成、8项独立Worker及完整API / Web门禁；deploy40150563126成功。已读取部署日志确认迁移前加密快照核验、四份新增迁移Applying及成功、同SHA API / Worker / Web镜像、服务健康、Worker启动与完整部署标记。
+
+公开login/OpenAPI均200，新组件映射 / 导入 / 批量及管理职责 / 分管 / 预览共15条路径出现；main JS从`index-XlfA8kUd.js`更新至`index-CIKtTNNC.js`，实际bundle可读且含新业务路径，匿名清单读取401。09:35 Asia/Taipei核对无活跃Actions，已提醒可闭源。完整链接、核验脚本参数首轮错误及复核、资源前后证据见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。
+
+这是机器发布核验，不代替真实账号 / 正式页面人工业务验收或完整phase-1/2脚本；生产新权限首次初始化 / 实际映射与分管配置未执行，N2-B及新8D未开通，Issue #66不关闭、不回填飞书。下方“未发布”保留为发布前本地历史，不覆盖本节。
+
 ## N2-A 本地配置回归（2026-10-25，未发布）
 
 Issue #66 / 候选 V0.0.29，基线 `c479b0e` 加本轮配置增量。主代理最终冻结686份API源码 / 测试 / 迁移，前后SHA-256一致：组织、配置及身份schema邻接21 suites / 335项通过（真实PG与DTO / 控制器unit混合，不全称PG用例）；API全部unit66 suites / 677项通过，API build/lint退出0。契约重新生成及同步、归档隔离、根工具71项、Compose foundation + production + scanning静态配置通过；Compose只使用临时占位配置且未启动服务，不表示运行健康。
