@@ -2,6 +2,14 @@
 
 统一依据：[QMS 2.0 前端统一设计规范 v1.3](../../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md)。该规格是设计与评审要求，本指南负责定位参考实现、复用边界和验证路径，不另维护一套色值表。
 
+## N2-A 配置页面（2026-10-25，本地未发布）
+
+`ComponentProjectAdministration` 为正式单表入口，复用平台管理组织范围与生成契约；项目资料使用弹窗，不另设项目台账页签。`ComponentProjectImport` 复用既有 Excel 读取 / 导入批次；跨页多选、启用字段、共享项目影响预览与应用各有独立状态，409 清失效预览，未知结果只重试原请求。工程师未配置中性展示，失效保留原身份并以可聚焦小感叹号支持 hover / focus / click 说明，不自动转派。
+
+`DepartmentResponsibilities` 在“组织与岗位”选中部门后的管理职责页签中维护岗位绑定、部长分管及只读预览；离开页签卸载并中止读取，不把迟到结果回填新上下文。职责保存 / 刷新使旧预览失效；具体任职需可辨认，不用同名姓名代替任职身份。组织 / 会话 / 权限变更隔离草稿，忙时与未保存保护沿共享机制，401 结束会话，不刷新旧范围。
+
+独立 `component-project-preview.html` 仅内存交互样例，不导入生产路由、不表示真实服务验收。正式文件、独立审查、本地测试和真实浏览器限制在 [N2 计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)分层记录。
+
 ## REQ-0024 岗位即角色（2026-10-22，本地未发布）
 
 平台管理使用“用户／历史授权／部门岗位”入口，移除独立权限矩阵入口；历史授权只读，新授权直接在岗位权限抽屉编辑。创建内部用户按部门选岗并预览，一次保存完成任职；列表显示有界任职摘要，人员入口调岗及查看来源。共用 `PositionSelector` 丢弃迟到预览，切组织／选择或409清签名；调岗重读CAS基线保留当前草稿，再预览后保存。本人成功变权先标记session ending再切登录，不能因旧会话401或列表重读误报保存失败。
@@ -10,7 +18,7 @@
 
 ## 1. 当前基线
 
-当前已上线基线为 V0.0.21（PR #54，ecf7224）；人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行。实际证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
+当前已上线基线为 V0.0.28（PR #65，b4e5115），N1 组织与岗位治理发布证据见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)；N2-A 仍是本地增量。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
 
 2026-10-18 REQ-0017～0021 正在功能分支实施：共享密度、个人账号与改密弹窗、主数据弹窗/连续导入、审计可读性。密度由 `theme/theme.css`、`ThemeProvider` 的 Card/Table 配置和共享外壳维护，业务页去除重复外边距。账号/导入/审计沿各自既有授权、失败恢复和秘密清理机制；不因紧凑化删除必要提示或压缩点击目标。四项 Issue、文件边界、验证与部署状态以[实施计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)为准；规范数值不是浏览器实测通过证据。 本轮账号定位历史返修复用既有 React Router 的 data router 与原生 blocker，保留路由地址、认证及门户边界；共享未保存保护在导航前处理确认，避免事后覆盖历史。新增本地回归不替代登录后的业务浏览器验收。
 
@@ -114,7 +122,7 @@ QMS 的信息架构、主题、组件、业务语义和验收以本指南、前�
 
 2026-10-24 按[基础管理前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)增加独立入口 `apps/web/organization-preview.html`，实现位于 `src/interaction-preview/organization/`。复用主题 / 语言及 Ant Design，左树右侧基本信息 / 岗位 / 任职，演示建架构、权限、兼岗和分管、改码及删除 / 停用依赖检查。所有数据仅在页面内存，刷新重置，不接入正式路由、真实 API 或生产默认入口；预览不证明真实授权 / 在途流程 / 审计实现。用户视觉评审及浏览器检查分别记录于前置计划，不以模型单元测试替代。
 
-同日负责人正式启动 N1，正式实现入口为 `features/governance/OrganizationWorkspace.tsx`，复用 `OrganizationAdministration`、`StructureAdministration` 及 `PositionRolesDrawer`，由 `AdminPage` 单一“组织与岗位”页签挂载；不导入原型模型或 CSS。按部门定位过滤岗位，任职编辑保留完整跨部门基线，不能用局部可选项覆盖其他任职。架构读取刷新与组织目录变更区分，未保存 / busy / 401 / 旧范围响应各自处理；删除结果未知只使用原请求身份、版本和幂等键恢复。当前仅为本地实现和审查验证状态，尚无 PR / 部署；完整机器结果与专项人工检查继续以基础管理前置计划为准。
+同日负责人正式启动 N1，正式实现入口为 `features/governance/OrganizationWorkspace.tsx`，复用 `OrganizationAdministration`、`StructureAdministration` 及 `PositionRolesDrawer`，由 `AdminPage` 单一“组织与岗位”页签挂载；不导入原型模型或 CSS。按部门定位过滤岗位，任职编辑保留完整跨部门基线，不能用局部可选项覆盖其他任职。架构读取刷新与组织目录变更区分，未保存 / busy / 401 / 旧范围响应各自处理；删除结果未知只使用原请求身份、版本和幂等键恢复。已由V0.0.28 / PR #65部署至b4e51150e934314889287980d062fe389a89561b，线上资源更新已核验；正式页面浏览器和人工业务验收仍待完成，完整机器与发布证据以前置计划4.6为准。
 
 后续实现继续复用当前 Ant Design、主题、语言、路由、未保存保护、附件和导入机制。未来模式覆盖不等于新增业务获准开发，已有切片、占位入口、外部系统预留与实际验收分别记录；“关闭”“保存”“提交”等动作依领域语义判断，不机械统一成同一种按钮。实现与交付要求仍以本指南、统一规格和交付流程为准。
 

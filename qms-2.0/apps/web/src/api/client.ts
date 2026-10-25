@@ -43,6 +43,7 @@ export function registerReauthentication(handler: () => Promise<void>) {
 }
 
 async function request<T>(path: string, init: RequestInit = {}, options: { replayAfterReauthentication?: boolean } = {}, canReauthenticate = true): Promise<T> {
+  init.signal?.throwIfAborted();
   const response = await fetch(path, {
     ...init,
     credentials: 'include',
@@ -58,7 +59,7 @@ async function request<T>(path: string, init: RequestInit = {}, options: { repla
       if (options.replayAfterReauthentication === false) {
         throw new ApiError({ code: 'CLIENT_REAUTHENTICATION_COMPLETED', message: '身份验证已完成，请重新提交操作' });
       }
-      const token = await csrfToken();
+      const token = await csrfToken(init.signal ?? undefined);
       return request<T>(path, { ...init, headers: { ...init.headers, 'x-csrf-token': token } }, options, false);
     }
     const fallback: ApiErrorPayload = {
@@ -85,12 +86,12 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
 
 export function createAdminMutation() {
   let pending: { signature: string; key: string } | undefined;
-  return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody): Promise<T> {
+  return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody, signal?: AbortSignal): Promise<T> {
     const signature = JSON.stringify([path, method, body]);
     if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
     const attempt = pending;
-    const token = await csrfToken();
-    const result = await request<T>(path, { method, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const token = await csrfToken(signal);
+    const result = await request<T>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) });
     if (pending === attempt) pending = undefined;
     return result;
   };
@@ -152,8 +153,8 @@ export async function completePasswordReset(body: components['schemas']['Complet
   await request<void>('/api/v1/auth/password-reset/complete', { method: 'POST', headers: { 'x-csrf-token': token }, body: JSON.stringify(body) });
 }
 
-export async function csrfToken(): Promise<string> {
-  const response = await request<CsrfResponse>('/api/v1/auth/csrf');
+export async function csrfToken(signal?: AbortSignal): Promise<string> {
+  const response = await request<CsrfResponse>('/api/v1/auth/csrf', { signal });
   return response.csrfToken;
 }
 

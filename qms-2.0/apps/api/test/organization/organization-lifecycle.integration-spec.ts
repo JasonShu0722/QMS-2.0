@@ -14,6 +14,7 @@ import { SessionService } from '../../src/modules/identity/session.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { ADMIN_PERMISSIONS } from '../../src/modules/authorization/permission-catalog.js';
 import { OrganizationService } from '../../src/modules/organization/organization.service.js';
+import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
 import { structureReferenceLiveCondition } from '../../src/modules/organization/organization-lifecycle.read-model.js';
 import { SupplierConcessionService } from '../../src/modules/supplier-concession/supplier-concession.service.js';
 import { SupplierMeetingsService } from '../../src/modules/supplier-meetings/supplier-meetings.service.js';
@@ -726,6 +727,77 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     }
     throw new Error('Expected real PostgreSQL lock contention was not observed');
   }
+
+  it('serializes delegated mapping reactivation against stopping its target organization', async () => {
+    const f = await fixture([...ADMIN_PERMISSIONS, 'organization:read', 'component-project:read', 'component-project:manage']);
+    const org = await f.child();
+    const governor = await prisma.role.findFirstOrThrow({ where: { organizationId: org.id, code: 'ORGANIZATION_GOVERNOR' } });
+    const permissions = await prisma.permission.findMany({ where: { code: { in: ['component-project:read', 'component-project:manage'] } } });
+    await prisma.rolePermission.createMany({ data: permissions.map(({ id }) => ({ roleId: governor.id, permissionId: id })) });
+    const second = await prisma.user.create({ data: { organizationId: f.root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    await prisma.userRole.create({ data: { organizationId: org.id, roleId: governor.id, userId: second.id } });
+    const token = await app.get(SessionService).create(second.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const actor = { id: f.actor.id, organizationId: f.root.id, scopeOrganizationId: org.id, accountType: 'INTERNAL' as const, sessionId: f.sessionId };
+    const delegated = { ...actor, id: second.id, sessionId: (await app.get(SessionService).resolve(token))!.id };
+    const service = app.get(ComponentProjectService);
+    const project = await service.createProject(actor, org.id, { code: randomUUID(), name: 'Concurrent mapping', stage: 'NEW_PRODUCT', status: 'DISABLED' }, randomUUID(), randomUUID());
+    expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body.disableBlockers).toEqual([]);
+    const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+    await blocker.connect();
+    let activation: Promise<number> | undefined;
+    try {
+      await blocker.query('BEGIN');
+      const { rows: [{ pid }] } = await blocker.query('SELECT pg_backend_pid() AS pid');
+      await blocker.query('SELECT id FROM component_project_records WHERE id = $1 FOR UPDATE', [project.id]);
+      activation = service.updateProject(delegated, org.id, project.id, { expectedVersion: 1, status: 'ACTIVE' }, randomUUID(), randomUUID())
+        .then(() => 200, (error: { status: number }) => error.status);
+      await waitBlocked(pid);
+      await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+      await blocker.query('COMMIT');
+      expect(await activation).toBe(409);
+      expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ status: 'DISABLED', version: 2 });
+      expect(await prisma.$queryRaw`SELECT status, version FROM component_project_records WHERE id = ${project.id}::uuid`).toEqual([{ status: 'DISABLED', version: 1 }]);
+    } finally {
+      await blocker.query('ROLLBACK');
+      await blocker.end();
+      await activation;
+    }
+  });
+
+  it('requires releasing an active management binding before disabling or moving its position', async () => {
+    const f = await fixture();
+    const department = await f.department();
+    const other = await f.department();
+    const position = await prisma.position.create({ data: { organizationId: f.root.id, departmentId: department.id, code: randomUUID(), name: 'Configured manager' } });
+    const binding = (await f.send('post', `/${f.root.id}/management-bindings`, { departmentId: department.id, responsibility: 'SECTION_MANAGER', positionId: position.id }).expect(201)).body;
+    await f.send('patch', `/${f.root.id}/positions/${position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+    await f.send('patch', `/${f.root.id}/positions/${position.id}`, { expectedVersion: 1, departmentId: other.id }).expect(409);
+    expect(await prisma.position.findUniqueOrThrow({ where: { id: position.id } })).toMatchObject({ status: 'ACTIVE', departmentId: department.id, version: 1 });
+    await f.send('patch', `/${f.root.id}/management-bindings/${binding.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    await f.send('patch', `/${f.root.id}/positions/${position.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    expect(await prisma.$queryRaw`SELECT id, status FROM department_management_bindings WHERE id = ${binding.id}::uuid`).toEqual([{ id: binding.id, status: 'DISABLED' }]);
+  });
+
+  it('requires releasing a minister scope before ending its referenced appointment', async () => {
+    const f = await fixture();
+    const department = await f.department();
+    const section = await f.department();
+    await prisma.department.update({ where: { id: section.id }, data: { parentId: department.id } });
+    const position = await prisma.position.create({ data: { organizationId: f.root.id, departmentId: department.id, code: randomUUID(), name: 'Assigned minister' } });
+    const employee = await prisma.user.create({ data: { organizationId: f.root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    const appointment = await prisma.userPosition.create({ data: { organizationId: f.root.id, userId: employee.id, positionId: position.id, startedAt: new Date(Date.now() - 3600000) } });
+    await f.send('post', `/${f.root.id}/management-bindings`, { departmentId: department.id, responsibility: 'MINISTER', positionId: position.id }).expect(201);
+    const scope = (await f.send('post', `/${f.root.id}/minister-scopes`, { departmentId: department.id, sectionDepartmentId: section.id, ministerAssignmentId: appointment.id }).expect(201)).body;
+    const actor = { id: f.actor.id, sessionId: f.sessionId, organizationId: f.root.id, accountType: 'INTERNAL' as const };
+    const replace = () => app.get(OrganizationService).replaceUserPositions(actor, f.root.id, employee.id,
+      { positionIds: [], expectedPositionIds: [position.id] }, randomUUID(), randomUUID());
+    await expect(replace()).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.userPosition.findUniqueOrThrow({ where: { id: appointment.id } })).toMatchObject({ endedAt: null });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: employee.id } })).toMatchObject({ securityVersion: 1 });
+    await f.send('patch', `/${f.root.id}/minister-scopes/${scope.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
+    expect(await replace()).toEqual([]);
+    expect((await prisma.userPosition.findUniqueOrThrow({ where: { id: appointment.id } })).endedAt).not.toBeNull();
+  });
 
   it('serializes organization deletion against a concurrent new department without orphaning or partial cleanup', async () => {
     const f = await fixture();

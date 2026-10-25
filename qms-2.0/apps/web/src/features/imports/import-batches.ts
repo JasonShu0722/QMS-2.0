@@ -2,7 +2,8 @@ import type { components } from '@qms/contracts';
 
 export type MasterRow = components['schemas']['SupplierProfileImportDto']['rows'][number]
   | components['schemas']['CustomerMasterImportDto']['rows'][number]
-  | components['schemas']['MaterialMasterImportDto']['rows'][number];
+  | components['schemas']['MaterialMasterImportDto']['rows'][number]
+  | components['schemas']['ComponentProjectImportDto']['rows'][number];
 export type MasterResult = components['schemas']['SupplierProfileImportResultDto'];
 export type ImportBatch = { body: string; key: string; count: number };
 

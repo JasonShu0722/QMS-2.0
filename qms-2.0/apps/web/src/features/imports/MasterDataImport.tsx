@@ -1,6 +1,6 @@
 import { Alert, Button, Modal, Progress, Space, Table, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
+import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { prepareImportBatches, type ImportBatch, type MasterResult, type MasterRow } from './import-batches';
@@ -9,6 +9,7 @@ import { readXlsxFile } from './read-xlsx';
 type Props<Row extends MasterRow> = {
   organizationId?: string;
   onImported: () => void | Promise<void>;
+  onUnauthorized?: (error: ApiError) => void;
   domain: string;
   endpoint: string;
   headers: string[];
@@ -23,7 +24,7 @@ export function MasterDataImport<Row extends MasterRow>(props: Props<Row>) {
   return <ImportForm key={props.organizationId ?? 'current'} {...props} />;
 }
 
-function ImportForm<Row extends MasterRow>({ organizationId, onImported, domain, endpoint, headers, fields, parse, rule }: Props<Row>) {
+function ImportForm<Row extends MasterRow>({ organizationId, onImported, onUnauthorized, domain, endpoint, headers, fields, parse, rule }: Props<Row>) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
@@ -80,6 +81,7 @@ function ImportForm<Row extends MasterRow>({ organizationId, onImported, domain,
     if (running.current || reading || next.current >= batches.current.length) return;
     running.current = true; stopped.current = false; setBusy(true); setError(undefined); setUnknown(false);
     let acknowledged = false;
+    let authenticationLost = false;
     try {
       while (alive.current && !stopped.current && next.current < batches.current.length) {
         const batch = batches.current[next.current]!;
@@ -94,9 +96,14 @@ function ImportForm<Row extends MasterRow>({ organizationId, onImported, domain,
         if (stopDecision.current && await stopDecision.current.promise) break;
       }
     } catch (cause) {
-      if (alive.current) { setUnknown(true); setError(safeAccountError(cause)); }
+      if (alive.current) {
+        if (cause instanceof ApiError && cause.status === 401 && onUnauthorized) {
+          authenticationLost = true; stopped.current = true;
+          onUnauthorized(cause);
+        } else { setUnknown(true); setError(safeAccountError(cause)); }
+      }
     } finally {
-      if (alive.current && acknowledged) {
+      if (alive.current && acknowledged && !authenticationLost) {
         try { await onImported(); }
         catch { if (alive.current) setError(t('导入回执已保留，列表刷新失败，请稍后刷新列表。')); }
       }

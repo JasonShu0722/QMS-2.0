@@ -22,6 +22,38 @@ const sibling = { ...department, id: 'dep-b', name: '采购部', code: 'BUY' };
 const position: components['schemas']['PositionDto'] = { id: 'pos-a', organizationId: org.id, departmentId: department.id, categoryId: null, code: 'QE', name: '质量工程师', status: 'ACTIVE', version: 1 };
 const otherPosition = { ...position, id: 'pos-b', departmentId: sibling.id, code: 'BUY', name: '采购专员' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+it('places management responsibilities inside the selected department workspace', async () => {
+  stub();
+  view([org]);
+  await selectDepartment();
+  fireEvent.click(await screen.findByRole('tab', { name: '管理职责' }));
+  expect(await screen.findByRole('button', { name: '新增职责绑定' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '职责预览' })).toBeVisible();
+}, 30000);
+it('aborts management reads on leaving the tab and rejects a late preview', async () => {
+  const { fetchMock } = stub();
+  const original = fetchMock.getMockImplementation()!;
+  let finishPreview!: (response: Response) => void;
+  let signal: AbortSignal | null | undefined;
+  fetchMock.mockImplementation((input, init) => String(input).includes('/management-responsibilities?')
+    ? (signal = init?.signal, new Promise<Response>(resolve => { finishPreview = resolve; }))
+    : original(input, init));
+  view([org]); await selectDepartment();
+  fireEvent.click(await screen.findByRole('tab', { name: '管理职责' }));
+  fireEvent.click(await screen.findByRole('button', { name: '职责预览' }));
+  await waitFor(() => expect(signal).toBeDefined());
+  fireEvent.click(screen.getByRole('tab', { name: '基本信息' }));
+  expect(signal?.aborted).toBe(true);
+  const late: components['schemas']['ManagementResponsibilitiesDto'] = {
+    organizationId: org.id, sectionDepartmentId: department.id, at: '2026-10-25T00:00:00.000Z',
+    responsibilities: [], issues: [{ responsibility: 'SECTION_MANAGER', code: 'ASSIGNMENT_AMBIGUOUS' }],
+  };
+  await act(async () => finishPreview(json(late)));
+  fireEvent.click(screen.getByRole('tab', { name: '管理职责' }));
+  expect(await screen.findByRole('button', { name: '职责预览' })).toBeEnabled();
+  expect(screen.queryByText('科室经理：存在多个有效任职候选')).not.toBeInTheDocument();
+}, 30000);
 function stub() {
   const requests: Array<[string, RequestInit | undefined]> = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

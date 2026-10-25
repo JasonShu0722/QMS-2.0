@@ -28,6 +28,7 @@
     "organization -> authorization",
     "platform-configuration -> audit-log",
     "platform-configuration -> authorization",
+    "platform-configuration -> organization",
     "problem-index -> audit-log",
     "problem-index -> authorization",
     "problem-index -> file-management",

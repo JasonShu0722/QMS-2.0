@@ -6,12 +6,13 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [本轮整体开发与分批上线路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md) | 五条开发中需求的六个主 PR / 部署节点、开源提醒与业务放行；负责人已正式启动，N1 Issue #64 本地开发中，未进入 PR / 部署 |
+| [本轮整体开发与分批上线路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md) | 五条批准需求的主 PR / 部署节点与开源提醒；N1 V0.0.28已部署，N2 Issue #66本地实施，正式人工验收与业务开通独立 |
+| [N2配置与流程基础细化](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md) | N2-A单表组件 / 两列导入 / 批量维护、科室经理与部长分管；N2-B动态流程另行接续；仓库保持私有，O2前提醒 |
 | [N1 到期维护事项事实复核](N1-MAINTENANCE-REVIEW-2026-10-24.md) | 正式开工时复核弃用、备份容量及运维观测，三项仍开放；真实定向结果、失败与未知边界，不靠改日期或假关闭解除门禁 |
 | [各板块问题管理研讨草稿](../../docs/superpowers/specs/2026-10-23-qms-domain-problem-management-discussion-draft.md) | 供 2026-10-24 讨论：旧版 / 当前源码差距、IMS、FAE、8D、SQE 关联发单、问题中心、指标与上线准备；未批准实施 |
 | [本轮五条聚合需求提交记录](../../docs/superpowers/specs/2026-10-24-qms-five-requirement-submission.md) | 已提交飞书 REQ-0025～0029；5 个综合目标覆盖 74 内部细项，真实 record_id、字段回读及状态留痕，旧需求不删不重开 |
 | [本轮完整需求清单](../../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md) | 74 条仅作内部验收追溯；业务已确认、工程细化 / 接入资料 / 上线准备与后置分开，不再逐项建单或将整包技术细节返询负责人 |
-| [基础管理前置交付计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md) | N1 正式组织治理已本地实现及分层验证，Issue #64 / 候选 V0.0.28，待首次 PR 前开源安排及后续部署验收；N2 映射与动态流程仍后续 |
+| [基础管理前置交付计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md) | N1 V0.0.28 / PR #65已部署b4e5115，机器发布核验与同根因返修证据；正式页面人工验收仍待完成，N2单独接续 |
 | [组织与岗位独立样例入口](../apps/web/organization-preview.html) | 本地开发服务打开 `/organization-preview.html`；负责人已认可页面交互，内存模拟不接真实 API 或默认生产入口，不代表真实角色或全设备验收 |
 | [基础交互体系与场景覆盖设计](../../docs/superpowers/specs/2026-10-21-qms-interaction-system-design.md) | 已确认的控件选型、动作层级、20 组领域、完整状态与验收；样例确认先于正式迁移 |
 | [可视化样例先行计划](../../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md) | Issue #58、8 组独立交互样例、预览入口、TDD／构建排除／视觉确认及实际进度 |
