@@ -1,5 +1,9 @@
 # 阶段四业务域策划入口
 
+## N3本地实施接续（2026-10-25）
+
+负责人已明确推进N3至下个PR检查点；[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)及Issue #70 / V0.0.31覆盖REQ-0026与REQ-0027的过程人工台账及完整内部8D链，当前仅本地开发验证，停O3提醒开源。生产仍a32615c，不提前推送建PR / 发布绑定 / 开通新业务或关闭回填；IMS / AI及其他域按后续节点。
+
 ## 问题管理重建接续（2026-10-25）
 
 本轮按[整体路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md)及[N2细化计划](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)继续：PR #68及独立fix3 [PR #69](https://github.com/JasonShu0722/QMS-2.0/pull/69)已合并并部署a32615c，最终PR / main完整9项、deploy40194990586及备份 / 迁移 / 镜像健康 / 公共新契约与资源已核验。原main失败及skipped部署保留，不改写成首次全绿。生产关闭领域适配器为空，新模板不能发布 / 开单；过程台账与完整报告、客户 / 新品 / 供应商链及IMS / AI仍按N3以后交付，生产配权及人工验收独立。下方2026-09-24记录是旧阶段源码与验收历史，不能替代本轮新业务规则的实现或上线证明。
