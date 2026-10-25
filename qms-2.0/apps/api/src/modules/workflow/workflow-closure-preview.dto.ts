@@ -1,6 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsUUID, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsUUID, ValidateIf, IsInt, Min, Max, IsOptional, IsString, MaxLength } from 'class-validator';
 import type { WorkflowClosureDuty, WorkflowClosurePolicy, WorkflowClosureSeverity } from './workflow-closure-policy.js';
+
+export class WorkflowClosureOptionsQueryDto {
+  @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) page = 1;
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) search?: string;
+}
+export class WorkflowClosureDepartmentOptionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() code!: string;
+  @ApiProperty() name!: string;
+}
+export class WorkflowClosureUserOptionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() username!: string;
+  @ApiProperty({ type: String, nullable: true }) fullName!: string | null;
+}
+export class WorkflowClosureOptionsDto {
+  @ApiProperty({ type: [WorkflowClosureDepartmentOptionDto] }) departments!: WorkflowClosureDepartmentOptionDto[];
+  @ApiProperty({ type: [WorkflowClosureUserOptionDto] }) users!: WorkflowClosureUserOptionDto[];
+  @ApiProperty() departmentTotal!: number;
+  @ApiProperty() userTotal!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
+}
 
 export class WorkflowClosurePreviewInputDto {
   @ApiProperty({ enum: ['INTERNAL', 'SUPPLIER'] }) @IsIn(['INTERNAL', 'SUPPLIER']) policy!: WorkflowClosurePolicy;

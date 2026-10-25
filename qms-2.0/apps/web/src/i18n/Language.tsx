@@ -10,6 +10,7 @@ import { problemCenterTranslations } from '../features/problem-center/problem-ce
 const translations: Record<string, string> = {
   '组织与岗位': 'Organization and positions',
   '管理职责': 'Management responsibilities',
+  '关闭审核': 'Closure review',
   '组件项目映射': 'Component project mapping',
   '查看组件项目映射': 'View component project mapping',
   '维护组件项目映射及项目状态': 'Maintain component mapping and project status',

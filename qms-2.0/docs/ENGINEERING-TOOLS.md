@@ -52,6 +52,8 @@ Foundation 使用 `scripts/ci-validation-scope.mjs`，仅将既有 `governance/v
 
 integration 构建完成后使用 `corepack pnpm --filter @qms/api test:worker-process:built` 复用本次产物。独立本地运行仍用 `corepack pnpm --filter @qms/api test:worker-process`，该入口先构建；不要从另一个源码版本或工作目录借用 dist。业务 PR/main 全套门禁和 Web 分片数本轮保留。
 
+N2-B本地全量Jest单进程实际触及4GB堆上限，不能将其计为PASS。CI integration在同一一次性数据库串行执行`test:integration --shard=1/4`至`4/4`，每片使用新进程释放VM状态，不增加并发写库或额外job；任一片失败即停止，独立Worker仍另跑。根工具用实际Jest文件清单验证四片无重叠且并集完整。本地可按完整清单分为更小的独立进程批次，必须保留清单 / 结果、无跳过与源码冻结证据，不能以挑选部分文件冒称全量。
+
 专项定向验证：`node --test test/ci-validation-scope.test.mjs`；默认 workspace 测试也包含该项。执行频率与重跑纪律依[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)，运行占用按 job 分钟累计，不把并行缩短的等待时间当成计费节省。
 
 ## 源码指纹与限制

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, Validate, ValidateNested, ValidatorConstraint, type ValidatorConstraintInterface } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, Validate, ValidateIf, ValidateNested, ValidatorConstraint, type ValidatorConstraintInterface } from 'class-validator';
 import { MAX_WORKFLOW_NODES, MAX_WORKFLOW_SLA_MINUTES, MAX_WORKFLOW_TRANSITIONS, WORKFLOW_ACTIONS, WORKFLOW_CONDITION_FIELDS, WORKFLOW_CONDITION_OPERATORS, WORKFLOW_EDITABLE_NODE_TYPES, WORKFLOW_NODE_TYPES, WORKFLOW_VERSION_STATUSES, type WorkflowAction, type WorkflowNodeType, type WorkflowVersionStatus } from './workflow.types.js';
 
 export class WorkflowAssignmentDto {
@@ -18,7 +18,14 @@ export class WorkflowEditorPositionDto {
   @ApiProperty({ minimum: -100000, maximum: 100000 }) @IsNumber() @Min(-100000) @Max(100000) y!: number;
 }
 
+export class WorkflowClosureReviewDto {
+  @ApiProperty({ enum: [1] }) @IsIn([1]) schemaVersion!: 1;
+  @ApiProperty({ enum: ['INTERNAL', 'SUPPLIER'] }) @IsIn(['INTERNAL', 'SUPPLIER']) policy!: 'INTERNAL' | 'SUPPLIER';
+  @ApiProperty({ maxLength: 100 }) @IsString() @Matches(/^\S(?:.*\S)?$/) @MaxLength(100) domainCode!: string;
+}
+
 export class WorkflowNodeConfigDto {
+  @ApiPropertyOptional({ type: WorkflowClosureReviewDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowClosureReviewDto) closureReview?: WorkflowClosureReviewDto;
   @ApiPropertyOptional({ type: WorkflowAssignmentDto }) @IsOptional() @ValidateNested() @Type(() => WorkflowAssignmentDto) assignment?: WorkflowAssignmentDto;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isStart?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isEnd?: boolean;

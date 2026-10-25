@@ -2,7 +2,25 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## N2-B / B1 本地契约（2026-10-25，未发布）
+## N2-B 本地契约（2026-10-25，未发布）
+
+在下方B1预览之外新增以下受控接口；生产70fdbab尚不含这些增量。DTO均由Swagger生成，不允许Web自建请求 / 响应模型。
+
+| 方法与路径 | 权限及语义 |
+| --- | --- |
+| `GET /api/v1/workflows/closure-options` | 内部当前组织、`workflow:manage`；有界科室 / 人员选项，分页最大100，不返回邮箱 |
+| `GET /api/v1/workflows/closure-templates` | 内部当前组织、`workflow:manage`；候选模板清单 |
+| `POST /api/v1/workflows/closure-templates` | 同上及CSRF / Idempotency-Key；201，显式初始化草稿，不发布 / 绑定 |
+| `GET /api/v1/workflow-closure/problems/:problemId/rounds` | `workflow:act`及领域数据资格；读取轮次历史，不返回内部context或内容快照 |
+| `POST /api/v1/workflow-closure/problems/:problemId/rounds` | 同上及CSRF / Idempotency-Key；200，当前负责人提交新轮 |
+| `POST /api/v1/workflow-closure/rounds/:roundId/decide` | 同上；200，按预期版本及明确职责列表通过 / 退回 |
+| `POST /api/v1/workflow-closure/rounds/:roundId/cancel` | 同上及领域允许的取消资格；200，旧轮保留历史 |
+| `GET /api/v1/tasks/closure` | 当前会话 / MFA、`task:read`与`workflow:act`及领域资格；只读有界职责待办，不支持泛用领取 / 转派 |
+| `GET /api/v1/notifications/closure` | 当前会话 / MFA、`notification:read`与`workflow:act`及领域资格；持久通知与实时资格取交集，不以空结果绕过会话检查 |
+
+start / decide / cancel只收控制版本、意见及必要职责选择，不接收组织、专业人、负责人或内容快照。写入的轮次 / 领域回调 / 审计 / Outbox / 幂等回执在同一事务内。注册表为空时新业务失败关闭；实际领域表单、供应商门户及生产开通不是这些基础接口存在即可用，边界见[流程设计器](WORKFLOW-DESIGNER.md)。
+
+### B1 预览契约历史
 
 新增`POST /api/v1/workflows/closure-preview`，返回200，只读配置预览；需CSRF、有效内部当前组织会话及`workflow:manage`，不接受body组织范围或未知字段。输入 / 响应DTO与类型均由Swagger生成，预览人员和缺项语义见[流程设计器](WORKFLOW-DESIGNER.md)。`previewOnly=true`、`configurationReady`不提供执行 / 审批资格，不创建实例 / 轮次 / 待办，也不启用新schema。生产70fdbab不含本路径；B1本地结果不可说成N2-B整体或新8D上线。
 

@@ -13,12 +13,24 @@ import { WORKFLOW_UPGRADE_ADAPTERS, WorkflowUpgradeRegistry } from './workflow-u
 import { OrganizationModule } from '../organization/organization.module.js';
 import { WorkflowClosurePreviewController } from './workflow-closure-preview.controller.js';
 import { WorkflowClosurePreviewService } from './workflow-closure-preview.service.js';
+import { WorkflowClosureRoundService } from './workflow-closure-round.service.js';
+import { WorkflowClosureRegistry, WORKFLOW_CLOSURE_ADAPTERS } from './workflow-closure-registry.js';
+import { WorkflowClosureTemplateController } from './workflow-closure-template.controller.js';
+import { WorkflowClosureTemplateService } from './workflow-closure-template.service.js';
+import { WorkflowClosureRoundController } from './workflow-closure-round.controller.js';
+import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
+import { ClosureInboxService } from '../task-notification/closure-inbox.service.js';
+import { ClosureInboxController, ClosureNotificationController } from './workflow-closure-inbox.controller.js';
+import { ClosureEventHandler } from '../task-notification/closure-event.handler.js';
 
 @Module({
-  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule],
-  controllers: [WorkflowController, WorkflowUpgradeController, WorkflowClosurePreviewController],
+  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule, AdminMutationModule],
+  controllers: [WorkflowClosurePreviewController, WorkflowClosureTemplateController, WorkflowClosureRoundController, ClosureInboxController, ClosureNotificationController, WorkflowController, WorkflowUpgradeController],
   providers: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosurePreviewService,
+    WorkflowClosureRoundService, WorkflowClosureRegistry, WorkflowClosureTemplateService,
+    ClosureInboxService, ClosureEventHandler,
+    { provide: WORKFLOW_CLOSURE_ADAPTERS, useValue: [] },
     { provide: WORKFLOW_UPGRADE_ADAPTERS, useValue: [] }],
-  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry],
+  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, ClosureEventHandler],
 })
 export class WorkflowModule {}

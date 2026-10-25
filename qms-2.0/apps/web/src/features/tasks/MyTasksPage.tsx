@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { mutateInbox, type NotificationPage, type TaskPage } from './task-inbox';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { ClosureTaskInbox } from './ClosureTaskInbox';
 
 import './tasks.css';
 
@@ -46,6 +48,8 @@ function pageQuery(offset: number, status: string, claim?: string) {
 
 export function MyTasksPage() {
   const { t, locale } = useLanguage();
+  const [activeTab, setActiveTab] = useState('tasks');
+  const requestLeave = useNavigationGuard();
   const [taskOffset, setTaskOffset] = useState(0);
   const [noticeOffset, setNoticeOffset] = useState(0);
   const [taskStatus, setTaskStatus] = useState('');
@@ -70,7 +74,8 @@ export function MyTasksPage() {
   return <main className="task-inbox">
     <Typography.Title level={2}>{t('我的待办')}</Typography.Title>
     <InboxError cause={mutationError} />
-    <Tabs items={[
+    <Tabs activeKey={activeTab} onChange={key => { if (!writing.current) requestLeave(() => setActiveTab(key)); }} items={[
+      { key: 'closure', label: t('关闭审核'), children: activeTab === 'closure' ? <ClosureTaskInbox /> : null },
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">
           <label>{t('任务状态')} <select aria-label={t('任务状态')} value={taskStatus} onChange={(event) => { setTaskStatus(event.target.value); setTaskOffset(0); }}>

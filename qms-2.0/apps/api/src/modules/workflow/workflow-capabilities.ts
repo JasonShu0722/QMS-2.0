@@ -2,7 +2,7 @@ import type { Prisma, ProblemIndex, WorkflowInstance } from '../../generated/pri
 import { HttpException } from '@nestjs/common';
 import { assertWorkflowFeature, canProcessWorkflowNode, type WorkflowActor } from './workflow-access-policy.js';
 import type { WorkflowAction } from './workflow.types.js';
-import { actionAllowed, forwardAction, jsonObject, matchesCondition } from './workflow-runtime-policy.js';
+import { actionAllowed, forwardAction, isClosureReviewNode, jsonObject, matchesCondition } from './workflow-runtime-policy.js';
 
 export interface WorkflowCapabilities {
   canAct: boolean;
@@ -32,13 +32,14 @@ export async function workflowCapabilities(tx: Prisma.TransactionClient, actor: 
   }
   if (!instance.currentNodeId) return { ...result, reasonCode: 'WORKFLOW_NODE_FORBIDDEN' };
   const node = await tx.workflowNode.findFirst({ where: { id: instance.currentNodeId, workflowVersionId: instance.workflowVersionId, organizationId: problem.organizationId } });
+  if (node && isClosureReviewNode(node)) return { ...result, reasonCode: 'WORKFLOW_ACTION_INVALID' };
   if (!node || !await canProcessWorkflowNode(tx, actor.id, problem.organizationId, jsonObject(node.config).assignment)) return { ...result, reasonCode: 'WORKFLOW_NODE_FORBIDDEN' };
   const task = await tx.workflowTask.findFirst({ where: { workflowInstanceId: instance.id, organizationId: problem.organizationId, workflowVersionId: instance.workflowVersionId,
     workflowNodeId: node.id, entryInstanceVersion: instance.version, status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] } } });
   result.taskId = task?.id ?? null;
   result.claimedByUserId = task?.claimedByUserId ?? null;
   result.projectionPending = !task && instance.status === 'RUNNING';
-  const transitions = await tx.workflowTransition.findMany({ where: { organizationId: problem.organizationId, workflowVersionId: instance.workflowVersionId, fromNodeId: node.id } });
+  const transitions = await tx.workflowTransition.findMany({ where: { organizationId: problem.organizationId, workflowVersionId: instance.workflowVersionId, fromNodeId: node.id }, include: { toNode: true } });
   const visited = await tx.$queryRaw<{ nodeId: string }[]>`SELECT DISTINCT node_id AS "nodeId" FROM workflow_mutations WHERE organization_id = ${problem.organizationId}::uuid AND instance_id = ${instance.id}::uuid`;
   for (const action of ['SUBMIT', 'APPROVE', 'VERIFY', 'REJECT', 'RETURN', 'REOPEN', 'CLOSE'] as const) {
     if (!actionAllowed(node.type, action) || (action === 'REOPEN' ? instance.status !== 'COMPLETED' : instance.status !== 'RUNNING')) continue;
@@ -52,6 +53,7 @@ export async function workflowCapabilities(tx: Prisma.TransactionClient, actor: 
     } else {
       const matches = transitions.filter((edge) => (edge.action ?? forwardAction(node.type)) === action && matchesCondition(edge.condition, problem));
       if (matches.length !== 1) { if (matches.length > 1 || action === forwardAction(node.type)) result.reasonCode = 'WORKFLOW_TRANSITION_AMBIGUOUS'; continue; }
+      if (isClosureReviewNode(matches[0]!.toNode)) { result.reasonCode = 'WORKFLOW_ACTION_INVALID'; continue; }
       if (['REJECT', 'RETURN', 'REOPEN'].includes(action) && !visited.some((mutation) => mutation.nodeId === matches[0]!.toNodeId)) continue;
     }
     result.allowedActions.push(action);

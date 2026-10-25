@@ -7,6 +7,7 @@ const BASE_BACKOFF_MS = 1_000;
 export const OUTBOX_LEASE_MS = 5 * 60_000;
 export const OUTBOX_CLOCK = 'QMS_OUTBOX_CLOCK';
 export const OUTBOX_HANDLER = 'QMS_OUTBOX_HANDLER';
+export const APPLICATION_OUTBOX_HANDLER = 'QMS_APPLICATION_OUTBOX_HANDLER';
 export type OutboxHandler = ((event: OutboxEvent) => Promise<void>) | AtomicOutboxHandler;
 
 export interface OutboxEvent {

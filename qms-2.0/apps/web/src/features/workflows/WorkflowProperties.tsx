@@ -8,6 +8,12 @@ type Assignment = NonNullable<Config['assignment']>;
 interface Props { graph: WorkflowGraph; selected: string; readOnly: boolean; options: WorkflowOptions; onChange: (graph: WorkflowGraph) => void; onSelect: (id: string) => void }
 const nodeTypes = ['ACTION', 'APPROVAL', 'VERIFICATION', 'CC', 'CLOSE'] as const;
 const fields = ['status', 'severity', 'problemType', 'domainCode', 'sourceType', 'responsibleParty'] as const;
+const closureCopy: Record<string, string> = {
+  '受控关闭审核': 'Controlled closure review', '关闭审核策略': 'Closure review policy', '关闭审核领域代码': 'Closure review domain code',
+  '内部问题': 'Internal problems', '供应商问题': 'Supplier problems',
+  '专业审核与管理审核按受控规则解析；此处配置规则，不指定具体人员 UUID。关闭后须手动配置普通处理范围，不会恢复或编造人员。': 'Professional and management reviews resolve through controlled rules, not specific user UUIDs. After disabling, configure ordinary assignments manually; no people are restored or invented.',
+  '生产领域适配器尚未注册，须领域接入准备好后才能发布；当前仅维护草稿规则。': 'Production domain adapters are not registered. Publish only after domain integration is ready; these are draft rules only.',
+};
 
 function AssignmentFields({ label, value, options, onChange }: { label: string; value?: Assignment; options: WorkflowOptions; onChange: (value: Assignment | undefined) => void }) {
   const { t } = useLanguage();
@@ -51,14 +57,16 @@ function ConditionFields({ edge, onChange }: { edge: WorkflowEdge; onChange: (ed
 }
 
 export function WorkflowProperties({ graph, selected, readOnly, options, onChange, onSelect }: Props) {
-  const { t } = useLanguage();
+  const { t: translate, locale } = useLanguage();
+  const t = (text: string) => locale === 'en-US' ? closureCopy[text] ?? translate(text) : translate(text);
   const node = graph.nodes.find((entry) => entry.id === selected);
   if (!node) return <Card>{t('选择节点以编辑处理规则和动作连线。')}</Card>;
   const config = node.config ?? {};
+  const closure = config.closureReview;
   function update(patch: Partial<WorkflowNode>) { if (!readOnly) onChange({ ...graph, nodes: graph.nodes.map((entry) => entry.id === selected ? { ...entry, ...patch } : entry) }); }
   function configure(patch: Partial<Config>) { update({ config: { ...config, ...patch } }); }
   function mark(key: 'isStart' | 'isEnd', checked: boolean) {
-    if (!readOnly) onChange({ ...graph, nodes: graph.nodes.map((entry) => entry.id === selected ? { ...entry, config: { ...entry.config, [key]: checked } } : checked ? { ...entry, config: { ...entry.config, [key]: false } } : entry) });
+    if (!readOnly) onChange({ ...graph, nodes: graph.nodes.map((entry) => entry.id === selected ? { ...entry, config: { ...entry.config, [key]: checked, ...(checked ? { closureReview: undefined } : {}) } } : checked ? { ...entry, config: { ...entry.config, [key]: false } } : entry) });
   }
   function changeEdge(edge: WorkflowEdge) { if (!readOnly) onChange({ ...graph, transitions: graph.transitions.map((entry) => entry.id === edge.id ? edge : entry) }); }
   const actions = node.type === 'CLOSE' ? ['REOPEN', 'RETURN'] : node.type === 'CC' ? ['SUBMIT'] : [node.type === 'APPROVAL' ? 'APPROVE' : node.type === 'VERIFICATION' ? 'VERIFY' : 'SUBMIT', 'RETURN', 'REJECT'];
@@ -66,20 +74,31 @@ export function WorkflowProperties({ graph, selected, readOnly, options, onChang
     <label>{t('节点名称')}<input aria-label={t('节点名称')} maxLength={200} value={node.name} onChange={(event) => update({ name: event.target.value })} /></label>
     <label>{t('节点类型')}<select aria-label={t('节点类型')} value={node.type} onChange={(event) => {
       const type = event.target.value as WorkflowNode['type'];
-      update({ type, config: { ...config, isEnd: type === 'CLOSE' ? config.isEnd : undefined, requireIndependentVerification: type === 'CLOSE' ? config.requireIndependentVerification : undefined, isStart: type === 'CLOSE' ? undefined : config.isStart } });
+      update({ type, config: { ...config, closureReview: type === 'APPROVAL' ? closure : undefined, isEnd: type === 'CLOSE' ? config.isEnd : undefined, requireIndependentVerification: type === 'CLOSE' ? config.requireIndependentVerification : undefined, isStart: type === 'CLOSE' ? undefined : config.isStart } });
     }}>{!nodeTypes.some((type) => type === node.type) && <option value={node.type}>{t(workflowLabel(node.type))}</option>}{nodeTypes.map((type) => <option key={type} value={type}>{t(workflowLabel(type))}</option>)}</select></label>
     {node.type !== 'CLOSE' && <label className="workflow-check"><input type="checkbox" checked={config.isStart === true} onChange={(event) => mark('isStart', event.target.checked)} />{t('起始节点')}</label>}
     {node.type === 'CLOSE' && <><label className="workflow-check"><input type="checkbox" checked={config.isEnd === true} onChange={(event) => mark('isEnd', event.target.checked)} />{t('结束节点')}</label>
       <label className="workflow-check"><input type="checkbox" checked={config.requireIndependentVerification === true} onChange={(event) => configure({ requireIndependentVerification: event.target.checked })} />{t('验证人与关闭人须不同')}</label></>}
-    <AssignmentFields label="处理范围" value={config.assignment} options={options} onChange={(assignment) => configure({ assignment })} />
+    {node.type === 'APPROVAL' && !config.isStart && !config.isEnd && <fieldset><legend>{t('受控关闭审核')}</legend>
+      <label className="workflow-check"><input aria-label={t('受控关闭审核')} type="checkbox" checked={!!closure} onChange={(event) => configure(event.target.checked ? { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: '' }, assignment: undefined, escalation: undefined } : { closureReview: undefined })} />{t('受控关闭审核')}</label>
+      <p>{t('专业审核与管理审核按受控规则解析；此处配置规则，不指定具体人员 UUID。关闭后须手动配置普通处理范围，不会恢复或编造人员。')}</p>
+      {closure && <>
+        <label>{t('关闭审核策略')}<select aria-label={t('关闭审核策略')} value={closure.policy} onChange={(event) => configure({ closureReview: { ...closure, policy: event.target.value as typeof closure.policy }, assignment: undefined, escalation: undefined })}>
+          <option value="INTERNAL">{t('内部问题')}</option><option value="SUPPLIER">{t('供应商问题')}</option>
+        </select></label>
+        <label>{t('关闭审核领域代码')}<input aria-label={t('关闭审核领域代码')} required maxLength={100} value={closure.domainCode} onChange={(event) => configure({ closureReview: { ...closure, domainCode: event.target.value }, assignment: undefined, escalation: undefined })} /></label>
+        <p role="note">{t('生产领域适配器尚未注册，须领域接入准备好后才能发布；当前仅维护草稿规则。')}</p>
+      </>}
+    </fieldset>}
+    {!closure && <AssignmentFields label="处理范围" value={config.assignment} options={options} onChange={(assignment) => configure({ assignment })} />}
     <label>{t('处理时限（分钟）')}<input aria-label={t('处理时限（分钟）')} type="number" min={1} max={2147483647} value={config.slaMinutes ?? ''} onChange={(event) => configure(event.target.value ? { slaMinutes: Number(event.target.value) } : { slaMinutes: undefined, reminders: undefined, escalation: undefined })} /></label>
     {config.slaMinutes !== undefined && <>
       <fieldset><legend>{t('截止前提醒')}</legend>{config.reminders?.map((reminder, index) => <Space key={index}>
         <label>{t('提前分钟')} {index + 1}<input aria-label={`${t('提前分钟')} ${index + 1}`} type="number" min={0} max={config.slaMinutes} value={reminder.offsetMinutes} onChange={(event) => configure({ reminders: config.reminders!.map((entry, position) => position === index ? { offsetMinutes: Number(event.target.value) } : entry) })} /></label>
         <Button onClick={() => configure({ reminders: config.reminders!.filter((_entry, position) => position !== index) })}>{t('移除提醒')}</Button>
       </Space>)}<Button disabled={(config.reminders?.length ?? 0) >= 10} onClick={() => configure({ reminders: [...config.reminders ?? [], { offsetMinutes: 0 }] })}>{t('添加提醒')}</Button></fieldset>
-      <AssignmentFields label="超时通知负责人" value={config.escalation} options={options} onChange={(escalation) => configure({ escalation })} />
-      <p>{t('超时只通知负责人，保留当前处理人和流程节点。')}</p>
+      {!closure && <><AssignmentFields label="超时通知负责人" value={config.escalation} options={options} onChange={(escalation) => configure({ escalation })} />
+      <p>{t('超时只通知负责人，保留当前处理人和流程节点。')}</p></>}
     </>}
     <fieldset><legend>{t('动作连线')}</legend>{graph.transitions.filter((edge) => edge.from === node.id).map((edge) => <div className="workflow-edge" id={`workflow-edge-${edge.id}`} key={edge.id}>
       <label>{t('动作')}<select aria-label={`${t('动作')} ${edge.id}`} value={edge.action ?? actions[0]} onChange={(event) => changeEdge({ ...edge, action: event.target.value as WorkflowEdge['action'] })}>

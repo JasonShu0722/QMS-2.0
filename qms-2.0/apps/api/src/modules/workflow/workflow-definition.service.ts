@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type WorkflowDefinition, type WorkflowVersion } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -8,6 +8,7 @@ import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js'
 import { assertWorkflowFeature, type WorkflowActor } from './workflow-access-policy.js';
 import { workflowError } from './workflow-runtime-policy.js';
 import { WorkflowValidationService, type WorkflowDraft } from './workflow-validation.service.js';
+import { WorkflowClosureRegistry } from './workflow-closure-registry.js';
 import type { WorkflowDefinitionDetailDto, WorkflowDefinitionHeaderDto, WorkflowDefinitionResponseDto, WorkflowGraphResponseDto, WorkflowOptionsDto, WorkflowOptionsQueryDto, WorkflowPageDto, WorkflowQueryDto, WorkflowVersionResponseDto, WorkflowVersionSummaryDto } from './workflow.dto.js';
 
 interface WorkflowManagementContext { organizationId: string; userId?: string; traceId?: string; actor?: WorkflowActor }
@@ -20,14 +21,15 @@ type IncludedVersion = Prisma.WorkflowVersionGetPayload<{ include: { nodes: true
 
 @Injectable()
 export class WorkflowDefinitionService {
-  constructor(private readonly prisma: PrismaService, private readonly validation: WorkflowValidationService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly validation: WorkflowValidationService, private readonly audit: AuditLogService,
+    @Optional() private readonly closureRegistry?: WorkflowClosureRegistry) {}
 
-  async createDraft(input: CreateInput): Promise<WorkflowDefinitionResponseDto> {
+  async createDraft(input: CreateInput, transaction?: Prisma.TransactionClient): Promise<WorkflowDefinitionResponseDto> {
     this.checkText(input.code, 100);
     this.checkText(input.name, 200);
     this.checkOptionalText(input.description, 1000);
     const graph = this.validation.normalizeDraft(input.draft);
-    return this.transaction(async (tx) => {
+    const create = async (tx: Prisma.TransactionClient) => {
       await this.access(tx, input);
       const definition = await tx.workflowDefinition.create({ data: {
         organizationId: input.organizationId, code: input.code.trim(), name: input.name.trim(), description: input.description?.trim() ?? null,
@@ -40,7 +42,8 @@ export class WorkflowDefinitionService {
       await this.writeGraph(tx, input.organizationId, version.id, graph, input.userId);
       await this.record(tx, input, 'WORKFLOW_DRAFT_CREATED', 'WorkflowDefinition', definition.id, 'DRAFT', 1);
       return this.response(tx, definition, version.id);
-    });
+    };
+    return transaction ? create(transaction) : this.transaction(create);
   }
 
   async updateDraft(input: UpdateInput): Promise<WorkflowDefinitionResponseDto> {
@@ -76,6 +79,12 @@ export class WorkflowDefinitionService {
       if (draft.status !== 'DRAFT') throw new ConflictException({ code: 'WORKFLOW_VERSION_IMMUTABLE' });
       const graph = this.graphFromIncluded(draft);
       this.validation.assertValid(graph);
+      const reviews = graph.nodes.flatMap(node => node.config?.closureReview === undefined ? [] : [node.config.closureReview as { domainCode: string }]);
+      if (reviews.length) {
+        const organization = await tx.organization.findUnique({ where: { id: input.organizationId }, select: { type: true } });
+        if (!input.actor || input.actor.accountType !== 'INTERNAL' || organization?.type !== 'INTERNAL'
+          || reviews.some(review => !this.closureRegistry?.hasDomain(review.domainCode))) workflowError('WORKFLOW_ACTION_INVALID', 409);
+      }
       await tx.workflowVersion.update({ where: { id: draft.id }, data: {
         status: 'PUBLISHED', publishedAt: new Date(), publishedById: input.userId ?? null,
         changeNote: input.changeNote?.trim() ?? null, structureSnapshot: this.json(graph), updatedById: input.userId ?? null,

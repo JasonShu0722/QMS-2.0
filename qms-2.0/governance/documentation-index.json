@@ -144,9 +144,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "登记既有决策及重新评估条件，保留原规格为决策来源。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "dae1083b3bd196a0256ec6fa0dbc73af84e924a81b890136a139fcdc3aeb13a1"
+            "sha256": "4830efeab90f94312daf228ab012cde9caf31ccc54a291d4a5aa713eb62ab008"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
+            "sha256": "7c6a53f6cb32fb73672edf53bf2071025981b63dc4e2a0735f5eb9f0a41b777e"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -178,9 +178,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（工作流整合实际复核）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "阅读治理新增当前摘要与工程完成定义，原事实拥有者、复用、事务与受影响门禁方法继续成立；本页正文无需修改。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
+            "sha256": "7c6a53f6cb32fb73672edf53bf2071025981b63dc4e2a0735f5eb9f0a41b777e"
           }
         ]
       }
@@ -200,9 +200,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 30,
-        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "P2-06 新增一次性数据库观测与隔离演练入口；复核 Node/pnpm、运维命令和恢复边界仍适用。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。",
         "sources": [
           {
             "path": "package.json",
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
+            "sha256": "7c6a53f6cb32fb73672edf53bf2071025981b63dc4e2a0735f5eb9f0a41b777e"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -234,9 +234,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 30,
-        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "能力状态增加REQ-0022/0023本地实现及待验边界；已复核机器人只读、批准后不覆盖初稿与五字段责任仍有效，不因本地授权模型实现授予机器人源码写入或发布权限。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。 N2-B最终API1441集成/802单测/Worker8及Web134文件1272项分组与整文件复验证据已核对，保留原始失败、仅3份遗留fixture修正；额外类型/浏览器/生产边界不冒称完成。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "f7bad16eac59071f663f564f7d03664b9ed0a954c05e2f61e67aa708699f2868"
+            "sha256": "485a489944531f9dda585bfa17f8ed41734bbc5aabb8c5013db4b60546f7bd7c"
           },
           {
             "path": "README.md",
@@ -390,9 +390,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（基础交互体系设计评审）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "负责人批准全量现有页面在本地展开；已复核统一规范的恢复与提交边界、102个正式TSX覆盖记录及8组样例来源。单元、源码审查、真实浏览器与人工业务验收分层记录；推送前等待负责人仓库处理确认，不更改远端可见性、计费或生产。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-A本地配置与单表导入批量、职责预览及共享scope取消边界已逐项审查；单元、PG与真实浏览器分层，尚未推送/部署。日期按UTC保持2026-10-24，对应业务时区2026-10-25。",
+        "reason": "负责人批准全量现有页面在本地展开；已复核统一规范的恢复与提交边界、102个正式TSX覆盖记录及8组样例来源。单元、源码审查、真实浏览器与人工业务验收分层记录；推送前等待负责人仓库处理确认，不更改远端可见性、计费或生产。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-A本地配置与单表导入批量、职责预览及共享scope取消边界已逐项审查；单元、PG与真实浏览器分层，尚未推送/部署。日期按UTC保持2026-10-24，对应业务时区2026-10-25。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。 正式配置预览、草稿模板、关闭审核入口及仅内存样例已分别规格和独立质量复核；unknown403与重新认证重放组合返修完成，真实浏览器和人工业务仍待验收。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -528,7 +528,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "e3748c841b7052b3c2e1a86098538bb3caf5dfcd0758d879907c0dc15a027347"
+            "sha256": "4fe2e9cecd093f4c83ea1a44505b5002f16ce97a517097ce5676f424c4c6216e"
           },
           {
             "path": "apps/web/component-project-preview.html",
@@ -588,11 +588,55 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "368460f41053afd8ade252221ce22ad25639d49cec6bb131f34f587c844d72f3"
+            "sha256": "c7d72504b7388e7886e4e5d34a36ab875a7cb9646a471dbba5373cbcd163e539"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
-            "sha256": "60c060e585829f62000478706dc9baecd1f195e093c91a532fca71569f831905"
+            "sha256": "628f2e51ea5e87eea9a9bdf53b40f01b9bb13361447539b84c99795acbe85157"
+          },
+          {
+            "path": "apps/web/src/features/workflows/WorkflowProperties.tsx",
+            "sha256": "64fc3819b514198f339b62de18043bef50bcfd560e6f206e876a2b396460b086"
+          },
+          {
+            "path": "apps/web/src/features/workflows/WorkflowListPage.tsx",
+            "sha256": "874a65e0e7dbe6dada8aa2b15906b8382af8dfaba0a2a19628f2d6abacc65086"
+          },
+          {
+            "path": "apps/web/src/features/workflows/WorkflowClosurePreview.tsx",
+            "sha256": "c6e55beaed5656aa74274a2e5e7dc80cc2f2cad49f5ff86b58563bcc1f1da3fd"
+          },
+          {
+            "path": "apps/web/src/features/workflows/WorkflowClosureTemplateDialog.tsx",
+            "sha256": "526238b8c28667156457edb08bda6c6dc97a504be0a0d54e64f5d3b403591044"
+          },
+          {
+            "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
+            "sha256": "7e00f2d548116bbbfecca204d394291b795666503e42e82504a9fdf4b91f4a8b"
+          },
+          {
+            "path": "apps/web/src/features/tasks/ClosureTaskInbox.tsx",
+            "sha256": "5e7419f76ded39a1fb016e82294468f2d153e7ac8bfa3af8d7bdb46f9f34354d"
+          },
+          {
+            "path": "apps/web/workflow-closure-preview.html",
+            "sha256": "9bf26960e14977289d183f056365c1f2e77e5608e2fa214937a67c7fb45ce0cd"
+          },
+          {
+            "path": "apps/web/src/interaction-preview/workflow-closure/WorkflowClosurePreview.tsx",
+            "sha256": "88e13214f88b60912cd741d55f068a0372c1ab1696d41b0ebcfe641b617e1bf8"
+          },
+          {
+            "path": "apps/web/src/features/supplier-audit/SupplierAuditPage.test.tsx",
+            "sha256": "001819ba56eb6a46b3b74266e97e6dc82ab0cc0bb0e1011b7d8063d3b4c0f53f"
+          },
+          {
+            "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
+            "sha256": "dfdc33a909091a93a522ab153a245b62d68ff9aa6971638f7e9d8f56b735adf4"
+          },
+          {
+            "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
+            "sha256": "54063dbdfe2e0fd2ac52366b564699142be3c71eb55064a6071287b08fe099a7"
           }
         ]
       }
@@ -622,9 +666,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（跨板块问题管理研讨准备）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "于 Asia/Taipei 2026-10-23 对照原阶段四设计、计划与当前源码，保留原阶段历史结论；登记跨板块研讨草稿，明确过程8D、客户合单报告归属、FAE与IMS未闭环；结合负责人IMS截图补充成品编码映射与AI描述提炼，区分明确需求、建议和未确认粒度，不将建议或旧PASS改为批准实施、当前验收或线上事实。复核日期按UTC记录。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 负责人认可样例交互，74细项聚合提交飞书REQ-0025至0029并回读50字段；工程细化/接入资料/上线准备不再整包列为业务待确认。 负责人调整五条需求为开发中后明确先规划后停等；已核对PR/自动部署边界，新增六主节点与开源提醒，不启动实现或云端操作。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "于 Asia/Taipei 2026-10-23 对照原阶段四设计、计划与当前源码，保留原阶段历史结论；登记跨板块研讨草稿，明确过程8D、客户合单报告归属、FAE与IMS未闭环；结合负责人IMS截图补充成品编码映射与AI描述提炼，区分明确需求、建议和未确认粒度，不将建议或旧PASS改为批准实施、当前验收或线上事实。复核日期按UTC记录。 2026-10-24 独立组织岗位原型与完整需求清单本地评审：仅内存样例和文档，非业务上线或人工验收。 负责人认可样例交互，74细项聚合提交飞书REQ-0025至0029并回读50字段；工程细化/接入资料/上线准备不再整包列为业务待确认。 负责人调整五条需求为开发中后明确先规划后停等；已核对PR/自动部署边界，新增六主节点与开源提醒，不启动实现或云端操作。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。 N2-B源码冻结与分批验证协议、失败保留和O2停止边界已复核；未运行完整阶段验收或生产配置，不改变原职责 / 授权边界。 N2-B最终API1441集成/802单测/Worker8及Web134文件1272项分组与整文件复验证据已核对，保留原始失败、仅3份遗留fixture修正；额外类型/浏览器/生产边界不冒称完成。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md",
@@ -652,11 +696,11 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md",
-            "sha256": "5a41af7fbb3a59b094614ecff0df07c72592f4c4ba1c08f178e31a7da44676f2"
+            "sha256": "d925aa06201c1f8c22ebdb044c0464971b90bbe93a2b672c92ef69ed031e6e43"
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md",
-            "sha256": "525754d1cac277d735db551734bed304c6114a56167f350e5b2f8b13c342599e"
+            "sha256": "906a9b364dd8c248c02795eb98ebd4691e7d3875bc1f7464a83a31ac6295ff9f"
           }
         ]
       }
@@ -752,9 +796,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。",
+        "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。 N2-B串行四分片与真实文件清单覆盖已独立规格及质量复核；本地OOM失败、分组验证及未来云端结果分别记录，不改job数量或生产授权。",
         "sources": [
           {
             "path": "scripts/engineering-report.mjs",
@@ -791,6 +835,10 @@
           {
             "path": "scripts/ci-validation-scope.mjs",
             "sha256": "94592afb679b58dbf1e020a82f25808e2f85dd40e3c59f545c0e2179451aaf0c"
+          },
+          {
+            "path": "test/ci-validation-scope.test.mjs",
+            "sha256": "e505844c362896641a0bb7cdfa6eb9b01cf5f0ab398c4417debbee0f68a9e92b"
           }
         ]
       }
@@ -896,9 +944,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 N2-B源码冻结与分批验证协议、失败保留和O2停止边界已复核；未运行完整阶段验收或生产配置，不改变原职责 / 授权边界。",
         "sources": [
           {
             "path": "docs/CHANGE-IMPACT.md",
@@ -910,7 +958,7 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
+            "sha256": "c12c906be38f4a2aaf2d0eb89531602f2548012fce6d4c61010efa51fd92a108"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -934,9 +982,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-24",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 已复核REQ-0024岗位即角色的本地实现、历史只读、供应商隔离和推送前等待边界；不把本地证据改写为生产或人工验收。 N1本地组织治理实现与冻结验证已复核，未推送/部署，原型/机器/浏览器/生产证据分开，不扩大OpenClaw或历史授权。 N2-B本地关闭轮次、职责待办、模板发布阻断及历史生命周期边界已复核，实施与最终验证状态见N2计划；生产仍70fdbab，不扩大为新8D、生产配权或人工验收。 N2-B源码冻结与分批验证协议、失败保留和O2停止边界已复核；未运行完整阶段验收或生产配置，不改变原职责 / 授权边界。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -944,7 +992,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "a719c5e3a0d33624054ad41ca36a606cf9704bf01052efefbb9d2dea3a12da27"
+            "sha256": "7c6a53f6cb32fb73672edf53bf2071025981b63dc4e2a0735f5eb9f0a41b777e"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",
@@ -956,7 +1004,7 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
+            "sha256": "c12c906be38f4a2aaf2d0eb89531602f2548012fce6d4c61010efa51fd92a108"
           }
         ]
       }
@@ -968,9 +1016,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 N2-B源码冻结与分批验证协议、失败保留和O2停止边界已复核；未运行完整阶段验收或生产配置，不改变原职责 / 授权边界。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -986,7 +1034,7 @@
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
+            "sha256": "c12c906be38f4a2aaf2d0eb89531602f2548012fce6d4c61010efa51fd92a108"
           }
         ]
       }
@@ -998,13 +1046,13 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-20",
+        "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。",
+        "reason": "复核负责人后续决定：自动浏览器连接故障转具体人工验收清单，继续独立已授权工作；反馈前保持待人工验收，不改写自动日志，不降低编译、契约、真实数据库等门禁。原职责与授权范围保持有效。 N2-B源码冻结与分批验证协议、失败保留和O2停止边界已复核；未运行完整阶段验收或生产配置，不改变原职责 / 授权边界。",
         "sources": [
           {
             "path": "docs/ENGINEERING-TOOLS.md",
-            "sha256": "b58647d70415914ccc468c409506602dc65040b158191686043b793346ec682f"
+            "sha256": "c12c906be38f4a2aaf2d0eb89531602f2548012fce6d4c61010efa51fd92a108"
           },
           {
             "path": "AGENTS.md",

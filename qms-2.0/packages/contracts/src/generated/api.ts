@@ -1719,6 +1719,134 @@ export interface paths {
         patch: operations["ProblemSavedViewController_update"];
         trace?: never;
     };
+    "/api/v1/workflows/closure-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowClosurePreviewController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/closure-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowClosurePreviewController_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows/closure-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowClosureTemplateController_list"];
+        put?: never;
+        post: operations["WorkflowClosureTemplateController_initialize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-closure/problems/{problemId}/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowClosureRoundController_history"];
+        put?: never;
+        post: operations["WorkflowClosureRoundController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-closure/rounds/{roundId}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowClosureRoundController_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow-closure/rounds/{roundId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WorkflowClosureRoundController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ClosureInboxController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ClosureNotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows": {
         parameters: {
             query?: never;
@@ -1889,22 +2017,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["WorkflowUpgradeController_upgrade"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workflows/closure-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["WorkflowClosurePreviewController_resolve"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7418,8 +7530,302 @@ export interface components {
             /** @enum {number} */
             deleted: true;
         };
+        WorkflowClosureDepartmentOptionDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        WorkflowClosureUserOptionDto: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            fullName: string | null;
+        };
+        WorkflowClosureOptionsDto: {
+            departments: components["schemas"]["WorkflowClosureDepartmentOptionDto"][];
+            users: components["schemas"]["WorkflowClosureUserOptionDto"][];
+            departmentTotal: number;
+            userTotal: number;
+            page: number;
+            pageSize: number;
+        };
+        WorkflowClosurePreviewInputDto: {
+            /** @enum {string} */
+            policy: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /**
+             * Format: uuid
+             * @description Configuration test identity only, not the issuer of a running problem.
+             */
+            professionalUserId: string;
+            /**
+             * Format: uuid
+             * @description Required only for INTERNAL; supplier owner identity is not accepted.
+             */
+            ownerUserId?: string;
+        };
+        WorkflowClosureParticipantDto: {
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            /** Format: uuid */
+            assignmentId: string | null;
+            /** Format: uuid */
+            positionId: string | null;
+            /** Format: uuid */
+            departmentId: string | null;
+            /** Format: uuid */
+            bindingId: string | null;
+            /** Format: uuid */
+            scopeId: string | null;
+            bindingVersion: number | null;
+            scopeVersion: number | null;
+        };
+        WorkflowClosurePreviewDutyDto: {
+            /** @enum {string} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            status: "PENDING" | "WAITING" | "SKIPPED_SAME_PERSON";
+            participant: components["schemas"]["WorkflowClosureParticipantDto"] | null;
+        };
+        WorkflowClosureSamePersonGroupDto: {
+            /** Format: uuid */
+            userId: string;
+            duties: ("SECTION_MANAGER" | "MINISTER")[];
+        };
+        WorkflowClosurePreviewIssueDto: {
+            /** @enum {string} */
+            duty: "OWNER" | "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            code: "PARTICIPANT_NOT_ELIGIBLE" | "STRUCTURE_INACTIVE" | "BINDING_MISSING" | "BINDING_AMBIGUOUS" | "ASSIGNMENT_MISSING" | "ASSIGNMENT_AMBIGUOUS" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS";
+        };
+        WorkflowClosurePreviewDto: {
+            /**
+             * @description Always true: read-only configuration preview, never approval or execution authorization.
+             * @example true
+             */
+            readonly previewOnly: boolean;
+            configurationReady: boolean;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            sectionDepartmentId: string;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            executionMode: "PARALLEL" | "PROFESSIONAL_THEN_MANAGEMENT";
+            duties: components["schemas"]["WorkflowClosurePreviewDutyDto"][];
+            samePersonGroups: components["schemas"]["WorkflowClosureSamePersonGroupDto"][];
+            issues: components["schemas"]["WorkflowClosurePreviewIssueDto"][];
+        };
+        WorkflowClosureTemplateCandidateDto: {
+            /** @enum {string} */
+            policy: "INTERNAL" | "SUPPLIER";
+            name: string;
+        };
+        WorkflowClosureTemplatesDto: {
+            items: components["schemas"]["WorkflowClosureTemplateCandidateDto"][];
+        };
+        CreateWorkflowClosureTemplateDto: {
+            /** @enum {string} */
+            policy: "INTERNAL" | "SUPPLIER";
+            domainCode: string;
+            code: string;
+            name: string;
+        };
         /** @enum {string} */
         WorkflowVersionStatus: "DRAFT" | "PUBLISHED" | "RETIRED";
+        /** @enum {string} */
+        WorkflowAction: "SUBMIT" | "APPROVE" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+        WorkflowConditionDto: {
+            /** @enum {string} */
+            field: "status" | "severity" | "problemType" | "domainCode" | "sourceType" | "responsibleParty";
+            /** @enum {string} */
+            operator: "eq" | "ne" | "in" | "notIn";
+            value: (string | null) | (string | null)[];
+        };
+        WorkflowTransitionDraftDto: {
+            id: string;
+            from: string;
+            to: string;
+            action?: components["schemas"]["WorkflowAction"];
+            condition?: components["schemas"]["WorkflowConditionDto"];
+        };
+        WorkflowClosureReviewDto: {
+            /** @enum {number} */
+            schemaVersion: 1;
+            /** @enum {string} */
+            policy: "INTERNAL" | "SUPPLIER";
+            domainCode: string;
+        };
+        WorkflowAssignmentDto: {
+            roleCode?: string;
+            /** Format: uuid */
+            assigneeUserId?: string;
+            permission?: string;
+        };
+        WorkflowReminderDto: {
+            offsetMinutes: number;
+        };
+        WorkflowEditorPositionDto: {
+            x: number;
+            y: number;
+        };
+        WorkflowNodeConfigDto: {
+            closureReview?: components["schemas"]["WorkflowClosureReviewDto"];
+            assignment?: components["schemas"]["WorkflowAssignmentDto"];
+            isStart?: boolean;
+            isEnd?: boolean;
+            slaMinutes?: number;
+            reminders?: components["schemas"]["WorkflowReminderDto"][];
+            escalation?: components["schemas"]["WorkflowAssignmentDto"];
+            requireIndependentVerification?: boolean;
+            editorPosition?: components["schemas"]["WorkflowEditorPositionDto"];
+        };
+        /** @enum {string} */
+        WorkflowNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
+        WorkflowNodeResponseDto: {
+            id: string;
+            name: string;
+            config?: components["schemas"]["WorkflowNodeConfigDto"];
+            type: components["schemas"]["WorkflowNodeType"];
+        };
+        WorkflowGraphResponseDto: {
+            transitions: components["schemas"]["WorkflowTransitionDraftDto"][];
+            nodes: components["schemas"]["WorkflowNodeResponseDto"][];
+        };
+        WorkflowVersionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            version: number;
+            status: components["schemas"]["WorkflowVersionStatus"];
+            /** Format: date-time */
+            publishedAt: string | null;
+            /** Format: uuid */
+            publishedById: string | null;
+            changeNote: string | null;
+            structureSnapshot: components["schemas"]["WorkflowGraphResponseDto"];
+        };
+        WorkflowDefinitionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            code: string;
+            name: string;
+            description: string | null;
+            revision: number;
+            version: components["schemas"]["WorkflowVersionResponseDto"];
+        };
+        WorkflowClosureDutyRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            status: "PENDING" | "WAITING" | "APPROVED" | "SKIPPED_SAME_PERSON" | "CANCELLED";
+            /** Format: uuid */
+            userId: string;
+            /** Format: uuid */
+            decidedBy: string | null;
+            comment: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            version: number;
+        };
+        WorkflowClosureRoundDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            problemId: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            contentVersion: number;
+            roundNumber: number;
+            /** @enum {string} */
+            status: "PENDING" | "APPROVED" | "RETURNED" | "CANCELLED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            duties: components["schemas"]["WorkflowClosureDutyRecordDto"][];
+        };
+        StartWorkflowClosureRoundDto: {
+            expectedContentVersion: number;
+            expectedInstanceVersion: number;
+        };
+        DecideWorkflowClosureRoundDto: {
+            expectedRoundVersion: number;
+            duties: ("PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER")[];
+            /** @enum {string} */
+            decision: "APPROVE" | "RETURN";
+            comment: string;
+        };
+        CancelWorkflowClosureRoundDto: {
+            expectedRoundVersion: number;
+            reason: string;
+        };
+        ClosureTaskDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            roundId: string;
+            roundVersion: number;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            /** @enum {string} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            status: "PENDING";
+            contentVersion: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            userId: string;
+            canAct: boolean;
+            requiresJointConfirmation: boolean;
+            jointDuties: ("PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER")[];
+        };
+        ClosureTaskPageDto: {
+            items: components["schemas"]["ClosureTaskDto"][];
+            total: number;
+        };
+        ClosureNotificationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            roundId: string;
+            roundVersion: number;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** @enum {string} */
+            kind: "CLOSURE_PENDING";
+            subject: string;
+            body: string;
+            /** Format: date-time */
+            deliveredAt: string;
+            duties: ("PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER")[];
+            requiresJointConfirmation: boolean;
+            jointDuties: ("PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER")[];
+        };
+        ClosureNotificationPageDto: {
+            items: components["schemas"]["ClosureNotificationDto"][];
+            total: number;
+        };
         WorkflowVersionSummaryDto: {
             /** Format: uuid */
             id: string;
@@ -7474,82 +7880,6 @@ export interface components {
             description: string | null;
             revision: number;
             versions: components["schemas"]["WorkflowVersionSummaryDto"][];
-        };
-        /** @enum {string} */
-        WorkflowAction: "SUBMIT" | "APPROVE" | "VERIFY" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
-        WorkflowConditionDto: {
-            /** @enum {string} */
-            field: "status" | "severity" | "problemType" | "domainCode" | "sourceType" | "responsibleParty";
-            /** @enum {string} */
-            operator: "eq" | "ne" | "in" | "notIn";
-            value: (string | null) | (string | null)[];
-        };
-        WorkflowTransitionDraftDto: {
-            id: string;
-            from: string;
-            to: string;
-            action?: components["schemas"]["WorkflowAction"];
-            condition?: components["schemas"]["WorkflowConditionDto"];
-        };
-        WorkflowAssignmentDto: {
-            roleCode?: string;
-            /** Format: uuid */
-            assigneeUserId?: string;
-            permission?: string;
-        };
-        WorkflowReminderDto: {
-            offsetMinutes: number;
-        };
-        WorkflowEditorPositionDto: {
-            x: number;
-            y: number;
-        };
-        WorkflowNodeConfigDto: {
-            assignment?: components["schemas"]["WorkflowAssignmentDto"];
-            isStart?: boolean;
-            isEnd?: boolean;
-            slaMinutes?: number;
-            reminders?: components["schemas"]["WorkflowReminderDto"][];
-            escalation?: components["schemas"]["WorkflowAssignmentDto"];
-            requireIndependentVerification?: boolean;
-            editorPosition?: components["schemas"]["WorkflowEditorPositionDto"];
-        };
-        /** @enum {string} */
-        WorkflowNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "REJECT" | "RETURN" | "REOPEN" | "CLOSE";
-        WorkflowNodeResponseDto: {
-            id: string;
-            name: string;
-            config?: components["schemas"]["WorkflowNodeConfigDto"];
-            type: components["schemas"]["WorkflowNodeType"];
-        };
-        WorkflowGraphResponseDto: {
-            transitions: components["schemas"]["WorkflowTransitionDraftDto"][];
-            nodes: components["schemas"]["WorkflowNodeResponseDto"][];
-        };
-        WorkflowVersionResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            workflowDefinitionId: string;
-            version: number;
-            status: components["schemas"]["WorkflowVersionStatus"];
-            /** Format: date-time */
-            publishedAt: string | null;
-            /** Format: uuid */
-            publishedById: string | null;
-            changeNote: string | null;
-            structureSnapshot: components["schemas"]["WorkflowGraphResponseDto"];
-        };
-        WorkflowDefinitionResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organizationId: string;
-            code: string;
-            name: string;
-            description: string | null;
-            revision: number;
-            version: components["schemas"]["WorkflowVersionResponseDto"];
         };
         /** @enum {string} */
         WorkflowEditableNodeType: "ACTION" | "APPROVAL" | "VERIFICATION" | "CC" | "CLOSE";
@@ -7655,79 +7985,6 @@ export interface components {
             mappingSummary: components["schemas"]["WorkflowMappingOutcomeDto"][];
             /** Format: date-time */
             upgradedAt: string;
-        };
-        WorkflowClosurePreviewInputDto: {
-            /** @enum {string} */
-            policy: "INTERNAL" | "SUPPLIER";
-            /** @enum {string} */
-            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-            /** Format: uuid */
-            responsibleSectionDepartmentId: string;
-            /**
-             * Format: uuid
-             * @description Configuration test identity only, not the issuer of a running problem.
-             */
-            professionalUserId: string;
-            /**
-             * Format: uuid
-             * @description Required only for INTERNAL; supplier owner identity is not accepted.
-             */
-            ownerUserId?: string;
-        };
-        WorkflowClosureParticipantDto: {
-            /** Format: uuid */
-            userId: string;
-            username: string;
-            fullName: string | null;
-            /** Format: uuid */
-            assignmentId: string | null;
-            /** Format: uuid */
-            positionId: string | null;
-            /** Format: uuid */
-            departmentId: string | null;
-            /** Format: uuid */
-            bindingId: string | null;
-            /** Format: uuid */
-            scopeId: string | null;
-            bindingVersion: number | null;
-            scopeVersion: number | null;
-        };
-        WorkflowClosurePreviewDutyDto: {
-            /** @enum {string} */
-            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
-            /** @enum {string} */
-            status: "PENDING" | "WAITING" | "SKIPPED_SAME_PERSON";
-            participant: components["schemas"]["WorkflowClosureParticipantDto"] | null;
-        };
-        WorkflowClosureSamePersonGroupDto: {
-            /** Format: uuid */
-            userId: string;
-            duties: ("SECTION_MANAGER" | "MINISTER")[];
-        };
-        WorkflowClosurePreviewIssueDto: {
-            /** @enum {string} */
-            duty: "OWNER" | "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
-            /** @enum {string} */
-            code: "PARTICIPANT_NOT_ELIGIBLE" | "STRUCTURE_INACTIVE" | "BINDING_MISSING" | "BINDING_AMBIGUOUS" | "ASSIGNMENT_MISSING" | "ASSIGNMENT_AMBIGUOUS" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS";
-        };
-        WorkflowClosurePreviewDto: {
-            /**
-             * @description Always true: read-only configuration preview, never approval or execution authorization.
-             * @example true
-             */
-            readonly previewOnly: boolean;
-            configurationReady: boolean;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            sectionDepartmentId: string;
-            /** Format: date-time */
-            at: string;
-            /** @enum {string} */
-            executionMode: "PARALLEL" | "PROFESSIONAL_THEN_MANAGEMENT";
-            duties: components["schemas"]["WorkflowClosurePreviewDutyDto"][];
-            samePersonGroups: components["schemas"]["WorkflowClosureSamePersonGroupDto"][];
-            issues: components["schemas"]["WorkflowClosurePreviewIssueDto"][];
         };
         SupplierProfileDto: {
             id: string;
@@ -16027,6 +16284,335 @@ export interface operations {
             };
         };
     };
+    WorkflowClosurePreviewController_options: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosurePreviewController_resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowClosurePreviewInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosurePreviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureTemplateController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureTemplatesDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureTemplateController_initialize: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkflowClosureTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureRoundController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureRoundDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureRoundController_start: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartWorkflowClosureRoundDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureRoundDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureRoundController_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                roundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideWorkflowClosureRoundDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureRoundDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowClosureRoundController_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                roundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelWorkflowClosureRoundDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowClosureRoundDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ClosureInboxController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+                problemId?: string;
+                roundId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureTaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ClosureNotificationController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                pageSize?: number;
+                offset?: number;
+                problemId?: string;
+                roundId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosureNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     WorkflowController_list: {
         parameters: {
             query?: {
@@ -16404,37 +16990,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowUpgradeResultDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    WorkflowClosurePreviewController_resolve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkflowClosurePreviewInputDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkflowClosurePreviewDto"];
                 };
             };
             default: {

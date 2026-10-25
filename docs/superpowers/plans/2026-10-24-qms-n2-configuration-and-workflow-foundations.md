@@ -7,14 +7,14 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 目标 | 接续既定 N2，复用 N1 真实组织岗位，交付组件项目映射、管理职责 / 分管及动态流程基础；不启用新问题业务 |
-| 批准来源 | 原讨论 / 路线已批准开发；2026-10-25负责人“已开源，继续”接续推PR，随后对明确“合并PR #67并执行生产部署核验”请求回复“继续”，已授权N2-A合并及自动部署；不扩为生产岗位配权 / 业务数据维护 / 关闭回填 |
-| 基线 | N1生产此前为`b4e51150e934314889287980d062fe389a89561b`；N2-A PR #67已squash合并至main `70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`，其源码树与受检head e5b1465一致。活动分支保留本地PR证据归档5bfd7a7，未额外推送 |
-| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29用于N2-A，[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，head `e5b1465a5e65c5183ff8888d7dbcb57046e9b4d8`，base `b4e51150e934314889287980d062fe389a89561b` |
+| 批准来源 | 原讨论 / 路线已批准开发；N2-A的PR #67合并与生产核验已按当轮明确批准完成。当前负责人“继续推进开发，直到需要我开源的时候停下来并告知”，批准N2-B持续本地实现 / 双审 / 门禁，最终推PR前停O2；不扩为N2-B合并 / 发布、生产配权 / 业务数据维护 / 关闭回填 |
+| 基线 | N2-A已squash合并至main / 生产`70fdbabb1a5394c2cbbd5896a4e3068f4452e6bf`。当前codex/qms-n2-workflow-foundations从该基线建立，仅携带N2-A纯文档归档7fb6979 / a523118及B1本地af038d9，不重引旧实现；N2-B未推送 |
+| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29对应N2-A已部署[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，V0.0.30由同Issue预留给N2-B，尚无该单元PR |
 | 需求核对 | 启动时user身份revision298、has_more=false，分别开发中/P1及开发中/P2；提交前两实际record_id回读revision300、has_more=false，REQ-0025状态现为“上线验收完成”，REQ-0026仍“开发中”，原范围字段未变。此状态变动不代表尚未部署的N2-A已验收，也不反向改表；本轮组件新要求有直接会话授权。CLI旧版复用已验证token，不更新CLI或改表 |
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
-| 公开边界 | 负责人已公开且实时核对public，O2满足；合并 / 发布已获本轮后续明确授权并执行检查点。代理未改可见性，等待main完整检查及自动部署逐层核验后才提示可闭源 |
+| 公开边界 | 上一轮N2-A已部署并由负责人闭源。N2-B保持私有本地开发，全部本地门禁后停O2提醒开源，再核对精确head / base后推PR；不复用N2-A公开或合并 / 发布授权 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | N2-A生产保持70fdbab。负责人“继续开发”后N2-B/B1真实关闭职责解析、只读配置预览及纯策略已本地完成，独立规格 / 质量返修关闭；最终流程 / 组织邻接312项、API unit744及构建 / 契约 / 治理通过。分支codex/qms-n2-workflow-foundations、V0.0.30预留，同Issue #66；B2轮次 / B3待办 / B4设计器仍待实现，不发B1为完整N2-B PR，不放行新schema / 新8D |
+| 当前进度 | N2-A生产保持70fdbab。N2-B/B1～B4本地实现及独立双审完成；API1441集成 / 802单测 / 独立Worker8及Web134文件1272项按分组与受影响文件复验覆盖通过，build / lint / 契约及最终治理通过，详见9.10。本地源码提交以本分支Git记录为准；当前停O2，待负责人开源再推PR。生产adapter为空，不放行新8D或代配生产岗位 |
 
 ## 1. 范围与结构
 
@@ -82,10 +82,10 @@ N2源码规模若需拆成配置与运行基础两个可独立验收/回滚单�
 
 ### C. 动态流程与模板
 
-- [ ] 固定现有定义/版本schema和调用者，先写已发布旧版本及固定分派回归；动态分派只对新受控schema启用，不修改旧定义语义。
-- [ ] 先真实测试专业/管理并行汇聚、风险管理分级、同人一次确认双职责与内部经理跳过的不同记录、退回新轮双方重审，再扩最小运行时/任务；权限、版本/轮次、审批准入统一后端校验。
-- [ ] 候选模板仅草稿幂等初始化，不覆盖生产现有配置、不带开发用户/岗位UUID。预览人员、发布/业务绑定分别检查组织职责、有效权限和适用流程，不因部署即开单。
-- [ ] 未配置允许草稿/登记，必要发单/审批动作失败并提示；N3完整业务表单未接通前不将新8D入口放行。
+- [x] 固定现有定义/版本schema和调用者，先写已发布旧版本及固定分派回归；动态分派只对新受控schema启用，不修改旧定义语义。
+- [x] 真实测试专业/管理并行汇聚、风险管理分级、同人一次确认双职责与内部经理跳过的不同记录、退回新轮双方重审；权限、版本/轮次、审批准入由后端统一校验。
+- [x] 候选模板仅草稿幂等初始化，不覆盖生产现有配置、不带开发用户/岗位UUID；未注册实际领域适配器时发布失败关闭，不因部署即开单。
+- [x] 未配置可保存候选草稿，必要动作失败并提示；N3完整业务表单未接通前不将新8D入口放行。此项不代表N3台账登记已交付。
 
 ## 4. 命令与真实证据
 
@@ -247,8 +247,8 @@ PR #67确认merged，main / merge commit均为`70fdbabb1a5394c2cbbd5896a4e3068f4
 - PostgreSQL仅新建本任务disposable loopback资源，不连接55440或生产；先108迁移基线，旧workflow核心unit / 真实schema邻接和治理基线通过后实施。新DTO运行contracts:generate/check，文档状态区分B1本地、N2-B整体和生产70fdbab。
 
 - [x] B1纯策略真实红绿、预览HTTP / PG红绿、独立规格再质量复核与主代理回归；仅该小单元本地完成，不代表N2-B整体或发布。
-- [ ] B2逐项固定受控schema / 表 / 服务接口与实际调用者后执行TDD，不混入领域8D表单。
-- [ ] B3与B4接续，最终完整门禁与O2提醒 / PR / 获准部署分别记录，不关闭Issue #66。
+- [x] B2逐项固定受控schema / 表 / 服务接口与实际调用者后执行TDD，不混入领域8D表单。
+- [x] B3与B4接续实现及独立审查；最终完整门禁与O2提醒 / PR / 获准部署分别记录，不关闭Issue #66。
 
 ### 9.4 B1实施、返修与证据归属
 
@@ -277,3 +277,88 @@ Sagan / Popper规格、Kepler / Pascal独立质量分别完成，MFA、配置vs�
 本任务仅使用qms-n2b-20261025-postgres:55475、rustfs:59075、clamav:59375，均有codex.task=qms-n2-workflow及disposable标签。验证结束后精确核对名称 / 标签 / loopback端口 / mounts，删除仅这三个容器及匿名卷；ClamAV只读绑定配置文件保留未删，Git外n2b-environment.json按解析绝对路径删除，任务标签资源已空；没有prune / 55440 / 生产操作。下一单元需新建独立资源，不复用过期秘密文件或依赖本次fixture数据。
 
 本地提交仅保存B1可验证成果，未推送 / 建PR / 触发CI / 部署 / 修改生产权限或飞书状态。候选V0.0.30继续由同N2-B范围使用，B2开工保持本分支并先补实际轮次 / 身份事实接口及受影响调用者，不重做B1或直接向旧单节点塞并行字段。最终B2～B4闭合后再做整体门禁与O2提醒，不以本地小单元完成提前关闭Issue #66。
+
+### 9.6 B2～B4接口冻结与持续推进（2026-10-25）
+
+负责人明确“继续推进开发，直到需要我开源的时候停下来并告知”，沿本分支持续本地实现 / 双审 / 验证，不把每小单元结尾当新批准关卡。最终可推PR前再停O2；不自动发布或配生产权限。
+
+- 有限关闭审核为独立受控轮次，关联当前problem / 固定workflow instance/version及内容版本。追加`workflow_closure_rounds`、`workflow_closure_duties`、`workflow_closure_receipts`表；旧workflow_tasks唯一约束和旧发布版本解释不改。每轮1～3职责，多职责待办按新轮次真实状态投影，问题索引仍一行。新轮次完成由领域适配器同事务落关闭 / 退回，不用客户端身份或内容版本伪造事实。
+- `WorkflowClosureAdapter`为受信服务端接口，注册按domainCode精确匹配；`lockAndRead(tx,actor,problemId,operation)`返回组织、当前instance/version/node、内容版本/JSON快照、policy/severity、owner、professional及责任科室；`complete(tx,context)` / `returnForChanges(tx,context)`同事务执行领域变更。HTTP不收这些身份或snapshot，只收expected版本、意见与明确duty列表。实际领域适配器在N3接入前未注册，必须拒绝发起 / 执行新业务；真实集成使用中性fixture适配器验证，不给生产塞演示适配器。
+- B2服务公开只读history/current、start/decide/cancel；每个动作重验session/MFA/功能权限和adapter数据资格，审计 / 幂等回执同事务。start仅当前owner可提交；decide逐职责当前人员及有效来源、workflow:act资格匹配，供应商先专业再管理，同人双管理必须明确两个待办职责一次确认且两条记录原子落账；return取消整轮其余pending/waiting，重提新轮两侧重审；cancel只有adapter判定有权的操作方，旧late决定失败。来源人员/任职变动时取消旧轮（保留历史）并恢复编辑，需新提交，不能自动换人续旧通过。
+- B3采用轮次职责本身作为新待办事实，不复制旧task唯一键；新只读inbox / problem round summary / 通知可见性均实时复验current round和有效资格。专业WAITING以外仅PENDING可操作；已通过 / 跳过 / 取消不可催办。通知Outbox投递前复验，late事件不重新生成旧待办。旧task/通知路径保持兼容，旧generic workflow action对新closure gate拒绝，防旁路关闭。
+- B4限定`config.closureReview={schemaVersion:1,policy:'INTERNAL'|'SUPPLIER',domainCode}`于非start/end APPROVAL节点；只用固定受控策略，不在旧assignment中增加被忽略字段。新模板有owner ACTION→closure APPROVAL→CLOSE及RETURN边，均仅草稿、无用户/岗位UUID；初始化由workflow:manage显式动作触发，幂等不覆盖现有定义。发布前验证图与adapter就绪，未注册domain适配器时明确阻止闭环模板发布/业务绑定，旧图发布完全兼容。设计器可创建模板、编辑受控policy与只读人员预览，发布阻断原因可读；不得部署自动放行新8D。
+- 写集：B2实现者独占新rounds service/types/registry/SQL migration及定向PG测试；B3实现者独占新inbox/notification文件及其测试；主代理持B4 DTO/validator/template/guard、模块注册 / 契约 / 文档 / Git。前端独立worker只在契约冻结后接正式组件及隔离交互样例。迁移 / PG序列由主代理协调，不互跑共享fixture。
+
+### 9.7 B2～B4返修、审查与范围
+
+B2实现与返修由独立worker执行，规格 / 质量分别复核，主代理再运行真实PG。最初在用户行锁等待期间任职到期仍能通过，修为取得锁后以当前时刻重验原任职 / 绑定 / 分管；随后补同岗位第二条任职在等待中生效（包含同账号）矩阵，以有效任职数量唯一而非用户去重判定，不能重新选人继承原审批。外层事务预写后同幂等键曾形成反向锁序，真实双连接复现后统一问题→幂等→领域事实→用户 / 结构，重复提交 / 决定汇聚同回执。独立最终规格与Halley质量无未关闭P1/P2，主代理单份并发11项已通过。
+
+B3先规格后质量复核，返修空通知结果漏会话 / 时间生效MFA末尾复验，不能空列表即跳过授权；合法大写UUID查询原来返回空，真实HTTP红灯后只在范围比较规范UUID，跨组织仍403。离线通知不依赖在线session，由适配器显式`canNotifyRecipient`准入，缺回调失败关闭。Kant最终限定质量未留P1/P2。compiled新事件用例只证明实际Worker进入新handler并保留真实解析失败；成功通知由Nest聚合处理器测试证明，不混称compiled业务成功投递。
+
+B4静态与PG返修包括policy数组被字符串转换误接收、正确出口之外夹带额外边，以及起点绕开所有gate到CLOSE。最后一项在已注册fixture适配器下原本真实PUBLISHED，移除所有gate后检查起点仍可到终点则拒绝；首轮测试误改排序边导致普通400的假覆盖已纠正为按owner/SUBMIT定位且断言明确绕过错误。Goodall最终规格及限定质量未留P1/P2，主代理三文件97项通过。
+
+主代理整合专用closure-options、HTTP投影、root Outbox聚合、旧runtime守卫与生命周期。新路由初被`/:id`遮蔽400，调整注册次序；capability原广告实际拒绝的SUBMIT，真实红绿后同步检查目标gate。Schrodinger规格及Laplace独立质量无确定P1/P2。后者当时指出缺closure专属start / replay / 可信domainAccess完整矩阵，以及新表经真实聚合而非仅SQL谓词的生命周期用例；随后按9.9补齐并修正发现的JSON / UUID问题，完整生命周期HTTP停用 / 删除链仍未专测。当前轮次 / 回执响应均不泄露领域context / 内容快照。
+
+正式Web模板与预览分别TDD和独立审查：preview人员下拉搜索引发自禁用，改用单独可见搜索框；内部经理跳过与供应商HIGH双管理同人使用真实各自契约fixture，不能混为同一输出。模板未知结果保留原键 / body，当前POST401必须先释放共享busy再由effect导航，真实父dirty data-router红绿验证；Avicenna限定质量无确定P1/P2，但未覆盖实际浏览器视觉、所有父回调及重新认证矩阵。关闭待办由Godel / Volta分别修正401 / trace及unknown403 / 认证重放组合，Ramanujan / Mill独立规格和Plato质量关闭确定P2，主代理亲跑Inbox58及entry / helper / 旧认证三文件共67项全绿，不借前两组件审查结论覆盖。
+
+来源 / 内容变化的读路径只过滤失效职责；写路径实时取消旧轮并通过adapter恢复编辑。N2没有后台即时撤审扫描，N3必须将业务修改与cancel同事务接通。SUPPLIER策略目前由内部fixture身份验证，真实供应商组织 / 门户写资格在N5，不将内部测试通过扩大为供应商可用。
+
+### 9.8 N2-B发布与人工验收接续清单
+
+本节是将来检查步骤，不是已执行记录。O2只控制推送 / PR前由负责人开源；PR检查、合并 / 发布、生产配置、业务开通、人工验收与关闭回填各自核验，不因本地工程成果自动发生。
+
+| 角色 / 页面 | 步骤与预期 | 本轮状态 |
+| --- | --- | --- |
+| 流程维护人 / 流程列表 | 显式初始化候选草稿，不覆盖原定义、不自动发布；重试同请求不重复建稿 | 正式组件及真实HTTP由本地测试验证，真实页面人工待验 |
+| 流程维护人 / 设计器 | 选审核节点、策略、领域与科室 / 人员，预览缺项 / 同人职责可辨；切节点 / 科室不残留旧结果 | 组件测试及独立审查；键盘、窄屏和弹层实际视觉待验 |
+| 流程维护人 / 发布 | 未注册实际领域适配器时明确阻止发布；旧无closure图仍可按原规则发布 | 真实PG验证；生产禁止为演示注册fixture或绕过门禁 |
+| 审批人 / 我的待办 | 关闭审核页签仅在选中时挂载，显示当前职责和历史；专业与双管理确认不能混并 | 使用隔离fixture组件 / PG测试，不表示生产已有新业务 |
+| 待办编辑 / 登录 | 401释放忙态后进入登录；403安全trace、409重读、未知结果保原请求；ESC及切页不丢稿 | 自动组件回归，正式登录环境待人工复核 |
+| 管理员 / 组织与岗位 | 先维护真实部门 / 科室、岗位、任职和部长分管，再由获准人员授予实际权限 | 未执行生产配置；不静默替管理员配权 |
+
+N3再把台账、完整8D报告、领域读取 / 写入授权、内容锁定与变更时同事务撤审接入实际适配器，然后才批准相应领域发布 / 绑定 / 试点开单。IMS依赖外部API，统计指标和AI仍按后续节点，不把本轮基础能力当全部问题管理交付。
+
+### 9.9 最终整合中发现的问题与验证纪律
+
+以下失败不覆盖、不重命名为PASS，最终结果另以冻结回归记录为准。
+
+- 第一轮整合复用已跑fixture的DB，旧supplier compiled worker未在batch25内取到目标事件；独立新DB重新迁移 / seed后原11项通过，无产品代码改动。修正新closure fixtures仅清理自有组织的closure事件，避免污染后跑的旧Worker，不清空全局队列。
+- 新DB全量API单进程于约4GB默认V8堆上限退出134，未取得完整测试结论。改用Jest列举全部受配测试文件，再按11文件的独立进程串行跑同一全量集合；独立compiled Worker另跑。不能将进程退出前未报告的用例计入通过，也不以删用例、Mock或Skip降低覆盖。
+- 同样的进程边界落实到CI：原integration job内串行四个Jest shard，同一次性DB、同runInBand、4096heap，任何片失败立即停止；不改job数量 / 门禁名 / 真实资源 / 独立Worker / always清理。根测试真实读取全部与四片清单验证无重复且并集完整，先wiring红灯后CI工具14项绿，全部根工具72项及归档隔离绿。Leibniz规格通过，云端是否消除OOM仍以将来实际CI为准，不提前声称。
+- 治理先检出WorkflowModule跨模块导入inbox Controller；将HTTP适配层迁回workflow目录并调整两个测试import，路由 / 权限metadata不变，模块边界127对已实际通过。文档来源摘要在正文完成后按真实复核更新，不改维护期限消除失败。
+- 补齐真实新表聚合后发现：只扫描UUID列会漏掉轮次context与职责participant的JSON科室引用，原4项红灯。新增明确的JSON存在性 / 在途查询；再由Newton规格发现大写部门UUID可绕过文本比较，补context-only与participant-only大写请求，旧实现6红4绿，四处双侧lower修正后legacy / lifecycle / old管理引用三文件20项全绿。终态仍阻删不阻停用，无关科室不误报。
+- Inbox的409原只清基线不清历史。最初缺席断言因Collapse重新折叠而假绿，改为再次展开并等待空态后真实红灯，补setHistory后绿。隔离样例同人双管理退回原可单项操作，改为明确两职责成组退回，旧红后3项全绿；均已由Ramanujan规格复核关闭。
+- Plato独立质量另指出unknown写后通知403永久busy及重新认证后自动重放审核POST。共享createAdminMutation只增加显式opt-out选项，默认30个调用点行为不改；真实认证链单测旧1红5绿，修后与旧认证邻接两文件8项全绿。Volta以accessRevoked先隔离再abort，失权后解除本页忙态、仍经脏稿确认退出并提示先前结果待核对；CLIENT_REAUTHENTICATION_COMPLETED保原body / key，初始化与409重置后均须显式重试。新增真实认证 / unknown→403 / 在途POST迟到success503401 / CSRF矩阵，主代理4文件67项包含全部Inbox58通过，Mill规格及Plato最终质量无未关闭P1/P2。
+
+Web全量曾为确定P2的返修主动中止两次，不计全量通过。API分批也曾为UUID P2主动中止，不汇总为最终结果。额外`tsconfig.spec.json`全测试类型检查返回非零，存在`@jest/globals`解析及其他测试诊断，未将所有错误归为历史；本轮新增显式类型错误已定向修正，标准API build / lint与实际Jest结果分别记录，不声称额外类型门禁通过。
+
+### 9.10 最终本地验证与资源边界
+
+API最终在全新`qms_n2b2_release`从空库执行110份迁移 / seed、build及标准lint成功后冻结验证；Jest实际配置182文件逐一与结果文件核对无重复、无遗漏，640份API源 / 测试 / 迁移前后SHA-256一致：
+
+| 范围 | 实际最终结果 |
+| --- | --- |
+| integration完整文件集合 | 110 suites / 1441项通过，按完整清单11文件独立进程串行运行，无pending / skip |
+| 标准非integration筛选 | 71 suites / 802项通过，同样独立进程批次，无integration文件混入 |
+| 独立compiled Worker | 1 suite / 8项通过，不借用其他源码dist，不与1441重复计数 |
+| 迁移、API build / lint、契约生成 / 同步 | 110份追加链成功；构建 / 类型标准门禁及契约通过 |
+| 根工具及归档隔离 | 72项通过，含实际Jest四分片覆盖检查；归档隔离通过 |
+| Compose静态配置 | foundation + production + scanning退出0，使用占位值、未启动生产服务 |
+
+PowerShell按if分支返回的单值splat曾把unit参数拆成字符，实际清单182文件含111个integration；核对清单发现后中止，明确传参重新跑71文件，错误选择的部分结果不累计。最终API原始报告 / 清单 / hash在Git外`n2-evidence/n2b-release-*`，未输出环境秘密或连接生产。CI仅配置四片串行，实际云端结果仍待开源 / PR后验证；Leibniz规格及Plato独立质量无确定P1/P2。
+
+Web按实际Vitest配置134文件核对互斥覆盖：第一组4文件67项已通过（含Inbox58），剩余65+65文件两独立进程各maxWorkers=1执行。Vitest的list命令忽略shard参数，未拿其重复列表冒称覆盖；改为实际完整文件列表手工互斥分组，最终以每份结果的文件集合及冻结hash复核。完整结果接续本节，不把第一组或正在运行状态写成全量通过。
+
+初次第二大组65文件537项有4文件 / 5项失败，61文件 / 532项通过；失败为既有供应商审核加载等待、PCN证据保稿10秒及供应商账号两项status拒绝清密码10秒。生产模块与测试当时gitdiff均为空。Audit整份独立6项仍1失败，PCN独立8项仍1失败，Targets独立4项通过，SupplierUsers独立18项再出现3失败（增加切组织迟到响应）；当时没有把失败归为环境或直接修改无关生产模块。原报告保留在Git外n2b-release-web-batch2.json及n2b-web-existing-isolated-*，随后按下述证据定位状态前提 / 受控响应并保留安全断言，没有靠增大超时消绿。
+
+最终已收拢，不覆盖上述原始失败：第一大组65文件668项原有MFA一项10秒超时（64文件667项通过），MFA整份10项与Targets整份4项在不改源码 / timeout下分别复验通过，保留其宽回归不稳定记录，不把独立通过写成首次分组全绿。
+
+首次暂存后`git diff --cached --check`另检出新fixture尾部多一个空行；仅清理`workflow-closure-round.fixture.ts`末尾空行，使用实际TypeScript transpileModule确认前后输出JavaScript逐字节一致，不改测试逻辑。原640份受检hash保留，提交候选的新hash另存Git外并验证其余639份一致，不把字节变化隐藏为原始快照一致。
+
+Sartre实测Audit顺序探针：第二项全页role查询的同步样式计算约1秒，占用事件循环至查找超时后records effect才启动；只把该测试改为先等实际记录摘要，再做具名role点击，mock / timeout / 后续pending-close断言不变。主代理默认forks运行Audit6与Targets4共10项通过。Curie实测PCN和Users全页role查询单次约1.2～2.3秒，证伪“父busy吞点击”猜测；只调整这两份测试的就绪前提 / 真实台账行 / tooltip查询范围，PCN保稿沿相邻用例fireEvent，Users保userEvent迟到响应和全局泄密断言，并增加精确PUT组织 / CAS及新组织读取断言。主代理默认forks独立整份PCN8 + Users18共26项通过，无跳过或timeout增加。Kuhn规格、Ohm读取精确diff的独立质量均无确定P1/P2，未修改供应商生产模块。
+
+最终将每个配置文件的最新完整通过结果与原始134文件清单逐一核对：**134文件 / 1272项全部有通过记录**，5份复验文件的用例名称集合及数量与原分组相同，未删 / 跳过任何失败项。不是一次全量命令全绿；原失败和追加的间歇失败均保留。原330份Web源快照只有3份获准测试fixture发生差异，所有生产源码保持一致；修正后重新冻结330文件，主代理26项复验、Web lint / build前后hash一致。完整汇总在Git外`n2b-web-final-complete-summary.json`及`n2b-web-final-per-file-results.json`。构建仅既有ExcelJS / AntD大chunk提示，不扩大为浏览器或生产验收。
+
+API验证结束后逐一核对Docker desktop-linux、完整ID、任务`qms-n2b2` / disposable标签、回环端口与mounts，只删除本任务PostgreSQL / RustFS / ClamAV / Mailpit四容器及其匿名卷。五份`n2b2-*environment.json`按绝对路径 / 父目录 / 55476及本任务库名确认后单独删除；原有encrypted-clean-fixture.zip和ClamAV只读绑定的deployment/clamd.conf前后hash一致。任务标签资源为空，没有prune、保留55440、生产或其他任务资源操作；测试原始报告 / hash保留在Git外。
+
+O2停止点：V0.0.30仍为同Issue #66 / REQ-0026 / N2-B，提交前已只读复核main70fdbab、Issue中原预留及无其他开放版本冲突。最终治理37文档 / 346本地链接 / 20来源复核 / 127模块依赖通过，3项维护仍开放，未改维护期限。当前分支`codex/qms-n2-workflow-foundations`仅本地，停在向负责人提醒临时开源的位置；不自动推送、建PR、合并、部署、改生产权限、关闭Issue或回填飞书。真实浏览器、完整阶段脚本和额外全测试类型检查未完成 / 未通过的边界保持9.8～9.9说明，不能以本地工程结果代替。

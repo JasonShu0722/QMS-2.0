@@ -48,7 +48,8 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
       where: { workflowInstanceId: instance.id, status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] } },
       data: { status: 'COMPLETED', completedAt: event.createdAt, version: { increment: 1 } },
     });
-    if (payload.status === 'RUNNING') {
+    // Closure duties are projected by their round event, never by the legacy single-task path.
+    if (payload.status === 'RUNNING' && object(node.config).closureReview === undefined) {
       const config = object(node.config);
       const slaMinutes = config.slaMinutes;
       if (slaMinutes !== undefined && (!Number.isSafeInteger(slaMinutes) || Number(slaMinutes) < 1 || Number(slaMinutes) > MAX_WORKFLOW_SLA_MINUTES)) invalidEvent();

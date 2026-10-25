@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { WorkflowValidationService } from '../../src/modules/workflow/workflow-validation.service.js';
+import { WorkflowValidationService, type WorkflowDraft } from '../../src/modules/workflow/workflow-validation.service.js';
 import { CreateWorkflowDto } from '../../src/modules/workflow/workflow.dto.js';
 
 const validDraft = () => ({
@@ -16,6 +16,127 @@ const validDraft = () => ({
     { id: 't2', from: 'approval', to: 'verify' },
     { id: 't3', from: 'verify', to: 'close' },
   ],
+});
+
+describe('controlled closure review schema', () => {
+  const service = new WorkflowValidationService();
+  const graph = (): WorkflowDraft => ({
+    nodes: [
+      { id: 'owner', type: 'ACTION', name: 'Owner', config: { isStart: true, assignment: { permission: 'workflow:act' } } },
+      { id: 'review', type: 'APPROVAL', name: 'Review', config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'NEUTRAL' } } },
+      { id: 'close', type: 'CLOSE', name: 'Close', config: { isEnd: true, assignment: { permission: 'workflow:act' } } },
+    ],
+    transitions: [
+      { id: 'submit', from: 'owner', to: 'review', action: 'SUBMIT' },
+      { id: 'approve', from: 'review', to: 'close', action: 'APPROVE' },
+      { id: 'return', from: 'review', to: 'owner', action: 'RETURN' },
+    ],
+  });
+
+  it('rejects a conditional start-to-close path bypassing every controlled closure gate', () => {
+    const draft = graph();
+    draft.transitions[0]!.condition = { field: 'severity', operator: 'ne', value: 'LOW' };
+    draft.transitions.push({ id: 'bypass', from: 'owner', to: 'close', action: 'SUBMIT', condition: { field: 'severity', operator: 'eq', value: 'LOW' } });
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_CLOSURE_BYPASS_NOT_ALLOWED');
+  });
+
+  it.each(['INTERNAL', 'SUPPLIER'])('uses %s closure duties instead of a legacy assignment', policy => {
+    const draft = graph();
+    (draft.nodes[1]!.config!.closureReview as Record<string, unknown>).policy = policy;
+    expect(service.validateDraft(draft)).toEqual({ valid: true, errors: [] });
+  });
+
+  it.each(['INTERNAL', 'SUPPLIER'])('rejects a single-element %s policy array without coercion at normalization', (policy: string) => {
+    const draft = graph();
+    (draft.nodes[1]!.config!.closureReview as Record<string, unknown>).policy = [policy];
+    expect(service.validateStructure(draft).errors).toContain('WORKFLOW_CLOSURE_CONFIG_INVALID:review');
+    expect(() => service.normalizeDraft(draft)).toThrow(expect.objectContaining({ status: 400, response: expect.objectContaining({ code: 'WORKFLOW_DRAFT_INVALID' }) }));
+  });
+
+  it('rejects an additional approve detour while retaining the valid approve-to-close edge', () => {
+    const draft = graph();
+    draft.nodes.push({ id: 'detour', type: 'ACTION', name: 'Detour', config: { assignment: 'QUALITY' } });
+    draft.transitions.push({ id: 'extra-approve', from: 'review', to: 'detour', action: 'APPROVE' },
+      { id: 'finish-detour', from: 'detour', to: 'close', action: 'SUBMIT' });
+    expect(service.validateStructure(draft).valid).toBe(true);
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_CLOSURE_APPROVE_REQUIRED:review');
+  });
+
+  it.each(['ACTION', 'APPROVAL'])('rejects an additional return to an upstream %s while retaining the valid owner return', (type: string) => {
+    const draft = graph();
+    draft.nodes.push({ id: 'prior', type, name: 'Prior', config: { assignment: 'QUALITY' } });
+    draft.transitions[0]!.to = 'prior';
+    draft.transitions.push({ id: 'prior-submit', from: 'prior', to: 'review', action: type === 'ACTION' ? 'SUBMIT' : 'APPROVE' },
+      { id: 'extra-return', from: 'review', to: 'prior', action: 'RETURN' });
+    expect(service.validateStructure(draft).valid).toBe(true);
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_CLOSURE_RETURN_REQUIRED:review');
+  });
+
+  it.each(['APPROVE', 'RETURN'])('rejects duplicate %s routes even when their target is valid', (action: string) => {
+    const draft = graph();
+    const route = draft.transitions.find(edge => edge.action === action)!;
+    draft.transitions.push({ ...route, id: 'duplicate-route' });
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it.each(['APPROVE', 'RETURN'])('rejects conditional %s routes that leave a controlled duty decision without an unconditional route', (action: string) => {
+    const draft = graph();
+    draft.transitions.find(edge => edge.action === action)!.condition = { field: 'severity', operator: 'eq', value: 'HIGH' };
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it('rejects an extra reject route alongside the valid approve and return routes', () => {
+    const draft = graph();
+    draft.transitions.push({ id: 'extra-reject', from: 'review', to: 'owner', action: 'REJECT' });
+    expect(service.validateDraft(draft).valid).toBe(false);
+  });
+
+  it('accepts a transformed HTTP DTO without treating absent optional fields as static assignments', async () => {
+    const dto = plainToInstance(CreateWorkflowDto, { code: 'TEST', name: 'Test', ...graph() });
+    expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+    expect(service.validateDraft({ nodes: dto.nodes as unknown as WorkflowDraft['nodes'], transitions: dto.transitions })).toEqual({ valid: true, errors: [] });
+  });
+
+  it.each([null, false, [], 'INTERNAL', {}, { schemaVersion: 2, policy: 'INTERNAL', domainCode: 'NEUTRAL' },
+    { schemaVersion: 1, policy: 'OTHER', domainCode: 'NEUTRAL' }, { schemaVersion: 1, policy: 'INTERNAL' },
+    { schemaVersion: 1, policy: 'INTERNAL', domainCode: '' }, { schemaVersion: 1, policy: 'INTERNAL', domainCode: ' NEUTRAL' },
+    { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'x'.repeat(101) },
+    { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'NEUTRAL', assigneeUserId: 'extra' },
+  ])('rejects malformed closure metadata %j at service and transport boundaries', async (closureReview: unknown) => {
+    const draft = graph(); draft.nodes[1]!.config!.closureReview = closureReview;
+    expect(service.validateStructure(draft).valid).toBe(false);
+    expect(await validate(plainToInstance(CreateWorkflowDto, { code: 'TEST', name: 'Test', ...draft }), { whitelist: true, forbidNonWhitelisted: true })).not.toHaveLength(0);
+  });
+
+  it.each(['ACTION', 'VERIFICATION', 'CC', 'CLOSE'])('rejects closure metadata on %s', type => {
+    const draft = graph(); draft.nodes[1]!.type = type;
+    expect(service.validateStructure(draft).valid).toBe(false);
+  });
+
+  it.each([{ isStart: true }, { isEnd: true }, { assignment: { permission: 'workflow:act' } }, { assignment: null },
+    { slaMinutes: 60, escalation: { roleCode: 'MANAGER' } }, { escalation: null }])('rejects incompatible closure config %j', config => {
+    const draft = graph(); Object.assign(draft.nodes[1]!.config!, config);
+    expect(service.validateStructure(draft).valid).toBe(false);
+  });
+
+  it('allows safe incomplete drafts but requires an explicit return to an earlier action and approve to the sole close', () => {
+    const draft = graph(); draft.transitions.pop();
+    expect(service.validateStructure(draft).valid).toBe(true);
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_CLOSURE_RETURN_REQUIRED:review');
+    draft.transitions.push({ id: 'wrong', from: 'review', to: 'close', action: 'RETURN' });
+    expect(service.validateDraft(draft).valid).toBe(false);
+    const indirect = graph(); indirect.transitions[1]!.to = 'after';
+    indirect.nodes.push({ id: 'after', type: 'ACTION', name: 'After', config: { assignment: 'QUALITY' } });
+    indirect.transitions.push({ id: 'finish', from: 'after', to: 'close', action: 'SUBMIT' });
+    expect(service.validateDraft(indirect).errors).toContain('WORKFLOW_CLOSURE_APPROVE_REQUIRED:review');
+  });
+
+  it('retains legacy close assignment, verification and graph safety constraints', () => {
+    const draft = graph(); draft.nodes[2]!.config!.assignment = undefined;
+    expect(service.validateDraft(draft).errors).toContain('WORKFLOW_ASSIGNMENT_REQUIRED:close');
+    const unsafe = graph(); unsafe.nodes[2]!.config!.requireIndependentVerification = 'true';
+    expect(service.validateDraft(unsafe).valid).toBe(false);
+  });
 });
 
 describe('WorkflowValidationService', () => {

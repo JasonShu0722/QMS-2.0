@@ -231,7 +231,12 @@ jobs:
         env:
           NODE_ENV: development
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm --filter @qms/api test:integration
+        run: |
+          set -euo pipefail
+          # Release Jest VM state between shards without parallel writes to the disposable database.
+          for shard in 1 2 3 4; do
+            pnpm --filter @qms/api test:integration --shard="$shard/4"
+          done
       - name: Real worker process lifecycle
         env:
           NODE_ENV: development

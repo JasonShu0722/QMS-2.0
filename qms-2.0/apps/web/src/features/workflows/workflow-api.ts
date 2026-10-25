@@ -6,6 +6,7 @@ export type WorkflowNode = WorkflowGraph['nodes'][number];
 export type WorkflowEdge = WorkflowGraph['transitions'][number];
 export type WorkflowDefinition = components['schemas']['WorkflowDefinitionResponseDto'];
 export type WorkflowOptions = components['schemas']['WorkflowOptionsDto'];
+export type WorkflowClosureTemplateInput = components['schemas']['CreateWorkflowClosureTemplateDto'];
 type WriteBody = components['schemas']['CreateWorkflowDto'] | components['schemas']['UpdateWorkflowDraftDto'] | components['schemas']['PublishWorkflowDto'] | components['schemas']['CopyWorkflowDto'] | components['schemas']['WorkflowGraphDto'];
 async function write<Result>(path: string, body: WriteBody, method = 'POST'): Promise<Result> {
   const token = await csrfToken();
@@ -15,6 +16,12 @@ export const getWorkflows = (query: URLSearchParams, signal?: AbortSignal) => ap
 export const getWorkflow = (id: string, signal?: AbortSignal) => apiRequest<components['schemas']['WorkflowDefinitionDetailDto']>(`/api/v1/workflows/${id}`, { signal });
 export const getWorkflowVersion = (id: string, version: string, signal?: AbortSignal) => apiRequest<WorkflowDefinition>(`/api/v1/workflows/${id}/versions/${version}`, { signal });
 export const getWorkflowOptions = (search = '', signal?: AbortSignal) => apiRequest<WorkflowOptions>(`/api/v1/workflows/options?${new URLSearchParams({ search, limit: '100' })}`, { signal });
+export const getWorkflowClosureTemplates = (signal?: AbortSignal) => apiRequest<components['schemas']['WorkflowClosureTemplatesDto']>('/api/v1/workflows/closure-templates', { signal });
+export async function createWorkflowClosureTemplate(body: WorkflowClosureTemplateInput, key: string, signal?: AbortSignal): Promise<WorkflowDefinition> {
+  const token = await csrfToken(signal);
+  signal?.throwIfAborted();
+  return apiRequest<WorkflowDefinition>('/api/v1/workflows/closure-templates', { method: 'POST', signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body) }, { replayAfterReauthentication: false });
+}
 export const createWorkflow = (body: components['schemas']['CreateWorkflowDto']) => write<WorkflowDefinition>('', body);
 export const saveWorkflow = (id: string, body: components['schemas']['UpdateWorkflowDraftDto']) => write<WorkflowDefinition>(`/${id}/draft`, body, 'PATCH');
 export const publishWorkflow = (id: string, body: components['schemas']['PublishWorkflowDto']) => write<WorkflowDefinition>(`/${id}/publish`, body);

@@ -98,6 +98,32 @@ describe('workflow closure configuration preview with real HTTP and PostgreSQL',
     expect(await counts()).toEqual(before);
   });
 
+  it('provides bounded named configuration choices with workflow manage alone and never exposes email or foreign identities', async () => {
+    const f = await fixture(); const other = await fixture();
+    await prisma.rolePermission.deleteMany({ where: { roleId: f.governor.id, permission: { code: 'organization:structure:manage' } } });
+    const choices = (await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?pageSize=1&page=1').set('Cookie', f.cookie).expect(200)).body;
+    expect(choices).toMatchObject({ page: 1, pageSize: 1, departmentTotal: 2, userTotal: 4 });
+    expect(choices.departments).toHaveLength(1); expect(choices.users).toHaveLength(1);
+    expect(Object.keys(choices.users[0]).sort()).toEqual(['fullName', 'id', 'username']);
+    expect(JSON.stringify(choices)).not.toContain(other.professional.user.id);
+    const found = (await request(app.getHttpServer()).get(`/api/v1/workflows/closure-options?search=${f.professional.user.username}`).set('Cookie', f.cookie).expect(200)).body;
+    expect(found.users).toEqual([{ id: f.professional.user.id, username: f.professional.user.username, fullName: null }]);
+    const second = (await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?pageSize=1&page=2').set('Cookie', f.cookie).expect(200)).body;
+    expect(second.users[0].id).not.toBe(choices.users[0].id); expect(second.departments[0].id).not.toBe(choices.departments[0].id);
+    expect(Object.keys(choices.departments[0]).sort()).toEqual(['code', 'id', 'name']);
+    await prisma.user.update({ where: { id: f.professional.user.id }, data: { fullName: 'Distinct quality name' } });
+    const named = (await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?search=Distinct').set('Cookie', f.cookie).expect(200)).body;
+    expect(named.users.map((item: { id: string }) => item.id)).toEqual([f.professional.user.id]);
+    const section = (await request(app.getHttpServer()).get(`/api/v1/workflows/closure-options?search=${f.section.code}`).set('Cookie', f.cookie).expect(200)).body;
+    expect(section.departments).toEqual([{ id: f.section.id, code: f.section.code, name: f.section.name }]);
+    await prisma.user.update({ where: { id: f.professional.user.id }, data: { status: 'DISABLED' } });
+    expect((await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?search=Distinct').set('Cookie', f.cookie).expect(200)).body.users).toEqual([]);
+    for (const query of ['pageSize=101', 'organizationId='+other.org.id, 'page=0', 'page=101']) await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?'+query).set('Cookie', f.cookie).expect(400);
+    await request(app.getHttpServer()).get('/api/v1/workflows/closure-options').expect(401);
+    await prisma.userRole.deleteMany({ where: { userId: f.actor.id } });
+    await request(app.getHttpServer()).get('/api/v1/workflows/closure-options').set('Cookie', f.cookie).expect(403);
+  });
+
   it('skips only an internal low/medium manager who is the valid owner, never the professional review', async () => {
     const f = await fixture(); await f.binding('SECTION_MANAGER');
     const result = (await f.post({ ...f.body, severity: 'MEDIUM', ownerUserId: f.manager.user.id, professionalUserId: f.manager.user.id }).expect(200)).body;
