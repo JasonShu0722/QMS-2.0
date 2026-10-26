@@ -22,6 +22,7 @@ const validId = (id: string) => { if (!isUUID(id)) ledgerFail('CUSTOMER_LEDGER_R
 const iso = (value: Date | string | null | undefined) => value == null ? null : value instanceof Date ? value.toISOString() : value;
 const date = (value: Date | string | null | undefined) => iso(value)?.slice(0, 10) ?? null;
 const json = (value: unknown) => JSON.stringify(value);
+const nonempty = (value: unknown) => value != null && !(typeof value === 'string' && !value.trim());
 const version = (value: number) => { if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) ledgerFail('CUSTOMER_LEDGER_VERSION_INVALID'); };
 const note = (value: string) => { if (!value?.trim() || value.trim().length > 10000) ledgerFail('CUSTOMER_LEDGER_NOTE_REQUIRED'); return value.trim(); };
 
@@ -236,7 +237,8 @@ export class CustomerComplaintLedgerService {
         ${query.mine === 'true' ? Prisma.sql`AND ${effectiveEngineer} = ${actor.id}` : Prisma.empty}
         ${query.occurredFrom ? Prisma.sql`AND c.ledger_normalized->>'occurredOn' >= ${query.occurredFrom}` : Prisma.empty}
         ${query.occurredTo ? Prisma.sql`AND c.ledger_normalized->>'occurredOn' <= ${query.occurredTo}` : Prisma.empty}
-        ${query.search ? Prisma.sql`AND strpos(lower(COALESCE(c.ledger_raw::text,'') || ' ' || COALESCE(c.defect_description,'') || ' ' || c.complaint_number),lower(${query.search})) > 0` : Prisma.empty}`;
+        ${query.search ? Prisma.sql`AND (strpos(lower(COALESCE(c.ledger_raw::text,'') || ' ' || COALESCE(c.defect_description,'') || ' ' || c.complaint_number),lower(${query.search})) > 0
+          OR EXISTS (SELECT 1 FROM customer_quality_customers customer WHERE customer.organization_id = c.organization_id AND customer.id = c.customer_id AND strpos(lower(customer.name),lower(${query.search})) > 0))` : Prisma.empty}`;
       const join = Prisma.sql`LEFT JOIN jsonb_to_recordset(${json(mapRows)}::jsonb) AS m(code text, stage text, project text, engineer text) ON m.code = COALESCE(c.ledger_normalized->>'componentCode',c.product_code)`;
       const [total] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM customer_quality_complaints c ${join} WHERE ${filter}`);
       const rows = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT c.* FROM customer_quality_complaints c ${join} WHERE ${filter} ORDER BY c.created_at DESC,c.id LIMIT ${query.pageSize} OFFSET ${(query.page-1)*query.pageSize}`);
@@ -263,7 +265,7 @@ export class CustomerComplaintLedgerService {
       ${eventType},${ledgerDisplayStatus(row.ledger_status,row.status)},${toStatus},${description},${actor.id}::uuid)`;
   }
 
-  private async createRow(tx: AdminTransaction, actor: AdminActor, input: CustomerLedgerCreateDto, traceId: string) {
+  private async prepareCreation(tx: AdminTransaction, actor: AdminActor, input: CustomerLedgerCreateDto) {
     const organizationId = this.scope(actor);
     const customer = await this.customer(tx, organizationId, input.customerId);
     const facts = normalizeComplaintFields(input.fields);
@@ -273,6 +275,12 @@ export class CustomerComplaintLedgerService {
     const automaticId = stage === 'NEW_PRODUCT' ? resolution!.projectEngineer.assignmentId : resolution?.customerEngineer.assignmentId;
     const assignment = await this.eligible(tx, organizationId, input.qualityEngineerAssignmentId ?? automaticId ?? null, stage);
     if (input.qualityEngineerAssignmentId && !assignment) ledgerFail('CUSTOMER_LEDGER_ENGINEER_UNAVAILABLE', 409);
+    if (nonempty(input.fields.investigation) && assignment?.userId !== actor.id) ledgerFail('CUSTOMER_LEDGER_RESPONSIBILITY_DENIED', 403);
+    return { organizationId, customer, facts, resolution, stage, assignment };
+  }
+
+  private async createRow(tx: AdminTransaction, actor: AdminActor, input: CustomerLedgerCreateDto, traceId: string) {
+    const { organizationId, customer, facts, resolution, stage, assignment } = await this.prepareCreation(tx, actor, input);
     const source = assignment ? input.qualityEngineerAssignmentId ? 'MANUAL' : 'MAPPING' : null;
     const id = randomUUID(); const number = `CQ-${id}`;
     const [row] = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_complaints
@@ -296,8 +304,7 @@ export class CustomerComplaintLedgerService {
     const row = await this.row(tx, current.organizationId, id);
     if (supplement && input.qualityEngineerAssignmentId !== undefined) ledgerFail('CUSTOMER_LEDGER_SUPPLEMENT_SCOPE_INVALID');
     const investigation = input.fields.investigation;
-    const nonemptyInvestigation = investigation != null && !(typeof investigation === 'string' && !investigation.trim());
-    if (investigation !== undefined && (supplement ? nonemptyInvestigation : current.qualityEngineerId !== actor.id)) ledgerFail('CUSTOMER_LEDGER_RESPONSIBILITY_DENIED', 403);
+    if (investigation !== undefined && (supplement ? nonempty(investigation) : current.qualityEngineerId !== actor.id)) ledgerFail('CUSTOMER_LEDGER_RESPONSIBILITY_DENIED', 403);
     const raw = supplement ? mergeComplaintSupplement(this.fields(row), input.fields) : { ...this.fields(row), ...input.fields };
     const facts = normalizeComplaintFields(raw);
     const customerId = input.customerId === undefined || (supplement && !input.customerId) ? row.customer_id : input.customerId;
@@ -415,8 +422,11 @@ export class CustomerComplaintLedgerService {
       for (const row of dto.rows) {
         const item = this.receipt(row, 'PREVIEW');
         item.similarities = await this.similarities(tx, actor, row.fields);
-        if (row.action === 'SUPPLEMENT') {
-          try { await this.lockCase(tx, actor, row.targetId!, row.expectedVersion!, 'update'); }
+        if (row.action === 'ADD' || row.action === 'SUPPLEMENT') {
+          try {
+            if (row.action === 'ADD') await this.prepareCreation(tx, actor, row);
+            else await this.lockCase(tx, actor, row.targetId!, row.expectedVersion!, 'update');
+          }
           catch (error) {
             if (!(error instanceof HttpException)) throw error;
             item.errorCode = (error.getResponse() as { code: string }).code; item.outcome = 'FAILED';
