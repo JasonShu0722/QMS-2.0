@@ -13,7 +13,7 @@
 | 评审 | 优化后开工：复用有效授权与SQL对应逻辑、已有问题中心/8D表单和出货组件；管理员范围是负责人本轮明确变更，不把旧“本组织全量”规则当永久限制；具体身份与安全初始化需先核对真实来源 |
 | 现状与不确定项 | 组织创建自动治理仅5权限且无audit:read；删除初始化判定依赖创建人/回执/审计严格匹配；审计查询导出均动作精确匹配；制程缺独立8D列表，出货挂台账底部。登记按钮存在且页头布局有横向溢出嫌疑；ZLGLB实际阻断仍需只读证据，不能冒称旧兼容根因 |
 | 停止点 | 本地实现、双审及适用真实验证完成后到PR检查点；GitHub实际回读visibility=public，验证后按持续授权推送/PR，代理未改可见性。合并/部署、生产配权/流程启用、目标删除及飞书状态变更另核准；不自动N4 |
-| 下一动作 | A/B/C/D/E及最后READ锁返修双审通过，PR #73已创建。首轮CI旧details期望已在两个相邻文件补齐，父13项真实PG及Descartes规格/Popper质量复核通过；推送测试接续补丁后检查最新head的CI，不改运行时规则、不合并/部署 |
+| 下一动作 | PR #73第二个head44da668的完整PG/Worker/API及三个Web分片通过，Web第二分片新弹窗用例同步失败已单行返修：实际本地红灯、完整32项通过及Bacon规格/Wegener质量通过。更新原PR并核最新head的CI；不改运行时规则、不合并/部署 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/req0030-evidence/approved-start.json及issue-created.json；不连接55440，生产只读与一次性测试明确分开 |
 
 ## 1. 范围和最小方案
@@ -92,6 +92,14 @@
 首个head22a2f9e已推送并创建PR #73；Foundation40297624053的scope/checks/API unit成功，integration第一分片32文件543项中542通过、1失败，其余PG分片及Worker未因此获得PASS。失败为organization-management-references旧内部读取模型严格toEqual缺少本轮新增details，并非数据库部署或线上故障。同一公开读取模型调用方搜索还发现closure-lifecycle有同类期望，统一补齐精确明细并保留原历史/未来/活动状态、大小写UUID和父轮次判定，不删除用例或降低断言；原失败日志保存于Git外pr-ci-first-integration-failure.log。
 
 Singer在原两个完整真实PG文件先复现11失败/2通过，仅增加details的精确toEqual期望后13/13通过；父独立重新执行相同两个完整文件13/13通过，无skip，端口55478。未修改生产源码、fixture构建、timeout、测试事件或原判定；这里只接续内部返回结构，不能声称修复了新的线上删除事实。日志/哈希在ci-reference-shape-repair；Descartes独立SPEC及Popper独立QUALITY均通过，精确去除17处details属性可还原原始文件哈希，无降低断言。按原PR推送，不重跑与此测试期望无关的全Web或数据库构建。
+
+head44da668的Foundation40300928058完整执行4份真实PG分片：32/31/31/31文件、543/268/426/437项，合计125文件1674项全通过，编译Worker8项通过，实际迁移/扫描/对象存储前置及一次性资源销毁均在成功步骤内。scope/checks/API单测及Web分片1/3/4成功；Web分片2为38文件496项中495通过、1失败，foundation汇总因此失败，不记录为9项通过。失败为OrganizationWorkspace新增弹窗用例false分支：findByText只等DOM附着，不等AntD入场动画后可见，toBeVisible在隐藏li上提前断言。接续只等待原相同可见条件，不延长timeout、关闭motion或改生产代码；保留实际云端失败pr-second-web2-failure.log。
+
+首轮普通Git推送和不同TLS后端/直连诊断均遇连接中断，已回读确认远端旧head后，使用官方GitHub Git对象API上传精确5个blob、匹配完整tree和本地commit44da668，以force=false更新原功能分支；完整SHA回读一致。没有修改全局代理或关闭证书校验，没有创建不同源码的远端提交。Git外git-object-upload/verification.json记录精确一致校验。
+
+Rawls仅将OrganizationWorkspace.test.tsx第31行改为await waitFor内的原getByText/toBeVisible条件；原始定向2项实际1通过/1失败、30未选，完整文件32项修后全部通过（无skip/todo，约233秒）。Bacon独立静态SPEC及Wegener独立静态QUALITY均通过，二者审查时完整执行尚未结束，不能称审查者亲自执行绿灯。生产源码、默认motion和timeout、原权限链接与禁用断言不变。两处文档差异是父代理同步证据的预期修改，worker未覆盖；最终文档摘要更新后由父同步来源哈希、重核治理，不以worker该时点的stale hash失败替代最终结果。
+
+父再独立运行原true/false两分支，2通过、30未选；不把该定向结果记为完整32项或与worker32项相加。ci-modal-visibility-repair/parent-focused.json保留完整记录；测试源修前后单行差异及最终SHA一致已复核。
 
 ## 7. 发布后人工验收清单（待执行）
 

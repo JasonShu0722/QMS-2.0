@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "cbbf2d4289e3685ad410c6714c91405b5d82fc98e522c7c90e88bca95089e1ae"
+            "sha256": "653c86a4d8c11bfb265356df99cf7331c05e8aec93caf1f5bd2993a969b05f80"
           },
           {
             "path": "README.md",
@@ -500,7 +500,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "e4f51e60df79ad8e0a4b7771b4e188add173e622bd2eaf8699c394a4906a8596"
+            "sha256": "0d3e4e2bd64b53cfa184bb0950ddf4e7d040d62cd64db8ac201dbadbef002b51"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -708,7 +708,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md",
-            "sha256": "6656ab96bf46e6383d7841d266222b19e811186d673e4c718e3fc51b38a3f113"
+            "sha256": "6ad1c203ffaad32b4ace5185ae2ff656fc2a3401f9538633f7697c16c74fbfec"
           }
         ]
       }

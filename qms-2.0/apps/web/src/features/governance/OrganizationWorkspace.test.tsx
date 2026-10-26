@@ -28,7 +28,7 @@ it.each([true, false])('shows actionable lifecycle details and only exposes an a
   render(<MemoryRouter><StructureLifecycleActions path="/api/v1/organizations/child" record={organization} auditOrganizationId={canReadAudit ? org.id : undefined} onChanged={vi.fn()} /></MemoryRouter>);
   await userEvent.click(screen.getByRole('button', { name: /^删\s*除$/ }));
   const dialog = within(await screen.findByRole('dialog'));
-  expect(await dialog.findByText('请核对额外授权来源，不能自动删除。 · 2')).toBeVisible();
+  await waitFor(() => expect(dialog.getByText('请核对额外授权来源，不能自动删除。 · 2')).toBeVisible());
   expect(dialog.getByRole('button', { name: '确认删除' })).toBeDisabled();
   if (canReadAudit) {
     expect(dialog.getByRole('link', { name: '定位此组织审计' })).toHaveAttribute('href', `/app/admin?organizationId=${org.id}&section=audit-log&resourceType=Organization&resourceId=${organization.id}`);
