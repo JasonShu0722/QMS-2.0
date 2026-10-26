@@ -16,7 +16,7 @@ type Attempt = { path: string; body: Decision; key: string };
 const base = '/api/v1/process-quality/eight-d';
 const extensionBase = '/api/v1/workflow-deadline-extensions';
 const stages = { ANALYSIS: '分析计划', SUBMISSION: '完整提交计划', CLOSURE: '关闭计划' };
-const statuses = { HANDLING: '负责人处理', LEADER_PENDING: '上级待审', QUALITY_PENDING: '专业待审' };
+const statuses = new Map([['HANDLING', '负责人处理'], ['LEADER_PENDING', '上级待审'], ['QUALITY_PENDING', '专业待审'], ['AVAILABLE', '可申请延期']]);
 
 export function ProcessEightDTaskInbox() {
   const session = useWorkTabsStore(state => state.sessionScope);
@@ -93,6 +93,7 @@ function InboxScope({ session }: { session?: string }) {
   }, [unauthorized, session, completeSessionNavigation, navigate]);
   const workspace = (id: string, report = false) => `/app/problem-workspace/${encodeURIComponent(id)}${report ? '?view=report' : ''}`;
   const date = (value: string | null) => value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : t('未设置期限');
+  const status = (value: string) => value === 'AVAILABLE' && locale === 'en-US' ? 'Extension available' : t(statuses.get(value) ?? value);
   async function check(task: Task) {
     if (!current() || writing.current || attempt) return;
     reviewController.current?.abort();
@@ -147,15 +148,15 @@ function InboxScope({ session }: { session?: string }) {
         <p>{t('负责人处理与延期审批来自独立真实投影；不支持旧任务领取、转派或任意完成。关闭审核请使用关闭审核入口。')}</p>
         {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <Table<Task> rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t('暂无过程8D待办') }} columns={[
           { title: t('问题编号'), dataIndex: 'reportNumber' },
-          { title: t('职责'), render: (_, task) => `${t(statuses[task.status])} · ${t(stages[task.stage])}` },
+          { title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },
           { title: t('原期限'), render: (_, task) => <span>{date(task.dueAt)}{task.overdue ? ` · ${t('已逾期')}` : ''}</span> },
           { title: t('操作'), render: (_, task) => <Space wrap>
             {task.actions.includes('OPEN_REPORT') && <Link to={workspace(task.problemId, true)}>{t('打开8D报告')}</Link>}
             {task.kind === 'HANDLING' && <>
               {task.actions.includes('ANALYSIS_COMPLETE') && <Link to={workspace(task.problemId)}>{t('确认分析完成')}</Link>}
               {task.actions.includes('SUBMIT') && <Link to={workspace(task.problemId)}>{t('完整提交8D')}</Link>}
-              {task.actions.includes('REQUEST_EXTENSION') && <Link to={workspace(task.problemId)}>{t('申请延期')}</Link>}
             </>}
+            {task.actions.includes('REQUEST_EXTENSION') && <Link to={workspace(task.problemId)}>{t('申请延期')}</Link>}
             {task.kind === 'EXTENSION' && task.actions.includes('DECIDE_EXTENSION') && task.extensionRequestId && <Button disabled={!!selected || busy} onClick={event => { trigger.current = event.currentTarget; setSelected(task); setComment(''); setDecision('APPROVE'); void check(task); }}>{t('审核延期')}</Button>}
           </Space> },
         ]} />}

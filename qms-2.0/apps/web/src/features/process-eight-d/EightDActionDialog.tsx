@@ -38,14 +38,14 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
     risk: text('调整风险', 'Change risk'), sources: text('调整来源', 'Change sources'), deadlines: text('设置期限', 'Set deadlines'), extension: text('申请延期', 'Request extension'),
   };
   const reviewChange = (action === 'risk' || action === 'sources') && report.status === 'IN_REVIEW';
-  const handling = tasks?.items.find(task => task.problemId === report.problemId && task.kind === 'HANDLING' && task.actions.includes('REQUEST_EXTENSION'));
+  const requestTask = tasks?.items.find(task => task.problemId === report.problemId && task.actions.includes('REQUEST_EXTENSION'));
   useEffect(() => {
     if (action !== 'extension') return;
     let active = true; setTasks(undefined); setTaskError(false);
     read<Tasks>(`/api/v1/process-quality/eight-d/tasks?problemId=${encodeURIComponent(report.problemId)}&pageSize=100&offset=0`).then(result => {
       if (!active) return;
       setTasks(result);
-      const task = result.items.find(item => item.kind === 'HANDLING' && item.actions.includes('REQUEST_EXTENSION'));
+      const task = result.items.find(item => item.problemId === report.problemId && item.actions.includes('REQUEST_EXTENSION'));
       if (task?.extensionStages[0]) setStage(task.extensionStages[0]);
     }).catch(cause => { if (active && !aborted(cause)) setTaskError(true); });
     return () => { active = false; };
@@ -65,7 +65,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
       case 'sources': if (!sourceChange) return; body = { ...base, ...sourceChange, reason, confirmCancelApproval: cancelApproval }; break;
       case 'deadlines': body = { ...base, ...(analysisDueAt ? { analysisDueAt: date(analysisDueAt) } : {}), ...(closureDueAt ? { closureDueAt: date(closureDueAt) } : {}) }; break;
       case 'extension':
-        if (!handling?.extensionStages.includes(stage) || handling.rowVersion !== report.version || handling.instanceVersion !== report.instanceVersion) return;
+        if (!requestTask?.extensionStages.includes(stage) || requestTask.rowVersion !== report.version || requestTask.instanceVersion !== report.instanceVersion) return;
         body = { expectedRowVersion: report.version, expectedInstanceVersion: report.instanceVersion, stage, requestedDueAt: date(requestedDueAt), reason };
         break;
     }
@@ -75,7 +75,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
   const validAction = action === 'reassign' ? !!selected[0] && !!section
     : action === 'sources' ? !!sourceChange
       : action === 'deadlines' ? !!analysisDueAt || !!closureDueAt
-        : action === 'extension' ? !!handling?.extensionStages.includes(stage) && handling.rowVersion === report.version && handling.instanceVersion === report.instanceVersion : true;
+        : action === 'extension' ? !!requestTask?.extensionStages.includes(stage) && requestTask.rowVersion === report.version && requestTask.instanceVersion === report.instanceVersion : true;
   return <Modal open={open} afterClose={afterClose} focusable={{ focusTriggerAfterClose: open }} title={`${report.reportNumber} · ${titles[action]}`} onCancel={() => { if (!disabled) onClose(); }} footer={null} closable={!disabled} mask={{ closable: false }} keyboard={!disabled} width={720}>
     <form style={css} className={styles.modal} onChange={onDirty} onSubmit={event => { event.preventDefault(); if (valid && validAction) void submit(); }}>
       {recovery}
@@ -87,8 +87,8 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
       {action === 'sources' && <EightDSourcePicker report={report} read={read} disabled={disabled} onChange={setSourceChange} />}
       {action === 'deadlines' && <><p>{text('不猜默认天数，显式选择日期。原期限在延期全部通过前不改变。', 'Choose explicit dates; no default days are inferred. Existing deadlines stay in force until an extension is fully approved.')}</p>{datetime(text('分析 / 对策期限', 'Analysis / countermeasure deadline'), analysisDueAt, setAnalysisDueAt)}{datetime(text('关闭计划', 'Planned closure'), closureDueAt, setClosureDueAt)}</>}
       {action === 'extension' && <>{!tasks && !taskError ? <Spin /> : null}{taskError ? <Alert type="error" title={text('延期资格加载失败', 'Extension eligibility could not be loaded')} action={<Button onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</Button>} /> : null}
-        {tasks && !handling ? <Alert type="info" title={text('当前无可申请延期阶段', 'No eligible extension stages')} /> : null}
-        <EightDField label={text('延期阶段', 'Extension stage')}><select disabled={disabled || !handling} value={stage} onChange={event => setStage(event.target.value as Stage)}>{handling?.extensionStages.map(item => <option key={item} value={item}>{item === 'ANALYSIS' ? text('分析', 'Analysis') : item === 'SUBMISSION' ? text('完整提交', 'Submission') : text('关闭', 'Closure')}</option>)}</select></EightDField>
+        {tasks && !requestTask ? <Alert type="info" title={text('当前无可申请延期阶段', 'No eligible extension stages')} /> : null}
+        <EightDField label={text('延期阶段', 'Extension stage')}><select disabled={disabled || !requestTask} value={stage} onChange={event => setStage(event.target.value as Stage)}>{requestTask?.extensionStages.map(item => <option key={item} value={item}>{item === 'ANALYSIS' ? text('分析', 'Analysis') : item === 'SUBMISSION' ? text('完整提交', 'Submission') : text('关闭', 'Closure')}</option>)}</select></EightDField>
         {datetime(text('申请新期限', 'Requested deadline'), requestedDueAt, setRequestedDueAt, true)}
         <Alert type="info" title={text('上级 → 质量侧依次审批。同人仅跳上级并留痕，不跳质量侧；原期限不暂停。', 'Leader → quality review in sequence. Same-person leader review is skipped with an audit record, never quality review. The original deadline remains active.')} />
       </>}

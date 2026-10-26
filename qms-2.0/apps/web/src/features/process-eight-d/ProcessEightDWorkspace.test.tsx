@@ -18,7 +18,7 @@ const report: Report = {
   problemId: 'problem-1', reportNumber: '8D-001', organizationId: 'org-1', instanceId: 'instance-1', workflowVersionId: 'flow-1', instanceVersion: 3, problemVersion: 2,
   version: 7, contentVersion: 4, status: 'PROCESSING', severity: 'MEDIUM', ownerUserId: 'owner-1', professionalUserId: 'quality-1', responsibleSectionDepartmentId: 'section-1',
   collaboratorUserIds: [], document, analysisCompletedAt: null, analysisDueAt: null, submissionDueAt: null, closureDueAt: null, submittedAt: null, closedRevisionId: null,
-  allowedActions: ['read', 'save', 'submit', 'analysis-complete', 'collaborators', 'reassign', 'risk', 'sources', 'deadlines'], sources: [], revisions: [],
+  allowedActions: ['read', 'save', 'submit', 'analysis-complete', 'collaborators', 'reassign', 'risk', 'sources', 'deadlines', 'request-extension'], sources: [], revisions: [],
 };
 let current: Report;
 let writes: { path: string; init: RequestInit; body: Record<string, unknown> }[];
@@ -729,6 +729,79 @@ it('uses actual task extension stages and both row/instance versions for an expl
   fireEvent.click(within(dialog).getByRole('button', { name: '确认提交' })); await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].path).toBe('/api/v1/workflow-deadline-extensions/problems/problem-1/requests');
   expect(writes[0].body).toEqual({ expectedRowVersion: 7, expectedInstanceVersion: 3, stage: 'SUBMISSION', requestedDueAt: new Date('2026-11-01T16:00').toISOString(), reason: '追加真实批次验证' });
+});
+
+function reviewExtension() {
+  current.status = 'IN_REVIEW'; current.allowedActions = ['read', 'request-extension'];
+  return { id: 'extension-request:problem-1', kind: 'EXTENSION_REQUEST', status: 'AVAILABLE', problemId: 'problem-1',
+    rowVersion: 7, instanceVersion: 3, actions: ['OPEN_REPORT', 'REQUEST_EXTENSION'], extensionStages: ['CLOSURE'] };
+}
+
+it('allows only a server-projected closure extension during review and keeps content locked', async () => {
+  const task = reviewExtension();
+  intercept(path => path.includes('/eight-d/tasks?') ? response({ items: [task], total: 1 }) : undefined);
+  mount(); await screen.findByDisplayValue('真实过程问题');
+  for (const name of ['保存草稿', '完整提交', '专业重派 / 科室内转派']) expect(actions().queryByRole('button', { name })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('D4 分析过程')).toBeDisabled();
+  fireEvent.click(actions().getByRole('button', { name: '申请延期' }));
+  const dialog = within(await screen.findByRole('dialog'));
+  await waitFor(() => expect(dialog.getByLabelText('延期阶段')).toHaveValue('CLOSURE'));
+  expect(dialog.getAllByRole('option').map(option => option.getAttribute('value'))).toEqual(['CLOSURE']);
+  fireEvent.change(dialog.getByLabelText('申请新期限'), { target: { value: '2026-11-01T16:00' } });
+  fireEvent.change(dialog.getByLabelText('变更 / 申请理由'), { target: { value: '审批期间追加验证' } });
+  fireEvent.click(dialog.getByRole('button', { name: '确认提交' }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0]).toMatchObject({ path: '/api/v1/workflow-deadline-extensions/problems/problem-1/requests',
+    body: { stage: 'CLOSURE', expectedRowVersion: 7, expectedInstanceVersion: 3, reason: '审批期间追加验证' },
+    init: { method: 'POST', headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': expect.any(String) } } });
+  expect(screen.getByLabelText('D4 分析过程')).toBeDisabled();
+});
+
+it('does not infer extension permission from owner fields or submit permission', async () => {
+  current.allowedActions = ['read', 'submit'];
+  mount(); await screen.findByDisplayValue('真实过程问题');
+  expect(actions().queryByRole('button', { name: '申请延期' })).not.toBeInTheDocument();
+});
+
+it.each(['pending', 'wrong-problem', 'stale-row', 'stale-instance'])('does not send an extension for %s task eligibility', async mode => {
+  const task = reviewExtension();
+  if (mode === 'wrong-problem') task.problemId = 'other-problem';
+  if (mode === 'stale-row') task.rowVersion++;
+  if (mode === 'stale-instance') task.instanceVersion++;
+  intercept(path => path.includes('/eight-d/tasks?') ? response({ items: mode === 'pending' ? [] : [task], total: 1 }) : undefined);
+  mount(); await screen.findByDisplayValue('真实过程问题'); fireEvent.click(actions().getByRole('button', { name: '申请延期' }));
+  const dialog = within(await screen.findByRole('dialog'));
+  if (mode === 'pending' || mode === 'wrong-problem') await dialog.findByText('当前无可申请延期阶段');
+  else await waitFor(() => expect(dialog.getByLabelText('延期阶段')).toHaveValue('CLOSURE'));
+  fireEvent.change(dialog.getByLabelText('申请新期限'), { target: { value: '2026-11-01T16:00' } });
+  fireEvent.change(dialog.getByLabelText('变更 / 申请理由'), { target: { value: '不应发送' } });
+  expect(dialog.getByRole('button', { name: '确认提交' })).toBeDisabled();
+  fireEvent.click(dialog.getByRole('button', { name: '确认提交' })); expect(writes).toHaveLength(0);
+});
+
+it.each([401, 403])('clears extension eligibility and content after a %s task read', async status => {
+  reviewExtension();
+  intercept(path => path.includes('/eight-d/tasks?') ? response({ code: 'FEATURE_PERMISSION_DENIED', message: 'refused' }, status) : undefined);
+  mount(); await screen.findByDisplayValue('真实过程问题');
+  await waitFor(() => expect(actions().getByRole('button', { name: '申请延期' })).toBeEnabled());
+  fireEvent.click(actions().getByRole('button', { name: '申请延期' }));
+  await screen.findByText(/敏感内容已清除/);
+  expect(screen.queryByDisplayValue('真实过程问题')).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(writes).toHaveLength(0);
+});
+
+it('ignores late extension eligibility after the session scope changes', async () => {
+  const task = reviewExtension(); let release!: (value: Response) => void;
+  intercept(path => path.includes('/eight-d/tasks?') ? new Promise(resolve => { release = resolve; }) : undefined);
+  mount(); await screen.findByDisplayValue('真实过程问题');
+  fireEvent.click(actions().getByRole('button', { name: '申请延期' }));
+  await waitFor(() => expect(release).toBeDefined());
+  current.allowedActions = ['read'];
+  act(() => useWorkTabsStore.getState().bindSession('INTERNAL:other:org-1'));
+  await act(async () => release(response({ items: [task], total: 1 })));
+  await screen.findByDisplayValue('真实过程问题');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(actions().queryByRole('button', { name: '申请延期' })).not.toBeInTheDocument(); expect(writes).toHaveLength(0);
 });
 
 it('posts analysis completion with an explicitly chosen complete-submission plan', async () => {

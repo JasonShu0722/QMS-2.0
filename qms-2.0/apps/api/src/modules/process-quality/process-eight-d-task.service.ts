@@ -7,8 +7,7 @@ import { inboxPage } from '../task-notification/task.service.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
 import { WorkflowDeadlineExtensionService } from '../workflow/workflow-deadline-extension.service.js';
 import { assertWorkflowFeature, type WorkflowActor } from '../workflow/workflow-access-policy.js';
-import { deadlineDueAt, deadlineStageOpen } from '../workflow/workflow-deadline-extension.policy.js';
-import type { WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
+import { deadlineDueAt } from '../workflow/workflow-deadline-extension.policy.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
 import { ProcessEightDReminderService, type ProcessEightDNotificationKind } from './process-eight-d-reminder.service.js';
@@ -43,18 +42,21 @@ export class ProcessEightDTaskService {
           const stage = handlingReminderStage(c);
           const base = { problemId: c.problemId, reportNumber: record.problem.reportNumber, workflowVersionId: c.workflowVersionId,
             userId: actor.id, rowVersion: c.rowVersion, contentVersion: c.contentVersion, instanceVersion: c.instanceVersion };
+          const extensionStages = await this.reports.deadlineRequestStages(tx, actor, record);
           if (actor.id === c.ownerUserId && stage && record.instance.status === 'RUNNING' && record.instance.currentNodeId === c.ownerNodeId) {
             try {
               await this.reports.authorizeEdit(tx, actor, record);
-              const requests = await this.extensions.readProjection(tx, c.organizationId, c.problemId);
-              const extensionStages = actor.id !== c.professionalUserId && await this.extensions.policyCurrent(tx, c)
-                ? (['ANALYSIS', 'SUBMISSION', 'CLOSURE'] as WorkflowDeadlineStage[]).filter(s => deadlineDueAt(c, s) !== null && deadlineStageOpen(c, s)
-                  && !requests.some(r => r.stage === s && ['LEADER_PENDING', 'QUALITY_PENDING'].includes(r.status))) : [];
               const dueAt = deadlineDueAt(c, stage);
               items.push({ ...base, id: `handling:${c.problemId}`, kind: 'HANDLING', stage, status: 'HANDLING', dueAt, overdue: !!dueAt && new Date(dueAt).getTime() < Date.now(),
                 extensionRequestId: null, extensionRequestVersion: null, requestedDueAt: null, extensionStages,
                 actions: ['OPEN_REPORT', ...(stage === 'ANALYSIS' ? ['ANALYSIS_COMPLETE' as const] : ['SUBMIT' as const]), ...(extensionStages.length ? ['REQUEST_EXTENSION' as const] : [])] });
             } catch (error) { if (!inaccessible(error)) throw error; }
+          }
+          if (extensionStages.length && !items.some(item => item.kind === 'HANDLING')) {
+            const stage = extensionStages[0], dueAt = deadlineDueAt(c, stage);
+            items.push({ ...base, id: `extension-request:${c.problemId}`, kind: 'EXTENSION_REQUEST', stage, status: 'AVAILABLE',
+              dueAt, overdue: !!dueAt && new Date(dueAt).getTime() < Date.now(), extensionRequestId: null, extensionRequestVersion: null,
+              requestedDueAt: null, extensionStages, actions: ['OPEN_REPORT', 'REQUEST_EXTENSION'] });
           }
           try {
             for (const r of await this.extensions.eligible(tx, actor, c.problemId)) {
@@ -69,6 +71,15 @@ export class ProcessEightDTaskService {
             catch (error) {
               if (!inaccessible(error)) throw error;
               items.splice(0, items.length, ...items.filter(item => item.kind !== 'HANDLING'));
+            }
+          }
+          if (items.some(item => item.actions.includes('REQUEST_EXTENSION'))) {
+            const stages = await this.reports.deadlineRequestStages(tx, actor, record);
+            for (let i = items.length - 1; i >= 0; i--) {
+              const item = items[i];
+              if (!item.actions.includes('REQUEST_EXTENSION')) continue;
+              if (!stages.length && item.kind === 'EXTENSION_REQUEST') items.splice(i, 1);
+              else { item.extensionStages = stages; if (!stages.length) item.actions = item.actions.filter(action => action !== 'REQUEST_EXTENSION'); }
             }
           }
           await this.authorize(tx, actor, 'task:read');

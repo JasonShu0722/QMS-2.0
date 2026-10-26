@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { validateSync, type ValidationError } from 'class-validator';
 import {
-  PROCESS_EIGHT_D_MAX_ROWS, ProcessEightDContainmentDto, ProcessEightDCorrectiveActionDto,
+  PROCESS_EIGHT_D_MAX_FILES, PROCESS_EIGHT_D_MAX_ROWS, ProcessEightDContainmentDto, ProcessEightDCorrectiveActionDto,
   ProcessEightDDocumentDto, ProcessEightDHorizontalDeploymentDto,
   ProcessEightDStandardizationDto, ProcessEightDTemporaryMeasureDto,
 } from './process-eight-d-document.dto.js';
@@ -71,6 +71,11 @@ function validationIssues(errors: ValidationError[], parent = ''): ProcessEightD
   });
 }
 
+function evidenceLimitIssues(document: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
+  return documentFileIds(document).length > PROCESS_EIGHT_D_MAX_FILES
+    ? [{ path: 'fileIds', message: `正文最多关联 ${PROCESS_EIGHT_D_MAX_FILES} 个不同附件` }] : [];
+}
+
 export function emptyProcessEightDDocument(): ProcessEightDDocument {
   return normalizeProcessEightDDocument({});
 }
@@ -91,6 +96,8 @@ export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDoc
   }
   const issues = validationIssues(validateSync(document, { whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true }));
   if (issues.length) throw new ProcessEightDDocumentError(issues);
+  const evidenceIssues = evidenceLimitIssues(document);
+  if (evidenceIssues.length) throw new ProcessEightDDocumentError(evidenceIssues);
 
   const seenKeys = new Set<string>();
   for (const [index, row] of document.standardization.entries()) {
@@ -131,7 +138,7 @@ export function analysisCompletionIssues(document: ProcessEightDDocument): Proce
 }
 
 export function submissionIssues(document: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
-  const issues = analysisCompletionIssues(document);
+  const issues = [...evidenceLimitIssues(document), ...analysisCompletionIssues(document)];
   document.correctiveActions.forEach((row, index) => {
     if (row.causeKind === 'SYSTEM') return;
     for (const field of ['implementationAt', 'result', 'beforeState', 'afterState', 'firstBatch'] as const) {

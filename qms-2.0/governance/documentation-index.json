@@ -158,7 +158,7 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "6223f15eca1f58a7eed26c7b6f717cd4f87b5414036965ed2d84f50aa959b96c"
+            "sha256": "922aa364aab342197f7f0bc5f5763d18f32af889dfe499f3ade2af117b27c5c9"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "2b828e38fe605c1d6a9faf987624075d5eca1dd2a166960fefe45332caf013e8"
+            "sha256": "4ca1b2ac2ad5eb4c80efa99d41b0651638103eb4bc1e208a7c28bfe6b751a8ad"
           },
           {
             "path": "README.md",
@@ -668,7 +668,7 @@
         "owner": "QMS 工程维护者（跨板块问题管理研讨准备）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核REQ-0026/0027 user身份revision300、Issue70/V0.0.31及N3最终证据：API100文件1253项/真实集成123文件1594项/编译Worker8项，Web148文件1566项源码支持的完整文件组合通过；独立来源证明和汇总增量质量复核通过。负责人已恢复正常规则并要求继续，常规PR与合并部署分开，不代配生产岗位、启用绑定或关闭回填。",
+        "reason": "PR71首版5d6f490的9项CI成功；本轮V0.0.31-fix1复核100不同附件保存/提交/关闭一致性及待审CLOSURE延期独立资格，API/Web已冻结独立双审。父155纯测/152真实PG/Worker8/Web132受影响验证及契约构建通过，历史内存/数据扫描/验证cwd失败保留，更新后另核新head CI；不自动合并部署、配权启用或关闭回填。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md",
@@ -704,7 +704,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md",
-            "sha256": "7d3b4458a80fc880625646f20b2c40240286a725408f09a7f8b60dec7c10d59a"
+            "sha256": "26dd28d6d58a8c91b9e9b2c47785c202eab0485be0ba84bd59e76a3255579b9e"
           }
         ]
       }

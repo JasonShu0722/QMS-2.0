@@ -9315,11 +9315,11 @@ export interface components {
             /** Format: uuid */
             workflowVersionId: string;
             /** @enum {string} */
-            kind: "HANDLING" | "EXTENSION";
+            kind: "HANDLING" | "EXTENSION" | "EXTENSION_REQUEST";
             /** @enum {string} */
             stage: "ANALYSIS" | "SUBMISSION" | "CLOSURE";
             /** @enum {string} */
-            status: "HANDLING" | "LEADER_PENDING" | "QUALITY_PENDING";
+            status: "HANDLING" | "LEADER_PENDING" | "QUALITY_PENDING" | "AVAILABLE";
             /** Format: uuid */
             userId: string;
             rowVersion: number;

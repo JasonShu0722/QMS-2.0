@@ -9,7 +9,8 @@ import type { FileEvidenceDto } from '../file-management/file.dto.js';
 import { OBJECT_STORAGE, type ObjectStorage } from '../file-management/object-storage.service.js';
 import { assertWorkflowFeature } from '../workflow/workflow-access-policy.js';
 import { canonical, isClosureReviewNode } from '../workflow/workflow-runtime-policy.js';
-import { documentFileIds, normalizeProcessEightDDocument } from './process-eight-d-document.js';
+import { documentFileIds, normalizeProcessEightDDocument, ProcessEightDDocumentError } from './process-eight-d-document.js';
+import { PROCESS_EIGHT_D_MAX_FILES } from './process-eight-d-document.dto.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
 import type { ProcessEightDActor } from './process-eight-d.types.js';
 import { ProcessEightDControlledReportDto, type ProcessEightDReportAttachmentDto, type ProcessEightDReportQueryDto, type ProcessEightDReportSnapshotDto } from './process-eight-d-report.dto.js';
@@ -81,7 +82,13 @@ export class ProcessEightDReportService {
     await assertWorkflowFeature(tx, actor, actor.organizationId, 'process-quality:issues:report');
     if (query.view === 'APPROVED' && !query.revisionId && !result.revision) fail('PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE', 409);
     const raw = object(result.snapshot);
-    const normalized = normalizeProcessEightDDocument(raw.document);
+    let normalized;
+    try { normalized = normalizeProcessEightDDocument(raw.document); }
+    catch (error) {
+      if (error instanceof ProcessEightDDocumentError) fail(error.issues.some(issue => issue.path === 'fileIds')
+        ? 'PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT' : 'PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID', 409);
+      throw error;
+    }
     if (canonical(raw.document) !== canonical(normalized) || !Array.isArray(raw.sources)
       || !Number.isSafeInteger(raw.contentVersion) || Number(raw.contentVersion) < 1
       || !Number.isSafeInteger(raw.rowVersion) || Number(raw.rowVersion) < 1) fail('PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID', 409);
@@ -89,7 +96,7 @@ export class ProcessEightDReportService {
     if (typeof problem.reportNumber !== 'string') fail('PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID', 409);
     const snapshot = raw as unknown as ProcessEightDReportSnapshotDto;
     const ids = documentFileIds(normalized);
-    if (ids.length > 100) fail('PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT', 409);
+    if (ids.length > PROCESS_EIGHT_D_MAX_FILES) fail('PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT', 409);
     const refs: FileReference[] = ids.length ? await this.files.readReportEvidence(tx, actor,
       [{ resource: { resourceType: 'process-eight-d', resourceId: problemId }, fileIds: ids }], downloadTraceId) : [];
     if (refs.length !== ids.length || new Set(refs.map(file => file.id)).size !== ids.length) fail('FILE_RESOURCE_DENIED', 403);

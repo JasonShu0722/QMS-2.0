@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { randomUUID } from 'node:crypto';
 import * as policy from '../../src/modules/process-quality/process-eight-d-document.js';
 const fileId = '1edc6a4d-87c1-4c6c-948b-ef190ef65df1';
 const otherFileId = '9d668705-aee0-48a4-b7b3-8dad3ec57c5a';
@@ -215,5 +216,69 @@ describe('process eight-d document policy', () => {
     const before = structuredClone(document);
     expect(policy.documentFileIds(document)).toEqual([fileId, otherFileId]);
     expect(document).toEqual(before);
+  });
+
+  describe('whole-document distinct evidence budget', () => {
+    const ids = Array.from({ length: 101 }, () => randomUUID());
+    const issue = { path: 'fileIds', message: '正文最多关联 100 个不同附件' };
+    const extraEvidence = [
+      ['NG', { ngFileIds: [ids[100]!] }],
+      ['analysis', { analysisFileIds: [ids[100]!] }],
+      ['temporary measure', { temporaryMeasures: [{ id: 't', fileIds: [ids[100]!] }] }],
+      ['corrective action', { correctiveActions: [{ id: 'a', causeKind: 'SYSTEM', fileIds: [ids[100]!] }] }],
+      ['verification', { correctiveActions: [{ id: 'a', causeKind: 'SYSTEM', verificationFileIds: [ids[100]!] }] }],
+      ['horizontal deployment', { horizontalDeployment: [{ id: 'h', fileIds: [ids[100]!] }] }],
+    ] as const;
+
+    it.each(extraEvidence)('rejects 100 OK plus one distinct %s attachment on save', (_section, extra) => {
+      const input = { description: 'private report description', okFileIds: ids.slice(0, 100), ...extra };
+      const before = structuredClone(input);
+      expect(() => policy.normalizeProcessEightDDocument(input)).toThrow(expect.objectContaining({
+        name: 'ProcessEightDDocumentError', message: 'PROCESS_EIGHT_D_DOCUMENT_INVALID', issues: [issue],
+      }));
+      expect(input).toEqual(before);
+    });
+
+    it.each(extraEvidence)('guards historical/direct submission with an extra %s attachment', (_section, extra) => {
+      const document = Object.assign(validDocument(), { okFileIds: ids.slice(0, 100) });
+      const additional = policy.normalizeProcessEightDDocument(extra);
+      if ('correctiveActions' in extra) document.correctiveActions.push(...additional.correctiveActions);
+      else Object.assign(document, extra);
+      expect(policy.submissionIssues(document)).toEqual([issue]);
+    });
+
+    it('counts nested measures, verification and horizontal deployment in one shared budget', () => {
+      const document = validDocument();
+      document.temporaryMeasures = [{ id: 't', description: '', departmentOwner: '', introducedAt: null, fileIds: ids.slice(0, 50) }];
+      document.correctiveActions[0]!.fileIds = ids.slice(50, 75);
+      document.correctiveActions[0]!.verificationFileIds = ids.slice(75, 100);
+      document.horizontalDeployment = [{ id: 'h', scope: '', inspectionResult: '', action: '', owner: '', completion: '', fileIds: [ids[100]!] }];
+      expect(() => policy.normalizeProcessEightDDocument(document)).toThrow(expect.objectContaining({ issues: [issue] }));
+      expect(policy.submissionIssues(document)).toEqual([issue]);
+    });
+
+    it.each([0, 99, 100])('accepts the %i-file boundary across OK/NG for save and submission', count => {
+      const document = validDocument();
+      document.okFileIds = ids.slice(0, Math.max(0, count - 1));
+      document.ngFileIds = count ? [ids[count - 1]!] : [];
+      expect(policy.normalizeProcessEightDDocument(document)).toEqual(document);
+      expect(policy.documentFileIds(document)).toHaveLength(count);
+      expect(policy.submissionIssues(document)).toEqual([]);
+    });
+
+    it('counts the same UUID only once when reused across every evidence section', () => {
+      const document = validDocument();
+      document.okFileIds = ids.slice(0, 100);
+      document.ngFileIds = [ids[0]!]; document.analysisFileIds = [ids[0]!];
+      document.temporaryMeasures = [{ id: 't', description: '', departmentOwner: '', introducedAt: null, fileIds: [ids[0]!] }];
+      document.correctiveActions[0]!.fileIds = [ids[0]!];
+      document.correctiveActions[0]!.verificationFileIds = [ids[0]!];
+      document.horizontalDeployment = [{ id: 'h', scope: '', inspectionResult: '', action: '', owner: '', completion: '', fileIds: [ids[0]!] }];
+      const before = structuredClone(document);
+      expect(policy.normalizeProcessEightDDocument(document)).toEqual(before);
+      expect(policy.documentFileIds(document)).toEqual(ids.slice(0, 100));
+      expect(policy.submissionIssues(document)).toEqual([]);
+      expect(document).toEqual(before);
+    });
   });
 });

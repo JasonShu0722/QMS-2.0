@@ -6,6 +6,8 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProcessEightDTaskService } from '../../src/modules/process-quality/process-eight-d-task.service.js';
+import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { PROCESS_EIGHT_D_MAX_FILES } from '../../src/modules/process-quality/process-eight-d-document.dto.js';
 import { ClosureInboxService } from '../../src/modules/task-notification/closure-inbox.service.js';
 import { createProcessEightDTaskFixture, clearProcessEightDTaskFixtureEvents, requireDisposableProcessEightDDatabase, addProcessEightDTaskProblem } from './process-eight-d-task.fixture.js';
 
@@ -38,11 +40,55 @@ describe('process current-action tasks with real App and PostgreSQL', () => {
     expect((await tasks.list(f.owner.actor, { problemId: f.problem.id })).items[0]?.extensionStages).not.toContain('ANALYSIS');
   }, 120000);
 
-  it('leaves submitted close-review tasks in N2Inbox and never marks owner as unhandled', async () => {
+  it('leaves close-review duties in N2Inbox and projects only owner closure extension, never handling', async () => {
     const f = await fixture(); const round = await f.toClosure();
-    expect((await tasks.list(f.owner.actor, { problemId: f.problem.id })).total).toBe(0);
+    expect(await tasks.list(f.owner.actor, { problemId: f.problem.id })).toMatchObject({ total: 1, items: [{
+      kind: 'EXTENSION_REQUEST', status: 'AVAILABLE', stage: 'CLOSURE', extensionStages: ['CLOSURE'], actions: ['OPEN_REPORT', 'REQUEST_EXTENSION'],
+    }] });
+    const report = await f.reports.read(f.owner.actor, f.problem.id);
+    expect(report.allowedActions).toContain('request-extension');
+    for (const action of ['save', 'submit', 'reassign', 'analysis-complete']) expect(report.allowedActions).not.toContain(action);
+    await expect(f.reports.save(f.owner.actor, f.problem.id, { expectedVersion: report.version, document: report.document }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(f.reports.submit(f.owner.actor, f.problem.id, { expectedVersion: report.version }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await tasks.list(f.manager.actor, { problemId: f.problem.id })).total).toBe(0);
     expect((await app.get(ClosureInboxService).list(f.manager.actor, { problemId: f.problem.id }))).toMatchObject({ total: 1, items: [{ roundId: round.id, duty: 'SECTION_MANAGER' }] });
+    const c = await f.context();
+    const input = { expectedRowVersion: c.rowVersion, expectedInstanceVersion: c.instanceVersion, stage: 'CLOSURE' as const,
+      requestedDueAt: new Date(Date.now() + 72 * 3600000).toISOString(), reason: '审批期间明确申请关闭延期' };
+    await expect(f.extensions.request(f.manager.actor, f.problem.id, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(f.extensions.request(f.owner.actor, f.problem.id, input, randomUUID(), randomUUID())).resolves.toMatchObject({ stage: 'CLOSURE', status: 'LEADER_PENDING' });
+    expect((await tasks.list(f.owner.actor, { problemId: f.problem.id })).items).toEqual([]);
+    expect((await f.reports.read(f.owner.actor, f.problem.id)).allowedActions).not.toContain('request-extension');
+    await expect(f.extensions.request(f.owner.actor, f.problem.id, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  }, 120000);
+
+  it('hides closure extension with no closure deadline and after an owner appointment is revoked', async () => {
+    const f = await fixture(); await f.toClosure();
+    await f.prisma.$executeRaw`UPDATE process_eight_d_reports SET closure_due_at = NULL WHERE problem_id = ${f.problem.id}::uuid`;
+    expect((await tasks.list(f.owner.actor, { problemId: f.problem.id })).items).toEqual([]);
+    await f.prisma.$executeRaw`UPDATE process_eight_d_reports SET closure_due_at = ${f.dueAt} WHERE problem_id = ${f.problem.id}::uuid`;
+    await f.prisma.userPosition.update({ where: { id: f.owner.assignment.id }, data: { endedAt: new Date(Date.now() - 1000) } });
+    expect((await tasks.list(f.owner.actor, { problemId: f.problem.id })).items).toEqual([]);
+    expect((await f.reports.read(f.owner.actor, f.problem.id)).allowedActions).not.toContain('request-extension');
+  }, 120000);
+
+  it('atomically rejects legacy in-review documents with 101 attachments before moving or writing a closed revision', async () => {
+    const f = await fixture();
+    const document = (await f.reports.read(f.owner.actor, f.problem.id)).document;
+    document.okFileIds = Array.from({ length: PROCESS_EIGHT_D_MAX_FILES }, () => randomUUID()); document.ngFileIds = [randomUUID()];
+    await f.prisma.$executeRaw`UPDATE process_eight_d_reports SET document = ${JSON.stringify(document)}::jsonb WHERE problem_id = ${f.problem.id}::uuid`;
+    await f.prisma.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId, nodeKey: 'end', type: 'CLOSE', name: 'Close', config: { isEnd: true } } });
+    const round = await f.toClosure();
+    const one = await f.rounds.decide(f.professional.actor, round.id, { expectedRoundVersion: round.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: '专业核验' }, randomUUID(), randomUUID());
+    const before = await f.prisma.workflowInstance.findUniqueOrThrow({ where: { id: f.instance.id } });
+    await expect(f.rounds.decide(f.manager.actor, round.id, { expectedRoundVersion: one.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: '管理核验' }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 400, response: { code: 'PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE' }, fields: { fileIds: expect.any(Array) } });
+    expect(await f.prisma.workflowInstance.findUniqueOrThrow({ where: { id: f.instance.id } })).toEqual(before);
+    expect((await f.reports.read(f.owner.actor, f.problem.id)).closedRevisionId).toBeNull();
+    expect(await f.prisma.$queryRaw`SELECT id FROM process_eight_d_revisions WHERE problem_id = ${f.problem.id}::uuid`).toEqual([]);
+    expect(await f.rounds.readProjection(f.prisma, f.org.id, f.problem.id)).toMatchObject({ status: 'PENDING', version: one.version,
+      duties: expect.arrayContaining([expect.objectContaining({ duty: 'SECTION_MANAGER', status: 'PENDING' })]) });
+    expect(await app.get(ProcessEightDService).read(f.owner.actor, f.problem.id)).toMatchObject({ status: 'IN_REVIEW' });
   }, 120000);
 
   it('denies revoked sessions, missing features, foreign organizations and unknown action JSON', async () => {

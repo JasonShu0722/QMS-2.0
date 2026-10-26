@@ -15,16 +15,18 @@ import { DomainSourceLinkService } from '../problem-index/domain-source-link.ser
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { ProblemDomainRegistry } from '../problem-index/problem-domain-registry.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
-import { assertWorkflowFeature, featurePredicate } from '../workflow/workflow-access-policy.js';
+import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate } from '../workflow/workflow-access-policy.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
 import type { WorkflowClosureContext, WorkflowClosureOperation } from '../workflow/workflow-closure-round.types.js';
-import type { WorkflowDeadlineContext, WorkflowDeadlinePolicy } from '../workflow/workflow-deadline-extension.types.js';
-import { parseDeadlinePolicy } from '../workflow/workflow-deadline-extension.policy.js';
+import type { WorkflowDeadlineContext, WorkflowDeadlinePolicy, WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
+import { deadlineDueAt, deadlineStageOpen, parseDeadlinePolicy } from '../workflow/workflow-deadline-extension.policy.js';
+import { WorkflowDeadlineExtensionService } from '../workflow/workflow-deadline-extension.service.js';
 import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '../workflow/workflow-runtime-policy.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { persistWorkflowMutation } from '../workflow/workflow-start.js';
 import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
 import { analysisCompletionIssues, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
+import { PROCESS_EIGHT_D_MAX_FILES } from './process-eight-d-document.dto.js';
 import { assertEightDSources, assertSourceConfirmation, eightDError as workflowError, eightDRequestDigest } from './process-eight-d-policy.js';
 import type { IssueProcessEightDInput, ProcessEightDActor, ProcessEightDPurpose, ProcessEightDRecord, ProcessEightDReport, ProcessEightDRevision, ProcessEightDSourceConfirmation, ProcessEightDStage, ProcessEightDVersionInput, SaveProcessEightDInput } from './process-eight-d.types.js';
 import { ProcessEightDAssignmentOptionsQueryDto, type ProcessEightDAssignmentOptionsDto, type ProcessEightDAnalysisCompleteDto, type ProcessEightDDeadlinesDto, type ProcessEightDRelatedProblemDto, type ProcessEightDRiskDto, type ProcessEightDSourceConfirmationDto, type ProcessEightDSourcePreviewDto, type ProcessEightDSourcePreviewInputDto, type ProcessEightDSourcesDto, type ReassignProcessEightDDto } from './process-eight-d.dto.js';
@@ -47,7 +49,7 @@ export class ProcessEightDService {
     private readonly runtime: WorkflowRuntimeService, private readonly problems: ProblemIndexService,
     private readonly rounds: WorkflowClosureRoundService, private readonly responsibilities: OrganizationResponsibilityService,
     private readonly resources: FileResourceAccess, private readonly audit: AuditLogService, private readonly outbox: OutboxService,
-    private readonly readRegistry: ProblemDomainRegistry) {}
+    private readonly readRegistry: ProblemDomainRegistry, private readonly extensions: WorkflowDeadlineExtensionService) {}
 
   async lockRecord(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, _purpose: ProcessEightDPurpose): Promise<ProcessEightDRecord> {
     this.scope(actor); this.uuid(problemId);
@@ -100,6 +102,24 @@ export class ProcessEightDService {
       analysisDueAt: iso(record.report.analysisDueAt), submissionDueAt: iso(record.report.submissionDueAt), closureDueAt: iso(record.report.closureDueAt),
       analysisCompletedAt: iso(record.report.analysisCompletedAt), submittedAt: iso(record.report.submittedAt), closedAt: iso(record.problem.closedAt),
       policy: this.deadlinePolicy(ownerNode.config) };
+  }
+
+  async deadlineRequestStages(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<WorkflowDeadlineStage[]> {
+    if (actor.id !== record.problem.ownerId || actor.id === record.report.professionalUserId || record.problem.closedAt
+      || record.report.closedRevisionId || record.instance.status !== 'RUNNING') return [];
+    try {
+      await this.authorizeDeadlineRequest(tx, actor, record);
+      const c = await this.deadlineContext(tx, record);
+      if (!await canProcessWorkflowNode(tx, actor.id, c.organizationId, { assigneeUserId: actor.id }) || !await this.extensions.policyCurrent(tx, c)) return [];
+      const requests = await this.extensions.readProjection(tx, c.organizationId, c.problemId);
+      const stages: WorkflowDeadlineStage[] = record.instance.currentNodeId === c.ownerNodeId ? ['ANALYSIS', 'SUBMISSION', 'CLOSURE'] : ['CLOSURE'];
+      return stages.filter(stage => deadlineDueAt(c, stage) !== null && deadlineStageOpen(c, stage)
+        && !requests.some(request => request.stage === stage && ['LEADER_PENDING', 'QUALITY_PENDING'].includes(request.status)));
+    } catch (error) {
+      if (error instanceof HttpException && ([403, 404].includes(error.getStatus()) || error.getStatus() === 409
+        && (error.getResponse() as { code?: string }).code === 'WORKFLOW_ACTION_INVALID')) return [];
+      throw error;
+    }
   }
 
   async applyDeadlineExtension(tx: Prisma.TransactionClient, record: ProcessEightDRecord, stage: ProcessEightDStage, dueAt: Date): Promise<void> {
@@ -516,12 +536,15 @@ export class ProcessEightDService {
     if (!round || round.status !== 'APPROVED' || round.contentVersion !== context.contentVersion || canonical(round.contentSnapshot) !== canonical(context.content)
       || !round.duties.some(d => d.duty === 'PROFESSIONAL' && d.status === 'APPROVED') || !round.duties.every(d => ['APPROVED', 'SKIPPED_SAME_PERSON'].includes(d.status))) workflowError('WORKFLOW_ACTION_INVALID', 409);
     this.notClosed(record);
+    const fileIds = documentFileIds(record.report.document);
+    if (fileIds.length > PROCESS_EIGHT_D_MAX_FILES) throw new ControlledValidationException('PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE',
+      [{ path: 'fileIds', message: `正文最多关联 ${PROCESS_EIGHT_D_MAX_FILES} 个不同附件` }]);
     const end = await tx.workflowNode.findMany({ where: { organizationId: context.organizationId, workflowVersionId: context.workflowVersionId, type: 'CLOSE' } });
     if (end.length !== 1 || jsonObject(end[0]!.config).isEnd !== true) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
     const actorId = actor.id;
     if (!round.duties.some(d => d.decidedBy === actorId && d.status === 'APPROVED')) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
     const id = randomUUID();
-    const evidence = await this.evidenceSnapshot(tx, record, documentFileIds(record.report.document));
+    const evidence = await this.evidenceSnapshot(tx, record, fileIds);
     await this.move(tx, record, end[0]!, 'CLOSE', actorId, randomUUID(), true);
     const closedRecord = await this.lockFacts(tx, context.organizationId, context.problemId);
     const snapshot = { ...await this.fullSnapshot(tx, closedRecord), rowVersion: record.report.version + 1, closedRevisionId: id, approval: round, evidence };
@@ -560,6 +583,7 @@ export class ProcessEightDService {
 
   async allowedActions(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<string[]> {
     const actions = ['read'];
+    if ((await this.deadlineRequestStages(tx, actor, record)).length) actions.push('request-extension');
     if (!record.report.closedRevisionId && record.instance.status === 'RUNNING') {
       if (!isClosureReviewNode(record.node)) {
         try { await this.authorizeEdit(tx, actor, record); actions.push('save'); if (actor.id === record.problem.ownerId) actions.push('analysis-complete', 'submit', 'collaborators', 'reassign'); }

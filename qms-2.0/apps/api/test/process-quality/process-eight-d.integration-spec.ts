@@ -51,7 +51,7 @@ describe('process 8D real domain transactions', () => {
   ]);
   const sourceLinks = new DomainSourceLinkService(prisma, audit, outbox);
   const service = new ProcessEightDService(prisma, ledger, new DomainSourceIssueService(prisma, problems, outbox), sourceLinks,
-    new WorkflowRuntimeService(prisma, audit, outbox, problems), problems, rounds, responsibilities, resources, audit, outbox, readRegistry);
+    new WorkflowRuntimeService(prisma, audit, outbox, problems), problems, rounds, responsibilities, resources, audit, outbox, readRegistry, extensions);
   const closure = new ProcessEightDClosureAdapter(registry, service), files = new ProcessEightDFileAdapter(resources, service);
 
   beforeAll(async () => { await prisma.$connect(); closure.onModuleInit(); files.onModuleInit(); new ProcessEightDReadAdapter(readRegistry, service).onModuleInit(); }, 120_000);

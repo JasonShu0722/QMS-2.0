@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { randomUUID } from 'node:crypto';
 import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -37,6 +38,14 @@ describe('process eight-d document DTO', () => {
     const document = await transform({});
     expect(Object.getPrototypeOf(document)).toBe(dto.ProcessEightDDocumentDto.prototype);
     expect(policy.normalizeProcessEightDDocument(document)).toEqual(policy.emptyProcessEightDDocument());
+  });
+
+  it('enforces the aggregate budget after the real ValidationPipe accepts each individual array', async () => {
+    const ids = Array.from({ length: 101 }, () => randomUUID());
+    const document = await transform({ okFileIds: ids.slice(0, 100), ngFileIds: [ids[100]!] });
+    expect(() => policy.normalizeProcessEightDDocument(document)).toThrow(policy.ProcessEightDDocumentError);
+    document.ngFileIds = [ids[0]!];
+    expect(policy.documentFileIds(policy.normalizeProcessEightDDocument(document))).toEqual(ids.slice(0, 100));
   });
 
   it.each(rowTypes)('normalizes the real ValidationPipe nested %s DTO independently of the root', async (section, Type) => {

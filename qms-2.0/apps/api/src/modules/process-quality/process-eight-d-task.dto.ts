@@ -16,9 +16,9 @@ export class ProcessEightDTaskDto {
   @ApiProperty({ format: 'uuid' }) problemId!: string;
   @ApiProperty() reportNumber!: string;
   @ApiProperty({ format: 'uuid' }) workflowVersionId!: string;
-  @ApiProperty({ enum: ['HANDLING', 'EXTENSION'] }) kind!: 'HANDLING' | 'EXTENSION';
+  @ApiProperty({ enum: ['HANDLING', 'EXTENSION', 'EXTENSION_REQUEST'] }) kind!: 'HANDLING' | 'EXTENSION' | 'EXTENSION_REQUEST';
   @ApiProperty({ enum: ['ANALYSIS', 'SUBMISSION', 'CLOSURE'] }) stage!: WorkflowDeadlineStage;
-  @ApiProperty({ enum: ['HANDLING', 'LEADER_PENDING', 'QUALITY_PENDING'] }) status!: 'HANDLING' | 'LEADER_PENDING' | 'QUALITY_PENDING';
+  @ApiProperty({ enum: ['HANDLING', 'LEADER_PENDING', 'QUALITY_PENDING', 'AVAILABLE'] }) status!: 'HANDLING' | 'LEADER_PENDING' | 'QUALITY_PENDING' | 'AVAILABLE';
   @ApiProperty({ format: 'uuid' }) userId!: string;
   @ApiProperty() rowVersion!: number;
   @ApiProperty() contentVersion!: number;

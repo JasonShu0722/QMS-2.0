@@ -53,6 +53,45 @@ it('defaults to explicit current snapshot and rechecks scope before returning JS
   expect(s.audit.record).toHaveBeenCalledTimes(1);
 });
 
+it.each(['read', 'pdf'] as const)('%s rejects historical 101-file evidence with a safe structured 409 before file access', async format => {
+  const s = setup();
+  const ids = Array.from({ length: 101 }, () => randomUUID());
+  s.result.snapshot.document.okFileIds = ids.slice(0, 100);
+  s.result.snapshot.document.ngFileIds = [ids[100]!];
+  s.result.snapshot.document.description = 'private report contents';
+  Object.assign(s.result, { revision: { id: revisionId } });
+  Object.assign(s.result.record.report, { closedRevisionId: revisionId });
+  await expect(s.service[format](actor, id, { revisionId }, 'trace')).rejects.toMatchObject({ status: 409,
+    response: { code: 'PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT', message: 'PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT' } });
+  expect(s.files.readReportEvidence).not.toHaveBeenCalled();
+  expect(s.storage.readVersion).not.toHaveBeenCalled();
+  expect(s.audit.record).not.toHaveBeenCalled();
+});
+
+it('reads 100 distinct authorized attachments while counting cross-section reuse only once', async () => {
+  const s = setup(true);
+  const ids = [fileId, ...Array.from({ length: 99 }, () => randomUUID())];
+  s.result.snapshot.document.okFileIds = ids.slice(0, 99);
+  s.result.snapshot.document.ngFileIds = [ids[99]!];
+  s.result.snapshot.document.analysisFileIds = [fileId];
+  s.result.snapshot.document.temporaryMeasures = [{ id: 't', description: '', departmentOwner: '', introducedAt: null, fileIds: [fileId] }];
+  s.files.readReportEvidence.mockImplementation(async () => ids.map(id => ({ ...s.ref, id })));
+  const report = await s.service.read(actor, id, {}, 'trace');
+  expect(report.attachments).toHaveLength(100);
+  expect(report.attachments[0]!.uses).toEqual(['D2 OK', 'D4 分析', 'D3 临时措施 t']);
+  expect(s.files.readReportEvidence).toHaveBeenCalledTimes(2);
+  expect(s.files.readReportEvidence).toHaveBeenNthCalledWith(1, s.tx, actor,
+    [{ resource: { resourceType: 'process-eight-d', resourceId: id }, fileIds: ids }], undefined);
+});
+
+it('converts malformed historical documents into a safe snapshot error rather than leaking domain validation', async () => {
+  const s = setup();
+  Object.assign(s.result.snapshot.document, { privateUnknownField: 'private historical contents' });
+  await expect(s.service.read(actor, id, {}, 'trace')).rejects.toMatchObject({ status: 409,
+    response: { code: 'PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID', message: 'PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID' } });
+  expect(s.files.readReportEvidence).not.toHaveBeenCalled();
+});
+
 it('does not turn an unavailable approved view into a current draft', async () => {
   const s = setup();
   await expect(s.service.read(actor, id, { view: 'APPROVED' }, 'trace')).rejects.toMatchObject({ status: 409 });

@@ -44,6 +44,31 @@ it('loads independent real projections and never exposes generic claim or arbitr
   expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
   expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/tasks?pageSize=25&offset=0', expect.anything());
 });
+
+it('shows request-only extension eligibility without inventing handling or decision actions', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => path.includes('/eight-d/tasks') ? {
+    items: [{ ...task, kind: 'EXTENSION_REQUEST', status: 'AVAILABLE', stage: 'CLOSURE', extensionRequestId: null,
+      extensionRequestVersion: null, actions: ['OPEN_REPORT', 'REQUEST_EXTENSION'], extensionStages: ['CLOSURE'] }], total: 1,
+  } : read(path, init));
+  await mount();
+  expect(screen.getByText('可申请延期 · 关闭计划')).toBeVisible();
+  expect(screen.getByRole('link', { name: '申请延期' })).toHaveAttribute('href', '/app/problem-workspace/problem');
+  expect(screen.queryByRole('link', { name: '完整提交8D' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '确认分析完成' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '审核延期' })).not.toBeInTheDocument();
+});
+
+it('shows the new available extension status in English without leaking its Chinese label', async () => {
+  localStorage.setItem('qms:locale:v1', 'en-US');
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => path.includes('/eight-d/tasks') ? {
+    items: [{ ...task, kind: 'EXTENSION_REQUEST', status: 'AVAILABLE', stage: 'CLOSURE', actions: ['OPEN_REPORT', 'REQUEST_EXTENSION'], extensionStages: ['CLOSURE'] }], total: 1,
+  } : read(path, init));
+  await mount();
+  expect(screen.getByText(/Extension available/)).toBeVisible();
+  expect(screen.queryByText(/可申请延期/)).not.toBeInTheDocument();
+});
 it('checks the persisted extension and posts only the versioned decision with csrf and idempotency', async () => {
   await mount(); fireEvent.click(screen.getByRole('button', { name: '审核延期' }));
   await waitFor(() => expect(screen.getByText('等待真实验证')).toBeVisible());

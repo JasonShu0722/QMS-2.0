@@ -23,6 +23,7 @@ function fixture() {
       return { problem: { id: problemId, reportNumber: problemId }, instance: { status: 'RUNNING', currentNodeId: 'owner' } };
     }),
     authorizeRead: jest.fn(async () => {}), authorizeEdit: jest.fn(async () => {}),
+    deadlineRequestStages: async () => [],
     deadlineContext: async (_tx: unknown, record: { problem: { id: string } }) => ({ ...c, problemId: record.problem.id }),
   };
   const extensions = { candidateProblemIds: async () => [], readProjection: async () => [], policyCurrent: async () => false, eligible: jest.fn(async () => []) };

@@ -209,7 +209,7 @@ function Workspace({ problemId, session, organizationId, onAccessDenied }: { pro
           {([
             ['analysis-complete', text('分析完成并设提交计划', 'Complete analysis and plan submission')], ['submit', text('完整提交', 'Submit complete report')], ['collaborators', text('维护协作者', 'Manage collaborators')], ['reassign', text('专业重派 / 科室内转派', 'Professional / within-section reassignment')], ['risk', text('调整风险', 'Change risk')], ['sources', text('调整来源', 'Change sources')], ['deadlines', text('设置期限', 'Set deadlines')],
           ] as [EightDAction, string][]).filter(([name]) => can(name)).map(([name, label]) => <Button key={name} disabled={locked || dirty || !!action || evidenceBlocks(`${eightDPath(problemId)}/${name}`)} onClick={() => open(name)}>{label}</Button>)}
-          {can('submit') && <Button disabled={locked || dirty || !!action} onClick={() => open('extension')}>{text('申请延期', 'Request extension')}</Button>}
+          {can('request-extension') && <Button disabled={locked || dirty || !!action} onClick={() => open('extension')}>{text('申请延期', 'Request extension')}</Button>}
         </Space>{dirty && <p role="status">{text('有未保存草稿，请先保存，再执行提交或责任 / 来源 / 计划变更。', 'Unsaved draft: save before submitting or changing responsibility, sources or plans.')}</p>}
       </section>
       {report.closedRevisionId && <Alert type="info" title={text('已关闭：正文与批准版只读，批准版不随关闭后来源补充改变。', 'Closed: content and approved version are read-only. Source supplements do not change the approved version.')} />}
