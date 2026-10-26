@@ -24,7 +24,14 @@ export class WorkflowClosureReviewDto {
   @ApiProperty({ maxLength: 100 }) @IsString() @Matches(/^\S(?:.*\S)?$/) @MaxLength(100) domainCode!: string;
 }
 
+export class WorkflowProcessEightDDto {
+  @ApiProperty({ enum: [1] }) @IsIn([1]) schemaVersion!: 1;
+  @ApiProperty({ enum: ['LEADER_THEN_PROFESSIONAL'] }) @IsIn(['LEADER_THEN_PROFESSIONAL']) extensionPolicy!: 'LEADER_THEN_PROFESSIONAL';
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 8760 }) @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) @Max(8760) reminderEveryHours!: number | null;
+}
+
 export class WorkflowNodeConfigDto {
+  @ApiPropertyOptional({ type: WorkflowProcessEightDDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowProcessEightDDto) processEightD?: WorkflowProcessEightDDto;
   @ApiPropertyOptional({ type: WorkflowClosureReviewDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowClosureReviewDto) closureReview?: WorkflowClosureReviewDto;
   @ApiPropertyOptional({ type: WorkflowAssignmentDto }) @IsOptional() @ValidateNested() @Type(() => WorkflowAssignmentDto) assignment?: WorkflowAssignmentDto;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isStart?: boolean;

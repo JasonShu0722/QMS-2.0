@@ -45,8 +45,19 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'process-defects', name: '制程不良品台账', status: 'active', operations: [
       operation('process-quality:defects:read', '查看制程不良品台账'),
       operation('process-quality:defects:write', '维护制程不良品台账'),
+      operation('process-quality:defects:close', '关闭及恢复制程台账'),
+      operation('process-quality:materials:review', '复核本人负责的物料不良'),
     ] },
-    { key: 'process-issues', name: '制程问题管理', status: 'planned', operations: [] },
+    { key: 'process-issues', name: '制程问题管理', status: 'active', operations: [
+      operation('process-quality:issues:read', '查看制程8D及报告'),
+      operation('process-quality:issues:report', '导出有权读取的制程8D报告'),
+      operation('process-quality:issues:issue', '发起制程8D'),
+      operation('process-quality:issues:work', '办理本人负责或协作的制程8D'),
+      operation('process-quality:issues:sources', '调整制程8D来源范围'),
+      operation('process-quality:issues:risk', '调整制程8D风险'),
+      operation('process-quality:issues:reassign', '撤回重派制程8D责任范围'),
+      operation('process-quality:issues:deadlines', '设置制程8D质量侧期限'),
+    ] },
   ] },
   { key: 'customer', name: '客户质量', status: 'active', modules: [
     { key: 'customer-complaints', name: '客户客诉台账', status: 'active', operations: [

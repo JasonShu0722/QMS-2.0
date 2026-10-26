@@ -16,6 +16,7 @@ import { WorkflowEventHandler } from './modules/task-notification/workflow-event
 import { ClosureEventHandler } from './modules/task-notification/closure-event.handler.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
+import { ProcessEightDReminderService } from './modules/process-quality/process-eight-d-reminder.service.js';
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
 import { MaterialMasterModule } from './modules/material-master/material-master.module.js';
 import { AuditManagementModule } from './modules/audit-management/audit-management.module.js';
@@ -39,10 +40,11 @@ import { SupplierAsnModule } from './modules/supplier-asn/supplier-asn.module.js
 import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js';
 
 @Module({
-  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler],
-    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler): AtomicOutboxHandler => ({
-      eventTypes: [...legacy.eventTypes, ...closure.eventTypes],
-      handle: (tx, event) => closure.eventTypes.includes(event.eventType) ? closure.handle(tx, event) : legacy.handle(tx, event),
+  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService],
+    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService): AtomicOutboxHandler => ({
+      eventTypes: [...legacy.eventTypes, ...closure.eventTypes, ...process.eventTypes],
+      handle: (tx, event) => process.eventTypes.includes(event.eventType) ? process.handle(tx, event)
+        : closure.eventTypes.includes(event.eventType) ? closure.handle(tx, event) : legacy.handle(tx, event),
     }) }],
   imports: [
     DatabaseModule,

@@ -8,13 +8,13 @@
 | --- | --- |
 | 目标 | 接续既定 N2，复用 N1 真实组织岗位，交付组件项目映射、管理职责 / 分管及动态流程基础；不启用新问题业务 |
 | 批准来源 | 原讨论 / 路线已批准开发；N2-A的PR #67合并与生产核验已按当轮明确批准完成。负责人2026-10-25明确“已开源，继续”，O2实查满足；PR #68后又明确“继续合并”，接续本单元审查返修、新head CI、合并及随后自动发布核验，不含生产配权 / 业务数据维护 / 关闭回填 |
-| 基线 | N2-A原生产基线70fdbab。N2-B的PR #68最终head421611c已squash合并main f78617d，整树与受检head一致；因main CI测试失败，从真正origin/main建立codex/qms-n2-postmerge-validation-fix3，保留四份本地文档归档，不重置或重引旧实现 |
-| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；V0.0.29对应N2-A已部署[PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，V0.0.30对应N2-B [PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)，Issue仍开放 |
+| 基线 | N2-A原生产70fdbab；N2-B PR #68合并f78617d后因main测试门禁未发布，独立fix3 PR #69合并并实际部署a32615c。两次squash后整树分别与受检head一致；本地保留codex/qms-n2-postmerge-validation-fix3及发布归档，不重置或重引旧实现 |
+| 映射 | [Issue #66](https://github.com/JasonShu0722/QMS-2.0/issues/66)；REQ-0025 / reczz28RDS4BlbBs、REQ-0026 / reczz28RDS4BnuCp；N2-A / V0.0.29 [PR #67](https://github.com/JasonShu0722/QMS-2.0/pull/67)，N2-B / V0.0.30 [PR #68](https://github.com/JasonShu0722/QMS-2.0/pull/68)及独立fix3 [PR #69](https://github.com/JasonShu0722/QMS-2.0/pull/69)已合并，最终发布a32615c；Issue仍开放 |
 | 需求核对 | 启动时user身份revision298、has_more=false，分别开发中/P1及开发中/P2；提交前两实际record_id回读revision300、has_more=false，REQ-0025状态现为“上线验收完成”，REQ-0026仍“开发中”，原范围字段未变。此状态变动不代表尚未部署的N2-A已验收，也不反向改表；本轮组件新要求有直接会话授权。CLI旧版复用已验证token，不更新CLI或改表 |
 | 本地基线 | 治理通过：37文档 / 324链接 / 20来源 / 125模块依赖；根工具71项通过。N2一次性PG仅回环55473、任务标签，原104迁移；不连接55440 |
-| 公开边界 | 负责人已临时公开，O2实查满足；PR最新head完整CI及云端审查通过后已按本轮授权合并main f78617d，当前跟进主分支CI / 自动部署，不自行更改可见性，全部发布核验完成前不提醒闭源 |
+| 公开边界 | O2及合并 / 自动发布核验授权已满足；最终PR / main完整CI及deploy成功，13:01 UTC回读main / 发布SHA一致、最新100条Actions无运行或排队，已告知本轮可以闭源。代理未修改可见性；后续归档只在本地，不推送触发新CI / 发布 |
 | 生产边界 | N1正式页面人工验收尚待完成；真实公司结构由获准人员维护。N2本地测试可用隔离fixture，不依赖或修改生产结构；D2/配置/绑定/试点开通分别受控 |
-| 当前进度 | PR #68最终fix2 / head421611c完整CI及云端审查通过，已合并main f78617d；main Foundation40188784499的Web2一项读取就绪断言失败，deploy40189920406已跳过，生产未更新。按V0.0.30-fix3独立修复PR接续，不重跑失败掩盖问题；生产70fdbab仍是最后已核验版本，adapter为空，不放行新8D或代配生产岗位 |
+| 当前进度 | N2-B已发布a32615c：fix3 PR Foundation40192084766与main Foundation40193745676各9项成功，deploy40194990586成功；备份 / 两迁移 / 同SHA镜像 / 健康 / 公共契约与新JS均独立核验。旧失败与skipped部署保留；真实浏览器 / 人工验收、生产配权及新8D实际领域接入仍未完成，不关闭Issue或回填飞书 |
 
 ## 1. 范围与结构
 
@@ -416,3 +416,23 @@ Wegener产出取同一previewButton并以默认waitFor等待enabled的最小两�
 主代理冻结330份Web源 / 测试，整份OrganizationWorkspace.test.tsx的30项通过，默认及JSON双reporter保存于Git外n2b-fix3-workspace.*，不是只跑失败case或增加重试次数。相对fix2快照只有该测试一份变化，其他329份Web及641份API均保持原源，DTO / 迁移 / 生产代码未改；本轮不重建已清理的一次性PG，旧API集成证据仅按同源复用，后续PR / main仍执行完整CI。修复与归档单次提交推送后创建独立fix3 PR，继续核验最新head而不是重复运行旧失败SHA。
 
 主代理Web lint / build及641 / 330冻结hash复核通过。治理先按实际复核同步前端指南所引用的测试来源hash，不改维护期限，最终37文档 / 346链接 / 20来源 / 127模块依赖通过。文档单测首轮11通过1失败，原因为Windows临时fixture的documentation-index.json读取返回EBUSY（并非预期extra.md断言），不改测试或生产代码，另建临时fixture整份复验12项通过；保留原报错，不虚构具体锁占用者或称首轮全绿。
+
+### 9.16 fix3 PR与新main接续
+
+fix3提交6cc4242f21e6e271379fbae1954620231be2b769推送后创建[PR #69](https://github.com/JasonShu0722/QMS-2.0/pull/69)并立即附到当前聊天，base f78617d，7份差异只含一个测试同步及交付 / 指南 / 索引。该head的[PR Foundation40192084766](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40192084766) / attempt1完整9项全部success，无重跑；云端复核明确同head completed / 无发现 / 无未解决项。
+
+按原继续合并及随后自动发布核验目标，重新回读public、精确base / head、mergeable clean、全9项和reviews / reviewThreads，无未解决意见或CHANGES_REQUESTED后，带期望head SHA squash合并。PR #69已merged，main / merge均为a32615ce245ae2242e8b1607aa6c564c244e0de7；fetch后整树与受检head一致，未直接push main或重置工作区。[新main Foundation40193745676](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40193745676)为该SHA的push / attempt1，当前运行中。继续其完整main / 自动deploy核验，旧f78617d失败及skipped deploy保留，尚不能声称N2-B上线或提醒闭源。
+
+### 9.17 N2-B最终生产发布核验与关闭边界
+
+上述新main最终完整9项全部success，attempt1无重跑；读取实际日志确认API unit72 suites / 804项、integration110 suites / 1441项、独立compiled Worker8项，Web四组34/34/34/32文件与390/286/291/305项，合计134文件1272项全部通过。PR与main各自取得本SHA的完整门禁，不用历史组合记录替代本次云端结果。
+
+[deploy40194990586](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40194990586) / attempt1成功，job121173797326的完整源run验证及SSH步骤均success。实际日志明确RUN_ID=40193745676、RUN_ATTEMPT=1、HEAD_SHA=a32615ce245ae2242e8b1607aa6c564c244e0de7，未出现superseded skip。先出现同SHA的Pre-migration encrypted database snapshot verified，再实际Applying 20261025120000_workflow_closure_rounds及20261025121000_closure_notifications，随后All migrations have been successfully applied；原108份追加到110份。此为本机迁移前加密快照核验，不声称异地完整灾备。
+
+实际API / Worker镜像qms2-foundation-api与Web镜像qms2-foundation-web均为上述完整SHA；API / Worker / Web及PG / RustFS / ClamAV启动等待完成，Worker启动就绪检查之后才写Deployment successful同SHA标记。读取ps及完整日志，不将只看到绿色workflow当作实际发布。
+
+独立外网核验：/login与/api/v1/openapi.json均200，8条closure相关新路径全部在真实schema；tasks / notifications / templates / options四类匿名GET均401，无业务写入。主JS从发布前/assets/index-CIKtTNNC.js变为/assets/index-CX439dnC.js，实际200且含新模板 / 待办路径；AntD资源变为antd-QFl03I2F.js，未改CSS保留原指纹。公开契约 / 资源变化与部署日志同版本相互印证，不冒充真实账号浏览器业务验收。
+
+13:01 UTC最后回读main仍a32615c、最终main与deploy已成功，最新100条Actions没有运行 / 排队，明确告知负责人本轮可以闭源，代理未修改可见性。原始日志、JSON及发布前后快照仅保留Git外n2-evidence，本节与能力状态等归档只在本地，不推送触发额外部署。
+
+**尚未完成：** 真实浏览器 / 正式页面人工验收、完整acceptance:phase-1/2及额外全测试类型检查的既有边界不变；没有生产新权限首次初始化或代填组织 / 岗位。生产adapter为空，候选模板只能显式初始化草稿，不能因此发布 / 绑定 / 开新8D。N3接真实过程台账 / 完整内部8D / 同事务变更钩子，N5接供应商身份；Issue #66与REQ-0026跨节点保持开放，不做关闭或飞书回填。

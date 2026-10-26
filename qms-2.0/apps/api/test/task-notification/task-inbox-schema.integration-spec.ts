@@ -61,9 +61,25 @@ describe('authorized task inbox on PostgreSQL', () => {
     }
     const peer = await prisma.user.create({ data: { organizationId: context.organization.id, username: randomUUID(), passwordHash: 'fixture', accountType: 'INTERNAL' } });
     await prisma.userRole.create({ data: { userId: peer.id, roleId: context.role.id, organizationId: context.organization.id } });
-    await worker.processAtomicDue(100, handler);
-    const task = await prisma.workflowTask.findFirstOrThrow({ where: { workflowInstanceId: context.started.instanceId } });
+    const task = await projectTask(context.started.instanceId);
     return { ...context, task, actor: await actor(context.user), peer: await actor(peer) };
+  }
+
+  async function projectTask(instanceId: string) {
+    const where = { workflowInstanceId: instanceId };
+    const existing = await prisma.workflowTask.findFirst({ where });
+    if (existing) return existing;
+    // Include future events and active leases for a conservative bound as they become due.
+    const queued = await prisma.outboxEvent.count({ where: { eventType: { in: [...handler.eventTypes] }, status: { in: ['PENDING', 'PROCESSING'] } } });
+    const maxBatches = Math.ceil(queued / 100);
+    for (let batch = 0; batch < maxBatches; batch += 1) {
+      const result = await worker.processAtomicDue(100, handler);
+      expect(result).toMatchObject({ failed: 0, retried: 0 });
+      const task = await prisma.workflowTask.findFirst({ where });
+      if (task) return task;
+      if (!result.processed) throw new Error(`Task projection made no progress for ${instanceId}: ${JSON.stringify(result)}`);
+    }
+    throw new Error(`Task projection missing for ${instanceId} after ${maxBatches} batches (${queued} queued events)`);
   }
 
   function action(context: Awaited<ReturnType<typeof fixture>>, who = context.actor) {
@@ -102,6 +118,39 @@ describe('authorized task inbox on PostgreSQL', () => {
     expect(await tasks.list(context.actor, { pageSize: 1 })).toMatchObject({ total: 1, items: [{ id: context.task.id, canAct: true, canClaim: true, canRelease: false }] });
     expect(await tasks.list(context.actor, { offset: 5 })).toEqual({ total: 1, items: [] });
     expect(await tasks.statistics(context.actor)).toMatchObject({ total: 1, pending: 1, inProgress: 0, overdue: 0, unclaimed: 1, mine: 0, dueToday: 1, dueThisWeek: 1 });
+  });
+
+  describe('with a real multi-organization event backlog', () => {
+    let backlogTasks: { id: string }[];
+    let backlogEvents: { id: string }[];
+
+    beforeAll(async () => {
+      const instances: string[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        const context = await timingFixture(prisma, organizations, { reminders: Array.from({ length: 20 }, (_, offsetMinutes) => ({ offsetMinutes })) });
+        instances.push(context.started.instanceId);
+      }
+      // Real starts from two hours ago make their handler-generated timing events due now.
+      await prisma.outboxEvent.updateMany({ where: { aggregateId: { in: instances }, eventType: 'WORKFLOW_STARTED' }, data: { createdAt: new Date(Date.now() - 2 * 3600000) } });
+      for (const instanceId of instances) await projectTask(instanceId);
+      backlogTasks = await prisma.workflowTask.findMany({ where: { workflowInstanceId: { in: instances } }, select: { id: true } });
+      // Seed only our real timing events, including any already consumed while projecting the starts.
+      await prisma.outboxEvent.updateMany({ where: { aggregateId: { in: backlogTasks.map((task) => task.id) } }, data: { status: 'PENDING', processedAt: null } });
+      backlogEvents = await prisma.outboxEvent.findMany({ where: {
+        aggregateId: { in: backlogTasks.map((task) => task.id) }, eventType: { in: [...handler.eventTypes] }, status: 'PENDING', availableAt: { lte: new Date() },
+      }, select: { id: true } });
+    });
+
+    it('projects the fixture task behind more than one batch of valid events from other organizations', async () => {
+      expect(backlogTasks).toHaveLength(5);
+      expect(backlogEvents).toHaveLength(110);
+
+      const context = await fixture();
+      expect(context.task).toMatchObject({ organizationId: context.organization.id, entryInstanceVersion: 1, status: 'PENDING' });
+      expect(await prisma.outboxEvent.count({ where: { id: { in: backlogEvents.map((event) => event.id) }, status: 'PROCESSED', attempts: 0, lastError: null } })).toBe(110);
+      expect(await tasks.list(context.actor, {})).toMatchObject({ total: 1, items: [{ id: context.task.id, canAct: true, canClaim: true }] });
+      expect(await notifications.list(context.actor, {})).toMatchObject({ total: 1, items: [{ instanceId: context.started.instanceId }] });
+    });
   });
 
   it('lists failed tasks and retries them with authorization, CAS and audit', async () => {

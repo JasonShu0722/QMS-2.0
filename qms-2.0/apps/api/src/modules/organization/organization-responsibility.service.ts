@@ -27,10 +27,10 @@ type Assignment = Prisma.UserPositionGetPayload<{ include: typeof assignmentIncl
 export class OrganizationResponsibilityService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
 
-  // Minimal directory projection for an already-authorized workflow configuration transaction.
-  async workflowDepartmentOptions(tx: AdminTransaction, organizationId: string, search: string | undefined, take: number, skip: number) {
+  // Minimal directory projection for an already-authorized workflow transaction.
+  async workflowDepartmentOptions(tx: AdminTransaction, organizationId: string, search: string | undefined, take: number, skip: number, sectionDepartmentId?: string) {
     await this.activeOrganization(tx, organizationId);
-    const where: Prisma.DepartmentWhereInput = { organizationId, status: 'ACTIVE', ...(search ? { OR: [{ code: { contains: search, mode: 'insensitive' } }, { name: { contains: search, mode: 'insensitive' } }] } : {}) };
+    const where: Prisma.DepartmentWhereInput = { organizationId, status: 'ACTIVE', ...(sectionDepartmentId ? { id: sectionDepartmentId } : {}), ...(search ? { OR: [{ code: { contains: search, mode: 'insensitive' } }, { name: { contains: search, mode: 'insensitive' } }] } : {}) };
     const [items, total] = await Promise.all([tx.department.findMany({ where, select: { id: true, code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take, skip }), tx.department.count({ where })]);
     return { items, total };
   }

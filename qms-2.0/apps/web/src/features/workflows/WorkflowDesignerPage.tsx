@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { Alert, Breadcrumb, Button, Card, Space, Spin, Tag, Typography } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -14,13 +14,25 @@ import './workflows.css';
 
 const WorkflowCanvas = lazy(() => import('./WorkflowCanvas').then((module) => ({ default: module.WorkflowCanvas })));
 interface Props { definitionId: string; versionId: string }
-export function WorkflowDesignerPage(props: Props) { return <Designer key={`${props.definitionId}:${props.versionId}`} {...props} />; }
+type Action = 'save' | 'validate' | 'publish' | 'copy';
+type Attempt = { key: string } & (
+  { stage: 'validate'; body: Parameters<typeof api.validateWorkflow>[0] } |
+  { stage: 'save'; body: Parameters<typeof api.saveWorkflow>[1] } |
+  { stage: 'publish'; body: Parameters<typeof api.publishWorkflow>[1] } |
+  { stage: 'copy'; body: Parameters<typeof api.copyWorkflow>[1] }
+);
+type Operation = { action: Action; graph: api.WorkflowGraph; description: string; changeNote: string; needsSave: boolean };
+export function WorkflowDesignerPage(props: Props) {
+  const session = useWorkTabsStore(state => state.sessionScope);
+  return <Designer key={`${session}:${props.definitionId}:${props.versionId}`} {...props} session={session} />;
+}
 
-function Designer({ definitionId, versionId }: Props) {
+function Designer({ definitionId, versionId, session }: Props & { session?: string }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const requestLeave = useNavigationGuard();
+  const completeSessionNavigation = useCompletedSessionNavigation();
   const openTab = useWorkTabsStore((state) => state.openTab);
   const [baseline, setBaseline] = useState<api.WorkflowDefinition>();
   const [graph, setGraph] = useState<api.WorkflowGraph>({ nodes: [], transitions: [] });
@@ -31,13 +43,30 @@ function Designer({ definitionId, versionId }: Props) {
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
+  const [unauthorized, setUnauthorized] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [uncertain, setUncertain] = useState<{ operation: Operation; attempt: Attempt }>();
   const [revision, setRevision] = useState(0);
   const [options, setOptions] = useState<api.WorkflowOptions>({ roles: [], users: [], permissions: [] });
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryError, setDirectoryError] = useState<unknown>();
   const lock = useRef(false);
-  const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const lifetime = useRef<AbortController | undefined>(undefined);
+  const accessRevoked = useRef(false);
+  const current = () => !accessRevoked.current && !!lifetime.current && !lifetime.current.signal.aborted && useWorkTabsStore.getState().sessionScope === session;
+  useEffect(() => {
+    const controller = new AbortController(); lifetime.current = controller;
+    const unsubscribe = useWorkTabsStore.subscribe(state => { if (state.sessionScope !== session) controller.abort(); });
+    return () => { controller.abort(); unsubscribe(); };
+  }, [session]);
+  function report(cause: unknown) {
+    setError(cause);
+    if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403 || ['FEATURE_PERMISSION_DENIED', 'ORGANIZATION_SCOPE_DENIED', 'AUTH_SESSION_REQUIRED'].includes(cause.code))) {
+      accessRevoked.current = true; lifetime.current?.abort(); setDenied(true); setBusy(false); setUncertain(undefined); setBaseline(undefined); setGraph({ nodes: [], transitions: [] });
+      setDescription(''); setChangeNote(''); setSelected(''); setOptions({ roles: [], users: [], permissions: [] }); setDiagnostics([]); setDirectorySearch(''); setDirectoryError(undefined);
+      if (cause.status === 401 || cause.code === 'AUTH_SESSION_REQUIRED') setUnauthorized(true);
+    }
+  }
   function accept(result: api.WorkflowDefinition) {
     setBaseline(result); setGraph(result.version.structureSnapshot); setDescription(result.description ?? '');
   }
@@ -45,24 +74,29 @@ function Designer({ definitionId, versionId }: Props) {
     const controller = new AbortController();
     setBusy(true); setError(undefined);
     api.getWorkflowVersion(definitionId, versionId, controller.signal).then((result) => {
-      if (!controller.signal.aborted) { accept(result); setChangeNote(''); setDenied(false); setDiagnostics([]); }
-    }).catch((cause) => { if (!controller.signal.aborted) setError(cause); }).finally(() => { if (!controller.signal.aborted) setBusy(false); });
+      if (current() && !controller.signal.aborted) { accept(result); setChangeNote(''); setDenied(false); setStale(false); setUncertain(undefined); setDiagnostics([]); }
+    }).catch((cause) => { if (current() && !controller.signal.aborted) report(cause); }).finally(() => { if (current() && !controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
   }, [definitionId, versionId, revision]);
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      api.getWorkflowOptions(directorySearch, controller.signal).then((result) => { if (!controller.signal.aborted) { setOptions(result); setDirectoryError(undefined); } })
-        .catch((cause) => { if (!controller.signal.aborted) setDirectoryError(cause); });
+      if (!current()) return;
+      api.getWorkflowOptions(directorySearch, controller.signal).then((result) => { if (current() && !controller.signal.aborted) { setOptions(result); setDirectoryError(undefined); } })
+        .catch((cause) => { if (current() && !controller.signal.aborted) { setDirectoryError(cause); if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403 || ['AUTH_SESSION_REQUIRED', 'FEATURE_PERMISSION_DENIED', 'ORGANIZATION_SCOPE_DENIED'].includes(cause.code))) report(cause); } });
     }, 200);
     return () => { controller.abort(); clearTimeout(timer); };
   }, [directorySearch]);
   const draftDirty = !!baseline && (JSON.stringify(graph) !== JSON.stringify(baseline.version.structureSnapshot) || description !== (baseline.description ?? ''));
-  const dirty = draftDirty || (baseline?.version.status === 'DRAFT' && changeNote.length > 0);
+  const dirty = !denied && (draftDirty || (baseline?.version.status === 'DRAFT' && changeNote.length > 0));
   useUnsavedChanges(dirty);
-  useNavigationBusy(busy);
+  useNavigationBusy(busy || !!uncertain);
+  useEffect(() => {
+    if (!unauthorized || session !== useWorkTabsStore.getState().sessionScope) return;
+    completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
+  }, [unauthorized, session, completeSessionNavigation, navigate]);
   const frozen = baseline?.version.status !== 'DRAFT';
-  const readOnly = frozen || denied || busy;
+  const readOnly = frozen || denied || busy || !!uncertain || stale;
   useEffect(() => {
     if (baseline) openTab({ id: location.pathname, path: `${location.pathname}${location.search}`, title: `${baseline.name} · ${t(baseline.version.status === 'DRAFT' ? '编辑' : '查看')}` });
   }, [baseline, location.pathname, location.search, openTab, t]);
@@ -73,35 +107,49 @@ function Designer({ definitionId, versionId }: Props) {
     return () => window.removeEventListener('beforeunload', prevent);
   }, [dirty]);
   function edit(next: api.WorkflowGraph) { if (!readOnly) { setGraph(next); setDiagnostics([]); } }
-  async function act(action: 'save' | 'validate' | 'publish' | 'copy') {
-    if (!baseline || lock.current || busy || denied || (frozen && action !== 'copy')) return;
+  async function act(action: Action, retry?: { operation: Operation; attempt: Attempt }) {
+    if (!current() || !baseline || lock.current || busy || denied || stale || (!retry && uncertain) || (frozen && action !== 'copy')) return;
     lock.current = true; setBusy(true); setError(undefined);
+    let attempt: Attempt | undefined;
+    let operation = retry?.operation;
     try {
-      let current = baseline;
-      if (action === 'validate' || action === 'publish') {
-        const validation = await api.validateWorkflow(editableWorkflowGraph(graph));
-        if (!alive.current) return;
+      operation ??= { action, graph: structuredClone(graph), description, changeNote, needsSave: draftDirty };
+      const options = (key: string) => ({ key, signal: lifetime.current!.signal });
+      let saved = baseline;
+      if ((action === 'validate' || action === 'publish') && (!retry || retry.attempt.stage === 'validate')) {
+        attempt = retry?.attempt.stage === 'validate' ? retry.attempt : { stage: 'validate', body: editableWorkflowGraph(operation.graph), key: crypto.randomUUID() };
+        const validation = await api.validateWorkflow(attempt.body, options(attempt.key));
+        if (!current()) return;
         setDiagnostics(validation.errors);
-        if (!validation.valid || action === 'validate') return;
+        if (!validation.valid || action === 'validate') { setUncertain(undefined); return; }
       }
-      if (action === 'save' || (action === 'publish' && draftDirty)) {
-        current = await api.saveWorkflow(definitionId, { ...editableWorkflowGraph(graph), description, draftVersionId: current.version.id, expectedRevision: current.revision });
-        if (!alive.current) return;
-        accept(current);
+      if (action === 'save' || (action === 'publish' && operation.needsSave && retry?.attempt.stage !== 'publish')) {
+        attempt = retry?.attempt.stage === 'save' ? retry.attempt : { stage: 'save', body: { ...editableWorkflowGraph(operation.graph), description: operation.description, draftVersionId: saved.version.id, expectedRevision: saved.revision }, key: crypto.randomUUID() };
+        saved = await api.saveWorkflow(definitionId, attempt.body, options(attempt.key));
+        if (!current()) return;
+        accept(saved);
       }
       if (action === 'publish') {
-        const published = await api.publishWorkflow(definitionId, { draftVersionId: current.version.id, expectedRevision: current.revision, changeNote });
-        if (alive.current) { accept(published); setChangeNote(''); }
+        attempt = retry?.attempt.stage === 'publish' ? retry.attempt : { stage: 'publish', body: { draftVersionId: saved.version.id, expectedRevision: saved.revision, changeNote: operation.changeNote }, key: crypto.randomUUID() };
+        const published = await api.publishWorkflow(definitionId, attempt.body, options(attempt.key));
+        if (!current()) return;
+        accept(published); setChangeNote('');
       }
       if (action === 'copy') {
-        const copied = await api.copyWorkflow(definitionId, { sourceVersionId: current.version.id, expectedRevision: current.revision, description });
-        if (alive.current) navigate(api.workflowPath(copied));
+        attempt = retry?.attempt.stage === 'copy' ? retry.attempt : { stage: 'copy', body: { sourceVersionId: saved.version.id, expectedRevision: saved.revision, description: operation.description }, key: crypto.randomUUID() };
+        const copied = await api.copyWorkflow(definitionId, attempt.body, options(attempt.key));
+        if (!current()) return;
+        navigate(api.workflowPath(copied));
       }
+      setUncertain(undefined);
     } catch (cause) {
-      if (!alive.current) return;
-      setError(cause);
-      if (cause instanceof ApiError && ['FEATURE_PERMISSION_DENIED', 'ORGANIZATION_SCOPE_DENIED', 'AUTH_SESSION_REQUIRED'].includes(cause.code)) setDenied(true);
-    } finally { lock.current = false; if (alive.current) setBusy(false); }
+      if (!current()) return;
+      report(cause);
+      if (!current()) return;
+      if (cause instanceof ApiError && (cause.status === 409 || ['CONCURRENCY_CONFLICT', 'WORKFLOW_VERSION_IMMUTABLE', 'WORKFLOW_DRAFT_EXISTS'].includes(cause.code))) { setStale(true); setUncertain(undefined); }
+      else if (attempt && operation && (attempt === retry?.attempt || api.unknownWorkflowWrite(cause))) setUncertain({ operation, attempt });
+      else setUncertain(undefined);
+    } finally { lock.current = false; if (current()) setBusy(false); }
   }
   function addNode() {
     if (readOnly) return;
@@ -116,7 +164,7 @@ function Designer({ definitionId, versionId }: Props) {
     if (node || edge) setSelected(node?.id ?? edge!.from);
     document.getElementById(node ? 'workflow-properties' : `workflow-edge-${id}`)?.scrollIntoView?.({ block: 'nearest' });
   }
-  const conflict = error instanceof ApiError && ['CONCURRENCY_CONFLICT', 'WORKFLOW_VERSION_IMMUTABLE', 'WORKFLOW_DRAFT_EXISTS'].includes(error.code);
+  const conflict = stale;
   const selectedClosure = graph.nodes.find(node => node.id === selected && node.type === 'APPROVAL' && node.config?.closureReview);
   return <section className="workflow-editor">
     {baseline && <nav aria-label={t('流程对象层级')}><Breadcrumb items={[
@@ -132,10 +180,11 @@ function Designer({ definitionId, versionId }: Props) {
       <Button aria-label={t('保存草稿')} disabled={readOnly} onClick={() => void act('save')}>{t('保存草稿')}</Button>
       <Button aria-label={t('校验流程')} disabled={readOnly} onClick={() => void act('validate')}>{t('校验流程')}</Button>
       <Button aria-label={t('发布流程')} type="primary" disabled={readOnly} onClick={() => void act('publish')}>{t('发布流程')}</Button>
-      {baseline?.version.status === 'PUBLISHED' && <Button disabled={busy || denied} onClick={() => void act('copy')}>{t('复制为新草稿')}</Button>}
+      {baseline?.version.status === 'PUBLISHED' && <Button disabled={busy || denied || !!uncertain || stale} onClick={() => void act('copy')}>{t('复制为新草稿')}</Button>}
     </Space></header>
     {!!error && <Alert type="error" title={t(conflict ? '流程已被修改，本地草稿仍保留，请确认后重新加载。' : safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
-    {(error || baseline) && <Button disabled={busy} onClick={() => requestLeave(() => setRevision((value) => value + 1))}>{t('重新加载流程')}</Button>}
+    {uncertain && <Alert type="warning" title={t('流程请求结果未确认，输入已冻结，只能重试原请求。')} description={t('重试若遇版本冲突，请显式刷新核对服务端结果；不会自动再次保存或发布。')} action={<Button disabled={busy || denied} onClick={() => void act(uncertain.operation.action, uncertain)}>{t('重试原流程请求')}</Button>} />}
+    {(error || baseline) && <Button disabled={busy || denied || !!uncertain} onClick={() => requestLeave(() => setRevision((value) => value + 1))}>{t('重新加载流程')}</Button>}
     {frozen && baseline && <Alert type="info" title={t('已发布版本只读；如需修改，请复制为新草稿。')} />}
     {busy && <Spin aria-label={t('加载中')} />}
     {baseline && <>
@@ -149,7 +198,7 @@ function Designer({ definitionId, versionId }: Props) {
         <div id="workflow-properties"><label>{t('搜索处理人和角色')}<input aria-label={t('搜索处理人和角色')} value={directorySearch} onChange={(event) => setDirectorySearch(event.target.value)} /></label>
           {!!directoryError && <Alert type="error" title={t('处理范围选项加载失败')} />}
           <WorkflowProperties graph={graph} selected={selected} readOnly={readOnly} options={options} onChange={edit} onSelect={setSelected} />
-          {selectedClosure?.config?.closureReview && <WorkflowClosurePreview key={selectedClosure.id} policy={selectedClosure.config.closureReview.policy} disabled={busy || denied} />}
+          {selectedClosure?.config?.closureReview && <WorkflowClosurePreview key={selectedClosure.id} policy={selectedClosure.config.closureReview.policy} disabled={busy || denied || !!uncertain} />}
         </div></div>
     </>}
   </section>;

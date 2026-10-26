@@ -10,8 +10,6 @@ import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/Unsaved
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ClosureTaskInbox } from './ClosureTaskInbox';
 
-vi.setConfig({ testTimeout: 30000 });
-
 type Task = components['schemas']['ClosureTaskDto'];
 type Round = components['schemas']['WorkflowClosureRoundDto'];
 type Notice = components['schemas']['ClosureNotificationDto'];
@@ -43,9 +41,23 @@ function scene() {
   </Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>;
 }
 const writes = (requests: Request[]) => requests.filter(item => item.path.endsWith('/decide'));
-async function openReview() { fireEvent.click(await screen.findByRole('button', { name: '审核关闭职责' })); return screen.findByRole('dialog', { name: '关闭职责审核' }); }
+// State checks use the known native button; representative role assertions remain below.
+function visibleButton(scope: HTMLElement, label: string) {
+  const button = within(scope).getByText(label, { selector: 'button span' }).closest('button')!;
+  expect(button).toBeVisible();
+  return button;
+}
+async function openReview() {
+  const label = await screen.findByText('审核关闭职责', { selector: 'button span' });
+  const button = label.closest('button')!;
+  await waitFor(() => { expect(button).toBeVisible(); expect(button).toBeEnabled(); });
+  fireEvent.click(button);
+  const dialog = await screen.findByRole('dialog', { name: '关闭职责审核' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  return dialog;
+}
 async function fillReview() { const dialog = await openReview(); await within(dialog).findByText('第 2 轮'); fireEvent.change(within(dialog).getByLabelText('审核意见'), { target: { value: '核对完成' } }); return dialog; }
-const submit = (dialog: HTMLElement) => fireEvent.click(within(dialog).getByRole('button', { name: '提交审核' }));
+const submit = (dialog: HTMLElement) => fireEvent.click(visibleButton(dialog, '提交审核'));
 beforeEach(() => {
   localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().bindSession('INTERNAL:org:actor');
   // Match the existing navigation tests: data routers use Node's native Request.
@@ -70,6 +82,9 @@ it('rechecks round history, shows fixed version and a real workspace link withou
   expect(within(dialog).getByText('固定内容版本：3')).toBeInTheDocument();
   expect(within(dialog).getByText(/未加载完整 8D/)).toBeInTheDocument();
   expect(within(dialog).getByRole('link', { name: '核对问题工作空间' })).toHaveAttribute('href', '/app/problem-workspace/problem-1?instanceId=instance-1');
+  for (const label of ['提交审核', '关闭审核', '刷新审核基线']) {
+    expect(within(dialog).getByRole('button', { name: label })).toBe(visibleButton(dialog, label));
+  }
   submit(dialog); await waitFor(() => expect(writes(requests)).toHaveLength(1));
   expect(JSON.parse(writes(requests)[0].init!.body as string)).toEqual({ expectedRoundVersion: 7, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: '核对完成' });
   expect(writes(requests)[0].init!.headers).toMatchObject({ 'x-csrf-token': 'csrf-test', 'Idempotency-Key': expect.any(String) });
@@ -78,7 +93,7 @@ it('rechecks round history, shows fixed version and a real workspace link withou
 it('requires an explicit joint acknowledgement and submits both management duties, never the professional duty', async () => {
   const requests = stub({ tasks: [joint], rounds: [{ ...round, duties: [...round.duties, duty('MINISTER'), duty('PROFESSIONAL')] }] }); render(scene());
   const dialog = await fillReview(); expect(within(dialog).getByText(/本次一次确认科室经理与部长两份职责/)).toBeInTheDocument();
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
   fireEvent.click(within(dialog).getByRole('checkbox', { name: '我确认同时审核科室经理与部长两份职责' })); submit(dialog);
   await waitFor(() => expect(writes(requests)).toHaveLength(1));
   expect(JSON.parse(writes(requests)[0].init!.body as string).duties).toEqual(['SECTION_MANAGER', 'MINISTER']);
@@ -98,12 +113,12 @@ it.each([
   { ...round, contentVersion: 4 }, { ...round, workflowVersionId: 'replacement-workflow' },
 ])('refuses an obsolete or mismatched history baseline %#', async changed => {
   const requests = stub({ rounds: [changed] }); render(scene()); const dialog = await openReview();
-  await within(dialog).findByText(/审核基线已失效/); expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled(); expect(writes(requests)).toHaveLength(0);
+  await within(dialog).findByText(/审核基线已失效/); expect(visibleButton(dialog, '提交审核')).toBeDisabled(); expect(writes(requests)).toHaveLength(0);
 });
 
 it('rejects malformed joint duties instead of mixing professional and management', async () => {
   const requests = stub({ tasks: [{ ...joint, jointDuties: ['SECTION_MANAGER', 'PROFESSIONAL'] }] }); render(scene()); const dialog = await openReview();
-  await within(dialog).findByText(/审核基线已失效/); expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled(); expect(writes(requests)).toHaveLength(0);
+  await within(dialog).findByText(/审核基线已失效/); expect(visibleButton(dialog, '提交审核')).toBeDisabled(); expect(writes(requests)).toHaveLength(0);
 });
 
 it.each([503, 'network'] as const)('freezes an unknown %s write and retries exactly the original body and key', async failure => {
@@ -112,7 +127,7 @@ it.each([503, 'network'] as const)('freezes an unknown %s write and retries exac
   const dialog = await fillReview(); submit(dialog); await within(dialog).findByText(/审核结果尚未确认/);
   expect(within(dialog).getByLabelText('审核意见')).toBeDisabled();
   expect(within(dialog).getByRole('radio', { name: '退回修改' })).toBeDisabled();
-  fireEvent.click(within(dialog).getByRole('button', { name: '重试原请求' }));
+  fireEvent.click(visibleButton(dialog, '重试原请求'));
   await waitFor(() => expect(writes(requests)).toHaveLength(2));
   expect(writes(requests)[1].init!.body).toBe(writes(requests)[0].init!.body);
   expect(writes(requests)[1].init!.headers).toEqual(writes(requests)[0].init!.headers);
@@ -133,8 +148,8 @@ it.each(['initial', 'after-conflict'] as const)('requires explicit retry after r
     render(scene()); const dialog = await fillReview(); submit(dialog);
     if (stage === 'after-conflict') {
       await within(dialog).findByText(/审核基线已失效/);
-      fireEvent.click(within(dialog).getByRole('button', { name: '刷新审核基线' }));
-      await waitFor(() => expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeEnabled());
+      fireEvent.click(visibleButton(dialog, '刷新审核基线'));
+      await waitFor(() => expect(visibleButton(dialog, '提交审核')).toBeEnabled());
       submit(dialog);
     }
     await waitFor(() => expect(reauthenticate).toHaveBeenCalledTimes(1));
@@ -145,8 +160,8 @@ it.each(['initial', 'after-conflict'] as const)('requires explicit retry after r
     expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成');
     expect(within(dialog).getByLabelText('审核意见')).toBeDisabled();
     expect(within(dialog).getByRole('radio', { name: '退回修改' })).toBeDisabled();
-    expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeDisabled();
-    const retry = within(dialog).getByRole('button', { name: '重试原请求' });
+    expect(visibleButton(dialog, '关闭审核')).toBeDisabled();
+    const retry = visibleButton(dialog, '重试原请求');
     expect(retry).toBeEnabled();
     expect(screen.queryByText('无权审核关闭职责')).not.toBeInTheDocument();
     expect(screen.queryByText(/审核回执：/)).not.toBeInTheDocument();
@@ -159,6 +174,8 @@ it.each(['initial', 'after-conflict'] as const)('requires explicit retry after r
 });
 
 it.each([[503, 'close'], [503, 'route'], ['network', 'close'], ['network', 'route']] as const)('releases an unknown %s attempt after notifications 403 for guarded %s', async (failure, exit) => {
+  // Wait for portal visibility instead of relying on slow role queries as a delay.
+  const control = (scope: HTMLElement, label: string) => waitFor(() => visibleButton(scope, label));
   let denied = false;
   const requests = stub({ intercept: ({ path }) => {
     if (path.endsWith('/decide')) return failure === 'network' ? Promise.reject(new TypeError('offline')) : json({}, failure);
@@ -169,27 +186,29 @@ it.each([[503, 'close'], [503, 'route'], ['network', 'close'], ['network', 'rout
   </Routes></UnsavedChangesProvider> }], { initialEntries: ['/app/my-tasks'] });
   render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><RouterProvider router={router} /></LanguageProvider></ConfigProvider>);
   const dialog = await fillReview(); submit(dialog); await within(dialog).findByText(/审核结果尚未确认/);
-  denied = true; fireEvent.click(screen.getByRole('button', { name: '刷新职责通知' }));
+  denied = true; fireEvent.click(await control(document.body, '刷新职责通知'));
   await within(dialog).findByText('无权审核关闭职责');
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeEnabled();
+  const close = await control(dialog, '关闭审核');
+  expect(close).toBeEnabled();
   expect(screen.getAllByText('trace-notices-denied').every(element => element.tagName === 'CODE')).toBe(true);
   expect(within(dialog).getByText(/先前审核结果仍待核对/)).toBeInTheDocument();
   expect(screen.queryByText('Q-001')).not.toBeInTheDocument();
   expect(screen.queryByText(notice.subject)).not.toBeInTheDocument();
-  expect(within(dialog).getByRole('button', { name: '重试原请求' })).toBeDisabled();
-  fireEvent.click(within(dialog).getByRole('button', { name: '重试原请求' }));
-  fireEvent.click(within(dialog).getByRole('button', { name: '关闭审核' }));
+  const retry = await control(dialog, '重试原请求');
+  expect(retry).toBeDisabled();
+  fireEvent.click(retry);
+  fireEvent.click(close);
   let guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
-  fireEvent.click(within(guard).getByRole('button', { name: '继续编辑' }));
+  fireEvent.click(await control(guard, '继续编辑'));
   expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成');
   await act(async () => { await router.navigate('/other'); });
   guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
-  fireEvent.click(within(guard).getByRole('button', { name: '继续编辑' }));
+  fireEvent.click(await control(guard, '继续编辑'));
   expect(router.state.location.pathname).toBe('/app/my-tasks');
   if (exit === 'close') {
-    fireEvent.click(within(dialog).getByRole('button', { name: '关闭审核' }));
+    fireEvent.click(close);
     guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
-    fireEvent.click(within(guard).getByRole('button', { name: '放弃修改并关闭' }));
+    fireEvent.click(await control(guard, '放弃修改并关闭'));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '关闭职责审核' })).not.toBeInTheDocument());
     expect(screen.getByText(/先前审核结果仍待核对/)).toBeInTheDocument();
     const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(false);
@@ -197,7 +216,7 @@ it.each([[503, 'close'], [503, 'route'], ['network', 'close'], ['network', 'rout
   } else {
     await act(async () => { await router.navigate('/other'); });
     guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
-    fireEvent.click(within(guard).getByRole('button', { name: '放弃修改' }));
+    fireEvent.click(await control(guard, '放弃修改'));
   }
   await screen.findByText('OTHER'); expect(writes(requests)).toHaveLength(1);
 });
@@ -211,10 +230,10 @@ it.each(['success', '503', '401'] as const)('isolates a late %s POST after concu
   } });
   render(scene()); const dialog = await fillReview(); submit(dialog);
   await waitFor(() => expect(writes(requests)).toHaveLength(1));
-  denied = true; fireEvent.click(screen.getByRole('button', { name: '刷新职责通知' }));
+  denied = true; fireEvent.click(visibleButton(document.body, '刷新职责通知'));
   await within(dialog).findByText('无权审核关闭职责');
   expect(writes(requests)[0].init!.signal!.aborted).toBe(true);
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeEnabled();
+  expect(visibleButton(dialog, '关闭审核')).toBeEnabled();
   expect(within(dialog).getByText(/先前审核结果仍待核对/)).toBeInTheDocument();
   const count = requests.length;
   await act(async () => { release(result === 'success' ? json({ ...round, version: 8, status: 'APPROVED' }) : json({ code: result === '401' ? 'AUTH_SESSION_REQUIRED' : 'UNAVAILABLE' }, Number(result))); });
@@ -225,7 +244,7 @@ it.each(['success', '503', '401'] as const)('isolates a late %s POST after concu
   expect(screen.queryByText('第 2 轮')).not.toBeInTheDocument();
   expect(screen.queryByText('LOGIN')).not.toBeInTheDocument();
   expect(within(dialog).getByText('无权审核关闭职责')).toBeInTheDocument();
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
   expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org:actor');
 });
 
@@ -238,13 +257,13 @@ it('does not dispatch a decision after notifications 403 during CSRF', async () 
   } });
   render(scene()); const dialog = await fillReview(); submit(dialog);
   await waitFor(() => expect(release).toBeDefined());
-  denied = true; fireEvent.click(screen.getByRole('button', { name: '刷新职责通知' }));
+  denied = true; fireEvent.click(visibleButton(document.body, '刷新职责通知'));
   await within(dialog).findByText('无权审核关闭职责');
   expect(requests.find(item => item.path === '/api/v1/auth/csrf')!.init!.signal!.aborted).toBe(true);
   await act(async () => { release(json({ csrfToken: 'late-csrf' })); });
   expect(writes(requests)).toHaveLength(0);
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeEnabled();
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '关闭审核')).toBeEnabled();
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
   expect(within(dialog).getByText('无权审核关闭职责')).toBeInTheDocument();
 });
 
@@ -263,9 +282,9 @@ it('clears a 409 baseline but retains the comment and requires an explicit refre
   expect(await within(dialog).findByText('暂无轮次历史')).toBeVisible();
   expect(within(dialog).queryByText('第 2 轮 · v7')).not.toBeInTheDocument();
   expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成');
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
-  fireEvent.click(within(dialog).getByRole('button', { name: '刷新审核基线' }));
-  await waitFor(() => expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeEnabled());
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
+  fireEvent.click(visibleButton(dialog, '刷新审核基线'));
+  await waitFor(() => expect(visibleButton(dialog, '提交审核')).toBeEnabled());
   expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成'); expect(writes(requests)).toHaveLength(1);
 });
 
@@ -282,7 +301,7 @@ it('retains the confirmed receipt when inbox refresh fails and never replays the
     if (decided && path.includes('/closure?')) return json({}, 503);
   } }); render(scene()); submit(await fillReview());
   await screen.findByText(/审核回执：/); await screen.findAllByText(/加载失败/);
-  fireEvent.click(screen.getByRole('button', { name: '刷新职责待办' }));
+  fireEvent.click(visibleButton(document.body, '刷新职责待办'));
   await waitFor(() => expect(requests.filter(item => item.path.startsWith('/api/v1/tasks/closure?')).length).toBeGreaterThan(2));
   expect(writes(requests)).toHaveLength(1); expect(screen.getByText(/审核回执：/)).toBeInTheDocument();
 });
@@ -296,7 +315,7 @@ it('terminates current 401 through session navigation even with a dirty comment'
 it('disables review after 403 without keeping sensitive task details', async () => {
   stub({ intercept: ({ path }) => path.endsWith('/decide') ? json({ code: 'FEATURE_PERMISSION_DENIED' }, 403) : undefined }); render(scene());
   const dialog = await fillReview(); submit(dialog); await within(dialog).findByText('无权审核关闭职责');
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
   expect(screen.queryByText('Q-001')).not.toBeInTheDocument();
 });
 
@@ -321,7 +340,7 @@ it('aborts on unmount and ignores late read results', async () => {
 
 it('can close an untouched review while its readonly history request is still pending', async () => {
   const requests = stub({ intercept: ({ path }) => path.endsWith('/rounds') ? new Promise<Response>(() => {}) : undefined }); render(scene());
-  const dialog = await openReview(); fireEvent.click(within(dialog).getByRole('button', { name: '关闭审核' }));
+  const dialog = await openReview(); fireEvent.click(visibleButton(dialog, '关闭审核'));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '关闭职责审核' })).not.toBeInTheDocument());
   expect(requests.find(item => item.path.endsWith('/rounds'))!.init!.signal!.aborted).toBe(true);
 });
@@ -336,11 +355,11 @@ it('synchronously locks double submit while CSRF is pending', async () => {
 
 it('guards dirty close, preserves on continue, and restores focus after confirmed discard', async () => {
   stub(); render(scene()); const trigger = await screen.findByRole('button', { name: '审核关闭职责' });
-  const dialog = await fillReview(); fireEvent.click(within(dialog).getByRole('button', { name: '关闭审核' }));
+  const dialog = await fillReview(); fireEvent.click(visibleButton(dialog, '关闭审核'));
   // rc-dialog uses the same test-id for both modal headings in test mode.
   const guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
   fireEvent.click(within(guard).getByRole('button', { name: '继续编辑' })); expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成');
-  fireEvent.click(within(dialog).getByRole('button', { name: '关闭审核' }));
+  fireEvent.click(visibleButton(dialog, '关闭审核'));
   fireEvent.click(within((await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement).getByRole('button', { name: '放弃修改并关闭' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '关闭职责审核' })).not.toBeInTheDocument());
   await waitFor(() => expect(trigger).toHaveFocus());
@@ -361,7 +380,7 @@ it('shows a failed task read as failure, not an empty inbox, without hiding noti
   const requests = stub({ intercept: ({ path }) => failed && path.startsWith('/api/v1/tasks/closure?') ? json({}, 503) : undefined }); render(scene());
   const region = screen.getByRole('region', { name: '关闭职责待办' }); await within(region).findByText('加载失败，请重试');
   expect(within(region).queryByText('暂无关闭职责待办')).not.toBeInTheDocument(); expect(await screen.findByText(notice.subject)).toBeInTheDocument();
-  failed = false; fireEvent.click(within(region).getByRole('button', { name: '刷新职责待办' }));
+  failed = false; fireEvent.click(visibleButton(region, '刷新职责待办'));
   await within(region).findByRole('button', { name: '审核关闭职责' }); expect(requests.filter(item => item.path.startsWith('/api/v1/notifications/closure?'))).toHaveLength(1);
 });
 
@@ -392,7 +411,7 @@ it('aborts an in-flight write and does not show its late receipt in a new sessio
 
 it('does not submit blank comments and focuses the editable comment field', async () => {
   const requests = stub(); render(scene()); const dialog = await openReview(); await within(dialog).findByText('第 2 轮');
-  expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '提交审核')).toBeDisabled();
   fireEvent.change(within(dialog).getByLabelText('审核意见'), { target: { value: '   ' } }); submit(dialog); expect(writes(requests)).toHaveLength(0);
   await waitFor(() => expect(within(dialog).getByLabelText('审核意见')).toHaveFocus());
 });
@@ -426,7 +445,7 @@ it('protects refresh and route navigation while a write is pending, then complet
   const dialog = await fillReview(); submit(dialog); await waitFor(() => expect(release).toBeDefined());
   const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
   await act(async () => { await router.navigate('/other'); }); expect(router.state.location.pathname).toBe('/app/my-tasks');
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '关闭审核')).toBeDisabled();
   await act(async () => { release(json({ code: 'AUTH_SESSION_REQUIRED' }, 401)); });
   await screen.findByText('LOGIN'); expect(router.state.location.pathname).toBe('/login'); expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
 });
@@ -449,7 +468,7 @@ it('releases POST busy before completing 401 navigation past a parent dirty draf
   render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><RouterProvider router={router} /></LanguageProvider></ConfigProvider>);
   const dialog = await fillReview(); submit(dialog);
   await waitFor(() => expect(writes(requests)).toHaveLength(1));
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '关闭审核')).toBeDisabled();
   await act(async () => { await router.navigate('/other'); });
   expect(router.state.location.pathname).toBe('/app/my-tasks');
   await act(async () => { release(json({ code: 'AUTH_SESSION_REQUIRED' }, 401)); });
@@ -472,12 +491,12 @@ it.each(['GET', 'history', 'decide'] as const)('preserves safe 403 trace from %s
   if (scope === 'GET') {
     // First retain a successful receipt, then lose read permission on refresh.
     submit(await fillReview()); await screen.findByText(/审核回执：/);
-    await waitFor(() => expect(screen.getByRole('button', { name: '刷新职责待办' })).toBeEnabled());
-    denied = true; fireEvent.click(screen.getByRole('button', { name: '刷新职责待办' }));
+    await waitFor(() => expect(visibleButton(document.body, '刷新职责待办')).toBeEnabled());
+    denied = true; fireEvent.click(visibleButton(document.body, '刷新职责待办'));
   } else {
     const dialog = await fillReview();
     denied = true;
-    if (scope === 'history') fireEvent.click(within(dialog).getByRole('button', { name: '刷新审核基线' }));
+    if (scope === 'history') fireEvent.click(visibleButton(dialog, '刷新审核基线'));
     else submit(dialog);
   }
   expect((await screen.findAllByText(traceId)).some(element => element.tagName === 'CODE')).toBe(true);
@@ -492,8 +511,8 @@ it.each(['GET', 'history', 'decide'] as const)('preserves safe 403 trace from %s
   if (scope !== 'GET') {
     const dialog = screen.getByRole('dialog', { name: '关闭职责审核' });
     expect(within(dialog).getByLabelText('审核意见')).toBeDisabled();
-    expect(within(dialog).getByRole('button', { name: '刷新审核基线' })).toBeDisabled();
-    expect(within(dialog).getByRole('button', { name: '提交审核' })).toBeDisabled();
+    expect(visibleButton(dialog, '刷新审核基线')).toBeDisabled();
+    expect(visibleButton(dialog, '提交审核')).toBeDisabled();
     submit(dialog);
   }
   expect(writes(requests)).toHaveLength(count);
@@ -535,12 +554,12 @@ it.each(['csrf', 'post', 'unknown'] as const)('ignores real Escape while %s keep
   fireEvent.keyDown(dialog, { key: 'Escape', keyCode: 27 });
   expect(screen.getByRole('dialog', { name: '关闭职责审核' })).toBe(dialog);
   expect(within(dialog).getByLabelText('审核意见')).toHaveValue('核对完成');
-  expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeDisabled();
+  expect(visibleButton(dialog, '关闭审核')).toBeDisabled();
   expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();
   expect(writes(requests)).toHaveLength(stage === 'csrf' ? 0 : 1);
   if (stage !== 'unknown') {
     await act(async () => { release(json({ code: 'WORKFLOW_CLOSURE_CONFLICT' }, 409)); });
-    await waitFor(() => expect(within(dialog).getByRole('button', { name: '关闭审核' })).toBeEnabled());
+    await waitFor(() => expect(visibleButton(dialog, '关闭审核')).toBeEnabled());
     expect(writes(requests)).toHaveLength(stage === 'csrf' ? 0 : 1);
   }
 });

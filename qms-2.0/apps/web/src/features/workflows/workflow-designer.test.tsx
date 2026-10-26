@@ -21,6 +21,7 @@ const graph = { nodes: [
 const definition = { id: 'definition', organizationId: 'organization', code: 'QA', name: '质量流程', revision: 3,
   version: { id: 'version', workflowDefinitionId: 'definition', version: 1, status: 'DRAFT', structureSnapshot: graph } };
 const response = (value: unknown) => value as Awaited<ReturnType<typeof api.getWorkflowVersion>>;
+const writeOptions = expect.objectContaining({ signal: expect.anything(), key: expect.any(String) });
 function mount() { return render(<MemoryRouter initialEntries={['/app/workflow-designer/definition/version']}><LanguageProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></LanguageProvider></MemoryRouter>); }
 function mountGuarded() {
   const router = createMemoryRouter([
@@ -72,7 +73,7 @@ it('saves dirty content before publishing with the returned revision and freezes
   fireEvent.click(await screen.findByRole('button', { name: '编辑节点 调查' }));
   fireEvent.change(screen.getByLabelText('节点名称'), { target: { value: '新调查' } });
   fireEvent.click(screen.getByRole('button', { name: '发布流程' }));
-  await waitFor(() => expect(api.publishWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ draftVersionId: 'version', expectedRevision: 4 })));
+  await waitFor(() => expect(api.publishWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ draftVersionId: 'version', expectedRevision: 4 }), writeOptions));
   expect(api.saveWorkflow).toHaveBeenCalledTimes(1);
   expect(await screen.findByText('已发布版本只读；如需修改，请复制为新草稿。')).toBeVisible();
   expect(screen.getByLabelText('节点名称')).toBeDisabled();
@@ -88,14 +89,15 @@ it('locates graph validation errors without losing unsaved content', async () =>
   expect(api.publishWorkflow).not.toHaveBeenCalled();
 });
 
-it('keeps loaded content when permission is lost and disables subsequent mutations', async () => {
+it('clears loaded content when permission is lost and disables subsequent mutations', async () => {
   vi.mocked(api.saveWorkflow).mockRejectedValue(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'unsafe' }));
   mount();
   fireEvent.click(await screen.findByRole('button', { name: '编辑节点 调查' }));
   fireEvent.change(screen.getByLabelText('节点名称'), { target: { value: '仍可阅读的调查' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
   expect(await screen.findByText('无权执行此操作')).toBeVisible();
-  expect(screen.getByLabelText('节点名称')).toHaveValue('仍可阅读的调查');
+  expect(screen.queryByLabelText('节点名称')).not.toBeInTheDocument();
+  expect(screen.queryByText('质量流程')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '保存草稿' })).toBeDisabled();
 });
 
@@ -134,7 +136,7 @@ it('keeps an unpublished note dirty after saving the draft without pretending it
   fireEvent.change(screen.getByLabelText('发布说明'), { target: { value: '仅供发布时使用' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '保存草稿' })).toBeEnabled());
-  expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ description: '保存的流程说明', expectedRevision: 3, draftVersionId: 'version' }));
+  expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ description: '保存的流程说明', expectedRevision: 3, draftVersionId: 'version' }), writeOptions);
   expect(vi.mocked(api.saveWorkflow).mock.calls[0]![1]).not.toHaveProperty('changeNote');
   expect(screen.getByLabelText('发布说明')).toHaveValue('仅供发布时使用');
   expect(api.publishWorkflow).not.toHaveBeenCalled();
@@ -152,7 +154,7 @@ it('publishes a note without saving an unchanged graph and becomes clean only af
   expect(await screen.findByText('已发布版本只读；如需修改，请复制为新草稿。')).toBeVisible();
   expect(api.validateWorkflow).toHaveBeenCalledTimes(1);
   expect(api.saveWorkflow).not.toHaveBeenCalled();
-  expect(api.publishWorkflow).toHaveBeenCalledWith('definition', { draftVersionId: 'version', expectedRevision: 3, changeNote: '修订发布说明' });
+  expect(api.publishWorkflow).toHaveBeenCalledWith('definition', { draftVersionId: 'version', expectedRevision: 3, changeNote: '修订发布说明' }, writeOptions);
   expect(screen.getByLabelText('发布说明')).toHaveValue('');
   expect(screen.queryByText('未保存', { exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: '受控流程列表' }));
@@ -279,7 +281,7 @@ it('preserves closure metadata through an unrelated edit and the real graph save
   fireEvent.click(await screen.findByRole('button', { name: '编辑节点 关闭审核' }));
   fireEvent.change(screen.getByLabelText('节点名称'), { target: { value: '保留受控规则' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
-  await waitFor(() => expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ nodes: [expect.objectContaining({ name: '保留受控规则', config: { closureReview: closure, editorPosition: { x: 10, y: 20 } } })] })));
+  await waitFor(() => expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({ nodes: [expect.objectContaining({ name: '保留受控规则', config: { closureReview: closure, editorPosition: { x: 10, y: 20 } } })] }), writeOptions));
 });
 
 it('saves edited closure policy and domain code and reads them back through the designer reload', async () => {
@@ -308,7 +310,7 @@ it('saves edited closure policy and domain code and reads them back through the 
     nodes: expect.arrayContaining([expect.objectContaining({ id: 'review', config: {
       closureReview: closure, editorPosition: { x: 10, y: 20 },
     } })]),
-  }));
+  }), writeOptions);
   expect(screen.queryByText('未保存', { exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '重新加载流程' }));
   await waitFor(() => expect(api.getWorkflowVersion).toHaveBeenCalledTimes(2));
@@ -317,4 +319,46 @@ it('saves edited closure policy and domain code and reads them back through the 
   expect(screen.getByLabelText('关闭审核领域代码')).toHaveValue('SUPPLIER_QUALITY');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(api.publishWorkflow).not.toHaveBeenCalled();
+});
+
+it('saves the exact controlled 8D owner reminder policy through the generated graph contract', async () => {
+  const snapshot = structuredClone(graph);
+  vi.mocked(api.getWorkflowVersion).mockResolvedValue(response({ ...definition, version: { ...definition.version, structureSnapshot: snapshot } }));
+  vi.mocked(api.saveWorkflow).mockImplementation(async (_id, body) => response({ ...definition, revision: 4, version: { ...definition.version, structureSnapshot: { nodes: body.nodes, transitions: body.transitions } } }));
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: '编辑节点 调查' }));
+  fireEvent.click(screen.getByLabelText('过程8D负责人处理'));
+  fireEvent.change(screen.getByLabelText('8D提醒间隔（小时）'), { target: { value: '12' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(api.saveWorkflow).toHaveBeenCalledWith('definition', expect.objectContaining({
+    nodes: expect.arrayContaining([expect.objectContaining({ id: 'start', config: {
+      isStart: true, assignment: { permission: 'workflow:act' }, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: 12 },
+    } })]),
+  }), writeOptions));
+  expect(screen.getByLabelText('8D提醒间隔（小时）')).toHaveValue(12);
+  expect(api.publishWorkflow).not.toHaveBeenCalled();
+});
+
+it('clears the graph on session expiry without accepting a late directory response', async () => {
+  let finish!: (value: api.WorkflowOptions) => void;
+  vi.mocked(api.getWorkflowOptions).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  vi.mocked(api.saveWorkflow).mockRejectedValue(new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: 'unsafe' }, 401));
+  mount(); fireEvent.click(await screen.findByRole('button', { name: '编辑节点 调查' }));
+  await waitFor(() => expect(api.getWorkflowOptions).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  expect(await screen.findByText('请先登录')).toBeVisible();
+  await act(async () => finish({ roles: [{ code: 'LEAK', name: '不可泄露的岗位' }], users: [], permissions: [] }));
+  expect(screen.queryByLabelText('节点名称')).not.toBeInTheDocument();
+  expect(screen.queryByText('不可泄露的岗位')).not.toBeInTheDocument();
+});
+
+it('does not paint a workflow response from an old session after organization change', async () => {
+  useWorkTabsStore.getState().bindSession('INTERNAL:user:old-org');
+  let finish!: (value: api.WorkflowDefinition) => void;
+  vi.mocked(api.getWorkflowVersion).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  mount();
+  act(() => useWorkTabsStore.getState().bindSession('INTERNAL:user:new-org'));
+  await act(async () => finish(response({ ...definition, name: '不可泄露的旧流程' })));
+  expect(screen.queryByText('不可泄露的旧流程')).not.toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '质量流程' })).toBeVisible();
 });

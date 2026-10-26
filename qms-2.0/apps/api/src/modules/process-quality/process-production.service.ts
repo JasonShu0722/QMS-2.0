@@ -168,7 +168,8 @@ export class ProcessProductionService {
     if (ids.length !== batchIds.length) reject('PROCESS_SHIPMENT_BATCHES_INVALID', 400);
     const rows = await transaction.$queryRaw<ProductionRow[]>(Prisma.sql`SELECT * FROM process_production_batches WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY period_start, id`);
     if (rows.length !== ids.length) reject('PROCESS_PRODUCTION_BATCH_NOT_FOUND', 404);
-    const defects = await transaction.$queryRaw<Array<{ production_batch_id: string; defect_quantity: number }>>(Prisma.sql`SELECT b.id AS production_batch_id, COALESCE(SUM(d.defect_quantity), 0)::int AS defect_quantity FROM process_production_batches b LEFT JOIN process_defects d ON d.organization_id = b.organization_id AND d.batch_code = b.batch_code AND d.work_order_code = b.work_order_code AND d.operation_code = b.operation_code AND d.occurred_at >= b.period_start AND d.occurred_at < b.period_end AND d.archived_at IS NULL WHERE b.organization_id = ${organizationId}::uuid AND b.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) GROUP BY b.id`);
+    const defects = await transaction.$queryRaw<Array<{ production_batch_id: string; defect_quantity: number | null }>>(Prisma.sql`SELECT b.id AS production_batch_id, CASE WHEN COUNT(d.id) > COUNT(d.defect_quantity) THEN NULL ELSE COALESCE(SUM(d.defect_quantity), 0) END::int AS defect_quantity FROM process_production_batches b LEFT JOIN process_defects d ON d.organization_id = b.organization_id AND d.batch_code = b.batch_code AND d.work_order_code = b.work_order_code AND d.operation_code = b.operation_code AND d.occurred_at >= b.period_start AND d.occurred_at < b.period_end AND d.archived_at IS NULL WHERE b.organization_id = ${organizationId}::uuid AND b.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) GROUP BY b.id`);
+    if (defects.some(row => row.defect_quantity === null)) reject('PROCESS_PRODUCTION_QUANTITY_INCOMPLETE', 409);
     const defectByBatch = new Map(defects.map((row) => [String(row.production_batch_id), Number(row.defect_quantity)]));
     const batches = rows.map((row) => ({ ...mapRow(row), defectQuantity: defectByBatch.get(String(row.id)) ?? 0 }));
     const totalQuantity = batches.reduce((sum, row) => sum + row.totalQuantity, 0);
@@ -186,7 +187,7 @@ export class ProcessProductionService {
       if (!row) reject('PROCESS_PRODUCTION_NOT_FOUND', 404);
       const revisions = await tx.$queryRaw<Array<{ version: number; total_quantity: number; good_quantity: number; first_pass_quantity: number; reason: string; recorded_by_id: string; recorded_at: Date }>>`SELECT version, total_quantity, good_quantity, first_pass_quantity, reason, recorded_by_id, recorded_at FROM process_production_revisions WHERE organization_id = ${organizationId}::uuid AND production_batch_id = ${id}::uuid ORDER BY version`;
       const defects = await tx.processDefect.findMany({ where: { organizationId, batchCode: row.batch_code, workOrderCode: row.work_order_code, operationCode: row.operation_code, occurredAt: { gte: row.period_start, lt: row.period_end } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] });
-      return { ...mapRow(row), revisions, defects, defectQuantity: defects.reduce((total, defect) => total + defect.defectQuantity, 0) };
+      return { ...mapRow(row), revisions, defects, defectQuantity: defects.reduce<number | null>((total, defect) => total === null || defect.defectQuantity === null ? null : total + defect.defectQuantity, 0) };
     });
   }
 }

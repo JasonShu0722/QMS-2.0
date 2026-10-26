@@ -36,7 +36,7 @@ function stable(value: unknown): unknown { if (Array.isArray(value)) return valu
 export class DomainSourceLinkService {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly outbox: OutboxService) {}
 
-  async change(command: ChangeDomainSourcesCommand, adapters: DomainSourceLinkAdapters) {
+  async change(command: ChangeDomainSourcesCommand, adapters: DomainSourceLinkAdapters, outerTransaction?: Prisma.TransactionClient) {
     if (!command.organizationId || !command.problemIndexId || command.actor.organizationId !== command.organizationId || command.actor.accountType !== 'INTERNAL') fail('SOURCE_LINK_SCOPE_FORBIDDEN', 403);
     if (!Number.isSafeInteger(command.expectedProblemVersion) || command.expectedProblemVersion < 1 || !/^[a-zA-Z0-9._:-]{8,128}$/.test(command.idempotencyKey)) fail('SOURCE_LINK_INPUT_INVALID', 400);
     if (command.add.length + command.remove.length === 0 && !command.primary) fail('SOURCE_LINK_INPUT_INVALID', 400);
@@ -44,9 +44,11 @@ export class DomainSourceLinkService {
     if (identities.some((source) => !validIdentity(source)) || new Set(identities.map(key)).size !== identities.length || (command.primary && !validIdentity(command.primary))) fail('SOURCE_LINK_INPUT_INVALID', 400);
     const digest = createHash('sha256').update(JSON.stringify(stable({ problemIndexId: command.problemIndexId, expectedProblemVersion: command.expectedProblemVersion, add: [...command.add].sort((left, right) => key(left).localeCompare(key(right))).map(({ sourceDomain, sourceType, sourceId, sourceVersion }) => ({ sourceDomain, sourceType, sourceId, sourceVersion })), remove: [...command.remove].sort((left, right) => key(left).localeCompare(key(right))), primary: command.primary ?? null }))).digest('hex');
     const eventKey = `source-link:${command.organizationId}:${createHash('sha256').update(`${command.actor.id}:${command.idempotencyKey}`).digest('hex')}`;
-    return this.prisma.$transaction(async (transaction) => {
+    const work = async (transaction: Prisma.TransactionClient) => {
+      const [isolation] = await transaction.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
+      if (isolation?.transaction_isolation !== 'read committed') fail('WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED', 409);
       await transaction.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`;
-      await assertActiveAuthentication(transaction, command.actor);
+      await assertActiveAuthentication(transaction, command.actor, outerTransaction ? 'SHARE' : 'NO KEY UPDATE');
       await adapters.authorize(transaction, command);
       const existing = await transaction.outboxEvent.findUnique({ where: { eventKey } });
       if (existing) {
@@ -97,6 +99,7 @@ export class DomainSourceLinkService {
       await this.audit.record({ organizationId: command.organizationId, actorUserId: command.actor.id, action: 'DOMAIN_SOURCES_CHANGED', resourceType: 'ProblemIndex', resourceId: command.problemIndexId, outcome: 'SUCCESS', traceId: command.traceId, metadata: { resourceVersion: updated.version } }, transaction);
       await this.outbox.enqueue({ eventKey, aggregateType: 'DomainSourceIssue', aggregateId: command.problemIndexId, eventType: 'DOMAIN_SOURCES_CHANGED', payload: { digest, problem: response as Prisma.InputJsonObject, organizationId: command.organizationId } }, transaction);
       return response;
-    }, { isolationLevel: 'ReadCommitted' });
+    };
+    return outerTransaction ? work(outerTransaction) : this.prisma.$transaction(work, { isolationLevel: 'ReadCommitted' });
   }
 }

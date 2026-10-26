@@ -2,9 +2,19 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## N2-B 本地契约（2026-10-25，未发布）
+## N3过程人工闭环契约（2026-10-26，本地候选）
 
-在下方B1预览之外新增以下受控接口；生产70fdbab尚不含这些增量。DTO均由Swagger生成，不允许Web自建请求 / 响应模型。
+新增`/api/v1/process-quality/eight-d`受控配置、发单 / 来源预览、正文 / 动作、任务 / 通知及报告接口，以及`/api/v1/workflow-deadline-extensions`延期申请 / 决定接口。准确方法、路径、输入、状态码以当前生成的`api.ts`为准；本节不另造第二套DTO。台账维护 / 关闭、物料复核、8D读取 / 报告 / 发单 / 编辑 / 来源 / 风险 / 重派 / 期限均有独立能力，登记目录不等于自动授予存量岗位。
+
+PR #71的fix1统一全正文最多100个不同附件，跨分区复用同UUID只计一次；保存、提交及旧在审关闭均检查，报告防御上限不放宽。延期资格独立于正文编辑/submit，服务端投影`request-extension`；在审只允许CLOSURE，新任务`EXTENSION_REQUEST / AVAILABLE`只表达申请资格，不等于办理任务或管理审批职责。精确枚举以Swagger生成契约为准。
+
+过程未知分类 / 数量 / 发生时间保留null，不能用虚构零值补齐消费者。未配置binding的GET实际返回200 JSON `null`，不是空响应体；配置及启用仍独立写动作。D2～D8的字段缺项只通过受控校验异常返回已登记code与有界fields，默认异常不反射任意message / issues / fields；前端用字段路径定位，不解析任意服务器文本。
+
+报告`view=CURRENT`显式读取当前保存版，`APPROVED`默认已批准关闭版；历史`revisionId`不得与CURRENT混用。PDF响应为真实`application/pdf`、安全文件名、no-store / nosniff，并独立检查读取及报告权限；证据版本 / 授权漂移不能返回旧内容。当前仍待最终工程门禁及PR / 部署，不把本地schema存在称为生产路径可用；范围及失败记录见[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)。
+
+## N2-B 契约（2026-10-25，V0.0.30含fix3已部署）
+
+以下受控接口及下方B1预览已随生产a32615c部署，真实公开schema已核验8条closure相关路径；匿名受限读取401，不代表真实用户业务验收或新8D已启用。DTO均由Swagger生成，不允许Web自建请求 / 响应模型。下方B1的本地结果为当时历史，不作为当前发布状态。
 
 | 方法与路径 | 权限及语义 |
 | --- | --- |

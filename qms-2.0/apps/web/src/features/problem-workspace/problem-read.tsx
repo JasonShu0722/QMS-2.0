@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Space, Tag } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -9,8 +9,17 @@ export function useProblemRead<Value>(read: (signal: AbortSignal) => Promise<Val
   const [state, setState] = useState<{ data?: Value; error?: unknown; loading: boolean }>({ loading: true });
   const [revision, setRevision] = useState(0);
   const previousIdentity = useRef(identity);
+  const activeRead = useRef<AbortController | undefined>(undefined);
+  const revoked = useRef(false);
+  const revoke = useCallback(() => {
+    revoked.current = true;
+    activeRead.current?.abort();
+    setState({ loading: false });
+  }, []);
   useEffect(() => {
+    if (revoked.current) return;
     const controller = new AbortController();
+    activeRead.current = controller;
     const sameIdentity = previousIdentity.current === identity;
     previousIdentity.current = identity;
     setState((current) => ({ data: sameIdentity ? current.data : undefined, loading: true }));
@@ -18,7 +27,7 @@ export function useProblemRead<Value>(read: (signal: AbortSignal) => Promise<Val
       .catch((error: unknown) => { if (!controller.signal.aborted) setState({ error, loading: false }); });
     return () => controller.abort();
   }, [read, identity, revision]);
-  return { ...state, refresh: () => setRevision((value) => value + 1) };
+  return { ...state, revoke, refresh: () => { if (!revoked.current) setRevision((value) => value + 1); } };
 }
 export function ProblemError({ cause }: { cause: unknown }) {
   const { t } = useLanguage();

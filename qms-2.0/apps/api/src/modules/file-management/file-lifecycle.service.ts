@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import type { FileObject, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
-import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication, mfaPolicy } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { canonical, workflowError } from '../workflow/workflow-runtime-policy.js';
 import { FilePolicyService } from './file-policy.service.js';
@@ -165,6 +166,54 @@ export class FileLifecycleService {
       if (file.organizationId !== grants.get(resourceKey(group.resource))!.organizationId || file.resourceType !== group.resource.resourceType || file.resourceId !== group.resource.resourceId) workflowError('FILE_RESOURCE_DENIED', 403);
     }
     return files.map((file) => ({ ...fileDto(file), downloadable: this.isAvailable(file) }));
+  }
+
+  async readReportEvidence(tx: Prisma.TransactionClient, actor: FileActor, groups: { resource: FileResourceRef; fileIds: string[] }[], traceId?: string): Promise<(FileEvidenceDto & { objectKey: string; objectVersionId: string })[]> {
+    const resourceKey = (resource: FileResourceRef) => `${resource.resourceType}:${resource.resourceId}`;
+    if (!Array.isArray(groups) || groups.length > 100 || groups.some(group => !group?.resource || !Array.isArray(group.fileIds)
+      || !/^[A-Za-z][A-Za-z0-9._:-]{0,99}$/.test(group.resource.resourceType) || !isUUID(group.resource.resourceId))) workflowError('FILE_UPLOAD_INVALID', 400);
+    const ids = groups.flatMap(group => group.fileIds);
+    if (ids.length > 100 || ids.some(id => !isUUID(id)) || new Set(ids).size !== ids.length
+      || new Set(groups.map(group => resourceKey(group.resource))).size !== groups.length) workflowError('FILE_UPLOAD_INVALID', 400);
+    const [isolation] = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
+    if (isolation?.transaction_isolation !== 'read committed') workflowError('WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED', 409);
+    const ordered = [...groups].sort((a, b) => resourceKey(a.resource).localeCompare(resourceKey(b.resource)));
+    const grants = new Map<string, FileResourceGrant>();
+    for (const group of ordered) grants.set(resourceKey(group.resource), await this.resources.authorizeAndLock(tx, actor, group.resource, 'read'));
+    const assertScope = (files: FileObject[]) => {
+      if (files.length !== ids.length) workflowError('FILE_RESOURCE_DENIED', 403);
+      for (const file of files) {
+        const group = ordered.find(group => group.fileIds.includes(file.id));
+        if (!group || file.organizationId !== grants.get(resourceKey(group.resource))!.organizationId
+          || file.resourceType !== group.resource.resourceType || file.resourceId !== group.resource.resourceId) workflowError('FILE_RESOURCE_DENIED', 403);
+      }
+    };
+    assertScope(await tx.fileObject.findMany({ where: { id: { in: ids } } }));
+    for (const id of [...ids].sort()) await tx.$queryRaw`SELECT id FROM file_objects WHERE id = ${id}::uuid FOR UPDATE`;
+    // Report/domain locks are already held: revalidate authentication without late user/session write locks.
+    const user = await tx.user.findUnique({ where: { id: actor.id }, include: { organization: true } });
+    if (!actor.sessionId || !user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE' || user.mustChangePassword
+      || user.organizationId !== actor.organizationId || user.accountType !== actor.accountType) workflowError('AUTH_SESSION_REQUIRED', 401);
+    const session = await tx.session.findFirst({ where: { id: actor.sessionId, userId: actor.id, revokedAt: null,
+      expiresAt: { gt: new Date() }, securityVersion: user.securityVersion } });
+    if (!session) workflowError('AUTH_SESSION_REQUIRED', 401);
+    if ((await mfaPolicy(tx, actor.id)).required && !session.mfaVerifiedAt) workflowError('AUTH_MFA_REQUIRED', 401);
+    for (const group of ordered) {
+      const current = await this.resources.authorizeAndLock(tx, actor, group.resource, 'read');
+      const initial = grants.get(resourceKey(group.resource))!;
+      if (current.organizationId !== initial.organizationId || current.version !== initial.version) workflowError('CONCURRENCY_CONFLICT', 409);
+    }
+    const files = await tx.fileObject.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+    assertScope(files);
+    for (const file of files) {
+      if (!this.isAvailable(file) || file.deletedAt || !isUUID(file.objectKey, '4') || file.objectVersionId === 'null'
+        || file.objectVersionId!.length > 1024 || !file.uploadCompletedAt || !Number.isFinite(file.uploadCompletedAt.getTime())
+        || !Number.isFinite(file.scannedAt!.getTime()) || file.scannedAt!.getTime() < file.uploadCompletedAt.getTime()
+        || !Number.isSafeInteger(Number(file.sizeBytes)) || file.sizeBytes < 1n || file.sizeBytes > BigInt(this.policy.maxBytes)
+        || !/^[0-9a-f]{64}$/.test(file.sha256)) workflowError('FILE_NOT_AVAILABLE', 409);
+    }
+    if (traceId !== undefined) for (const file of files) await this.record(tx, actor, file, 'ATTACHMENT_DOWNLOAD_AUTHORIZED', traceId);
+    return files.map(file => ({ ...fileDto(file), downloadable: true, objectKey: file.objectKey, objectVersionId: file.objectVersionId! }));
   }
 
   async download(actor: FileActor, id: string, traceId: string): Promise<FileDownloadDto> {

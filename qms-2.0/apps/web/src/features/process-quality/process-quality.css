@@ -11,4 +11,11 @@
 .process-quality-report-detail { width: 100%; }
 .process-quality-report-select { min-width: 240px; }
 .process-quality-report-version { width: 120px; }
+.process-quality-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--qms-section-gap); }
+.process-quality-form-grid .ant-input-number { width: 100%; }
+.process-quality-source-preview { display: grid; gap: var(--qms-section-gap); margin-block: var(--qms-section-gap); }
+.process-quality-warning { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--qms-warning); border-radius: 50%; background: var(--qms-surface); color: var(--qms-warning); font: inherit; font-weight: 700; cursor: help; }
+.process-quality-warning:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
+.process-quality-toolbar .ant-select { min-width: 140px; }
+@media (max-width: 600px) { .process-quality-form-grid { grid-template-columns: minmax(0, 1fr); } .process-quality-warning { width: 44px; height: 44px; } }
 @media (max-width: 720px) { .process-quality-page { padding: 0;  min-width: 0; } .process-quality-heading { flex-direction: column; } .process-quality-card { padding: var(--qms-card-padding); } }

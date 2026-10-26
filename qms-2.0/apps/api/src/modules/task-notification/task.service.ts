@@ -4,7 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate, workflowAccessPredicate, type WorkflowActor } from '../workflow/workflow-access-policy.js';
-import { jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
+import { isDomainControlledNode, isProcessEightDVersion, jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
 import { TaskDto, TaskPageDto, TaskQueryDto, TaskStatisticsDto } from './task-inbox.dto.js';
 
 export function inboxPage(query: { pageSize?: number; offset?: number }) {
@@ -14,6 +14,7 @@ export function inboxPage(query: { pageSize?: number; offset?: number }) {
   return { pageSize, offset };
 }
 
+// Bind the fixed target organization to avoid repeated correlated role scans without weakening per-task authorization.
 function taskScope(actor: WorkflowActor, organizationId: string, statuses: readonly string[] = ['PENDING', 'IN_PROGRESS', 'OVERDUE']): Prisma.Sql {
   const statusList = Prisma.join(statuses.map((status) => Prisma.sql`${status}`));
   return Prisma.sql`FROM workflow_tasks task
@@ -23,12 +24,16 @@ function taskScope(actor: WorkflowActor, organizationId: string, statuses: reado
     WHERE task.organization_id = ${organizationId}::uuid AND task.status::text IN (${statusList})
       AND instance.status = 'RUNNING' AND instance.current_node_id = task.workflow_node_id AND instance.version = task.entry_instance_version
       AND problem.archived_at IS NULL AND problem.status NOT IN ('CLOSED', 'ARCHIVED')
-      AND ${workflowAccessPredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`task.organization_id`, Prisma.sql`node.config->'assignment'`)}`;
+      AND NOT (node.config ? 'closureReview' OR node.config ? 'processEightD')
+      AND NOT EXISTS (SELECT 1 FROM workflow_nodes controlled
+        WHERE controlled.organization_id = task.organization_id AND controlled.workflow_version_id = task.workflow_version_id
+          AND controlled.config ? 'processEightD')
+      AND ${workflowAccessPredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`node.config->'assignment'`)}`;
 }
 
-function taskFields(actor: WorkflowActor): Prisma.Sql {
-  const canClaim = featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`task.organization_id`, Prisma.sql`'task:claim'`);
-  const ownerEligible = workflowAccessPredicate(Prisma.sql`task.claimed_by_user_id`, Prisma.sql`task.organization_id`, Prisma.sql`node.config->'assignment'`);
+function taskFields(actor: WorkflowActor, organizationId: string): Prisma.Sql {
+  const canClaim = featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'task:claim'`);
+  const ownerEligible = workflowAccessPredicate(Prisma.sql`task.claimed_by_user_id`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`node.config->'assignment'`);
   return Prisma.sql`task.id, task.version, task.workflow_instance_id AS "instanceId", task.workflow_version_id AS "fixedVersion",
     task.entry_instance_version AS "entryInstanceVersion", node.id AS "nodeId", node.name, node.type, problem.id AS "problemId", problem.report_number AS "reportNumber",
     task.due_at AS "dueAt", task.status, task.claimed_by_user_id AS "claimedByUserId", task.claimed_at AS "claimedAt",
@@ -54,8 +59,8 @@ export class TaskService {
         : query.claim === 'OTHERS' ? Prisma.sql`AND task.claimed_by_user_id <> ${actor.id}::uuid`
           : query.claim === 'UNCLAIMED' ? Prisma.sql`AND task.claimed_by_user_id IS NULL` : Prisma.empty;
       const [page] = await tx.$queryRaw<TaskPageDto[]>(Prisma.sql`
-        WITH eligible AS MATERIALIZED (SELECT ${taskFields(actor)} ${taskScope(actor, organizationId, statuses)} ${status} ${claim}
-          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`task.organization_id`, Prisma.sql`'task:read'`)}),
+        WITH eligible AS MATERIALIZED (SELECT ${taskFields(actor, organizationId)} ${taskScope(actor, organizationId, statuses)} ${status} ${claim}
+          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'task:read'`)}),
         selected AS (SELECT * FROM eligible ORDER BY "dueAt" ASC NULLS LAST, id ASC LIMIT ${pageSize} OFFSET ${offset})
         SELECT (SELECT count(*)::int FROM eligible) AS total, COALESCE((SELECT jsonb_agg(selected ORDER BY "dueAt" ASC NULLS LAST, id ASC) FROM selected), '[]'::jsonb) AS items`);
       return page!;
@@ -71,11 +76,11 @@ export class TaskService {
         WITH eligible AS (
           SELECT task.status::text AS status, task.claimed_by_user_id AS "claimedByUserId", task.due_at AS "dueAt"
           ${taskScope(actor, organizationId)}
-          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`task.organization_id`, Prisma.sql`'task:read'`)}
+          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'task:read'`)}
         ), failed AS (
           SELECT task.id
           ${taskScope(actor, organizationId, ['FAILED'])}
-          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`task.organization_id`, Prisma.sql`'task:read'`)}
+          AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'task:read'`)}
         )
         SELECT
           count(*)::int AS total,
@@ -111,6 +116,7 @@ export class TaskService {
       await assertActiveAuthentication(tx, actor);
       await assertWorkflowFeature(tx, actor, organizationId, 'task:claim');
       const task = await tx.workflowTask.findUniqueOrThrow({ where: { id }, include: { workflowNode: true } });
+      if (isDomainControlledNode(task.workflowNode) || await isProcessEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
       if (task.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       if (task.status !== 'FAILED') workflowError('TASK_RETRY_UNAVAILABLE', 409);
       const current = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT task.id ${taskScope(actor, organizationId, ['FAILED'])} AND task.id = ${id}::uuid`);
@@ -119,7 +125,7 @@ export class TaskService {
       await tx.workflowTask.update({ where: { id }, data: { claimedByUserId: null, claimedAt: null, completedAt: null, status: nextStatus, version: { increment: 1 }, updatedById: actor.id } });
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'TASK_RETRIED', resourceType: 'WorkflowTask', resourceId: id, outcome: 'SUCCESS', traceId,
         metadata: { status: nextStatus, resourceVersion: task.version + 1 } }, tx);
-      const [result] = await tx.$queryRaw<{ item: TaskDto }[]>(Prisma.sql`SELECT to_jsonb(result) AS item FROM (SELECT ${taskFields(actor)} ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid) result`);
+      const [result] = await tx.$queryRaw<{ item: TaskDto }[]>(Prisma.sql`SELECT to_jsonb(result) AS item FROM (SELECT ${taskFields(actor, organizationId)} ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid) result`);
       return result!.item;
     }, { isolationLevel: 'ReadCommitted' });
   }
@@ -135,6 +141,7 @@ export class TaskService {
       await assertActiveAuthentication(tx, actor);
       await assertWorkflowFeature(tx, actor, organizationId, 'task:claim');
       const task = await tx.workflowTask.findUniqueOrThrow({ where: { id }, include: { workflowNode: true } });
+      if (isDomainControlledNode(task.workflowNode) || await isProcessEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
       if (task.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       const current = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT task.id ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid`);
       if (!current.length) workflowError('TASK_NOT_FOUND', 404);
@@ -150,7 +157,7 @@ export class TaskService {
       await tx.workflowTask.update({ where: { id }, data: { claimedByUserId: release ? null : actor.id, claimedAt: release ? null : now, status, version: { increment: 1 }, updatedById: actor.id } });
       await this.audit.record({ organizationId, actorUserId: actor.id, action: release ? 'TASK_RELEASED' : previousOwner ? 'TASK_RECLAIMED' : 'TASK_CLAIMED', resourceType: 'WorkflowTask', resourceId: id, outcome: 'SUCCESS', traceId,
         metadata: { previousClaimedByUserId: previousOwner, claimedByUserId: release ? null : actor.id, resourceVersion: task.version + 1 } }, tx);
-      const [result] = await tx.$queryRaw<{ item: TaskDto }[]>(Prisma.sql`SELECT to_jsonb(result) AS item FROM (SELECT ${taskFields(actor)} ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid) result`);
+      const [result] = await tx.$queryRaw<{ item: TaskDto }[]>(Prisma.sql`SELECT to_jsonb(result) AS item FROM (SELECT ${taskFields(actor, organizationId)} ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid) result`);
       return result!.item;
     }, { isolationLevel: 'ReadCommitted' });
   }

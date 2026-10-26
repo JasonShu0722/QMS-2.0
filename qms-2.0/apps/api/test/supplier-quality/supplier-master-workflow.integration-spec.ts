@@ -87,6 +87,8 @@ describe('independent supplier workflow and owner-local lazy snapshots', () => {
     expect(completed.body.securityState).toBe('AUTHENTICATED');
     return (completed.headers['set-cookie'] as string[]).find((value) => value.startsWith('qms_session=') && !value.startsWith('qms_session=;'))!.split(';')[0]!;
   }
+  const portalGet = (cookie: string, id: string) => request(app.getHttpServer()).get(`/api/v1/supplier-portal/problems/${id}`).set('Cookie', cookie);
+  const portalSubmit = (cookie: string, id: string, expectedContentVersion: number) => request(app.getHttpServer()).post(`/api/v1/supplier-portal/problems/${id}/actions`).set('Cookie', `${cookie}; qms_csrf=${csrf}`).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ expectedContentVersion, content: { rootCause: 'Root cause', correctiveAction: 'Supplier action', completionTime: new Date().toISOString() } });
 
   it('completes an internal-only issue, reply, independent verification and closure without a supplier enterprise', async () => {
     const ctx = await context();
@@ -133,31 +135,45 @@ describe('independent supplier workflow and owner-local lazy snapshots', () => {
     expect(await prisma.workflowInstance.count({ where: { instanceKey: record.id } })).toBe(0);
   });
 
-  it('gives two staff the same portal boundary after real first-login changes and isolates another supplier', async () => {
+  it('gives two staff the same portal boundary after real first-login changes and revokes only the disabled staff', async () => {
     const a = await context();
-    const b = await context();
     await prepareFlow(a, 'SUPPLIER');
-    await prepareFlow(b, 'SUPPLIER');
     const accounts = [];
-    for (const ctx of [a, a, b]) accounts.push((await post(ctx.operator.cookie, `profiles/${ctx.profile.id}/accounts`, { username: `f1-portal-${randomUUID()}` }).expect(201)).body);
+    for (let index = 0; index < 2; index++) accounts.push((await post(a.operator.cookie, `profiles/${a.profile.id}/accounts`, { username: `f1-portal-${randomUUID()}` }).expect(201)).body);
     const cookies = [];
     for (const account of accounts) cookies.push(await firstLogin(account));
     const aDraft = await draft(a, 'SUPPLIER');
-    const bDraft = await draft(b, 'SUPPLIER');
     const aProblem = (await post(a.operator.cookie, `drafts/${aDraft.id}/issue`, { expectedVersion: aDraft.version }).expect(201)).body;
-    const bProblem = (await post(b.operator.cookie, `drafts/${bDraft.id}/issue`, { expectedVersion: bDraft.version }).expect(201)).body;
-    const get = (cookie: string, id: string) => request(app.getHttpServer()).get(`/api/v1/supplier-portal/problems/${id}`).set('Cookie', cookie);
-    await get(cookies[0]!, aProblem.id).expect(200);
-    await get(cookies[1]!, aProblem.id).expect(200);
-    await get(cookies[2]!, aProblem.id).expect(404);
-    await get(cookies[0]!, bProblem.id).expect(404);
-    const submit = (cookie: string, id: string, expectedContentVersion: number) => request(app.getHttpServer()).post(`/api/v1/supplier-portal/problems/${id}/actions`).set('Cookie', `${cookie}; qms_csrf=${csrf}`).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ expectedContentVersion, content: { rootCause: 'Root cause', correctiveAction: 'Supplier action', completionTime: new Date().toISOString() } });
-    await submit(cookies[2]!, aProblem.id, aProblem.version).expect(404);
-    await submit(cookies[0]!, aProblem.id, aProblem.version).expect(201);
+    await portalGet(cookies[0]!, aProblem.id).expect(200);
+    await portalGet(cookies[1]!, aProblem.id).expect(200);
+    await portalSubmit(cookies[0]!, aProblem.id, aProblem.version).expect(201);
     expect(await prisma.supplierResponseRevision.count({ where: { problemId: aProblem.id, submittedById: accounts[0]!.id } })).toBe(1);
     await request(app.getHttpServer()).put(`/api/v1/supplier-quality/profiles/${a.profile.id}/accounts/${accounts[0]!.id}/status`).set('Cookie', a.operator.cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ status: 'DISABLED', expectedSecurityVersion: 2 }).expect(200);
-    await get(cookies[0]!, aProblem.id).expect(401);
-    await get(cookies[1]!, aProblem.id).expect(200);
+    await portalGet(cookies[0]!, aProblem.id).expect(401);
+    await portalGet(cookies[1]!, aProblem.id).expect(200);
+    expect(await prisma.userTemporaryPassword.count({ where: { userId: { in: accounts.map(({ id }) => id) } } })).toBe(0);
+  });
+
+  it('isolates reads and submissions between suppliers after real first-login changes', async () => {
+    const contexts = [await context(), await context()];
+    const accounts = [];
+    const cookies = [];
+    const problems = [];
+    for (const ctx of contexts) {
+      await prepareFlow(ctx, 'SUPPLIER');
+      const account = (await post(ctx.operator.cookie, `profiles/${ctx.profile.id}/accounts`, { username: `f1-isolated-${randomUUID()}` }).expect(201)).body;
+      accounts.push(account);
+      cookies.push(await firstLogin(account));
+      const record = await draft(ctx, 'SUPPLIER');
+      problems.push((await post(ctx.operator.cookie, `drafts/${record.id}/issue`, { expectedVersion: record.version }).expect(201)).body);
+    }
+    await portalGet(cookies[0]!, problems[0]!.id).expect(200);
+    await portalGet(cookies[1]!, problems[1]!.id).expect(200);
+    await portalGet(cookies[1]!, problems[0]!.id).expect(404);
+    await portalGet(cookies[0]!, problems[1]!.id).expect(404);
+    await portalSubmit(cookies[1]!, problems[0]!.id, problems[0]!.version).expect(404);
+    await portalSubmit(cookies[0]!, problems[1]!.id, problems[1]!.version).expect(404);
+    expect(await prisma.supplierResponseRevision.count({ where: { problemId: { in: problems.map(({ id }) => id) } } })).toBe(0);
     expect(await prisma.userTemporaryPassword.count({ where: { userId: { in: accounts.map(({ id }) => id) } } })).toBe(0);
   });
 });

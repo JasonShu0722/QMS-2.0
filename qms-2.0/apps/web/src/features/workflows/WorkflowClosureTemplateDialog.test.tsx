@@ -51,7 +51,9 @@ afterEach(() => vi.unstubAllGlobals());
 it('loads server candidates and sends an explicit draft-only body with CSRF and idempotency', async () => {
   const view = mount(); await fill();
   await waitFor(() => expect(screen.getByText(/不自动发布或绑定/)).toBeVisible());
-  expect(screen.getByText(/领域接入准备好后/)).toBeVisible();
+  const integrationNotice = screen.getByText(/发布时校验对应领域是否已接入/);
+  expect(integrationNotice).toBeVisible();
+  expect(integrationNotice).toHaveTextContent('创建候选草稿不会自动发布、绑定或启用。');
   fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
   await waitFor(() => expect(view.created).toHaveBeenCalledWith(draft));
   const [path, init, options] = writes()[0]!;
@@ -72,10 +74,12 @@ it('requires policy, domain code, code and name without pre-filling business ide
   expect(writes()).toHaveLength(0);
 });
 
-it.each([new TypeError('network disconnected'), failure(503)])('freezes unknown results and replays exactly the original body and key: %s', async cause => {
+it.each([new TypeError('network disconnected'), failure(503), failure(408), failure(425), new ApiError({ code: 'CLIENT_REAUTHENTICATION_COMPLETED', message: 'reauthenticated' })])('freezes unknown results and replays exactly the original body and key: %s', async cause => {
   vi.mocked(apiRequest).mockImplementation(async (_path, init) => { if (init?.method !== 'POST') return candidates; if (writes().length === 1) throw cause; return draft; });
   mount(); await fill(); fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
-  fireEvent.click(await screen.findByRole('button', { name: '重试原请求' }));
+  const retry = await screen.findByRole('button', { name: '重试原请求' });
+  expect(screen.getByLabelText('模板流程代码')).toBeDisabled(); expect(writes()).toHaveLength(1);
+  fireEvent.click(retry);
   await waitFor(() => expect(writes()).toHaveLength(2));
   expect(writes()[1]![1]!.body).toBe(writes()[0]![1]!.body);
   expect(writes()[1]![1]!.headers).toEqual(writes()[0]![1]!.headers);
@@ -94,7 +98,64 @@ it('locks unknown inputs and prevents sending an edited request before original 
   expect(screen.getByText('trace-500')).toBeVisible();
 });
 
-it.each([400, 409, 422])('restores original inputs after unknown retry is explicitly rejected with %s without changing body or key', async status => {
+it.each([400, 422])('keeps unknown template frozen across retry CSRF 429 and write %s until exact replay succeeds', async status => {
+  vi.mocked(csrfToken).mockResolvedValueOnce('csrf-token').mockRejectedValueOnce(failure(429)).mockResolvedValue('csrf-token');
+  vi.mocked(apiRequest).mockImplementation(async (_path, init) => {
+    if (init?.method !== 'POST') return candidates;
+    if (writes().length === 1) throw new TypeError('response lost');
+    if (writes().length === 2) throw failure(status);
+    return draft;
+  });
+  const view = mount(); await fill(); fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
+  fireEvent.click(await screen.findByRole('button', { name: '重试原请求' }));
+  expect(await screen.findByText('trace-429')).toBeVisible();
+  expect(writes()).toHaveLength(1); expect(csrfToken).toHaveBeenCalledTimes(2);
+  expect(screen.getByLabelText('模板流程代码')).toBeDisabled(); expect(screen.getByRole('button', { name: '重试原请求' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '重试原请求' }));
+  expect(await screen.findByText(`trace-${status}`)).toBeVisible();
+  expect(writes()).toHaveLength(2);
+  for (const label of ['模板策略', '模板领域代码', '模板流程代码', '模板流程名称']) expect(screen.getByLabelText(label)).toBeDisabled();
+  expect(screen.getByRole('button', { name: '创建模板草稿' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('模板流程代码'), { target: { value: 'CHANGED' } });
+  fireEvent.submit(screen.getByLabelText('模板流程代码').closest('form')!);
+  expect(writes()).toHaveLength(2); expect(csrfToken).toHaveBeenCalledTimes(3);
+  fireEvent.click(screen.getByRole('button', { name: '重试原请求' }));
+  await waitFor(() => expect(view.created).toHaveBeenCalledOnce());
+  expect(view.created).toHaveBeenCalledWith(draft); expect(writes()).toHaveLength(3);
+  const first = writes()[0]![1]!;
+  expect(JSON.parse(first.body as string)).toEqual({ policy: 'SUPPLIER', domainCode: 'SUPPLIER_QUALITY', code: 'SUPPLIER-CLOSE', name: '供应商关闭流程' });
+  expect((first.headers as Record<string, string>)['Idempotency-Key']).toBeTruthy();
+  for (const [path, init] of writes()) {
+    expect(path).toBe('/api/v1/workflows/closure-templates'); expect(init!.body).toBe(first.body); expect(init!.headers).toEqual(first.headers);
+  }
+});
+
+it('keeps template editable after first 400 without claiming an unknown result', async () => {
+  vi.mocked(apiRequest).mockImplementation(async (_path, init) => { if (init?.method === 'POST') throw failure(400); return candidates; });
+  mount(); await fill(); fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
+  expect(await screen.findByText('trace-400')).toBeVisible();
+  expect(screen.getByLabelText('模板流程代码')).toBeEnabled(); expect(screen.getByRole('button', { name: '创建模板草稿' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: '重试原请求' })).not.toBeInTheDocument(); expect(writes()).toHaveLength(1);
+});
+
+it.each([401, 403])('revokes an unknown template retry on %s instead of retaining its attempt', async status => {
+  vi.mocked(apiRequest).mockImplementation(async (_path, init) => {
+    if (init?.method !== 'POST') return candidates;
+    throw writes().length === 1 ? new TypeError('response lost') : failure(status);
+  });
+  const view = mount(true); await fill(); fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
+  fireEvent.click(await screen.findByRole('button', { name: '重试原请求' }));
+  if (status === 401) {
+    expect(await screen.findByText('Login destination')).toBeVisible(); expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
+  } else {
+    expect(await screen.findByText('trace-403')).toBeVisible();
+    expect(screen.getByLabelText('模板流程代码')).toBeDisabled(); expect(screen.getByRole('button', { name: '创建模板草稿' })).toBeDisabled();
+  }
+  expect(screen.queryByRole('button', { name: '重试原请求' })).not.toBeInTheDocument();
+  expect(writes()).toHaveLength(2); expect(view.created).not.toHaveBeenCalled();
+});
+
+it.each([409])('restores original inputs after unknown retry is explicitly rejected with %s without changing body or key', async status => {
   vi.mocked(apiRequest).mockImplementation(async (_path, init) => {
     if (init?.method !== 'POST') return candidates;
     throw writes().length === 1 ? new TypeError('network disconnected') : failure(status);
@@ -296,5 +357,5 @@ it('localizes the candidate dialog without changing shared translations', async 
   await waitFor(() => expect(screen.getByLabelText('Template domain code')).toBeVisible());
   expect(await screen.findByRole('option', { name: 'Supplier problem closure review' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create template draft' })).toBeDisabled();
-  expect(screen.getByText(/Production domain adapters/)).toBeVisible();
+  expect(screen.getByText('Publishing checks whether the domain is integrated. Creating a candidate draft does not publish, bind or enable it.')).toBeVisible();
 });

@@ -65,6 +65,7 @@ describe('process production facts on PostgreSQL', () => {
     expect(detail.yieldRate).toBe(0.9);
     expect(detail.firstPassRate).toBe(0.8);
     expect(detail.revisions).toHaveLength(1);
+    expect(detail.defectQuantity).toBe(0);
   });
 
   it('requires consistent quantities and period boundaries', async () => {
@@ -104,5 +105,53 @@ describe('process production facts on PostgreSQL', () => {
     const detail = await production.detail(actor, record.id);
     expect(detail.defects.map((item: { id: string }) => item.id)).toContain(defect.id);
     expect(detail.defectQuantity).toBe(2);
+  });
+
+  async function batchWithDefects(quantities: Array<number | null>) {
+    const facts = input();
+    const record = await production.create(actor, facts, randomUUID(), randomUUID());
+    for (const defectQuantity of quantities) {
+      await defects.create(actor, { description: 'Quantity regression', defectQuantity, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode }, randomUUID(), randomUUID());
+    }
+    return record;
+  }
+
+  it.each([[null], [2, null]])('preserves an incomplete detail quantity for %j', async (...quantities) => {
+    const record = await batchWithDefects(quantities);
+    const detail = await production.detail(actor, record.id);
+    expect(detail.defects).toHaveLength(quantities.length);
+    expect(detail.defectQuantity).toBeNull();
+  });
+
+  it.each([[null], [2, null]])('rejects an incomplete shipment snapshot for %j', async (...quantities) => {
+    const known = await batchWithDefects([3]);
+    const incomplete = await batchWithDefects(quantities);
+    await expect(prisma.$transaction(tx => production.snapshot(tx, organizationId, [known.id, incomplete.id])))
+      .rejects.toMatchObject({ status: 409, response: { code: 'PROCESS_PRODUCTION_QUANTITY_INCOMPLETE' } });
+  });
+
+  it('keeps zero for unassociated batches and sums known quantities in detail and snapshots', async () => {
+    const empty = await batchWithDefects([]);
+    const known = await batchWithDefects([2, 3]);
+    const detail = await production.detail(actor, known.id);
+    expect(detail.defectQuantity).toBe(5);
+    const snapshot = await prisma.$transaction(tx => production.snapshot(tx, organizationId, [empty.id, known.id]));
+    expect(snapshot.defectQuantity).toBe(5);
+    expect(snapshot.batches.find(batch => batch.id === empty.id)?.defectQuantity).toBe(0);
+    expect(snapshot.batches.find(batch => batch.id === known.id)?.defectQuantity).toBe(5);
+  });
+
+  it('does not associate unknown quantities outside the existing batch and time boundaries', async () => {
+    const record = await batchWithDefects([2]);
+    for (const [batchCode, operationCode, occurredAt] of [
+      [record.batchCode, record.operationCode, periodEnd],
+      [record.batchCode, record.operationCode, null],
+      [record.batchCode, 'OTHER', periodStart],
+      ['OTHER', record.operationCode, periodStart],
+    ] as const) {
+      await defects.create(actor, { description: 'Unassociated quantity', defectQuantity: null, occurredAt, batchCode, workOrderCode: record.workOrderCode, operationCode }, randomUUID(), randomUUID());
+    }
+    expect((await production.detail(actor, record.id)).defectQuantity).toBe(2);
+    expect((await prisma.$transaction(tx => production.snapshot(tx, organizationId, [record.id]))).defectQuantity).toBe(2);
   });
 });

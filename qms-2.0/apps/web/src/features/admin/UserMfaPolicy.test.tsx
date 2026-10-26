@@ -170,9 +170,13 @@ it('refreshes policy and user list after saving another account and keeps the di
     userReads++; return json([user]);
   }));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await userEvent.click(await screen.findByRole('switch', { name: '要求 MFA' }));
-  await confirmSave();
+  await userEvent.click((await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!);
+  const dialog = within(await screen.findByRole('dialog'));
+  const required = await dialog.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' });
+  await waitFor(() => expect(required).toBeEnabled());
+  await userEvent.click(required);
+  await userEvent.click(dialog.getByRole('button', { name: '保存 MFA 设置' }));
+  await userEvent.click((await screen.findByText('确认保存', { selector: 'button > span' })).closest('button')!);
   expect(await screen.findByText('MFA 设置已保存')).toBeInTheDocument();
   await waitFor(() => expect(policyReads).toBe(2));
   expect(userReads).toBe(2);

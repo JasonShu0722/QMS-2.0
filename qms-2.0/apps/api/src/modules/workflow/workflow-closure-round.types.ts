@@ -1,5 +1,6 @@
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { WorkflowActor } from './workflow-access-policy.js';
+import type { WorkflowDeadlineContext, WorkflowDeadlineOperation, WorkflowDeadlineStage } from './workflow-deadline-extension.types.js';
 import type { WorkflowClosureDuty, WorkflowClosureParticipant, WorkflowClosurePlan, WorkflowClosurePolicy, WorkflowClosureSeverity } from './workflow-closure-policy.js';
 
 export type { WorkflowClosureDuty } from './workflow-closure-policy.js';
@@ -24,10 +25,12 @@ export type WorkflowClosureContext = {
 export interface WorkflowClosureAdapter {
   readonly domainCode: string;
   lockAndRead(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, operation: WorkflowClosureOperation): Promise<WorkflowClosureContext>;
-  complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext): Promise<void>;
-  returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext): Promise<void>;
+  complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
+  returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
   // Session-independent READ scope: also reject stale domain content/person/section facts in context.
   canNotifyRecipient?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean>;
+  deadlineContext?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor, operation: WorkflowDeadlineOperation): Promise<WorkflowDeadlineContext>;
+  applyDeadlineExtension?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, stage: WorkflowDeadlineStage, dueAt: Date): Promise<void>;
 }
 
 export type WorkflowClosureStartInput = { expectedContentVersion: number; expectedInstanceVersion: number };

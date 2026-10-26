@@ -214,6 +214,19 @@ describe('PostgreSQL domain source to issue contract', () => {
       .rejects.toMatchObject({ status: 409, response: { code: 'SOURCE_LAST_LINK_REQUIRED' } });
   });
 
+  it('rolls back source changes and their receipt with an outer domain transaction', async () => {
+    const first = await createSource(); const second = await createSource();
+    const issued = await service.issue(command(first), adapters());
+    const problemId = String(issued.problem.id);
+    await expect(prisma.$transaction(async tx => {
+      await links.change({ organizationId, problemIndexId: problemId, actor: command(first).actor, expectedProblemVersion: 2,
+        add: [second], remove: [], idempotencyKey: randomUUID(), traceId: randomUUID() }, { authorize: async () => undefined, lockAndResolve }, tx);
+      throw new Error('OUTER_DOMAIN_ROLLBACK');
+    })).rejects.toThrow('OUTER_DOMAIN_ROLLBACK');
+    expect(await prisma.domainSourceIssueLink.count({ where: { problemIndexId: problemId, sourceId: second.sourceId } })).toBe(0);
+    expect((await prisma.problemIndex.findUniqueOrThrow({ where: { id: problemId } })).version).toBe(2);
+  });
+
   it('replays source changes and rejects stale or cross-organization additions', async () => {
     const first = await createSource();
     const second = await createSource();
