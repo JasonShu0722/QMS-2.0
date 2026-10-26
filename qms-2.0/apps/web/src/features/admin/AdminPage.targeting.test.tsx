@@ -18,7 +18,7 @@ vi.mock('../governance/OrganizationAdministration', () => ({ OrganizationAdminis
 vi.mock('../governance/StructureAdministration', () => ({ StructureAdministration: () => null }));
 vi.mock('../governance/OrganizationWorkspace', () => ({ OrganizationWorkspace: () => <div>组织工作区</div> }));
 vi.mock('../governance/ConfigurationAdministration', () => ({ ConfigurationAdministration: () => null }));
-vi.mock('../governance/AuditAdministration', () => ({ AuditAdministration: () => <div>审计内容</div> }));
+vi.mock('../governance/AuditAdministration', () => ({ AuditAdministration: ({ organization, target }: { organization: AdminOrganization; target?: { resourceType?: string; resourceId?: string } }) => <div data-testid="audit">审计内容:{organization.id}:{target?.resourceType}:{target?.resourceId}</div> }));
 vi.mock('../governance/OutboxAdministration', () => ({ OutboxAdministration: () => null }));
 vi.mock('../supplier-quality/SupplierProfilesPage', () => ({ SupplierProfilesPage: () => <div>供应商页面</div> }));
 vi.mock('../customer-quality/CustomerMasterSection', () => ({ CustomerMasterSection: () => <div>客户页面</div> }));
@@ -97,6 +97,38 @@ it.each(['supplier-quality:profiles:read', 'supplier-quality:profiles:write'])('
 });
 
 describe('D account targeting', () => {
+it('opens only the authorized organization audit with exact resource filters', () => {
+  view([org(orgA), org(orgB, ['account:users:read', 'audit:read'])], `?organizationId=${orgB}&section=audit-log&resourceType=Organization&resourceId=${orgA}`);
+  expect(screen.getByTestId('audit')).toHaveTextContent(`${orgB}:Organization:${orgA}`);
+  expect(screen.getByRole('tab', { name: '管理审计' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByTestId('users')).not.toBeInTheDocument();
+});
+
+it('allows an organization-scoped audit link without silently adding resource filters', () => {
+  view([org(orgB, ['audit:read'])], `?organizationId=${orgB}&section=audit-log`);
+  expect(screen.getByTestId('audit')).toHaveTextContent(`${orgB}::`);
+});
+
+it.each([
+  `?organizationId=${orgB}&section=audit-log&resourceType=Organization`,
+  `?organizationId=${orgB}&section=audit-log&resourceType=Organization&resourceId=${orgA}&resourceId=${orgB}`,
+  `?organizationId=${orgB}&section=audit-log&resourceType=Organization&resourceId=${orgA}&userId=${userA}`,
+  `?organizationId=${orgB}&section=audit-log&unknown=wrong-target`,
+])('rejects malformed audit targets without mounting a default directory: %s', search => {
+  view([org(orgB, ['account:users:read', 'audit:read'])], search);
+  expect(screen.getByRole('alert')).toHaveTextContent('审计定位失败');
+  expect(screen.queryByTestId('audit')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('users')).not.toBeInTheDocument();
+});
+
+it('removes audit target content immediately after audit authority is revoked', () => {
+  const result = view([org(orgB, ['audit:read'])], `?organizationId=${orgB}&section=audit-log`);
+  expect(screen.getByTestId('audit')).toBeVisible();
+  result.directory([org(orgB, ['account:users:read'])]);
+  expect(screen.queryByTestId('audit')).not.toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('审计定位失败');
+});
+
 it('pushes an actor link so Back returns to its audit source and Forward returns to the account', async () => {
   view([org(orgA, ['account:users:read', 'audit:read']), org(orgB)], '', {
     initialEntries: ['/app/admin?source=older', '/app/admin?source=audit'],
@@ -175,8 +207,9 @@ it.each([
   target('33333333-3333-4333-8333-333333333333'),
 ])('rejects invalid, partial, duplicate or unauthorized targets without falling back: %s', (search) => {
   view(undefined, search);
-  expect(screen.getByRole('alert')).toHaveTextContent(/账号定位/);
   expect(screen.queryByTestId('users')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('audit')).not.toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent(new URLSearchParams(search).get('section') === 'audit-log' ? '审计定位失败' : '账号定位失败');
 });
 
 it('rejects targeting with only users:create in the target organization even if another organization has read', () => {

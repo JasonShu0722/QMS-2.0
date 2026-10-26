@@ -40,7 +40,7 @@ describe('authorization policy', () => {
     expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         userId: 'user-internal',
-        organizationId: 'org-supplier-a',
+        OR: expect.arrayContaining([{ organizationId: 'org-supplier-a' }]),
       },
     }));
   });

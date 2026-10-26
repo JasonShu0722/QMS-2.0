@@ -197,7 +197,7 @@ describe('administrator role management', () => {
     prisma.userRole.findMany.mockResolvedValue([]);
     await expect(service.create({ ...actor, scopeOrganizationId: 'org-b' }, { organizationId: 'org-b', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
-    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: actor.id, organizationId: 'org-b' } }));
+    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: actor.id, OR: expect.arrayContaining([{ organizationId: 'org-b' }]) } }));
     expect(prisma.role.create).not.toHaveBeenCalled();
   });
 

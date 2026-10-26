@@ -23,6 +23,19 @@ const position: components['schemas']['PositionDto'] = { id: 'pos-a', organizati
 const otherPosition = { ...position, id: 'pos-b', departmentId: sibling.id, code: 'BUY', name: '采购专员' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+it.each([true, false])('shows actionable lifecycle details and only exposes an authorized target audit link (%s)', async canReadAudit => {
+  vi.stubGlobal('fetch', vi.fn(async () => json({ deleteBlockers: ['存在非初始化授权或管理使用记录'], disableBlockers: [], deleteBlockerDetails: [{ code: 'NON_INITIALIZATION_GRANTS', count: 2, message: '请核对额外授权来源，不能自动删除。' }] })));
+  render(<MemoryRouter><StructureLifecycleActions path="/api/v1/organizations/child" record={organization} auditOrganizationId={canReadAudit ? org.id : undefined} onChanged={vi.fn()} /></MemoryRouter>);
+  await userEvent.click(screen.getByRole('button', { name: /^删\s*除$/ }));
+  const dialog = within(await screen.findByRole('dialog'));
+  await waitFor(() => expect(dialog.getByText('请核对额外授权来源，不能自动删除。 · 2')).toBeVisible());
+  expect(dialog.getByRole('button', { name: '确认删除' })).toBeDisabled();
+  if (canReadAudit) {
+    expect(dialog.getByRole('link', { name: '定位此组织审计' })).toHaveAttribute('href', `/app/admin?organizationId=${org.id}&section=audit-log&resourceType=Organization&resourceId=${organization.id}`);
+    expect(dialog.getByRole('link', { name: '查看组织管理审计' })).toHaveAttribute('href', `/app/admin?organizationId=${org.id}&section=audit-log`);
+  } else expect(dialog.queryByRole('link')).not.toBeInTheDocument();
+});
+
 it('places management responsibilities inside the selected department workspace', async () => {
   stub();
   view([org]);
@@ -99,17 +112,19 @@ it('refreshes the parent department directory from the workspace context panel a
   fetchMock.mockImplementation((input, init) => String(input).includes('/org-a/departments?') ? (requests.push([String(input), init]), Promise.resolve(json([{ ...department, code: updated ? 'QA-NEW' : department.code, version: updated ? 5 : 4 }, child, sibling]))) : original(input, init));
   view([org, other], directoryChanged); await selectDepartment(); updated = true;
   const before = requests.filter(([path]) => path.includes('/org-a/departments?')).length;
-  await userEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  const refreshButton = within(screen.getByRole('region', { name: '部门岗位' })).getByRole('button', { name: /^刷\s*新$/ });
+  await waitFor(() => expect(refreshButton).toBeEnabled());
+  await userEvent.click(refreshButton);
   await waitFor(() => expect(requests.filter(([path]) => path.includes('/org-a/departments?')).length).toBeGreaterThan(before));
   expect(directoryChanged).not.toHaveBeenCalled();
-  expect(await screen.findByRole('button', { name: '质量部 · 部门/科室' })).toHaveAttribute('aria-pressed', 'true');
-  await userEvent.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
+  expect(await within(await screen.findByLabelText('可读组织与部门')).findByLabelText('质量部 · 部门/科室')).toHaveAttribute('aria-pressed', 'true');
+  await userEvent.click(within(screen.getByRole('region', { name: '部门岗位' })).getByRole('button', { name: /^编\s*辑$/ }));
   expect(within(screen.getByRole('dialog')).getByLabelText('代码')).toHaveValue('QA-NEW');
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PATCH')).toBe(true));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(directoryChanged).not.toHaveBeenCalled();
-  expect(await screen.findByRole('button', { name: '质量部 · 部门/科室' })).toHaveAttribute('aria-pressed', 'true');
+  expect(await within(await screen.findByLabelText('可读组织与部门')).findByLabelText('质量部 · 部门/科室')).toHaveAttribute('aria-pressed', 'true');
 }, 30000);
 
 it.each([{ failure: 'transport', change: 'none' }, { failure: 'json', change: 'none' }, { failure: 'transport', change: 'session' }, { failure: 'transport', change: 'version' }, { failure: 'transport', change: 'path' }])('recovers an unknown DELETE $failure result without a GET, but never across a $change change', async ({ failure, change }) => {
@@ -186,7 +201,11 @@ it('retains an unknown original DELETE through recovery CSRF 403 and unchanged-p
   expect(requests.filter(([path]) => path.endsWith('/lifecycle'))).toHaveLength(1);
 }, 30000);
 async function selectDepartment(name = '质量部') {
-  await userEvent.click(await screen.findByRole('button', { name: `${name} · 部门/科室` }));
+  const navigation = await screen.findByLabelText('可读组织与部门');
+  const button = await within(navigation).findByLabelText(`${name} · 部门/科室`);
+  expect(button).toHaveRole('button');
+  expect(button).toBeVisible();
+  await userEvent.click(button);
 }
 beforeEach(() => { vi.stubEnv('NODE_ENV', 'development'); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); });

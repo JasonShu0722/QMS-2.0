@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PlatformAdministratorScopeDto } from './platform-administrator-scope.dto.js';
 
 export class AccountOverviewQueryDto {}
 
@@ -25,6 +26,7 @@ export class AccountEffectiveRoleDto {
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ type: [AccountRoleSourceDto] }) sources!: AccountRoleSourceDto[];
+  @ApiPropertyOptional({ type: PlatformAdministratorScopeDto }) platformScope?: PlatformAdministratorScopeDto;
 }
 export class AccountOverviewDto {
   @ApiProperty({ format: 'uuid' }) organizationId!: string;

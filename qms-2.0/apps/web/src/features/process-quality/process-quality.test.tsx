@@ -35,6 +35,21 @@ it('loads the defect ledger and opens source detail with linked issues', async (
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`);
 });
 
+it('keeps shipment requests out of the defect ledger and retains authorized registration in the heading', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('my-permissions') ? { permissions: ['process-quality:defects:write'] } : page);
+  render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
+  const register = await screen.findByRole('button', { name: '登记不良' });
+  expect(register.closest('header')).toHaveClass('process-quality-heading');
+  expect(screen.queryByRole('region', { name: '出货报告台账' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/shipment-reports'))).toBe(false);
+});
+
+it('does not expose registration to a read-only user', async () => {
+  render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
+  await screen.findByText('表面划伤');
+  expect(screen.queryByRole('button', { name: '登记不良' })).not.toBeInTheDocument();
+});
+
 it('protects an unfinished process issue when navigating away', async () => {
   render(<MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByText('表面划伤');

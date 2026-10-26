@@ -48,7 +48,7 @@ export class ProblemQueryService {
     const organizationId = query.organizationId ?? actor.organizationId;
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const conditions: Prisma.Sql[] = [this.scope(actor, organizationId)];
+    const conditions: Prisma.Sql[] = [this.scope(actor, organizationId, query.responseForm)];
     for (const [value, column] of [[query.domainCode, Prisma.sql`p.domain_code`], [query.problemType, Prisma.sql`p.problem_type`], [query.status, Prisma.sql`p.status::text`], [query.severity, Prisma.sql`p.severity`]] as const) if (value !== undefined) conditions.push(Prisma.sql`${column} = ${value}`);
     if (query.ownerId) conditions.push(Prisma.sql`p.owner_id = ${query.ownerId}::uuid`);
     if (query.search?.trim()) conditions.push(Prisma.sql`p.report_number ILIKE ${`%${query.search.trim().replace(/[\\%_]/g, '\\$&')}%`}`);
@@ -95,7 +95,7 @@ export class ProblemQueryService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
-  private scope(actor: WorkflowActor, organizationId: string): Prisma.Sql {
-    return Prisma.sql`p.organization_id = ${organizationId}::uuid AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`p.organization_id`, Prisma.sql`'problem-index:read'`)} AND ${this.registry.visibility(actor, organizationId)}`;
+  private scope(actor: WorkflowActor, organizationId: string, responseForm?: ProblemIndexQueryDto['responseForm']): Prisma.Sql {
+    return Prisma.sql`p.organization_id = ${organizationId}::uuid AND ${featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`p.organization_id`, Prisma.sql`'problem-index:read'`)} AND ${this.registry.visibility(actor, organizationId, responseForm)}`;
   }
 }

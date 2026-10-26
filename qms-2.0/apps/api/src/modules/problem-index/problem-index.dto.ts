@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { PROBLEM_STATUSES, type ProblemStatus } from './problem.types.js';
+import { DOMAIN_SOURCE_RESPONSE_FORMS, type DomainSourceResponseForm } from './domain-source-issue.service.js';
 
 export const PROBLEM_SORT_FIELDS = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'] as const;
 
@@ -14,6 +15,7 @@ export class ProblemIndexQueryDto extends ProblemScopeQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) domainCode?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) problemType?: string;
+  @ApiPropertyOptional({ enum: DOMAIN_SOURCE_RESPONSE_FORMS }) @IsOptional() @IsIn(DOMAIN_SOURCE_RESPONSE_FORMS) responseForm?: DomainSourceResponseForm;
   @ApiPropertyOptional({ enum: PROBLEM_STATUSES }) @IsOptional() @IsIn(PROBLEM_STATUSES) status?: ProblemStatus;
   @ApiPropertyOptional({ maxLength: 32 }) @IsOptional() @IsString() @MaxLength(32) severity?: string;
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() ownerId?: string;
@@ -25,10 +27,17 @@ export class ProblemIndexQueryDto extends ProblemScopeQueryDto {
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' }) @IsOptional() @IsIn(['asc', 'desc']) sortDirection?: 'asc' | 'desc';
 }
 
+export class ProblemFieldDto {
+  @ApiProperty({ maxLength: 100, pattern: '^[A-Za-z][A-Za-z0-9._:-]{0,99}$' }) key!: string;
+  @ApiProperty({ maxLength: 200 }) label!: string;
+  @ApiProperty({ type: String, nullable: true, maxLength: 20000 }) value!: string | null;
+}
+
 export class ProblemDomainSummaryDto {
   @ApiProperty() title!: string;
   @ApiProperty() description!: string;
   @ApiProperty() domainUiKey!: string;
+  @ApiPropertyOptional({ type: [ProblemFieldDto], maxItems: 50 }) fields?: ProblemFieldDto[];
 }
 
 export class ProblemIndexResponseDto {

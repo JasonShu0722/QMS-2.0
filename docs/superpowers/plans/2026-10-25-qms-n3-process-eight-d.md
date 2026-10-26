@@ -7,15 +7,15 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 目标 | N3：过程人工台账到完整内部8D、有效性验证、并行审核关闭、网页及PDF报告的一条真实链，不交付只有发单的半链 |
-| 批准 | 2026-10-26负责人已明确“我醒了，可以恢复正常规则了”，夜间临时连续交付授权立即结束。恢复N3到O3 / PR检查点及常规交付规则；不再依据夜间授权自动合并部署或接续N4，既有本地验证可以继续 |
+| 批准 | 2026-10-26负责人恢复正常规则，夜间临时连续交付授权结束；随后明确“继续推进部署”，单次授权PR #71合并、main CI及同源部署核验，不授权自动接续N4或生产配权/流程启用 |
 | 需求 | REQ-0026 / reczz28RDS4BnuCp、REQ-0027 / reczz28RDS4Bp8Yn；user身份回读revision300、has_more=false，均开发中。直接会话批准覆盖本N3子范围，无飞书写入 |
-| 映射 | [Issue #70](https://github.com/JasonShu0722/QMS-2.0/issues/70)，关联原Issue #66；[PR #71](https://github.com/JasonShu0722/QMS-2.0/pull/71)首版5d6f490，base/main a32615c。V0.0.31；两项确认评审返修使用V0.0.31-fix1，修复head以PR最新提交为准，不新开PR或扩大REQ |
-| 基线 | 开发基线 / N2发布记录a32615ce245ae2242e8b1607aa6c564c244e0de7。活动分支codex/qms-n3-process-eight-d，验证起点HEAD a9f660e，最终候选以PR head为准；N2纯文档归档安全cherry-pick为e9ad0f2。2026-10-26GitHub连接实读visibility=public，未由代理改变可见性 |
-| 现状差距 | 旧ProcessIssueService只支持BRIEF；来源强制分类 / 数量 / 时间，只有5类，缺两态及多物料；N2关闭轮次、职责和设计器基础可复用但生产domain adapter为空 |
+| 映射 | [Issue #70](https://github.com/JasonShu0722/QMS-2.0/issues/70)保持open，关联原Issue #66；[PR #71](https://github.com/JasonShu0722/QMS-2.0/pull/71)最终head31e0499104495cc48582b49d83cfedc81442cb29，已squash合并44f612bab92a787e64dfc04f97295b3e343cd332。版本V0.0.31含fix1，不扩大REQ或提前关闭 |
+| 基线 | 开发base / N2发布a32615ce245ae2242e8b1607aa6c564c244e0de7；N3 main及部署44f612bab92a787e64dfc04f97295b3e343cd332。当前codex/qms-n3-release-records只归档发布文档，不再推送触发Actions；归档提交不是运行版本。仓库可见性由负责人决定，代理未修改 |
+| 现状差距 | N3过程人工台账及完整内部8D运行代码已部署，过程领域adapter已注册；生产真实岗位/人员、受控流程发布/绑定/启用及角色人工验收仍需准备，IMS/AI及其他域未随本轮开通 |
 | 评审 | 可按既定规则开工；保留BRIEF及其他域兼容，在原过程事实拥有者中扩展，不新建第二份过程事实或复制组织名单。权限细分仅实现已批准角色边界，不通过岗位名称或admin旁路 |
-| 停止点 | 恢复正常交付检查点：先完成N3验证与审查，达到O3后汇报并核对有效PR授权；合并、发布和下一阶段另按常规规则核准。仓库开源不等于发布授权，生产配权/流程绑定启用和关闭回填不随代码部署代办 |
+| 停止点 | 本次单次授权的合并与机器发布核验已完成；停在生产组织岗位/流程配置与人工业务验收，不自动N4，不代配权限或启用绑定，不关闭Issue/飞书REQ。相关CI/部署已结束，可以由负责人恢复闭源 |
 | 未纳入 | IMS / AI真实适配、指标统计、客户 / 新品接入、供应商门户及汇总绩效；一期不做在线鱼骨 / FTA绘图、Office可编辑报告或通用BPMN |
-| 当前接续 | 原head5d6f490的9项CI全部通过，但评审两项P2阻止直接集成。fix1已统一100个不同附件的保存/提交/旧在审关闭守卫，并独立投影待审CLOSURE延期资格及真实UI入口；A、B API与Web均独立双审通过。父验证155纯测、152真实PG、编译Worker8、Web132项通过，保留资源/命令失败和整文件复验；生成契约及API/Web构建通过。更新同PR后必须等待新head CI，不自动合并部署/N4 |
+| 当前接续 | 最终PR CI40255961669与main CI40257750060各9项成功，deploy40259187725成功；迁移前加密快照、5份迁移、同SHA API/Worker/Web及公网19条契约/新JS/4个匿名401已核验。发布证据见6.5，人工清单第7节仍待执行；本地纯文档归档不额外推送 |
 | 夜间接续 | 夜间heartbeat `qms`已在负责人恢复规则后通过应用工具删除，并核实配置文件不存在。保留既有本地测试和证据，不再自动连续交付；中断且未收到完整退出证据的测试不记PASS |
 
 ## 1. 依据与不再悬置的业务规则
@@ -187,9 +187,19 @@
 - 原8文件PG批次一份提醒文件发生Memory allocation error，其余7份完整文件142项通过；新进程提醒复验9通过/1默认120秒超时，均保留。重复06库已有118份8D，提醒测试会全域扫描旧样本；另建07一次性库，115迁移/seed通过，旧06不重置/删除，提醒整文件10项通过。Worker首次根目录cwd找不到`dist/worker.js`，属于父验证命令工作目录错误；按原`apps/api`目录完整8项复验通过，不改生产代码、断言、超时或Argon2参数。
 - 证据在Git外`pr71-parent-validation-summary.json`、`pr71-parent-api/`、`pr71-parent-web/`、`pr71-parent-fresh07/`及`pr71-parent-worker-correct-cwd/`；原FAIL、NOT_RUN与新PASS分别保存，不称一次全绿。Swagger生成/检查、API/Web lint/build已通过；文档治理及提交前检查随后收口。IMS、其他域、生产岗位/绑定、人工验收与关闭回填均未扩大。
 
+### 6.5 N3 发布核验（2026-10-26，V0.0.31含fix1）
+
+- 负责人明确“继续推进部署”。最终PR head `31e0499104495cc48582b49d83cfedc81442cb29`的CI40255961669全部9项成功，最新Code Review无发现/未解决项；未单独运行Security Review，不声称安全扫描通过。PR #71实际squash为`44f612bab92a787e64dfc04f97295b3e343cd332`，合并树与审查head一致。
+- [main CI40257750060](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40257750060) attempt1全部9项成功；[deploy40259187725](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40259187725) attempt1、job121367611077成功。校验与SSH部署均完整执行、未skipped，日志RUN_ID/ATTEMPT/HEAD_SHA与main同源，Full validation scope。
+- 10:32:14（Asia/Taipei）先出现`Pre-migration encrypted database snapshot verified: 44f612bab92a787e64dfc04f97295b3e343cd332`，再实际应用130000台账、140000报告、150000延期、160000权限及20261026010000组织引用共5份迁移；115迁移链全部成功。该marker是发布源码SHA，不是数据库文件内容校验码；仅为本机加密迁移前快照，不是异地灾备/恢复演练。
+- API与Worker使用同SHA的API镜像，Web使用同SHA的Web镜像；API healthy、Worker/Web Up，10:32:33输出精确SHA的Deployment successful。该版本deploy.sh在成功前强制检查当前Worker启动后的QMS_WORKER_READY，未将Worker原始stdout复制进Actions日志。
+- 10:33:54独立只读核查[线上站点](https://qms.bigshuaibee.cn)：login/OpenAPI/新JS均200；公开N3契约由0变19条，延期任务EXTENSION_REQUEST/AVAILABLE出现；主JS由index-CX439dnC.js变为index-lnvvKeEc.js，SHA256为`502309f7540632c2144e1323f513eaae445854b6ef5b23b57a88b5d8a0e55010`且含request-extension。binding、tasks、CURRENT report及延期requests四个匿名读取均401；未登录或写生产业务记录。
+- Git外证据：`D:/WorkSpace/QMS-2.0-local/n3-evidence/n3-release-20261026/`中的release-verification.json为PASS，原始CI/jobs、deploy-job.log、公网前后schema/HTML与摘要分别保留。机器核验不替代第7节角色人工验收、完整phase-2或业务开通；不自动配权/启用绑定，不关闭Issue #70/REQ，不自动N4。
+- 发布后只在本地分支归档文档及来源索引，运行文档/治理门禁后提交、不推送；无需为记录再部署。下一步由负责人准备真实组织岗位与流程配置，按第7节验收。相关CI及部署已结束，可告知负责人恢复闭源，代理不改变可见性。
+
 ## 7. 人工验收清单（待实际执行）
 
-浏览器桥接当前不可用，不更换不受信任通道绕过。O3提交候选需在这里填写实际源码SHA/构建版本和测试组织；下表仅为角色、页面与预期，不代表截图、键盘、窄屏或人工业务验收通过。生产岗位、绑定和启用按后续部署授权单独办理。
+浏览器桥接当前不可用，不更换不受信任通道绕过。本轮已部署源码为44f612bab92a787e64dfc04f97295b3e343cd332 / V0.0.31含fix1；实际验收组织、账号和岗位尚未就绪，不以本地一次性06/07库代替生产。下表仅为角色、页面与预期，不代表截图、键盘、窄屏或人工业务验收通过。生产岗位、流程发布、绑定和启用须单独授权办理。
 
 | 角色 / 页面 | 操作与预期 | 当前人工结果 |
 | --- | --- | --- |

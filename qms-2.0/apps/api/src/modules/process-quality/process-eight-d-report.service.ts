@@ -71,15 +71,14 @@ export class ProcessEightDReportService {
       || query.organizationId !== undefined && !isUUID(query.organizationId)
       || query.view !== undefined && !['CURRENT', 'APPROVED'].includes(query.view)
       || query.revisionId !== undefined && query.view === 'CURRENT') fail('PROCESS_EIGHT_D_REPORT_QUERY_INVALID', 400);
-    if (actor.accountType !== 'INTERNAL' || query.organizationId !== undefined && query.organizationId !== actor.organizationId
-      || actor.scopeOrganizationId !== undefined && actor.scopeOrganizationId !== actor.organizationId) fail('ORGANIZATION_SCOPE_DENIED', 403);
+    if (actor.accountType !== 'INTERNAL' || query.organizationId !== undefined && query.organizationId !== (actor.scopeOrganizationId ?? actor.organizationId)) fail('ORGANIZATION_SCOPE_DENIED', 403);
   }
 
   private async select(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto, downloadTraceId?: string): Promise<Selection> {
     const revision = query.revisionId ?? (query.view === 'APPROVED' ? undefined : null);
     // The domain service revalidates the active session/MFA, organization and domain read permission.
     const result = await this.core.readReport(tx, actor, problemId, revision);
-    await assertWorkflowFeature(tx, actor, actor.organizationId, 'process-quality:issues:report');
+    await assertWorkflowFeature(tx, actor, result.record.problem.organizationId, 'process-quality:issues:report');
     if (query.view === 'APPROVED' && !query.revisionId && !result.revision) fail('PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE', 409);
     const raw = object(result.snapshot);
     let normalized;
@@ -177,13 +176,13 @@ export class ProcessEightDReportService {
     try { await this.transaction(async tx => {
       const current = await this.select(tx, actor, problemId, query, format === 'PDF' ? traceId : undefined);
       if (current.fingerprint !== selected.fingerprint) fail('PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT', 409);
-      await this.audit.record({ organizationId: actor.organizationId, actorUserId: actor.id, action: `PROCESS_EIGHT_D_REPORT_${format}`,
+      await this.audit.record({ organizationId: selected.result.record.problem.organizationId, actorUserId: actor.id, action: `PROCESS_EIGHT_D_REPORT_${format}`,
         resourceType: 'ProcessEightDReport', resourceId: problemId, outcome: 'SUCCESS', traceId,
         metadata: { resourceVersion: selected.report.rowVersion, status: selected.report.status,
           ...(content ? { sizeBytes: content.length, sha256: createHash('sha256').update(content).digest('hex') } : {}) } }, tx);
     }); } catch (error) {
       if (error instanceof HttpException && [401, 403, 409].includes(error.getStatus())) {
-        await this.audit.record({ organizationId: actor.organizationId, actorUserId: actor.id, action: 'PROCESS_EIGHT_D_REPORT_REJECTED',
+        await this.audit.record({ organizationId: selected.result.record.problem.organizationId, actorUserId: actor.id, action: 'PROCESS_EIGHT_D_REPORT_REJECTED',
           resourceType: 'ProcessEightDReport', resourceId: problemId, outcome: 'DENIED', traceId,
           metadata: { permissionCode: 'process-quality:issues:report', reasonCode: error.getStatus() === 409
             ? 'PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT' : 'PROCESS_EIGHT_D_REPORT_ACCESS_DENIED' } });

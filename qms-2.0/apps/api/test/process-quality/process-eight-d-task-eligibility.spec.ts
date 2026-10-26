@@ -19,7 +19,7 @@ function fixture() {
     ownerNodeId: 'owner', workflowVersionId: 'published', rowVersion: 4, contentVersion: 2, instanceVersion: 3,
     analysisDueAt: '2026-10-25T00:00:00Z', submissionDueAt: '2026-10-26T00:00:00Z', closureDueAt: '2026-11-01T00:00:00Z' as string | null,
     submittedAt: '2026-10-26T00:00:00Z', analysisCompletedAt: '2026-10-25T00:00:00Z', closedAt: null as string | null };
-  const record = { problem: { id: problemId, reportNumber: '8D-1', get ownerId() { return c.ownerUserId; }, get closedAt() { return c.closedAt; } },
+  const record = { problem: { id: problemId, organizationId: actor.organizationId, reportNumber: '8D-1', get ownerId() { return c.ownerUserId; }, get closedAt() { return c.closedAt; } },
     report: { get professionalUserId() { return c.professionalUserId; }, closedRevisionId: null }, node: { type: 'APPROVAL', config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'process-quality' } } },
     instance: { status: 'RUNNING', currentNodeId: 'review' } };
   let workflowAllowed = true;

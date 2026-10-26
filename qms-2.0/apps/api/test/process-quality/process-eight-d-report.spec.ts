@@ -53,6 +53,18 @@ it('defaults to explicit current snapshot and rechecks scope before returning JS
   expect(s.audit.record).toHaveBeenCalledTimes(1);
 });
 
+it.each(['read', 'pdf'] as const)('%s preserves the real actor home and uses the authorized target for report permission and final audit', async format => {
+  const s = setup(), target = randomUUID(), scoped = { ...actor, scopeOrganizationId: target };
+  s.result.record.problem.organizationId = target;
+  s.result.snapshot.problem.organizationId = target;
+  const output = await s.service[format](scoped, id, { organizationId: target }, 'cross-trace');
+  expect(output).toBeDefined();
+  expect(s.core.readReport.mock.calls).toHaveLength(2);
+  expect(s.core.readReport.mock.calls.every(call => call[1] === scoped)).toBe(true);
+  expect(scoped.organizationId).toBe(actor.organizationId);
+  expect(s.audit.record.mock.calls[0]![0]).toMatchObject({ organizationId: target, actorUserId: actor.id });
+});
+
 it.each(['read', 'pdf'] as const)('%s rejects historical 101-file evidence with a safe structured 409 before file access', async format => {
   const s = setup();
   const ids = Array.from({ length: 101 }, () => randomUUID());

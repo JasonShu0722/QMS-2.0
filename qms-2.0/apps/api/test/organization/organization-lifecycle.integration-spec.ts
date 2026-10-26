@@ -64,6 +64,129 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     return { root, actor, role, send, child, department, cookie, sessionId };
   }
 
+  async function manager(f: Awaited<ReturnType<typeof fixture>>, platform: boolean, targetId?: string) {
+    const user = await prisma.user.create({ data: { organizationId: f.root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    const codes = platform ? ['platform:admin'] : ['organization:read', 'organization:manage'];
+    const permissions = await Promise.all(codes.map(code => prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} })));
+    const role = await prisma.role.create({ data: { organizationId: f.root.id, code: randomUUID(), name: 'REQ0030 manager', permissions: { create: permissions.map(({ id }) => ({ permissionId: id })) } } });
+    await prisma.userRole.create({ data: { userId: user.id, organizationId: f.root.id, roleId: role.id } });
+    if (targetId) await prisma.userRole.create({ data: { userId: user.id, organizationId: targetId, roleId: role.id } });
+    const token = await app.get(SessionService).create(user.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const send = (method: 'get' | 'delete', targetId: string, body = {}, key = randomUUID()) => request(app.getHttpServer())[method](`/api/v1/organizations/${targetId}${method === 'get' ? '/lifecycle' : ''}`)
+      .set('Cookie', `qms_session=${token}; qms_csrf=${csrf}`).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
+    return { user, role, send };
+  }
+
+  it.each([false, true])('REQ0030 deletes verified old/new initialization by another explicit platform admin (legacy=%s)', async legacy => {
+    const f = await fixture();
+    const org = await f.child();
+    if (legacy) await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: { resourceVersion: 1 } } });
+    await f.send('patch', `/${org.id}`, { expectedVersion: 1, name: 'Creator corrected typo' }).expect(200);
+    const before = await prisma.auditEvent.findMany({ where: { organizationId: org.id } });
+    const originalReceipt = await prisma.adminMutation.findFirstOrThrow({ where: { organizationId: f.root.id, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: org.id } } });
+    const admin = await manager(f, true);
+    expect((await admin.send('get', org.id).expect(200)).body.deleteBlockers).toEqual([]);
+    const key = randomUUID();
+    await admin.send('delete', org.id, { expectedVersion: 2 }, key).expect(200);
+    await admin.send('delete', org.id, { expectedVersion: 2 }, key).expect(200);
+    expect(await prisma.organization.findUnique({ where: { id: org.id } })).toBeNull();
+    expect(await prisma.userRole.count({ where: { organizationId: org.id } })).toBe(0);
+    expect(await prisma.role.count({ where: { organizationId: org.id } })).toBe(0);
+    expect(await prisma.userRole.count({ where: { userId: admin.user.id, roleId: admin.role.id } })).toBe(1);
+    expect(await prisma.adminMutation.findUniqueOrThrow({ where: { id: originalReceipt.id } })).toEqual(originalReceipt);
+    for (const event of before) expect(await prisma.auditEvent.findUniqueOrThrow({ where: { id: event.id } })).toEqual({ ...event, organizationId: f.root.id, metadata: { ...event.metadata as object, organizationId: org.id } });
+    expect(await prisma.auditEvent.count({ where: { resourceId: org.id, action: 'ORGANIZATION_DELETED', actorUserId: admin.user.id } })).toBe(1);
+  });
+
+  it('REQ0030 permits the original creator with legacy provenance without any platform marker', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: { resourceVersion: 1 } } });
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(200);
+    expect(await prisma.auditEvent.findFirstOrThrow({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' } })).toMatchObject({ organizationId: f.root.id, actorUserId: f.actor.id, metadata: { resourceVersion: 1, organizationId: org.id } });
+  });
+
+  it('REQ0030 rejects an ordinary other manager and preserves the original creator grant', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    const admin = await manager(f, false, org.id);
+    const before = await prisma.userRole.findMany({ where: { organizationId: org.id }, orderBy: [{ userId: 'asc' }, { roleId: 'asc' }] });
+    const lifecycle = (await admin.send('get', org.id).expect(200)).body;
+    expect(lifecycle.deleteBlockers).toContain('存在非初始化授权或管理使用记录');
+    expect(lifecycle.deleteBlockerDetails).toContainEqual(expect.objectContaining({ code: 'NON_INITIALIZATION_GRANTS', count: 1 }));
+    await admin.send('delete', org.id, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.userRole.findMany({ where: { organizationId: org.id }, orderBy: [{ userId: 'asc' }, { roleId: 'asc' }] })).toEqual(before);
+  });
+
+  it.each(['missing-receipt', 'partial-modern', 'changed-permissions', 'other-management'] as const)('REQ0030 refuses legacy initialization with %s even for explicit platform admins', async kind => {
+    const f = await fixture();
+    const org = await f.child();
+    await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: kind === 'partial-modern' ? { resourceVersion: 1, organizationId: org.id } : { resourceVersion: 1 } } });
+    if (kind === 'missing-receipt') await prisma.adminMutation.deleteMany({ where: { organizationId: f.root.id, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: org.id } } });
+    if (kind === 'changed-permissions') {
+      const governor = await prisma.role.findFirstOrThrow({ where: { organizationId: org.id } });
+      const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'organization:structure:read' } });
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: governor.id, permissionId: permission.id } } });
+    }
+    if (kind === 'other-management') await prisma.auditEvent.create({ data: { organizationId: org.id, actorUserId: f.actor.id, action: 'ROLE_UPDATED', resourceType: 'Role', outcome: 'SUCCESS', traceId: randomUUID(), metadata: {} } });
+    const admin = await manager(f, true);
+    const reason = kind === 'changed-permissions' ? 'INITIALIZATION_PERMISSIONS_CHANGED' : kind === 'other-management' ? 'OTHER_MANAGEMENT_EVENTS' : 'INITIALIZATION_PROVENANCE_MISSING';
+    expect((await admin.send('get', org.id).expect(200)).body.deleteBlockerDetails).toContainEqual(expect.objectContaining({ code: reason, count: 1 }));
+    await admin.send('delete', org.id, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ version: 1 });
+  });
+
+  it('REQ0030 reports exact business reference counts while keeping real usage undeletable', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    await prisma.materialMaster.create({ data: { organizationId: org.id, materialCode: randomUUID(), materialName: 'Retained material', createdById: f.actor.id, updatedById: f.actor.id } });
+    const lifecycle = (await f.send('get', `/${org.id}/lifecycle`).expect(200)).body;
+    expect(lifecycle.deleteBlockers).toContain('存在业务、配置或历史引用');
+    expect(lifecycle.deleteBlockerDetails).toContainEqual(expect.objectContaining({ code: 'REFERENCE:material_masters.organization_id', count: 1 }));
+    await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(409);
+    expect(await prisma.materialMaster.count({ where: { organizationId: org.id } })).toBe(1);
+  });
+
+  it('REQ0030 rolls back a noncreator platform-admin deletion if audit persistence fails', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    const admin = await manager(f, true);
+    const before = await prisma.auditEvent.findMany({ where: { organizationId: org.id }, orderBy: { id: 'asc' } });
+    const key = randomUUID();
+    const failure = jest.spyOn(app.get(AuditLogService), 'record').mockRejectedValueOnce(new Error('REQ0030 archive rollback'));
+    try { await admin.send('delete', org.id, { expectedVersion: 1 }, key).expect(500); } finally { failure.mockRestore(); }
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ version: 1 });
+    expect(await prisma.userRole.count({ where: { organizationId: org.id, userId: f.actor.id } })).toBe(1);
+    expect(await prisma.auditEvent.findMany({ where: { organizationId: org.id }, orderBy: { id: 'asc' } })).toEqual(before);
+    expect(await prisma.adminMutation.count({ where: { key } })).toBe(0);
+    await admin.send('delete', org.id, { expectedVersion: 1 }, key).expect(200);
+  });
+
+  it('REQ0030 rejects a waiting noncreator deletion after its explicit platform grant is revoked', async () => {
+    const f = await fixture();
+    const org = await f.child();
+    const admin = await manager(f, true);
+    const key = randomUUID();
+    const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+    await blocker.connect();
+    let deletion: Promise<request.Response> | undefined;
+    try {
+      await blocker.query('BEGIN');
+      const { rows: [{ pid }] } = await blocker.query('SELECT pg_backend_pid() AS pid');
+      await blocker.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [admin.user.id]);
+      deletion = admin.send('delete', org.id, { expectedVersion: 1 }, key).then(response => response);
+      await waitBlocked(pid);
+      await blocker.query('DELETE FROM user_roles WHERE user_id = $1', [admin.user.id]);
+      await blocker.query('UPDATE users SET security_version = security_version + 1 WHERE id = $1', [admin.user.id]);
+      await blocker.query('COMMIT');
+      expect([401, 403, 409]).toContain((await deletion).status);
+      expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ version: 1 });
+      expect(await prisma.userRole.count({ where: { organizationId: org.id, userId: f.actor.id } })).toBe(1);
+      expect(await prisma.adminMutation.count({ where: { key } })).toBe(0);
+      expect(await prisma.auditEvent.count({ where: { resourceId: org.id, action: 'ORGANIZATION_DELETED' } })).toBe(0);
+    } finally { await blocker.query('ROLLBACK'); await blocker.end(); await deletion; }
+  });
+
   it('edits organization and department code on the original ID, audits old/new values and enforces version/uniqueness', async () => {
     const f = await fixture();
     const org = await f.child();
@@ -268,6 +391,7 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     await prisma.$executeRaw`UPDATE new_product_projects SET status = 'ARCHIVED' WHERE id = ${projectId}::uuid`;
     expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toEqual({
       disableBlockers: [], deleteBlockers: ['存在业务、配置或历史引用'],
+      deleteBlockerDetails: ['new_product_projects', 'new_product_stages'].map(table => ({ code: `REFERENCE:${table}.organization_id`, count: 1, message: expect.any(String) })),
     });
     await f.send('patch', `/${org.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(200);
     await f.send('delete', `/${org.id}`, { expectedVersion: 2 }).expect(409);
@@ -317,6 +441,7 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     expect(await projection(external)).toEqual([{ version: 20, status: activeStatuses[0], live: true }]);
     expect((await f.send('get', `/${org.id}/lifecycle`).expect(200)).body).toEqual({
       disableBlockers: [], deleteBlockers: ['存在业务、配置或历史引用'],
+      deleteBlockerDetails: ['customer_quality_complaints', 'customer_quality_customers', tableName].map(table => ({ code: `REFERENCE:${table}.organization_id`, count: table === tableName ? activeStatuses.length + 1 : 1, message: expect.any(String) })),
     });
     // A lower-version pending complaint in the same organization must not be shadowed.
     const second = await complaint(org.id);

@@ -60,9 +60,17 @@ export class UpdateDepartmentDto {
   @ApiPropertyOptional({ enum: ['ACTIVE', 'DISABLED'] }) @ValidateIf((_object, value) => value !== undefined) @IsIn(['ACTIVE', 'DISABLED']) status?: 'ACTIVE' | 'DISABLED';
 }
 
+export class OrganizationLifecycleBlockerDto {
+  @ApiProperty() code!: string;
+  @ApiProperty({ minimum: 1 }) count!: number;
+  @ApiProperty() message!: string;
+}
+
 export class OrganizationLifecycleDto {
   @ApiProperty({ type: [String] }) deleteBlockers!: string[];
   @ApiProperty({ type: [String] }) disableBlockers!: string[];
+  @ApiPropertyOptional({ type: [OrganizationLifecycleBlockerDto] }) deleteBlockerDetails?: OrganizationLifecycleBlockerDto[];
+  @ApiPropertyOptional({ type: [OrganizationLifecycleBlockerDto] }) disableBlockerDetails?: OrganizationLifecycleBlockerDto[];
 }
 
 export class DeleteStructureDto {

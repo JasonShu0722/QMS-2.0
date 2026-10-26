@@ -13,6 +13,7 @@ import { assertSupplierAccountTarget, SUPPLIER_PORTAL_PERMISSIONS } from '../../
 import { AdminOrganizationController } from '../../src/modules/identity/admin-organization.controller.js';
 import { AdminUserService } from '../../src/modules/identity/admin-user.service.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
+import { SupplierAccountIdentityService } from '../../src/modules/identity/supplier-account-identity.service.js';
 import { OrganizationScopeService } from '../../src/modules/organization/organization-scope.service.js';
 import { OrganizationService } from '../../src/modules/organization/organization.service.js';
 
@@ -238,6 +239,26 @@ describe('effective-role consumers with real PostgreSQL', () => {
     await expect(prisma.$transaction((tx) => assertSupplierAccountTarget(tx, f.actor, f.home.id, f.user.id, 'account:users:reset'))).resolves.toMatchObject({ id: f.user.id });
     expect(await prisma.$transaction((tx) => adminPermissions(tx, f.admin.id, f.home.id))).toContain('account:users:reset');
     expect(await prisma.userRole.count({ where: { userId: f.admin.id, organizationId: f.home.id } })).toBe(1);
+  });
+
+  it.each(['DIRECT', 'POSITION', 'FOREIGN_DIRECT'] as const)('rejects supplier governance when a real %s marker source is hidden from runtime permissions', async kind => {
+    const f = await fixture(['notification:read'], 'SUPPLIER');
+    const sourceOrganizationId = kind === 'FOREIGN_DIRECT' ? f.actor.organizationId : f.home.id;
+    const markerRole = await role(sourceOrganizationId, ['platform:admin']);
+    if (kind === 'POSITION') await position(f.home.id, f.user.id, markerRole.id);
+    else await prisma.userRole.create({ data: { userId: f.user.id, roleId: markerRole.id, organizationId: sourceOrganizationId } });
+    const token = await sessions.create(f.user.id, prisma);
+    const session = await sessions.resolve(token);
+    expect(session).not.toBeNull();
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: f.user.id } });
+    const beforeSession = await prisma.session.findUniqueOrThrow({ where: { id: session!.id } });
+    const identities = new SupplierAccountIdentityService({} as never, {} as never, audit);
+    await expect(prisma.$transaction(tx => identities.setStatus(tx, f.actor, f.home.id, f.user.id,
+      { status: 'DISABLED', expectedSecurityVersion: before.securityVersion }, randomUUID())))
+      .rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: f.user.id } })).toEqual(before);
+    expect(await prisma.session.findUniqueOrThrow({ where: { id: session!.id } })).toEqual(beforeSession);
+    expect(await prisma.auditEvent.count({ where: { organizationId: f.home.id, resourceId: f.user.id, action: 'USER_UPDATED', outcome: 'SUCCESS' } })).toBe(0);
   });
 
   it.each(['member', 'position'] as const)('rejects updating a supplier-%s-referenced role beyond portal permissions', async (reference) => {

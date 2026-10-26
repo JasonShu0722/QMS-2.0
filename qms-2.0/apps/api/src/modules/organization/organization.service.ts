@@ -10,6 +10,7 @@ import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../com
 import { assertLegacyPositionRoleWrite, assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { ministerAssignmentReferences, positionManagementReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
@@ -198,8 +199,8 @@ export class OrganizationService {
       // Dependency hints are administrative information, not a member directory capability.
       await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
       const current = await transaction.organization.findUniqueOrThrow({ where: { id: organizationId } });
-      const { deleteBlockers, disableBlockers } = await this.organizationLifecycleState(transaction, actor, current);
-      return { deleteBlockers, disableBlockers };
+      const { protected: _protected, ...lifecycle } = await this.organizationLifecycleState(transaction, actor, current);
+      return lifecycle;
     }, { isolationLevel: 'RepeatableRead' });
   }
 
@@ -238,8 +239,9 @@ export class OrganizationService {
       const lifecycle = await this.organizationLifecycleState(transaction, actor, current);
       if (lifecycle.deleteBlockers.length) adminError(lifecycle.protected ? 'ADMIN_SELF_LOCK_FORBIDDEN' : 'STRUCTURE_REFERENCE_INVALID', 409);
       const initialization = await this.initializationAttachments(transaction, actor, current);
+      if (initialization.blocked) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       if (initialization.roleId) {
-        await transaction.userRole.deleteMany({ where: { organizationId, roleId: initialization.roleId, userId: actor.id } });
+        await transaction.userRole.deleteMany({ where: { organizationId, roleId: initialization.roleId, userId: initialization.creatorUserId } });
         await transaction.rolePermission.deleteMany({ where: { roleId: initialization.roleId } });
         await transaction.role.delete({ where: { id: initialization.roleId } });
       }
@@ -285,7 +287,7 @@ export class OrganizationService {
     return typeof value?.id === 'string' ? { id: value.id, deleted: value.deleted === true } : undefined;
   }
 
-  private async initializationAttachments(transaction: AdminTransaction, actor: AdminActor, organization: { id: string; parentId: string | null }) {
+  private async initializationAttachments(transaction: AdminTransaction, actor: AdminActor, organization: { id: string; parentId: string | null; type: string }) {
     const organizationId = organization.id;
     const events = await transaction.auditEvent.findMany({ where: { organizationId } });
     const creations = events.filter((event) => event.resourceId === organizationId && event.resourceType === 'Organization' && event.action === 'ORGANIZATION_CREATED' && event.outcome === 'SUCCESS');
@@ -296,61 +298,109 @@ export class OrganizationService {
     const metadata = event?.metadata as Record<string, unknown> | undefined;
     const created = receipts.length === 1 ? (receipts[0]!.response as { value?: Record<string, Prisma.JsonValue> })?.value : undefined;
     const role = roles.length === 1 ? roles[0] : undefined;
-    const initialized = event?.actorUserId === actor.id && created?.id === organizationId && created.parentId === organization.parentId && created.version === 1
-      && metadata?.resourceVersion === 1 && metadata.organizationId === organizationId && metadata.structureCode === created.code && metadata.structureName === created.name && role
-      && role.id === metadata?.structureGovernorRoleId && role.code === 'ORGANIZATION_GOVERNOR' && !role.mfaRequired
-      && role.permissions.map(({ permission }) => permission.code).sort().join(',') === metadata?.permissionCode
-      && role.permissions.every(({ permission }) => governancePermissions.includes(permission.code))
-      && role.positions.length === 0 && role.userRoles.length === 1 && grants.length === 1
-      && grants[0]!.roleId === role.id && grants[0]!.userId === actor.id
-      && role.userRoles[0]!.organizationId === organizationId && role.userRoles[0]!.userId === actor.id;
+    const creatorUserId = event?.actorUserId ?? undefined;
+    const details: NonNullable<OrganizationLifecycleDto['deleteBlockerDetails']> = [];
+    const reason = (code: string, count: number, message: string) => { if (count) details.push({ code, count, message }); };
+    const legacy = metadata?.resourceVersion === 1 && Object.keys(metadata).length === 1;
+    const provenance = Boolean(creatorUserId && created?.id === organizationId && created.parentId === organization.parentId && created.version === 1
+      && typeof created.code === 'string' && typeof created.name === 'string' && created.type === organization.type && created.status === 'ACTIVE'
+      && Object.keys(created).sort().join(',') === 'code,id,name,parentId,status,type,version'
+      && receipts[0]?.actorUserId === creatorUserId && receipts[0]?.organizationId === organization.parentId
+      && metadata?.resourceVersion === 1 && (legacy || (metadata.organizationId === organizationId
+        && metadata.structureCode === created.code && metadata.structureName === created.name && metadata.structureGovernorRoleId === role?.id)));
+    reason('INITIALIZATION_PROVENANCE_MISSING', provenance ? 0 : 1, '创建审计、原创建人或父组织创建回执无法相互核验；请核对原始记录，勿补造凭据。');
+    const permissionCodes = role?.permissions.map(({ permission }) => permission.code).sort() ?? [];
+    // Old events did not snapshot permissions; only the complete known bootstrap set is unambiguous.
+    const permissionsValid = permissionCodes.length > 0 && permissionCodes.every(code => governancePermissions.includes(code))
+      && permissionCodes.includes('organization:read') && permissionCodes.includes('organization:manage')
+      && permissionCodes.join(',') === (legacy ? [...governancePermissions].sort().join(',') : metadata?.permissionCode);
+    reason('INITIALIZATION_PERMISSIONS_CHANGED', role && !permissionsValid ? 1 : 0, '初始化治理权限与原始证据不一致，或旧版权限不完整；请核对权限变更历史。');
+    const governorValid = role?.code === 'ORGANIZATION_GOVERNOR' && !role.mfaRequired && role.positions.length === 0;
+    reason('INITIALIZATION_ROLE_MISSING', roles.length ? 0 : 1, '缺少可核验的初始化治理角色，不能自动清理。');
+    reason('NON_INITIALIZATION_ROLES', roles.length && !(roles.length === 1 && governorValid) ? Math.max(roles.length - 1, 1) : 0, '存在非初始化角色、岗位映射或安全配置，不能作为初始化附属项清理。');
+    const expectedGrant = (grant: { organizationId: string; roleId: string; userId: string }) => grant.organizationId === organizationId && grant.roleId === role?.id && grant.userId === creatorUserId;
+    const grantsValid = grants.length === 1 && grants.every(expectedGrant) && role?.userRoles.length === 1 && role.userRoles.every(expectedGrant);
+    reason('INITIALIZATION_GRANT_MISSING', grants.length && role?.userRoles.length ? 0 : 1, '缺少原创建人的唯一初始化授权，不能自动清理。');
+    reason('NON_INITIALIZATION_GRANTS', grantsValid || !grants.length ? 0 : Math.max(1, grants.filter(grant => !expectedGrant(grant)).length, role?.userRoles.filter(grant => !expectedGrant(grant)).length ?? 0), '存在额外授权或原创建人初始化授权已变化；请先核对授权来源，不能自动删除。');
+    const initialized = provenance && permissionsValid && governorValid && grantsValid;
     const mutations = await transaction.adminMutation.findMany({ where: { organizationId } });
     // Only this initializer's name/code/status maintenance of the same object and unchanged parent is ancillary.
-    const maintenance = mutations.every((mutation) => {
+    const isMaintenance = (mutation: typeof mutations[number]) => {
       const value = (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value;
-      return initialized && mutation.actorUserId === actor.id && mutation.action === 'ORGANIZATION_UPDATED'
+      return provenance && mutation.actorUserId === creatorUserId && mutation.action === 'ORGANIZATION_UPDATED'
         && value?.id === organizationId && value.parentId === organization.parentId && value.type === created?.type
         && typeof value.version === 'number' && value.version > 1
         && events.some((entry) => entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS'
-          && entry.actorUserId === actor.id && entry.resourceType === 'Organization' && entry.resourceId === organizationId
+          && entry.actorUserId === creatorUserId && entry.resourceType === 'Organization' && entry.resourceId === organizationId
           && (entry.metadata as Record<string, unknown> | null)?.resourceVersion === value.version);
-    });
-    const audited = events.every((entry) => {
+    };
+    const isAncillaryEvent = (entry: typeof events[number]) => {
       const details = entry.metadata as Record<string, unknown> | null;
       if (details?.organizationId !== undefined && details.organizationId !== organizationId) return false;
       if (entry.action === 'ACTION_REJECTED' && entry.outcome === 'DENIED' && ['Administration', 'Authorization'].includes(entry.resourceType)) return true;
-      if (entry.id === event?.id) return Boolean(initialized);
-      return initialized && entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS' && entry.actorUserId === actor.id
+      if (entry.id === event?.id) return provenance;
+      return provenance && entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS' && entry.actorUserId === creatorUserId
         && entry.resourceType === 'Organization' && entry.resourceId === organizationId
         && mutations.some((mutation) => (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value?.version === details?.resourceVersion);
-    });
-    const blocked = !maintenance || !audited || Boolean((roles.length || grants.length) && !initialized);
-    return { blocked, roleId: initialized ? role.id : undefined, events: blocked ? [] : events, mutationIds: blocked ? [] : mutations.map(({ id }) => id) };
+    };
+    reason('OTHER_MANAGEMENT_MUTATIONS', mutations.filter(mutation => !isMaintenance(mutation)).length, '存在非原创建人基础维护的管理回执；请定位管理审计并核对操作。');
+    reason('OTHER_MANAGEMENT_EVENTS', events.filter(entry => entry.id !== event?.id && !isAncillaryEvent(entry)).length, '存在其他管理操作或无法对应回执的审计；请定位审计，保留真实使用历史。');
+    reason('INITIALIZATION_OTHER_CREATOR', initialized && creatorUserId !== actor.id && !await hasPlatformAdministrator(transaction, actor.id) ? 1 : 0, '当前操作者不是原创建人，需要显式平台管理员授权。');
+    const blocked = details.length > 0;
+    return { blocked, details, creatorUserId, roleId: !blocked && initialized ? role!.id : undefined, events: blocked ? [] : events, mutationIds: blocked ? [] : mutations.map(({ id }) => id) };
   }
 
-  private async organizationLifecycleState(transaction: AdminTransaction, actor: AdminActor, current: { id: string; parentId: string | null }) {
+  private async organizationLifecycleState(transaction: AdminTransaction, actor: AdminActor, current: { id: string; parentId: string | null; type: string }) {
     const organizationId = current.id;
     const deleteBlockers: string[] = [];
     const disableBlockers: string[] = [];
+    const deleteBlockerDetails: NonNullable<OrganizationLifecycleDto['deleteBlockerDetails']> = [];
+    const disableBlockerDetails: NonNullable<OrganizationLifecycleDto['disableBlockerDetails']> = [];
+    const add = (action: 'delete' | 'disable', code: string, count: number, message: string) => {
+      if (count) (action === 'delete' ? deleteBlockerDetails : disableBlockerDetails).push({ code, count, message });
+    };
     const protectedOrganization = current.parentId === null || organizationId === actor.organizationId;
     if (protectedOrganization) { deleteBlockers.push('根组织或当前主组织受自锁保护'); disableBlockers.push('根组织或当前主组织受自锁保护'); }
     const children = await transaction.organization.findMany({ where: { parentId: organizationId }, select: { status: true } });
     if (children.length) deleteBlockers.push('存在下级组织');
     if (children.some(({ status }) => status === 'ACTIVE')) disableBlockers.push('存在启用的下级组织');
+    add('delete', 'CHILD_ORGANIZATIONS', children.length, '请在组织架构中处理下级组织。');
+    add('disable', 'ACTIVE_CHILD_ORGANIZATIONS', children.filter(({ status }) => status === 'ACTIVE').length, '请先停用下级组织。');
     const departments = await transaction.department.findMany({ where: { organizationId }, select: { status: true } });
     if (departments.length) deleteBlockers.push('存在部门');
     if (departments.some(({ status }) => status === 'ACTIVE')) disableBlockers.push('存在启用的部门');
-    if (await transaction.position.count({ where: { organizationId } })) deleteBlockers.push('存在岗位');
-    if (await transaction.position.count({ where: { organizationId, status: 'ACTIVE' } })) disableBlockers.push('存在启用的岗位');
-    if (await transaction.user.count({ where: { organizationId } })) deleteBlockers.push('存在用户账号');
-    if (await transaction.user.count({ where: { organizationId, status: 'ACTIVE' } })) disableBlockers.push('存在启用的用户账号');
-    if (await transaction.userPosition.count({ where: { organizationId } })) deleteBlockers.push('存在任职历史');
-    if (await transaction.userPosition.count({ where: { organizationId, OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] } })) disableBlockers.push('存在有效或待生效任职');
-    if ((await this.initializationAttachments(transaction, actor, current)).blocked) deleteBlockers.push('存在非初始化授权或管理使用记录');
+    add('delete', 'DEPARTMENTS', departments.length, '请在组织架构中处理部门；历史引用不能级联清除。');
+    add('disable', 'ACTIVE_DEPARTMENTS', departments.filter(({ status }) => status === 'ACTIVE').length, '请先停用部门。');
+    const positionCount = await transaction.position.count({ where: { organizationId } });
+    const activePositions = await transaction.position.count({ where: { organizationId, status: 'ACTIVE' } });
+    const userCount = await transaction.user.count({ where: { organizationId } });
+    const activeUsers = await transaction.user.count({ where: { organizationId, status: 'ACTIVE' } });
+    const assignmentCount = await transaction.userPosition.count({ where: { organizationId } });
+    const effectiveAssignments = await transaction.userPosition.count({ where: { organizationId, OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] } });
+    if (positionCount) deleteBlockers.push('存在岗位');
+    if (activePositions) disableBlockers.push('存在启用的岗位');
+    if (userCount) deleteBlockers.push('存在用户账号');
+    if (activeUsers) disableBlockers.push('存在启用的用户账号');
+    if (assignmentCount) deleteBlockers.push('存在任职历史');
+    if (effectiveAssignments) disableBlockers.push('存在有效或待生效任职');
+    add('delete', 'POSITIONS', positionCount, '请在部门岗位中核对岗位及引用，不能自动清除。');
+    add('disable', 'ACTIVE_POSITIONS', activePositions, '请先处理启用岗位。');
+    add('delete', 'USERS', userCount, '请在用户管理核对账号；保留真实账号历史。');
+    add('disable', 'ACTIVE_USERS', activeUsers, '请先处理启用账号。');
+    add('delete', 'APPOINTMENTS', assignmentCount, '请核对任职历史；结束任职不等于可以清除历史。');
+    add('disable', 'EFFECTIVE_APPOINTMENTS', effectiveAssignments, '请先结束有效或待生效任职。');
+    const initialization = await this.initializationAttachments(transaction, actor, current);
+    if (initialization.blocked) deleteBlockers.push('存在非初始化授权或管理使用记录');
+    deleteBlockerDetails.push(...initialization.details);
     const business = await structureBusinessReferences(transaction, organizationId, 'organization');
     if (business.referenced) deleteBlockers.push('存在业务、配置或历史引用');
     if (business.live) disableBlockers.push('存在有效配置或在途业务引用');
-    return { deleteBlockers, disableBlockers, protected: protectedOrganization };
+    for (const reference of business.details) {
+      const source = `${reference.tableName}.${reference.columnName}`;
+      add('delete', `REFERENCE:${source}`, reference.count, `存在 ${source} 引用项；请在对应业务或配置中核对，历史引用必须保留。`);
+      add('disable', `LIVE_REFERENCE:${source}`, reference.liveCount, `存在 ${source} 有效引用项；请先结束在途业务或停用配置。`);
+    }
+    return { deleteBlockers, disableBlockers, ...(deleteBlockerDetails.length ? { deleteBlockerDetails } : {}), ...(disableBlockerDetails.length ? { disableBlockerDetails } : {}), protected: protectedOrganization };
   }
 
   private async departmentLifecycleState(transaction: AdminTransaction, organizationId: string, departmentId: string): Promise<OrganizationLifecycleDto> {

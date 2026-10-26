@@ -2,18 +2,39 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { effectiveRoleMembershipSql } from '../../common/security/effective-role-membership.sql.js';
 import type { AuthorizedSessionUser } from '../authorization/authorization.service.js';
 import { workflowError } from './workflow-runtime-policy.js';
+import { INTERNAL_PLATFORM_PERMISSION_CODES, PLATFORM_ADMINISTRATOR_PERMISSION, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../authorization/permission-catalog.js';
 
 export type WorkflowActor = AuthorizedSessionUser & { sessionId: string };
 
 export function featurePredicate(userId: Prisma.Sql, organizationId: Prisma.Sql, permission: Prisma.Sql): Prisma.Sql {
-  return Prisma.sql`EXISTS (
+  return Prisma.sql`(EXISTS (
     SELECT 1 FROM roles role
     JOIN role_permissions grant_record ON grant_record.role_id = role.id
     JOIN permissions permission ON permission.id = grant_record.permission_id
     WHERE role.id IN (${effectiveRoleMembershipSql(userId, organizationId)})
       AND (role.organization_id = ${organizationId} OR role.organization_id IS NULL)
       AND permission.code = ${permission}
-  )`;
+      AND permission.code <> ${PLATFORM_ADMINISTRATOR_PERMISSION}
+  ) OR EXISTS (
+    SELECT 1 FROM users platform_actor
+    JOIN organizations platform_home ON platform_home.id = platform_actor.organization_id
+    JOIN organizations platform_target ON platform_target.id = ${organizationId}
+    JOIN permissions platform_permission ON platform_permission.code = ${permission}
+    WHERE platform_actor.id = ${userId} AND platform_actor.status = 'ACTIVE' AND platform_actor.account_type = 'INTERNAL'
+      AND platform_home.status = 'ACTIVE' AND platform_home.type = 'INTERNAL'
+      AND platform_target.type = 'INTERNAL'
+      AND (platform_target.status = 'ACTIVE' OR platform_permission.code IN (${Prisma.join(PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES)}))
+      AND platform_permission.code IN (${Prisma.join(INTERNAL_PLATFORM_PERMISSION_CODES)})
+      AND EXISTS (
+        SELECT 1 FROM organizations platform_source
+        JOIN roles platform_role ON platform_role.id IN (${effectiveRoleMembershipSql(userId, Prisma.sql`platform_source.id`)})
+        JOIN role_permissions platform_grant ON platform_grant.role_id = platform_role.id
+        JOIN permissions platform_marker ON platform_marker.id = platform_grant.permission_id
+        WHERE platform_source.status = 'ACTIVE' AND platform_source.type = 'INTERNAL'
+          AND (platform_role.organization_id = platform_source.id OR platform_role.organization_id IS NULL)
+          AND platform_marker.code = ${PLATFORM_ADMINISTRATOR_PERMISSION}
+      )
+  ))`;
 }
 
 export function activeActorPredicate(userId: Prisma.Sql, organizationId: Prisma.Sql): Prisma.Sql {

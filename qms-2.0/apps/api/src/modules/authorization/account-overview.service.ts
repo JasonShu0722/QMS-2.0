@@ -16,7 +16,8 @@ export class AccountOverviewService {
       return {
         organizationId: user.organizationId,
         assignments,
-        effectiveRoles: grants.map(({ role, sources }) => ({ id: role.id, code: role.code, name: role.name,
+        effectiveRoles: grants.map(({ role, sources, platformScope }) => ({ id: role.id, code: role.code, name: role.name,
+          ...(platformScope ? { platformScope } : {}),
           sources: sources.map((source) => source.kind === 'DIRECT' ? source : { ...source, positionName: names.get(source.assignmentId)! }),
         })),
         permissions: [...new Set(grants.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.code)))].sort(),

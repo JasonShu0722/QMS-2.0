@@ -19,6 +19,7 @@ import { CustomerQualityPage } from '../features/customer-quality/CustomerQualit
 import { AuditManagementPage } from '../features/audit-management/AuditManagementPage';
 import { NewProductQualityPage } from '../features/new-product-quality/NewProductQualityPage';
 import { ProcessDefectLedgerPage } from '../features/process-quality/ProcessDefectLedgerPage';
+import { ProcessShipmentReportPage } from '../features/process-quality/ProcessShipmentReportPage';
 import { QualityDataPage } from '../features/quality-data/QualityDataPage';
 import { SupplierIncomingPage } from '../features/supplier-incoming/SupplierIncomingPage';
 import { TaskStatisticsPage } from '../features/tasks/TaskStatisticsPage';
@@ -71,6 +72,7 @@ function InternalShell() {
   const isAdmin = location.pathname.startsWith('/app/admin');
   const workflowRoute = /^\/app\/workflow-designer\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
+  const processPath = location.pathname.replace(/\/$/, '');
   const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
   useEffect(() => {
     let current = true;
@@ -145,7 +147,9 @@ function InternalShell() {
         {location.pathname.startsWith('/app/supplier-quality-targets') ? <SupplierQualityTargetsPage /> : null}
         {location.pathname.startsWith('/app/supplier-ppap') ? <SupplierPpapPage /> : null}
         {location.pathname.startsWith('/app/supplier-asn') ? <SupplierAsnPage /> : null}
-        {location.pathname.startsWith('/app/process-quality') ? <ProcessDefectLedgerPage /> : null}
+        {processPath === '/app/process-quality' ? <ProcessDefectLedgerPage /> : null}
+        {processPath === '/app/process-quality/problems' ? <ProblemCenterPage processQuality /> : null}
+        {processPath === '/app/process-quality/shipment-reports' ? <ProcessShipmentReportPage /> : null}
         {location.pathname.startsWith('/app/customer-quality') ? <CustomerQualityPage /> : null}
         {location.pathname.startsWith('/app/audits') ? <AuditManagementPage /> : null}
         {location.pathname.startsWith('/app/audit-standards') ? <AuditStandardsPage /> : null}

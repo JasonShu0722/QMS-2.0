@@ -1,7 +1,7 @@
 import type { WorkflowClosureParticipant } from './workflow-closure-policy.js';
 
 export type WorkflowDeadlineStage = 'ANALYSIS' | 'SUBMISSION' | 'CLOSURE';
-export type WorkflowDeadlineOperation = 'READ' | 'REQUEST' | 'DECIDE';
+export type WorkflowDeadlineOperation = 'READ' | 'ELIGIBILITY' | 'REQUEST' | 'DECIDE';
 export type WorkflowDeadlinePolicy = {
   schemaVersion: 1;
   extensionPolicy: 'LEADER_THEN_PROFESSIONAL';

@@ -52,11 +52,11 @@ export class WorkflowDeadlineExtensionService {
 
   // For authorized domain task projections; never grants domain access by itself.
   async eligible(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string): Promise<WorkflowDeadlineExtension[]> {
-    const { context, closureContext, adapter } = await this.context(tx, actor, problemId, 'DECIDE');
+    const { context, closureContext, adapter } = await this.context(tx, actor, problemId, 'ELIGIBILITY');
     const selection = await this.selectParticipants(tx, context);
     const plan = selection.plan;
     const rows = await this.readProjection(tx, context.organizationId, problemId);
-    await adapter.deadlineContext!(tx, closureContext, actor, 'DECIDE');
+    await adapter.deadlineContext!(tx, closureContext, actor, 'ELIGIBILITY');
     await this.rounds.assertActor(tx, actor);
     if (!await selection.current()) return [];
     return rows.filter(r => pending(r) && plan !== null && sameDeadlineSources(r.context, context, r.stage)

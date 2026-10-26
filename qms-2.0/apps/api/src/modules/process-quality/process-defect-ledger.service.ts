@@ -4,7 +4,7 @@ import { Prisma, type ProcessDefect } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
-import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
+import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
@@ -375,12 +375,17 @@ export class ProcessDefectLedgerService {
     return this.prisma.$transaction(async tx => {
       await assertActiveAuthentication(tx, actor);
       await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
-      const hasPermission = { permissions: { some: { permission: { code: 'process-quality:materials:review' } } } };
-      const where: Prisma.UserWhereInput = { organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
-        AND: [{ OR: [{ userRoles: { some: { organizationId, role: hasPermission } } }, { positions: { some: { organizationId, ...effectivePositionAssignmentWhere(), position: { status: 'ACTIVE', department: { status: 'ACTIVE' }, roles: { some: { role: hasPermission } } } } } }] },
-          ...(query.search ? [{ OR: [{ username: { contains: query.search, mode: 'insensitive' as const } }, { fullName: { contains: query.search, mode: 'insensitive' as const } }] }] : [])] };
-      const [items, total] = await Promise.all([tx.user.findMany({ where, select: { id: true, username: true, fullName: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), tx.user.count({ where })]);
-      return { items, total, page: query.page, pageSize: query.pageSize };
+      const pattern = `%${(query.search ?? '').replace(/[\\%_]/g, '\\$&')}%`;
+      const [result] = await tx.$queryRaw<{ items: { id: string; username: string; fullName: string | null }[]; total: number }[]>(Prisma.sql`
+        WITH eligible AS MATERIALIZED (
+          SELECT candidate.id, candidate.username, candidate.full_name AS "fullName" FROM users candidate
+          WHERE candidate.organization_id = ${organizationId}::uuid AND candidate.account_type = 'INTERNAL' AND candidate.status = 'ACTIVE'
+            AND ${featurePredicate(Prisma.sql`candidate.id`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:materials:review'`)}
+            ${query.search ? Prisma.sql`AND (candidate.username ILIKE ${pattern} OR candidate.full_name ILIKE ${pattern})` : Prisma.empty}
+        ), selected AS (SELECT * FROM eligible ORDER BY username, id LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize})
+        SELECT COALESCE((SELECT jsonb_agg(selected ORDER BY username, id) FROM selected), '[]'::jsonb) AS items,
+          (SELECT count(*)::int FROM eligible) AS total`);
+      return { items: result!.items, total: result!.total, page: query.page, pageSize: query.pageSize };
     });
   }
 

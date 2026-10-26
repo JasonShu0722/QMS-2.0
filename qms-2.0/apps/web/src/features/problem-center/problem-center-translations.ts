@@ -1,4 +1,11 @@
 export const problemCenterTranslations: Record<string, string> = {
+  '制程问题跟进': 'Process problem follow-up', '出货报告': 'Shipment reports',
+  '固定制程领域，一张正式8D一行；编号进入既有问题处理工作空间。': 'Process domain only, one row per formal 8D. Open the report number in the existing problem workspace.',
+  '支持编号、状态、风险、负责人及问题截止时间筛选；阶段期限仅供核对，暂不参与截止筛选。': 'Filter by report number, status, risk, owner and problem due date. Stage deadlines are shown for review and are not included in due-date filtering.',
+  '责任科室': 'Responsible section', '负责人': 'Owner', '风险': 'Risk', '当前期限': 'Current deadline', '问题截止时间': 'Problem due date', '全部阶段期限': 'All stage deadlines',
+  '当前阶段': 'Current stage', '分析阶段': 'Analysis stage', '完整提交阶段': 'Submission stage', '关闭阶段': 'Closure stage', '关闭审批中': 'Closure review',
+  '已取消': 'Cancelled', '已暂停': 'Suspended', '流程失败': 'Workflow failed', '流程已结束': 'Workflow completed',
+  '分析期限': 'Analysis due', '完整提交期限': 'Submission due', '关闭期限': 'Closure due',
   '在授权组织内检索问题，并保存个人视图。': 'Search problems in an authorized organization and save personal views.',
   '组织上下文': 'Organization context', '切换组织': 'Switch organization', '保存视图': 'Saved views', '视图名称': 'View name',
   '应用视图': 'Apply view', '保存新视图': 'Save new view', '更新视图': 'Update view', '删除视图': 'Delete view',

@@ -9,14 +9,14 @@ import { assertRecentAuthentication, isGovernancePermission, mfaPolicy } from '.
 import { rethrowSecurityRejection } from '../../common/security/security-rejection.js';
 import { sessionLifetimeMs } from './session-policy.js';
 import type { AccountSessionHistoryQueryDto } from './dto/account.dto.js';
-import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
+import { effectiveRoleGrants, type EffectiveRoleGrantClient } from '../../common/security/effective-role-grants.js';
 
 export const SESSION_COOKIE = 'qms_session';
 export const CSRF_COOKIE = 'qms_csrf';
 
 type SessionTransaction = Pick<PrismaService, '$queryRaw' | 'user' | 'session' | 'auditEvent'>;
 
-type SessionCreationTransaction = Pick<PrismaService, 'session' | 'user' | 'userRole' | 'userPosition'>;
+type SessionCreationTransaction = Pick<PrismaService, 'session'> & EffectiveRoleGrantClient;
 type SessionCreationOptions = { mfaVerified?: boolean; reauthenticated?: boolean; rememberMe?: boolean; expiresAt?: Date };
 export type IssuedSession = { sessionToken: string; sessionExpiresAt: Date };
 

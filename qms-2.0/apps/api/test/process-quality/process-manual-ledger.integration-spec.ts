@@ -334,6 +334,33 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     expect(known.materialVerificationHistory[1].materialSnapshot).toMatchObject({ materialCode: 'M-B', materialName: null });
   });
 
+  it('lists marker-only internal material reviewers consistently with assignment eligibility and removes revoked candidates', async () => {
+    const search = `marker-sqe-${randomUUID()}`;
+    const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+    const candidates = await Promise.all([
+      { organizationId, status: 'ACTIVE' as const, suffix: 'eligible' },
+      { organizationId, status: 'DISABLED' as const, suffix: 'disabled' },
+      { organizationId: otherOrganizationId, status: 'ACTIVE' as const, suffix: 'foreign' },
+    ].map(async input => {
+      const user = await prisma.user.create({ data: { organizationId: input.organizationId, username: `${search}-${input.suffix}`, passwordHash: 'test-only', accountType: 'INTERNAL', status: input.status } });
+      const role = await prisma.role.create({ data: { organizationId: input.organizationId, code: randomUUID(), name: 'Explicit platform candidate', permissions: { create: { permissionId: marker.id } } } });
+      await prisma.userRole.create({ data: { organizationId: input.organizationId, userId: user.id, roleId: role.id } });
+      return { user, role };
+    }));
+    try {
+      const options = await ledger.materialSqes(actor(), { page: 1, pageSize: 1, search });
+      expect(options.total).toBe(1);
+      expect(options.items.map(item => item.id)).toEqual([candidates[0]!.user.id]);
+      const record = await create({ materials: [{ materialCode: 'MARKER-CANDIDATE', sqeUserId: candidates[0]!.user.id }] });
+      expect(record.materials[0]!.sqeUserId).toBe(candidates[0]!.user.id);
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: candidates[0]!.role.id, permissionId: marker.id } } });
+      expect(await ledger.materialSqes(actor(), { page: 1, pageSize: 1, search })).toMatchObject({ items: [], total: 0 });
+      await send('leader', 'post', 'defects', { materials: [{ materialCode: 'REVOKED-MARKER', sqeUserId: candidates[0]!.user.id }] }).expect(400);
+    } finally {
+      await prisma.rolePermission.deleteMany({ where: { roleId: { in: candidates.map(item => item.role.id) }, permissionId: marker.id } });
+    }
+  });
+
   it('resolves an unmapped component without configuration read permission or overwriting the manual project', async () => {
     const record = await create({ productCode: `UNMAPPED-${randomUUID()}`, projectCode: 'MANUAL-PROJECT' });
     expect(record.projectCode).toBe('MANUAL-PROJECT');

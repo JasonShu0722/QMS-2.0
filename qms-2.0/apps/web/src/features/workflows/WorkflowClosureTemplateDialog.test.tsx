@@ -34,6 +34,7 @@ function mount(parentDirty = false) {
 }
 async function fill() {
   await screen.findByRole('option', { name: '供应商关闭审核' });
+  await waitFor(() => expect(screen.getByLabelText('模板流程代码')).toBeVisible());
   fireEvent.change(screen.getByLabelText('模板策略'), { target: { value: 'SUPPLIER' } });
   fireEvent.change(screen.getByLabelText('模板领域代码'), { target: { value: ' SUPPLIER_QUALITY ' } });
   fireEvent.change(screen.getByLabelText('模板流程代码'), { target: { value: ' SUPPLIER-CLOSE ' } });

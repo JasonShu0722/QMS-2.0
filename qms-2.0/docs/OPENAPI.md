@@ -2,7 +2,13 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## N3过程人工闭环契约（2026-10-26，本地候选）
+## REQ-0030 契约接续（2026-10-26，本地修复，未部署）
+
+新增可选platformScope说明真实来源组织、目标和内部平台范围；岗位授权预览保留直接来源的organizationId及平台投影信息。组织生命周期保留原blockers数组，可选deleteBlockerDetails/disableBlockerDetails提供类型、数量和处理说明。问题摘要可选有界fields承载领域可读列表字段，其他域不因此获得新业务能力。
+
+公共问题查询新增可选responseForm=BRIEF/EIGHT_D，当前由支持的领域适配器根据自有事实构建筛选谓词，进入分页前eligible集合；列表、total和statusCounts一致，无筛选时旧行为不变。制程正式8D不能仅凭PROCESS_DEFECT类型与旧BRIEF区分，Web固定领域/类型/EIGHT_D，不客户端过滤后冒称总数准确。绑定与启用写及其幂等重放需近期完整认证，GET绑定仍按有效会话与目标读取授权。实际生成、验证及限制见[修复计划](../../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md)。
+
+## N3过程人工闭环契约（2026-10-26，V0.0.31含fix1已部署）
 
 新增`/api/v1/process-quality/eight-d`受控配置、发单 / 来源预览、正文 / 动作、任务 / 通知及报告接口，以及`/api/v1/workflow-deadline-extensions`延期申请 / 决定接口。准确方法、路径、输入、状态码以当前生成的`api.ts`为准；本节不另造第二套DTO。台账维护 / 关闭、物料复核、8D读取 / 报告 / 发单 / 编辑 / 来源 / 风险 / 重派 / 期限均有独立能力，登记目录不等于自动授予存量岗位。
 
@@ -10,7 +16,7 @@ PR #71的fix1统一全正文最多100个不同附件，跨分区复用同UUID只
 
 过程未知分类 / 数量 / 发生时间保留null，不能用虚构零值补齐消费者。未配置binding的GET实际返回200 JSON `null`，不是空响应体；配置及启用仍独立写动作。D2～D8的字段缺项只通过受控校验异常返回已登记code与有界fields，默认异常不反射任意message / issues / fields；前端用字段路径定位，不解析任意服务器文本。
 
-报告`view=CURRENT`显式读取当前保存版，`APPROVED`默认已批准关闭版；历史`revisionId`不得与CURRENT混用。PDF响应为真实`application/pdf`、安全文件名、no-store / nosniff，并独立检查读取及报告权限；证据版本 / 授权漂移不能返回旧内容。当前仍待最终工程门禁及PR / 部署，不把本地schema存在称为生产路径可用；范围及失败记录见[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)。
+报告`view=CURRENT`显式读取当前保存版，`APPROVED`默认已批准关闭版；历史`revisionId`不得与CURRENT混用。PDF响应为真实`application/pdf`、安全文件名、no-store / nosniff，并独立检查读取及报告权限；证据版本 / 授权漂移不能返回旧内容。PR #71已合并并部署44f612b，公网核验19条N3契约及EXTENSION_REQUEST/AVAILABLE枚举；四个受保护匿名读取均401。契约可用不等于岗位配权、流程启用或业务人工验收完成；发布、范围及失败记录见[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)。
 
 ## N2-B 契约（2026-10-25，V0.0.30含fix3已部署）
 

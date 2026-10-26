@@ -1,3 +1,6 @@
+export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
+export const PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES = ['organization:read', 'organization:manage', 'audit:read', 'audit:export'];
+
 export const ADMIN_PERMISSIONS = [
   'configuration:read', 'configuration:manage', 'audit:export',
   'outbox:read', 'outbox:retry',
@@ -103,6 +106,7 @@ export const PERMISSION_CATALOG: Group[] = [
     ] },
   ] },
   { key: 'system', name: '系统管理', status: 'active', modules: [
+    { key: 'platform-administrator', name: '平台管理员', status: 'active', operations: [operation(PLATFORM_ADMINISTRATOR_PERMISSION, '平台管理员（全部活跃内部组织的适用权限，须显式授予）')] },
     { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },
     { key: 'management-audit', name: '管理审计', status: 'active', operations: [operation('audit:read', '查询管理审计'), operation('audit:export', '导出管理审计')] },
     { key: 'platform-configuration', name: '平台配置', status: 'active', operations: [operation('configuration:read', '查看配置字典和通知规则'), operation('configuration:manage', '维护配置字典和通知规则')] },
@@ -120,6 +124,18 @@ export const PERMISSION_CATALOG: Group[] = [
 ];
 
 export const ACTIVE_PERMISSION_CODES = PERMISSION_CATALOG.flatMap((group) => group.modules.flatMap((module) => module.operations.map((entry) => entry.code)));
+
+const SUPPLIER_ONLY_PERMISSION_CODES = new Set([
+  'supplier-quality:responses:read', 'supplier-quality:responses:write',
+  'supplier-admission:submissions:read', 'supplier-admission:submissions:write',
+  'supplier-performance:portal:cards:read', 'supplier-performance:portal:appeals:read', 'supplier-performance:portal:appeals:write',
+  'supplier-pcn:submissions:read', 'supplier-pcn:submissions:write',
+]);
+
+export const INTERNAL_PLATFORM_PERMISSION_CODES = PERMISSION_CATALOG
+  .filter(group => group.status === 'active')
+  .flatMap(group => group.modules.filter(module => module.status === 'active')
+    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code)).map(entry => entry.code)));
 
 export function userUpdatePermissions(fields: object): string[] {
   const submitted = fields as Record<string, unknown>;
