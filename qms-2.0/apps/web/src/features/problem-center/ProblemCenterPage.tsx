@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { ProcessProblemDeadlines, ProcessProblemTitle, processSummaryValue } from '../process-quality/ProcessProblemSummary';
+import { useEightDSeverityText } from '../process-eight-d/eight-d';
 import {
   createProblemView,
   deleteProblemView,
@@ -100,14 +103,16 @@ function Feedback({ error, t }: { error?: ErrorState; t: (text: string) => strin
   return <Alert role="alert" type="error" showIcon title={t(error.message)} description={error.traceId ? <span>{t('追踪标识')}: <code>{error.traceId}</code></span> : undefined} />;
 }
 
-export function ProblemCenterPage() {
+export function ProblemCenterPage({ processQuality = false }: { processQuality?: boolean }) {
   const [searchParams] = useSearchParams();
+  const session = useWorkTabsStore(state => state.sessionScope);
   const explicitOrganization = searchParams.get('organizationId')?.trim() ?? '';
-  return <ProblemCenterScope key={explicitOrganization || 'session-primary-organization'} explicitOrganization={explicitOrganization} />;
+  return <ProblemCenterScope key={`${session}:${processQuality}:${explicitOrganization || 'session-primary-organization'}`} explicitOrganization={explicitOrganization} processQuality={processQuality} />;
 }
 
-function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: string }) {
+function ProblemCenterScope({ explicitOrganization, processQuality }: { explicitOrganization: string; processQuality: boolean }) {
   const { locale, t } = useLanguage();
+  const severityText = useEightDSeverityText();
   const [searchParams, setSearchParams] = useSearchParams();
   const [organizationId, setOrganizationId] = useState<string>();
   const [organizationInput, setOrganizationInput] = useState(explicitOrganization);
@@ -134,11 +139,30 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
   const [mutating, setMutating] = useState(false);
   const [conflicted, setConflicted] = useState(false);
   const [writeForbidden, setWriteForbidden] = useState(false);
+  const [accessLost, setAccessLost] = useState(false);
+  const [revision, setRevision] = useState(0);
   const primaryOrganization = useRef('');
   const mutationPending = useRef(false);
   const problemResource = useRef('');
   const viewResource = useRef('');
   const viewGeneration = useRef(0);
+  const scopeActive = useRef(true);
+  const processReads = useRef(new Set<AbortController>());
+  const revokeProcessAccess = useCallback(() => {
+    if (!scopeActive.current) return;
+    scopeActive.current = false;
+    problemResource.current = ''; viewResource.current = ''; viewGeneration.current += 1;
+    processReads.current.forEach(controller => controller.abort()); processReads.current.clear();
+    setAccessLost(true); setResult(undefined); setViews([]); setViewTotal(0); setSelectedViewId(''); setViewName('');
+    setResultLoading(false); setViewsLoading(false); setMutating(false); setWriteForbidden(true);
+  }, []);
+  useEffect(() => {
+    scopeActive.current = true;
+    return () => {
+      scopeActive.current = false;
+      if (processQuality) { processReads.current.forEach(controller => controller.abort()); processReads.current.clear(); }
+    };
+  }, [processQuality]);
 
   useEffect(() => {
     let active = true;
@@ -165,50 +189,59 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
   }, [organizationId]);
 
   const loadViews = useCallback(async (selectedOrganizationId: string, offset: number, signal?: AbortSignal) => {
+    if (processQuality && !scopeActive.current) return undefined;
+    const controller = processQuality ? new AbortController() : undefined;
+    const requestSignal = controller ? signal ? AbortSignal.any([signal, controller.signal]) : controller.signal : signal;
+    if (controller) processReads.current.add(controller);
     const key = `${selectedOrganizationId}:${offset}`;
     const generation = ++viewGeneration.current;
-    const current = () => viewResource.current === key && viewGeneration.current === generation && !signal?.aborted;
+    const current = () => viewResource.current === key && viewGeneration.current === generation && !requestSignal?.aborted && (!processQuality || scopeActive.current);
     viewResource.current = key;
     setViews([]);
     setViewTotal(0);
     setViewsError(undefined);
     setViewsLoading(true);
     try {
-      const response = await getProblemViews({ organizationId: selectedOrganizationId, pageSize: 100, offset }, signal);
+      const response = await getProblemViews({ organizationId: selectedOrganizationId, pageSize: 100, offset }, requestSignal);
       if (!current()) return undefined;
       setViews(response.items);
       setViewTotal(response.total);
       return response;
     } catch (cause) {
-      if (signal?.aborted || (cause instanceof DOMException && cause.name === 'AbortError') || !current()) return undefined;
+      if (requestSignal?.aborted || (cause instanceof DOMException && cause.name === 'AbortError') || !current()) return undefined;
       const error = controlledError(cause);
       setViewsError(error);
       if (isForbidden(error)) setWriteForbidden(true);
+      if (processQuality && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) revokeProcessAccess();
       return undefined;
     } finally {
+      if (controller) processReads.current.delete(controller);
       if (current()) setViewsLoading(false);
     }
-  }, []);
+  }, [processQuality, revokeProcessAccess]);
 
   useEffect(() => {
-    if (!organizationId) return;
+    if (!organizationId || accessLost) return;
     const controller = new AbortController();
     void loadViews(organizationId, viewOffset, controller.signal);
     return () => controller.abort();
-  }, [loadViews, organizationId, viewOffset]);
+  }, [loadViews, organizationId, viewOffset, accessLost]);
 
-  const query = useMemo<ProblemQuery | undefined>(() => organizationId ? ({
-    organizationId,
-    page,
-    pageSize,
-    ...appliedFilters,
-    sortBy: sort.sortBy,
-    sortDirection: sort.sortDirection,
-  }) : undefined, [appliedFilters, organizationId, page, pageSize, sort]);
+  const query = useMemo<ProblemQuery | undefined>(() => {
+    if (!organizationId || accessLost) return undefined;
+    const value: ProblemQuery = { organizationId, page, pageSize, ...appliedFilters, sortBy: sort.sortBy, sortDirection: sort.sortDirection };
+    if (processQuality) {
+      value.domainCode = 'process-quality';
+      value.problemType = 'PROCESS_DEFECT';
+      value.responseForm = 'EIGHT_D';
+    }
+    return value;
+  }, [appliedFilters, organizationId, page, pageSize, sort, processQuality, accessLost]);
 
   useEffect(() => {
-    if (!query) return;
+    if (!query || processQuality && !scopeActive.current) return;
     const controller = new AbortController();
+    if (processQuality) processReads.current.add(controller);
     const key = JSON.stringify(query);
     problemResource.current = key;
     setResult(undefined);
@@ -221,20 +254,22 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
       const error = controlledError(cause);
       setResultError(error);
       if (isForbidden(error)) setWriteForbidden(true);
+      if (processQuality && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) revokeProcessAccess();
     }).finally(() => {
+      processReads.current.delete(controller);
       if (problemResource.current === key && !controller.signal.aborted) setResultLoading(false);
     });
-    return () => controller.abort();
-  }, [query]);
+    return () => { controller.abort(); processReads.current.delete(controller); };
+  }, [query, revision, processQuality, revokeProcessAccess]);
 
   const selectedView = views.find((view) => view.id === selectedViewId);
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
-    filters: { ...filters },
+    filters: { ...filters, ...(processQuality ? { domainCode: 'process-quality', problemType: 'PROCESS_DEFECT' } : {}) },
     sort: { ...sort },
     visibleColumns: [...visibleColumns],
     columnOrder: [...columnOrder],
-  }), [columnOrder, filters, sort, visibleColumns]);
+  }), [columnOrder, filters, sort, visibleColumns, processQuality]);
 
   const applyConfiguration = useCallback((next: ProblemViewConfiguration, name?: string) => {
     const normalized = normalizeConfiguration(next);
@@ -267,7 +302,8 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
   };
 
   const mutate = async (operation: () => Promise<void>, message: string) => {
-    if (mutationPending.current) return;
+    const current = () => !processQuality || scopeActive.current;
+    if (mutationPending.current || !current()) return;
     mutationPending.current = true;
     setMutating(true);
     setMutationError(undefined);
@@ -275,15 +311,17 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
     setConflicted(false);
     try {
       await operation();
-      setMutationMessage(message);
+      if (current()) setMutationMessage(message);
     } catch (cause) {
+      if (!current()) return;
       const error = controlledError(cause);
       setMutationError(error);
       if (error.code === 'CONCURRENCY_CONFLICT' || error.code === 'HTTP_409') setConflicted(true);
       if (isForbidden(error)) setWriteForbidden(true);
+      if (processQuality && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) revokeProcessAccess();
     } finally {
       mutationPending.current = false;
-      setMutating(false);
+      if (current()) setMutating(false);
     }
   };
 
@@ -295,6 +333,7 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
     }
     void mutate(async () => {
       const created = await createProblemView(organizationId, { name, configuration });
+      if (processQuality && !scopeActive.current) return;
       setViews((current) => [created, ...current]);
       setViewTotal((total) => total + 1);
       setSelectedViewId(created.id);
@@ -309,6 +348,7 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
         configuration,
         expectedVersion: selectedView.version,
       });
+      if (processQuality && !scopeActive.current) return;
       setViews((current) => current.map((view) => view.id === updated.id ? updated : view));
     }, '视图已更新');
   };
@@ -317,6 +357,7 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
     if (!organizationId || !selectedView) return;
     void mutate(async () => {
       await deleteProblemView(organizationId, selectedView.id, { expectedVersion: selectedView.version });
+      if (processQuality && !scopeActive.current) return;
       setViews((current) => current.filter((view) => view.id !== selectedView.id));
       setViewTotal((total) => Math.max(0, total - 1));
       setSelectedViewId('');
@@ -351,26 +392,34 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
   const columns = useMemo<TableColumnsType<ProblemItem>>(() => {
     const definitions: Record<ColumnKey, TableColumnsType<ProblemItem>[number]> = {
       reportNumber: { title: t('报告编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={`/app/problem-workspace/${item.id}?organizationId=${encodeURIComponent(item.organizationId)}`}>{value}</Link> },
-      title: { title: t('标题'), dataIndex: ['summary', 'title'] },
+      title: { title: t('标题'), dataIndex: ['summary', 'title'], render: (value: string, item) => processQuality ? <ProcessProblemTitle summary={item.summary} /> : value },
       domainCode: { title: t('领域'), dataIndex: 'domainCode' },
       problemType: { title: t('问题类型'), dataIndex: 'problemType' },
       status: { title: t('状态'), dataIndex: 'status', render: (value: ProblemStatus) => <Tag>{t(statusLabels[value] ?? value)}</Tag> },
-      severity: { title: t('严重度'), dataIndex: 'severity' },
-      responsibleParty: { title: t('责任方'), dataIndex: 'responsibleParty', render: (value: string | null) => value || '—' },
-      ownerId: { title: t('负责人 ID'), dataIndex: 'ownerId', render: (value: string | null) => value || '—' },
-      dueAt: { title: t('截止时间'), dataIndex: 'dueAt', render: (value: string | null) => value ? new Date(value).toLocaleString(locale) : '—' },
+      severity: { title: t(processQuality ? '风险' : '严重度'), dataIndex: 'severity', render: (value: string) => processQuality && (value === 'LOW' || value === 'MEDIUM' || value === 'HIGH' || value === 'CRITICAL') ? severityText(value) : value },
+      responsibleParty: { title: t(processQuality ? '责任科室' : '责任方'), dataIndex: 'responsibleParty', render: (value: string | null, item) => (processQuality ? processSummaryValue(item.summary, 'responsibleSectionName') : value) || '—' },
+      ownerId: { title: t(processQuality ? '负责人' : '负责人 ID'), dataIndex: 'ownerId', render: (value: string | null, item) => (processQuality ? processSummaryValue(item.summary, 'ownerName') : value) || '—' },
+      dueAt: { title: t(processQuality ? '问题截止时间' : '截止时间'), dataIndex: 'dueAt', render: (value: string | null) => value ? new Date(value).toLocaleString(locale) : '—' },
       updatedAt: { title: t('更新时间'), dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString(locale) },
     };
-    return columnOrder.filter((column) => visibleColumns.includes(column)).map((column) => ({ ...definitions[column], key: column }));
-  }, [columnOrder, locale, t, visibleColumns]);
+    const selected: TableColumnsType<ProblemItem> = columnOrder.filter((column) => visibleColumns.includes(column)).map((column) => ({ ...definitions[column], key: column }));
+    if (processQuality) selected.push(
+      { title: t('当前阶段'), key: 'processStage', render: (_, item) => t(processSummaryValue(item.summary, 'stage') || '—') },
+      { title: t('当前期限'), key: 'processDeadlines', render: (_, item) => <ProcessProblemDeadlines problem={item} /> },
+    );
+    return selected;
+  }, [columnOrder, locale, t, visibleColumns, processQuality, severityText]);
 
   const disabledWrites = writeForbidden || mutating || viewsLoading;
+  const visibleColumnLabels = processQuality ? { ...columnLabels, severity: '风险', responsibleParty: '责任科室', ownerId: '负责人', dueAt: '问题截止时间' } : columnLabels;
+  if (accessLost) return <main className="problem-center"><Typography.Title level={1}>{t('制程问题跟进')}</Typography.Title><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
   return <main className="problem-center">
     <div className="problem-center__heading">
-      <div><Typography.Title level={1}>{t('问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t('在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
+      <div><Typography.Title level={1}>{t(processQuality ? '制程问题跟进' : '问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t(processQuality ? '固定制程领域，一张正式8D一行；编号进入既有问题处理工作空间。' : '在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
       <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
     </div>
     <Feedback error={organizationError} t={t} />
+    {processQuality ? <><Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button><Alert type="info" title={t('支持编号、状态、风险、负责人及问题截止时间筛选；阶段期限仅供核对，暂不参与截止筛选。')} /></> : null}
 
     <Card title={t('保存视图')} loading={!organizationId && !organizationError}>
       <div className="problem-center__view-row">
@@ -407,14 +456,14 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
     <Card title={t('筛选与排序')}>
       <div className="problem-center__filters">
         <label>{t('报告编号检索')}<Input aria-label={t('报告编号检索')} value={filters.search ?? ''} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value || undefined }))} /></label>
-        <label>{t('领域代码')}<Input aria-label={t('领域代码')} value={filters.domainCode ?? ''} onChange={(event) => setFilters((current) => ({ ...current, domainCode: event.target.value || undefined }))} /></label>
-        <label>{t('问题类型')}<Input aria-label={t('问题类型')} value={filters.problemType ?? ''} onChange={(event) => setFilters((current) => ({ ...current, problemType: event.target.value || undefined }))} /></label>
+        {!processQuality ? <label>{t('领域代码')}<Input aria-label={t('领域代码')} value={filters.domainCode ?? ''} onChange={(event) => setFilters((current) => ({ ...current, domainCode: event.target.value || undefined }))} /></label> : null}
+        {!processQuality ? <label>{t('问题类型')}<Input aria-label={t('问题类型')} value={filters.problemType ?? ''} onChange={(event) => setFilters((current) => ({ ...current, problemType: event.target.value || undefined }))} /></label> : null}
         <label>{t('状态')}<select aria-label={t('状态筛选')} value={filters.status ?? ''} onChange={(event) => setFilters((current) => ({ ...current, status: (event.target.value || undefined) as ProblemStatus | undefined }))}><option value="">{t('全部状态')}</option>{statuses.map((status) => <option key={status} value={status}>{t(statusLabels[status])}</option>)}</select></label>
         <label>{t('严重度')}<Input aria-label={t('严重度筛选')} value={filters.severity ?? ''} onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value || undefined }))} /></label>
         <label>{t('负责人 ID')}<Input aria-label={t('负责人 ID')} value={filters.ownerId ?? ''} onChange={(event) => setFilters((current) => ({ ...current, ownerId: event.target.value || undefined }))} /></label>
         <label>{t('截止起始')}<input aria-label={t('截止起始')} type="datetime-local" value={localDateTime(filters.dueFrom)} onChange={(event) => setFilters((current) => ({ ...current, dueFrom: isoDateTime(event.target.value) }))} /></label>
         <label>{t('截止结束')}<input aria-label={t('截止结束')} type="datetime-local" value={localDateTime(filters.dueTo)} onChange={(event) => setFilters((current) => ({ ...current, dueTo: isoDateTime(event.target.value) }))} /></label>
-        <label>{t('排序字段')}<Select aria-label={t('排序字段')} value={sort.sortBy} options={sortFields.map((value) => ({ value, label: t(sortLabels[value]) }))} onChange={(sortBy) => { setSort((current) => ({ ...current, sortBy })); setPage(1); }} /></label>
+        <label>{t('排序字段')}<Select aria-label={t('排序字段')} value={sort.sortBy} options={sortFields.map((value) => ({ value, label: t(processQuality && value === 'dueAt' ? '问题截止时间' : sortLabels[value]) }))} onChange={(sortBy) => { setSort((current) => ({ ...current, sortBy })); setPage(1); }} /></label>
         <label>{t('排序方向')}<Select aria-label={t('排序方向')} value={sort.sortDirection} options={[{ value: 'desc', label: t('降序') }, { value: 'asc', label: t('升序') }]} onChange={(sortDirection) => { setSort((current) => ({ ...current, sortDirection })); setPage(1); }} /></label>
       </div>
       <Space wrap className="problem-center__filter-actions">
@@ -426,7 +475,7 @@ function ProblemCenterScope({ explicitOrganization }: { explicitOrganization: st
     </Card>
 
     <Card title={t('显示列')}>
-      <div className="problem-center__columns">{columnOrder.map((column, index) => <div key={column} className="problem-center__column-option"><Checkbox checked={visibleColumns.includes(column)} onChange={(event) => changeColumn(column, event.target.checked)}>{t(columnLabels[column])}</Checkbox><Space.Compact><Button size="small" aria-label={`${t('上移')} ${t(columnLabels[column])}`} disabled={index === 0} onClick={() => moveColumn(column, -1)}>↑</Button><Button size="small" aria-label={`${t('下移')} ${t(columnLabels[column])}`} disabled={index === columnOrder.length - 1} onClick={() => moveColumn(column, 1)}>↓</Button></Space.Compact></div>)}</div>
+      <div className="problem-center__columns">{columnOrder.map((column, index) => <div key={column} className="problem-center__column-option"><Checkbox checked={visibleColumns.includes(column)} onChange={(event) => changeColumn(column, event.target.checked)}>{t(visibleColumnLabels[column])}</Checkbox><Space.Compact><Button size="small" aria-label={`${t('上移')} ${t(visibleColumnLabels[column])}`} disabled={index === 0} onClick={() => moveColumn(column, -1)}>↑</Button><Button size="small" aria-label={`${t('下移')} ${t(visibleColumnLabels[column])}`} disabled={index === columnOrder.length - 1} onClick={() => moveColumn(column, 1)}>↓</Button></Space.Compact></div>)}</div>
     </Card>
 
     <section aria-label={t('问题列表')}>

@@ -9,6 +9,8 @@ describe('audit summary projection (unit, not PostgreSQL evidence)', () => {
     ['CUSTOMER_MASTER_UPDATED', '更新客户主数据'],
     ['MATERIAL_MASTER_UPDATED', '更新物料主数据'],
     ['POSITION_ROLES_CHANGED', '调整岗位角色'],
+    ['PLATFORM_ADMINISTRATOR_GRANTED', '授予平台管理员'],
+    ['PLATFORM_ADMINISTRATOR_REVOKED', '撤销平台管理员'],
     ['SUPPLIER_PROFILE_UPDATED', '更新供应商档案'],
     ['SUPPLIER_PPAP_EVIDENCE_BOUND', '绑定供应商 PPAP 项目证据'],
     ['SUPPLIER_PPAP_ACCEPTED', '接受供应商 PPAP 项目'],

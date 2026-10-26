@@ -14,6 +14,7 @@
 | [本轮五条聚合需求提交记录](../../docs/superpowers/specs/2026-10-24-qms-five-requirement-submission.md) | 已提交飞书 REQ-0025～0029；5 个综合目标覆盖 74 内部细项，真实 record_id、字段回读及状态留痕，旧需求不删不重开 |
 | [本轮完整需求清单](../../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md) | 74 条仅作内部验收追溯；业务已确认、工程细化 / 接入资料 / 上线准备与后置分开，不再逐项建单或将整包技术细节返询负责人 |
 | [基础管理前置交付计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md) | N1 V0.0.28 / PR #65已部署b4e5115，机器发布核验与同根因返修证据；正式页面人工验收仍待完成，N2单独接续 |
+| [REQ-0030 修复计划](../../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md) | P0 / Issue #72，管理员内部组织全量权限、受控删除及审计检索、制程问题跟进与登记/出货入口；本地开发中 |
 | [组织与岗位独立样例入口](../apps/web/organization-preview.html) | 本地开发服务打开 `/organization-preview.html`；负责人已认可页面交互，内存模拟不接真实 API 或默认生产入口，不代表真实角色或全设备验收 |
 | [基础交互体系与场景覆盖设计](../../docs/superpowers/specs/2026-10-21-qms-interaction-system-design.md) | 已确认的控件选型、动作层级、20 组领域、完整状态与验收；样例确认先于正式迁移 |
 | [可视化样例先行计划](../../docs/superpowers/plans/2026-10-21-qms-interaction-preview.md) | Issue #58、8 组独立交互样例、预览入口、TDD／构建排除／视觉确认及实际进度 |

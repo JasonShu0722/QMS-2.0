@@ -14,6 +14,8 @@ export const internalNavigation: NavigationItem[] = [
   { label: '供应商质量目标', path: '/app/supplier-quality-targets', icon: Target, context: [{ label: '目标与实际', path: '/app/supplier-quality-targets' }] },
   { label: '供应商 PPAP', path: '/app/supplier-ppap', icon: FileText, context: [{ label: '资料包审核', path: '/app/supplier-ppap' }] },
   { label: '供应商 ASN', path: '/app/supplier-asn', icon: Inbox, context: [{ label: '发运通知', path: '/app/supplier-asn' }] },
+  { label: '制程问题跟进', path: '/app/process-quality/problems', icon: Target },
+  { label: '出货报告', path: '/app/process-quality/shipment-reports', icon: FileText },
   { label: '不良品台账', path: '/app/process-quality', icon: Target, context: [{ label: '不良品台账', path: '/app/process-quality' }] },
   { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, context: [{ label: '客诉台账', path: '/app/customer-quality' }] },
   { label: '审计管理', path: '/app/audits', icon: ClipboardCheck, context: [{ label: '审核计划', path: '/app/audits' }] },
@@ -32,7 +34,7 @@ export const internalNavigation: NavigationItem[] = [
 export const internalDomains = [
   { label: '问题中心', path: '/app/problem-center', icon: ShieldAlert, paths: ['/app/problem-center', '/app/my-tasks'] },
   { label: '供应商质量', path: '/app/supplier-quality', icon: Users, paths: ['/app/supplier-quality', '/app/supplier-incoming', '/app/site-scanning', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn'] },
-  { label: '制程质量', path: '/app/process-quality', icon: Target, paths: ['/app/process-quality'] },
+  { label: '制程质量', path: '/app/process-quality', icon: Target, paths: ['/app/process-quality', '/app/process-quality/problems', '/app/process-quality/shipment-reports'] },
   { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, paths: ['/app/customer-quality'] },
   { label: '新品质量', path: '/app/new-product-quality', icon: Target, paths: ['/app/new-product-quality'] },
   { label: '审核管理', path: '/app/audits', icon: ClipboardCheck, paths: ['/app/audits', '/app/audit-standards'] },

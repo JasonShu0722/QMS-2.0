@@ -10,10 +10,29 @@ const event = { id: 'event', organizationId: organization.id, actorUserId: userI
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
 
+it('applies an audit resource target to the first query and export, then resets it on a new target', async () => {
+  const fetch = vi.fn(async (path: string, _init?: RequestInit) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : path.endsWith('/audit-exports') ? json({ id: 'artifact', downloadPath: '/private-export', expiresAt: '2026-10-30', rowCount: 0 }) : json({ items: [], total: 0, nextCursor: null }));
+  vi.stubGlobal('fetch', fetch);
+  const scope = { ...organization, permissions: ['audit:read', 'audit:export'] };
+  const view = render(<AuditAdministration organization={scope} target={{ resourceType: 'Organization', resourceId: userId }} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: /查\s*询/ })).toBeEnabled());
+  expect(new URL(fetch.mock.calls[0]![0], 'http://localhost').searchParams.get('resourceId')).toBe(userId);
+  expect(screen.getByLabelText('资源 ID')).toHaveValue(userId);
+  await userEvent.click(screen.getByRole('button', { name: '导出筛选结果' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([path]) => path.endsWith('/audit-exports'))).toBe(true));
+  expect(JSON.parse(fetch.mock.calls.find(([path]) => path.endsWith('/audit-exports'))![1]!.body as string)).toEqual({ organizationId: organization.id, resourceType: 'Organization', resourceId: userId });
+  view.rerender(<AuditAdministration organization={scope} target={{ resourceType: 'Department', resourceId: 'new-target' }} />);
+  await waitFor(() => expect(fetch.mock.calls.some(([path]) => path.includes('resourceId=new-target'))).toBe(true));
+  expect(screen.getByLabelText('资源 ID')).toHaveValue('new-target');
+  expect(screen.queryByRole('button', { name: '下载 CSV' })).not.toBeInTheDocument();
+});
+
 it('shows safe actor summary and Chinese action with original code, without requesting the account directory', async () => {
   const fetch = vi.fn(async (_path: string) => json({ items: [event, { ...event, id: 'missing', actorUserId: null, actorSummary: null, action: 'NEW_ACTION', actionLabel: 'NEW_ACTION' }], total: 2, nextCursor: null }));
   vi.stubGlobal('fetch', fetch);
   render(<AuditAdministration organization={organization} />);
+  expect(screen.getByLabelText('动作')).toHaveAttribute('placeholder', '支持中文名称或英文关键词');
+  expect(screen.getByText(`当前查询组织：${organization.name} · ${organization.code}`)).toBeVisible();
   expect(await screen.findByText('current-alice')).toBeVisible();
   expect(screen.getByText('更新用户')).toBeVisible();
   expect(screen.getByText('USER_UPDATED')).toBeVisible();

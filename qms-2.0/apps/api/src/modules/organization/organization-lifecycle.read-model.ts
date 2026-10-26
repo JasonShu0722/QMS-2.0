@@ -81,7 +81,7 @@ export async function ministerAssignmentReferences(transaction: AdminTransaction
 }
 
 // A dependency projection, including migration-owned tables absent from Prisma and UUIDs without FKs.
-// It only reports existence; business details and identifiers never leave this read model.
+// Only administrative reference counts leave this read model, never business rows or identifiers.
 export async function structureBusinessReferences(transaction: AdminTransaction, targetId: string, kind: 'organization' | 'department') {
   const columns = await transaction.$queryRaw<ReferenceColumn[]>`
     SELECT c.relname AS "tableName", a.attname AS "columnName"
@@ -93,17 +93,16 @@ export async function structureBusinessReferences(transaction: AdminTransaction,
         OR (${kind} = 'department' AND a.attname ~ '(^|_)department_id$'))
     ORDER BY c.relname, a.attname`;
   const references = columns.filter(({ tableName }) => kind === 'organization' ? !organizationOwned.has(tableName) : tableName !== 'positions');
-  if (!references.length) return { referenced: false, live: false };
-  const rows = await transaction.$queryRaw<{ referenced: boolean; live: boolean }[]>(Prisma.sql`
-    SELECT bool_or(referenced) AS referenced, bool_or(live) AS live FROM (${Prisma.join(references.map(({ tableName, columnName }) => {
+  const rows = references.length ? await transaction.$queryRaw<{ tableName: string; columnName: string; count: number; liveCount: number }[]>(Prisma.sql`
+    SELECT * FROM (${Prisma.join(references.map(({ tableName, columnName }) => {
       const scope = Prisma.sql`${identifier(columnName)} = ${targetId}::uuid`;
       const live = historyOnly.has(tableName)
         ? Prisma.sql`false`
-        : Prisma.sql`EXISTS (SELECT 1 FROM ${identifier(tableName)} t WHERE ${scope}
-            AND (${structureReferenceLiveCondition(tableName)}))`;
-      return Prisma.sql`SELECT EXISTS (SELECT 1 FROM ${identifier(tableName)} WHERE ${scope}) AS referenced, ${live} AS live`;
-    }), ' UNION ALL ')} ) dependencies`);
-  const result = rows[0] ?? { referenced: false, live: false };
+        : structureReferenceLiveCondition(tableName);
+      return Prisma.sql`SELECT ${tableName}::text AS "tableName", ${columnName}::text AS "columnName", count(*)::int AS count,
+        count(*) FILTER (WHERE ${live})::int AS "liveCount" FROM ${identifier(tableName)} t WHERE ${scope}`;
+    }), ' UNION ALL ')} ) dependencies WHERE count > 0`) : [];
+  const result = { referenced: rows.some(row => row.count > 0), live: rows.some(row => row.liveCount > 0), details: rows };
   if (kind === 'department') {
     // Closure snapshots retain department provenance in JSON, outside the UUID-column projection.
     const [closure] = await transaction.$queryRaw<{ referenced: boolean; live: boolean }[]>`
@@ -117,22 +116,23 @@ export async function structureBusinessReferences(transaction: AdminTransaction,
     result.live ||= closure?.live ?? false;
   }
   if (kind === 'organization') {
-    const [notifications] = await transaction.$queryRaw<{ live: boolean }[]>`
-      SELECT EXISTS (SELECT 1 FROM notifications n LEFT JOIN workflow_tasks t ON t.id = n.workflow_task_id
+    const [notifications] = await transaction.$queryRaw<{ liveCount: number }[]>`
+      SELECT ((SELECT count(*) FROM notifications n LEFT JOIN workflow_tasks t ON t.id = n.workflow_task_id
         LEFT JOIN workflow_instances i ON i.id = t.workflow_instance_id WHERE n.organization_id = ${targetId}::uuid
         AND ((n.workflow_task_id IS NULL AND n.read_at IS NULL AND n.status IN ('PENDING', 'SENT'))
           OR t.status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') OR i.status IN ('RUNNING', 'SUSPENDED')))
-      OR EXISTS (SELECT 1 FROM supplier_portal_notifications n JOIN workflow_tasks t ON t.id = n.workflow_task_id
+      + (SELECT count(*) FROM supplier_portal_notifications n JOIN workflow_tasks t ON t.id = n.workflow_task_id
         JOIN workflow_instances i ON i.id = t.workflow_instance_id WHERE (n.owner_organization_id = ${targetId}::uuid OR n.supplier_organization_id = ${targetId}::uuid)
-        AND (t.status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') OR i.status IN ('RUNNING', 'SUSPENDED'))) AS live`;
-    result.live ||= notifications?.live ?? false;
-    const [outbox] = await transaction.$queryRaw<{ referenced: boolean; live: boolean }[]>`
-      SELECT EXISTS (SELECT 1 FROM outbox_events WHERE payload->>'organizationId' = ${targetId}
-        OR payload->>'ownerOrganizationId' = ${targetId} OR payload->>'supplierOrganizationId' = ${targetId}) AS referenced,
-      EXISTS (SELECT 1 FROM outbox_events WHERE (payload->>'organizationId' = ${targetId}
-        OR payload->>'ownerOrganizationId' = ${targetId} OR payload->>'supplierOrganizationId' = ${targetId}) AND status <> 'PROCESSED') AS live`;
-    result.referenced ||= outbox?.referenced ?? false;
-    result.live ||= outbox?.live ?? false;
+        AND (t.status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') OR i.status IN ('RUNNING', 'SUSPENDED'))))::int AS "liveCount"`;
+    result.live ||= Boolean(notifications?.liveCount);
+    if (notifications?.liveCount) result.details.push({ tableName: 'notifications', columnName: 'workflow_state', count: 0, liveCount: notifications.liveCount });
+    const [outbox] = await transaction.$queryRaw<{ count: number; liveCount: number }[]>`
+      SELECT count(*)::int AS count, count(*) FILTER (WHERE status <> 'PROCESSED')::int AS "liveCount"
+      FROM outbox_events WHERE payload->>'organizationId' = ${targetId}
+        OR payload->>'ownerOrganizationId' = ${targetId} OR payload->>'supplierOrganizationId' = ${targetId}`;
+    result.referenced ||= Boolean(outbox?.count);
+    result.live ||= Boolean(outbox?.liveCount);
+    if (outbox?.count) result.details.push({ tableName: 'outbox_events', columnName: 'payload', ...outbox });
   }
   return result;
 }

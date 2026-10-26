@@ -10,8 +10,8 @@ import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
-export function StructureLifecycleActions({ path, record, onChanged }: {
-  path: string; record: { id: string; name: string; code: string; version: number; status: 'ACTIVE' | 'DISABLED' }; onChanged: () => void;
+export function StructureLifecycleActions({ path, record, onChanged, auditOrganizationId }: {
+  path: string; record: { id: string; name: string; code: string; version: number; status: 'ACTIVE' | 'DISABLED' }; onChanged: () => void; auditOrganizationId?: string;
 }) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
@@ -33,6 +33,7 @@ export function StructureLifecycleActions({ path, record, onChanged }: {
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current++; reading.current?.abort(); }; }, []);
   const label = action === 'delete' ? '删除' : action === 'disable' ? '停用' : '启用';
   const blockers = !check ? [] : action === 'delete' ? check.deleteBlockers : action === 'disable' ? check.disableBlockers : [];
+  const details = !check ? [] : action === 'delete' ? check.deleteBlockerDetails : action === 'disable' ? check.disableBlockerDetails : [];
   function fail(cause: unknown) {
     if (cause instanceof ApiError && cause.status === 401) {
       setAction(undefined);
@@ -89,6 +90,11 @@ export function StructureLifecycleActions({ path, record, onChanged }: {
       {checking ? <Spin /> : <>
         <Alert type={blockers.length ? 'warning' : 'info'} showIcon title={t(blockers.length ? '请先处理以下依赖' : '确认时服务端将重新检查依赖及版本，不会级联删除业务数据。')} />
         <ul>{blockers.map((blocker, index) => <li key={index}>{blocker}</li>)}</ul>
+        {!!details?.length && <ul>{details.map(detail => <li key={detail.code}>{detail.message} · {detail.count}</li>)}</ul>}
+        {check && auditOrganizationId && <Space wrap>
+          <a href={`/app/admin?${new URLSearchParams({ organizationId: auditOrganizationId, section: 'audit-log' })}`}>{t('查看组织管理审计')}</a>
+          <a href={`/app/admin?${new URLSearchParams({ organizationId: auditOrganizationId, section: 'audit-log', resourceType: 'Organization', resourceId: record.id })}`}>{t('定位此组织审计')}</a>
+        </Space>}
         {unknownDelete ? <><Alert showIcon type="warning" title={t('删除结果尚未确认，将使用原请求重试，不会创建新的删除操作。')} /><Button disabled={busy} loading={busy} onClick={() => void confirm(true)}>{t('重试确认结果')}</Button></> : <Button disabled={busy} onClick={() => { if (action) void inspect(action); }}>{t('重新检查依赖')}</Button>}
       </>}
     </Modal>
@@ -148,7 +154,7 @@ export function OrganizationAdministration({ organization, organizations, items,
         { key: 'parent', label: t('父组织'), children: items.find(entry => entry.id === target.parentId)?.name ?? '—' },
         { key: 'status', label: t('状态'), children: <Tag color={target.status === 'ACTIVE' ? 'green' : undefined}>{t(target.status === 'ACTIVE' ? '启用' : '停用')}</Tag> },
       ]} />
-      {canManage ? <Space wrap><Button disabled={saving} onClick={() => edit('edit')}>{t('编辑')}</Button>{target.status === 'ACTIVE' && <Button disabled={saving} onClick={() => edit('create')}>{t('新增子组织')}</Button>}<StructureLifecycleActions key={`${target.id}:${target.version}`} path={organizationPath(target.id)} record={target} onChanged={() => onChanged?.()} /></Space> : t('只读')}
+      {canManage ? <Space wrap><Button disabled={saving} onClick={() => edit('edit')}>{t('编辑')}</Button>{target.status === 'ACTIVE' && <Button disabled={saving} onClick={() => edit('create')}>{t('新增子组织')}</Button>}<StructureLifecycleActions key={`${target.id}:${target.version}`} path={organizationPath(target.id)} record={target} auditOrganizationId={organization.permissions.includes('audit:read') ? organization.id : undefined} onChanged={() => onChanged?.()} /></Space> : t('只读')}
     </> : <Alert type="info" title={t('当前组织基本信息不可读')} />}
     <Modal title={t(editor?.mode === 'create' ? '新增子组织' : '编辑')} open={!!editor} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }} onCancel={() => { if (pending.current) return; requestLeave(() => { setEditor(undefined); setDirty(false); form.resetFields(); }); }} onOk={() => form.submit()}>
       <GovernanceFeedback error={error} />

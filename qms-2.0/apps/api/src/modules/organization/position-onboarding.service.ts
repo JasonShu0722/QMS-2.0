@@ -5,7 +5,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { adminMutationDigests } from '../../common/security/security-keyring.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
-import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
+import { effectivePositionAssignmentWhere, projectEffectiveRoleGrants, roleGrantSources, type EffectiveRoleGrant } from '../../common/security/effective-role-grants.js';
 import { assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { PositionAuthorizationPreviewInputDto } from './position-onboarding.dto.js';
@@ -103,21 +103,29 @@ export class PositionOnboardingService {
       return { id: position.id, code: position.code, name: position.name, department: { id: position.department.id, code: position.department.code, name: position.department.name }, version: position.version, roleVersion: position.roleVersion, permissionCodes: role?.permissions.map(({ code }) => code).sort() ?? [], mfaRequired: role?.mfaRequired ?? false, historicalSources: position.roles.filter(({ isCanonical }) => !isCanonical).map(({ roleId }) => source(roleMap.get(roleId)!)) };
     });
     let targetContext: unknown = null;
-    let retainedSources: ReturnType<typeof source>[] | undefined;
+    let retainedGrants: EffectiveRoleGrant[] = [];
+    let subject = { status: 'ACTIVE', accountType: 'INTERNAL', organization };
     if (input.targetUserId) {
       await assertAdminAccess(tx, actor, organizationId, 'account:users:read');
       if (lock) await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.targetUserId}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
       const target = await tx.user.findFirst({ where: { id: input.targetUserId, organizationId }, select: { id: true, status: true, securityVersion: true, accountType: true, mfaEnabled: true, mfaPreference: true, mfaRequirementOverride: true } });
       if (!target) adminError('ADMIN_USER_NOT_FOUND', 404);
-      const grants = await effectiveRoleGrants(tx, target.id, organizationId);
-      retainedSources = grants.filter(({ sources }) => sources.some(({ kind }) => kind === 'DIRECT')).map(({ role }) => source({ ...role, permissions: role.permissions.map(({ permission }) => permission) }));
+      const grants = await roleGrantSources(tx, target.id);
+      retainedGrants = grants.filter(({ sources }) => sources.some(({ kind }) => kind === 'DIRECT')).map(grant => ({ ...grant, sources: [{ kind: 'DIRECT' }] }));
+      subject = { ...target, organization };
       const assignments = await tx.userPosition.findMany({ where: { userId: target.id, organizationId }, select: { id: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
       targetContext = { target, assignments, grants };
     }
-    const codes = [...new Set([...roles.flatMap(({ permissions }) => permissions.map(({ code }) => code)), ...(retainedSources?.flatMap(({ permissionCodes }) => permissionCodes) ?? [])])].sort();
-    const baseline = JSON.stringify({ purpose: 'position-authorization-preview:v1', actorId: actor.id, organization, positionIds: ids, positions, roles, targetUserId: input.targetUserId ?? null, targetContext });
+    const candidates: EffectiveRoleGrant[] = [...retainedGrants, ...roles.map(role => ({ organizationId, role: { ...role, permissions: role.permissions.map(permission => ({ permission })) }, sources: [] }))];
+    const projected = await projectEffectiveRoleGrants(tx, subject, candidates, organizationId);
+    const retainedSources = input.targetUserId ? retainedGrants.flatMap(grant => {
+      const platformScope = projected.find(item => item.role.id === grant.role.id && item.platformScope?.sourceOrganizationIds.includes(grant.organizationId))?.platformScope;
+      return grant.organizationId === organizationId || platformScope ? [{ ...source({ ...grant.role, permissions: grant.role.permissions.map(({ permission }) => permission) }), organizationId: grant.organizationId, ...(platformScope ? { platformScope } : {}) }] : [];
+    }) : undefined;
+    const codes = [...new Set(projected.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.code)))].sort();
+    const baseline = JSON.stringify({ purpose: 'position-authorization-preview:v1', actorId: actor.id, organization, positionIds: ids, positions, roles, targetUserId: input.targetUserId ?? null, targetContext, projected });
     const digests = adminMutationDigests(baseline, process.env.QMS_RATE_LIMIT_SECRET?.trim() ?? 'qms-development-rate-limit-secret-not-for-production');
-    return { digests, preview: { authorizationBaseline: digests[0]!, positions: items, effectivePermissionCodes: codes, effectiveMfaRequired: roles.some(({ mfaRequired }) => mfaRequired) || (retainedSources?.some(({ mfaRequired }) => mfaRequired) ?? false), ...(retainedSources === undefined ? {} : { retainedSources }) } };
+    return { digests, preview: { authorizationBaseline: digests[0]!, positions: items, effectivePermissionCodes: codes, effectiveMfaRequired: projected.some(({ role }) => role.mfaRequired), ...(retainedSources === undefined ? {} : { retainedSources }) } };
   }
 
   private positions(tx: AdminTransaction, organizationId: string, ids: string[]) {

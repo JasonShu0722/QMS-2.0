@@ -7,6 +7,7 @@ import request from 'supertest';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { AuditExportService } from '../../src/modules/audit-log/audit-export.service.js';
+import { AuditQueryService } from '../../src/modules/audit-log/audit-query.service.js';
 import { AppModule } from '../../src/app.module.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
@@ -59,6 +60,57 @@ describe('controlled audit exports', () => {
     expect(result.content).toContain('"\'@SUM(1,1)"');
     expect(result.content).not.toContain('never-export-secret');
     expect(await prisma.auditEvent.count({ where: { resourceId: artifact.id, action: { in: ['AUDIT_EXPORT_CREATED', 'AUDIT_EXPORT_DOWNLOADED'] } } })).toBe(2);
+  });
+
+  it('exports exactly the keyword-filtered query rows with exact resource/outcome/time boundaries', async () => {
+    const traceId = `keyword-export-${randomUUID()}`;
+    const createdAt = new Date('2026-01-01T12:00:00Z');
+    const base = { organizationId, actorUserId: userId, resourceType: 'KeywordExportTest', resourceId: traceId, outcome: 'SUCCESS', traceId, createdAt };
+    const actions = ['USER_UPDATED', 'USER_CREATED', 'LEGACY_Unknown_ACTION', 'USERxUPDATED', 'PERCENT%ACTION', 'PERCENTxACTION', 'BACK\\ACTION', 'BACKxACTION', 'MFA_ENABLED'];
+    const queries = new AuditQueryService(prisma, audit);
+    const artifacts: string[] = [];
+    try {
+      await prisma.auditEvent.createMany({ data: [
+        ...actions.map((action) => ({ ...base, action })),
+        { ...base, action: 'USER_UPDATED', resourceType: `${base.resourceType}Extra` },
+        { ...base, action: 'USER_UPDATED', resourceId: `${traceId}-extra` },
+        { ...base, action: 'USER_UPDATED', outcome: 'DENIED' },
+        { ...base, action: 'USER_UPDATED', createdAt: new Date(createdAt.getTime() + 1) },
+        { ...base, action: 'USER_UPDATED', organizationId: null },
+        { ...base, action: 'USER_UPDATED', actorUserId: null },
+      ] });
+      for (const [action, expected] of [
+        ['用户', ['USER_UPDATED', 'USER_CREATED']],
+        ['uSeR_upD', ['USER_UPDATED']],
+        ['unknown', ['LEGACY_Unknown_ACTION']],
+        ['mFa', ['MFA_ENABLED']],
+        ['%', ['PERCENT%ACTION']],
+        ['USER_UPDATED', ['USER_UPDATED']],
+        ['BACK\\', ['BACK\\ACTION']],
+        ['不存在的动作', []],
+      ] as const) {
+        const filters = { action, resourceType: base.resourceType, resourceId: traceId, actorUserId: userId, outcome: base.outcome, from: createdAt.toISOString(), to: createdAt.toISOString() };
+        const first = await queries.list(actor, { ...filters, pageSize: 1 });
+        const items = [...first.items];
+        if (first.nextCursor) {
+          const second = await queries.list(actor, { ...filters, pageSize: 1, cursor: first.nextCursor });
+          expect(second.total).toBe(expected.length);
+          expect(second.nextCursor).toBeNull();
+          items.push(...second.items);
+        }
+        expect(first.total).toBe(expected.length);
+        expect(items.map((entry) => entry.action).sort()).toEqual([...expected].sort());
+        const artifact = await service.create(actor, filters, traceId);
+        artifacts.push(artifact.id);
+        expect(artifact.rowCount).toBe(first.total);
+        const csv = await service.download(actor, organizationId, artifact.id, traceId);
+        const ids = csv.content.replace(/^\uFEFF/, '').split('\r\n').slice(1).map((line) => line.split(',')[0]!.replaceAll('"', ''));
+        expect(ids).toEqual(items.map((entry) => entry.id));
+      }
+    } finally {
+      await prisma.exportArtifact.deleteMany({ where: { id: { in: artifacts } } });
+      await prisma.auditEvent.deleteMany({ where: { traceId } });
+    }
   });
 
   it('rechecks permissions for download and audits denied access without leaking foreign IDs', async () => {

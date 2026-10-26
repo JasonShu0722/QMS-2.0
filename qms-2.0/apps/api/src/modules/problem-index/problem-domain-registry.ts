@@ -2,9 +2,10 @@ import { Inject, Injectable, type OnApplicationBootstrap } from '@nestjs/common'
 import { Prisma, type ProblemIndex, type WorkflowInstance } from '../../generated/prisma/client.js';
 import type { WorkflowActor } from '../workflow/workflow-access-policy.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
+import type { DomainSourceResponseForm } from './domain-source-issue.service.js';
 
 export type ProblemReadPurpose = 'overview' | 'report' | 'history';
-export interface ProblemDomainSummary { title: string; description: string; domainUiKey: string }
+export interface ProblemDomainSummary { title: string; description: string; domainUiKey: string; fields?: ProblemDomainField[] }
 export interface ProblemDomainField { key: string; label: string; value: string | null }
 export interface ProblemDomainSection { key: string; title: string; fields: ProblemDomainField[] }
 export interface ProblemDomainAction { actionKey: string; label: string; enabled: boolean; reasonCode: string | null }
@@ -24,6 +25,7 @@ export interface ProblemDomainReadAdapter {
   readonly revisionResourceType?: string;
   listRevisionIds?(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[]>;
   visibilityPredicate(actor: WorkflowActor, organizationId: string): Prisma.Sql;
+  responseFormPredicate?(form: DomainSourceResponseForm): Prisma.Sql;
   authorizeRead(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<void>;
   readSummaries(tx: Prisma.TransactionClient, actor: WorkflowActor, problems: readonly ProblemIndex[]): Promise<ReadonlyMap<string, ProblemDomainSummary>>;
   readWorkspace(tx: Prisma.TransactionClient, context: ProblemDomainReadContext, instance: WorkflowInstance | null): Promise<ProblemDomainWorkspace | null>;
@@ -64,8 +66,9 @@ export class ProblemDomainRegistry implements OnApplicationBootstrap {
   }
 
   onApplicationBootstrap(): void { this.bootstrapped = true; }
-  visibility(actor: WorkflowActor, organizationId: string): Prisma.Sql {
-    const predicates = this.adapters.map((adapter) => Prisma.sql`(p.domain_code = ${adapter.domainCode} AND p.source_type = ${adapter.sourceType} AND p.source_id IS NOT NULL AND (${adapter.visibilityPredicate(actor, organizationId)}))`);
+  visibility(actor: WorkflowActor, organizationId: string, responseForm?: DomainSourceResponseForm): Prisma.Sql {
+    const predicates = this.adapters.map((adapter) => Prisma.sql`(p.domain_code = ${adapter.domainCode} AND p.source_type = ${adapter.sourceType} AND p.source_id IS NOT NULL AND (${adapter.visibilityPredicate(actor, organizationId)})
+      ${responseForm ? Prisma.sql`AND (${adapter.responseFormPredicate?.(responseForm) ?? Prisma.sql`FALSE`})` : Prisma.empty})`);
     return predicates.length ? Prisma.sql`(${Prisma.join(predicates, ' OR ')})` : Prisma.sql`FALSE`;
   }
   forProblem(problem: Pick<ProblemIndex, 'domainCode' | 'sourceType' | 'sourceId'>): ProblemDomainReadAdapter {

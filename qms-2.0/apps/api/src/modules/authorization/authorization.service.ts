@@ -1,6 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { AccessContextRequirement } from './access.decorator.js';
 import {
@@ -51,8 +52,10 @@ export class AuthorizationService {
     organizationId: string,
     featurePermission: string,
   ): Promise<void> {
-    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { status: true } });
-    if (!organization || (organization.status !== 'ACTIVE' && !['organization:read', 'organization:manage'].includes(featurePermission))) {
+    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { status: true, type: true } });
+    const platformAudit = organization?.status === 'DISABLED' && organization.type === 'INTERNAL'
+      && ['audit:read', 'audit:export'].includes(featurePermission) && await hasPlatformAdministrator(this.prisma, userId);
+    if (!organization || (organization.status !== 'ACTIVE' && !['organization:read', 'organization:manage'].includes(featurePermission) && !platformAudit)) {
       throw new HttpException({ code: 'ORGANIZATION_DISABLED', message: '组织已停用' }, 403);
     }
     if (organization.status !== 'ACTIVE' && featurePermission === 'organization:read') {

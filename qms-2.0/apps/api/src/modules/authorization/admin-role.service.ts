@@ -7,7 +7,7 @@ import type { AdminUserActor } from '../identity/admin-user.service.js';
 import type { AssignAdminRolesDto, CopyAdminRoleDto, CreateAdminRoleDto, UpdateAdminRoleDto } from './admin-role.dto.js';
 import { AdminMutationService, adminError, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
 import { ACTIVE_PERMISSION_CODES, ADMIN_PERMISSIONS, PERMISSION_CATALOG } from './permission-catalog.js';
-import { effectivePositionAssignmentWhere, effectiveRoleGrants, type EffectiveRoleGrant } from '../../common/security/effective-role-grants.js';
+import { effectivePositionAssignmentWhere, effectiveRoleGrants, roleGrantSources, type EffectiveRoleGrant } from '../../common/security/effective-role-grants.js';
 import { SUPPLIER_PORTAL_PERMISSIONS } from './supplier-account-authorization.js';
 import { assertNoCanonicalRole } from '../../common/security/position-role-policy.js';
 
@@ -138,7 +138,7 @@ export class AdminRoleService {
       const roles = roleIds.length ? await transaction.role.findMany({ where: { id: { in: roleIds }, organizationId }, include: ROLE_INCLUDE }) : [];
       if (roles.length !== roleIds.length) this.fail('ADMIN_ROLE_NOT_FOUND', 404);
       await this.resolvePermissions(transaction, roles.flatMap((role) => role.permissions.map((entry) => entry.permission.code)), granted);
-      const effective = await effectiveRoleGrants(transaction, userId);
+      const effective = await roleGrantSources(transaction, userId);
       const existing = effective.filter((grant) => grant.organizationId === organizationId);
       if (existing.some((assignment) => assignment.role.organizationId === null && assignment.sources.some(({ kind }) => kind === 'DIRECT'))) this.fail('ADMIN_GLOBAL_ROLE_IMMUTABLE', 409);
       this.assertGranted(existing.flatMap((assignment) => assignment.role.permissions.map((entry) => entry.permission.code)), granted);
@@ -207,8 +207,9 @@ export class AdminRoleService {
   }
 
   private userRoles(userId: string, organizationId: string, grants: EffectiveRoleGrant[]) {
-    const effectiveRoles = grants.map(({ role, sources }) => ({ ...this.serialize(role), sources }));
-    const roles = grants.filter(({ sources }) => sources.some(({ kind }) => kind === 'DIRECT')).map(({ role }) => this.serialize(role));
+    const effectiveRoles = grants.map(({ role, sources, platformScope }) => ({ ...this.serialize(role), sources, ...(platformScope ? { platformScope } : {}) }));
+    const roles = grants.filter(({ sources, platformScope }) => sources.some(({ kind }) => kind === 'DIRECT')
+      && (!platformScope || platformScope.sourceOrganizationIds.includes(organizationId))).map(({ role }) => this.serialize(role));
     return { userId, organizationId, roles, effectiveRoles, permissions: [...new Set(effectiveRoles.flatMap((role) => role.permissions.map((permission) => permission.code)))].sort() };
   }
 

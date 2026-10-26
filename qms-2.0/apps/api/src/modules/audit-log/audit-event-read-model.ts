@@ -11,6 +11,7 @@ export const auditEventReadSelect = {
 const actionLabels: Readonly<Record<string, string>> = {
   LOGIN_FAILED: '登录失败', PASSWORD_RESET_REQUESTED: '申请重置密码', PERMISSION_CHANGED: '变更权限',
   SESSION_REVOKED: '撤销会话', ATTACHMENT_UPLOAD_INITIALIZED: '初始化附件上传', ACTION_REJECTED: '操作被拒绝',
+  PLATFORM_ADMINISTRATOR_GRANTED: '授予平台管理员', PLATFORM_ADMINISTRATOR_REVOKED: '撤销平台管理员',
   USER_CREATED: '创建用户', USER_UPDATED: '更新用户', USER_MFA_POLICY_CHANGED: '变更用户 MFA 策略',
   PROFILE_UPDATED: '更新个人资料', PASSWORD_CHANGED: '修改密码', PASSWORD_RESET: '重置密码',
   PASSWORD_RESET_ISSUED: '签发密码重置凭证', TEMPORARY_PASSWORD_RESET: '设置临时密码', TEMPORARY_PASSWORD_READ: '查看临时密码',
@@ -150,6 +151,16 @@ const actionLabels: Readonly<Record<string, string>> = {
 
 export function auditActionLabel(action: string): string {
   return Object.hasOwn(actionLabels, action) ? actionLabels[action]! : action;
+}
+
+export function auditActionFilter(keyword?: string): Prisma.AuditEventWhereInput {
+  if (!keyword) return {};
+  const normalized = keyword.toLowerCase();
+  return { OR: [
+    // Prisma contains uses LIKE patterns; action keywords must match literal characters.
+    { action: { contains: keyword.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' } },
+    { action: { in: Object.entries(actionLabels).filter(([, label]) => label.toLowerCase().includes(normalized)).map(([code]) => code) } },
+  ] };
 }
 
 export function auditActorSummary(event: Prisma.AuditEventGetPayload<{ select: typeof auditEventReadSelect }>): AuditActorSummaryDto | null {

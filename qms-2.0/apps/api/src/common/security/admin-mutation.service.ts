@@ -7,6 +7,8 @@ import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
 import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/platform-error.js';
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
 import { effectiveRoleGrants } from './effective-role-grants.js';
+import { hasPlatformAdministrator } from './platform-administrator.js';
+import { PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
 
 export type AdminActor = { id: string; sessionId: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
 export type AdminTransaction = Prisma.TransactionClient;
@@ -28,9 +30,12 @@ export async function assertAdminAccess(transaction: AdminTransaction, actor: Ad
   if (current.accountType === 'SUPPLIER' && organizationId !== current.organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
   const granted = await adminPermissions(transaction, actor.id, organizationId);
   if ((Array.isArray(permission) ? permission : [permission]).some((code) => !granted.includes(code))) adminError('FEATURE_PERMISSION_DENIED', 403);
-  const target = await transaction.organization.findUnique({ where: { id: organizationId }, select: { status: true } });
+  const target = await transaction.organization.findUnique({ where: { id: organizationId }, select: { status: true, type: true } });
   if (!target) adminError('ORGANIZATION_NOT_FOUND', 404);
-  if (target.status !== 'ACTIVE' && !(Array.isArray(permission) ? permission : [permission]).every((code) => ['organization:manage', 'organization:read'].includes(code)) ) adminError('ORGANIZATION_DISABLED', 403);
+  if (target.status !== 'ACTIVE' && !(Array.isArray(permission) ? permission : [permission]).every((code) => ['organization:manage', 'organization:read'].includes(code))) {
+    if (target.type !== 'INTERNAL' || !(Array.isArray(permission) ? permission : [permission]).every(code => PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES.includes(code))
+      || !await hasPlatformAdministrator(transaction, actor.id)) adminError('ORGANIZATION_DISABLED', 403);
+  }
   return granted;
 }
 

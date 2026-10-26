@@ -4,7 +4,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from './audit-log.service.js';
 import { AuditPageDto, AuditQueryDto } from './audit-query.dto.js';
-import { auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
+import { auditActionFilter, auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
 
 @Injectable()
 export class AuditQueryService {
@@ -20,7 +20,7 @@ export class AuditQueryService {
     return this.prisma.$transaction(async (transaction) => {
       await assertAdminAccess(transaction, actor, organizationId, 'audit:read');
       const where: Prisma.AuditEventWhereInput = {
-        organizationId, actorUserId: query.actorUserId, action: query.action, resourceType: query.resourceType,
+        organizationId, actorUserId: query.actorUserId, ...auditActionFilter(query.action), resourceType: query.resourceType,
         resourceId: query.resourceId, outcome: query.outcome,
         ...(from || to ? { createdAt: { gte: from, lte: to } } : {}),
       };

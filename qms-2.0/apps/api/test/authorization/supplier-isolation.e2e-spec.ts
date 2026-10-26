@@ -278,7 +278,7 @@ describe('supplier isolation HTTP guard', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           userId: USERS.internalMember.id,
-          organizationId: ORG_SUPPLIER_B.id,
+          OR: expect.arrayContaining([{ organizationId: ORG_SUPPLIER_B.id }]),
         }),
       }),
     );

@@ -6,7 +6,8 @@ import { Prisma, type WorkflowNode } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
-import { isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
+import { assertRecentAuthentication, isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileResourceAccess } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
@@ -51,19 +52,29 @@ export class ProcessEightDService {
     private readonly resources: FileResourceAccess, private readonly audit: AuditLogService, private readonly outbox: OutboxService,
     private readonly readRegistry: ProblemDomainRegistry, private readonly extensions: WorkflowDeadlineExtensionService) {}
 
-  async lockRecord(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, _purpose: ProcessEightDPurpose): Promise<ProcessEightDRecord> {
-    this.scope(actor); this.uuid(problemId);
-    return this.lockFacts(tx, actor.organizationId, problemId);
+  async readResourceOrganizationId(tx: Prisma.TransactionClient, problemId: string): Promise<string> {
+    this.uuid(problemId);
+    const [report] = await tx.$queryRaw<{ organizationId: string }[]>`SELECT organization_id AS "organizationId" FROM process_eight_d_reports WHERE problem_id = ${problemId}::uuid`;
+    if (!report) workflowError('PROBLEM_NOT_FOUND', 404);
+    return report.organizationId;
   }
 
-  private async lockFacts(tx: Prisma.TransactionClient, organizationId: string, problemId: string): Promise<ProcessEightDRecord> {
-    await tx.$queryRaw`SELECT id FROM problem_indexes WHERE organization_id = ${organizationId}::uuid AND id = ${problemId}::uuid FOR UPDATE`;
-    const problem = await tx.problemIndex.findFirst({ where: { id: problemId, organizationId, domainCode: 'process-quality', sourceType: 'process-defect', archivedAt: null } });
+  async lockRecord(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, purpose: ProcessEightDPurpose): Promise<ProcessEightDRecord> {
+    const readOnly = purpose === 'READ';
+    this.scope(actor, readOnly); this.uuid(problemId);
+    const organizationId = readOnly ? actor.scopeOrganizationId ?? actor.organizationId : actor.organizationId;
+    this.uuid(organizationId);
+    return this.lockFacts(tx, organizationId, problemId, readOnly);
+  }
+
+  private async lockFacts(tx: Prisma.TransactionClient, organizationId: string, problemId: string, readOnly = false): Promise<ProcessEightDRecord> {
+    await tx.$queryRaw`SELECT id FROM problem_indexes WHERE organization_id = ${organizationId}::uuid AND id = ${problemId}::uuid ${readOnly ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`}`;
+    const problem = await tx.problemIndex.findFirst({ where: { id: problemId, organizationId, domainCode: 'process-quality', sourceType: 'process-defect', ...(readOnly ? {} : { archivedAt: null }) } });
     if (!problem?.workflowInstanceId) workflowError('PROBLEM_NOT_FOUND', 404);
-    await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${organizationId}::uuid AND id = ${problem.workflowInstanceId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${organizationId}::uuid AND id = ${problem.workflowInstanceId}::uuid ${readOnly ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`}`;
     const instance = await tx.workflowInstance.findFirst({ where: { id: problem.workflowInstanceId, organizationId, problemIndexId: problem.id }, include: { currentNode: true, workflowVersion: true } });
     const [report] = await tx.$queryRaw<ProcessEightDReport[]>(Prisma.sql`SELECT ${reportColumns} FROM process_eight_d_reports
-      WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid FOR UPDATE`);
+      WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid ${readOnly ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`}`);
     if (!report) workflowError('PROCESS_EIGHT_D_NOT_FOUND', 404);
     if (!instance?.currentNode || instance.workflowVersion.status !== 'PUBLISHED' || instance.workflowVersion.organizationId !== organizationId
       || instance.currentNode.organizationId !== organizationId || instance.currentNode.workflowVersionId !== instance.workflowVersionId) workflowError('WORKFLOW_VERSION_MISMATCH', 409);
@@ -74,7 +85,7 @@ export class ProcessEightDService {
 
   // Read-only security checks deliberately take no user/structure locks after the domain lock/resolver.
   async authorizeRead(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<void> {
-    await this.authorize(tx, actor, 'process-quality:issues:read', record.problem.organizationId);
+    await this.authorize(tx, actor, 'process-quality:issues:read', record.problem.organizationId, 'READ');
   }
 
   async authorizeEdit(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<void> {
@@ -200,7 +211,7 @@ export class ProcessEightDService {
   visibilityPredicate(actor: ProcessEightDActor, organizationId: string, legacy: Prisma.Sql): Prisma.Sql {
     const exists = Prisma.sql`EXISTS (SELECT 1 FROM process_eight_d_reports eight_d WHERE eight_d.organization_id = p.organization_id AND eight_d.problem_id = p.id)`;
     const read = featurePredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:issues:read'`);
-    return Prisma.sql`((${exists} AND ${read} AND p.organization_id = ${actor.organizationId}::uuid) OR (NOT ${exists} AND ${legacy}))`;
+    return Prisma.sql`((${exists} AND ${read} AND p.organization_id = ${organizationId}::uuid) OR (NOT ${exists} AND ${legacy}))`;
   }
 
   async read(actor: ProcessEightDActor, problemId: string) {
@@ -232,26 +243,30 @@ export class ProcessEightDService {
   }
 
   async binding(actor: ProcessEightDActor) {
-    return this.transaction(async tx => { await this.authorize(tx, actor, 'configuration:read'); return this.readBinding(tx, actor.organizationId); });
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
+    this.scope(actor, true); this.uuid(organizationId);
+    return this.transaction(async tx => { await this.authorize(tx, actor, 'configuration:read', organizationId, 'ADMIN_CONFIGURATION'); return this.readBinding(tx, organizationId); });
   }
 
   async bind(actor: ProcessEightDActor, input: { expectedVersion: number; workflowDefinitionId: string; workflowVersionId: string }, key: string, traceId: string) {
-    return this.configuration(actor, input, key, traceId, async (tx, current) => {
-      await this.validateFlow(tx, actor.organizationId, input.workflowDefinitionId, input.workflowVersionId);
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
+    return this.configuration(actor, organizationId, input, key, traceId, async (tx, current) => {
+      await this.validateFlow(tx, organizationId, input.workflowDefinitionId, input.workflowVersionId);
       if (current) await tx.$executeRaw`UPDATE process_eight_d_bindings SET workflow_definition_id = ${input.workflowDefinitionId}::uuid,
         workflow_version_id = ${input.workflowVersionId}::uuid, enabled = false, version = version + 1, updated_by = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
-        WHERE organization_id = ${actor.organizationId}::uuid AND version = ${input.expectedVersion}`;
+        WHERE organization_id = ${organizationId}::uuid AND version = ${input.expectedVersion}`;
       else await tx.$executeRaw`INSERT INTO process_eight_d_bindings (organization_id, workflow_definition_id, workflow_version_id, updated_by)
-        VALUES (${actor.organizationId}::uuid, ${input.workflowDefinitionId}::uuid, ${input.workflowVersionId}::uuid, ${actor.id}::uuid)`;
+        VALUES (${organizationId}::uuid, ${input.workflowDefinitionId}::uuid, ${input.workflowVersionId}::uuid, ${actor.id}::uuid)`;
     });
   }
 
   async activate(actor: ProcessEightDActor, input: { expectedVersion: number; enabled: boolean }, key: string, traceId: string) {
-    return this.configuration(actor, input, key, traceId, async (tx, current) => {
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
+    return this.configuration(actor, organizationId, input, key, traceId, async (tx, current) => {
       if (!current) workflowError('PROCESS_EIGHT_D_CONFIGURATION_REQUIRED', 409);
-      await this.validateFlow(tx, actor.organizationId, current.workflowDefinitionId, current.workflowVersionId);
+      await this.validateFlow(tx, organizationId, current.workflowDefinitionId, current.workflowVersionId);
       await tx.$executeRaw`UPDATE process_eight_d_bindings SET enabled = ${input.enabled}, version = version + 1, updated_by = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
-        WHERE organization_id = ${actor.organizationId}::uuid AND version = ${input.expectedVersion}`;
+        WHERE organization_id = ${organizationId}::uuid AND version = ${input.expectedVersion}`;
     });
   }
 
@@ -583,6 +598,7 @@ export class ProcessEightDService {
 
   async allowedActions(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<string[]> {
     const actions = ['read'];
+    if (record.problem.archivedAt || record.problem.status === 'ARCHIVED' || record.problem.organizationId !== actor.organizationId) return actions;
     if ((await this.deadlineRequestStages(tx, actor, record)).length) actions.push('request-extension');
     if (!record.report.closedRevisionId && record.instance.status === 'RUNNING') {
       if (!isClosureReviewNode(record.node)) {
@@ -788,21 +804,21 @@ export class ProcessEightDService {
     return binding ?? null;
   }
 
-  private async configuration(actor: ProcessEightDActor, input: { expectedVersion: number }, key: string, traceId: string, work: (tx: Prisma.TransactionClient, binding: Binding | null) => Promise<void>) {
-    this.key(key); this.scope(actor);
+  private async configuration(actor: ProcessEightDActor, organizationId: string, input: { expectedVersion: number }, key: string, traceId: string, work: (tx: Prisma.TransactionClient, binding: Binding | null) => Promise<void>) {
+    this.key(key); this.scope(actor, true); this.uuid(organizationId);
     const digest = eightDRequestDigest({ operation: 'configuration', input });
     return this.transaction(async tx => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`process-eight-d-configuration:${actor.organizationId}`}, 0))::text`;
-      await this.lockUsers(tx, actor.organizationId, [actor.id]);
-      await this.authorize(tx, actor, 'configuration:manage');
-      const replay = await this.receipt(tx, actor, key, digest); if (replay) return replay;
-      const binding = await this.readBinding(tx, actor.organizationId);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`process-eight-d-configuration:${organizationId}`}, 0))::text`;
+      await assertRecentAuthentication(tx, actor);
+      await this.authorize(tx, actor, 'configuration:manage', organizationId, 'ADMIN_CONFIGURATION');
+      const replay = await this.receipt(tx, actor, key, digest, organizationId); if (replay) return replay;
+      const binding = await this.readBinding(tx, organizationId);
       if ((binding?.version ?? 0) !== input.expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       await work(tx, binding);
-      const response = await this.readBinding(tx, actor.organizationId);
-      await this.audit.record({ organizationId: actor.organizationId, actorUserId: actor.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED', resourceType: 'ProcessEightDBinding',
-        resourceId: actor.organizationId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: response!.version, status: response!.enabled ? 'ENABLED' : 'DISABLED' } }, tx);
-      await this.storeReceipt(tx, actor, key, digest, response);
+      const response = await this.readBinding(tx, organizationId);
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED', resourceType: 'ProcessEightDBinding',
+        resourceId: organizationId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: response!.version, status: response!.enabled ? 'ENABLED' : 'DISABLED' } }, tx);
+      await this.storeReceipt(tx, actor, key, digest, response, organizationId);
       return response;
     });
   }
@@ -832,14 +848,15 @@ export class ProcessEightDService {
 
   private async visibleSourceProblems(tx: Prisma.TransactionClient, actor: ProcessEightDActor, defectId: string, ids: string[]): Promise<ProcessEightDRelatedProblemDto[]> {
     if (!ids.length) return [];
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
     const visible = await tx.$queryRaw<ProcessEightDRelatedProblemDto[]>(Prisma.sql`SELECT p.id AS "problemId", p.report_number AS "reportNumber", p.status,
       COALESCE(NULLIF(r.document->>'description', ''), p.report_number) AS title,
       (p.domain_code = 'process-quality' AND p.source_type = 'process-defect' AND p.source_id = ${defectId}::uuid) AS primary
       FROM problem_indexes p LEFT JOIN process_eight_d_reports r ON r.organization_id = p.organization_id AND r.problem_id = p.id
         AND p.domain_code = 'process-quality' AND p.source_type = 'process-defect'
-      WHERE p.organization_id = ${actor.organizationId}::uuid AND p.archived_at IS NULL
-        AND p.id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) AND ${this.readRegistry.visibility(actor, actor.organizationId)} ORDER BY p.id`);
-    const otherDomains = visible.length ? await tx.problemIndex.findMany({ where: { organizationId: actor.organizationId, id: { in: visible.map(p => p.problemId) }, domainCode: { not: 'process-quality' } } }) : [];
+      WHERE p.organization_id = ${organizationId}::uuid AND p.archived_at IS NULL
+        AND p.id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) AND ${this.readRegistry.visibility(actor, organizationId)} ORDER BY p.id`);
+    const otherDomains = visible.length ? await tx.problemIndex.findMany({ where: { organizationId, id: { in: visible.map(p => p.problemId) }, domainCode: { not: 'process-quality' } } }) : [];
     for (const problem of otherDomains) {
       const adapter = this.readRegistry.forProblem(problem);
       await adapter.authorizeRead(tx, { actor, problem, purpose: 'overview' });
@@ -874,22 +891,23 @@ export class ProcessEightDService {
     return confirmation ? { ...confirmation, relatedProblemIds } : undefined;
   }
 
-  private async receipt(tx: Prisma.TransactionClient, actor: ProcessEightDActor, key: string, digest: string): Promise<Prisma.JsonValue | null> {
+  private async receipt(tx: Prisma.TransactionClient, actor: ProcessEightDActor, key: string, digest: string, organizationId = actor.organizationId): Promise<Prisma.JsonValue | null> {
     const [receipt] = await tx.$queryRaw<{ digest: string; response: Prisma.JsonValue }[]>`SELECT digest, response FROM process_eight_d_receipts
-      WHERE organization_id = ${actor.organizationId}::uuid AND actor_user_id = ${actor.id}::uuid AND key = ${key}`;
+      WHERE organization_id = ${organizationId}::uuid AND actor_user_id = ${actor.id}::uuid AND key = ${key}`;
     if (receipt && receipt.digest !== digest) workflowError('IDEMPOTENCY_REPLAY', 409);
     return receipt?.response ?? null;
   }
 
-  private storeReceipt(tx: Prisma.TransactionClient, actor: ProcessEightDActor, key: string, digest: string, response: unknown) {
+  private storeReceipt(tx: Prisma.TransactionClient, actor: ProcessEightDActor, key: string, digest: string, response: unknown, organizationId = actor.organizationId) {
     return tx.$executeRaw`INSERT INTO process_eight_d_receipts (organization_id, actor_user_id, key, digest, response)
-      VALUES (${actor.organizationId}::uuid, ${actor.id}::uuid, ${key}, ${digest}, ${JSON.stringify(response)}::jsonb)`;
+      VALUES (${organizationId}::uuid, ${actor.id}::uuid, ${key}, ${digest}, ${JSON.stringify(response)}::jsonb)`;
   }
 
-  private async authorize(tx: Prisma.TransactionClient, actor: ProcessEightDActor, permission: string, organizationId = actor.organizationId) {
-    this.scope(actor);
-    if (organizationId !== actor.organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
+  private async authorize(tx: Prisma.TransactionClient, actor: ProcessEightDActor, permission: string, organizationId = actor.organizationId, purpose: 'LOCAL' | 'READ' | 'ADMIN_CONFIGURATION' = 'LOCAL') {
+    this.scope(actor, purpose !== 'LOCAL');
+    if (organizationId !== actor.organizationId && (purpose === 'LOCAL' || !await hasPlatformAdministrator(tx, actor.id))) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, organizationId, permission);
+    if (purpose === 'ADMIN_CONFIGURATION' && (await tx.organization.findUnique({ where: { id: organizationId }, select: { type: true } }))?.type !== 'INTERNAL') workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     const session = await tx.session.findFirst({ where: { id: actor.sessionId, userId: actor.id, revokedAt: null, expiresAt: { gt: new Date() }, user: { mustChangePassword: false } },
       select: { securityVersion: true, mfaVerifiedAt: true, user: { select: { securityVersion: true, organization: { select: { type: true } } } } } });
     if (!session || session.securityVersion !== session.user.securityVersion) workflowError('AUTH_SESSION_REQUIRED', 401);
@@ -941,7 +959,7 @@ export class ProcessEightDService {
     if (unique.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(unique.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
   }
 
-  private scope(actor: ProcessEightDActor) { if (actor.accountType !== 'INTERNAL' || actor.scopeOrganizationId && actor.scopeOrganizationId !== actor.organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403); }
+  private scope(actor: ProcessEightDActor, allowCrossScope = false) { if (actor.accountType !== 'INTERNAL' || !allowCrossScope && actor.scopeOrganizationId && actor.scopeOrganizationId !== actor.organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403); }
   private owner(actor: ProcessEightDActor, record: ProcessEightDRecord) { if (actor.id !== record.problem.ownerId) workflowError('WORKFLOW_NODE_FORBIDDEN', 403); }
   private notClosed(record: ProcessEightDRecord) { if (record.report.closedRevisionId || record.problem.closedAt || ['CLOSED', 'ARCHIVED'].includes(record.problem.status) || record.instance.status !== 'RUNNING') workflowError('WORKFLOW_ACTION_INVALID', 409); }
   private editable(record: ProcessEightDRecord) { this.notClosed(record); if (isClosureReviewNode(record.node) || jsonObject(record.node.config).isStart !== true || !this.deadlinePolicy(record.node.config) || record.node.type !== 'ACTION') workflowError('PROCESS_EIGHT_D_APPROVAL_LOCKED', 409); }

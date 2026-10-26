@@ -26,7 +26,7 @@ describe('portal navigation', () => {
     const childPaths = internalDomains.flatMap((domain) => domain.children.map((entry) => entry.path));
     expect([...childPaths].sort()).toEqual(internalNavigation.filter((entry) => entry.path !== '/app/documents').map((entry) => entry.path).sort());
     expect(internalDomains.find((domain) => domain.label === '供应商质量')?.children.map((entry) => entry.path).slice(0, 3)).toEqual(['/app/supplier-quality', '/app/supplier-incoming', '/app/site-scanning']);
-    expect(internalDomains.find((domain) => domain.label === '制程质量')?.children.map((entry) => entry.path)).toEqual(['/app/process-quality']);
+    expect(internalDomains.find((domain) => domain.label === '制程质量')?.children.map((entry) => entry.path)).toEqual(['/app/process-quality', '/app/process-quality/problems', '/app/process-quality/shipment-reports']);
   });
 
   it('shows the internal workbench with full domain navigation', () => {

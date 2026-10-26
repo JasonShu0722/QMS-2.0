@@ -146,7 +146,7 @@
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核N3发布后公开契约和启动期适配器交接；PR71已部署44f612b，业务配权/绑定及人工验收保持独立，架构边界不变。",
+        "reason": "定向复核REQ0030显式平台marker、真实授权来源与运行时投影分离、受控资源scope及有界表单筛选接缝；沿现有架构最小扩展，生产权限/角色职责不随代码部署自动变更。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "994f0f4cb4f7c056e98365bae782be7e646028c7d0bbc183602594f77dd63cce"
+            "sha256": "49a17cbebf74e5b42ca2ff033c55bc062b1ccb60756ba21a3ebd0084b2f4e22a"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "623935603b2c580b7610e9c2b098767917f9076542fd08f4be4f5b848fbc58bf"
+            "sha256": "f00ed49dd9fd17dda7655a94e7c9267c13a87c9af98417921711e98ba6e7c890"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -180,7 +180,7 @@
         "owner": "QMS 工程维护者（工作流整合实际复核）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核N3发布状态对平台交接和消费者的影响；仅归档44f612b实际发布，不增加领域接入、配置或授权。",
+        "reason": "复核REQ0030共享授权、账号及供应商治理、组织删除/审计和制程页面消费者；原数据/权限/职责保护保持，父最终回归与部署人工验收分别记录。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "623935603b2c580b7610e9c2b098767917f9076542fd08f4be4f5b848fbc58bf"
+            "sha256": "f00ed49dd9fd17dda7655a94e7c9267c13a87c9af98417921711e98ba6e7c890"
           }
         ]
       }
@@ -202,7 +202,7 @@
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 30,
-        "reason": "复核44f612b部署的本机加密迁移前快照、5份迁移及同源服务/Worker就绪证据；不等于异地灾备或恢复演练。",
+        "reason": "复核平台管理员精确来源预览/初始化及canonical岗位版本、会话和审计原子性；迁移仅登记权限，生产apply及删除仍需独立核准，未改备份恢复流程。",
         "sources": [
           {
             "path": "package.json",
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "623935603b2c580b7610e9c2b098767917f9076542fd08f4be4f5b848fbc58bf"
+            "sha256": "f00ed49dd9fd17dda7655a94e7c9267c13a87c9af98417921711e98ba6e7c890"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -236,7 +236,7 @@
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 30,
-        "reason": "复核能力总账N3已部署及恢复正常授权后的单次发布事实；机器人仍仅只读分析，不扩大为代码、可见性、生产配置执行者。",
+        "reason": "复核能力总账N3已部署及恢复正常授权后的单次发布事实；机器人仍仅只读分析，不扩大为代码、可见性、生产配置执行者。 2026-10-26复核REQ0030本地开发状态，机器人只读职责和生产独立授权边界不变。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "641f71da4228aea8d009cc65815cf683450d9aeafc0feb4810a7f2965fa026d1"
+            "sha256": "6c8669d1cbdff1c14d009a28775600c7fe7ee0b4be3df4d51716afd920578c88"
           },
           {
             "path": "README.md",
@@ -392,7 +392,7 @@
         "owner": "QMS 工程维护者（基础交互体系设计评审）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核N3正式台账、工作区与受控待办接入、有限流程策略、未知写入原请求冻结和附件撤权/pending边界；只用生成契约，不导入内存样例。各轮独立审查及完整回归状态见N3计划，浏览器与人工仍待验。",
+        "reason": "复核D管理定位与删除依赖界面及其测试；Dewey规格和Sartre质量独立通过，targeting48/workspace32及父剩余两文件30分别通过，保原业务断言和timeout/motion。真实几何与业务验收另列。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -480,15 +480,15 @@
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.tsx",
-            "sha256": "923dbad316e004025786e288a9a4d97a720e623f91cd8487378d7e4289d6afa0"
+            "sha256": "ce5cafa05b831bd6bc7629e30f13c1249be9ea3477a96094eb8dc4b05ceda0a2"
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.targeting.test.tsx",
-            "sha256": "c7c94e847cdad211a840642e003d9b95cfffef690e98971fda2df880c6df322a"
+            "sha256": "30421d04d47baced759a8882430d62a37d70ad6e0500737dd59e885ce3531b75"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationAdministration.tsx",
-            "sha256": "a3f1f080bb236ef3be87dd554dcc6513e2a938f269b1bf06ffe8d66877f93a5c"
+            "sha256": "e905655bf404cf27820c13a4205d33e6176e90ed643665974688f729b4d93722"
           },
           {
             "path": "apps/web/src/features/governance/StructureAdministration.tsx",
@@ -500,7 +500,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "c1d51483caad14b56472aecda104ae8af9c60a4666b12cbc179290b487ed5079"
+            "sha256": "e4f51e60df79ad8e0a4b7771b4e188add173e622bd2eaf8699c394a4906a8596"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -668,7 +668,7 @@
         "owner": "QMS 工程维护者（跨板块问题管理研讨准备）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核PR71最终31e0499至main/部署44f612b；PR/main各9项CI及deploy40259187725通过，5迁移/同源服务/公网已核验。历史失败保留，人工验收/配权绑定仍待办，不关闭整包REQ或自动N4；发布文档只本地归档。",
+        "reason": "REQ0030已获P0/开发中及当前会话明确开工授权；治理、删除/审计、制程入口及资源/配置scope修复的分层证据保留，最后近期认证窄复核及父最终验证接续，不把旧PASS替代最终树或提前关闭整包需求。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md",
@@ -688,7 +688,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md",
-            "sha256": "e7dc42d4d51ecf7c5d419501b68ee8df060e45f6f771c381ee0407751aab1055"
+            "sha256": "fb05ef9d95fa4ebe81b59a8ca503195d5a0c42f2b05e7da43b8773a7f8eee940"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-five-requirement-submission.md",
@@ -705,6 +705,10 @@
           {
             "path": "../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md",
             "sha256": "6dfb836d840efba32409d06792be1f398de6fd06d5ee685033100fb79d7c8fac"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md",
+            "sha256": "5ab7745133808a2a33598a06b7e711957cd0b8813d51a2817e39eabf43f4aed7"
           }
         ]
       }
@@ -988,7 +992,7 @@
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
         "reviewedOn": "2026-10-25",
         "maxAgeDays": 90,
-        "reason": "复核N3平台交接已部署事实与独立授权边界；代码上线不代配岗位、启用绑定或证明角色人工验收，权限审查规则不变。",
+        "reason": "复核共享实际授权来源/平台投影、职责范围、资源只读scope和配置近期认证边界；权限专项仍要求真实服务及独立审查，不因管理员功能全量模拟业务责任人或代配生产。",
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
@@ -996,7 +1000,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "623935603b2c580b7610e9c2b098767917f9076542fd08f4be4f5b848fbc58bf"
+            "sha256": "f00ed49dd9fd17dda7655a94e7c9267c13a87c9af98417921711e98ba6e7c890"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

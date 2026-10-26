@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsUUID } from 'class-validator';
-import { ProblemDomainSummaryDto, ProblemIndexResponseDto, ProblemScopeQueryDto } from './problem-index.dto.js';
+import { ProblemDomainSummaryDto, ProblemFieldDto, ProblemIndexResponseDto, ProblemScopeQueryDto } from './problem-index.dto.js';
 import { TaskDto } from '../task-notification/task-inbox.dto.js';
 import { FileEvidenceDto } from '../file-management/file.dto.js';
 import { WORKFLOW_ACTIONS, WORKFLOW_NODE_TYPES } from '../workflow/workflow.types.js';
@@ -8,11 +8,7 @@ import { WORKFLOW_ACTIONS, WORKFLOW_NODE_TYPES } from '../workflow/workflow.type
 export class ProblemWorkspaceQueryDto extends ProblemScopeQueryDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() instanceId?: string;
 }
-export class ProblemFieldDto {
-  @ApiProperty() key!: string;
-  @ApiProperty() label!: string;
-  @ApiProperty({ type: String, nullable: true }) value!: string | null;
-}
+export { ProblemFieldDto } from './problem-index.dto.js';
 export class ProblemSectionDto {
   @ApiProperty() key!: string;
   @ApiProperty() title!: string;

@@ -76,7 +76,7 @@ describe('effectiveRoleGrants', () => {
     prisma.userRole.findMany.mockResolvedValue([{ organizationId: 'org-other', role: role('role-other', 'org-other') }]);
     const grants = await effectiveRoleGrants(transaction, 'user', 'org-other', now);
     expect(grants.map((grant) => grant.organizationId)).toEqual(['org-other']);
-    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user', organizationId: 'org-other' } }));
+    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user', OR: expect.arrayContaining([{ organizationId: 'org-other' }]) } }));
     expect(prisma.userPosition.findMany).not.toHaveBeenCalled();
     expect(positions).toHaveLength(2);
   });
@@ -84,7 +84,7 @@ describe('effectiveRoleGrants', () => {
   it('requires active home organization, position and direct department and exact temporal boundaries in the real Prisma query', async () => {
     const { transaction, prisma } = fixture();
     await effectiveRoleGrants(transaction, 'user', 'org-home', now);
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user' }, select: { organizationId: true } });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user' }, select: { organizationId: true, status: true, accountType: true, organization: { select: { status: true, type: true } } } });
     expect(prisma.userPosition.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         userId: 'user', organizationId: 'org-home',

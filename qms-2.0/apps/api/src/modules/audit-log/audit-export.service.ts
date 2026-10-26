@@ -6,7 +6,7 @@ import { assertActiveAuthentication, assertRecentAuthentication } from '../../co
 import { encryptSecret, decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from './audit-log.service.js';
 import { AuditExportContentDto, AuditExportDto, AuditExportRequestDto } from './audit-export.dto.js';
-import { auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
+import { auditActionFilter, auditActionLabel, auditActorSummary, auditEventReadSelect } from './audit-event-read-model.js';
 
 function csvCell(value: string | null) {
   const normalized = value ?? '';
@@ -26,7 +26,7 @@ export class AuditExportService {
     return this.controlled(actor, traceId, async (transaction) => {
       await assertRecentAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, ['audit:read', 'audit:export']);
-      const rows = await transaction.auditEvent.findMany({ where: { organizationId, actorUserId: query.actorUserId, action: query.action, resourceType: query.resourceType, resourceId: query.resourceId, outcome: query.outcome, ...(from || to ? { createdAt: { gte: from, lte: to } } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 5001, select: auditEventReadSelect });
+      const rows = await transaction.auditEvent.findMany({ where: { organizationId, actorUserId: query.actorUserId, ...auditActionFilter(query.action), resourceType: query.resourceType, resourceId: query.resourceId, outcome: query.outcome, ...(from || to ? { createdAt: { gte: from, lte: to } } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 5001, select: auditEventReadSelect });
       if (rows.length > 5000) throw new HttpException({ code: 'EXPORT_TOO_LARGE', message: '请缩小导出筛选范围，最多 5000 条' }, 422);
       const settings = await transaction.platformSettings.findUnique({ where: { organizationId }, select: { exportRetentionMinutes: true } });
       const id = randomUUID();

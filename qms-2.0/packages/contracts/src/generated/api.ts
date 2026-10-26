@@ -6665,9 +6665,16 @@ export interface components {
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
         };
+        OrganizationLifecycleBlockerDto: {
+            code: string;
+            count: number;
+            message: string;
+        };
         OrganizationLifecycleDto: {
             deleteBlockers: string[];
             disableBlockers: string[];
+            deleteBlockerDetails?: components["schemas"]["OrganizationLifecycleBlockerDto"][];
+            disableBlockerDetails?: components["schemas"]["OrganizationLifecycleBlockerDto"][];
         };
         DeleteStructureDto: {
             expectedVersion: number;
@@ -6797,12 +6804,37 @@ export interface components {
             /** Format: uuid */
             targetUserId?: string;
         };
+        PlatformAdministratorScopeDto: {
+            /**
+             * @description 平台管理员的权限投影，不代表目标组织的实际角色成员资格
+             * @enum {string}
+             */
+            kind: "PLATFORM_ADMINISTRATOR";
+            /** @description 显式 platform:admin 有效来源的内部组织 ID */
+            sourceOrganizationIds: string[];
+            /**
+             * Format: uuid
+             * @description 本次权限预览的目标组织 ID；角色本身仍保留真实来源组织
+             */
+            targetOrganizationId: string;
+            /**
+             * @description 覆盖全部活跃内部组织的已注册、实际可用适用权限；停用内部组织仅保留组织查看、管理和审计读取/导出，不含业务权限或供应商范围
+             * @enum {string}
+             */
+            coverage: "INTERNAL_PLATFORM";
+        };
         PositionAuthorizationSourceDto: {
             roleId: string;
             roleCode: string;
             name: string;
             permissionCodes: string[];
             mfaRequired: boolean;
+            /**
+             * Format: uuid
+             * @description 保留的真实直接角色授权所在组织，不是平台投影的目标组织。
+             */
+            organizationId?: string;
+            platformScope?: components["schemas"]["PlatformAdministratorScopeDto"];
         };
         PositionAuthorizationItemDto: {
             id: string;
@@ -7049,6 +7081,7 @@ export interface components {
             name: string;
             permissions: components["schemas"]["AdminPermissionDto"][];
             sources: components["schemas"]["EffectiveAdminRoleSourceDto"][];
+            platformScope?: components["schemas"]["PlatformAdministratorScopeDto"];
         };
         AdminUserRolesDto: {
             userId: string;
@@ -7091,6 +7124,7 @@ export interface components {
             code: string;
             name: string;
             sources: components["schemas"]["AccountRoleSourceDto"][];
+            platformScope?: components["schemas"]["PlatformAdministratorScopeDto"];
         };
         AccountOverviewDto: {
             /** Format: uuid */
@@ -7628,10 +7662,16 @@ export interface components {
             items: components["schemas"]["SupplierPortalNotificationDto"][];
             total: number;
         };
+        ProblemFieldDto: {
+            key: string;
+            label: string;
+            value: string | null;
+        };
         ProblemDomainSummaryDto: {
             title: string;
             description: string;
             domainUiKey: string;
+            fields?: components["schemas"]["ProblemFieldDto"][];
         };
         ProblemIndexResponseDto: {
             id: string;
@@ -7708,11 +7748,6 @@ export interface components {
             ownerId: string | null;
             /** Format: date-time */
             dueAt: string | null;
-        };
-        ProblemFieldDto: {
-            key: string;
-            label: string;
-            value: string | null;
         };
         ProblemSectionDto: {
             key: string;
@@ -16970,6 +17005,7 @@ export interface operations {
                 pageSize?: number;
                 domainCode?: string;
                 problemType?: string;
+                responseForm?: "BRIEF" | "EIGHT_D";
                 status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
                 severity?: string;
                 ownerId?: string;
@@ -17077,6 +17113,7 @@ export interface operations {
                 pageSize?: number;
                 domainCode?: string;
                 problemType?: string;
+                responseForm?: "BRIEF" | "EIGHT_D";
                 status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
                 severity?: string;
                 ownerId?: string;

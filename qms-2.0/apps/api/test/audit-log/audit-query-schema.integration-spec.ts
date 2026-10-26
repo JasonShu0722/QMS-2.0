@@ -96,6 +96,41 @@ describe('authorized audit queries on PostgreSQL', () => {
     expect(result.items[0]?.resourceId).toBe('4');
   });
 
+  it('matches Chinese labels, case-insensitive code fragments and literal legacy codes before pagination', async () => {
+    const traceId = `${prefix}-keywords`;
+    const resourceType = 'KeywordQueryTest';
+    const actions = ['USER_UPDATED', 'USER_CREATED', 'LEGACY_Unknown_ACTION', 'USERxUPDATED', 'PERCENT%ACTION', 'PERCENTxACTION', 'BACK\\ACTION', 'BACKxACTION', 'MFA_ENABLED'];
+    try {
+      const data = actions.map((action) => ({ organizationId: organizations[0]!, actorUserId: userId, action, resourceType, resourceId: traceId, outcome: 'SUCCESS', traceId, createdAt: new Date('2026-01-01T12:00:00Z') }));
+      await prisma.auditEvent.createMany({ data: [...data, { ...data[0]!, organizationId: organizations[1]! }] });
+      await prisma.auditEvent.create({ data: { ...data[0]!, organizationId: null } });
+      for (const [action, expected] of [
+        ['用户', ['USER_UPDATED', 'USER_CREATED']],
+        ['uSeR_upD', ['USER_UPDATED']],
+        ['unknown', ['LEGACY_Unknown_ACTION']],
+        ['mFa', ['MFA_ENABLED']],
+        ['%', ['PERCENT%ACTION']],
+        ['USER_UPDATED', ['USER_UPDATED']],
+        ['BACK\\', ['BACK\\ACTION']],
+        ['不存在的动作', []],
+      ] as const) {
+        const filters = { action, resourceType, resourceId: traceId };
+        const first = await service.list(actor, { ...filters, pageSize: 1 });
+        expect(first.total).toBe(expected.length);
+        const items = [...first.items];
+        if (first.nextCursor) {
+          const second = await service.list(actor, { ...filters, pageSize: 1, cursor: first.nextCursor });
+          expect(second.total).toBe(expected.length);
+          expect(second.nextCursor).toBeNull();
+          items.push(...second.items);
+        }
+        expect(items.map((entry) => entry.action).sort()).toEqual([...expected].sort());
+        expect(new Set(items.map((entry) => entry.id)).size).toBe(expected.length);
+        expect(items.every((entry) => entry.organizationId === organizations[0])).toBe(true);
+      }
+    } finally { await prisma.auditEvent.deleteMany({ where: { traceId } }); }
+  });
+
   it('rejects foreign organization, spoofed identity and disabled users', async () => {
     await expect(service.list(actor, { organizationId: organizations[1] })).rejects.toMatchObject({ status: 403 });
     await expect(service.list({ ...actor, accountType: 'SUPPLIER' }, {})).rejects.toMatchObject({ status: 401 });

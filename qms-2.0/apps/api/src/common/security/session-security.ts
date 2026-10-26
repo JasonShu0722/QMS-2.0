@@ -21,7 +21,7 @@ export function digest(value: string): string {
 }
 
 export function isGovernancePermission(code: string): boolean {
-  return /^(account:users:(create|update|status|transfer|reset)|account:roles:(create|update|delete|assign)|organization:manage|organization:structure:manage|organization:positions:assign|configuration:manage|outbox:retry)$/.test(code);
+  return /^(platform:admin|account:users:(create|update|status|transfer|reset)|account:roles:(create|update|delete|assign)|organization:manage|organization:structure:manage|organization:positions:assign|configuration:manage|outbox:retry)$/.test(code);
 }
 
 export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: string) {

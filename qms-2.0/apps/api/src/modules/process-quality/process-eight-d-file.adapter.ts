@@ -12,8 +12,9 @@ export class ProcessEightDFileAdapter implements FileResourceAccessAdapter, OnMo
   onModuleInit(): void { this.resources.register(this); }
   async authorizeAndLock(tx: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction) {
     if (resource.resourceType !== this.resourceType || !isUUID(resource.resourceId)) workflowError('FILE_RESOURCE_DENIED', 403);
-    const record = await this.service.lockRecord(tx, actor, resource.resourceId, action === 'read' ? 'READ' : 'EDIT');
-    if (action === 'read') await this.service.authorizeRead(tx, actor, record);
+    const reader = action === 'read' ? { ...actor, scopeOrganizationId: await this.service.readResourceOrganizationId(tx, resource.resourceId) } : actor;
+    const record = await this.service.lockRecord(tx, reader, resource.resourceId, action === 'read' ? 'READ' : 'EDIT');
+    if (action === 'read') await this.service.authorizeRead(tx, reader, record);
     else await this.service.authorizeEdit(tx, actor, record);
     // FileLifecycle checks this adapter before every delete: review and closed evidence stay protected.
     return { organizationId: record.problem.organizationId, version: record.report.version };

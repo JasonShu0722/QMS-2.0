@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Descriptions, Form, Input, Modal, Select, Table, Typography } from 'antd';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
-import type { components } from '@qms/contracts';
+import type { components, paths } from '@qms/contracts';
 import type { AdminOrganization } from '../admin/admin';
 import type { AuditPage } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
 import { useLanguage } from '../../i18n/Language';
 import './audit.css';
 
-export function AuditAdministration({ organization }: { organization: AdminOrganization }) {
-  return <AuditAdministrationPanel key={`${organization.id}:${organization.permissions.join(',')}`} organization={organization} />;
+export type AuditTarget = Pick<NonNullable<paths['/api/v1/admin/audit-events']['get']['parameters']['query']>, 'resourceType' | 'resourceId'>;
+type Props = { organization: AdminOrganization; target?: AuditTarget };
+
+export function AuditAdministration({ organization, target }: Props) {
+  return <AuditAdministrationPanel key={JSON.stringify([organization.id, organization.permissions, target])} organization={organization} target={target} />;
 }
 
-function AuditAdministrationPanel({ organization }: { organization: AdminOrganization }) {
+function AuditAdministrationPanel({ organization, target }: Props) {
   const { t, locale } = useLanguage();
   const [form] = Form.useForm<Record<string, string>>();
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(target ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')));
   const [cursor, setCursor] = useState<string>();
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState<AuditPage>();
@@ -24,7 +27,7 @@ function AuditAdministrationPanel({ organization }: { organization: AdminOrganiz
   const [exporting, setExporting] = useState(false);
   const [artifact, setArtifact] = useState<components['schemas']['AuditExportDto']>();
   const [selected, setSelected] = useState<AuditPage['items'][number]>();
-  const [moreFilters, setMoreFilters] = useState(false);
+  const [moreFilters, setMoreFilters] = useState(!!target?.resourceId);
   const alive = useRef(true);
   const canRead = organization.permissions.includes('audit:read');
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -64,8 +67,9 @@ function AuditAdministrationPanel({ organization }: { organization: AdminOrganiz
   }
   if (!canRead) return <GovernanceFeedback error={new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '无权执行此操作' })} />;
   return <section className="governance-panel" aria-label={t('管理审计')}>
-    <Form form={form} className="audit-query-toolbar" layout="inline" onFinish={() => { const values: Record<string, string> = form.getFieldsValue(true); setCursor(undefined); setFilters(Object.fromEntries(Object.entries(values).filter(([, value]) => !!value?.trim()).map(([key, value]) => [key, ['from', 'to'].includes(key) ? new Date(value).toISOString() : value.trim()]))); }}>
-      <Form.Item name="action" label={t('动作')}><Input maxLength={150} /></Form.Item>
+    <Typography.Paragraph>{t('当前查询组织')}：{organization.name} · {organization.code}</Typography.Paragraph>
+    <Form form={form} initialValues={target} className="audit-query-toolbar" layout="inline" onFinish={() => { const values: Record<string, string> = form.getFieldsValue(true); setCursor(undefined); setFilters(Object.fromEntries(Object.entries(values).filter(([, value]) => !!value?.trim()).map(([key, value]) => [key, ['from', 'to'].includes(key) ? new Date(value).toISOString() : value.trim()]))); }}>
+      <Form.Item name="action" label={t('动作')}><Input maxLength={150} placeholder={t('支持中文名称或英文关键词')} /></Form.Item>
       <Form.Item name="outcome" label={t('结果')}><Select allowClear style={{ width: 130 }} options={['SUCCESS', 'FAILURE', 'DENIED'].map((value) => ({ value, label: value }))} /></Form.Item>
       <Button htmlType="submit" loading={loading}>{t('查询')}</Button>
       <Button aria-expanded={moreFilters} onClick={() => setMoreFilters((value) => !value)}>{t('更多筛选')}</Button>

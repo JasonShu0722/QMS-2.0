@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ArrayMaxSize, ArrayUnique, IsArray, IsOptional, IsUUID } from 'class-validator';
+import { PlatformAdministratorScopeDto } from '../authorization/platform-administrator-scope.dto.js';
 
 export class PositionAuthorizationPreviewInputDto {
   @ApiProperty({ type: [String], maxItems: 100, description: '目标组织内的岗位 ID，空数组用于预览撤销全部任职。' })
@@ -17,6 +18,8 @@ export class PositionAuthorizationSourceDto {
   @ApiProperty() name!: string;
   @ApiProperty({ type: [String] }) permissionCodes!: string[];
   @ApiProperty() mfaRequired!: boolean;
+  @ApiPropertyOptional({ format: 'uuid', description: '保留的真实直接角色授权所在组织，不是平台投影的目标组织。' }) organizationId?: string;
+  @ApiPropertyOptional({ type: PlatformAdministratorScopeDto }) platformScope?: PlatformAdministratorScopeDto;
 }
 
 export class PositionAuthorizationDepartmentDto {

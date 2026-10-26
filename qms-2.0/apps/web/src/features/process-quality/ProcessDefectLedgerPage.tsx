@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
-import { ProcessShipmentReportPanel } from './ProcessShipmentReportPanel';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
@@ -254,7 +253,6 @@ function ProcessLedgerContent() {
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
       {!listError ? <Table<Defect> rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize: 20, total: result?.total ?? 0, showSizeChanger: false, onChange: setPage }} /> : null}
     </section>
-    <ProcessShipmentReportPanel />
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
         <Descriptions bordered size="small" column={1} items={[

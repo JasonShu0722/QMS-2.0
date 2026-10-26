@@ -177,6 +177,9 @@ export class EffectiveAdminRoleSourceDto {
 export class EffectiveAdminRoleDto extends AdminRoleDto {
   @ApiProperty({ type: [EffectiveAdminRoleSourceDto] })
   sources!: EffectiveAdminRoleSourceDto[];
+
+  @ApiPropertyOptional({ type: PlatformAdministratorScopeDto })
+  platformScope?: PlatformAdministratorScopeDto;
 }
 
 export class AdminUserRolesDto {
@@ -195,3 +198,4 @@ export class AdminUserRolesDto {
   @ApiProperty({ type: [String] })
   permissions!: string[];
 }
+import { PlatformAdministratorScopeDto } from './platform-administrator-scope.dto.js';

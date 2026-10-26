@@ -1,17 +1,30 @@
 import 'reflect-metadata';
 import { jest } from '@jest/globals';
-import { randomUUID } from 'node:crypto';
+import { Test } from '@nestjs/testing';
+import { ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { createHash, randomUUID } from 'node:crypto';
+import { AppModule } from '../../src/app.module.js';
+import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
+import { SessionService } from '../../src/modules/identity/session.service.js';
 import { Prisma } from '../../src/generated/prisma/client.js';
 import { assertActiveAuthentication } from '../../src/common/security/session-security.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
+import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
+import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
+import { S3CompatibleObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
+import { FileScanWorkerService } from '../../src/modules/file-management/file-scan-worker.service.js';
+import { FileVerificationService } from '../../src/modules/file-management/file-verification.service.js';
 import { OrganizationResponsibilityService } from '../../src/modules/organization/organization-responsibility.service.js';
 import { DomainSourceIssueService } from '../../src/modules/problem-index/domain-source-issue.service.js';
 import { DomainSourceLinkService } from '../../src/modules/problem-index/domain-source-link.service.js';
 import { NumberingService } from '../../src/modules/problem-index/numbering.service.js';
 import { ProblemIndexService } from '../../src/modules/problem-index/problem-index.service.js';
+import { ProblemQueryService } from '../../src/modules/problem-index/problem-query.service.js';
+import { ProblemIndexQueryDto } from '../../src/modules/problem-index/problem-index.dto.js';
 import { DomainProblemReadAdapter } from '../../src/modules/problem-index/domain-problem-read.adapter.js';
 import { ProblemDomainRegistry } from '../../src/modules/problem-index/problem-domain-registry.js';
 import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
@@ -19,6 +32,7 @@ import { ProcessEightDClosureAdapter } from '../../src/modules/process-quality/p
 import { ProcessEightDFileAdapter } from '../../src/modules/process-quality/process-eight-d-file.adapter.js';
 import { normalizeProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { ProcessEightDReportService } from '../../src/modules/process-quality/process-eight-d-report.service.js';
 import { ProcessEightDReadAdapter } from '../../src/modules/process-quality/process-eight-d-read.adapter.js';
 import { ProcessEightDAssignmentOptionsQueryDto } from '../../src/modules/process-quality/process-eight-d.dto.js';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
@@ -29,6 +43,7 @@ import { WorkflowDeadlineExtensionService } from '../../src/modules/workflow/wor
 import { WorkflowRuntimeService } from '../../src/modules/workflow/workflow-runtime.service.js';
 import { WorkflowValidationService } from '../../src/modules/workflow/workflow-validation.service.js';
 import type { ProcessEightDActor } from '../../src/modules/process-quality/process-eight-d.types.js';
+import { png } from './process-eight-d-pdf.fixture.js';
 
 const url = process.env.DATABASE_URL && new URL(process.env.DATABASE_URL);
 if (!url || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !['postgres:', 'postgresql:'].includes(url.protocol)
@@ -150,6 +165,493 @@ describe('process 8D real domain transactions', () => {
     const id = String(result.problem.id), model = await f.read(id);
     expect(model).toMatchObject({ professionalUserId: f.issuer.user.id, ownerUserId: f.owner.user.id, version: 1, contentVersion: 1 });
     await expect(service.save(f.issuer.actor, id, { expectedVersion: 1, document: f.draft() }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+  }, 120_000);
+
+  it('reads authorized followup names without management grants or full reports, falls back to username and denies revoked readers', async () => {
+    const f = await fixture(), id = await f.issue();
+    await prisma.user.update({ where: { id: f.owner.user.id }, data: { fullName: '实际负责人' } });
+    const summary = () => prisma.$transaction(async tx => {
+      const problem = await tx.problemIndex.findUniqueOrThrow({ where: { id } });
+      return (await readRegistry.forProblem(problem).readSummaries(tx, f.owner.actor, [problem])).get(id)!;
+    });
+    const readReport = jest.spyOn(service, 'readReport');
+    try {
+      const first = await summary();
+      expect(Object.fromEntries(first.fields!.map(field => [field.key, field.value]))).toEqual({
+        responsibleSectionName: f.section.name, ownerName: '实际负责人', stage: '分析阶段',
+        analysisDueAt: '2026-11-01T00:00:00.000Z', submissionDueAt: null, closureDueAt: '2026-12-01T00:00:00.000Z',
+        analysisCompletedAt: null, submittedAt: null,
+      });
+      await prisma.user.update({ where: { id: f.owner.user.id }, data: { fullName: '  ' } });
+      expect((await summary()).fields!.find(field => field.key === 'ownerName')!.value).toBe(f.owner.user.username);
+      const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:read' } });
+      await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: permission.id } } });
+      await expect(summary()).rejects.toMatchObject({ status: 403 });
+      expect(readReport).not.toHaveBeenCalled();
+    } finally { readReport.mockRestore(); }
+  }, 120_000);
+
+  it('reads concurrent public 8D details after both transactions hold problem SHARE locks without an upgrade deadlock', async () => {
+    const f = await fixture(), id = await f.issue(), shared = gate();
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'problem-index:read' } });
+    await prisma.rolePermission.create({ data: { roleId: f.role.id, permissionId: permission.id } });
+    const query = new ProblemQueryService(prisma, readRegistry);
+    let arrivals = 0;
+    const read = () => prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM problem_indexes WHERE organization_id = ${f.organization.id}::uuid AND id = ${id}::uuid FOR SHARE`;
+      // Neither public read starts until both real transactions hold the same problem's SHARE lock.
+      if (++arrivals === 2) shared.open();
+      await shared.promise;
+      const { problem, adapter } = await query.authorized(tx, f.owner.actor, f.organization.id, id, 'overview');
+      return (await adapter.readSummaries(tx, f.owner.actor, [problem])).get(id);
+    });
+    const results = await Promise.allSettled([read(), read()]);
+    expect(arrivals).toBe(2);
+    expect(results.filter(result => result.status === 'rejected')).toEqual([]);
+    expect(results).toMatchObject([
+      { status: 'fulfilled', value: { domainUiKey: 'process-eight-d' } },
+      { status: 'fulfilled', value: { domainUiKey: 'process-eight-d' } },
+    ]);
+  });
+
+  async function archivedFixture(closed = false) {
+    const f = await fixture(), id = await f.issue();
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'problem-index:read' } });
+    await prisma.rolePermission.create({ data: { roleId: f.role.id, permissionId: permission.id } });
+    if (closed) {
+      const round = (await f.submit(id))!;
+      const one = await rounds.decide(f.issuer.actor, round.id, { expectedRoundVersion: round.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Verified before archive' }, randomUUID(), randomUUID());
+      await rounds.decide(f.manager.actor, one.id, { expectedRoundVersion: one.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: 'Verified before archive' }, randomUUID(), randomUUID());
+    }
+    const before = await prisma.problemIndex.findUniqueOrThrow({ where: { id } });
+    await prisma.$transaction(tx => problems.archive(tx, f.organization.id, id, before.version, f.issuer.user.id));
+    const archived = await prisma.problemIndex.findUniqueOrThrow({ where: { id } });
+    expect(archived).toMatchObject({ status: 'ARCHIVED', archivedAt: expect.any(Date), version: before.version + 1 });
+    const query = new ProblemQueryService(prisma, readRegistry);
+    return { f, id, archived, query };
+  }
+
+  it.each([false, true])('lists real archived 8D summaries on a mixed public problem page, including pinned closed facts: closed=%s', async closed => {
+    const { f, id, archived, query } = await archivedFixture(closed), activeId = await f.issue();
+    const page = await query.list(f.owner.actor, { domainCode: 'process-quality' });
+    expect(page.total).toBe(2);
+    expect(page.items.map(item => item.id)).toEqual(expect.arrayContaining([id, activeId]));
+    expect(page.items.find(item => item.id === id)).toMatchObject({ status: 'ARCHIVED', summary: { domainUiKey: 'process-eight-d', fields: expect.arrayContaining([
+      { key: 'stage', label: '当前阶段', value: '已归档' },
+      { key: 'ownerName', label: '负责人', value: f.owner.user.username },
+      { key: 'responsibleSectionName', label: '责任科室', value: f.section.name },
+      { key: 'analysisDueAt', label: '分析期限', value: '2026-11-01T00:00:00.000Z' },
+    ]) } });
+    const filtered = await query.list(f.owner.actor, { domainCode: 'process-quality', status: 'ARCHIVED' });
+    expect(filtered.total).toBe(1); expect(filtered.items[0]!.id).toBe(id);
+    expect(await prisma.problemIndex.findUniqueOrThrow({ where: { id } })).toEqual(archived);
+  }, 120_000);
+
+  it('keeps archived reports readable through existing APIs but rejects every write purpose and attachment mutation', async () => {
+    const { f, id, archived } = await archivedFixture();
+    const model = await f.read(id);
+    expect(model.allowedActions).toEqual(['read']);
+    const report = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id));
+    expect(report.record.problem).toEqual(archived);
+    const context = await prisma.$transaction(tx => closure.lockAndRead(tx, f.owner.actor, id, 'READ'));
+    const resource = { resourceType: 'process-eight-d', resourceId: id };
+    await expect(prisma.$transaction(tx => resources.authorizeAndLock(tx, f.owner.actor, resource, 'read'))).resolves.toMatchObject({ organizationId: f.organization.id });
+    const before = { audits: await prisma.auditEvent.count({ where: { organizationId: f.organization.id } }), events: await prisma.outboxEvent.count() };
+    for (const purpose of ['EDIT', 'SUBMIT', 'DECIDE', 'CANCEL', 'DEADLINE'] as const) {
+      await expect(prisma.$transaction(tx => service.lockRecord(tx, f.owner.actor, id, purpose))).rejects.toMatchObject({ status: 404, response: { code: 'PROBLEM_NOT_FOUND' } });
+    }
+    for (const action of ['upload', 'complete', 'delete', 'attach'] as const) {
+      await expect(prisma.$transaction(tx => resources.authorizeAndLock(tx, f.owner.actor, resource, action))).rejects.toMatchObject({ status: 404 });
+    }
+    for (const operation of ['SUBMIT', 'DECIDE', 'CANCEL'] as const) {
+      await expect(prisma.$transaction(tx => closure.lockAndRead(tx, f.owner.actor, id, operation))).rejects.toMatchObject({ status: 404 });
+    }
+    await expect(prisma.$transaction(tx => closure.deadlineContext(tx, context, f.owner.actor, 'REQUEST'))).rejects.toMatchObject({ status: 404 });
+    await expect(service.save(f.owner.actor, id, { expectedVersion: model.version, document: f.draft() }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    await expect(service.submit(f.owner.actor, id, { expectedVersion: model.version }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    await expect(service.sources(f.issuer.actor, id, { expectedVersion: model.version, add: [], removeDefectIds: [] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    expect(await prisma.problemIndex.findUniqueOrThrow({ where: { id } })).toEqual(archived);
+    expect(await f.read(id)).toEqual(model);
+    expect(await prisma.auditEvent.count({ where: { organizationId: f.organization.id } })).toBe(before.audits);
+    expect(await prisma.outboxEvent.count()).toBe(before.events);
+  }, 120_000);
+
+  it('denies archived reads after effective read permission is revoked, including public list and existing read APIs', async () => {
+    const { f, id, query } = await archivedFixture();
+    await expect(query.find(f.owner.actor, f.organization.id, id)).resolves.toMatchObject({ id, status: 'ARCHIVED' });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:read' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: permission.id } } });
+    expect(await query.list(f.owner.actor, { domainCode: 'process-quality' })).toMatchObject({ total: 0, items: [] });
+    await expect(query.find(f.owner.actor, f.organization.id, id)).rejects.toMatchObject({ status: 404 });
+    await expect(f.read(id)).rejects.toMatchObject({ status: 403 });
+    await expect(prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id))).rejects.toMatchObject({ status: 403 });
+    await expect(prisma.$transaction(tx => closure.lockAndRead(tx, f.owner.actor, id, 'READ'))).rejects.toMatchObject({ status: 403 });
+    await expect(prisma.$transaction(tx => resources.authorizeAndLock(tx, f.owner.actor, { resourceType: 'process-eight-d', resourceId: id }, 'read'))).rejects.toMatchObject({ status: 403 });
+    await expect(prisma.$transaction(async tx => {
+      const problem = await tx.problemIndex.findUniqueOrThrow({ where: { id } });
+      return readRegistry.forProblem(problem).readSummaries(tx, f.owner.actor, [problem]);
+    })).rejects.toMatchObject({ status: 403 });
+  }, 120_000);
+
+  it('keeps archived READ constrained to the original organization and active session', async () => {
+    const { f, id } = await archivedFixture(), other = await fixture();
+    await expect(service.read(other.owner.actor, id)).rejects.toMatchObject({ status: 404 });
+    await expect(service.read({ ...f.owner.actor, accountType: 'SUPPLIER' }, id)).rejects.toMatchObject({ status: 403 });
+    await prisma.session.update({ where: { id: f.owner.actor.sessionId }, data: { revokedAt: new Date() } });
+    await expect(f.read(id)).rejects.toMatchObject({ status: 401 });
+  }, 120_000);
+
+  async function crossOrganizationFixture() {
+    const home = await fixture(), target = await fixture(), id = await target.issue();
+    const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+    const role = await prisma.role.create({ data: { organizationId: home.organization.id, code: randomUUID(), name: 'Explicit platform marker', permissions: { create: { permissionId: marker.id } } } });
+    await prisma.userRole.create({ data: { organizationId: home.organization.id, userId: home.issuer.user.id, roleId: role.id } });
+    const actor = { ...home.issuer.actor, scopeOrganizationId: target.organization.id };
+    const query = new ProblemQueryService(prisma, readRegistry);
+    const storage = new S3CompatibleObjectStorage();
+    const reports = new ProcessEightDReportService(prisma, service, new FileLifecycleService(prisma, new FilePolicyService(), storage, audit, resources), storage, audit);
+    return { home, target, id, role, actor, query, reports };
+  }
+
+  it.each(['LIST', 'READ', 'REPORT'] as const)('allows a real platform administrator in A to %s a formal B 8D without impersonating its organization', async operation => {
+    const { home, target, id, role, actor, query, reports } = await crossOrganizationFixture();
+    const original = { ...actor };
+    expect(await prisma.userPosition.count({ where: { userId: actor.id, organizationId: target.organization.id } })).toBe(0);
+    if (operation === 'LIST') {
+      const page = await query.list(home.issuer.actor, { organizationId: target.organization.id, domainCode: 'process-quality' });
+      expect(page).toMatchObject({ total: 1, items: [{ id, organizationId: target.organization.id, summary: { fields: expect.arrayContaining([
+        { key: 'ownerName', label: '负责人', value: target.owner.user.username },
+      ]) } }] });
+      const problem = await prisma.problemIndex.findUniqueOrThrow({ where: { id } });
+      await prisma.$transaction(tx => problems.archive(tx, target.organization.id, id, problem.version, target.issuer.user.id));
+      expect((await query.list(home.issuer.actor, { organizationId: target.organization.id, status: 'ARCHIVED' })).items[0]).toMatchObject({ id, summary: { fields: expect.arrayContaining([
+        { key: 'stage', label: '当前阶段', value: '已归档' },
+      ]) } });
+      await expect(service.read(actor, id)).resolves.toMatchObject({ problemId: id, organizationId: target.organization.id, allowedActions: ['read'] });
+    } else if (operation === 'READ') {
+      await expect(service.read(actor, id)).resolves.toMatchObject({ problemId: id, organizationId: target.organization.id, allowedActions: ['read'] });
+      const result = await prisma.$transaction(tx => service.readReport(tx, actor, id));
+      expect(result.record.problem.organizationId).toBe(target.organization.id);
+      await expect(prisma.$transaction(tx => resources.authorizeAndLock(tx, actor, { resourceType: 'process-eight-d', resourceId: id }, 'read'))).resolves.toMatchObject({ organizationId: target.organization.id });
+    } else {
+      const traceId = randomUUID();
+      await expect(reports.read(actor, id, { organizationId: target.organization.id }, traceId)).resolves.toMatchObject({ problemId: id });
+      expect(await prisma.auditEvent.findFirst({ where: { traceId, action: 'PROCESS_EIGHT_D_REPORT_READ' } })).toMatchObject({ organizationId: target.organization.id, actorUserId: home.issuer.user.id });
+      await expect(reports.read(actor, id, { organizationId: home.organization.id }, randomUUID())).rejects.toMatchObject({ status: 403 });
+    }
+    expect(actor).toEqual(original);
+    await prisma.userRole.delete({ where: { userId_roleId_organizationId: { userId: actor.id, roleId: role.id, organizationId: home.organization.id } } });
+    await expect(service.read(actor, id)).rejects.toMatchObject({ status: 403 });
+    await expect(query.list(home.issuer.actor, { organizationId: target.organization.id })).rejects.toMatchObject({ status: 403 });
+    await expect(reports.read(actor, id, { organizationId: target.organization.id }, randomUUID())).rejects.toMatchObject({ status: 403 });
+  }, 120_000);
+
+  it('never promotes cross-organization platform feature grants into owner, collaborator or closure duties', async () => {
+    const { target, id, actor } = await crossOrganizationFixture();
+    const before = await target.read(id);
+    for (const purpose of ['EDIT', 'SUBMIT', 'DECIDE', 'CANCEL', 'DEADLINE'] as const) {
+      await expect(prisma.$transaction(tx => service.lockRecord(tx, actor, id, purpose))).rejects.toMatchObject({ status: 403 });
+    }
+    await expect(service.save(actor, id, { expectedVersion: before.version, document: target.draft() }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(service.submit(actor, id, { expectedVersion: before.version }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    const round = (await target.submit(id))!;
+    await expect(rounds.decide(actor, round.id, { expectedRoundVersion: round.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'No actual duty' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    expect((await rounds.readProjection(prisma, target.organization.id, id))!.status).toBe('PENDING');
+  }, 120_000);
+
+  it('denies ordinary users and actual supplier accounts cross-organization 8D list, read and report', async () => {
+    const { home, target, id, query, reports } = await crossOrganizationFixture();
+    const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Actual supplier', type: 'SUPPLIER' } });
+    const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'unused', accountType: 'SUPPLIER' } });
+    const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), securityVersion: user.securityVersion } });
+    const supplier: ProcessEightDActor = { id: user.id, organizationId: organization.id, accountType: 'SUPPLIER', sessionId: session.id };
+    for (const reader of [home.owner.actor, supplier]) {
+      const scoped = { ...reader, scopeOrganizationId: target.organization.id };
+      await expect(query.list(reader, { organizationId: target.organization.id })).rejects.toMatchObject({ status: 403 });
+      await expect(service.read(scoped, id)).rejects.toMatchObject({ status: 403 });
+      await expect(reports.read(scoped, id, { organizationId: target.organization.id }, randomUUID())).rejects.toMatchObject({ status: 403 });
+    }
+  }, 120_000);
+
+  it('serves cross-organization public HTTP list, current report and PDF through real guards, and still denies duty-free writes', async () => {
+    const { home, target, id } = await crossOrganizationFixture();
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const sessions = app.get(SessionService), csrf = randomUUID();
+      const token = await sessions.create(home.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const cookie = `qms_session=${token}; qms_csrf=${csrf}`;
+      const get = (path: string) => request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', cookie);
+      const suffix = `organizationId=${target.organization.id}`;
+      const base = `process-quality/eight-d/${id}`;
+      const page = await get(`problem-index?${suffix}&domainCode=process-quality`).expect(200);
+      expect(page.body).toMatchObject({ total: 1, items: [{ id, organizationId: target.organization.id }] });
+      await get(`${base}?${suffix}`).expect(200);
+      const report = await get(`${base}/report?${suffix}&view=CURRENT`).expect(200);
+      expect(report.body).toMatchObject({ problemId: id, view: 'CURRENT', snapshot: { problem: { organizationId: target.organization.id } } });
+      const pdf = await get(`${base}/report/pdf?${suffix}&view=CURRENT`).expect(200).expect('Content-Type', /application\/pdf/);
+      expect(pdf.body.subarray(0, 5).toString()).toBe('%PDF-');
+      const before = await target.read(id);
+      await request(app.getHttpServer()).put(`/api/v1/${base}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+        .send({ organizationId: target.organization.id, expectedVersion: before.version, document: target.draft() }).expect(403);
+      await request(app.getHttpServer()).post(`/api/v1/${base}/submit`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+        .send({ organizationId: target.organization.id, expectedVersion: before.version }).expect(403);
+      expect(await target.read(id)).toEqual(before);
+      const ordinary = await sessions.create(home.owner.user.id, app.get(PrismaService), { mfaVerified: true });
+      for (const path of [`problem-index?${suffix}`, `${base}?${suffix}`, `${base}/report?${suffix}`, `${base}/report/pdf?${suffix}`]) {
+        await request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', `qms_session=${ordinary}`).expect(403);
+      }
+      const session = await sessions.resolve(token);
+      expect(session!.user.organizationId).toBe(home.organization.id);
+    } finally { await app.close(); }
+  }, 120_000);
+
+  it('filters response forms before pagination and status counts for real same-type BRIEF and formal 8D indexes', async () => {
+    const { f, id: archivedId, query } = await archivedFixture(), activeId = await f.issue(), briefSource = await f.source();
+    const brief = await prisma.$transaction(tx => problems.createForDomainSourceIssue(tx, { organizationId: f.organization.id, domainCode: 'process-quality',
+      problemType: 'PROCESS_DEFECT', sourceType: 'process-defect', sourceId: briefSource.id, severity: 'LOW', ownerId: f.owner.user.id, createdById: f.issuer.user.id }));
+    const base = { domainCode: 'process-quality', problemType: 'PROCESS_DEFECT', pageSize: 1 };
+    const form = (responseForm: 'BRIEF' | 'EIGHT_D', page = 1) => Object.assign(new ProblemIndexQueryDto(), base, { responseForm, page });
+    const first = await query.list(f.owner.actor, form('EIGHT_D'));
+    const second = await query.list(f.owner.actor, form('EIGHT_D', 2));
+    expect(first.total).toBe(2); expect(second.total).toBe(2);
+    expect(first.items).toHaveLength(1); expect(second.items).toHaveLength(1);
+    expect([first.items[0]!.id, second.items[0]!.id].sort()).toEqual([activeId, archivedId].sort());
+    expect(first.statusCounts).toEqual(expect.arrayContaining([{ status: 'ARCHIVED', count: 1 }, { status: 'IN_PROGRESS', count: 1 }]));
+    expect(first.statusCounts).toHaveLength(2); expect(second.statusCounts).toEqual(first.statusCounts);
+    expect((await query.list(f.owner.actor, form('EIGHT_D', 3))).items).toEqual([]);
+    const briefs = await query.list(f.owner.actor, form('BRIEF'));
+    expect(briefs).toMatchObject({ total: 1, items: [{ id: brief.id }], statusCounts: [{ status: 'OPEN', count: 1 }] });
+    expect((await query.list(f.owner.actor, base)).total).toBe(3);
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:read' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: permission.id } } });
+    expect(await query.list(f.owner.actor, form('EIGHT_D'))).toMatchObject({ total: 0, items: [], statusCounts: [] });
+    expect((await query.list(f.owner.actor, form('BRIEF'))).total).toBe(1);
+  }, 120_000);
+
+  async function realFileReadFixture() {
+    const f = await crossOrganizationFixture();
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID(), sessions = app.get(SessionService);
+      const cookie = async (userId: string) => `qms_session=${await sessions.create(userId, app.get(PrismaService), { reauthenticated: true, mfaVerified: true })}; qms_csrf=${csrf}`;
+      const ownerCookie = await cookie(f.target.owner.user.id), adminCookie = await cookie(f.home.issuer.user.id);
+      const get = (who: string, path: string) => request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', who);
+      const post = (who: string, path: string, body: object) => request(app.getHttpServer()).post(`/api/v1/${path}`)
+        .set('Cookie', who).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
+      const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'problem-index:read' } });
+      await prisma.rolePermission.create({ data: { roleId: f.target.role.id, permissionId: permission.id } });
+      const uploadInput = { resourceType: 'process-eight-d', resourceId: f.id, originalName: 'actual-file-read.png', contentType: 'image/png',
+        sizeBytes: png.length, sha256: createHash('sha256').update(png).digest('hex') };
+      const upload = (await post(ownerCookie, 'files/uploads', uploadInput).expect(201)).body;
+      expect((await fetch(upload.uploadUrl, { method: 'PUT', headers: upload.headers, body: png })).status).toBe(200);
+      await post(ownerCookie, `files/${upload.file.id}/complete`, { expectedVersion: upload.file.version }).expect(202);
+      const [{ now }] = await prisma.$queryRaw<{ now: Date }[]>`SELECT CURRENT_TIMESTAMP AS "now"`;
+      const offset = now.getTime() - Date.now() + 1000;
+      const scanner = new FileScanWorkerService(prisma, app.get(FileVerificationService), app.get(AuditLogService), () => new Date(Date.now() + offset));
+      await scanner.processDue(100);
+      const file = await prisma.fileObject.findUniqueOrThrow({ where: { id: upload.file.id } });
+      expect(file).toMatchObject({ status: 'AVAILABLE', scanStatus: 'CLEAN', verifiedSha256: uploadInput.sha256, verifiedContentType: 'image/png' });
+      expect(file.scannerEngine).toMatch(/^ClamAV /);
+      const current = await f.target.read(f.id), document = f.target.draft();
+      document.okFileIds = [file.id];
+      await service.save(f.target.owner.actor, f.id, { expectedVersion: current.version, document }, randomUUID(), randomUUID());
+      const workspace = `problem-index/${f.id}/workspace?organizationId=${f.target.organization.id}`;
+      expect((await get(ownerCookie, workspace).expect(200)).body.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ id: file.id, downloadable: true })]));
+      console.info('REQ0030 real file READ fixture', { fileId: file.id, organizationId: file.organizationId, scannerEngine: file.scannerEngine,
+        status: file.status, scanStatus: file.scanStatus, sha256: file.verifiedSha256, objectVersionId: file.objectVersionId });
+      return { ...f, app, cookie, ownerCookie, adminCookie, get, post, file, uploadInput, workspace };
+    } catch (error) { await app.close(); throw error; }
+  }
+
+  it.each(['WORKSPACE', 'METADATA', 'DOWNLOAD'] as const)('reads an actual CLEAN B attachment through public %s as platform administrator A without supplied scope', async route => {
+    const f = await realFileReadFixture();
+    try {
+      if (route === 'WORKSPACE') {
+        const response = await f.get(f.adminCookie, f.workspace).expect(200);
+        expect(response.body).toMatchObject({ problem: { id: f.id, organizationId: f.target.organization.id }, evidence: expect.arrayContaining([
+          expect.objectContaining({ id: f.file.id, downloadable: true }),
+        ]) });
+      } else if (route === 'METADATA') {
+        await f.get(f.adminCookie, `files/${f.file.id}`).expect(200).expect(response => {
+          expect(response.body).toMatchObject({ id: f.file.id, status: 'AVAILABLE', scanStatus: 'CLEAN' });
+        });
+      } else {
+        const grant = (await f.post(f.adminCookie, `files/${f.file.id}/download`, {}).expect(201)).body;
+        const response = await fetch(grant.url);
+        expect(response.status).toBe(200);
+        const bytes = Buffer.from(await response.arrayBuffer());
+        expect(bytes).toEqual(png);
+        expect(createHash('sha256').update(bytes).digest('hex')).toBe(f.file.sha256);
+      }
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: f.home.issuer.user.id } });
+      expect(user.organizationId).toBe(f.home.organization.id);
+    } finally { await f.app.close(); }
+  }, 120_000);
+
+  it('denies real file reads to ungranted same-organization and ordinary cross-organization users and to a revoked platform administrator', async () => {
+    const f = await realFileReadFixture();
+    try {
+      const ungranted = await f.target.person(f.target.section.id);
+      await prisma.userRole.deleteMany({ where: { userId: ungranted.user.id } });
+      for (const who of [await f.cookie(ungranted.user.id), await f.cookie(f.home.owner.user.id)]) {
+        await f.get(who, f.workspace).expect(403);
+        await f.get(who, `files/${f.file.id}`).expect(403);
+        await f.post(who, `files/${f.file.id}/download`, {}).expect(403);
+      }
+      await f.get(f.adminCookie, `files/${f.file.id}`).expect(200);
+      await prisma.userRole.delete({ where: { userId_roleId_organizationId: { userId: f.actor.id, roleId: f.role.id, organizationId: f.home.organization.id } } });
+      await f.get(f.adminCookie, f.workspace).expect(403);
+      await f.get(f.adminCookie, `files/${f.file.id}`).expect(403);
+      await f.post(f.adminCookie, `files/${f.file.id}/download`, {}).expect(403);
+    } finally { await f.app.close(); }
+  }, 120_000);
+
+  it('keeps actual archived attachment READ available but rejects upload, complete, attach and delete without mutating evidence', async () => {
+    const f = await realFileReadFixture();
+    try {
+      const problem = await prisma.problemIndex.findUniqueOrThrow({ where: { id: f.id } });
+      await prisma.$transaction(tx => problems.archive(tx, f.target.organization.id, f.id, problem.version, f.target.issuer.user.id));
+      await f.get(f.adminCookie, f.workspace).expect(200);
+      await f.get(f.adminCookie, `files/${f.file.id}`).expect(200);
+      const grant = (await f.post(f.adminCookie, `files/${f.file.id}/download`, {}).expect(201)).body;
+      const response = await fetch(grant.url);
+      expect(response.status).toBe(200); expect(Buffer.from(await response.arrayBuffer())).toEqual(png);
+      await f.post(f.ownerCookie, 'files/uploads', f.uploadInput).expect(404);
+      await f.post(f.ownerCookie, `files/${f.file.id}/complete`, { expectedVersion: f.file.version }).expect(404);
+      await f.post(f.ownerCookie, `files/${f.file.id}/delete`, { expectedVersion: f.file.version }).expect(404);
+      await expect(prisma.$transaction(tx => f.app.get(FileLifecycleService).assertAttachable(tx, f.target.owner.actor,
+        { resourceType: 'process-eight-d', resourceId: f.id }, [f.file.id]))).rejects.toMatchObject({ status: 404 });
+      expect(await prisma.fileObject.findUniqueOrThrow({ where: { id: f.file.id } })).toEqual(f.file);
+    } finally { await f.app.close(); }
+  }, 120_000);
+
+  it('manages target B binding GET, PUT and activation through real HTTP without changing administrator A identity or A configuration', async () => {
+    const f = await crossOrganizationFixture();
+    const beforeA = await service.binding(f.home.issuer.actor), beforeB = (await service.binding(f.target.issuer.actor))!;
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID(), token = await app.get(SessionService).create(f.home.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const cookie = `qms_session=${token}; qms_csrf=${csrf}`, bindKey = randomUUID(), activateKey = randomUUID();
+      const beforeOutbox = await prisma.outboxEvent.count();
+      const get = await request(app.getHttpServer()).get(`/api/v1/process-quality/eight-d/binding?organizationId=${f.target.organization.id}`).set('Cookie', cookie).expect(200);
+      expect(get.body).toEqual(beforeB);
+      const bound = await request(app.getHttpServer()).put('/api/v1/process-quality/eight-d/binding').set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', bindKey)
+        .send({ organizationId: f.target.organization.id, expectedVersion: beforeB.version, workflowDefinitionId: beforeB.workflowDefinitionId, workflowVersionId: beforeB.workflowVersionId }).expect(200);
+      expect(bound.body).toMatchObject({ organizationId: f.target.organization.id, version: beforeB.version + 1, enabled: false });
+      const active = await request(app.getHttpServer()).put('/api/v1/process-quality/eight-d/activation').set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', activateKey)
+        .send({ organizationId: f.target.organization.id, expectedVersion: bound.body.version, enabled: true }).expect(200);
+      expect(active.body).toMatchObject({ organizationId: f.target.organization.id, version: beforeB.version + 2, enabled: true });
+      expect(await service.binding(f.home.issuer.actor)).toEqual(beforeA);
+      const [stored] = await prisma.$queryRaw<{ updatedBy: string }[]>`SELECT updated_by AS "updatedBy" FROM process_eight_d_bindings WHERE organization_id = ${f.target.organization.id}::uuid`;
+      expect(stored!.updatedBy).toBe(f.home.issuer.user.id);
+      const receipts = await prisma.$queryRaw<{ organizationId: string; responseOrganizationId: string }[]>`SELECT organization_id AS "organizationId", response->>'organizationId' AS "responseOrganizationId"
+        FROM process_eight_d_receipts WHERE actor_user_id = ${f.home.issuer.user.id}::uuid AND key IN (${bindKey}, ${activateKey})`;
+      expect(receipts).toHaveLength(2);
+      expect(receipts.every(row => row.organizationId === f.target.organization.id && row.responseOrganizationId === f.target.organization.id)).toBe(true);
+      expect(await prisma.auditEvent.count({ where: { organizationId: f.target.organization.id, actorUserId: f.home.issuer.user.id, resourceId: f.target.organization.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED' } })).toBe(2);
+      expect(await prisma.outboxEvent.count()).toBe(beforeOutbox);
+      expect((await app.get(SessionService).resolve(token))!.user.organizationId).toBe(f.home.organization.id);
+    } finally { await app.close(); }
+  }, 120_000);
+
+  it.each(['MISSING', 'EXPIRED'] as const)('rejects configuration writes and replays without %s recent authentication while allowing reads', async state => {
+    const f = await crossOrganizationFixture();
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const sessions = app.get(SessionService);
+      const token = await sessions.create(f.home.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const session = (await sessions.resolve(token))!;
+      const csrf = randomUUID(), cookie = `qms_session=${token}; qms_csrf=${csrf}`;
+      const before = (await service.binding(f.target.issuer.actor))!;
+      const bindKey = randomUUID(), activateKey = randomUUID();
+      const bindBody = { organizationId: f.target.organization.id, expectedVersion: before.version, workflowDefinitionId: before.workflowDefinitionId, workflowVersionId: before.workflowVersionId };
+      const bound = await request(app.getHttpServer()).put('/api/v1/process-quality/eight-d/binding').set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', bindKey).send(bindBody).expect(200);
+      const activateBody = { organizationId: f.target.organization.id, expectedVersion: bound.body.version, enabled: true };
+      await request(app.getHttpServer()).put('/api/v1/process-quality/eight-d/activation').set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', activateKey).send(activateBody).expect(200);
+      const stable = (await service.binding(f.target.issuer.actor))!;
+      const auditBefore = await prisma.auditEvent.count({ where: { organizationId: f.target.organization.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED', outcome: 'SUCCESS' } });
+      const receiptBefore = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM process_eight_d_receipts WHERE organization_id = ${f.target.organization.id}::uuid AND actor_user_id = ${f.actor.id}::uuid`;
+      const userBefore = await prisma.user.findUniqueOrThrow({ where: { id: f.actor.id } });
+      await prisma.session.update({ where: { id: session.id }, data: { reauthenticatedAt: state === 'MISSING' ? null : new Date(Date.now() - 6 * 60_000) } });
+      await request(app.getHttpServer()).get(`/api/v1/process-quality/eight-d/binding?organizationId=${f.target.organization.id}`).set('Cookie', cookie).expect(200);
+      for (const operation of [
+        { path: 'binding', key: randomUUID(), body: { ...bindBody, expectedVersion: stable.version } },
+        { path: 'activation', key: randomUUID(), body: { ...activateBody, expectedVersion: stable.version, enabled: false } },
+        { path: 'binding', key: bindKey, body: bindBody },
+        { path: 'activation', key: activateKey, body: activateBody },
+      ]) {
+        const rejected = await request(app.getHttpServer()).put(`/api/v1/process-quality/eight-d/${operation.path}`).set('Cookie', cookie)
+          .set('x-csrf-token', csrf).set('Idempotency-Key', operation.key).send(operation.body).expect(403);
+        expect(rejected.body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+      }
+      expect(await service.binding(f.target.issuer.actor)).toEqual(stable);
+      expect(await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM process_eight_d_receipts WHERE organization_id = ${f.target.organization.id}::uuid AND actor_user_id = ${f.actor.id}::uuid`).toEqual(receiptBefore);
+      expect(await prisma.auditEvent.count({ where: { organizationId: f.target.organization.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED', outcome: 'SUCCESS' } })).toBe(auditBefore);
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: f.actor.id } })).toEqual(userBefore);
+    } finally {
+      await prisma.rolePermission.deleteMany({ where: { roleId: f.role.id } });
+      await app.close();
+    }
+  }, 120_000);
+
+  it('isolates configuration receipts for the same actor and key in A and B, preserves CAS and rejects foreign workflow bindings', async () => {
+    const f = await crossOrganizationFixture(), a = (await service.binding(f.home.issuer.actor))!, b = (await service.binding(f.target.issuer.actor))!;
+    const key = randomUUID(), input = { expectedVersion: b.version, enabled: false };
+    expect(a.version).toBe(b.version);
+    const bChanged = await service.activate(f.actor, input, key, randomUUID());
+    expect(await service.binding(f.home.issuer.actor)).toEqual(a);
+    const aChanged = await service.activate(f.home.issuer.actor, input, key, randomUUID());
+    expect(bChanged).toMatchObject({ organizationId: f.target.organization.id, version: b.version + 1, enabled: false });
+    expect(aChanged).toMatchObject({ organizationId: f.home.organization.id, version: a.version + 1, enabled: false });
+    expect(await service.activate(f.actor, input, key, randomUUID())).toEqual(bChanged);
+    expect(await service.activate(f.home.issuer.actor, input, key, randomUUID())).toEqual(aChanged);
+    await expect(service.activate(f.actor, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    await expect(service.bind(f.actor, { expectedVersion: b.version + 1, workflowDefinitionId: a.workflowDefinitionId, workflowVersionId: a.workflowVersionId }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    expect(await service.binding(f.actor)).toEqual(bChanged);
+    const rows = await prisma.$queryRaw<{ organizationId: string }[]>`SELECT organization_id AS "organizationId" FROM process_eight_d_receipts
+      WHERE actor_user_id = ${f.actor.id}::uuid AND key = ${key}`;
+    expect(rows.map(row => row.organizationId).sort()).toEqual([f.home.organization.id, f.target.organization.id].sort());
+  }, 120_000);
+
+  it('revalidates cross-organization configuration MFA, internal active target and grants while denying ordinary users and suppliers', async () => {
+    const f = await crossOrganizationFixture(), binding = (await service.binding(f.target.issuer.actor))!;
+    const input = { expectedVersion: binding.version, enabled: false };
+    await prisma.user.update({ where: { id: f.actor.id }, data: { mfaRequirementOverride: true } });
+    await prisma.session.update({ where: { id: f.actor.sessionId }, data: { mfaVerifiedAt: null } });
+    await expect(service.binding(f.actor)).rejects.toMatchObject({ status: 401, response: { code: 'AUTH_MFA_REQUIRED' } });
+    await expect(service.activate(f.actor, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 401 });
+    await prisma.session.update({ where: { id: f.actor.sessionId }, data: { mfaVerifiedAt: new Date() } });
+    const ordinary = { ...f.home.owner.actor, scopeOrganizationId: f.target.organization.id };
+    await expect(service.binding(ordinary)).rejects.toMatchObject({ status: 403 });
+    await expect(service.bind(ordinary, { expectedVersion: binding.version, workflowDefinitionId: binding.workflowDefinitionId, workflowVersionId: binding.workflowVersionId }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(service.activate(ordinary, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Configuration supplier boundary', type: 'SUPPLIER' } });
+    const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'unused', accountType: 'SUPPLIER' } });
+    const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), securityVersion: user.securityVersion } });
+    const supplier: ProcessEightDActor = { id: user.id, organizationId: organization.id, accountType: 'SUPPLIER', sessionId: session.id, scopeOrganizationId: f.target.organization.id };
+    await expect(service.binding(supplier)).rejects.toMatchObject({ status: 403 });
+    await expect(service.activate(supplier, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(service.binding({ ...f.actor, scopeOrganizationId: organization.id })).rejects.toMatchObject({ status: 403 });
+    await prisma.organization.update({ where: { id: f.target.organization.id }, data: { status: 'DISABLED' } });
+    await expect(service.binding(f.actor)).rejects.toMatchObject({ status: 403 });
+    await expect(service.activate(f.actor, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await prisma.organization.update({ where: { id: f.target.organization.id }, data: { status: 'ACTIVE' } });
+    await prisma.userRole.delete({ where: { userId_roleId_organizationId: { userId: f.actor.id, roleId: f.role.id, organizationId: f.home.organization.id } } });
+    await expect(service.binding(f.actor)).rejects.toMatchObject({ status: 403 });
+    await expect(service.activate(f.actor, input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    expect(await service.binding(f.target.issuer.actor)).toEqual(binding);
   }, 120_000);
 
   it('lists domain-authorized active assignment candidates without workflow/structure management grants', async () => {
@@ -307,12 +809,24 @@ describe('process 8D real domain transactions', () => {
     expect(await rounds.decide(f.manager.actor, one.id, decision, key, randomUUID())).toEqual(done);
     const closed = await f.read(id);
     expect(closed.status).toBe('CLOSED'); expect(closed.closedRevisionId).not.toBeNull();
+    const followup = () => prisma.$transaction(async tx => {
+      const problem = await tx.problemIndex.findUniqueOrThrow({ where: { id } });
+      return (await readRegistry.forProblem(problem).readSummaries(tx, f.owner.actor, [problem])).get(id)!;
+    });
+    const closedSummary = await followup();
+    expect(closedSummary.fields).toEqual(expect.arrayContaining([
+      { key: 'stage', label: '当前阶段', value: '已关闭' },
+      { key: 'ownerName', label: '负责人', value: f.owner.user.username },
+      { key: 'analysisDueAt', label: '分析期限', value: closed.analysisDueAt },
+      { key: 'submittedAt', label: '完整提交时间', value: closed.submittedAt },
+    ]));
     const snapshot = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id, closed.closedRevisionId!));
     const additional = await f.source();
     await service.sources(f.issuer.actor, id, { expectedVersion: closed.version, add: [{ defectId: additional.id, expectedVersion: additional.version }], removeDefectIds: [] }, randomUUID(), randomUUID());
     expect((await f.read(id)).contentVersion).toBe(closed.contentVersion);
     const historical = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id, closed.closedRevisionId!));
     expect(historical.snapshot).toEqual(snapshot.snapshot);
+    expect(await followup()).toEqual(closedSummary);
     const current = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id, null));
     expect(current.revision).toBeNull();
     expect((current.snapshot as { sources: unknown[] }).sources).toHaveLength(2);
