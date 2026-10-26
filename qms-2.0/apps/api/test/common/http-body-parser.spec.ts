@@ -3,6 +3,8 @@ import { Body, Controller, Module, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { configureHttpBodyParser } from '../../src/http-body-parser.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 
@@ -24,7 +26,17 @@ class ComponentImportBodyController {
   other(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
 }
 
-@Module({ controllers: [BodyLimitController, ComponentImportBodyController] })
+@Controller('api/v1/customer-quality/ledger')
+class CustomerLedgerBodyController {
+  @Post('import/preview')
+  preview(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
+  @Post('import/commit')
+  commit(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
+  @Post('other')
+  other(@Body() body: { rows: unknown[] }) { return { rows: body.rows.length }; }
+}
+
+@Module({ controllers: [BodyLimitController, ComponentImportBodyController, CustomerLedgerBodyController] })
 class BodyLimitModule {}
 
 it('accepts a legal complaint import JSON batch while bounding oversized bodies', async () => {
@@ -60,4 +72,33 @@ it('accepts the Unicode component batch boundary only on the bounded import rout
     await request(app.getHttpServer()).post(`${path}/other`).send({ rows }).expect(413);
     await request(app.getHttpServer()).post(`${path}/import`).send({ rows: ['x'.repeat(513 * 1024)] }).expect(413);
   } finally { await app.close(); }
+});
+
+it.each(['preview', 'commit'])('accepts the full bounded customer ledger %s envelope without widening ordinary writes', async action => {
+  const app = (await Test.createTestingModule({ imports: [BodyLimitModule] }).compile())
+    .createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
+  configureHttpBodyParser(app);
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  await app.init();
+  try {
+    const rows = Array.from({ length: 100 }, (_, index) => ({ rowNumber: index + 1, action: 'ADD', fields: {
+      defectDescription: '质'.repeat(10000), investigation: '量'.repeat(10000), customerName: 'A'.repeat(200),
+      serviceMode: '待补'.repeat(500),
+    } }));
+    expect(Buffer.byteLength(JSON.stringify(rows[0]!.fields))).toBeLessThanOrEqual(64000);
+    expect(Buffer.byteLength(JSON.stringify({ mode: 'CONTINUE', rows }))).toBeGreaterThan(6 * 1024 * 1024);
+    const path = `/api/v1/customer-quality/ledger/import/${action}`;
+    await request(app.getHttpServer()).post(path).send({ mode: 'CONTINUE', rows }).expect(201);
+    await request(app.getHttpServer()).post('/api/v1/customer-quality/ledger/other').send({ rows }).expect(413);
+    await request(app.getHttpServer()).post(path).send({ rows: ['x'.repeat(7 * 1024 * 1024)] }).expect(413);
+  } finally { await app.close(); }
+});
+
+it('keeps the matching gateway allowances restricted to the two exact ledger import endpoints', () => {
+  const config = readFileSync(resolve('../../deployment/nginx.conf'), 'utf8');
+  for (const action of ['preview', 'commit']) {
+    expect(config).toMatch(new RegExp(`location = /api/v1/customer-quality/ledger/import/${action} \\{\\s+client_max_body_size 7m;\\s+proxy_pass http://api:3000;`));
+  }
+  expect(config.slice(0, config.indexOf('location'))).not.toContain('client_max_body_size');
+  expect(config.match(/location \/api\/ \{([^}]+)\}/)?.[1]).not.toContain('client_max_body_size');
 });

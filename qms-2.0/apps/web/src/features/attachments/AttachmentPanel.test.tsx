@@ -17,6 +17,33 @@ function sample() {
   return selected;
 }
 
+it('distinguishes historical quarantine from pending work started in the current panel', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => json(file)));
+  const allPending = vi.fn(), localPending = vi.fn();
+  const props = { resource, fileIds: [file.id], onPendingChange: allPending, onLocalPendingChange: localPending };
+  render(<LanguageProvider><AttachmentPanel {...props} /></LanguageProvider>);
+  await screen.findByText(file.originalName);
+  await waitFor(() => expect(allPending).toHaveBeenLastCalledWith(true));
+  expect(localPending).toHaveBeenLastCalledWith(false);
+});
+
+it('keeps an unknown local upload pending until its private retry is explicitly abandoned', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.endsWith('/uploads')) throw new TypeError('lost upload initialization response');
+    return json(file);
+  }));
+  const localPending = vi.fn();
+  const props = { resource, fileIds: [], onLocalPendingChange: localPending };
+  render(<LanguageProvider><AttachmentPanel {...props} /></LanguageProvider>);
+  fireEvent.change(screen.getByLabelText('选择附件'), { target: { files: [sample()] } });
+  await screen.findByRole('button', { name: '重试上传' });
+  expect(localPending).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole('button', { name: '放弃重试' }));
+  await waitFor(() => expect(localPending).toHaveBeenLastCalledWith(false));
+});
+
 it('keeps a rejected CLEAN receipt pending and retries it after a temporary read-only render', async () => {
   vi.stubGlobal('crypto', webcrypto);
   let complete!: (response: Response) => void;

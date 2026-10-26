@@ -1,5 +1,13 @@
 # OpenAPI 契约
 
+## N4本地契约接续（2026-10-27，尚未发布）
+
+客诉新事实入口为`/api/v1/customer-quality/ledger`及其详情、候选、收件、关闭/恢复、`import/preview`和`import/commit`；逐行ADD/SKIP/SUPPLEMENT与取消/继续/跳错误行使用同一生成DTO，raw与normalized分开，缺客户/工程师/有效业务字段可留空或保原文警告，不补造风险/数量。映射响应直接复用`ComponentProjectResolutionDto`，中文类型别名仅规范化值，不改原单元格。
+
+两个新import端点单独允许7 MiB请求体，以容纳100条各64000字节raw加行元数据；API及Web网关均有对应边界，普通API保留100 kB JSON默认值，其他既有import限额不变。先3项运输/静态断言失败后完整5项通过；该配置测试不是完整域授权或公网网关实测。
+
+`/api/v1/customer-quality/analysis`提供真实派工、FAE同部门转派、FAE与SQE各自保存及不可变历史；`fae-tasks`是当前有效解析职责投影，不伪造通用WorkflowTask。附件资源为稳定`customer-complaint-analysis` UUID，当前资格和CLEAN状态仍由服务器校验。旧`/complaints`仅接未采用新语义的历史行，旧问题幂等回放保留非变更性历史结果；客户完整problemId多源8D仍是后续单元。
+
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
 ## REQ-0030 契约接续（2026-10-26，28cc304已部署并核验公开契约）

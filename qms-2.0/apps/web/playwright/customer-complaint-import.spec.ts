@@ -54,6 +54,7 @@ test('previews Excel errors and creates a complaint with a row result through th
   const recordKey = unique('complaint_source');
 
   await page.goto('/app/customer-quality');
+  await page.getByRole('button', { name: '历史台账', exact: true }).click();
   const section = page.locator('.customer-quality-import');
   await expect(section.getByRole('heading', { name: 'Excel 批量导入' })).toBeVisible();
   const picker = section.getByLabel('选择客诉 Excel 文件');
@@ -102,6 +103,7 @@ test('hides Excel import from a business role with complaint read access only', 
     const page = await reader.newPage();
     await uiLogin(page, username, password);
     await page.goto('/app/customer-quality');
+    await page.getByRole('button', { name: '历史台账', exact: true }).click();
     await expect(page.getByRole('heading', { name: '客诉台账' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Excel 批量导入' })).toHaveCount(0);
     await expect(page.getByLabel('选择客诉 Excel 文件')).toHaveCount(0);

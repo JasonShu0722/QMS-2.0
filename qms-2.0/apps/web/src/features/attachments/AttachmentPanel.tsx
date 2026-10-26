@@ -13,6 +13,7 @@ interface Props {
   onReady?: (file: Attachment) => void | boolean;
   onAccessDenied?: (cause: ApiError) => void;
   onPendingChange?: (pending: boolean) => void;
+  onLocalPendingChange?: (pending: boolean) => void;
   onFilesChanged?: (files: Attachment[]) => void;
   onRemoved?: (id: string) => void;
 }
@@ -21,7 +22,7 @@ export function AttachmentPanel(props: Props) {
   return <AttachmentContent key={`${props.resource.resourceType}:${props.resource.resourceId}`} {...props} />;
 }
 
-function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFilesChanged, onRemoved, onAccessDenied, onPendingChange }: Props) {
+function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFilesChanged, onRemoved, onAccessDenied, onPendingChange, onLocalPendingChange }: Props) {
   const { t, locale } = useLanguage();
   const [localIds, setLocalIds] = useState<string[]>([]);
   const [files, setFiles] = useState<Record<string, Attachment>>({});
@@ -51,6 +52,8 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
   const awaitingReceipt = !!onReady && localIds.some(id => files[id]?.status === 'AVAILABLE' && files[id]?.scanStatus === 'CLEAN' && !announced.has(id));
   const unsettled = busy || pending || awaitingReceipt;
   useEffect(() => { onPendingChange?.(unsettled); }, [onPendingChange, unsettled]);
+  const localUnsettled = busy || retryAvailable || awaitingReceipt || localIds.some(id => files[id]?.status === 'QUARANTINED' && ['WAITING_UPLOAD', 'PENDING'].includes(files[id].scanStatus));
+  useEffect(() => { onLocalPendingChange?.(localUnsettled); }, [onLocalPendingChange, localUnsettled]);
   useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   const refresh = () => setRevision((value) => value + 1);
   useEffect(() => {

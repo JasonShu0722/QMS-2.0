@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { CustomerComplaintProcessing } from './CustomerComplaintProcessing';
-import { CustomerQualityPage } from './CustomerQualityPage';
+import { CustomerLegacyQualityPage as CustomerQualityPage } from './CustomerLegacyQualityPage';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
 import { MemoryRouter, Link } from 'react-router-dom';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';

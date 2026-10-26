@@ -25,6 +25,52 @@ const document: EightDDocument = { description: '', okFileIds: [], ngFileIds: []
 beforeEach(() => vi.stubGlobal('crypto', webcrypto));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it('uses an explicit customer source resource for uploads while retaining verified preview metadata', async () => {
+  const current = { ...file, resourceType: 'CustomerComplaint', resourceId: 'complaint-1' };
+  let uploaded: { resourceType: string; resourceId: string } | undefined;
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf-test' });
+    if (path.endsWith('/uploads')) { uploaded = JSON.parse(String(init?.body)); return json({ code: 'FILE_UPLOAD_INVALID', message: 'test boundary' }, 422); }
+    return json(current);
+  }));
+  const scope = { onAccessDenied: vi.fn(), onPendingChange: vi.fn() };
+  const props = { problemId: current.resourceId, resource: { resourceType: current.resourceType, resourceId: current.resourceId },
+    fileIds: [current.id], readOnly: false, read: vi.fn(async () => undefined as never), onChange: vi.fn() };
+  render(<LanguageProvider><EightDEvidenceScopeContext.Provider value={scope}><EightDEvidence {...props} /></EightDEvidenceScopeContext.Provider></LanguageProvider>);
+  expect(await screen.findByRole('button', { name: `预览附件 ${current.originalName}` })).toBeEnabled();
+  expect(scope.onAccessDenied).not.toHaveBeenCalled();
+  const selected = new File([png], 'source-proof.png', { type: 'image/png' });
+  Object.defineProperty(selected, 'arrayBuffer', { value: async () => png.slice().buffer });
+  fireEvent.change(screen.getByLabelText('选择附件'), { target: { files: [selected] } });
+  await waitFor(() => expect(uploaded).toMatchObject({ resourceType: 'CustomerComplaint', resourceId: current.resourceId }));
+});
+
+it('lets a persisted source resource acknowledge its own CLEAN receipt after a read-only handoff', async () => {
+  let complete!: (response: Response) => void;
+  const current = { ...file, resourceType: 'CustomerComplaint', resourceId: 'complaint-1' };
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf-test' });
+    if (path.endsWith('/uploads')) return json({ file: { ...current, status: 'QUARANTINED', scanStatus: 'WAITING_UPLOAD', version: 1 }, uploadUrl: 'https://objects.example.test/source', headers: {} });
+    if (path.startsWith('https:')) return new Response(null);
+    if (path.endsWith('/complete')) return new Promise<Response>(resolve => { complete = resolve; });
+    return json(current);
+  }));
+  const ready = vi.fn(() => true), pending = vi.fn(), change = vi.fn();
+  const props = { problemId: current.resourceId, resource: { resourceType: current.resourceType, resourceId: current.resourceId },
+    fileIds: [], read: vi.fn(async () => undefined as never), onChange: change, onFileReady: ready, onLocalPendingChange: pending };
+  const content = (readOnly: boolean) => <LanguageProvider><EightDEvidence {...props} readOnly={readOnly} /></LanguageProvider>;
+  const view = render(content(false));
+  const selected = new File([png], 'source.png', { type: 'image/png' });
+  Object.defineProperty(selected, 'arrayBuffer', { value: async () => png.slice().buffer });
+  fireEvent.change(screen.getByLabelText('选择附件'), { target: { files: [selected] } });
+  await waitFor(() => expect(complete).toBeTypeOf('function'));
+  view.rerender(content(true));
+  await act(async () => complete(json(current)));
+  await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+  expect(ready).toHaveBeenCalledWith(expect.objectContaining({ id: current.id, status: 'AVAILABLE', scanStatus: 'CLEAN' }));
+  expect(change).not.toHaveBeenCalled();
+});
+
 function mount({ readOnly = false, read = vi.fn(async () => undefined as never), scope = { onAccessDenied: vi.fn(), onPendingChange: vi.fn() }, onChange = vi.fn() }: {
   readOnly?: boolean; read?: EightDRead; scope?: EightDEvidenceScopeValue; onChange?: (ids: string[]) => void;
 } = {}) {

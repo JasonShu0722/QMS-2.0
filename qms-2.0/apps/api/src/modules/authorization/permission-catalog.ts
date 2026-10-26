@@ -66,6 +66,10 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'customer-complaints', name: '客户客诉台账', status: 'active', operations: [
       operation('customer-quality:complaints:read', '查看客户客诉台账'),
       operation('customer-quality:complaints:write', '维护客户客诉台账'),
+      operation('customer-quality:complaints:close', '关闭及恢复本人跟进的客诉台账'),
+      operation('customer-quality:complaints:closed-edit', '补充已关闭客诉资料'),
+      operation('customer-quality:analyses:fae', '办理本人负责的客诉功能解析'),
+      operation('customer-quality:analyses:supplier', '办理本人负责的客诉供应商分析'),
     ] },
     { key: 'customer-issues', name: '客户问题管理', status: 'planned', operations: [] },
   ] },

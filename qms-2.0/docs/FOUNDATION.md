@@ -1,5 +1,15 @@
 # 底座与阶段二平台验收记录
 
+## N4本地整合门禁（2026-10-27，非发布/人工验收）
+
+首单元按[N4执行细化](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md)和Issue #74接续。默认API115完整文件1518项通过后，仅三个integration前置guard改用既有安全函数，适应CI随机端口；另库实际前置3套件拒绝后，修改后的3完整PG文件17项及原guard11项通过，不称前次默认测试已在修改后重跑。客户目录完整真实PG15文件137项、独立编译Worker8项、源码构建通过。历史红灯、测试前置/时序失败均在Git外证据保留，不合计重叠项。
+
+随后发现新批量导入缺少运输层放行，仅在preview/commit添加7 MiB API及网关边界；真实HTTP/静态配置测试先3失败/2通过，后5项全部通过，API再次构建成功。普通100 kB限制及行数/raw校验未放宽，不把该运输测试当业务授权。
+
+根工具72项、归档隔离、foundation/scanning及production/scanning的静态Compose验证通过。最终来源组件整合后的Web lint/build通过，大块体积告警保留。全Web160唯一文件8批初轮1820通过/1失败，原报告保持FAIL；冻结结束后仅优化原过程样例单用例的重复全页标签查询，不改业务/断言/timeout，完整14项通过替换唯一整文件证据、454个其他输入逐项不变，形成160文件1821项0跳过的完整文件组合覆盖，不称首次一次全绿。证据收集与窄补见本轮计划5.3。
+
+独立真实浏览器最终在新的55478/qms_n4_20261027_browser_final、119迁移/seed、API53180/Vite5191development及编译WorkerREADY上两个完整用例通过，55秒/零重试、安全输入前置3项通过。客户清单129字节真实上传为AVAILABLE/CLEAN、刷新持久化、下载字节/SHA一致且件数1不变；CQE/FAE/SQE职责及中文原文、1440/375px几何/JPEG均有证据。此前缺fixture授权、NODE_ENV=test重复test-id及选择器失败保留，不冒称IAB信任恢复。精确fixture授权/CORS只在任务一次性库/桶，不涉及生产；当前没有N4 PR/部署，不声称完整phase-2或业务人工验收。
+
 ## REQ-0030 发布核验（2026-10-26，V0.0.31-fix2）
 
 PR #73最终head f23d01b / CI40315522373及main合并28cc3049d35cf837be386d03bc32789fa3f84f01 / CI40321569614各9项成功，最新Code Review无发现和未处理项，独立Security Review未运行；main实际PG125文件1676项、Worker8项通过。Actions部署40323717205的attempt1 Git SSH失败、attempt2构建ENOSPC失败保留，不改写为成功。

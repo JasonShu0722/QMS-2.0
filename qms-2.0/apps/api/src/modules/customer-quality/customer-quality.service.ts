@@ -38,6 +38,10 @@ type CustomerMasterImportResultItem = { rowNumber: number; code: string; status:
 
 type Row = Record<string, any>;
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
+export function assertLegacyCustomerComplaint(row: Row | undefined): asserts row is Row {
+  if (!row) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
+  if (row.ledger_status !== null) fail('CUSTOMER_LEDGER_ROUTE_REQUIRED', 409);
+}
 function text(value: unknown, max: number, code = 'CUSTOMER_QUALITY_INPUT_INVALID'): string {
   const result = typeof value === 'string' ? value.trim() : ''; if (!result || result.length > max) fail(code, 400); return result;
 }
@@ -65,6 +69,12 @@ export class CustomerQualityService {
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     return actor.scopeOrganizationId ?? actor.organizationId;
+  }
+
+  private async authorizeLegacyComplaint(tx: AdminTransaction, organizationId: string, id: string) {
+    // Resource authorization runs before receipt replay, not just before the first write.
+    const [row] = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
+    assertLegacyCustomerComplaint(row);
   }
 
   async createCustomer(actor: AdminActor, input: { code: string; name: string }, traceId: string, key?: string) {
@@ -232,7 +242,8 @@ export class CustomerQualityService {
           if (status === 409) {
             const existing = await this.prisma.$transaction(async (tx) => {
               await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:write');
-              const records = await tx.$queryRaw<Row[]>`SELECT id, complaint_number FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND external_source_system = ${facts.externalSourceSystem} AND external_record_key = ${facts.externalRecordKey}`;
+              const records = await tx.$queryRaw<Row[]>`SELECT id, complaint_number, ledger_status FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND external_source_system = ${facts.externalSourceSystem} AND external_record_key = ${facts.externalRecordKey}`;
+              if (records[0]) assertLegacyCustomerComplaint(records[0]);
               return records[0] ?? null;
             });
             if (existing) {
@@ -259,33 +270,33 @@ export class CustomerQualityService {
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_COMPLAINT_UPDATED', payload: { id, ...input }, permission: 'customer-quality:complaints:write' }, async (tx) => {
       const rows = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET defect_description = COALESCE(${description}, defect_description), severity = COALESCE(${severity}, severity), severity_policy_version = COALESCE(${policy}, severity_policy_version), severity_snapshot = COALESCE(${snapshot}::jsonb, severity_snapshot), version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${input.expectedVersion} AND archived_at IS NULL RETURNING *`;
       if (!rows[0]) fail('CONCURRENCY_CONFLICT', 409); await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_UPDATED', resourceType: 'CustomerComplaint', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: rows[0].version } }, tx); return rows[0];
-    }, async (tx) => { const rows = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; if (!rows[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); });
+    }, async (tx) => { await this.authorizeLegacyComplaint(tx, organizationId, id); });
   }
 
   async detailComplaint(actor: AdminActor, id: string) {
-    const organizationId = this.scope(actor); id = uuid(id); return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const rows = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; if (!rows[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); const dispositions = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_dispositions WHERE complaint_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version DESC LIMIT 1`; const analyses = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_analyses WHERE complaint_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version DESC LIMIT 1`; return { ...rows[0], currentDisposition: dispositions[0] ?? null, currentAnalysis: analyses[0] ?? null }; });
+    const organizationId = this.scope(actor); id = uuid(id); return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const rows = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; assertLegacyCustomerComplaint(rows[0]); const dispositions = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_dispositions WHERE complaint_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version DESC LIMIT 1`; const analyses = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_analyses WHERE complaint_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version DESC LIMIT 1`; return { ...rows[0], currentDisposition: dispositions[0] ?? null, currentAnalysis: analyses[0] ?? null }; });
   }
 
   async dispositionHistory(actor: AdminActor, complaintId: string) {
     const organizationId = this.scope(actor); complaintId = uuid(complaintId);
-    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const complaint = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`; if (!complaint[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_dispositions WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version`; });
+    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const complaint = await tx.$queryRaw<Row[]>`SELECT id, ledger_status FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`; assertLegacyCustomerComplaint(complaint[0]); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_dispositions WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version`; });
   }
 
   async analysisHistory(actor: AdminActor, complaintId: string) {
     const organizationId = this.scope(actor); complaintId = uuid(complaintId);
-    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const complaint = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`; if (!complaint[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_analyses WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version`; });
+    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); const complaint = await tx.$queryRaw<Row[]>`SELECT id, ledger_status FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`; assertLegacyCustomerComplaint(complaint[0]); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_physical_analyses WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY version`; });
   }
 
   async listComplaints(actor: AdminActor) {
     const organizationId = this.scope(actor);
-    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND archived_at IS NULL ORDER BY created_at DESC, id DESC`; });
+    return this.prisma.$transaction(async (tx) => { await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read'); return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND archived_at IS NULL AND ledger_status IS NULL ORDER BY created_at DESC, id DESC`; });
   }
 
   async sourceReference(actor: AdminActor, complaintId: string): Promise<DomainSourceReference> {
     const organizationId = this.scope(actor); complaintId = uuid(complaintId);
     return this.prisma.$transaction(async (tx) => {
       await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read');
-      const record = await this.sourceRecord(tx, complaintId);
+      const record = await this.sourceRecord(tx, complaintId, organizationId);
       if (!record || record.organizationId !== organizationId) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
       return { sourceDomain: 'customer-quality', sourceType: 'customer-complaint', sourceId: complaintId,
         sourceVersion: record.sourceVersion, sourceSnapshot: record.sourceSnapshot, createdBy: record.createdBy };
@@ -298,9 +309,10 @@ export class CustomerQualityService {
     return this.sourceRecord(tx, source.sourceId);
   }
 
-  private async sourceRecord(tx: AdminTransaction, complaintId: string): Promise<DomainSourceRecord | null> {
-    const records = await tx.$queryRaw<Row[]>`SELECT complaint.*, customer.name AS customer_name FROM customer_quality_complaints complaint JOIN customer_quality_customers customer ON customer.id = complaint.customer_id AND customer.organization_id = complaint.organization_id WHERE complaint.id = ${complaintId}::uuid`;
+  private async sourceRecord(tx: AdminTransaction, complaintId: string, organizationId?: string): Promise<DomainSourceRecord | null> {
+    const records = await tx.$queryRaw<Row[]>`SELECT complaint.*, customer.name AS customer_name FROM customer_quality_complaints complaint LEFT JOIN customer_quality_customers customer ON customer.id = complaint.customer_id AND customer.organization_id = complaint.organization_id WHERE complaint.id = ${complaintId}::uuid AND (${organizationId ?? null}::uuid IS NULL OR complaint.organization_id = ${organizationId ?? null}::uuid)`;
     const record = records[0]; if (!record) return null;
+    assertLegacyCustomerComplaint(record);
     const analyses = await tx.$queryRaw<Row[]>`SELECT status, summary, evidence_summary FROM customer_quality_physical_analyses WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${record.organization_id}::uuid ORDER BY version DESC LIMIT 1`;
     const dispositions = await tx.$queryRaw<Row[]>`SELECT action, status, responsibility FROM customer_quality_physical_dispositions WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${record.organization_id}::uuid ORDER BY version DESC LIMIT 1`;
     const analysis = analyses[0]; const disposition = dispositions[0];
@@ -328,7 +340,7 @@ export class CustomerQualityService {
       await tx.$executeRaw`INSERT INTO customer_quality_complaint_events (id, organization_id, complaint_id, seq, event_type, from_status, to_status, note, category, responsible_department_id, owner_user_id, actor_user_id) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, (SELECT COALESCE(MAX(seq), 0) + 1 FROM customer_quality_complaint_events WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${id}::uuid), 'ARCHIVED', 'CLOSED', 'ARCHIVED', '复核关闭后归档', ${rows[0].category}, ${rows[0].responsible_department_id}::uuid, ${rows[0].owner_user_id}::uuid, ${actor.id}::uuid)`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_ARCHIVED', resourceType: 'CustomerComplaint', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: rows[0].version } }, tx);
       return rows[0];
-    }, async (tx) => { const rows = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`; if (!rows[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404); });
+    }, async (tx) => { await this.authorizeLegacyComplaint(tx, organizationId, id); });
   }
 
   async recordPhysicalDisposition(actor: AdminActor, complaintId: string, input: { action: string; status: string; responsibility?: string | null; notes?: string | null }, traceId: string, key?: string) {
@@ -344,7 +356,7 @@ export class CustomerQualityService {
       const rows = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_physical_dispositions (id, organization_id, complaint_id, action, status, responsibility, notes, version, created_by_id, updated_at) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${complaintId}::uuid, ${action}, ${status}, ${responsibility}, ${notes}, ${previous[0] ? previous[0].version + 1 : 1}, ${actor.id}::uuid, CURRENT_TIMESTAMP) RETURNING *`;
       await tx.$executeRaw`UPDATE customer_quality_complaints SET version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_PHYSICAL_DISPOSITION_RECORDED', resourceType: 'CustomerPhysicalDisposition', resourceId: rows[0].id, outcome: 'SUCCESS', traceId }, tx); return rows[0];
-    });
+    }, async (tx) => { await this.authorizeLegacyComplaint(tx, organizationId, complaintId); });
   }
 
   async recordPhysicalAnalysis(actor: AdminActor, complaintId: string, input: { summary: string; status: string; evidenceSummary?: string | null }, traceId: string, key?: string) {
@@ -357,7 +369,7 @@ export class CustomerQualityService {
       const rows = await tx.$queryRaw<Row[]>`INSERT INTO customer_quality_physical_analyses (id, organization_id, complaint_id, summary, status, evidence_summary, version, created_by_id, updated_at) VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${complaintId}::uuid, ${summary}, ${status}, ${evidenceSummary}, ${previous[0] ? previous[0].version + 1 : 1}, ${actor.id}::uuid, CURRENT_TIMESTAMP) RETURNING *`;
       await tx.$executeRaw`UPDATE customer_quality_complaints SET version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_PHYSICAL_ANALYSIS_RECORDED', resourceType: 'CustomerPhysicalAnalysis', resourceId: rows[0].id, outcome: 'SUCCESS', traceId }, tx); return rows[0];
-    });
+    }, async (tx) => { await this.authorizeLegacyComplaint(tx, organizationId, complaintId); });
   }
 
   private normalize(input: CustomerComplaintInput) {

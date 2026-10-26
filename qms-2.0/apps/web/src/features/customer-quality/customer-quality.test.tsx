@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import ExcelJS from 'exceljs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
-import { CustomerQualityPage } from './CustomerQualityPage';
+import { CustomerLegacyQualityPage as CustomerQualityPage } from './CustomerLegacyQualityPage';
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client');
