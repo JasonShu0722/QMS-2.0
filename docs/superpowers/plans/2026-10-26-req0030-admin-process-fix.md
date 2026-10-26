@@ -8,12 +8,12 @@
 | --- | --- |
 | 目标 | 修复平台管理员内部组织全量适用权限、可解释的组织删除、审计关键词与目标定位、制程8D跟进/登记/出货独立入口 |
 | 批准 | 2026-10-26负责人明确“已更新智能表格状态以及优先级，立即启动这一轮修复”；REQ-0030 / reczz28Ru7XCLtaR，user回读revision304、has_more=false，P0 / 开发中；原方案/子任务/验收保持，登记时仅提单的限制已由当前直接开工指令接续 |
-| 映射 | [Issue #72](https://github.com/JasonShu0722/QMS-2.0/issues/72)，V0.0.31-fix2；关联REQ-0025/0026/0027反馈，不关闭其后续整包 |
-| 基线 | main/线上44f612bab92a787e64dfc04f97295b3e343cd332；本地N3发布文档归档e7ceb60完整保留，功能分支codex/req0030-admin-process-fix基于该提交，运行时代码及文档修复将在本次功能提交中登记 |
+| 映射 | [Issue #72](https://github.com/JasonShu0722/QMS-2.0/issues/72) / [PR #73](https://github.com/JasonShu0722/QMS-2.0/pull/73)，V0.0.31-fix2；关联REQ-0025/0026/0027反馈，不关闭其后续整包 |
+| 基线 | main/线上44f612bab92a787e64dfc04f97295b3e343cd332；本地N3发布文档归档e7ceb60完整保留，功能分支codex/req0030-admin-process-fix首个修复提交22a2f9e已推送，PR #73以main为base |
 | 评审 | 优化后开工：复用有效授权与SQL对应逻辑、已有问题中心/8D表单和出货组件；管理员范围是负责人本轮明确变更，不把旧“本组织全量”规则当永久限制；具体身份与安全初始化需先核对真实来源 |
 | 现状与不确定项 | 组织创建自动治理仅5权限且无audit:read；删除初始化判定依赖创建人/回执/审计严格匹配；审计查询导出均动作精确匹配；制程缺独立8D列表，出货挂台账底部。登记按钮存在且页头布局有横向溢出嫌疑；ZLGLB实际阻断仍需只读证据，不能冒称旧兼容根因 |
 | 停止点 | 本地实现、双审及适用真实验证完成后到PR检查点；GitHub实际回读visibility=public，验证后按持续授权推送/PR，代理未改可见性。合并/部署、生产配权/流程启用、目标删除及飞书状态变更另核准；不自动N4 |
-| 下一动作 | A/B/C/D/E独立规格及质量审查均已收口，最后READ锁升级缺陷已按真实PG红绿灯修复，父独立barrier复验、108文件1377项及编译Worker8项通过。完成文档/治理最终检查后提交推送及创建PR，检查最新head的CI；不合并/部署 |
+| 下一动作 | A/B/C/D/E及最后READ锁返修双审通过，PR #73已创建。首轮CI旧details期望已在两个相邻文件补齐，父13项真实PG及Descartes规格/Popper质量复核通过；推送测试接续补丁后检查最新head的CI，不改运行时规则、不合并/部署 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/req0030-evidence/approved-start.json及issue-created.json；不连接55440，生产只读与一次性测试明确分开 |
 
 ## 1. 范围和最小方案
@@ -44,7 +44,7 @@
 - [x] 各单元规格通过后质量审查，修复后重审；父独立验证关键允许/拒绝、原失败及完整文件。
 - [x] 一次性资源迁移/真实PG/Worker与附件邻近链；所有前置真实，不Mock/Skip代替，不访问55440。
 - [x] 契约生成检查、lint/build、相关Web及API、治理/归档隔离/Compose和diff检查；人工浏览器另记实际结果，不以CI替代。
-- [ ] 更新能力/交接与本计划证据，回读REQ范围未变；本地提交，重核可见性及有效授权后推PR，不提前合并部署。
+- [x] 更新能力/交接与本计划证据，回读REQ范围未变；本地提交，重核可见性及有效授权后推PR，不提前合并部署。
 - [ ] 获独立发布授权后再核mainCI、快照/迁移/同SHA运行服务及目标页面；线上实际删除由负责人决定。
 
 ## 4. 最终验收与沉淀
@@ -86,6 +86,12 @@
 证据根为Git外`D:/WorkSpace/QMS-2.0-local/req0030-evidence/`，父合成汇总在parent-backend-final-v2/consolidated.json，保留原无完整退出的INTERRUPTED、失败/诊断和新完整文件结果。未通过全测试源码额外tsc检查的233条写集外诊断仍保留，不冒称这些类型检查通过；生产源码/CLI及实际执行测试门禁另列。
 
 提交前再次实际核验：API lint、contracts:check通过；治理37文档/363本地链接/20来源复核/131依赖对及阶段五条目检查通过，文档/边界21项通过，diff无空白错误；未改维护项日期。实际record_id回读整个响应与上一批准快照一致（revision304、has_more=false），GitHub仓库仍public、origin/main仍44f612b。以下PR创建步骤由持续授权直接接续，不因此取得合并或发布授权。
+
+### 6.1 PR首轮检查与测试契约接续
+
+首个head22a2f9e已推送并创建PR #73；Foundation40297624053的scope/checks/API unit成功，integration第一分片32文件543项中542通过、1失败，其余PG分片及Worker未因此获得PASS。失败为organization-management-references旧内部读取模型严格toEqual缺少本轮新增details，并非数据库部署或线上故障。同一公开读取模型调用方搜索还发现closure-lifecycle有同类期望，统一补齐精确明细并保留原历史/未来/活动状态、大小写UUID和父轮次判定，不删除用例或降低断言；原失败日志保存于Git外pr-ci-first-integration-failure.log。
+
+Singer在原两个完整真实PG文件先复现11失败/2通过，仅增加details的精确toEqual期望后13/13通过；父独立重新执行相同两个完整文件13/13通过，无skip，端口55478。未修改生产源码、fixture构建、timeout、测试事件或原判定；这里只接续内部返回结构，不能声称修复了新的线上删除事实。日志/哈希在ci-reference-shape-repair；Descartes独立SPEC及Popper独立QUALITY均通过，精确去除17处details属性可还原原始文件哈希，无降低断言。按原PR推送，不重跑与此测试期望无关的全Web或数据库构建。
 
 ## 7. 发布后人工验收清单（待执行）
 

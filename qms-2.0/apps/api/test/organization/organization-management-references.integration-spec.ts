@@ -36,11 +36,14 @@ describe('management configuration lifecycle references with real PostgreSQL', (
         minister_assignment_id, valid_from, valid_to, created_by, updated_by)
       VALUES (${f.scopeId}::uuid, ${f.organization.id}::uuid, ${f.department.id}::uuid, ${f.section.id}::uuid,
         ${f.assignment.id}::uuid, ${from}, ${to}, ${f.user.id}::uuid, ${f.user.id}::uuid)`;
-    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: false });
+    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: false,
+      details: [{ tableName: 'department_minister_scopes', columnName: 'section_department_id', count: 1, liveCount: 0 }] });
     await prisma.$executeRaw`UPDATE department_minister_scopes SET valid_from = ${new Date(Date.now() + 60000)}, valid_to = NULL WHERE id = ${f.scopeId}::uuid`;
-    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: true });
+    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: true,
+      details: [{ tableName: 'department_minister_scopes', columnName: 'section_department_id', count: 1, liveCount: 1 }] });
     await prisma.$executeRaw`UPDATE department_minister_scopes SET status = 'DISABLED' WHERE id = ${f.scopeId}::uuid`;
-    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: false });
+    expect(await structureBusinessReferences(prisma, f.section.id, 'department')).toEqual({ referenced: true, live: false,
+      details: [{ tableName: 'department_minister_scopes', columnName: 'section_department_id', count: 1, liveCount: 0 }] });
     expect(await prisma.$queryRaw`SELECT id FROM department_minister_scopes WHERE id = ${f.scopeId}::uuid`).toEqual([{ id: f.scopeId }]);
   });
 
