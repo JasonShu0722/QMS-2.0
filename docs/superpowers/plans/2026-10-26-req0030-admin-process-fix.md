@@ -13,7 +13,7 @@
 | 评审 | 优化后开工：复用有效授权与SQL对应逻辑、已有问题中心/8D表单和出货组件；管理员范围是负责人本轮明确变更，不把旧“本组织全量”规则当永久限制；具体身份与安全初始化需先核对真实来源 |
 | 现状与不确定项 | 组织创建自动治理仅5权限且无audit:read；删除初始化判定依赖创建人/回执/审计严格匹配；审计查询导出均动作精确匹配；制程缺独立8D列表，出货挂台账底部。登记按钮存在且页头布局有横向溢出嫌疑；ZLGLB实际阻断仍需只读证据，不能冒称旧兼容根因 |
 | 停止点 | 本地实现、双审及适用真实验证完成后到PR检查点；GitHub实际回读visibility=public，验证后按持续授权推送/PR，代理未改可见性。合并/部署、生产配权/流程启用、目标删除及飞书状态变更另核准；不自动N4 |
-| 下一动作 | PR #73第三轮完整integration/API/checks及Web2/3/4通过，删除弹窗问题已在Web2全分片复验。既有模板fill单行可见就绪补丁经worker/父完整33项及Erdos规格/Linnaeus质量通过，更新原PR后核最新head完整CI；不合并/部署 |
+| 下一动作 | PR #73 head e658272的上一轮CI九项全通过；自动审查延期锁P2窄修已双审，父独立并发2项/邻近PG23项/API108文件1377项/Worker8项及构建lint契约通过，751输入稳定。更新原PR并要求最新head复核及CI；不合并/部署 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/req0030-evidence/approved-start.json及issue-created.json；不连接55440，生产只读与一次性测试明确分开 |
 
 ## 1. 范围和最小方案
@@ -108,6 +108,18 @@ head56fe715 / Foundation40305510711的scope/checks/API/integration及Web2/3/4成
 先核查同一模板的mount/fill及所有调用方；原mount已配置motion:false，不能把它误说为新增默认动画问题，也不继续关闭动画或放宽timeout。模板fill只等候选项DOM，相关同步断言需按真实表单/提示可见就绪等待；最小修复不改错误分类、幂等body/key、403/401、未知结果冻结、生产流程或发布策略。其他普通页面的文本presence查询不因语法相似一律改写。
 
 McClintock临时探针实际观察到候选option已出现而父dialog仍opacity:0，Alert源码关闭独立appear/enter，探针已清除。仅在同文件共享fill中追加原必填控件“模板流程代码”可见的waitFor，18处调用均已await fill，统一阻止隐藏阶段的fireEvent；所有原断言（含原trace-400的toBeVisible）逐字保留，不新建通用测试平台。原本地定向1通过/32未选，不能伪造本地RED；修后worker完整33项通过，父另完整33项通过，无skip/todo。Erdos独立SPEC及Linnaeus独立QUALITY均通过；证据在ci-template-readiness-repair，最新CI分别接续，不能把本地通过当作云端通过。
+
+### 6.3 最新CI全绿与自动审查的延期读取锁补充
+
+head e658272 / Foundation40309678242 / attempt1实际9/9成功，四个Web分片、API默认108文件1377项、真实PG125文件1674项及编译Worker8项、工具门禁均通过。最终各job的head/status/conclusion已逐一断言，日志及元数据在Git外pr-fourth-ci-*、pr-final-integration.log和pr-final-api-unit.log；前述三轮失败不改写为首次全绿。
+
+随后回读同head自动Code Review有1条P2（review5650822701/comment4376373863）：延期history的context先经lockAndRead READ取得SHARE，再由领域deadlineContext无条件DEADLINE申请UPDATE；eligible及待办读取也经过该升级。源码追踪支持风险，不能只修history而漏掉eligible，或把资格读取的workflow:act/policyCurrent/最终来源复验移除。实际REQUEST/DECIDE写命令仍需排他锁；在真实PG并发屏障复现后，由受控内部读取用途贯通接缝，不引入HTTP可选绕过。此条自动建议尚需真实红绿验证、独立双审和新headCI，不能因上一head9项成功而合并。
+
+Gauss新增两个参数化真实PG屏障用例：两实际actor/session在原lockAndRead真正取得共享锁后才同放行，确认两个backend PID，allSettled要求双方成功并核对真实待批申请及参与人资格。修前两项失败，history对外为映射后的409并发冲突、eligible保留原始40P01，不能描述为history直接暴露原始错误；原55项未选不算全文件。仅在服务端内部增加ELIGIBILITY用途，eligible两次hook及history保持READ，REQUEST/DECIDE仍DEADLINE；workflow:act、非READ政策和最终来源/会话复验保留，无DTO/schema变化。
+
+修后完整57项及邻近6完整文件88项通过（其中PG23、纯测65），原55项文字与超时不变；Carver独立SPEC、Anscombe独立QUALITY均通过。证据在ci-deadline-read-lock-repair，原治理stale hash由父文档并行更新导致，保持失败原件；父最终源冻结、默认API/真实PG/Worker/构建/契约与治理另列，不能把worker绿灯冒称父复跑或云端通过。
+
+父独立验证见parent-deadline-final/result.json：新增真实并发两条都通过（55未选，不称整文件）、两个完整邻近PG文件23项通过、默认API108文件1377项通过、编译Worker完整8项通过、API build/lint及contracts:check通过；751个API/根输入前后相同。它不与worker57/88项重叠相加为一次全集。无DTO/schema/迁移变更，不执行无关Web重跑；云端仍以最新PR head的完整门禁为准。未扩大生产配权、删除或发布授权。
 
 ## 7. 发布后人工验收清单（待执行）
 

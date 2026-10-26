@@ -21,13 +21,13 @@ export class ProcessEightDClosureAdapter implements WorkflowClosureAdapter, OnMo
   canNotifyRecipient(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string) { return this.service.canNotifyClosureRecipient(tx, context, userId); }
 
   async deadlineContext(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor, operation: WorkflowDeadlineOperation) {
-    const record = await this.service.lockRecord(tx, actor, context.problemId, 'DEADLINE');
+    const record = await this.service.lockRecord(tx, actor, context.problemId, operation === 'READ' || operation === 'ELIGIBILITY' ? 'READ' : 'DEADLINE');
     await this.service.authorizeRead(tx, actor, record);
     if (record.problem.organizationId !== context.organizationId || record.instance.id !== context.instanceId || record.instance.workflowVersionId !== context.workflowVersionId) workflowError('CONCURRENCY_CONFLICT', 409);
     if (operation === 'REQUEST') {
       await this.service.authorizeDeadlineRequest(tx, actor, record);
     }
-    if (operation === 'DECIDE') await assertWorkflowFeature(tx, actor, context.organizationId, 'workflow:act');
+    if (operation === 'DECIDE' || operation === 'ELIGIBILITY') await assertWorkflowFeature(tx, actor, context.organizationId, 'workflow:act');
     return this.service.deadlineContext(tx, record);
   }
 

@@ -214,6 +214,41 @@ describe('process 8D real domain transactions', () => {
     ]);
   });
 
+  it.each(['history', 'eligible'] as const)('reads concurrent deadline %s after both transactions hold real READ record locks without an upgrade deadlock', async operation => {
+    const f = await fixture(), id = await f.issue(), shared = gate();
+    const before = await f.read(id);
+    const extension = await extensions.request(f.owner.actor, id, { expectedRowVersion: before.version, expectedInstanceVersion: before.instanceVersion,
+      stage: 'CLOSURE', requestedDueAt: '2027-01-15T00:00:00.000Z', reason: 'Concurrent reads must not change the pending extension' }, randomUUID(), randomUUID());
+    let arrivals = 0;
+    const backends = new Set<number>();
+    const original = closure.lockAndRead.bind(closure);
+    const read = jest.spyOn(closure, 'lockAndRead').mockImplementation(async (tx, actor, problemId, mode) => {
+      const context = await original(tx, actor, problemId, mode);
+      expect(mode).toBe('READ');
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      backends.add(backend.pid);
+      // Both real domain READ locks must be held before either deadline hook can run.
+      if (++arrivals === 2) shared.open();
+      await shared.promise;
+      return context;
+    });
+    const run = (actor: ProcessEightDActor) => operation === 'history' ? extensions.history(actor, id) : prisma.$transaction(async tx => {
+      const record = await service.lockRecord(tx, actor, id, 'READ');
+      await service.authorizeRead(tx, actor, record);
+      return extensions.eligible(tx, actor, id);
+    });
+    try {
+      const results = await Promise.allSettled([run(f.manager.actor), run(f.issuer.actor)]);
+      expect(arrivals).toBe(2);
+      expect(backends.size).toBe(2);
+      expect(results.filter(result => result.status === 'rejected')).toEqual([]);
+      expect(results).toMatchObject([
+        { status: 'fulfilled', value: [{ id: extension.id, status: 'LEADER_PENDING' }] },
+        { status: 'fulfilled', value: operation === 'history' ? [{ id: extension.id, status: 'LEADER_PENDING' }] : [] },
+      ]);
+    } finally { read.mockRestore(); }
+  }, 120_000);
+
   async function archivedFixture(closed = false) {
     const f = await fixture(), id = await f.issue();
     const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'problem-index:read' } });

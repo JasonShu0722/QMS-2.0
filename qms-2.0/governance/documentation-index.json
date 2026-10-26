@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "653c86a4d8c11bfb265356df99cf7331c05e8aec93caf1f5bd2993a969b05f80"
+            "sha256": "f564e2c63d5391603eff0de2c3b698ad8f9191fed70e17542942706e446cae1d"
           },
           {
             "path": "README.md",
@@ -708,7 +708,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md",
-            "sha256": "2983dd5cda4307e8fd4b52ff8ffcc8237fc2ef8e7db0ead33dfd42e8a4cb8106"
+            "sha256": "8b98aced912d4f6696641a59f096098cb0563de60c0fb8ed2e64f0c82a168bc9"
           }
         ]
       }
