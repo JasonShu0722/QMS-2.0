@@ -1,5 +1,11 @@
 # 底座与阶段二平台验收记录
 
+## N3 发布核验（2026-10-26，V0.0.31含fix1）
+
+负责人明确“继续推进部署”，PR #71最终head31e0499通过CI40255961669全部9项后，squash合并并部署44f612bab92a787e64dfc04f97295b3e343cd332。main CI40257750060 / attempt1全部9项成功，deploy40259187725 / attempt1成功；部署实际SSH步骤未跳过。迁移前同SHA本机加密快照验证先于5份新迁移，115迁移链全部成功；API/Worker/Web同SHA镜像及启动就绪核验通过。此快照不是异地灾备或恢复演练。
+
+独立公网login/OpenAPI/新JS均200，19条N3契约、EXTENSION_REQUEST/AVAILABLE及index-lnvvKeEc.js实际出现，四个受保护匿名读取401。精确日志、SHA、时间及限制见[N3计划6.5](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)与Git外n3-release-20261026/release-verification.json。机器发布不替代完整phase-2、真实角色人工验收或业务开通；不代配生产岗位/启用绑定，不关闭Issue/飞书REQ，不自动N4。下方原失败及本地候选记录保留原证据范围；本次归档仅本地提交，不再推送触发发布。
+
 ## PR #71 评审返修（V0.0.31-fix1，本地受影响门禁通过）
 
 原首版5d6f490的CI40249188581全部9项成功；fix1不复用该CI为新提交通过。父按冻结来源验证7完整纯测文件155项、8完整真实PG文件152项、编译Worker8项、6完整Web文件132项，无跳过；运行前后全域来源LF归一化指纹不变，排除0。证据见Git外`pr71-parent-validation-summary.json`，不是新head完整CI或完整phase-2。

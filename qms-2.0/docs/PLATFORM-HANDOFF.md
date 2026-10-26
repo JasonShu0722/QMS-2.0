@@ -1,8 +1,8 @@
 # 平台与供应商质量接口交接
 
-## N3过程内部8D接续（2026-10-26，本地验证中）
+## N3过程内部8D接续（2026-10-26，V0.0.31含fix1已部署）
 
-[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)在原过程事实拥有者上扩展人工台账，并注册真实过程关闭、公共读取及文件授权适配器；不注册客户 / 新品 / 供应商的新8D适配器或中性fixture。下方N2“生产适配器为空”是a32615c发布时事实，N3尚未部署，不能混作当前候选代码的注册状态。注册仅允许启动期，重复 / 晚注册失败；已发布版本及在途实例固定版本不改。
+[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)在原过程事实拥有者上扩展人工台账，并注册真实过程关闭、公共读取及文件授权适配器；不注册客户 / 新品 / 供应商的新8D适配器或中性fixture。下方N2“生产适配器为空”是a32615c发布时事实，N3已由PR #71合并并部署44f612b，不能混作当前运行代码的注册状态；最终PR/main各9项CI及部署核验见N3计划6.5。注册仅允许启动期，重复 / 晚注册失败；已发布版本及在途实例固定版本不改。
 
 `WorkflowClosureAdapter.complete` / `returnForChanges`由轮次引擎传入已核验actor，同事务回调不接受客户端身份。轮次服务公开同事务历史投影；`DomainSourceLinkService.change`支持可选外层ReadCommitted事务，复用事实与来源锁，不在外层持锁后另开事务等待自身。过程owner和closure均为受控执行面，generic start / upgrade / act / claim / transfer / reopen及旧任务投影不得绕过领域动作。
 
