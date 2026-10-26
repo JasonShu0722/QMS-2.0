@@ -2,7 +2,7 @@
 
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## REQ-0030 契约接续（2026-10-26，本地修复，未部署）
+## REQ-0030 契约接续（2026-10-26，28cc304已部署并核验公开契约）
 
 新增可选platformScope说明真实来源组织、目标和内部平台范围；岗位授权预览保留直接来源的organizationId及平台投影信息。组织生命周期保留原blockers数组，可选deleteBlockerDetails/disableBlockerDetails提供类型、数量和处理说明。问题摘要可选有界fields承载领域可读列表字段，其他域不因此获得新业务能力。
 

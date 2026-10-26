@@ -7,14 +7,14 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 目标 | 修复平台管理员内部组织全量适用权限、可解释的组织删除、审计关键词与目标定位、制程8D跟进/登记/出货独立入口 |
-| 批准 | 2026-10-26负责人明确“已更新智能表格状态以及优先级，立即启动这一轮修复”；REQ-0030 / reczz28Ru7XCLtaR，user回读revision304、has_more=false，P0 / 开发中；原方案/子任务/验收保持，登记时仅提单的限制已由当前直接开工指令接续 |
+| 批准 | 2026-10-26负责人明确立即启动REQ-0030，user回读revision304、has_more=false，P0 / 开发中，业务范围未变；随后“通过了，继续”接续合并/发布。负责人报告手动清理并部署，提供同次原始日志片段；不是代理清理或直接读取服务器全日志 |
 | 映射 | [Issue #72](https://github.com/JasonShu0722/QMS-2.0/issues/72) / [PR #73](https://github.com/JasonShu0722/QMS-2.0/pull/73)，V0.0.31-fix2；关联REQ-0025/0026/0027反馈，不关闭其后续整包 |
-| 基线 | main/线上44f612bab92a787e64dfc04f97295b3e343cd332；本地N3发布文档归档e7ceb60完整保留，功能分支codex/req0030-admin-process-fix首个修复提交22a2f9e已推送，PR #73以main为base |
+| 基线 | 开发运行基线44f612b、本地N3归档e7ceb60保留；PR #73最终head f23d01b，squash合并/运行发布28cc3049d35cf837be386d03bc32789fa3f84f01。当前codex/req0030-release-records仅本地归档，基于f23d01b且其树已与发布28cc304核对相同，不额外推送触发Actions |
 | 评审 | 优化后开工：复用有效授权与SQL对应逻辑、已有问题中心/8D表单和出货组件；管理员范围是负责人本轮明确变更，不把旧“本组织全量”规则当永久限制；具体身份与安全初始化需先核对真实来源 |
-| 现状与不确定项 | 组织创建自动治理仅5权限且无audit:read；删除初始化判定依赖创建人/回执/审计严格匹配；审计查询导出均动作精确匹配；制程缺独立8D列表，出货挂台账底部。登记按钮存在且页头布局有横向溢出嫌疑；ZLGLB实际阻断仍需只读证据，不能冒称旧兼容根因 |
-| 停止点 | 本地实现、双审及适用真实验证完成后到PR检查点；GitHub实际回读visibility=public，验证后按持续授权推送/PR，代理未改可见性。合并/部署、生产配权/流程启用、目标删除及飞书状态变更另核准；不自动N4 |
-| 下一动作 | PR #73 head e658272的上一轮CI九项全通过；自动审查延期锁P2窄修已双审，父独立并发2项/邻近PG23项/API108文件1377项/Worker8项及构建lint契约通过，751输入稳定。更新原PR并要求最新head复核及CI；不合并/部署 |
-| 证据 | Git外D:/WorkSpace/QMS-2.0-local/req0030-evidence/approved-start.json及issue-created.json；不连接55440，生产只读与一次性测试明确分开 |
+| 现状与不确定项 | 修复代码已发布；新前端和三类契约标记、公网401保护已核验。真实ZLGLB阻断、精确平台管理员初始化及角色/窄屏业务验收仍待办理，不将本地legacy复现当作该生产节点根因 |
+| 停止点 | 机器发布多来源证据已齐，停在生产显式授权/流程配置及真实账号人工验收；不自动N4，不执行ZLGLB删除、Issue/REQ关闭或Base写入。负责人可恢复闭源，代理不改仓库可见性 |
+| 下一动作 | 按第7节验收；平台管理员来源预览/实际初始化分别核准。归档本地提交不推送，不重跑已经结束的CI或部署；业务验收成立后才接续获准关闭回填 |
+| 证据 | Git外req0030-evidence/fix2-release-20261026/release-verification.json；服务端原始片段由负责人提供，公网由代理GET核验；两次Actions失败保留，不改写为Actions部署成功 |
 
 ## 1. 范围和最小方案
 
@@ -45,7 +45,7 @@
 - [x] 一次性资源迁移/真实PG/Worker与附件邻近链；所有前置真实，不Mock/Skip代替，不访问55440。
 - [x] 契约生成检查、lint/build、相关Web及API、治理/归档隔离/Compose和diff检查；人工浏览器另记实际结果，不以CI替代。
 - [x] 更新能力/交接与本计划证据，回读REQ范围未变；本地提交，重核可见性及有效授权后推PR，不提前合并部署。
-- [ ] 获独立发布授权后再核mainCI、快照/迁移/同SHA运行服务及目标页面；线上实际删除由负责人决定。
+- [x] 获独立发布授权，核对mainCI及多来源快照/迁移/同SHA运行服务/公网证据；机器发布核验成立。线上实际删除未执行，仍由负责人决定。
 
 ## 4. 最终验收与沉淀
 
@@ -120,6 +120,17 @@ Gauss新增两个参数化真实PG屏障用例：两实际actor/session在原loc
 修后完整57项及邻近6完整文件88项通过（其中PG23、纯测65），原55项文字与超时不变；Carver独立SPEC、Anscombe独立QUALITY均通过。证据在ci-deadline-read-lock-repair，原治理stale hash由父文档并行更新导致，保持失败原件；父最终源冻结、默认API/真实PG/Worker/构建/契约与治理另列，不能把worker绿灯冒称父复跑或云端通过。
 
 父独立验证见parent-deadline-final/result.json：新增真实并发两条都通过（55未选，不称整文件）、两个完整邻近PG文件23项通过、默认API108文件1377项通过、编译Worker完整8项通过、API build/lint及contracts:check通过；751个API/根输入前后相同。它不与worker57/88项重叠相加为一次全集。无DTO/schema/迁移变更，不执行无关Web重跑；云端仍以最新PR head的完整门禁为准。未扩大生产配权、删除或发布授权。
+
+### 6.4 最终合并与手工部署核验
+
+- PR #73最终head为f23d01bf04076b623b314e551c3c6d6162f0fc5e，[PR CI40315522373](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40315522373) / attempt1全部9项成功；最新Code Review同head完成，has_any_findings/has_unresolved_findings均false，原P2线程已回复并resolved。独立Security Review未执行，不能据此声称安全扫描通过。
+- 负责人“通过了，继续”后按已说明的合并→mainCI→部署链执行；squash提交28cc3049d35cf837be386d03bc32789fa3f84f01的文件树与审查head相同。[main CI40321569614](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40321569614) / attempt1全部9项成功；实际集成日志4分片125文件1676项及独立Worker8项通过。
+- [deploy40323717205](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40323717205) attempt1在服务器Git SSH取源码时失败，未进入构建/备份/迁移；attempt2推进至API镜像依赖安装，最终ERR_PNPM_ENOSPC。慢registry请求不是唯一原因。两次失败原件保留；代理未触发attempt3，未删除服务器数据或缓存。
+- 负责人手动清理后运行同版deploy.sh，提供`/tmp/qms_deploy_20261026.log`原始片段，部署窗口2026-10-26 21:11:00–21:19:54（按本会话Asia/Taipei记录）：行444为同SHA迁移前加密快照核验，负责人确认先于prisma migrate deploy；行498–504的API/Worker/Web镜像tag均为28cc304，API healthy、Worker/Web Up，PostgreSQL/RustFS/ClamAV healthy；行505–506为同SHA Deployment successful及EXIT_CODE=0，并确认deployed-sha文件一致。
+- 服务端证据来源明确为负责人提供的原始片段，不是代理SSH直接读取或完整日志逐字归档。同版deploy.sh在成功出口前强制执行migrate deploy及本次Worker StartedAt之后的QMS_WORKER_READY检查，因此支持这两项已通过；未另外提供原始Worker stdout/迁移Applying行，不伪称亲眼读取。快照标记的SHA是发布源码标识，不是数据库内容校验码；这仍是本机加密快照，不是异地灾备或恢复演练。
+- 代理公网GET核验：login/新JS/OpenAPI均200；旧index-lnvvKeEc.js替换为index-B3q2V0GD.js，包含制程问题跟进/独立出货路由，JS SHA256为de6b6b3fb1baecefcea5549ca8cf4946dc821565f56faf906871035699e57187。删除依赖明细、平台范围、公共8D筛选三类契约标记均出现；4个受保护匿名GET返回401。此层不替代真实账号功能验收。
+
+汇总为“负责人手工部署日志＋代理CI/审查/公网核验”的机器发布PASS，见Git外manual-deployment-user-evidence.json及release-verification.json；不是Actions部署成功或人工业务验收完成。本次纯文档归档仅本地提交，不推送、不再触发Actions，可由负责人恢复闭源；代理不执行生产授权、目标删除、流程绑定、Base写入或Issue/REQ关闭。
 
 ## 7. 发布后人工验收清单（待执行）
 
