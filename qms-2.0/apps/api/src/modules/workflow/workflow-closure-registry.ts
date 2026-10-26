@@ -1,23 +1,27 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap } from '@nestjs/common';
 import type { WorkflowClosureAdapter } from './workflow-closure-round.types.js';
 import { workflowError } from './workflow-runtime-policy.js';
 
 export const WORKFLOW_CLOSURE_ADAPTERS = Symbol('WORKFLOW_CLOSURE_ADAPTERS');
 
 @Injectable()
-export class WorkflowClosureRegistry {
-  private readonly adapters: ReadonlyMap<string, WorkflowClosureAdapter>;
+export class WorkflowClosureRegistry implements OnApplicationBootstrap {
+  private readonly adapters = new Map<string, WorkflowClosureAdapter>();
+  private bootstrapped = false;
 
   constructor(@Inject(WORKFLOW_CLOSURE_ADAPTERS) adapters: readonly WorkflowClosureAdapter[]) {
-    const entries = new Map<string, WorkflowClosureAdapter>();
-    for (const adapter of adapters) {
-      if (!adapter.domainCode || adapter.domainCode.trim() !== adapter.domainCode || entries.has(adapter.domainCode)) {
-        throw new Error('Closure adapters require distinct exact nonempty domain codes');
-      }
-      entries.set(adapter.domainCode, adapter);
-    }
-    this.adapters = entries;
+    for (const adapter of adapters) this.register(adapter);
   }
+
+  register(adapter: WorkflowClosureAdapter): void {
+    if (this.bootstrapped) throw new Error('WORKFLOW_CLOSURE_REGISTRY_FROZEN');
+    if (!adapter.domainCode || adapter.domainCode.trim() !== adapter.domainCode || this.adapters.has(adapter.domainCode)) {
+      throw new Error('Closure adapters require distinct exact nonempty domain codes');
+    }
+    this.adapters.set(adapter.domainCode, adapter);
+  }
+
+  onApplicationBootstrap(): void { this.bootstrapped = true; }
 
   hasDomain(domainCode: string): boolean { return this.adapters.has(domainCode); }
 

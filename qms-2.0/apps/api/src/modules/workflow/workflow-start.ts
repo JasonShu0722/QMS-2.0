@@ -3,13 +3,14 @@ import type { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { OutboxService } from '../task-notification/outbox.service.js';
 import type { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import type { StartWorkflowInstanceInput, WorkflowActionResult, WorkflowCommand } from './workflow-runtime.service.js';
-import { isClosureReviewNode, jsonObject, workflowError } from './workflow-runtime-policy.js';
+import { isClosureReviewNode, isProcessEightDNode, jsonObject, workflowError } from './workflow-runtime-policy.js';
 
 export interface WorkflowWriters { audit: AuditLogService; outbox: OutboxService; problems: ProblemIndexService }
 
-export async function fixedWorkflowStart(tx: Prisma.TransactionClient, organizationId: string, definitionId: string, versionId: string) {
+export async function fixedWorkflowStart(tx: Prisma.TransactionClient, organizationId: string, definitionId: string, versionId: string, domainAccess = false) {
   const version = await tx.workflowVersion.findFirst({ where: { id: versionId, organizationId, workflowDefinitionId: definitionId, status: 'PUBLISHED' }, include: { nodes: true } });
   if (!version) workflowError('WORKFLOW_VERSION_NOT_FOUND', 404);
+  if (!domainAccess && version.nodes.some(isProcessEightDNode)) workflowError('WORKFLOW_ACTION_INVALID', 409);
   const starts = version.nodes.filter((node) => jsonObject(node.config).isStart === true);
   if (starts.length !== 1 || starts[0]!.type === 'CLOSE' || isClosureReviewNode(starts[0]!)) workflowError('WORKFLOW_DRAFT_INVALID', 409);
   return { version, node: starts[0]! };
@@ -22,8 +23,8 @@ export function workflowProblemStatus(node: WorkflowNode, closing: boolean): 'IN
 }
 
 export async function createWorkflowStart(tx: Prisma.TransactionClient, input: StartWorkflowInstanceInput, digest: string, writers: WorkflowWriters,
-  expectedInstanceId: string | null, afterCreate?: (instanceId: string, node: WorkflowNode) => Promise<void>, problemType?: string): Promise<WorkflowActionResult> {
-  const { version, node } = await fixedWorkflowStart(tx, input.organizationId, input.workflowDefinitionId, input.workflowVersionId);
+  expectedInstanceId: string | null, afterCreate?: (instanceId: string, node: WorkflowNode) => Promise<void>, problemType?: string, domainAccess = false): Promise<WorkflowActionResult> {
+  const { version, node } = await fixedWorkflowStart(tx, input.organizationId, input.workflowDefinitionId, input.workflowVersionId, domainAccess);
   const instance = await tx.workflowInstance.create({ data: { organizationId: input.organizationId, problemIndexId: input.problemIndexId,
     workflowDefinitionId: input.workflowDefinitionId, workflowVersionId: version.id, instanceKey: input.instanceKey, currentNodeId: node.id,
     createdById: input.actor.id, updatedById: input.actor.id } });

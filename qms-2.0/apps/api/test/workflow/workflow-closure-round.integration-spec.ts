@@ -35,6 +35,30 @@ describe('workflow closure rounds real PostgreSQL', () => {
   const fixture = (policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL', severity: WorkflowClosureContext['severity'] = 'LOW', dual = false) =>
     createWorkflowClosureFixture(prisma, service, policy, severity, dual);
 
+  it('passes the engine-verified actor into terminal domain hooks', async () => {
+    const complete = jest.spyOn(adapter, 'complete');
+    const returned = jest.spyOn(adapter, 'returnForChanges');
+    try {
+      const f = await fixture();
+      const one = await f.decide(f.professional.actor, await f.start(), ['PROFESSIONAL']);
+      await f.decide(f.manager.actor, one, ['SECTION_MANAGER']);
+      expect(complete.mock.calls.at(-1)?.[2]).toEqual(f.manager.actor);
+      const another = await fixture();
+      await another.decide(another.professional.actor, await another.start(), ['PROFESSIONAL'], 'RETURN');
+      expect(returned.mock.calls.at(-1)?.[2]).toEqual(another.professional.actor);
+    } finally { complete.mockRestore(); returned.mockRestore(); }
+  });
+
+  it('projects every historical round in the caller transaction and organization', async () => {
+    const f = await fixture();
+    await f.decide(f.professional.actor, await f.start(), ['PROFESSIONAL'], 'RETURN');
+    await service.start(f.owner.actor, f.problem.id, { expectedContentVersion: 2, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
+    const rounds = await prisma.$transaction(tx => service.readHistoryProjection(tx, f.problem.organizationId, f.problem.id));
+    expect(rounds.map(round => round.status)).toEqual(['PENDING', 'RETURNED']);
+    expect(rounds.every(round => round.duties.length === 2)).toBe(true);
+    expect(await prisma.$transaction(tx => service.readHistoryProjection(tx, randomUUID(), f.problem.id))).toEqual([]);
+  });
+
   it.each(['PROFESSIONAL', 'SECTION_MANAGER'] as const)('joins parallel internal reviews with %s first, never closes on one side alone', async first => {
     const f = await fixture(); const r = await f.start();
     expect(r).toMatchObject({ status: 'PENDING', roundNumber: 1, version: 1, contentSnapshot: { revision: 1 } });

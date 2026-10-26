@@ -22,15 +22,17 @@ import { AdminMutationModule } from '../../common/security/admin-mutation.servic
 import { ClosureInboxService } from '../task-notification/closure-inbox.service.js';
 import { ClosureInboxController, ClosureNotificationController } from './workflow-closure-inbox.controller.js';
 import { ClosureEventHandler } from '../task-notification/closure-event.handler.js';
+import { WorkflowDeadlineExtensionService } from './workflow-deadline-extension.service.js';
+import { WorkflowDeadlineExtensionController } from './workflow-deadline-extension.controller.js';
 
 @Module({
   imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule, AdminMutationModule],
-  controllers: [WorkflowClosurePreviewController, WorkflowClosureTemplateController, WorkflowClosureRoundController, ClosureInboxController, ClosureNotificationController, WorkflowController, WorkflowUpgradeController],
+  controllers: [WorkflowClosurePreviewController, WorkflowClosureTemplateController, WorkflowClosureRoundController, ClosureInboxController, ClosureNotificationController, WorkflowController, WorkflowUpgradeController, WorkflowDeadlineExtensionController],
   providers: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosurePreviewService,
     WorkflowClosureRoundService, WorkflowClosureRegistry, WorkflowClosureTemplateService,
-    ClosureInboxService, ClosureEventHandler,
+    ClosureInboxService, ClosureEventHandler, WorkflowDeadlineExtensionService,
     { provide: WORKFLOW_CLOSURE_ADAPTERS, useValue: [] },
     { provide: WORKFLOW_UPGRADE_ADAPTERS, useValue: [] }],
-  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, ClosureEventHandler],
+  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, ClosureEventHandler, WorkflowDeadlineExtensionService],
 })
 export class WorkflowModule {}

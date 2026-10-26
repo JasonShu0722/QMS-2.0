@@ -75,6 +75,14 @@ export class WorkflowClosureRoundService {
     return row ? this.hydrate(tx, row) : null;
   }
 
+  // Trusted domain readers authorize scope before requesting the complete saved history.
+  async readHistoryProjection(tx: Prisma.TransactionClient, organizationId: string, problemId: string): Promise<WorkflowClosureRound[]> {
+    this.uuid(organizationId); this.uuid(problemId);
+    const rows = await tx.$queryRaw<RoundRow[]>(Prisma.sql`SELECT ${roundColumns} FROM workflow_closure_rounds
+      WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid ORDER BY round_number DESC`);
+    return Promise.all(rows.map(row => this.hydrate(tx, row)));
+  }
+
   async eligible(tx: Prisma.TransactionClient, actor: WorkflowActor, snapshot: WorkflowClosureSnapshot, duty: WorkflowClosureDuty): Promise<boolean> {
     try {
       const fresh = await this.readSnapshot(tx, actor, snapshot.context.problemId);
@@ -347,7 +355,7 @@ export class WorkflowClosureRoundService {
     const complete = changed.duties.some(d => d.duty === 'PROFESSIONAL' && d.status === 'APPROVED')
       && changed.duties.every(d => ['APPROVED', 'SKIPPED_SAME_PERSON'].includes(d.status));
     await this.bump(tx, r, complete ? 'APPROVED' : 'PENDING');
-    if (complete) await adapter.complete(tx, c);
+    if (complete) await adapter.complete(tx, c, actor);
     return (await this.round(tx, r.organizationId, r.id))!;
   }
 
@@ -355,7 +363,7 @@ export class WorkflowClosureRoundService {
     await tx.$executeRaw`UPDATE workflow_closure_duties SET status = 'CANCELLED', version = version + 1
       WHERE organization_id = ${r.organizationId}::uuid AND round_id = ${r.id}::uuid AND status IN ('PENDING', 'WAITING')`;
     await this.bump(tx, r, status);
-    await adapter.returnForChanges(tx, c);
+    await adapter.returnForChanges(tx, c, actor);
     // The receipt preserves why the terminal transition occurred without overwriting old decisions.
     await tx.$executeRaw`UPDATE workflow_closure_rounds SET context = context || ${JSON.stringify({ endedBy: actor.id, endReason: reason })}::jsonb
       WHERE organization_id = ${r.organizationId}::uuid AND id = ${r.id}::uuid`;

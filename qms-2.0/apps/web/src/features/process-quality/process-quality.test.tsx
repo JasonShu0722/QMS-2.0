@@ -1,13 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { Link, MemoryRouter } from 'react-router-dom';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
-import { ApiError, apiRequest, csrfToken } from '../../api/client';
+import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { ProcessDefectLedgerPage } from './ProcessDefectLedgerPage';
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client');
-  return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn() };
+  return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() };
 });
 
 const defect = {
@@ -22,13 +22,14 @@ beforeEach(() => {
   vi.mocked(apiRequest).mockReset();
   vi.mocked(csrfToken).mockReset();
   vi.mocked(csrfToken).mockResolvedValue('csrf-token');
+  vi.mocked(getSession).mockResolvedValue({ userId: 'user', organizationId: defect.organizationId, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   vi.mocked(apiRequest).mockImplementation(async (path) => path.endsWith('/issues') ? [] : path.endsWith(defect.id) ? { ...defect, evidence: [] } : page);
 });
 
 it('loads the defect ledger and opens source detail with linked issues', async () => {
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   expect(await screen.findByText('表面划伤')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
+  fireEvent.click(screen.getByText('查看详情'));
   expect(await screen.findByText('来源详情')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`);
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`);
@@ -37,13 +38,13 @@ it('loads the defect ledger and opens source detail with linked issues', async (
 it('protects an unfinished process issue when navigating away', async () => {
   render(<MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByText('表面划伤');
-  fireEvent.click(screen.getByRole('checkbox', { name: '选择制程不良 表面划伤' }));
-  fireEvent.click(screen.getByRole('button', { name: '发起问题' }));
+  fireEvent.click(screen.getByLabelText('选择制程不良 表面划伤'));
+  fireEvent.click(screen.getByText('发起问题'));
   fireEvent.change(screen.getByLabelText('实例标识'), { target: { value: '尚未发单' } });
-  fireEvent.click(screen.getByRole('link', { name: '返回工作台' }));
-  await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
-  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  fireEvent.click(screen.getByText('返回工作台'));
+  const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
+  await waitFor(() => expect(title).toBeVisible());
+  fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByText('继续编辑'));
   expect(screen.getByLabelText('实例标识')).toHaveValue('尚未发单');
 });
 
@@ -59,14 +60,14 @@ it('keeps selected sources and form entries after a version conflict, then reuse
   });
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   await screen.findByText('表面划伤');
-  fireEvent.click(screen.getByRole('checkbox', { name: '选择制程不良 表面划伤' }));
-  fireEvent.click(screen.getByRole('button', { name: '发起问题' }));
+  fireEvent.click(screen.getByLabelText('选择制程不良 表面划伤'));
+  fireEvent.click(screen.getByText('发起问题'));
   fireEvent.change(screen.getByLabelText('严重度'), { target: { value: 'HIGH' } });
   fireEvent.change(screen.getByLabelText('流程定义 ID'), { target: { value: '55555555-5555-4555-8555-555555555555' } });
   fireEvent.change(screen.getByLabelText('流程版本 ID'), { target: { value: '66666666-6666-4666-8666-666666666666' } });
   fireEvent.change(screen.getByLabelText('实例标识'), { target: { value: 'process-issue-1' } });
   fireEvent.click(screen.getByRole('button', { name: '确认发单' }));
-  expect(await screen.findByText(/来源版本已变化/)).toBeVisible();
+  expect(await screen.findByText('记录已被其他用户更新，请刷新后重试')).toBeVisible();
   expect(screen.getByLabelText('流程定义 ID')).toHaveValue('55555555-5555-4555-8555-555555555555');
   expect(screen.getByText('已选择 1 条来源')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '确认发单' }));

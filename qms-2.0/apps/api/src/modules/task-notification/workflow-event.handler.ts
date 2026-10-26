@@ -7,6 +7,7 @@ import { eligibleWorkflowRecipients, workflowObject as object } from './workflow
 import { handleWorkflowTiming, scheduleWorkflowTiming, WORKFLOW_TIMING_EVENTS } from './workflow-timing.js';
 import { notificationContent } from '../platform-configuration/notification-content.js';
 import { projectSupplierNotification } from './supplier-portal-notification.js';
+import { isDomainControlledNode, isProcessEightDVersion } from '../workflow/workflow-runtime-policy.js';
 
 interface WorkflowEventPayload {
   schemaVersion: 1;
@@ -26,7 +27,14 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
   readonly eventTypes = ['WORKFLOW_STARTED', 'WORKFLOW_ACTION_COMPLETED', ...WORKFLOW_TIMING_EVENTS];
 
   async handle(tx: Prisma.TransactionClient, event: OutboxEvent): Promise<'deferred' | void> {
-    if (WORKFLOW_TIMING_EVENTS.some((type) => type === event.eventType)) return handleWorkflowTiming(tx, event);
+    if (WORKFLOW_TIMING_EVENTS.some((type) => type === event.eventType)) {
+      const payload = object(event.payload);
+      if (['nodeId', 'organizationId', 'workflowVersionId'].every(key => typeof payload[key] === 'string' && isUUID(payload[key] as string))) {
+        const node = await tx.workflowNode.findFirst({ where: { id: payload.nodeId as string, organizationId: payload.organizationId as string, workflowVersionId: payload.workflowVersionId as string } });
+        if (node && (isDomainControlledNode(node) || await isProcessEightDVersion(tx, node.organizationId, node.workflowVersionId))) return;
+      }
+      return handleWorkflowTiming(tx, event);
+    }
     const payload = parseEvent(event);
     await tx.$queryRaw`SELECT id FROM workflow_instances WHERE id = ${payload.instanceId}::uuid FOR UPDATE`;
     const instance = await tx.workflowInstance.findUnique({ where: { id: payload.instanceId } });
@@ -48,8 +56,8 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
       where: { workflowInstanceId: instance.id, status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] } },
       data: { status: 'COMPLETED', completedAt: event.createdAt, version: { increment: 1 } },
     });
-    // Closure duties are projected by their round event, never by the legacy single-task path.
-    if (payload.status === 'RUNNING' && object(node.config).closureReview === undefined) {
+    // Domain duties and handling tasks have their own projection, including legacy timing suppression.
+    if (payload.status === 'RUNNING' && !isDomainControlledNode(node) && !await isProcessEightDVersion(tx, payload.organizationId, payload.workflowVersionId)) {
       const config = object(node.config);
       const slaMinutes = config.slaMinutes;
       if (slaMinutes !== undefined && (!Number.isSafeInteger(slaMinutes) || Number(slaMinutes) < 1 || Number(slaMinutes) > MAX_WORKFLOW_SLA_MINUTES)) invalidEvent();

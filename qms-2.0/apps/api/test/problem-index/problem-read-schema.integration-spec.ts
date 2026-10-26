@@ -6,7 +6,7 @@ import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
-import { PROBLEM_DOMAIN_READ_ADAPTERS } from '../../src/modules/problem-index/problem-domain-registry.js';
+import { PROBLEM_DOMAIN_READ_ADAPTERS, type ProblemDomainReadAdapter } from '../../src/modules/problem-index/problem-domain-registry.js';
 import { NeutralReadAdapter, NeutralReadFileAdapter } from './neutral-read-adapter.js';
 import { timingFixture, clearTimingEvents } from '../task-notification/workflow-timing-fixture.js';
 import { FILE_RESOURCE_ADAPTERS } from '../../src/modules/file-management/file-resource-access.js';
@@ -39,7 +39,8 @@ describe('domain authorized problem reads on PostgreSQL', () => {
     await prisma.$executeRawUnsafe("CREATE OR REPLACE FUNCTION p4_read_fixture.reject_revision_changes() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'IMMUTABLE_REVISION'; END $$");
     await prisma.$executeRawUnsafe('CREATE OR REPLACE TRIGGER immutable_revision BEFORE UPDATE OR DELETE ON p4_read_fixture.revisions FOR EACH ROW EXECUTE FUNCTION p4_read_fixture.reject_revision_changes()');
     await prisma.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS p4_read_fixture.evidence (source_id uuid NOT NULL, revision_id uuid, file_id uuid NOT NULL, resource_type text NOT NULL, resource_id uuid NOT NULL)');
-    const configured = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PROBLEM_DOMAIN_READ_ADAPTERS).useValue([adapter])
+    const production = app.get<readonly ProblemDomainReadAdapter[]>(PROBLEM_DOMAIN_READ_ADAPTERS);
+    const configured = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PROBLEM_DOMAIN_READ_ADAPTERS).useValue([...production, adapter])
       .overrideProvider(FILE_RESOURCE_ADAPTERS).useValue([fileAdapter]).compile();
     registered = configured.createNestApplication();
     registered.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));

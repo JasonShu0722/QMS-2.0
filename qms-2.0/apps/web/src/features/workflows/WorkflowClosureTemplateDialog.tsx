@@ -5,7 +5,7 @@ import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
-import { createWorkflowClosureTemplate, getWorkflowClosureTemplates, type WorkflowClosureTemplateInput, type WorkflowDefinition } from './workflow-api';
+import { createWorkflowClosureTemplate, getWorkflowClosureTemplates, unknownWorkflowWrite, type WorkflowClosureTemplateInput, type WorkflowDefinition } from './workflow-api';
 
 type Props = { onClose: () => void; onCreated: (result: WorkflowDefinition) => void; onBusyChange?: (busy: boolean) => void };
 type Attempt = { body: WorkflowClosureTemplateInput; key: string };
@@ -13,7 +13,7 @@ const english: Record<string, string> = {
   '初始化关闭审核模板': 'Initialize closure review template', '模板策略': 'Template policy', '请选择模板策略': 'Choose a template policy',
   '模板领域代码': 'Template domain code', '模板流程代码': 'Template workflow code', '模板流程名称': 'Template workflow name', '创建模板草稿': 'Create template draft',
   '仅初始化草稿，不自动发布或绑定；不写入具体人员或岗位 UUID。': 'Creates a draft only. No automatic publication or binding; no specific user or position UUIDs.',
-  '生产领域适配器尚未注册，须领域接入准备好后才能发布（否则返回 409 阻断）。': 'Production domain adapters are not registered. Publish only after domain integration is ready (otherwise blocked with 409).',
+  '发布时校验对应领域是否已接入；创建候选草稿不会自动发布、绑定或启用。': 'Publishing checks whether the domain is integrated. Creating a candidate draft does not publish, bind or enable it.',
   '结果尚未确认，输入已冻结，请使用原请求重试。': 'The result is unknown. Inputs are frozen; retry the original request.',
   '重试原请求': 'Retry original request', '重试加载模板': 'Retry loading templates',
   '内部问题关闭审核': 'Internal problem closure review', '供应商问题关闭审核': 'Supplier problem closure review',
@@ -95,8 +95,8 @@ function TemplateScope({ onClose, onCreated, onBusyChange }: Props) {
     } catch (cause) {
       if (current()) {
         report(cause);
-        if (!(cause instanceof ApiError) || (!cause.status && cause.code !== 'CLIENT_REAUTHENTICATION_COMPLETED') || (cause.status ?? 0) >= 500) setUncertain(attempt);
-        else setUncertain(undefined);
+        if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403 || cause.status === 409)) setUncertain(undefined);
+        else setUncertain(uncertain || unknownWorkflowWrite(cause) ? attempt : undefined);
       }
     } finally { lock.current = false; if (current()) setBusy(false); }
   }
@@ -105,7 +105,7 @@ function TemplateScope({ onClose, onCreated, onBusyChange }: Props) {
   const valid = !!options?.items.some(item => item.policy === values.policy) && !!values.domainCode.trim() && !!values.code.trim() && !!values.name.trim();
   return <Modal open title={t('初始化关闭审核模板')} onCancel={close} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null}>
     <p>{t('仅初始化草稿，不自动发布或绑定；不写入具体人员或岗位 UUID。')}</p>
-    <Alert type="warning" showIcon title={t('生产领域适配器尚未注册，须领域接入准备好后才能发布（否则返回 409 阻断）。')} />
+    <Alert type="warning" showIcon title={t('发布时校验对应领域是否已接入；创建候选草稿不会自动发布、绑定或启用。')} />
     {!!displayed && <Alert type="error" title={t(displayed instanceof ApiError && displayed.status === 403 ? '无权执行此操作' : safeAccountError(displayed))} description={displayed instanceof ApiError && displayed.traceId ? <code>{displayed.traceId}</code> : undefined} />}
     {loading && <Spin aria-label={t('加载中')} />}
     {!!readError && <Button disabled={loading || denied || busy} onClick={() => { setError(undefined); setRevision(value => value + 1); }}>{t('重试加载模板')}</Button>}

@@ -43,7 +43,10 @@ export class WorkflowClosureTemplateService {
   private graph(body: CreateWorkflowClosureTemplateDto): WorkflowDraft {
     return {
       nodes: [
-        { id: 'owner', type: 'ACTION', name: '负责人处理', config: { isStart: true, assignment: { permission: 'workflow:act' } } },
+        { id: 'owner', type: 'ACTION', name: '负责人处理', config: { isStart: true, assignment: { permission: 'workflow:act' },
+          ...(body.policy === 'INTERNAL' && body.domainCode === 'process-quality' ? { processEightD: {
+            schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null,
+          } } : {}) } },
         { id: 'closure', type: 'APPROVAL', name: '关闭审核', config: { closureReview: { schemaVersion: 1, policy: body.policy, domainCode: body.domainCode } } },
         { id: 'close', type: 'CLOSE', name: '关闭', config: { isEnd: true, assignment: { permission: 'workflow:act' } } },
       ],

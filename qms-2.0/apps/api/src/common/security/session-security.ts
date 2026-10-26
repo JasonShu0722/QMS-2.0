@@ -34,8 +34,10 @@ export async function mfaPolicy(transaction: Prisma.TransactionClient, userId: s
   return { administrator, roleRequired, required: effectiveMfa(administrator, user.mfaPreference, roleRequired, user.mfaEnabled, user.mfaRequirementOverride ?? null), digest: digest(JSON.stringify({ facts, preference: user.mfaPreference, bound: user.mfaEnabled, override: user.mfaRequirementOverride ?? null })) };
 }
 
-export async function assertActiveAuthentication(transaction: Prisma.TransactionClient, actor: { id: string; sessionId: string }) {
-  await transaction.$queryRaw`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR UPDATE`;
+// Server-only lock selection: outer domain transactions already hold participant SHARE locks.
+export async function assertActiveAuthentication(transaction: Prisma.TransactionClient, actor: { id: string; sessionId: string }, userLock: 'NO KEY UPDATE' | 'SHARE' = 'NO KEY UPDATE') {
+  if (userLock === 'SHARE') await transaction.$queryRaw`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR SHARE`;
+  else await transaction.$queryRaw`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR NO KEY UPDATE`;
   const user = await transaction.user.findUnique({ where: { id: actor.id }, include: { organization: true } });
   if (!actor.sessionId || !user || user.status !== 'ACTIVE' || user.organization.status !== 'ACTIVE' || user.mustChangePassword) securityError('AUTH_SESSION_REQUIRED');
   await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${user.organizationId}::uuid FOR SHARE`;

@@ -60,7 +60,7 @@ describe('administrator role HTTP contract', () => {
     expect(supplier.modules.find((module: { key: string }) => module.key === 'supplier-problems').operations.map((operation: { code: string }) => operation.code)).toEqual(['supplier-quality:problems:read', 'supplier-quality:problems:write']);
     const process = response.body[2];
     expect(process.status).toBe('active');
-    expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write']);
+    expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review']);
     const customer = response.body[3];
     expect(customer.status).toBe('active');
     expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write']);

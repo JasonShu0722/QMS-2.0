@@ -224,7 +224,18 @@ export class ComponentProjectService {
 
   async resolve(actor: AdminActor, organizationId: string, input: ResolveComponentProjectQueryDto, transaction?: AdminTransaction): Promise<ComponentProjectResolutionDto> {
     const query = await this.input(ResolveComponentProjectQueryDto, input);
-    return this.read(actor, organizationId, async (current) => {
+    return this.read(actor, organizationId, current => this.resolveCurrent(current, organizationId, query), transaction);
+  }
+
+  // The domain caller authorizes its action; reuse its tenant transaction without granting configuration access.
+  async resolveForDomain(transaction: AdminTransaction, organizationId: string, componentCode: string): Promise<ComponentProjectResolutionDto> {
+    const query = await this.input(ResolveComponentProjectQueryDto, { componentCode });
+    const organization = await this.organizations.lookup(organizationId, transaction);
+    if (organization?.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+    return this.resolveCurrent(transaction, organizationId, query);
+  }
+
+  private async resolveCurrent(current: AdminTransaction, organizationId: string, query: ResolveComponentProjectQueryDto): Promise<ComponentProjectResolutionDto> {
       const [row] = await current.$queryRaw<Stored<ComponentProjectMappingDto>[]>(Prisma.sql`SELECT ${mappingColumns} FROM component_project_mappings WHERE organization_id = ${organizationId}::uuid AND component_code = ${query.componentCode}`);
       const mapping = row ? dates<ComponentProjectMappingDto>(row) : null;
       const project = mapping?.projectRecordId ? await this.project(current, organizationId, mapping.projectRecordId) : null;
@@ -242,7 +253,6 @@ export class ComponentProjectService {
           ...(!project ? ['PROJECT_NOT_CONFIGURED'] : []), ...(!mapping.productCategory ? ['PRODUCT_CATEGORY_NOT_CONFIGURED'] : []),
           ...(outcome === 'inactive' ? ['MAPPING_OR_PROJECT_DISABLED'] : []),
         ]), ...(engineerDifference ? ['MANUAL_ENGINEER_DIFFERS'] : [])] };
-    }, transaction);
   }
 
   private async project(transaction: AdminTransaction, organizationId: string, id: string): Promise<ComponentProjectRecordDto> {

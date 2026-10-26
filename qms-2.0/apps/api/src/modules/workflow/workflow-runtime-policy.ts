@@ -1,6 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../../common/contracts/platform-error.js';
 import type { WorkflowAction } from './workflow.types.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 
 export function workflowError(code: PlatformErrorCode, status: number): never {
   throw new HttpException({ code, message: PLATFORM_ERROR_MESSAGES[code] }, status);
@@ -12,6 +13,21 @@ export function jsonObject(value: unknown): Record<string, unknown> {
 
 export function isClosureReviewNode(node: { config: unknown }): boolean {
   return Object.hasOwn(jsonObject(node.config), 'closureReview');
+}
+
+export function isProcessEightDNode(node: { config: unknown }): boolean {
+  return Object.hasOwn(jsonObject(node.config), 'processEightD');
+}
+
+export function isDomainControlledNode(node: { config: unknown }): boolean {
+  return isClosureReviewNode(node) || isProcessEightDNode(node);
+}
+
+export async function isProcessEightDVersion(tx: Prisma.TransactionClient, organizationId: string, versionId: string): Promise<boolean> {
+  const [node] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM workflow_nodes
+    WHERE organization_id = ${organizationId}::uuid AND workflow_version_id = ${versionId}::uuid
+      AND config ? 'processEightD' LIMIT 1`;
+  return !!node;
 }
 
 export function forwardAction(type: string): WorkflowAction {

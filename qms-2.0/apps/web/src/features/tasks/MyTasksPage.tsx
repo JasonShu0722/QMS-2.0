@@ -6,6 +6,7 @@ import { useLanguage } from '../../i18n/Language';
 import { mutateInbox, type NotificationPage, type TaskPage } from './task-inbox';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { ClosureTaskInbox } from './ClosureTaskInbox';
+import { ProcessEightDTaskInbox } from './ProcessEightDTaskInbox';
 
 import './tasks.css';
 
@@ -75,6 +76,7 @@ export function MyTasksPage() {
     <Typography.Title level={2}>{t('我的待办')}</Typography.Title>
     <InboxError cause={mutationError} />
     <Tabs activeKey={activeTab} onChange={key => { if (!writing.current) requestLeave(() => setActiveTab(key)); }} items={[
+      { key: 'process-eight-d', label: t('过程8D'), children: activeTab === 'process-eight-d' ? <ProcessEightDTaskInbox /> : null },
       { key: 'closure', label: t('关闭审核'), children: activeTab === 'closure' ? <ClosureTaskInbox /> : null },
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">

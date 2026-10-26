@@ -1,5 +1,16 @@
 # 底座与阶段二平台验收记录
 
+## N3过程人工闭环（2026-10-26，本地最终门禁进行中）
+
+Issue #70 / V0.0.31接续[N3计划](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md)，尚无本轮运行代码PR或部署，生产仍a32615c。一次性资源为本任务PG 55478、RustFS 59078、固定digest ClamAV 59378、Mailpit 58178 / 58078；配置、原始日志及样本均在Git外`D:/WorkSpace/QMS-2.0-local/n3-evidence/`，不连接55440。
+
+- 原110链追加5份迁移，含真实组织引用RESTRICT补迁移；空库及110链升级 / 组织生命周期验证54例通过。原115个已应用迁移文件（含lock）最终SHA核对未变，不修改已应用SQL。
+- 真实Nest HTTP、S3版本对象 / 签名octet-stream及SHA、ClamAV、完整D2～D8、并行审核关闭及批准PDF链8例通过；N3编译Worker2例另存。完整配置API单测100文件1253例、真实集成123文件1594例及独立编译Worker8例已通过，pending=0。基础组合覆盖及新06库证据见Git外`api-final-coverage.json`和`api-composite-final/`；最终候选739个输入中736个RAW一致、3个仅去EOF重复换行，独立等价复核、API lint及实际3完整文件41项通过，见`api-o3-coverage.json`。原PG不可达失败及仅启动原任务容器后的复验均保留，不称全RAW一致或首次全量全绿。
+- API / Web lint及构建、契约生成同步、归档隔离、契约包编译、根工具及备份控制流72例、Foundation + production + scanning静态Compose均实际通过。契约包`test`执行成功但发现0用例，不当作新增业务覆盖；Compose无生产容器启动或真实备份恢复含义。
+- 正式Web最终组合覆盖148完整文件1566项：70完整文件687项按传递依赖及配置来源证明复用、78完整文件879项新跑，未覆盖0。原runner中断及新恢复批3文件5失败保留；仅英文旧提示断言一行修正，父串行完整3文件58项通过，整对象替换且case标题/数量完全一致，不拼case。其余输入不变，默认timeout/motion不变；证据为Git外`web-final-coverage.json`。这不是一次全量首次全绿，历史403浮层可见性偶发失败亦保留。
+- 负责人已恢复正常规则并要求继续推进N3，夜间连续交付heartbeat已删除；本地验证/PR、获准合并部署、人工验收和关闭回填分别处理，不自动接续N4。
+- 原生浏览器桥接信任拒绝，未绕过；人工角色 / 版本 / 页面清单在N3计划第7节。完整`acceptance:phase-2`曾因隔离gateway / 浏览器夹具等前置不足真实FAIL，本轮分层证据不等于完整阶段二PASS；当前CI Foundation也未配置业务浏览器运行。CI、机器发布核验和人工业务验收继续分开，不自动配权 / 绑定启用或关闭整包REQ。
+
 ## N2-B 生产发布核验（2026-10-25，V0.0.30含fix3）
 
 PR #68及独立fix3 PR #69已合并，最终main / 生产a32615ce245ae2242e8b1607aa6c564c244e0de7。最终PR Foundation40192084766与main Foundation40193745676各9项success，deploy40194990586 / attempt1成功；原main失败及skipped部署不改写。实际日志确认API单测804项、集成1441项、独立Worker8项、Web134文件1272项全部通过。

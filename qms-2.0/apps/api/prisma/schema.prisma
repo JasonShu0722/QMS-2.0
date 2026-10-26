@@ -705,10 +705,10 @@ model ProcessDefectType {
 model ProcessDefect {
   id                     String    @id @default(uuid()) @db.Uuid
   organizationId         String    @map("organization_id") @db.Uuid
-  defectTypeCode         String    @map("defect_type_code") @db.VarChar(64)
+  defectTypeCode         String?   @map("defect_type_code") @db.VarChar(64)
   description            String    @db.Text
-  defectQuantity         Int       @map("defect_quantity")
-  occurredAt             DateTime  @map("occurred_at") @db.Timestamptz(3)
+  defectQuantity         Int?      @map("defect_quantity")
+  occurredAt             DateTime? @map("occurred_at") @db.Timestamptz(3)
   batchCode              String?   @map("batch_code") @db.VarChar(100)
   workOrderCode          String?   @map("work_order_code") @db.VarChar(100)
   operationCode          String?   @map("operation_code") @db.VarChar(100)
@@ -717,7 +717,12 @@ model ProcessDefect {
   productCode            String?   @map("product_code") @db.VarChar(100)
   materialCode           String?   @map("material_code") @db.VarChar(100)
   supplierOrganizationId String?   @map("supplier_organization_id") @db.Uuid
-  responsibilityCategory String    @map("responsibility_category") @db.VarChar(32)
+  responsibilityCategory String?   @map("responsibility_category") @db.VarChar(32)
+  traceCode              String?   @map("trace_code") @db.VarChar(200)
+  analysisProgress       String?   @map("analysis_progress") @db.Text
+  ledgerStatus           String    @default("FOLLOWING") @map("ledger_status") @db.VarChar(16)
+  closedById             String?   @map("closed_by_id") @db.Uuid
+  closedAt               DateTime? @map("closed_at") @db.Timestamptz(3)
   sourceKind             String    @default("MANUAL") @map("source_kind") @db.VarChar(32)
   externalSourceSystem   String?   @map("external_source_system") @db.VarChar(64)
   externalRecordKey      String?   @map("external_record_key") @db.VarChar(200)
@@ -735,6 +740,8 @@ model ProcessDefect {
   @@index([organizationId, archivedAt, occurredAt])
   @@index([organizationId, batchCode, workOrderCode])
   @@index([organizationId, projectCode, productCode])
+  @@index([organizationId, operationCode, traceCode])
+  @@index([organizationId, ledgerStatus, createdAt])
   @@map("process_defects")
 }
 

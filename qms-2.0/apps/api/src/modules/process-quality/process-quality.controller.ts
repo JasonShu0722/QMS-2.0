@@ -9,6 +9,7 @@ import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
 import { ProcessIssueService } from './process-issue.service.js';
 import { ProcessProductionService } from './process-production.service.js';
 import { ProcessShipmentReportService } from './process-shipment-report.service.js';
+import { ClassifyProcessDefectDto, ClassifyProcessDefectsDto, CloseProcessDefectDto, ReopenProcessDefectDto, VerifyProcessDefectMaterialDto, ProcessDefectClassificationResultDto, ProcessMaterialSqePageDto, ProcessMaterialSqeQueryDto } from './process-quality.dto.js';
 import { ArchiveProcessDefectDto, ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
 
 function actor(request: Request) {
@@ -127,6 +128,45 @@ export class ProcessQualityController {
   @Get('defects') @ApiOkResponse({ type: ProcessDefectPageDto })
   @RequireAccess({ featurePermission: 'process-quality:defects:read', organizationScope: queryScope })
   list(@Req() request: Request, @Query() query: ProcessDefectQueryDto) { return this.service.list(actor(request), query); }
+
+  @Get('defects/material-sqes') @ApiOkResponse({ type: ProcessMaterialSqePageDto })
+  @RequireAccess({ featurePermission: 'process-quality:defects:read', organizationScope: queryScope })
+  materialSqes(@Req() request: Request, @Query() query: ProcessMaterialSqeQueryDto) { return this.service.materialSqes(actor(request), query); }
+
+  @Put('defects/classification') @ApiOkResponse({ type: ProcessDefectClassificationResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:write', organizationScope: bodyScope })
+  classifyMany(@Req() request: Request, @Body() body: ClassifyProcessDefectsDto, @Headers('idempotency-key') key?: string) {
+    return this.service.classify(actor(request), body, requestTraceId(request), key);
+  }
+
+  @Put('defects/:id/classification') @ApiOkResponse({ type: ProcessDefectClassificationResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:write', organizationScope: bodyScope })
+  classifyOne(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: ClassifyProcessDefectDto, @Headers('idempotency-key') key?: string) {
+    return this.service.classify(actor(request), { sources: [{ defectId: id, expectedVersion: body.expectedVersion }], responsibilityCategory: body.responsibilityCategory }, requestTraceId(request), key);
+  }
+
+  @Put('defects/:id/close') @ApiOkResponse({ type: ProcessDefectDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:close', organizationScope: bodyScope })
+  close(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: CloseProcessDefectDto, @Headers('idempotency-key') key?: string) {
+    return this.service.close(actor(request), id, body, requestTraceId(request), key);
+  }
+
+  @Put('defects/:id/reopen') @ApiOkResponse({ type: ProcessDefectDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:close', organizationScope: bodyScope })
+  reopen(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: ReopenProcessDefectDto, @Headers('idempotency-key') key?: string) {
+    return this.service.reopen(actor(request), id, body, requestTraceId(request), key);
+  }
+
+  @Put('defects/:id/materials/:materialId/verification') @ApiOkResponse({ type: ProcessDefectDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:materials:review', organizationScope: bodyScope })
+  verifyMaterial(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('materialId', ParseUUIDPipe) materialId: string, @Body() body: VerifyProcessDefectMaterialDto, @Headers('idempotency-key') key?: string) {
+    return this.service.verifyMaterial(actor(request), id, materialId, body, requestTraceId(request), key);
+  }
 
   @Get('defects/:id') @ApiOkResponse({ type: ProcessDefectDto })
   @RequireAccess({ featurePermission: 'process-quality:defects:read', organizationScope: queryScope })

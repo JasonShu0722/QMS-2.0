@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { toErrorResponse } from './error-response.js';
+import { ControlledValidationException } from './controlled-validation.exception.js';
 import { requestTraceId } from './request-trace.js';
 import { PLATFORM_ERROR_CODES, PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from './platform-error.js';
 
@@ -41,6 +42,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       toErrorResponse({
         code: status >= 500 ? 'INTERNAL_ERROR' : (code ?? `HTTP_${status}`),
         message,
+        fields: status === HttpStatus.BAD_REQUEST && code && exception instanceof ControlledValidationException ? exception.fields : undefined,
         traceId: requestTraceId(host.switchToHttp().getRequest?.()),
         cause: exception,
       }),

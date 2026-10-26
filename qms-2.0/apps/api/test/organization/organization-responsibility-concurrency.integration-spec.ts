@@ -133,7 +133,7 @@ describe('responsibility resolver real PostgreSQL lock ordering', () => {
       writerPid = (await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`)[0]!.pid;
       let first = true;
       return queryHook(tx, async () => {}, async (sql) => {
-        if (first && sql.includes('FROM users') && sql.includes('FOR UPDATE')) {
+        if (first && sql.includes('FROM users') && /FOR (?:NO KEY )?UPDATE/.test(sql)) {
           first = false;
           locked.release();
           await proceed.ready;

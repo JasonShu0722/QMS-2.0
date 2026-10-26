@@ -11,7 +11,6 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { WorkflowClosurePreview } from './WorkflowClosurePreview';
 
 vi.mock('../../api/client', async importOriginal => ({ ...await importOriginal<typeof import('../../api/client')>(), apiRequest: vi.fn(), csrfToken: vi.fn() }));
-vi.setConfig({ testTimeout: 30_000 });
 
 const section = '00000000-0000-4000-8000-000000000001';
 const professional = '00000000-0000-4000-8000-000000000002';
@@ -66,7 +65,12 @@ async function configure(policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL') {
   await choose('专业人员（配置测试）', '专业张工 (engineer)');
   if (policy === 'INTERNAL') await choose('内部负责人（配置测试）', '负责人李工 (owner)');
 }
-async function submit() { fireEvent.click(screen.getByRole('button', { name: '运行配置预览' })); await waitFor(() => expect(posts()).toHaveLength(1)); }
+async function submit() {
+  // The existing label avoids rescanning every portal control on each submit.
+  const button = screen.getByLabelText('运行配置预览');
+  expect(button).toBeVisible(); expect(button).toBeEnabled();
+  fireEvent.click(button); await waitFor(() => expect(posts()).toHaveLength(1));
+}
 
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear();
@@ -139,18 +143,31 @@ it('searches and pages the bounded directory, retaining selected labels across p
   expect(JSON.parse(posts()[0]![1]!.body as string)).toMatchObject({ professionalUserId: professional, responsibleSectionDepartmentId: section });
 });
 
-it('clears results on edits and safe errors, shows trace and allows explicit retry', async () => {
+it('invalidates the displayed result on edits and submits the edited severity', async () => {
   mount(); await configure(); await submit();
   expect(await screen.findByText('同人跳过')).toBeVisible();
   await choose('严重度', '高');
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
+  const run = screen.getByLabelText('运行配置预览');
+  expect(run).toBeVisible(); expect(run).toBeEnabled();
+  fireEvent.click(run);
+  await waitFor(() => expect(posts()).toHaveLength(2));
+  expect(JSON.parse(posts()[1]![1]!.body as string)).toMatchObject({ severity: 'HIGH' });
+  expect(await screen.findByText('同人跳过')).toBeVisible();
+});
+
+it('shows a safe preview error and retries only after explicit activation', async () => {
+  mount(); await configure();
   vi.mocked(apiRequest).mockRejectedValueOnce(new ApiError({ code: 'VALIDATION_FAILED', message: 'unsafe diagnostic', traceId: 'closure-trace' }, 400));
-  fireEvent.click(screen.getByRole('button', { name: '运行配置预览' }));
+  await submit();
   expect(await screen.findByText('closure-trace')).toBeVisible();
   expect(screen.queryByText('unsafe diagnostic')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '重试配置预览' }));
+  expect(posts()).toHaveLength(1);
+  const retry = screen.getByText('重试配置预览', { selector: 'button span' }).closest('button')!;
+  expect(retry).toBeVisible(); expect(retry).toBeEnabled();
+  fireEvent.click(retry);
   expect(await screen.findByText('同人跳过')).toBeVisible();
-  expect(posts()).toHaveLength(3);
+  expect(posts()).toHaveLength(2);
 });
 
 it.each(['directory', 'preview'])('locks all operations on %s 403 without leaking previous results', async source => {

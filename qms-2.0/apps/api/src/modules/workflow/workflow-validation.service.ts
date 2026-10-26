@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { actionAllowed, forwardAction } from './workflow-runtime-policy.js';
+import { parseDeadlinePolicy } from './workflow-deadline-extension.policy.js';
 import { MAX_WORKFLOW_NODES, MAX_WORKFLOW_SLA_MINUTES, MAX_WORKFLOW_TRANSITIONS, WORKFLOW_ACTIONS, WORKFLOW_CONDITION_FIELDS, WORKFLOW_CONDITION_OPERATORS, WORKFLOW_EDITABLE_NODE_TYPES } from './workflow.types.js';
 
 export const WORKFLOW_NODE_TYPES = [
@@ -55,7 +56,16 @@ export class WorkflowValidationService {
       if (!this.text(node.name, 200)) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
       const config = node.config ?? {};
       if (node.config === null || !this.object(config)) { errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`); continue; }
-      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition', 'closureReview'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition', 'closureReview', 'processEightD'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (config.processEightD !== undefined) {
+        if (!parseDeadlinePolicy(config.processEightD)) errors.push(`WORKFLOW_PROCESS_CONFIG_INVALID:${node.id}`);
+        const assignment = config.assignment;
+        if (node.type !== 'ACTION' || config.isStart !== true || config.isEnd === true || config.closureReview !== undefined
+          || config.slaMinutes !== undefined || config.reminders !== undefined || config.escalation !== undefined
+          || !this.object(assignment) || Object.entries(assignment).filter(([, value]) => value !== undefined).length !== 1 || assignment.permission !== 'workflow:act') {
+          errors.push(`WORKFLOW_PROCESS_NODE_INVALID:${node.id}`);
+        }
+      }
       if (config.closureReview !== undefined) {
         const review = config.closureReview;
         if (!this.object(review) || Object.keys(review).some(key => !['schemaVersion', 'policy', 'domainCode'].includes(key))
@@ -104,6 +114,22 @@ export class WorkflowValidationService {
     }
     const nodes = draft.nodes;
     const transitions = draft.transitions;
+    const handling = nodes.filter(node => node.config?.processEightD !== undefined);
+    const processGates = nodes.filter(node => {
+      const review = node.config?.closureReview;
+      return this.object(review) && review.domainCode === 'process-quality';
+    });
+    if (handling.length || processGates.length) {
+      if (handling.length !== 1 || processGates.length !== 1) errors.push('WORKFLOW_PROCESS_HANDLING_REQUIRED');
+      else {
+        const owner = handling[0]!; const gate = processGates[0]!;
+        if ((gate.config!.closureReview as Record<string, unknown>).policy !== 'INTERNAL') errors.push('WORKFLOW_PROCESS_POLICY_INVALID');
+        const edges = transitions.filter(edge => edge.from === owner.id);
+        if (edges.length !== 1 || edges[0]!.to !== gate.id || (edges[0]!.action ?? forwardAction(owner.type)) !== 'SUBMIT'
+          || Object.keys(edges[0]!.condition ?? {}).length) errors.push('WORKFLOW_PROCESS_SUBMIT_REQUIRED');
+        if (!transitions.some(edge => edge.from === gate.id && edge.to === owner.id && edge.action === 'RETURN')) errors.push('WORKFLOW_PROCESS_RETURN_REQUIRED');
+      }
+    }
     const byId = new Map<string, WorkflowDraftNode>();
     for (const node of nodes) {
       if (!node.id || byId.has(node.id)) errors.push('WORKFLOW_NODE_ID_DUPLICATE');

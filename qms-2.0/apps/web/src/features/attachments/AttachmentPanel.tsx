@@ -10,7 +10,9 @@ interface Props {
   resource: FileResource;
   fileIds: string[];
   readOnly?: boolean;
-  onReady?: (file: Attachment) => void;
+  onReady?: (file: Attachment) => void | boolean;
+  onAccessDenied?: (cause: ApiError) => void;
+  onPendingChange?: (pending: boolean) => void;
   onFilesChanged?: (files: Attachment[]) => void;
   onRemoved?: (id: string) => void;
 }
@@ -19,7 +21,7 @@ export function AttachmentPanel(props: Props) {
   return <AttachmentContent key={`${props.resource.resourceType}:${props.resource.resourceId}`} {...props} />;
 }
 
-function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFilesChanged, onRemoved }: Props) {
+function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFilesChanged, onRemoved, onAccessDenied, onPendingChange }: Props) {
   const { t, locale } = useLanguage();
   const [localIds, setLocalIds] = useState<string[]>([]);
   const [files, setFiles] = useState<Record<string, Attachment>>({});
@@ -32,15 +34,24 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
   const attempt = useRef<ReturnType<typeof createUploadAttempt> | undefined>(undefined);
   const actionLock = useRef(false);
   const lifetime = useRef(new AbortController());
-  const announced = useRef(new Set<string>());
+  const [announced, setAnnounced] = useState(new Set<string>());
   const readyCallback = useRef(onReady);
   readyCallback.current = onReady;
   const filesChangedCallback = useRef(onFilesChanged);
   filesChangedCallback.current = onFilesChanged;
+  const deniedCallback = useRef(onAccessDenied);
+  deniedCallback.current = onAccessDenied;
+  function reportError(cause: unknown) {
+    if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) deniedCallback.current?.(cause);
+  }
   const idsKey = [...new Set([...fileIds, ...localIds])].sort().join(',');
   const ids = idsKey ? idsKey.split(',') : [];
   const visible = ids.flatMap((id) => files[id] ? [files[id]!] : []);
-  const pending = visible.some((file) => file.status === 'QUARANTINED' && file.scanStatus === 'PENDING');
+  const pending = visible.some((file) => file.status === 'QUARANTINED' && ['WAITING_UPLOAD', 'PENDING'].includes(file.scanStatus));
+  const awaitingReceipt = !!onReady && localIds.some(id => files[id]?.status === 'AVAILABLE' && files[id]?.scanStatus === 'CLEAN' && !announced.has(id));
+  const unsettled = busy || pending || awaitingReceipt;
+  useEffect(() => { onPendingChange?.(unsettled); }, [onPendingChange, unsettled]);
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   const refresh = () => setRevision((value) => value + 1);
   useEffect(() => {
     const controller = new AbortController();
@@ -51,7 +62,10 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
     const controller = new AbortController();
     const requested = idsKey ? idsKey.split(',') : [];
     setLoading(true); setQueryError(undefined);
-    Promise.allSettled(requested.map((id) => readAttachment(id, controller.signal))).then((results) => {
+    Promise.allSettled(requested.map((id) => readAttachment(id, controller.signal).catch(cause => {
+      if (!controller.signal.aborted) reportError(cause);
+      throw cause;
+    }))).then((results) => {
       if (controller.signal.aborted) return;
       const failure = results.find((result) => result.status === 'rejected');
       if (failure?.status === 'rejected') setQueryError(failure.reason);
@@ -72,13 +86,14 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
     return () => clearTimeout(timer);
   }, [pending, revision]);
   useEffect(() => {
+    const accepted: string[] = [];
     for (const id of localIds) {
       const file = files[id];
-      if (file?.status !== 'AVAILABLE' || file.scanStatus !== 'CLEAN' || announced.current.has(id)) continue;
-      announced.current.add(id);
-      readyCallback.current?.(file);
+      if (file?.status !== 'AVAILABLE' || file.scanStatus !== 'CLEAN' || announced.has(id)) continue;
+      if (readyCallback.current?.(file) !== false) accepted.push(id);
     }
-  }, [files, localIds]);
+    if (accepted.length) setAnnounced(current => new Set([...current, ...accepted]));
+  }, [files, localIds, announced, onReady, readOnly]);
   const observe = (file: Attachment) => {
     if (lifetime.current.signal.aborted) return;
     setLocalIds((current) => current.includes(file.id) ? current : [...current, file.id]);
@@ -93,7 +108,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
       await attempt.current.run(observe, lifetime.current.signal);
       attempt.current = undefined;
     } catch (cause) {
-      if (!lifetime.current.signal.aborted) { setActionError(cause); setRetryAvailable(true); }
+      if (!lifetime.current.signal.aborted) { reportError(cause); setActionError(cause); setRetryAvailable(true); }
     } finally {
       actionLock.current = false;
       if (!lifetime.current.signal.aborted) { setBusy(false); refresh(); }
@@ -116,7 +131,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
           document.body.append(link); link.click(); link.remove();
         }
       }
-    } catch (cause) { if (!lifetime.current.signal.aborted) setActionError(cause); }
+    } catch (cause) { if (!lifetime.current.signal.aborted) { reportError(cause); setActionError(cause); } }
     finally { actionLock.current = false; if (!lifetime.current.signal.aborted) { setBusy(false); refresh(); } }
   }
   const error = actionError ?? queryError;
