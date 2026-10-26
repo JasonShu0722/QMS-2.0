@@ -13,7 +13,7 @@
 | 评审 | 优化后开工：复用有效授权与SQL对应逻辑、已有问题中心/8D表单和出货组件；管理员范围是负责人本轮明确变更，不把旧“本组织全量”规则当永久限制；具体身份与安全初始化需先核对真实来源 |
 | 现状与不确定项 | 组织创建自动治理仅5权限且无audit:read；删除初始化判定依赖创建人/回执/审计严格匹配；审计查询导出均动作精确匹配；制程缺独立8D列表，出货挂台账底部。登记按钮存在且页头布局有横向溢出嫌疑；ZLGLB实际阻断仍需只读证据，不能冒称旧兼容根因 |
 | 停止点 | 本地实现、双审及适用真实验证完成后到PR检查点；GitHub实际回读visibility=public，验证后按持续授权推送/PR，代理未改可见性。合并/部署、生产配权/流程启用、目标删除及飞书状态变更另核准；不自动N4 |
-| 下一动作 | PR #73第二个head44da668的完整PG/Worker/API及三个Web分片通过，Web第二分片新弹窗用例同步失败已单行返修：实际本地红灯、完整32项通过及Bacon规格/Wegener质量通过。更新原PR并核最新head的CI；不改运行时规则、不合并/部署 |
+| 下一动作 | PR #73第三轮完整integration/API/checks及Web2/3/4通过，删除弹窗问题已在Web2全分片复验。既有模板fill单行可见就绪补丁经worker/父完整33项及Erdos规格/Linnaeus质量通过，更新原PR后核最新head完整CI；不合并/部署 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/req0030-evidence/approved-start.json及issue-created.json；不连接55440，生产只读与一次性测试明确分开 |
 
 ## 1. 范围和最小方案
@@ -100,6 +100,14 @@ head44da668的Foundation40300928058完整执行4份真实PG分片：32/31/31/31�
 Rawls仅将OrganizationWorkspace.test.tsx第31行改为await waitFor内的原getByText/toBeVisible条件；原始定向2项实际1通过/1失败、30未选，完整文件32项修后全部通过（无skip/todo，约233秒）。Bacon独立静态SPEC及Wegener独立静态QUALITY均通过，二者审查时完整执行尚未结束，不能称审查者亲自执行绿灯。生产源码、默认motion和timeout、原权限链接与禁用断言不变。两处文档差异是父代理同步证据的预期修改，worker未覆盖；最终文档摘要更新后由父同步来源哈希、重核治理，不以worker该时点的stale hash失败替代最终结果。
 
 父再独立运行原true/false两分支，2通过、30未选；不把该定向结果记为完整32项或与worker32项相加。ci-modal-visibility-repair/parent-focused.json保留完整记录；测试源修前后单行差异及最终SHA一致已复核。
+
+### 6.2 既有流程模板测试的可见就绪接续
+
+head56fe715 / Foundation40305510711的scope/checks/API/integration及Web2/3/4成功，上轮OrganizationWorkspace在完整Web2中通过。Web1的38文件345项中344通过/1失败，位置为既有WorkflowClosureTemplateDialog.test.tsx第136行：首次400后trace-400的code节点已附着但仍不可见，完整日志保留于pr-third-web1-failure.log，不将该失败归咎于上轮已修用例或声称9项全过。
+
+先核查同一模板的mount/fill及所有调用方；原mount已配置motion:false，不能把它误说为新增默认动画问题，也不继续关闭动画或放宽timeout。模板fill只等候选项DOM，相关同步断言需按真实表单/提示可见就绪等待；最小修复不改错误分类、幂等body/key、403/401、未知结果冻结、生产流程或发布策略。其他普通页面的文本presence查询不因语法相似一律改写。
+
+McClintock临时探针实际观察到候选option已出现而父dialog仍opacity:0，Alert源码关闭独立appear/enter，探针已清除。仅在同文件共享fill中追加原必填控件“模板流程代码”可见的waitFor，18处调用均已await fill，统一阻止隐藏阶段的fireEvent；所有原断言（含原trace-400的toBeVisible）逐字保留，不新建通用测试平台。原本地定向1通过/32未选，不能伪造本地RED；修后worker完整33项通过，父另完整33项通过，无skip/todo。Erdos独立SPEC及Linnaeus独立QUALITY均通过；证据在ci-template-readiness-repair，最新CI分别接续，不能把本地通过当作云端通过。
 
 ## 7. 发布后人工验收清单（待执行）
 
