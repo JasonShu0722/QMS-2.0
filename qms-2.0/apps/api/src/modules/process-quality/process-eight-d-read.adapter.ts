@@ -2,7 +2,9 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { Prisma, type ProblemIndex, type WorkflowInstance } from '../../generated/prisma/client.js';
 import type { DomainSourceResponseForm } from '../problem-index/domain-source-issue.service.js';
 import { DomainProblemReadAdapter } from '../problem-index/domain-problem-read.adapter.js';
-import { ProblemDomainRegistry, type ProblemDomainReadAdapter, type ProblemDomainReadContext, type ProblemDomainSection, type ProblemDomainSummary } from '../problem-index/problem-domain-registry.js';
+import { ProblemDomainRegistry, type ProblemDomainReadAdapter, type ProblemDomainReadContext, type ProblemDomainSummary } from '../problem-index/problem-domain-registry.js';
+import { internalEightDSections } from '../../common/eight-d/internal-eight-d-sections.js';
+export { internalEightDSections } from '../../common/eight-d/internal-eight-d-sections.js';
 import type { WorkflowActor } from '../workflow/workflow-access-policy.js';
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
 import { documentFileIds, normalizeProcessEightDDocument } from './process-eight-d-document.js';
@@ -52,7 +54,7 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
     const { record } = await this.service.readReport(tx, this.readActor(context.actor, context.problem), context.problem.id);
     return { domainVersion: record.report.version, revisionId: record.report.closedRevisionId,
       summary: this.summary(record.problem.reportNumber, record.report.document.description),
-      sections: this.sections(record.report.document) };
+      sections: internalEightDSections(record.report.document) };
   }
 
   async readReport(tx: Prisma.TransactionClient, context: ProblemDomainReadContext, instance: WorkflowInstance) {
@@ -65,7 +67,7 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
       summary: this.summary(String(problem.reportNumber), document.description),
       snapshot: { problemType: String(problem.problemType), severity: String(problem.severity), status: String(problem.status),
         responsibleParty: problem.responsibleParty as string | null, ownerId: problem.ownerId as string | null, dueAt: problem.dueAt as string | null },
-      sections: this.sections(document) };
+      sections: internalEightDSections(document) };
   }
 
   async listRevisionIds(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[]> {
@@ -93,15 +95,4 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
   private readActor(actor: WorkflowActor, problem: ProblemIndex) { return actor.organizationId === problem.organizationId ? actor : { ...actor, scopeOrganizationId: problem.organizationId }; }
   private eightD(tx: Prisma.TransactionClient, problem: ProblemIndex) { return this.service.hasReport(tx, problem.organizationId, problem.id); }
   private summary(reportNumber: string, description: string): ProblemDomainSummary { return { title: reportNumber, description, domainUiKey: 'process-eight-d' }; }
-  private sections(document: ReturnType<typeof normalizeProcessEightDDocument>): ProblemDomainSection[] {
-    const fields = (keys: (keyof typeof document)[]) => keys.map(key => ({ key, label: key, value: typeof document[key] === 'string' ? document[key] as string : JSON.stringify(document[key]) }));
-    return [
-      { key: 'D2', title: 'D2 问题描述', fields: fields(['description', 'okFileIds', 'ngFileIds']) },
-      { key: 'D3', title: 'D3 临时措施与围堵', fields: fields(['temporaryMeasures', 'containment', 'optionalAffectedContainment']) },
-      { key: 'D4', title: 'D4 原因分析', fields: fields(['analysisProcess', 'analysisFileIds', 'occurrenceCause', 'escapeCause', 'systemCause']) },
-      { key: 'D5-D6', title: 'D5/D6 对策实施与有效性', fields: fields(['correctiveActions']) },
-      { key: 'D7', title: 'D7 横向展开与标准化', fields: fields(['horizontalDeployment', 'standardization']) },
-      { key: 'D8', title: 'D8 总结', fields: fields(['closureSummary']) },
-    ];
-  }
 }

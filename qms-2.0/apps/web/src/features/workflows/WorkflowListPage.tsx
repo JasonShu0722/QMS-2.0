@@ -8,7 +8,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import * as api from './workflow-api';
 import { workflowLabel } from './workflow-labels';
 import { WorkflowClosureTemplateDialog } from './WorkflowClosureTemplateDialog';
-import { ProcessEightDBinding } from './ProcessEightDBinding';
+import { ProcessEightDBinding, type EightDBindingDomain } from './ProcessEightDBinding';
 import './workflows.css';
 
 type CreateAttempt = { action: 'create'; path: '/api/v1/workflows'; method: 'POST'; rawBody: string; key: string };
@@ -33,6 +33,7 @@ function List({ session }: { session?: string }) {
   const [creating, setCreating] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [bindingDomain, setBindingDomain] = useState<EightDBindingDomain>('process-quality');
   const [createdPath, setCreatedPath] = useState<string>();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -140,6 +141,6 @@ function List({ session }: { session?: string }) {
     {history && <Card title={`${history.name} · ${t('版本历史')}`}><ul>{history.versions.map((version) => <li key={version.id}>
       <Link to={`/app/workflow-designer/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
     </li>)}</ul></Card>}
-    <ProcessEightDBinding />
+    <ProcessEightDBinding domain={bindingDomain} onDomainChange={setBindingDomain} />
   </section>;
 }

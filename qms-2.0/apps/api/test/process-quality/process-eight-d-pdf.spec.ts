@@ -78,6 +78,25 @@ it('rejects a missing required image instead of producing a success with a blank
   await expect(renderProcessEightDPdf(sampleReport(), new Map())).rejects.toThrow('PROCESS_EIGHT_D_REPORT_IMAGE_MISSING');
 });
 
+it.each([['customer-quality', '客户'], ['new-product-quality', '新品']])('renders %s report titles without process-domain headings', async (domainCode, label) => {
+  const report = sampleReport(); report.snapshot.problem.domainCode = domainCode;
+  report.snapshot.document.temporaryMeasures = [];
+  const loading = getDocument({ data: new Uint8Array(await renderProcessEightDPdf(report, new Map([[imageId, png]]))), useSystemFonts: false });
+  const pdf = await loading.promise;
+  try {
+    let text = '';
+    for (let index = 1; index <= pdf.numPages; index++) {
+      const page = await pdf.getPage(index);
+      text += (await page.getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
+    }
+    expect(text).toContain(`${label}内部 8D 报告`);
+    expect(text).toContain(`D2 问题描述与${label}来源`);
+    expect(text).not.toContain('过程内部');
+    expect(text).not.toContain('版本与过程基础');
+    expect(text).not.toContain('问题描述与过程来源');
+  } finally { await loading.destroy(); }
+});
+
 it('uses the confirmed major-risk business label instead of the API severity code', async () => {
   const report = sampleReport();
   report.snapshot.problem.severity = 'CRITICAL';

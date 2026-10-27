@@ -3799,6 +3799,278 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/eight-d/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDRevisionDeliveryController_tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDRevisionDeliveryController_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{problemId}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDRevisionDeliveryController_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{problemId}/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDRevisionDeliveryController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDController_binding"];
+        put: operations["CustomerEightDController_bind"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_activate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerEightDController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/sources/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerEightDController_previewSources"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/assignment-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDController_assignmentOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDController_read"];
+        put: operations["CustomerEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/analysis-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerEightDController_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerEightDController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/collaborators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_collaborators"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_reassign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_risk"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_sources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/eight-d/{id}/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerEightDController_deadlines"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/material-masters": {
         parameters: {
             query?: never;
@@ -4769,6 +5041,278 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["NewProductQualityController_handover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDRevisionDeliveryController_tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDRevisionDeliveryController_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{problemId}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDRevisionDeliveryController_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{problemId}/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDRevisionDeliveryController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDController_binding"];
+        put: operations["NewProductEightDController_bind"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_activate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductEightDController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/sources/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductEightDController_previewSources"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/assignment-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDController_assignmentOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDController_read"];
+        put: operations["NewProductEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/analysis-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductEightDController_analysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductEightDController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/collaborators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_collaborators"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_reassign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_risk"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_sources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["NewProductEightDController_deadlines"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10966,6 +11510,203 @@ export interface components {
             /** Format: uuid */
             assigneeAssignmentId: string;
         };
+        CustomerEightDBindingDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+        };
+        CustomerEightDBindingResultDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            enabled: boolean;
+            version: number;
+        };
+        CustomerEightDActivationDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            enabled: boolean;
+        };
+        InternalEightDHttpSourceDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        InternalEightDHttpSourceConfirmationDto: {
+            relatedProblemIds: string[];
+            /** @enum {string} */
+            recurrence: "RECURRENCE" | "NOT_RECURRENCE";
+            /** @description Fingerprint returned by sources/preview; required when hidden relations exist. */
+            relatedSetToken?: string;
+            reason?: string;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        IssueCustomerEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
+            sources: components["schemas"]["InternalEightDHttpSourceDto"][];
+            sourceConfirmations?: components["schemas"]["InternalEightDHttpSourceConfirmationDto"][];
+        };
+        CustomerEightDIssueResultDto: {
+            problem: components["schemas"]["ProcessIssueProblemDto"];
+            replayed: boolean;
+        };
+        CustomerEightDSourcePreviewInputDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            problemId?: string;
+            sources: components["schemas"]["InternalEightDHttpSourceDto"][];
+        };
+        CustomerEightDSourcePreviewDto: {
+            relatedProblems: components["schemas"]["ProcessEightDRelatedProblemDto"][];
+            hasHiddenRelations: boolean;
+            /** @description Opaque confirmation fingerprint; revalidated inside the mutation transaction. */
+            relatedSetToken: string;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        CustomerEightDAssignmentOptionsDto: {
+            departments: components["schemas"]["WorkflowClosureDepartmentOptionDto"][];
+            users: components["schemas"]["WorkflowClosureUserOptionDto"][];
+            departmentTotal: number;
+            userTotal: number;
+            page: number;
+            pageSize: number;
+        };
+        InternalEightDHttpSourceSnapshotDto: {
+            sourceVersion: number;
+            snapshot: {
+                [key: string]: unknown;
+            };
+            primary: boolean;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        CustomerEightDReportDto: {
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceVersion: number;
+            problemVersion: number;
+            version: number;
+            contentVersion: number;
+            status: string;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            collaboratorUserIds: string[];
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+            /** Format: date-time */
+            analysisCompletedAt: string | null;
+            /** Format: date-time */
+            analysisDueAt: string | null;
+            /** Format: date-time */
+            submissionDueAt: string | null;
+            /** Format: date-time */
+            closureDueAt: string | null;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: uuid */
+            closedRevisionId: string | null;
+            allowedActions: string[];
+            revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
+            sources: components["schemas"]["InternalEightDHttpSourceSnapshotDto"][];
+        };
+        SaveCustomerEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+        };
+        CustomerEightDAnalysisCompleteDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: date-time */
+            submissionDueAt: string;
+        };
+        CustomerEightDVersionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        CustomerEightDCollaboratorsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            userIds: string[];
+        };
+        ReassignCustomerEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            reason?: string;
+        };
+        CustomerEightDRiskDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            confirmCancelApproval?: boolean;
+            reason?: string;
+        };
+        CustomerEightDSourcesDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            confirmCancelApproval?: boolean;
+            reason?: string;
+            add: components["schemas"]["InternalEightDHttpSourceDto"][];
+            removeSourceIds: string[];
+            /** Format: uuid */
+            primarySourceId?: string;
+            sourceConfirmations?: components["schemas"]["InternalEightDHttpSourceConfirmationDto"][];
+        };
+        CustomerEightDDeadlinesDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
+        };
         MaterialMasterDto: {
             /** Format: uuid */
             id: string;
@@ -11414,6 +12155,25 @@ export interface components {
             work_order_code?: string | null;
             version: number;
         };
+        NewProductDefectSelectionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            defect_id: string;
+            source_version: number;
+            source_snapshot: {
+                [key: string]: unknown;
+            };
+            selection_reason: string | null;
+            /** Format: uuid */
+            selected_by_id: string;
+            /** Format: date-time */
+            selected_at: string;
+        };
         NewProductHandoverDto: {
             /** Format: uuid */
             id: string;
@@ -11472,6 +12232,65 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        NewProductIssueDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            trial_batch_id?: string | null;
+            /** @enum {string} */
+            response_form: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            complexity: "SIMPLE" | "COMPLEX";
+            severity: string;
+            /** @enum {string} */
+            status: "OPEN" | "ESCALATED" | "IN_PROGRESS" | "VERIFIED" | "CLOSED";
+            version: number;
+            /** Format: uuid */
+            owner_user_id?: string | null;
+            owner_username?: string | null;
+            measure_plan?: string | null;
+            /** Format: date-time */
+            measure_due_at?: string | null;
+            verification_summary?: string | null;
+            /** Format: uuid */
+            verification_evidence_object_id?: string | null;
+            /** Format: uuid */
+            verified_by_id?: string | null;
+            /** Format: date-time */
+            verified_at?: string | null;
+            /** Format: date-time */
+            closed_at?: string | null;
+            closure_note?: string | null;
+        };
+        NewProductInternalEightDIssueDto: {
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            status: string;
+            severity: string;
+            problemVersion: number;
+            /** Format: date-time */
+            createdAt: string;
+            selectionIds: string[];
+        };
+        NewProductIssueStatsDto: {
+            total: number;
+            open: number;
+            escalated: number;
+            in_progress: number;
+            verified: number;
+            closed: number;
+            pending: number;
+            resolved: number;
+            archived: number;
+        };
+        NewProductIssueListDto: {
+            items: components["schemas"]["NewProductIssueDto"][];
+            internalEightDIssues: components["schemas"]["NewProductInternalEightDIssueDto"][];
+            stats: components["schemas"]["NewProductIssueStatsDto"];
+        };
         NewProductProjectDetailDto: {
             /** Format: uuid */
             id: string;
@@ -11486,10 +12305,10 @@ export interface components {
             stages: components["schemas"]["NewProductStageDto"][];
             lessons: components["schemas"]["NewProductLessonCheckDto"][];
             batches: components["schemas"]["NewProductTrialBatchDto"][];
-            selected_defects: Record<string, never>[];
+            selected_defects: components["schemas"]["NewProductDefectSelectionDto"][];
             handover?: components["schemas"]["NewProductHandoverDto"] | null;
             early_flow?: components["schemas"]["NewProductEarlyFlowDto"] | null;
-            issues?: Record<string, never>;
+            issues?: components["schemas"]["NewProductIssueListDto"];
         };
         CreateNewProductStageDto: {
             /** Format: uuid */
@@ -11742,50 +12561,6 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
         };
-        NewProductIssueDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            project_id: string;
-            /** Format: uuid */
-            trial_batch_id?: string | null;
-            /** @enum {string} */
-            response_form: "BRIEF" | "EIGHT_D";
-            /** @enum {string} */
-            complexity: "SIMPLE" | "COMPLEX";
-            severity: string;
-            /** @enum {string} */
-            status: "OPEN" | "ESCALATED" | "IN_PROGRESS" | "VERIFIED" | "CLOSED";
-            version: number;
-            /** Format: uuid */
-            owner_user_id?: string | null;
-            owner_username?: string | null;
-            measure_plan?: string | null;
-            /** Format: date-time */
-            measure_due_at?: string | null;
-            verification_summary?: string | null;
-            /** Format: uuid */
-            verification_evidence_object_id?: string | null;
-            /** Format: uuid */
-            verified_by_id?: string | null;
-            /** Format: date-time */
-            verified_at?: string | null;
-            /** Format: date-time */
-            closed_at?: string | null;
-            closure_note?: string | null;
-        };
-        NewProductIssueStatsDto: {
-            total: number;
-            open: number;
-            escalated: number;
-            in_progress: number;
-            verified: number;
-            closed: number;
-        };
-        NewProductIssueListDto: {
-            items: components["schemas"]["NewProductIssueDto"][];
-            stats: components["schemas"]["NewProductIssueStatsDto"];
-        };
         AssignNewProductIssueDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -11836,6 +12611,179 @@ export interface components {
             organizationId?: string;
             expectedVersion: number;
             riskStatement: string;
+        };
+        NewProductEightDBindingDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+        };
+        NewProductEightDBindingResultDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            enabled: boolean;
+            version: number;
+        };
+        NewProductEightDActivationDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            enabled: boolean;
+        };
+        IssueNewProductEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
+            sources: components["schemas"]["InternalEightDHttpSourceDto"][];
+            sourceConfirmations?: components["schemas"]["InternalEightDHttpSourceConfirmationDto"][];
+        };
+        NewProductEightDIssueResultDto: {
+            problem: components["schemas"]["ProcessIssueProblemDto"];
+            replayed: boolean;
+        };
+        NewProductEightDSourcePreviewInputDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            problemId?: string;
+            sources: components["schemas"]["InternalEightDHttpSourceDto"][];
+        };
+        NewProductEightDSourcePreviewDto: {
+            relatedProblems: components["schemas"]["ProcessEightDRelatedProblemDto"][];
+            hasHiddenRelations: boolean;
+            /** @description Opaque confirmation fingerprint; revalidated inside the mutation transaction. */
+            relatedSetToken: string;
+            /** Format: uuid */
+            sourceId: string;
+        };
+        NewProductEightDAssignmentOptionsDto: {
+            departments: components["schemas"]["WorkflowClosureDepartmentOptionDto"][];
+            users: components["schemas"]["WorkflowClosureUserOptionDto"][];
+            departmentTotal: number;
+            userTotal: number;
+            page: number;
+            pageSize: number;
+        };
+        NewProductEightDReportDto: {
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceVersion: number;
+            problemVersion: number;
+            version: number;
+            contentVersion: number;
+            status: string;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            collaboratorUserIds: string[];
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+            /** Format: date-time */
+            analysisCompletedAt: string | null;
+            /** Format: date-time */
+            analysisDueAt: string | null;
+            /** Format: date-time */
+            submissionDueAt: string | null;
+            /** Format: date-time */
+            closureDueAt: string | null;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: uuid */
+            closedRevisionId: string | null;
+            allowedActions: string[];
+            revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
+            sources: components["schemas"]["InternalEightDHttpSourceSnapshotDto"][];
+        };
+        SaveNewProductEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+        };
+        NewProductEightDAnalysisCompleteDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: date-time */
+            submissionDueAt: string;
+        };
+        NewProductEightDVersionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        NewProductEightDCollaboratorsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            userIds: string[];
+        };
+        ReassignNewProductEightDDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            reason?: string;
+        };
+        NewProductEightDRiskDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            confirmCancelApproval?: boolean;
+            reason?: string;
+        };
+        NewProductEightDSourcesDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            confirmCancelApproval?: boolean;
+            reason?: string;
+            add: components["schemas"]["InternalEightDHttpSourceDto"][];
+            removeSourceIds: string[];
+            /** Format: uuid */
+            primarySourceId?: string;
+            sourceConfirmations?: components["schemas"]["InternalEightDHttpSourceConfirmationDto"][];
+        };
+        NewProductEightDDeadlinesDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
         };
         MetricDefinitionDto: {
             /** Format: uuid */
@@ -17719,6 +18667,7 @@ export interface operations {
                 pageSize?: number;
                 domainCode?: string;
                 problemType?: string;
+                sourceType?: string;
                 responseForm?: "BRIEF" | "EIGHT_D";
                 status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
                 severity?: string;
@@ -17827,6 +18776,7 @@ export interface operations {
                 pageSize?: number;
                 domainCode?: string;
                 problemType?: string;
+                sourceType?: string;
                 responseForm?: "BRIEF" | "EIGHT_D";
                 status?: "OPEN" | "IN_PROGRESS" | "PENDING" | "RESOLVED" | "CLOSED" | "ARCHIVED";
                 severity?: string;
@@ -23266,6 +24216,668 @@ export interface operations {
             };
         };
     };
+    CustomerEightDRevisionDeliveryController_tasks: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                problemId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDTaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDRevisionDeliveryController_notifications: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                problemId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDRevisionDeliveryController_report: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDControlledReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDRevisionDeliveryController_pdf: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_binding: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDBindingResultDto"] | null;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_bind: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDBindingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDBindingResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_activate: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDActivationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDBindingResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCustomerEightDDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDIssueResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_previewSources: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDSourcePreviewInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDSourcePreviewDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_assignmentOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                organizationId?: string;
+                action?: "ISSUE" | "REASSIGN" | "COLLABORATORS";
+                /** @description Required for REASSIGN and COLLABORATORS. */
+                problemId?: string;
+                sectionDepartmentId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDAssignmentOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_save: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCustomerEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_analysis: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDAnalysisCompleteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_collaborators: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDCollaboratorsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_reassign: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignCustomerEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_risk: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDRiskDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_sources: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDSourcesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_deadlines: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerEightDDeadlinesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     MaterialMasterController_list: {
         parameters: {
             query?: {
@@ -25196,7 +26808,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": components["schemas"]["NewProductDefectSelectionDto"][];
                 };
             };
             default: {
@@ -25232,7 +26844,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["NewProductDefectSelectionDto"];
                 };
             };
             default: {
@@ -25586,6 +27198,668 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NewProductHandoverDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDRevisionDeliveryController_tasks: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                problemId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDTaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDRevisionDeliveryController_notifications: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                problemId?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDRevisionDeliveryController_report: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDControlledReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDRevisionDeliveryController_pdf: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                problemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_binding: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDBindingResultDto"] | null;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_bind: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDBindingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDBindingResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_activate: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDActivationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDBindingResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueNewProductEightDDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDIssueResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_previewSources: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDSourcePreviewInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDSourcePreviewDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_assignmentOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                organizationId?: string;
+                action?: "ISSUE" | "REASSIGN" | "COLLABORATORS";
+                /** @description Required for REASSIGN and COLLABORATORS. */
+                problemId?: string;
+                sectionDepartmentId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDAssignmentOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_save: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveNewProductEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_analysis: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDAnalysisCompleteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_collaborators: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDCollaboratorsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_reassign: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignNewProductEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_risk: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDRiskDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_sources: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDSourcesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_deadlines: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewProductEightDDeadlinesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewProductEightDReportDto"];
                 };
             };
             default: {

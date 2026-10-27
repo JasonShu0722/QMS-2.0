@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { LanguageProvider } from '../../i18n/Language';
@@ -33,6 +33,25 @@ function mount(read: (path: string) => Promise<Controlled>, download = vi.fn(asy
   const request: EightDRead = async <T,>(path: string) => await read(path) as T;
   return render(<LanguageProvider><EightDControlledReport report={report} read={request} download={download} /></LanguageProvider>);
 }
+
+it('shows customer source facts from the selected saved report, never live workspace sources', async () => {
+  const read: EightDRead = async <T,>(path: string) => {
+    const approved = path.includes('view=APPROVED');
+    const value = saved(approved ? 'APPROVED' : 'CURRENT', 'Saved content');
+    value.snapshot.sources = [{ sourceDomain: 'customer-quality', sourceType: 'customer-complaint', sourceId: 'complaint-1', sourceVersion: approved ? 2 : 3,
+      sourceSnapshot: { complaintNumber: 'CQ-1', customerName: approved ? 'Approved customer' : 'Current customer',
+        normalized: { defectDescription: 'Saved defect', componentCode: 'COMP-1', quantity: 2 } } }];
+    return value as T;
+  };
+  render(<LanguageProvider><EightDControlledReport domain="customer" report={report} read={read} download={vi.fn()} /></LanguageProvider>);
+  let facts = await screen.findByRole('region', { name: '来源基础信息' });
+  expect(within(facts).getByText('Current customer')).toBeVisible();
+  fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'APPROVED' } });
+  await waitFor(() => expect(screen.queryByText('Current customer')).not.toBeInTheDocument());
+  facts = await screen.findByRole('region', { name: '来源基础信息' });
+  expect(within(facts).getByText('Approved customer')).toBeVisible();
+  expect(within(facts).getByText('保存来源版本').nextElementSibling).toHaveTextContent('2');
+});
 
 it('ignores a late CURRENT response after switching to APPROVED', async () => {
   let release!: (value: Controlled) => void;

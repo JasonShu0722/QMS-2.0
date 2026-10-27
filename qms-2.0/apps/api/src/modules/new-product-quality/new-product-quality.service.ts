@@ -9,6 +9,7 @@ import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js'
 import { WorkflowUpgradeService } from '../workflow/workflow-upgrade.service.js';
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
 import { renderTrialSummaryReport, type TrialSummaryReport } from './trial-summary-report.js';
+import { NewProductEightDSourceService } from './new-product-eight-d-source.service.js';
 
 export type TrialMetricCode = 'INPUT' | 'OUTPUT' | 'FIRST_PASS' | 'DEFECT' | 'CPK' | 'DIMENSION_PASS_RATE';
 export interface TrialMetricSourceAdapter<ExternalRecord> {
@@ -45,7 +46,12 @@ function canonical(value: unknown): string {
 
 @Injectable()
 export class NewProductQualityService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService, @Optional() private readonly upgrades?: WorkflowUpgradeService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly problems?: ProblemIndexService, private readonly runtime?: WorkflowRuntimeService, @Optional() private readonly upgrades?: WorkflowUpgradeService, @Optional() private readonly sources?: NewProductEightDSourceService) {}
+
+  private sourceService(): NewProductEightDSourceService {
+    if (!this.sources) fail('NEW_PRODUCT_SOURCE_SERVICE_REQUIRED', 503);
+    return this.sources;
+  }
 
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
@@ -87,7 +93,7 @@ export class NewProductQualityService {
       const lessons = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT lesson_checks.*, lessons.title, lessons.lesson FROM new_product_lesson_checks lesson_checks JOIN new_product_lessons lessons ON lessons.id = lesson_checks.lesson_id AND lessons.organization_id = lesson_checks.organization_id WHERE lesson_checks.project_id = ${id}::uuid AND lesson_checks.organization_id = ${organizationId}::uuid ORDER BY lesson_checks.created_at, lesson_checks.id`);
       const batches = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_trial_batches WHERE project_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY created_at, id`);
       const selected_defects = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_defect_selections WHERE project_id = ${id}::uuid AND organization_id = ${organizationId}::uuid ORDER BY selected_at, id`);
-      if (selected_defects.length) await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
+      if (selected_defects.length) await NewProductEightDSourceService.assertRead(tx, actor, organizationId);
       const [handover] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_handovers WHERE project_id = ${id}::uuid AND organization_id = ${organizationId}::uuid`);
       const [earlyFlow] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT flow.*, release.decision AS release_decision, release.note AS release_note, release.evidence_object_id AS release_evidence_object_id, release.decided_by_id AS release_decided_by_id, release.decided_at AS release_decided_at, release.flow_version AS release_flow_version FROM new_product_early_flows flow LEFT JOIN new_product_early_flow_releases release ON release.early_flow_id = flow.id AND release.organization_id = flow.organization_id AND release.flow_version = flow.version WHERE flow.project_id = ${id}::uuid AND flow.organization_id = ${organizationId}::uuid`);
       const issues = await this.issueList(tx, organizationId, id);
@@ -108,7 +114,23 @@ export class NewProductQualityService {
   private async issueList(tx: AdminTransaction, organizationId: string, projectId: string) {
     const items = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT issue.*, owner.username AS owner_username FROM new_product_issues issue LEFT JOIN users owner ON owner.id = issue.owner_user_id AND owner.organization_id = issue.organization_id WHERE issue.project_id = ${projectId}::uuid AND issue.organization_id = ${organizationId}::uuid ORDER BY issue.created_at, issue.id`);
     const [counts] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT count(*)::int AS total, count(*) FILTER (WHERE status = 'OPEN')::int AS open, count(*) FILTER (WHERE status = 'ESCALATED')::int AS escalated, count(*) FILTER (WHERE status = 'IN_PROGRESS')::int AS in_progress, count(*) FILTER (WHERE status = 'VERIFIED')::int AS verified, count(*) FILTER (WHERE status = 'CLOSED')::int AS closed FROM new_product_issues WHERE project_id = ${projectId}::uuid AND organization_id = ${organizationId}::uuid`);
-    return { items: items.map((item) => this.issueDto(item)), stats: { total: Number(counts?.total ?? 0), open: Number(counts?.open ?? 0), escalated: Number(counts?.escalated ?? 0), in_progress: Number(counts?.in_progress ?? 0), verified: Number(counts?.verified ?? 0), closed: Number(counts?.closed ?? 0) } };
+    const internalEightDIssues = await this.projectEightDIssues(tx, organizationId, projectId);
+    const count = (status: string) => internalEightDIssues.filter(issue => issue.status === status).length;
+    return { items: items.map((item) => this.issueDto(item)), internalEightDIssues, stats: {
+      total: Number(counts?.total ?? 0) + internalEightDIssues.length,
+      open: Number(counts?.open ?? 0) + count('OPEN'), escalated: Number(counts?.escalated ?? 0),
+      in_progress: Number(counts?.in_progress ?? 0) + count('IN_PROGRESS'), verified: Number(counts?.verified ?? 0),
+      closed: Number(counts?.closed ?? 0) + count('CLOSED'), pending: count('PENDING'), resolved: count('RESOLVED'), archived: count('ARCHIVED'),
+    } };
+  }
+
+  private async projectEightDIssues(tx: AdminTransaction, organizationId: string, projectId: string) {
+    const selections = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM new_product_defect_selections WHERE project_id = ${projectId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY id`);
+    if (!selections.length) return [];
+    if (!this.problems) fail('NEW_PRODUCT_PROBLEM_SERVICE_REQUIRED', 503);
+    const states = await this.problems.readSourceLinkedStates(tx, { organizationId, domainCode: 'new-product-quality',
+      sourceType: 'new-product-defect-selection', sourceIds: selections.map(selection => selection.id) });
+    return states.map(({ sourceIds, ...state }) => ({ ...state, selectionIds: sourceIds }));
   }
 
   async issueListForProject(actor: AdminActor, projectId: string) {
@@ -356,9 +378,11 @@ export class NewProductQualityService {
     const metricSnapshot = metricRows.map((metric) => ({ id: metric.id, code: metric.code, target: Number(metric.target), actual: Number(metric.actual), comparison: metric.comparison, signal: metric.comparison === 'GTE' ? Number(metric.actual) >= Number(metric.target) ? 'GREEN' : 'RED' : Number(metric.actual) <= Number(metric.target) ? 'GREEN' : 'RED', source: metric.source, recordedAt: new Date(metric.recorded_at).toISOString() }));
     const legacyIssues = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, description, risk_level, status, created_at FROM new_product_legacy_issues WHERE project_id = ${projectId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY created_at, id`);
     const formalIssues = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, response_form, complexity, severity, status, created_at FROM new_product_issues WHERE trial_batch_id = ${batchId}::uuid AND project_id = ${projectId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY created_at, id`);
+    const internalEightDIssues = await this.projectEightDIssues(tx, organizationId, projectId);
     const issueSnapshot = [
       ...legacyIssues.map((issue) => ({ kind: 'PROJECT_LEGACY', id: issue.id, description: issue.description, riskLevel: issue.risk_level, status: issue.status, createdAt: new Date(issue.created_at).toISOString() })),
       ...formalIssues.map((issue) => ({ kind: 'FORMAL', id: issue.id, responseForm: issue.response_form, complexity: issue.complexity, severity: issue.severity, status: issue.status, createdAt: new Date(issue.created_at).toISOString() })),
+      ...internalEightDIssues.map(issue => ({ kind: 'INTERNAL_EIGHT_D', id: issue.problemId, ...issue, responseForm: 'EIGHT_D' })),
     ];
     const sourceSha256 = createHash('sha256').update(canonical({ batchId, conclusion, metricSnapshot, issueSnapshot }), 'utf8').digest('hex');
     return { metricSnapshot, issueSnapshot, sourceSha256 };
@@ -434,24 +458,22 @@ export class NewProductQualityService {
   async selectProcessDefect(actor: AdminActor, projectId: string, input: { defectId: string; expectedVersion: number; reason?: string }, traceId: string, key?: string) {
     const organizationId = this.scope(actor); const project = uuid(projectId); const defectId = uuid(input.defectId); const expectedVersion = version(input.expectedVersion);
     const reason = input.reason === undefined ? null : text(input.reason, 2000);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'NEW_PRODUCT_DEFECT_SELECTED', payload: { project, defectId, expectedVersion, reason }, permission: WRITE }, async (tx) => {
-      await assertAdminAccess(tx, actor, organizationId, ['new-product-quality:projects:write', 'process-quality:defects:read']);
+    const reference = await this.sourceService().processReference(actor, defectId);
+    reference.sourceVersion = expectedVersion;
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'NEW_PRODUCT_DEFECT_SELECTED', payload: { project, defectId, expectedVersion, reason }, permission: [WRITE, READ, 'process-quality:defects:read'] }, async (tx) => {
       const [projectRow] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT status, code, product_code FROM new_product_projects WHERE id = ${project}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`);
       if (!projectRow) fail('NEW_PRODUCT_PROJECT_NOT_FOUND', 404); if (projectRow.status !== 'ACTIVE') fail('NEW_PRODUCT_PROJECT_ARCHIVED', 409);
-      const [defect] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM process_defects WHERE id = ${defectId}::uuid AND organization_id = ${organizationId}::uuid AND archived_at IS NULL FOR UPDATE`);
-      if (!defect) fail('PROCESS_DEFECT_NOT_FOUND', 404); if (defect.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
-      if (defect.project_code !== projectRow.code && defect.project_code !== projectRow.product_code && defect.product_code !== projectRow.product_code) fail('NEW_PRODUCT_DEFECT_PROJECT_MISMATCH', 409);
-      const snapshot = { id: defect.id, defectTypeCode: defect.defect_type_code, description: defect.description, defectQuantity: defect.defect_quantity, occurredAt: defect.occurred_at?.toISOString() ?? null, batchCode: defect.batch_code, workOrderCode: defect.work_order_code, projectCode: defect.project_code, productCode: defect.product_code, sourceKind: defect.source_kind, version: defect.version };
+      const snapshot = await this.sourceService().selectionSnapshot(tx, actor, { id: project, code: projectRow.code }, reference, reason);
       const id = randomUUID();
       const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`INSERT INTO new_product_defect_selections(id, organization_id, project_id, defect_id, source_version, source_snapshot, selection_reason, selected_by_id) VALUES (${id}::uuid, ${organizationId}::uuid, ${project}::uuid, ${defectId}::uuid, ${expectedVersion}, ${JSON.stringify(snapshot)}::jsonb, ${reason}, ${actor.id}::uuid) RETURNING *`);
       await this.record(tx, actor, organizationId, 'NEW_PRODUCT_DEFECT_SELECTED', 'NewProductDefectSelection', id, traceId); return row;
-    }).catch(mapUnique);
+    }, async tx => { await NewProductEightDSourceService.assertRead(tx, actor, organizationId); }).catch(mapUnique);
   }
 
   async selectedDefects(actor: AdminActor, projectId: string) {
     const organizationId = this.scope(actor); const project = uuid(projectId);
     return this.read(actor, async (tx) => {
-      await assertAdminAccess(tx, actor, organizationId, ['new-product-quality:projects:read', 'process-quality:defects:read']);
+      await NewProductEightDSourceService.assertRead(tx, actor, organizationId);
       return tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM new_product_defect_selections WHERE project_id = ${project}::uuid AND organization_id = ${organizationId}::uuid ORDER BY selected_at, id`);
     });
   }
@@ -732,7 +754,8 @@ export class NewProductQualityService {
         if (source.sourceSha256 !== summary.source_sha256) fail('NEW_PRODUCT_HANDOVER_TRIAL_SUMMARY_STALE', 409);
       }
       const [issues] = await tx.$queryRaw<{ open_count: bigint }[]>(Prisma.sql`SELECT (SELECT count(*) FROM new_product_issues WHERE organization_id = ${organizationId}::uuid AND project_id = ${projectIdValue}::uuid AND status <> 'CLOSED') + (SELECT count(*) FROM new_product_legacy_issues WHERE organization_id = ${organizationId}::uuid AND project_id = ${projectIdValue}::uuid AND status <> 'CLOSED') AS open_count`);
-      const openIssueCount = Number(issues?.open_count ?? 0n);
+      const internalEightDIssues = await this.projectEightDIssues(tx, organizationId, projectIdValue);
+      const openIssueCount = Number(issues?.open_count ?? 0n) + internalEightDIssues.filter(issue => issue.status !== 'CLOSED').length;
       const [decision] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id, decision, risk_statement FROM new_product_mass_production_approvals WHERE project_id = ${projectIdValue}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`);
       let approvalId: string | null = null;
       if (decision) {

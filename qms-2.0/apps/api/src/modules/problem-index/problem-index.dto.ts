@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { PROBLEM_STATUSES, type ProblemStatus } from './problem.types.js';
 import { DOMAIN_SOURCE_RESPONSE_FORMS, type DomainSourceResponseForm } from './domain-source-issue.service.js';
 
@@ -15,6 +15,7 @@ export class ProblemIndexQueryDto extends ProblemScopeQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) domainCode?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) problemType?: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(100) sourceType?: string;
   @ApiPropertyOptional({ enum: DOMAIN_SOURCE_RESPONSE_FORMS }) @IsOptional() @IsIn(DOMAIN_SOURCE_RESPONSE_FORMS) responseForm?: DomainSourceResponseForm;
   @ApiPropertyOptional({ enum: PROBLEM_STATUSES }) @IsOptional() @IsIn(PROBLEM_STATUSES) status?: ProblemStatus;
   @ApiPropertyOptional({ maxLength: 32 }) @IsOptional() @IsString() @MaxLength(32) severity?: string;

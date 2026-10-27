@@ -49,7 +49,7 @@ export class ProblemQueryService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const conditions: Prisma.Sql[] = [this.scope(actor, organizationId, query.responseForm)];
-    for (const [value, column] of [[query.domainCode, Prisma.sql`p.domain_code`], [query.problemType, Prisma.sql`p.problem_type`], [query.status, Prisma.sql`p.status::text`], [query.severity, Prisma.sql`p.severity`]] as const) if (value !== undefined) conditions.push(Prisma.sql`${column} = ${value}`);
+    for (const [value, column] of [[query.domainCode, Prisma.sql`p.domain_code`], [query.problemType, Prisma.sql`p.problem_type`], [query.sourceType, Prisma.sql`p.source_type`], [query.status, Prisma.sql`p.status::text`], [query.severity, Prisma.sql`p.severity`]] as const) if (value !== undefined) conditions.push(Prisma.sql`${column} = ${value}`);
     if (query.ownerId) conditions.push(Prisma.sql`p.owner_id = ${query.ownerId}::uuid`);
     if (query.search?.trim()) conditions.push(Prisma.sql`p.report_number ILIKE ${`%${query.search.trim().replace(/[\\%_]/g, '\\$&')}%`}`);
     if (query.dueFrom) conditions.push(Prisma.sql`p.due_at >= ${new Date(query.dueFrom)}`);

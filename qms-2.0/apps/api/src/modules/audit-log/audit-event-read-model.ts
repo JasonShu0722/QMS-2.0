@@ -5,6 +5,7 @@ import type { AuditActorSummaryDto } from './audit-query.dto.js';
 export const auditEventReadSelect = {
   id: true, organizationId: true, actorUserId: true, action: true, resourceType: true,
   resourceId: true, outcome: true, traceId: true, createdAt: true,
+  metadata: true,
   actor: { select: { username: true, accountType: true, organizationId: true, organization: { select: { name: true } } } },
 } as const satisfies Prisma.AuditEventSelect;
 
@@ -154,8 +155,14 @@ const actionLabels: Readonly<Record<string, string>> = {
   SUPPLIER_MEETING_ACTION_CREATED: '创建供应商会议行动项', SUPPLIER_MEETING_ACTION_COMPLETED: '完成供应商会议行动项',
 };
 
+const allActionLabels: Readonly<Record<string, string>> = { ...actionLabels,
+  ...Object.fromEntries(Object.entries(actionLabels).filter(([code]) => code.startsWith('PROCESS_EIGHT_D_'))
+    .flatMap(([code, label]) => [['CUSTOMER', '客户'], ['NEW_PRODUCT', '新品']].map(([prefix, name]) =>
+      [code.replace(/^PROCESS_/, `${prefix}_`), label.includes('制程') ? label.replaceAll('制程', name) : `${name}8D：${label}`]))),
+};
+
 export function auditActionLabel(action: string): string {
-  return Object.hasOwn(actionLabels, action) ? actionLabels[action]! : action;
+  return Object.hasOwn(allActionLabels, action) ? allActionLabels[action]! : action;
 }
 
 export function auditActionFilter(keyword?: string): Prisma.AuditEventWhereInput {
@@ -164,7 +171,7 @@ export function auditActionFilter(keyword?: string): Prisma.AuditEventWhereInput
   return { OR: [
     // Prisma contains uses LIKE patterns; action keywords must match literal characters.
     { action: { contains: keyword.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' } },
-    { action: { in: Object.entries(actionLabels).filter(([, label]) => label.toLowerCase().includes(normalized)).map(([code]) => code) } },
+    { action: { in: Object.entries(allActionLabels).filter(([, label]) => label.toLowerCase().includes(normalized)).map(([code]) => code) } },
   ] };
 }
 

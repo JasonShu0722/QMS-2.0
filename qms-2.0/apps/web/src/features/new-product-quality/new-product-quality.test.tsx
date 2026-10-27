@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, getSession } from '../../api/client';
 import { NewProductQualityPage } from './NewProductQualityPage';
@@ -20,6 +20,17 @@ beforeEach(() => {
   vi.mocked(apiRequest).mockReset();
   vi.mocked(getSession).mockReset();
   vi.mocked(getSession).mockResolvedValue({ accountType: 'INTERNAL', landingPath: '/app/workbench', userId: 'reviewer', organizationId: 'org-1' });
+});
+
+it('opens the formal same-source entry without replacing stages or historical issue handling', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['new-product-quality:projects:read', 'new-product-quality:projects:write', 'process-quality:defects:read'] } : path.includes('/defect-selections') ? [] : path.includes('/defects?') ? { items: [], total: 0 } : project);
+  render(<MemoryRouter><UnsavedChangesProvider><NewProductQualityPage projectId={project.id} /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '新品同源8D' }));
+  expect(await screen.findByText('暂无已纳入来源')).toBeVisible();
+  expect(screen.getByText('设计验证')).toBeVisible();
+  await act(async () => { fireEvent.click(screen.getByText('纳入过程事实', { selector: 'button span' })); });
+  await waitFor(() => expect(screen.getByText(/当前项目：NP-2026-001；当前组件线索：EDRIVE-X/)).toBeVisible());
+  expect(screen.getByLabelText('候选项目代码')).toHaveValue('NP-2026-001');
 });
 
 it('loads a project and renders its stages', async () => {

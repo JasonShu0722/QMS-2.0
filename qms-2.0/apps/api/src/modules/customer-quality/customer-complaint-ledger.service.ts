@@ -10,11 +10,12 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ComponentProjectService, listComponentEngineerAssignments, readComponentEngineerAssignment } from '../platform-configuration/component-project.service.js';
 import type { ComponentProjectResolutionDto } from '../platform-configuration/component-project.dto.js';
 import { OrganizationService } from '../organization/organization.service.js';
+import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { complaintMileageBand, complaintMisTag, complaintServiceMonths, parseComplaintDate } from './customer-complaint-derived.js';
 import { CustomerLedgerCreateDto, CustomerLedgerImportDto, CustomerLedgerListDto, CustomerLedgerNoteDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerUpdateDto,
   type CustomerLedgerCandidateDto, type CustomerLedgerDetailDto, type CustomerLedgerImportItemDto, type CustomerLedgerImportResultDto,
   type CustomerLedgerImportRowDto, type CustomerLedgerItemDto } from './customer-complaint-ledger.dto.js';
-import { LEDGER_PERMISSIONS, ledgerDisplayStatus, ledgerFail, mergeComplaintSupplement, normalizeComplaintFields,
+import { CUSTOMER_SOURCE_PERMISSIONS, LEDGER_PERMISSIONS, ledgerDisplayStatus, ledgerFail, mergeComplaintSupplement, normalizeComplaintFields,
   type ComplaintFields, type CustomerLedgerCase, type LedgerOperation, type LedgerStage } from './customer-complaint-ledger.types.js';
 
 type Row = Record<string, any>;
@@ -55,6 +56,68 @@ export class CustomerComplaintLedgerService {
     const [row] = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND id = ${validId(id)}::uuid FOR UPDATE`;
     if (!row) ledgerFail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
     return row;
+  }
+
+  private async authorizeSource(tx: AdminTransaction, actor: AdminActor) {
+    const organizationId = await this.authorize(tx, actor);
+    const granted = await adminPermissions(tx, actor.id, organizationId);
+    if (!CUSTOMER_SOURCE_PERMISSIONS.some(permission => granted.includes(permission))) ledgerFail('FEATURE_PERMISSION_DENIED', 403);
+    return organizationId;
+  }
+
+  async sourceReference(actor: AdminActor, id: string): Promise<DomainSourceReference> {
+    validId(id);
+    return this.prisma.$transaction(async tx => {
+      const organizationId = await this.authorizeSource(tx, actor);
+      const [row] = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid`;
+      if (!row) ledgerFail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
+      const record = await this.sourceRecord(tx, row);
+      return { sourceDomain: 'customer-quality', sourceType: 'customer-complaint', sourceId: id,
+        sourceVersion: record.sourceVersion, sourceSnapshot: record.sourceSnapshot, createdBy: record.createdBy };
+    }, { isolationLevel: 'ReadCommitted' });
+  }
+
+  async lockAndResolve(tx: Prisma.TransactionClient, reference: DomainSourceReference, actor: AdminActor): Promise<DomainSourceRecord | null> {
+    const organizationId = await this.authorizeSource(tx, actor);
+    if (reference.sourceDomain !== 'customer-quality' || reference.sourceType !== 'customer-complaint') return null;
+    const [isolation] = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
+    if (isolation?.transaction_isolation !== 'read committed') ledgerFail('WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED', 409);
+    const [row] = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE organization_id = ${organizationId}::uuid AND id = ${validId(reference.sourceId)}::uuid FOR UPDATE`;
+    return row ? this.sourceRecord(tx, row) : null;
+  }
+
+  private async sourceRecord(tx: AdminTransaction, row: Row): Promise<DomainSourceRecord> {
+    if (row.archived_at || row.status === 'ARCHIVED') ledgerFail('CUSTOMER_LEDGER_ARCHIVED', 409);
+    // Source snapshots contain saved facts only; readCase/project would reconcile engineers or consult live mappings.
+    const raw = row.ledger_raw ?? this.fields(row);
+    const normalized = row.ledger_normalized ?? normalizeComplaintFields(raw).normalized;
+    let customerName = normalized.customerName ?? null;
+    if (!customerName && row.customer_id) {
+      const [customer] = await tx.$queryRaw<{ name: string }[]>`SELECT name FROM customer_quality_customers WHERE organization_id = ${row.organization_id}::uuid AND id = ${row.customer_id}::uuid`;
+      customerName = customer?.name ?? null;
+    }
+    // Analysis writers lock the source first, so this query needs no second row lock or service dependency.
+    const analyses = await tx.$queryRaw<Row[]>`SELECT id, section, assignee_user_id AS "assigneeUserId",
+      assignee_assignment_id AS "assigneeAssignmentId", department_id AS "departmentId", content, version,
+      updated_by_user_id AS "updatedByUserId", updated_at AS "updatedAt"
+      FROM customer_complaint_analyses WHERE organization_id = ${row.organization_id}::uuid AND complaint_id = ${row.id}::uuid ORDER BY id`;
+    const savedAnalysis = (section: string) => {
+      const analysis = analyses.find(item => item.section === section);
+      return analysis ? { ...analysis, updatedAt: iso(analysis.updatedAt) } : null;
+    };
+    const occurredOn = parseComplaintDate(normalized.occurredOn);
+    return { organizationId: row.organization_id, createdBy: row.created_by_id, sourceVersion: row.version, archivedAt: row.archived_at,
+      sourceSnapshot: { id: row.id, complaintNumber: row.complaint_number, sourceKind: 'CUSTOMER_COMPLAINT',
+        complaintType: normalized.complaintType ?? row.complaint_type, customerId: row.customer_id, customerName,
+        raw, normalized, mappingSnapshot: row.ledger_mapping_snapshot, stage: row.registered_stage,
+        quantity: normalized.quantity ?? null, occurredAt: occurredOn ? `${occurredOn}T00:00:00.000Z` : null,
+        qualityEngineerId: row.quality_engineer_id, qualityEngineerAssignmentId: row.quality_engineer_assignment_id,
+        qualityEngineerSource: row.quality_engineer_source, registeredByUserId: row.created_by_id,
+        status: ledgerDisplayStatus(row.ledger_status, row.status), legacyStatus: row.status,
+        courierNumber: row.courier_number, receivedOn: date(row.received_on),
+        severity: row.severity, severityPolicyVersion: row.severity_policy_version, severitySnapshot: row.severity_snapshot,
+        analyses: { fae: savedAnalysis('FAE'), supplier: savedAnalysis('SUPPLIER') },
+      } as Prisma.InputJsonObject };
   }
 
   private fields(row: Row): ComplaintFields {

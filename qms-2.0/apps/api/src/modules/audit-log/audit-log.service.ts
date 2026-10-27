@@ -33,6 +33,7 @@ interface AuditEventWriter {
 }
 
 const configurationTextLimits: Readonly<Record<string, number>> = {
+  originalOrganizationCode: 64, originalOrganizationName: 200,
   componentProjectCode: 100, previousComponentProjectCode: 100,
   componentProjectName: 200, previousComponentProjectName: 200,
   componentName: 200, previousComponentName: 200,
@@ -41,6 +42,7 @@ const configurationTextLimits: Readonly<Record<string, number>> = {
   productSubcategory: 100, previousProductSubcategory: 100,
 };
 const configurationIdKeys = new Set([
+  'originalOrganizationId',
   'componentProjectId', 'projectRecordId', 'previousProjectRecordId',
   'customerEngineerAssignmentId', 'previousCustomerEngineerAssignmentId',
   'projectEngineerAssignmentId', 'previousProjectEngineerAssignmentId',

@@ -1,4 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import { INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
 import type { ProblemDomainSummary } from '../problem-index/problem-domain-registry.js';
 import { isClosureReviewNode } from '../workflow/workflow-runtime-policy.js';
 import { eightDError } from './process-eight-d-policy.js';
@@ -25,7 +26,8 @@ function stage(record: ProcessEightDRecord, facts: FollowupFacts): string {
 }
 
 // Only already-authorized page records enter this read model; no directory or management permission is exposed.
-export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionClient, records: readonly ProcessEightDRecord[]): Promise<ReadonlyMap<string, ProblemDomainSummary>> {
+export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionClient, records: readonly ProcessEightDRecord[], domain: InternalEightDDomainDescriptor = INTERNAL_EIGHT_D_DOMAINS.PROCESS): Promise<ReadonlyMap<string, ProblemDomainSummary>> {
+  const tables = internalEightDSql(domain);
   const facts = new Map<string, FollowupFacts>();
   const organizations = new Map<string, ProcessEightDRecord[]>();
   for (const record of records) {
@@ -39,7 +41,7 @@ export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionC
         snapshot #>> '{deadlines,analysisDueAt}' AS "analysisDueAt", snapshot #>> '{deadlines,submissionDueAt}' AS "submissionDueAt",
         snapshot #>> '{deadlines,closureDueAt}' AS "closureDueAt", snapshot ->> 'analysisCompletedAt' AS "analysisCompletedAt",
         snapshot ->> 'submittedAt' AS "submittedAt"
-        FROM process_eight_d_revisions WHERE organization_id = ${problem.organizationId}::uuid
+        FROM ${tables.revisions} WHERE organization_id = ${problem.organizationId}::uuid
           AND problem_id = ${problem.id}::uuid AND id = ${report.closedRevisionId}::uuid`);
       if (!snapshot) eightDError('PROBLEM_REPORT_REVISION_NOT_FOUND', 404);
       selected = snapshot;
@@ -66,7 +68,7 @@ export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionC
     const sections = new Map(names.filter(n => n.kind === 'section').map(n => [n.id, n.name]));
     for (const record of group) {
       const selected = facts.get(record.problem.id)!;
-      summaries.set(record.problem.id, { title: record.problem.reportNumber, description: selected.description, domainUiKey: 'process-eight-d', fields: [
+      summaries.set(record.problem.id, { title: record.problem.reportNumber, description: selected.description, domainUiKey: domain.resourceType, fields: [
         { key: 'responsibleSectionName', label: '责任科室', value: sections.get(selected.sectionId) ?? null },
         { key: 'ownerName', label: '负责人', value: selected.ownerId ? owners.get(selected.ownerId) ?? null : null },
         { key: 'stage', label: '当前阶段', value: stage(record, selected) },

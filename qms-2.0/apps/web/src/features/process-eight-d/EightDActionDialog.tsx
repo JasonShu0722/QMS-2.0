@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Checkbox, Modal, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { EightDField } from './EightDDocumentEditor';
@@ -6,13 +6,15 @@ import { EightDAssignmentPicker } from './EightDAssignmentPicker';
 import { EightDSourcePicker } from './EightDSourcePicker';
 import { aborted, eightDPath, extensionPath, useEightDSeverityText, useEightDStyle, useEightDText, type EightDRead, type EightDReport, type EightDWrite, type EightDWriteBody } from './eight-d';
 import styles from './eight-d.module.css';
+import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
+import type { InternalEightDReport, InternalEightDSourceChange, RenderInternalEightDSourcePicker } from '../internal-eight-d/source-picker';
 
 export type EightDAction = 'submit' | 'analysis-complete' | 'collaborators' | 'reassign' | 'risk' | 'sources' | 'deadlines' | 'extension';
 type Sources = Pick<components['schemas']['ProcessEightDSourcesDto'], 'add' | 'removeDefectIds' | 'primaryDefectId' | 'sourceConfirmations'>;
 type Stage = components['schemas']['RequestWorkflowDeadlineExtensionDto']['stage'];
 type Tasks = components['schemas']['ProcessEightDTaskPageDto'];
-export function EightDActionDialog({ action, report, read, write, frozen, busy, recovery, onClose, onDirty, open = true, afterClose }: {
-  action: EightDAction; report: EightDReport; read: EightDRead; write: EightDWrite; frozen: boolean; busy: boolean; recovery?: ReactNode; onClose: () => void; onDirty: () => void; open?: boolean; afterClose?: () => void;
+export function EightDActionDialog({ action, report, read, write, frozen, busy, recovery, onClose, onDirty, open = true, afterClose, domain = 'process', renderSourcePicker }: {
+  action: EightDAction; report: EightDReport; domain?: InternalEightDDomain; renderSourcePicker?: RenderInternalEightDSourcePicker; read: EightDRead; write: EightDWrite; frozen: boolean; busy: boolean; recovery?: ReactNode; onClose: () => void; onDirty: () => void; open?: boolean; afterClose?: () => void;
 }) {
   const text = useEightDText();
   const severityText = useEightDSeverityText();
@@ -27,11 +29,23 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
   const [closureDueAt, setClosureDueAt] = useState('');
   const [stage, setStage] = useState<Stage>('ANALYSIS');
   const [requestedDueAt, setRequestedDueAt] = useState('');
-  const [sourceChange, setSourceChange] = useState<Sources>();
+  const [sourceChange, setSourceChange] = useState<Sources | InternalEightDSourceChange>();
   const [tasks, setTasks] = useState<Tasks>();
   const [taskError, setTaskError] = useState(false);
   const [retry, setRetry] = useState(0);
   const disabled = frozen || busy;
+  const sourceBaseline = JSON.stringify([domain, report.problemId, report.organizationId, report.version]);
+  const sourceScope = useRef({ baseline: sourceBaseline, disabled, active: true });
+  sourceScope.current.baseline = sourceBaseline; sourceScope.current.disabled = disabled;
+  useEffect(() => {
+    sourceScope.current.active = true;
+    return () => { sourceScope.current.active = false; };
+  }, []);
+  const onInternalSourceChange = useCallback((value?: InternalEightDSourceChange) => {
+    if (!sourceScope.current.active || sourceScope.current.disabled || sourceScope.current.baseline !== sourceBaseline) return;
+    setSourceChange(value);
+    if (value) onDirty();
+  }, [sourceBaseline, onDirty]);
   const titles: Record<EightDAction, string> = {
     submit: text('完整提交', 'Submit complete report'), 'analysis-complete': text('分析完成并设提交计划', 'Complete analysis and plan submission'),
     collaborators: text('维护协作者', 'Manage collaborators'), reassign: text('专业重派 / 科室内转派', 'Professional / within-section reassignment'),
@@ -39,17 +53,18 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
   };
   const reviewChange = (action === 'risk' || action === 'sources') && report.status === 'IN_REVIEW';
   const requestTask = tasks?.items.find(task => task.problemId === report.problemId && task.actions.includes('REQUEST_EXTENSION'));
+  useEffect(() => { setSourceChange(undefined); }, [report.version, domain]);
   useEffect(() => {
     if (action !== 'extension') return;
     let active = true; setTasks(undefined); setTaskError(false);
-    read<Tasks>(`/api/v1/process-quality/eight-d/tasks?problemId=${encodeURIComponent(report.problemId)}&pageSize=100&offset=0`).then(result => {
+    read<Tasks>(`${eightDDomain(domain).basePath}/tasks?problemId=${encodeURIComponent(report.problemId)}&pageSize=100&offset=0`).then(result => {
       if (!active) return;
       setTasks(result);
       const task = result.items.find(item => item.problemId === report.problemId && item.actions.includes('REQUEST_EXTENSION'));
       if (task?.extensionStages[0]) setStage(task.extensionStages[0]);
     }).catch(cause => { if (active && !aborted(cause)) setTaskError(true); });
     return () => { active = false; };
-  }, [action, report.problemId, read, retry]);
+  }, [action, report.problemId, read, retry, domain]);
   const datetime = (label: string, value: string, change: (value: string) => void, required = false) => <EightDField label={label}><input type="datetime-local" required={required} disabled={disabled} value={value} onChange={event => { onDirty(); change(event.target.value); }} /></EightDField>;
   async function submit() {
     if (disabled) return;
@@ -69,7 +84,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
         body = { expectedRowVersion: report.version, expectedInstanceVersion: report.instanceVersion, stage, requestedDueAt: date(requestedDueAt), reason };
         break;
     }
-    await write(action === 'extension' ? extensionPath(report.problemId) : `${eightDPath(report.problemId)}/${action}`, ['submit', 'analysis-complete', 'extension'].includes(action) ? 'POST' : 'PUT', body);
+    await write(action === 'extension' ? extensionPath(report.problemId) : `${eightDPath(report.problemId, domain)}/${action}`, ['submit', 'analysis-complete', 'extension'].includes(action) ? 'POST' : 'PUT', body);
   }
   const valid = !reviewChange || cancelApproval;
   const validAction = action === 'reassign' ? !!selected[0] && !!section
@@ -82,9 +97,13 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
       <p>{text('固定内容版本', 'Fixed content version')} {report.contentVersion} · {text('记录版本', 'Row version')} {report.version}</p>
       {action === 'submit' && <Alert type="info" title={text('只有负责人可提交。提交前由服务端检查发生 / 流出措施实施及人工有效结论；D2–D8不是八道审批。', 'Only the owner may submit. The server verifies occurrence / escape actions and human effectiveness decisions. D2–D8 are not eight approval stages.')} />}
       {action === 'analysis-complete' && <>{datetime(text('完整提交计划', 'Planned complete submission'), submissionDueAt, setSubmissionDueAt, true)}<p>{text('确认分析与对策计划已完成；完整实施及验证仍须在正式提交前完成。', 'Confirm analysis and corrective plans are complete. Implementation and verification are still required before final submission.')}</p></>}
-      {(action === 'collaborators' || action === 'reassign') && <EightDAssignmentPicker report={report} read={read} collaborators={action === 'collaborators'} disabled={disabled} section={section} onSection={value => { onDirty(); setSection(value); }} selected={selected} onSelect={value => { onDirty(); setSelected(value); }} />}
+      {(action === 'collaborators' || action === 'reassign') && <EightDAssignmentPicker report={report} domain={domain} read={read} collaborators={action === 'collaborators'} disabled={disabled} section={section} onSection={value => { onDirty(); setSection(value); }} selected={selected} onSelect={value => { onDirty(); setSelected(value); }} />}
       {action === 'risk' && <EightDField label={text('风险等级', 'Risk level')}><select disabled={disabled} value={severity} onChange={event => setSeverity(event.target.value as typeof severity)}><option value="LOW">{severityText('LOW')}</option><option value="MEDIUM">{severityText('MEDIUM')}</option><option value="HIGH">{severityText('HIGH')}</option><option value="CRITICAL">{severityText('CRITICAL')}</option></select></EightDField>}
-      {action === 'sources' && <EightDSourcePicker report={report} read={read} disabled={disabled} onChange={setSourceChange} />}
+      {action === 'sources' && (domain === 'process'
+        ? <EightDSourcePicker report={report as components['schemas']['ProcessEightDReportDto']} read={read} disabled={disabled} onChange={setSourceChange} />
+        : renderSourcePicker
+          ? renderSourcePicker({ domain, report: report as InternalEightDReport, read, disabled, onChange: onInternalSourceChange })
+          : <Alert type="error" title={text('当前领域来源选择器尚未接入，不能调整来源。', 'The source picker for this domain is not connected. Source changes are unavailable.')} />)}
       {action === 'deadlines' && <><p>{text('不猜默认天数，显式选择日期。原期限在延期全部通过前不改变。', 'Choose explicit dates; no default days are inferred. Existing deadlines stay in force until an extension is fully approved.')}</p>{datetime(text('分析 / 对策期限', 'Analysis / countermeasure deadline'), analysisDueAt, setAnalysisDueAt)}{datetime(text('关闭计划', 'Planned closure'), closureDueAt, setClosureDueAt)}</>}
       {action === 'extension' && <>{!tasks && !taskError ? <Spin /> : null}{taskError ? <Alert type="error" title={text('延期资格加载失败', 'Extension eligibility could not be loaded')} action={<Button onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</Button>} /> : null}
         {tasks && !requestTask ? <Alert type="info" title={text('当前无可申请延期阶段', 'No eligible extension stages')} /> : null}

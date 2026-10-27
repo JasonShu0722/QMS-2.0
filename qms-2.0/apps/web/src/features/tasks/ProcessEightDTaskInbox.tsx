@@ -13,18 +13,20 @@ type Notices = components['schemas']['ProcessEightDNotificationPageDto'];
 type Extension = components['schemas']['WorkflowDeadlineExtensionDto'];
 type Decision = components['schemas']['DecideWorkflowDeadlineExtensionDto'];
 type Attempt = { path: string; body: Decision; key: string };
-const base = '/api/v1/process-quality/eight-d';
+type Domain = 'process-quality' | 'customer-quality' | 'new-product-quality';
 const extensionBase = '/api/v1/workflow-deadline-extensions';
 const stages = { ANALYSIS: '分析计划', SUBMISSION: '完整提交计划', CLOSURE: '关闭计划' };
 const statuses = new Map([['HANDLING', '负责人处理'], ['LEADER_PENDING', '上级待审'], ['QUALITY_PENDING', '专业待审'], ['AVAILABLE', '可申请延期']]);
 
-export function ProcessEightDTaskInbox() {
+export function ProcessEightDTaskInbox({ domain = 'process-quality' }: { domain?: Domain } = {}) {
   const session = useWorkTabsStore(state => state.sessionScope);
   const location = useLocation();
-  return <InboxScope key={JSON.stringify([session, location.search])} session={session} />;
+  return <InboxScope key={JSON.stringify([domain, session, location.search])} session={session} domain={domain} />;
 }
 
-function InboxScope({ session }: { session?: string }) {
+function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
+  const base = `/api/v1/${domain}/eight-d`;
+  const domainLabel = domain === 'customer-quality' ? '客户8D' : domain === 'new-product-quality' ? '新品8D' : '过程8D';
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
@@ -144,9 +146,9 @@ function InboxScope({ session }: { session?: string }) {
   return <div className="closure-task-inbox">
     {!!error && <Alert type="error" showIcon title={t(safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
     {!denied && <>
-      <section aria-label={t('过程8D正式待办')}><Space wrap><Typography.Title level={3}>{t('过程8D正式待办')}</Typography.Title><Button disabled={tasksLoading || !!selected} onClick={() => setTaskRevision(value => value + 1)}>{t('刷新8D待办')}</Button></Space>
+      <section aria-label={t(`${domainLabel}正式待办`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}正式待办`)}</Typography.Title><Button disabled={tasksLoading || !!selected} onClick={() => setTaskRevision(value => value + 1)}>{t('刷新8D待办')}</Button></Space>
         <p>{t('负责人处理与延期审批来自独立真实投影；不支持旧任务领取、转派或任意完成。关闭审核请使用关闭审核入口。')}</p>
-        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <Table<Task> rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t('暂无过程8D待办') }} columns={[
+        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <Table<Task> rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
           { title: t('问题编号'), dataIndex: 'reportNumber' },
           { title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },
           { title: t('原期限'), render: (_, task) => <span>{date(task.dueAt)}{task.overdue ? ` · ${t('已逾期')}` : ''}</span> },
@@ -162,11 +164,11 @@ function InboxScope({ session }: { session?: string }) {
         ]} />}
         {tasks && pager(taskOffset, tasks.total, setTaskOffset)}
       </section>
-      <section aria-label={t('过程8D通知')}><Space wrap><Typography.Title level={3}>{t('过程8D通知')}</Typography.Title><Button disabled={noticesLoading} onClick={() => setNoticeRevision(value => value + 1)}>{t('刷新8D通知')}</Button></Space>
+      <section aria-label={t(`${domainLabel}通知`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}通知`)}</Typography.Title><Button disabled={noticesLoading} onClick={() => setNoticeRevision(value => value + 1)}>{t('刷新8D通知')}</Button></Space>
         {noticeError ? <Alert type="error" title={t('8D通知加载失败，请重试')} /> : noticesLoading ? <Spin aria-label={t('正在加载8D通知')} /> : notices?.items.map(notice => <Card key={notice.id} title={notice.subject}>
           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{notice.body}</Typography.Paragraph><Space wrap><time>{date(notice.deliveredAt)}</time><Link to={workspace(notice.problemId)}>{t('查看关联8D')}</Link></Space>
         </Card>)}
-        {notices && !notices.items.length && <p>{t('暂无过程8D通知')}</p>}
+        {notices && !notices.items.length && <p>{t(`暂无${domainLabel}通知`)}</p>}
         {notices && pager(noticeOffset, notices.total, setNoticeOffset)}
       </section>
     </>}

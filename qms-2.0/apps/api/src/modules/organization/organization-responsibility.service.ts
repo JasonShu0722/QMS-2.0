@@ -25,6 +25,8 @@ type Assignment = Prisma.UserPositionGetPayload<{ include: typeof assignmentIncl
 
 @Injectable()
 export class OrganizationResponsibilityService {
+  private readonly userLockBudgets = new WeakMap<AdminTransaction, ReadonlySet<string>>();
+
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
 
   // Minimal directory projection for an already-authorized workflow transaction.
@@ -175,9 +177,9 @@ export class OrganizationResponsibilityService {
     return { items: rows.map((row) => this.assignmentResult(row)), total };
   }
 
-  async resolveManagementResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at = new Date()): Promise<ManagementResponsibilitiesDto> {
+  async resolveManagementResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at = new Date(), additionalUserIds: string[] = [], fenceUserLocks = false): Promise<ManagementResponsibilitiesDto> {
     try {
-      return await this.resolveLockedResponsibilities(tx, organizationId, sectionDepartmentId, at);
+      return await this.resolveLockedResponsibilities(tx, organizationId, sectionDepartmentId, at, additionalUserIds, fenceUserLocks);
     } catch (error) {
       if (isSecurityConcurrencyConflict(error)) adminError('CONCURRENCY_CONFLICT', 409);
       throw error;
@@ -211,7 +213,7 @@ export class OrganizationResponsibilityService {
     return validSources;
   }
 
-  private async resolveLockedResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at: Date): Promise<ManagementResponsibilitiesDto> {
+  private async resolveLockedResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at: Date, additionalUserIds: string[], fenceUserLocks: boolean): Promise<ManagementResponsibilitiesDto> {
     if (!Number.isFinite(at.getTime())) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     const result: ManagementResponsibilitiesDto = { organizationId, sectionDepartmentId, at, responsibilities: [], issues: [] };
     // Authentication writers lock users first; callers must resolve before taking structure locks.
@@ -220,7 +222,9 @@ export class OrganizationResponsibilityService {
       where: { organizationId, positionId: { in: candidates.positions }, startedAt: { lte: at }, OR: [{ endedAt: null }, { endedAt: { gt: at } }] },
       select: { userId: true },
     }) : [];
-    const lockedUsers = new Set((await this.lockUsers(tx, organizationId, candidateAssignments.map(({ userId }) => userId))).map(({ id }) => id));
+    const lockedUsers = new Set((await this.lockUsers(tx, organizationId, [...candidateAssignments.map(({ userId }) => userId), ...additionalUserIds])).map(({ id }) => id));
+    // Later live resolvers must not grow the user lock set after this caller takes project locks.
+    if (fenceUserLocks && !this.userLockBudgets.has(tx)) this.userLockBudgets.set(tx, lockedUsers);
     await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR SHARE`;
     await this.lockDepartments(tx, organizationId, [sectionDepartmentId], false);
     const organization = await tx.organization.findUnique({ where: { id: organizationId } });
@@ -319,6 +323,8 @@ export class OrganizationResponsibilityService {
 
   private async lockUsers(tx: AdminTransaction, organizationId: string, ids: string[]): Promise<{ id: string }[]> {
     const userIds = [...new Set(ids)].sort();
+    const budget = this.userLockBudgets.get(tx);
+    if (budget && userIds.some(id => !budget.has(id))) adminError('CONCURRENCY_CONFLICT', 409);
     return userIds.length ? tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(userIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`) : [];
   }
 

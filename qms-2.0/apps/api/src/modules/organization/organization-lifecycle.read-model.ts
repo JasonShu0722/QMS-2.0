@@ -2,7 +2,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import type { AdminTransaction } from '../../common/security/admin-mutation.service.js';
 
 type ReferenceColumn = { tableName: string; columnName: string };
-const organizationOwned = new Set(['audit_events', 'admin_mutations', 'roles', 'user_roles', 'users', 'departments', 'positions', 'user_positions']);
+const organizationOwned = new Set(['audit_events', 'admin_mutations', 'organization_initializations', 'organization_mutation_archives', 'roles', 'user_roles', 'users', 'departments', 'positions', 'user_positions']);
 const historyOnly = new Set([
   'admin_mutations', 'account_batches', 'export_artifacts', 'number_sequences', 'problem_saved_views',
   'mfa_challenges', 'password_change_challenges', 'announcement_recipients', 'approval_signatures', 'user_signatures',

@@ -79,6 +79,8 @@ export function MyTasksPage() {
     <Tabs activeKey={activeTab} onChange={key => { if (!writing.current) requestLeave(() => setActiveTab(key)); }} items={[
       { key: 'customer-fae', label: t('客诉FAE解析'), children: activeTab === 'customer-fae' ? <CustomerFaeTaskInbox /> : null },
       { key: 'process-eight-d', label: t('过程8D'), children: activeTab === 'process-eight-d' ? <ProcessEightDTaskInbox /> : null },
+      { key: 'customer-eight-d', label: t('客户8D'), children: activeTab === 'customer-eight-d' ? <ProcessEightDTaskInbox domain="customer-quality" /> : null },
+      { key: 'new-product-eight-d', label: t('新品8D'), children: activeTab === 'new-product-eight-d' ? <ProcessEightDTaskInbox domain="new-product-quality" /> : null },
       { key: 'closure', label: t('关闭审核'), children: activeTab === 'closure' ? <ClosureTaskInbox /> : null },
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">

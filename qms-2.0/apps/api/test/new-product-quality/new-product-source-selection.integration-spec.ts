@@ -5,6 +5,13 @@ import { AdminMutationService } from '../../src/common/security/admin-mutation.s
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
 import { NewProductQualityService } from '../../src/modules/new-product-quality/new-product-quality.service.js';
+import { NewProductEightDSourceService } from '../../src/modules/new-product-quality/new-product-eight-d-source.service.js';
+import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
+import { OrganizationService } from '../../src/modules/organization/organization.service.js';
+import { PositionOnboardingService } from '../../src/modules/organization/position-onboarding.service.js';
+import { ProblemIndexService } from '../../src/modules/problem-index/problem-index.service.js';
+import { NumberingService } from '../../src/modules/problem-index/numbering.service.js';
+import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || new URL(databaseUrl).port === '55440') throw new Error('Disposable PostgreSQL is required');
@@ -23,8 +30,12 @@ describe('new product process source snapshots on PostgreSQL', () => {
   const prisma = new PrismaService(databaseUrl);
   const audit = new AuditLogService(prisma);
   const mutations = new AdminMutationService(prisma, audit);
-  const service = new NewProductQualityService(prisma, mutations, audit);
-  const defects = new ProcessDefectLedgerService(prisma, mutations, audit);
+  const organizations = new OrganizationService(prisma, mutations, audit, new PositionOnboardingService(prisma, audit));
+  const mappings = new ComponentProjectService(prisma, mutations, audit, organizations);
+  const defects = new ProcessDefectLedgerService(prisma, mutations, audit, mappings);
+  const sources = new NewProductEightDSourceService(prisma, defects, mappings);
+  const problems = new ProblemIndexService(prisma, new NumberingService(prisma), audit, new OutboxService(prisma));
+  const service = new NewProductQualityService(prisma, mutations, audit, problems, undefined, undefined, sources);
   const organizationId = randomUUID();
   const userId = randomUUID();
   const sessionId = randomUUID();
@@ -37,7 +48,7 @@ describe('new product process source snapshots on PostgreSQL', () => {
     await prisma.user.create({ data: { id: userId, organizationId, username: `nps-${userId.slice(0, 8)}`, accountType: 'INTERNAL', passwordHash: 'test-only' } });
     await prisma.session.create({ data: { id: sessionId, userId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), reauthenticatedAt: new Date() } });
     await prisma.role.create({ data: { id: roleId, organizationId, code: 'NPS', name: 'Source selection' } });
-    for (const code of ['new-product-quality:projects:read', 'new-product-quality:projects:write', 'process-quality:defects:read', 'process-quality:defects:write']) {
+    for (const code of ['new-product-quality:projects:read', 'new-product-quality:projects:write', 'process-quality:defects:read', 'process-quality:defects:write', 'component-project:read', 'component-project:manage']) {
       const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
     }
@@ -46,13 +57,20 @@ describe('new product process source snapshots on PostgreSQL', () => {
 
   afterAll(async () => prisma.$disconnect());
 
+  async function mappedProject(code: string, name: string) {
+    const project = await service.createProject(actor, { code, name, productCode: code }, randomUUID(), randomUUID());
+    const record = await mappings.createProject(actor, organizationId, { code: project.code, name, stage: 'NEW_PRODUCT' }, randomUUID(), randomUUID());
+    await mappings.createMapping(actor, organizationId, { componentCode: code, projectRecordId: record.id, productCategory: 'Source fixture' }, randomUUID(), randomUUID());
+    return project;
+  }
+
   it.each([
     { occurredAt: null, defectQuantity: null },
     { occurredAt: new Date('2026-09-24T08:00:00Z'), defectQuantity: 2 },
   ])('persists the original source time and quantity: %j', async ({ occurredAt, defectQuantity }) => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
-    const project = await service.createProject(actor, { code, name: 'Source regression', productCode: code }, randomUUID(), randomUUID());
-    const defect = await defects.create(actor, { description: 'Source regression', projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
+    const project = await mappedProject(code, 'Source regression');
+    const defect = await defects.create(actor, { description: 'Source regression', productCode: code, projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
     const selection = await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const expected = { id: defect.id, occurredAt: occurredAt?.toISOString() ?? null, defectQuantity, version: defect.version };
     expect(selection.source_snapshot).toMatchObject(expected);
@@ -79,8 +97,8 @@ describe('new product process source snapshots on PostgreSQL', () => {
     { occurredAt: new Date('2026-09-24T08:00:00Z'), defectQuantity: 2 },
   ])('denies source-bearing project detail after process read revocation: %j', async ({ occurredAt, defectQuantity }) => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
-    const project = await service.createProject(actor, { code, name: 'Source read scope', productCode: code }, randomUUID(), randomUUID());
-    const defect = await defects.create(actor, { description: 'Protected source', projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
+    const project = await mappedProject(code, 'Source read scope');
+    const defect = await defects.create(actor, { description: 'Protected source', productCode: code, projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
     const selection = await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const expected = [{ id: selection.id, source_version: selection.source_version, source_snapshot: selection.source_snapshot }];
     expect((await service.projectDetail(actor, project.id)).selected_defects).toMatchObject(expected);
@@ -98,8 +116,8 @@ describe('new product process source snapshots on PostgreSQL', () => {
 
   it('denies another real organization even when the actor has both read permissions at home', async () => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
-    const project = await service.createProject(actor, { code, name: 'Organization scope', productCode: code }, randomUUID(), randomUUID());
-    const defect = await defects.create(actor, { description: 'Organization source', projectCode: code }, randomUUID(), randomUUID());
+    const project = await mappedProject(code, 'Organization scope');
+    const defect = await defects.create(actor, { description: 'Organization source', productCode: code, projectCode: code }, randomUUID(), randomUUID());
     await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const otherOrganizationId = randomUUID();
     const otherUserId = randomUUID();

@@ -4,6 +4,7 @@ import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, getSession, safeAccountError } from '../../api/client';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { NewProductIssueClosurePanel } from './NewProductIssueClosurePanel';
+import { NewProductEightDPanel } from './NewProductEightDPanel';
 import './new-product-quality.css';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 
@@ -27,6 +28,7 @@ export function NewProductQualityPage({ projectId: initialProjectId }: { project
   const [input, setInput] = useState(initialProjectId ?? '');
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [project, setProject] = useState<Project>();
+  const [eightDOpen, setEightDOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(initialProjectId));
   const [error, setError] = useState<unknown>();
   const [handoverOpen, setHandoverOpen] = useState(false);
@@ -268,7 +270,7 @@ export function NewProductQualityPage({ projectId: initialProjectId }: { project
   return <main className="new-product-quality-page">
     <header className="new-product-quality-heading">
       <div><Typography.Text type="secondary">新产品质量</Typography.Text><Typography.Title level={1}>项目质量台账</Typography.Title><Typography.Paragraph type="secondary">查看项目阶段、经验教训和试制批次，所有数据均来自受权限保护的项目接口。</Typography.Paragraph></div>
-      {project ? <Space><Button aria-label="刷新" onClick={() => lookup()} loading={loading}>刷新</Button>{project.status === 'ACTIVE' ? <Button type="primary" disabled={writing} onClick={() => setHandoverOpen(true)}>量产移交</Button> : null}</Space> : null}
+      {project ? <Space><Button aria-label="刷新" onClick={() => lookup()} loading={loading}>刷新</Button><Button disabled={writing} onClick={() => requestLeave(() => setEightDOpen(value => !value))}>新品同源8D</Button>{project.status === 'ACTIVE' ? <Button type="primary" disabled={writing} onClick={() => setHandoverOpen(true)}>量产移交</Button> : null}</Space> : null}
     </header>
     <section className="new-product-quality-card">
       <Space.Compact className="new-product-quality-lookup">
@@ -285,6 +287,7 @@ export function NewProductQualityPage({ projectId: initialProjectId }: { project
           { key: 'lessons', label: '经验教训数', children: project.lessons.length }, { key: 'version', label: '版本', children: project.version },
           ...(project.handover ? [{ key: 'handover', label: '移交记录', children: new Date(project.handover.handed_over_at).toLocaleString('zh-CN') }] : []),
         ]} />
+        {eightDOpen && project.organization_id ? <NewProductEightDPanel projectId={project.id} organizationId={project.organization_id} projectContext={project} active={project.status === 'ACTIVE'} onDenied={cause => { projectRequestId.current++; reportRequestId.current++; setProject(undefined); setTrialReport(undefined); setTrialSummary(undefined); discardDrafts(); setError(cause); }} /> : null}
         <Typography.Title level={3}>阶段</Typography.Title>
         <List size="small" dataSource={project.stages} locale={{ emptyText: <Empty description="暂无阶段" /> }} renderItem={(stage) => <List.Item><Space><Typography.Text strong>{stage.code}</Typography.Text><span>{stage.name}</span><Tag>{stage.status}</Tag></Space></List.Item>} />
         <NewProductIssueClosurePanel key={`${project.id}:${draftEpoch}`} projectId={project.id} value={project.issues} active={project.status === 'ACTIVE'} currentUserId={currentUserId} onRefresh={() => load(project.id)} />

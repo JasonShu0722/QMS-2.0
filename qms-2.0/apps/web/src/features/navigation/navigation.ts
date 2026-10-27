@@ -18,9 +18,11 @@ export const internalNavigation: NavigationItem[] = [
   { label: '出货报告', path: '/app/process-quality/shipment-reports', icon: FileText },
   { label: '不良品台账', path: '/app/process-quality', icon: Target, context: [{ label: '不良品台账', path: '/app/process-quality' }] },
   { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, context: [{ label: '客诉台账', path: '/app/customer-quality' }] },
+  { label: '客户问题跟进', path: '/app/customer-quality/problems', icon: Target },
   { label: '审计管理', path: '/app/audits', icon: ClipboardCheck, context: [{ label: '审核计划', path: '/app/audits' }] },
   { label: '审核标准库', path: '/app/audit-standards', icon: ClipboardCheck, context: [{ label: '标准目录', path: '/app/audit-standards' }] },
   { label: '新品质量', path: '/app/new-product-quality', icon: Target, context: [{ label: '项目质量台账', path: '/app/new-product-quality' }] },
+  { label: '新品问题跟进', path: '/app/new-product-quality/problems', icon: Target },
   { label: '质量数据', path: '/app/quality-data', icon: Gauge, context: [{ label: '指标趋势', path: '/app/quality-data' }] },
   { label: '任务统计', path: '/app/task-statistics', icon: BarChart3, context: [{ label: '任务统计', path: '/app/task-statistics' }] },
   { label: '公告', path: '/app/announcements', icon: Megaphone, context: [{ label: '公告与阅读记录', path: '/app/announcements' }] },
@@ -35,8 +37,8 @@ export const internalDomains = [
   { label: '问题中心', path: '/app/problem-center', icon: ShieldAlert, paths: ['/app/problem-center', '/app/my-tasks'] },
   { label: '供应商质量', path: '/app/supplier-quality', icon: Users, paths: ['/app/supplier-quality', '/app/supplier-incoming', '/app/site-scanning', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn'] },
   { label: '制程质量', path: '/app/process-quality', icon: Target, paths: ['/app/process-quality', '/app/process-quality/problems', '/app/process-quality/shipment-reports'] },
-  { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, paths: ['/app/customer-quality'] },
-  { label: '新品质量', path: '/app/new-product-quality', icon: Target, paths: ['/app/new-product-quality'] },
+  { label: '客户质量', path: '/app/customer-quality', icon: MessageSquareWarning, paths: ['/app/customer-quality', '/app/customer-quality/problems'] },
+  { label: '新品质量', path: '/app/new-product-quality', icon: Target, paths: ['/app/new-product-quality', '/app/new-product-quality/problems'] },
   { label: '审核管理', path: '/app/audits', icon: ClipboardCheck, paths: ['/app/audits', '/app/audit-standards'] },
   { label: '质量分析', path: '/app/quality-data', icon: Gauge, paths: ['/app/quality-data', '/app/task-statistics', '/app/risk-dashboard'] },
   { label: '检测管理', path: '/app/coordinate-inspection', icon: Ruler, paths: ['/app/coordinate-inspection'] },
@@ -52,5 +54,5 @@ export const supplierNavigation: NavigationItem[] = [
 ];
 export function activeInternalDomain(pathname: string) {
   if (pathname.startsWith('/app/problem-workspace')) return internalNavigation[0];
-  return internalNavigation.find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`));
+  return internalNavigation.find(item => pathname === item.path) ?? internalNavigation.find((item) => pathname.startsWith(`${item.path}/`));
 }

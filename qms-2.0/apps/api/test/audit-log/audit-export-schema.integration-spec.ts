@@ -131,12 +131,43 @@ describe('controlled audit exports', () => {
       await prisma.user.update({ where: { id: userId }, data: { username: 'changed-after-export' } });
       const result = await service.download(actor, organizationId, artifact.id, 'export-summary');
       const lines = result.content.replace(/^\uFEFF/, '').split('\r\n');
-      expect(lines[0]).toBe('"id","createdAt","actorUserId","action","resourceType","resourceId","outcome","traceId","actionLabel","accountType","username","organizationName"');
+      expect(lines[0]).toBe('"id","createdAt","actorUserId","action","resourceType","resourceId","outcome","traceId","actionLabel","accountType","username","organizationName","originalOrganizationId","originalOrganizationCode","originalOrganizationName"');
       expect(result.content).toContain('"\'=FORMULA()","INTERNAL","\'-USERNAME","\'\t@ORGANIZATION()"');
+      expect(lines[1]).toMatch(/,"","",""$/);
       expect(result.content).not.toContain('changed-after-export');
     } finally {
       await prisma.user.update({ where: { id: userId }, data: { username: old.username } });
       await prisma.organization.update({ where: { id: organizationId }, data: { name: 'Exports' } });
+    }
+  });
+
+  it.each([
+    ['=ORIGINAL_CODE()', '+ORIGINAL_NAME()'],
+    ['-ORIGINAL_CODE', '@ORIGINAL_NAME("frozen",1)'],
+  ])('escapes archived organization code %s and freezes original provenance in the artifact', async (code, name) => {
+    const traceId = `archived-export-${randomUUID()}`;
+    const originalOrganizationId = randomUUID();
+    const event = await prisma.auditEvent.create({ data: { organizationId, actorUserId: userId, action: 'ORGANIZATION_DELETED', resourceType: 'Organization', resourceId: originalOrganizationId, outcome: 'SUCCESS', traceId,
+      metadata: { originalOrganizationId, originalOrganizationCode: code, originalOrganizationName: name, token: 'never-export-secret' } } });
+    let artifactId: string | undefined;
+    try {
+      const artifact = await service.create(actor, { resourceId: originalOrganizationId }, traceId);
+      artifactId = artifact.id;
+      expect(artifact.rowCount).toBe(1);
+      await prisma.auditEvent.update({ where: { id: event.id }, data: { metadata: {
+        originalOrganizationId: randomUUID(), originalOrganizationCode: 'changed-after-export', originalOrganizationName: 'changed-after-export',
+      } } });
+      await prisma.organization.update({ where: { id: organizationId }, data: { name: 'changed-after-export' } });
+      const result = await service.download(actor, organizationId, artifact.id, traceId);
+      const lines = result.content.replace(/^\uFEFF/, '').split('\r\n');
+      expect(lines).toHaveLength(2);
+      expect(lines[1]).toContain(`"${event.id}",`);
+      expect(lines[1]).toContain(`,"Exports","${originalOrganizationId}","'${code}","'${name.replaceAll('"', '""')}"`);
+      expect(result.content).not.toMatch(/changed-after-export|never-export-secret/);
+    } finally {
+      await prisma.organization.update({ where: { id: organizationId }, data: { name: 'Exports' } });
+      if (artifactId) await prisma.exportArtifact.delete({ where: { id: artifactId } });
+      await prisma.auditEvent.deleteMany({ where: { traceId } });
     }
   });
 

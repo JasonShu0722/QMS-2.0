@@ -12,6 +12,7 @@ import { useProblemDomainUi } from './problem-ui';
 import { useNavigationBusy, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessEightDWorkspace } from '../process-eight-d/ProcessEightDWorkspace';
+import { InternalEightDSourcePicker } from '../internal-eight-d/InternalEightDSourcePicker';
 import './problem-workspace.css';
 
 export function ProblemWorkspacePage({ problemId }: { problemId?: string }) {
@@ -47,8 +48,11 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   const selected = workspace?.selectedInstance;
   const current = !!selected?.current;
   const processEightD = workspace?.problem.domainCode === 'process-quality' && workspace.domain?.summary.domainUiKey === 'process-eight-d';
+  const eightDDomain = processEightD ? 'process'
+    : workspace?.problem.domainCode === 'customer-quality' && workspace.domain?.summary.domainUiKey === 'customer-eight-d' ? 'customer'
+    : workspace?.problem.domainCode === 'new-product-quality' && workspace.domain?.summary.domainUiKey === 'new-product-eight-d' ? 'new-product' : undefined;
   async function claim(action: 'claim' | 'release') {
-    if (writing.current || !workspace?.task || !current) return;
+    if (writing.current || !workspace?.task || !current || eightDDomain) return;
     writing.current = true; setPending(true); setError(undefined);
     try { await mutateInbox(`/api/v1/tasks/${workspace.task.id}/${action}?${problemScope(workspace.problem.organizationId)}`, workspace.task.version); }
     catch (cause) { setError(cause); }
@@ -70,14 +74,14 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
         <p>{workspace.domain?.summary.description ?? t('领域数据不可用')}</p>
         {selected ? <p>{t('固定流程版本')}：<code>{selected.workflowVersionId}</code> · {t('实例版本')} {selected.version}</p> : null}
         {workspace.capabilities.projectionPending ? <Alert type="info" title={t('任务正在同步，请稍后刷新。')} /> : null}
-        <Space wrap>{current && !processEightD && workspace.task?.canClaim ? <Button loading={pending} onClick={() => { void claim('claim'); }}>{t(workspace.task.claimedByUserId ? '重新领取任务' : '领取任务')}</Button> : null}
-          {current && !processEightD && workspace.task?.canRelease ? <Button loading={pending} onClick={() => { void claim('release'); }}>{t('释放任务')}</Button> : null}
-          {current && workspace.actions.some((action) => action.actionKey === 'platform.upgrade') ? <Button disabled={pending || !workspace.actions.some((action) => action.actionKey === 'platform.upgrade' && action.enabled)} onClick={() => setUpgrading(true)}>{t('升级预览')}</Button> : null}</Space>
+        <Space wrap>{current && !eightDDomain && workspace.task?.canClaim ? <Button loading={pending} onClick={() => { void claim('claim'); }}>{t(workspace.task.claimedByUserId ? '重新领取任务' : '领取任务')}</Button> : null}
+          {current && !eightDDomain && workspace.task?.canRelease ? <Button loading={pending} onClick={() => { void claim('release'); }}>{t('释放任务')}</Button> : null}
+          {current && !eightDDomain && workspace.actions.some((action) => action.actionKey === 'platform.upgrade') ? <Button disabled={pending || !workspace.actions.some((action) => action.actionKey === 'platform.upgrade' && action.enabled)} onClick={() => setUpgrading(true)}>{t('升级预览')}</Button> : null}</Space>
         {upgrading ? <ProblemUpgradePanel problemId={problemId} organizationId={workspace.problem.organizationId} onClose={() => requestLeave(() => setUpgrading(false), true)} onSuccess={() => { setUpgrading(false); choose(); state.refresh(); }} /> : null}
         <div className="problem-workspace__body">
           <aside className="problem-workspace__nodes"><ProblemNodes nodes={workspace.nodes} /></aside>
           <div className="problem-workspace__main">
-            {current && processEightD ? <ProcessEightDWorkspace problemId={problemId} onAccessDenied={revoke} /> : <>
+            {current && eightDDomain ? <ProcessEightDWorkspace problemId={problemId} domain={eightDDomain} renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onAccessDenied={revoke} /> : <>
               <ProblemSections sections={workspace.domain?.sections ?? []} />
               {current && DomainUi ? <DomainUi workspace={workspace} refresh={state.refresh} /> : current ? <p>{t('该领域处理表单尚未接入。')}</p> : null}
             </>}

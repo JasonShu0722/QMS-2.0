@@ -51,12 +51,30 @@ function showContent(content: ReactNode, route = '/app/customer-quality') { retu
 function show(route = '/app/customer-quality') { return showContent(<CustomerQualityPage renderAnalysis={complaintId => <div>解析插槽 {complaintId}</div>} />, route); }
 const writes = () => vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method);
 
+it('selects across pages, customers and complaint types for the actual issuer instead of limiting to the source QE', async () => {
+  const second = { ...item, id: '33333333-3333-4333-8333-333333333333', complaintNumber: 'CQ-N4-2', qualityEngineerId: 'another-qe', normalized: { ...item.normalized, customerName: '其他客户', complaintType: 'ZERO_KM' } };
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { organizationId: org, permissions: [...permissions, 'customer-quality:issues:issue'] };
+    if (path.includes('/eight-d/sources/preview')) return [item, second].map(row => ({ sourceId: row.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: `token-${row.id}` }));
+    if (path.includes('/assignment-options')) return { departments: [], users: [], departmentTotal: 0, userTotal: 0 };
+    if (path.startsWith(`${base}?`)) return { items: [path.includes('page=2') ? second : item], total: 21, pageSize: 20 };
+    return read(path, init);
+  });
+  show(); fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-1'));
+  fireEvent.click(screen.getByTitle('2'));
+  fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-2'));
+  fireEvent.click(screen.getByText('发起客户8D', { selector: 'button span' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/eight-d/sources/preview', expect.objectContaining({ body: JSON.stringify({ sources: [{ sourceId: id, expectedVersion: 1 }, { sourceId: second.id, expectedVersion: 1 }] }) })));
+  expect(screen.getByText(/实际发单人为专业审核人/)).toBeVisible();
+});
+
 it('mounts the authorized stale-engineer handoff in the formal ledger detail', async () => {
   const stale = { ...item, warnings: [{ field: 'qualityEngineerId', code: 'ENGINEER_NO_LONGER_ELIGIBLE' }] };
   showContent(<CustomerLedgerDetail record={stale} candidates={[]} permissions={[...permissions, 'customer-quality:complaints:reassign']} organizationId={org}
     onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={vi.fn().mockResolvedValue(stale)} />);
   const handoff = screen.getByRole('button', { name: '交接失效跟进人' });
-  fireEvent.click(handoff);
+  await act(async () => { fireEvent.click(handoff); });
   await waitFor(() => expect(screen.getByRole('combobox', { name: '接任质量工程师' })).toBeVisible());
   expect(screen.getByLabelText('交接原因')).toBeVisible();
   expect(writes()).toHaveLength(0);
@@ -207,7 +225,7 @@ const assignedCandidates = [{ assignmentId: 'assignment', userId: 'user', fullNa
 it('keeps accepted CQE editing while offering only qualified NEW assignment options', async () => {
   const candidates = [{ ...assignedCandidates[0], projectQualified: false }, { ...assignedCandidates[0], assignmentId: 'project-assignment', userId: 'project-user', fullName: '项目工程师', projectQualified: true }];
   showContent(<CustomerLedgerDetail record={item} candidates={candidates} userId="user" permissions={permissions} onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={async () => item} />);
-  fireEvent.click(screen.getByLabelText('编辑台账'));
+  await act(async () => { fireEvent.click(screen.getByLabelText('编辑台账')); });
   await waitFor(() => expect(screen.getByLabelText('实际跟进质量工程师')).toBeVisible());
   const choices = within(screen.getByLabelText('实际跟进质量工程师'));
   expect(choices.queryByRole('option', { name: /实际工程师/ })).not.toBeInTheDocument();
@@ -620,7 +638,7 @@ it.each(['candidates', 'customers'] as const)('F1QUALITY2P2 retries failed %s in
   expect(screen.queryByLabelText('关闭台账')).not.toBeInTheDocument();
   expect(within(screen.getByLabelText('筛选客户')).queryByRole('option', { name: '重试读取的客户' })).not.toBeInTheDocument();
   const detailReads = vi.mocked(apiRequest).mock.calls.filter(([path]) => path === `${base}/${id}`).length;
-  fireEvent.click(screen.getByRole('button', { name: '重试候选人员与客户' }));
+  fireEvent.click(screen.getByText('重试候选人员与客户', { selector: 'button span' }));
   expect(await screen.findByLabelText('编辑台账')).toBeVisible();
   expect(screen.getByLabelText('关闭台账')).toBeVisible();
   expect(within(screen.getByLabelText('筛选客户')).getByRole('option', { name: '重试读取的客户' })).toHaveValue(id);
@@ -645,14 +663,14 @@ it.each([401, 403, 'read-only'] as const)('F1QUALITY2P2 respects current %s perm
   show();
   fireEvent.click(await screen.findByLabelText('CQ-N4-1'));
   await screen.findByText(`解析插槽 ${id}`);
-  fireEvent.click(screen.getByRole('button', { name: '重试候选人员与客户' }));
+  fireEvent.click(screen.getByText('重试候选人员与客户', { selector: 'button span' }));
   if (access === 'read-only') {
-    await waitFor(() => expect(screen.queryByRole('button', { name: '重试候选人员与客户' })).not.toBeInTheDocument());
-    expect(screen.getByRole('region', { name: '客诉详情' })).toBeVisible();
+    await waitFor(() => expect(screen.queryByText('重试候选人员与客户', { selector: 'button span' })).not.toBeInTheDocument());
+    expect(screen.getByLabelText('客诉详情', { selector: 'section' })).toBeVisible();
     expect(screen.queryByLabelText('人工登记客诉')).not.toBeInTheDocument();
   } else {
     expect(await screen.findByText(/访问已失效/)).toBeVisible();
-    expect(screen.queryByRole('region', { name: '客诉详情' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('客诉详情', { selector: 'section' })).not.toBeInTheDocument();
     expect(candidateReads).toBe(1);
   }
   expect(permissionReads).toBe(2);
@@ -672,7 +690,7 @@ it('F1QUALITY2P2 aborts an auxiliary retry on scope change and ignores its late 
   });
   show();
   await screen.findByLabelText('CQ-N4-1');
-  fireEvent.click(screen.getByRole('button', { name: '重试候选人员与客户' }));
+  fireEvent.click(screen.getByText('重试候选人员与客户', { selector: 'button span' }));
   await waitFor(() => expect(reject).toBeDefined());
   vi.mocked(getSession).mockResolvedValue({ userId: 'other', organizationId: org, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   act(() => useWorkTabsStore.getState().bindSession(`INTERNAL:${org}:other`));

@@ -31,9 +31,11 @@ export class AuditExportService {
       const settings = await transaction.platformSettings.findUnique({ where: { organizationId }, select: { exportRetentionMinutes: true } });
       const id = randomUUID();
       const expiresAt = new Date(Date.now() + (settings?.exportRetentionMinutes ?? 1440) * 60000);
-      const csv = '\uFEFF' + [['id', 'createdAt', 'actorUserId', 'action', 'resourceType', 'resourceId', 'outcome', 'traceId', 'actionLabel', 'accountType', 'username', 'organizationName'].map(csvCell).join(','), ...rows.map((row) => {
+      const csv = '\uFEFF' + [['id', 'createdAt', 'actorUserId', 'action', 'resourceType', 'resourceId', 'outcome', 'traceId', 'actionLabel', 'accountType', 'username', 'organizationName', 'originalOrganizationId', 'originalOrganizationCode', 'originalOrganizationName'].map(csvCell).join(','), ...rows.map((row) => {
         const summary = auditActorSummary(row);
-        return [row.id, row.createdAt.toISOString(), row.actorUserId, row.action, row.resourceType, row.resourceId, row.outcome, row.traceId, auditActionLabel(row.action), summary?.accountType ?? null, summary?.username ?? null, summary?.organizationName ?? null].map(csvCell).join(',');
+        const metadata = this.audit.safeMetadata(row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {});
+        const original = ['originalOrganizationId', 'originalOrganizationCode', 'originalOrganizationName'].map(key => typeof metadata[key] === 'string' ? metadata[key] as string : null);
+        return [row.id, row.createdAt.toISOString(), row.actorUserId, row.action, row.resourceType, row.resourceId, row.outcome, row.traceId, auditActionLabel(row.action), summary?.accountType ?? null, summary?.username ?? null, summary?.organizationName ?? null, ...original].map(csvCell).join(',');
       })].join('\r\n');
       await transaction.exportArtifact.create({ data: { id, organizationId, createdById: actor.id, expiresAt, rowCount: rows.length, ciphertext: encryptSecret(csv, `export:${id}:${organizationId}:${actor.id}`) } });
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AUDIT_EXPORT_CREATED', resourceType: 'ExportArtifact', resourceId: id, outcome: 'SUCCESS', traceId }, transaction);

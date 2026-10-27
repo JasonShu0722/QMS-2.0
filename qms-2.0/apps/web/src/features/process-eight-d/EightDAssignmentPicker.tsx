@@ -4,10 +4,11 @@ import type { components } from '@qms/contracts';
 import { EightDField } from './EightDDocumentEditor';
 import { aborted, useEightDText, type EightDRead, type EightDReport } from './eight-d';
 import styles from './eight-d.module.css';
+import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
 
 type Options = components['schemas']['ProcessEightDAssignmentOptionsDto'];
-export function EightDAssignmentPicker({ report, read, collaborators, disabled, section, onSection, selected, onSelect }: {
-  report: EightDReport; read: EightDRead; collaborators: boolean; disabled: boolean; section: string; onSection: (id: string) => void; selected: string[]; onSelect: (ids: string[]) => void;
+export function EightDAssignmentPicker({ report, read, collaborators, disabled, section, onSection, selected, onSelect, domain = 'process' }: {
+  report: EightDReport; domain?: InternalEightDDomain; read: EightDRead; collaborators: boolean; disabled: boolean; section: string; onSection: (id: string) => void; selected: string[]; onSelect: (ids: string[]) => void;
 }) {
   const text = useEightDText();
   const [search, setSearch] = useState('');
@@ -22,13 +23,13 @@ export function EightDAssignmentPicker({ report, read, collaborators, disabled, 
   const options = state?.query === queryKey ? state.data : undefined;
   useEffect(() => {
     let active = true; setError(false);
-    read<Options>(`/api/v1/process-quality/eight-d/assignment-options?${queryKey}`).then(data => {
+    read<Options>(`${eightDDomain(domain).basePath}/assignment-options?${queryKey}`).then(data => {
       if (!active) return;
       setState({ query: queryKey, data });
       setNames(previous => ({ ...previous, ...Object.fromEntries(data.users.map(user => [user.id, user.fullName || user.username])) }));
     }).catch(cause => { if (active && !aborted(cause)) setError(true); });
     return () => { active = false; };
-  }, [queryKey, read, retry]);
+  }, [queryKey, read, retry, domain]);
   return <div className={styles.modal}>
     <EightDField label={text('搜索人员 / 科室', 'Search people / sections')}><input disabled={disabled} value={search} maxLength={200} onChange={event => { setSearch(event.target.value); setPage(1); }} /></EightDField>
     {error ? <Alert type="error" title={text('候选加载失败', 'Options could not be loaded')} action={<button disabled={disabled} onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</button>} /> : !options ? <Spin aria-label={text('正在加载候选', 'Loading options')} /> : null}
