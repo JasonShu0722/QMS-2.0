@@ -741,6 +741,10 @@
           {
             "path": "../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md",
             "sha256": "fa44ab10400adc6618de7cafde3eaa83295a2e6d39d924c96c45c01cca3e46af"
+          },
+          {
+            "path": "../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md",
+            "sha256": "256fad17b0156425cc9e2e4596e0ae5234a05870ecf051229146e0e8b15929a0"
           }
         ]
       }

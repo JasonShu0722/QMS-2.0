@@ -41,9 +41,11 @@ export class WorkflowClosureTemplateService {
   }
 
   private graph(body: CreateWorkflowClosureTemplateDto): WorkflowDraft {
+    const supplierEightD = body.policy === 'SUPPLIER' && body.domainCode === 'supplier-quality';
     return {
       nodes: [
-        { id: 'owner', type: 'ACTION', name: '负责人处理', config: { isStart: true, assignment: { permission: 'workflow:act' },
+        { id: 'owner', type: 'ACTION', name: '负责人处理', config: { isStart: true, assignment: { permission: supplierEightD ? 'supplier-quality:responses:write' : 'workflow:act' },
+          ...(supplierEightD ? { supplierEightD: { schemaVersion: 1, reminderEveryHours: null } } : {}),
           ...(body.policy === 'INTERNAL' && ['process-quality', 'customer-quality', 'new-product-quality'].includes(body.domainCode) ? { processEightD: {
             schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null,
           } } : {}) } },

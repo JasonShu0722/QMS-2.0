@@ -2,7 +2,7 @@ import type { Prisma, ProblemIndex, WorkflowInstance } from '../../generated/pri
 import { HttpException } from '@nestjs/common';
 import { assertWorkflowFeature, canProcessWorkflowNode, type WorkflowActor } from './workflow-access-policy.js';
 import type { WorkflowAction } from './workflow.types.js';
-import { actionAllowed, forwardAction, isDomainControlledNode, isProcessEightDVersion, jsonObject, matchesCondition } from './workflow-runtime-policy.js';
+import { actionAllowed, forwardAction, isDomainControlledNode, isControlledEightDVersion, jsonObject, matchesCondition } from './workflow-runtime-policy.js';
 
 export interface WorkflowCapabilities {
   canAct: boolean;
@@ -32,7 +32,7 @@ export async function workflowCapabilities(tx: Prisma.TransactionClient, actor: 
   }
   if (!instance.currentNodeId) return { ...result, reasonCode: 'WORKFLOW_NODE_FORBIDDEN' };
   const node = await tx.workflowNode.findFirst({ where: { id: instance.currentNodeId, workflowVersionId: instance.workflowVersionId, organizationId: problem.organizationId } });
-  if ((node && isDomainControlledNode(node)) || await isProcessEightDVersion(tx, problem.organizationId, instance.workflowVersionId)) return { ...result, reasonCode: 'WORKFLOW_ACTION_INVALID' };
+  if ((node && isDomainControlledNode(node)) || await isControlledEightDVersion(tx, problem.organizationId, instance.workflowVersionId)) return { ...result, reasonCode: 'WORKFLOW_ACTION_INVALID' };
   if (!node || !await canProcessWorkflowNode(tx, actor.id, problem.organizationId, jsonObject(node.config).assignment)) return { ...result, reasonCode: 'WORKFLOW_NODE_FORBIDDEN' };
   const task = await tx.workflowTask.findFirst({ where: { workflowInstanceId: instance.id, organizationId: problem.organizationId, workflowVersionId: instance.workflowVersionId,
     workflowNodeId: node.id, entryInstanceVersion: instance.version, status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] } } });

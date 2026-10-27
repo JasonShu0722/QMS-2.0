@@ -322,11 +322,11 @@ export class WorkflowClosureRoundService {
     }
   }
 
-  private async createRound(tx: Prisma.TransactionClient, actor: WorkflowActor, c: WorkflowClosureContext, plan: WorkflowClosurePlan, roundNumber: number) {
+  private async createRound(tx: Prisma.TransactionClient, actor: WorkflowActor, c: WorkflowClosureContext, plan: WorkflowClosurePlan, roundNumber: number, supplierResponseRevisionId: string | null = null) {
     const id = randomUUID();
-    await tx.$executeRaw`INSERT INTO workflow_closure_rounds (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by)
+    await tx.$executeRaw`INSERT INTO workflow_closure_rounds (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by, creator_organization_id, supplier_response_revision_id)
       VALUES (${id}::uuid, ${c.organizationId}::uuid, ${c.problemId}::uuid, ${c.instanceId}::uuid, ${c.workflowVersionId}::uuid, ${c.currentNodeId}::uuid,
-        ${c.contentVersion}, ${JSON.stringify(c.content)}::jsonb, ${JSON.stringify(c)}::jsonb, ${roundNumber}, ${actor.id}::uuid)`;
+        ${c.contentVersion}, ${JSON.stringify(c.content)}::jsonb, ${JSON.stringify(c)}::jsonb, ${roundNumber}, ${actor.id}::uuid, ${actor.organizationId}::uuid, ${supplierResponseRevisionId}::uuid)`;
     for (const d of plan.duties) {
       await tx.$executeRaw`INSERT INTO workflow_closure_duties (id, organization_id, round_id, duty, status, user_id, participant)
         VALUES (${randomUUID()}::uuid, ${c.organizationId}::uuid, ${id}::uuid, ${d.duty}, ${d.status}, ${d.participant!.userId}::uuid, ${JSON.stringify(d.participant)}::jsonb)`;

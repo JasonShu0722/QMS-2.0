@@ -56,7 +56,18 @@ export class WorkflowValidationService {
       if (!this.text(node.name, 200)) errors.push(`WORKFLOW_NODE_NAME_REQUIRED:${node.id}`);
       const config = node.config ?? {};
       if (node.config === null || !this.object(config)) { errors.push(`WORKFLOW_CONFIG_INVALID:${node.id}`); continue; }
-      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition', 'closureReview', 'processEightD'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (Object.keys(config).some((key) => !['assignment', 'isStart', 'isEnd', 'slaMinutes', 'reminders', 'escalation', 'requireIndependentVerification', 'editorPosition', 'closureReview', 'processEightD', 'supplierEightD'].includes(key))) errors.push(`WORKFLOW_CONFIG_FIELD_NOT_ALLOWED:${node.id}`);
+      if (Object.hasOwn(config, 'supplierEightD')) {
+        const supplier = config.supplierEightD;
+        if (!this.object(supplier) || Object.keys(supplier).some(key => !['schemaVersion', 'reminderEveryHours'].includes(key))
+          || supplier.schemaVersion !== 1 || supplier.reminderEveryHours !== null) errors.push(`WORKFLOW_SUPPLIER_CONFIG_INVALID:${node.id}`);
+        const assignment = config.assignment;
+        if (node.type !== 'ACTION' || config.isStart !== true || config.isEnd === true || config.closureReview !== undefined
+          || config.processEightD !== undefined || config.slaMinutes !== undefined || config.reminders !== undefined || config.escalation !== undefined
+          || !this.object(assignment) || Object.entries(assignment).filter(([, value]) => value !== undefined).length !== 1 || assignment.permission !== 'supplier-quality:responses:write') {
+          errors.push(`WORKFLOW_SUPPLIER_NODE_INVALID:${node.id}`);
+        }
+      }
       if (config.processEightD !== undefined) {
         if (!parseDeadlinePolicy(config.processEightD)) errors.push(`WORKFLOW_PROCESS_CONFIG_INVALID:${node.id}`);
         const assignment = config.assignment;
@@ -114,6 +125,20 @@ export class WorkflowValidationService {
     }
     const nodes = draft.nodes;
     const transitions = draft.transitions;
+    const supplierHandling = nodes.filter(node => Object.hasOwn(node.config ?? {}, 'supplierEightD'));
+    if (supplierHandling.length) {
+      const gates = nodes.filter(node => node.config?.closureReview !== undefined);
+      const review = gates[0]?.config?.closureReview;
+      if (supplierHandling.length !== 1 || gates.length !== 1 || !this.object(review) || review.policy !== 'SUPPLIER' || review.domainCode !== 'supplier-quality') {
+        errors.push('WORKFLOW_SUPPLIER_HANDLING_REQUIRED');
+      } else {
+        const owner = supplierHandling[0]!; const gate = gates[0]!;
+        const edges = transitions.filter(edge => edge.from === owner.id);
+        if (edges.length !== 1 || edges[0]!.to !== gate.id || (edges[0]!.action ?? forwardAction(owner.type)) !== 'SUBMIT'
+          || Object.keys(edges[0]!.condition ?? {}).length) errors.push('WORKFLOW_SUPPLIER_SUBMIT_REQUIRED');
+        if (!transitions.some(edge => edge.from === gate.id && edge.to === owner.id && edge.action === 'RETURN')) errors.push('WORKFLOW_SUPPLIER_RETURN_REQUIRED');
+      }
+    }
     const handling = nodes.filter(node => node.config?.processEightD !== undefined);
     const processGates = nodes.filter(node => {
       const review = node.config?.closureReview;

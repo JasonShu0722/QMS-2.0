@@ -1,0 +1,49 @@
+.se-preview { min-height: 100dvh; color: var(--qms-text); background: var(--qms-background); }
+.se-preview *, .se-preview *::before, .se-preview *::after { box-sizing: border-box; }
+.se-preview :focus-visible { outline: 2px solid var(--qms-accent-action); outline-offset: 3px; }
+.se-skip { position: fixed; top: -80px; left: 8px; z-index: 2000; padding: 8px; background: var(--qms-surface); }
+.se-skip:focus { top: 8px; }
+.se-header, .se-header strong, .se-toolbar, .se-actions, .se-current { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.se-header { justify-content: space-between; min-height: 54px; padding: 8px 16px; border-bottom: 1px solid var(--qms-border); background: var(--qms-surface); }
+.se-header strong { font-size: 20px; }
+.se-header svg { color: var(--qms-accent); }
+.se-main { max-width: 1600px; min-width: 0; margin: auto; padding: var(--qms-page-padding); display: grid; gap: var(--qms-section-gap); }
+.se-toolbar { justify-content: space-between; }
+.se-preview :is(h1, h2, h3, p, li) { overflow-wrap: anywhere; }
+.se-preview :is(h1, h2, h3, p) { margin: 0 0 8px; }
+.se-preview h1 { font-size: 26px; }
+.se-preview h2 { font-size: 18px; }
+.se-preview h3 { font-size: 15px; }
+.se-muted { color: var(--qms-muted); }
+.se-controls { display: grid; grid-template-columns: minmax(220px, 330px) minmax(0, 1fr); gap: 12px; align-items: center; }
+.se-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.se-nav a { padding: 8px 12px; border: 1px solid var(--qms-border); border-radius: 7px; background: var(--qms-surface); color: var(--qms-text); text-decoration: none; }
+.se-nav a:hover { color: var(--qms-accent); border-color: var(--qms-accent-border); }
+.se-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(310px, 390px); gap: 12px; align-items: start; }
+.se-content { display: grid; min-width: 0; gap: 12px; }
+.se-panel { min-width: 0; padding: var(--qms-card-padding); border: 1px solid var(--qms-border); border-radius: 9px; background: var(--qms-surface); scroll-margin-top: 8px; }
+.se-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; }
+.se-field { display: grid; min-width: 0; gap: 4px; margin-bottom: 8px; }
+.se-field label { font-size: 13px; }
+.se-field :is(input, select, textarea) { width: 100%; min-width: 0; min-height: 36px; padding: 6px 10px; border: 1px solid var(--qms-border); border-radius: 7px; background: var(--qms-surface); color: var(--qms-text); font: inherit; color-scheme: inherit; }
+.se-field textarea { resize: vertical; }
+.se-field :is(input, select, textarea):disabled { color: var(--qms-muted); background: var(--qms-surface-tint); opacity: 1; cursor: not-allowed; }
+.se-actions, .se-review-actions { margin: 8px 0; }
+.se-review-actions { display: grid; gap: 6px; }
+.se-preview a { color: var(--qms-accent-action); overflow-wrap: anywhere; }
+.se-snapshot { padding: 12px; border: 1px solid var(--qms-border); border-radius: 7px; background: var(--qms-surface-tint); white-space: pre-wrap; overflow-wrap: anywhere; }
+.se-notice { padding: 8px; border: 1px solid var(--qms-accent-border); border-radius: 7px; background: var(--qms-accent-soft); }
+.se-duty-list { list-style: none; padding: 0; }
+.se-duty-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--qms-border); }
+.se-table-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; margin: 8px 0; }
+.se-preview table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 13px; text-align: left; }
+.se-preview :is(th, td) { padding: 6px 8px; vertical-align: top; border-bottom: 1px solid var(--qms-border); overflow-wrap: anywhere; }
+.se-preview th { background: var(--qms-surface-tint); }
+@media (max-width: 1000px) { .se-workspace { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .se-header { padding: 8px; }
+  .se-controls, .se-grid { grid-template-columns: minmax(0, 1fr); }
+  .se-preview h1 { font-size: 22px; }
+  .se-preview .ant-btn, .se-nav a { min-height: 44px; white-space: normal; height: auto; }
+  .se-field :is(input, select) { min-height: 44px; }
+}

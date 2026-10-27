@@ -7,7 +7,7 @@ import { eligibleWorkflowRecipients, workflowObject as object } from './workflow
 import { handleWorkflowTiming, scheduleWorkflowTiming, WORKFLOW_TIMING_EVENTS } from './workflow-timing.js';
 import { notificationContent } from '../platform-configuration/notification-content.js';
 import { projectSupplierNotification } from './supplier-portal-notification.js';
-import { isDomainControlledNode, isProcessEightDVersion } from '../workflow/workflow-runtime-policy.js';
+import { isDomainControlledNode, isControlledEightDVersion } from '../workflow/workflow-runtime-policy.js';
 
 interface WorkflowEventPayload {
   schemaVersion: 1;
@@ -31,7 +31,7 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
       const payload = object(event.payload);
       if (['nodeId', 'organizationId', 'workflowVersionId'].every(key => typeof payload[key] === 'string' && isUUID(payload[key] as string))) {
         const node = await tx.workflowNode.findFirst({ where: { id: payload.nodeId as string, organizationId: payload.organizationId as string, workflowVersionId: payload.workflowVersionId as string } });
-        if (node && (isDomainControlledNode(node) || await isProcessEightDVersion(tx, node.organizationId, node.workflowVersionId))) return;
+        if (node && (isDomainControlledNode(node) || await isControlledEightDVersion(tx, node.organizationId, node.workflowVersionId))) return;
       }
       return handleWorkflowTiming(tx, event);
     }
@@ -57,7 +57,7 @@ export class WorkflowEventHandler implements AtomicOutboxHandler {
       data: { status: 'COMPLETED', completedAt: event.createdAt, version: { increment: 1 } },
     });
     // Domain duties and handling tasks have their own projection, including legacy timing suppression.
-    if (payload.status === 'RUNNING' && !isDomainControlledNode(node) && !await isProcessEightDVersion(tx, payload.organizationId, payload.workflowVersionId)) {
+    if (payload.status === 'RUNNING' && !isDomainControlledNode(node) && !await isControlledEightDVersion(tx, payload.organizationId, payload.workflowVersionId)) {
       const config = object(node.config);
       const slaMinutes = config.slaMinutes;
       if (slaMinutes !== undefined && (!Number.isSafeInteger(slaMinutes) || Number(slaMinutes) < 1 || Number(slaMinutes) > MAX_WORKFLOW_SLA_MINUTES)) invalidEvent();

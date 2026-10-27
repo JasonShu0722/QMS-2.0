@@ -46,8 +46,8 @@ describe('bounded process 8D handling workflow policy', () => {
   it('detects a controlled version even when the current close node has no handling marker', async () => {
     let parts: TemplateStringsArray | undefined; let parameters: unknown[] = [];
     const tx = { $queryRaw: async (query: TemplateStringsArray, ...values: unknown[]) => { parts = query; parameters = values; return [{ id: 'owner' }]; } } as unknown as Prisma.TransactionClient;
-    const versionPolicy = policy as typeof policy & { isProcessEightDVersion(tx: Prisma.TransactionClient, org: string, version: string): Promise<boolean> };
-    expect(await versionPolicy.isProcessEightDVersion(tx, 'org', 'version')).toBe(true);
+    const versionPolicy = policy as typeof policy & { isControlledEightDVersion(tx: Prisma.TransactionClient, org: string, version: string): Promise<boolean> };
+    expect(await versionPolicy.isControlledEightDVersion(tx, 'org', 'version')).toBe(true);
     expect(parts?.join('?')).toContain("config ? 'processEightD'");
     expect(parameters).toEqual(['org', 'version']);
   });

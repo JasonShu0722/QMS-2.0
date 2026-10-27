@@ -19,17 +19,20 @@ const jest = import.meta.jest;
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const org = id(1), userId = id(2), versionId = id(3), instanceId = id(4), problemId = id(5), nodeId = id(6), definitionId = id(7), ownerId = id(8);
 const actor = { id: userId, organizationId: org, accountType: 'INTERNAL' as const, sessionId: id(9) };
+describe.each([
+  { marker: 'processEightD', domainCode: 'process-quality', sourceType: 'process-defect', policy: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null } },
+  { marker: 'supplierEightD', domainCode: 'supplier-quality', sourceType: 'supplier-problem', policy: { schemaVersion: 1, reminderEveryHours: null } },
+])('$marker consumer guards', ({ marker, domainCode, sourceType, policy }) => {
 const assignment = { permission: 'workflow:act' };
-const policy = { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null };
 const invalidAction = { response: expect.objectContaining({ code: 'WORKFLOW_ACTION_INVALID' }) };
 
 // These are consumer unit tests with an in-memory transaction double, not PostgreSQL evidence.
-function fixture(config: Record<string, unknown> = { assignment, processEightD: policy }, controlledVersion = true) {
+function fixture(config: Record<string, unknown> = { assignment, [marker]: policy }, controlledVersion = true) {
   const node = { id: nodeId, organizationId: org, workflowVersionId: versionId, type: 'ACTION', name: 'Owner', config };
-  const owner = { ...node, id: ownerId, config: { isStart: true, assignment, ...(controlledVersion ? { processEightD: policy } : {}) } };
+  const owner = { ...node, id: ownerId, config: { isStart: true, assignment, ...(controlledVersion ? { [marker]: policy } : {}) } };
   const version = { id: versionId, organizationId: org, nodes: [owner, node] };
   const problem = { id: problemId, organizationId: org, workflowInstanceId: instanceId, version: 1, status: 'IN_PROGRESS', archivedAt: null,
-    domainCode: 'process-quality', sourceType: 'process-defect', sourceId: id(10), problemType: 'BRIEF', reportNumber: 'TEST' };
+    domainCode, sourceType, sourceId: id(10), problemType: 'BRIEF', reportNumber: 'TEST' };
   const instance = { id: instanceId, organizationId: org, problemIndexId: problemId, workflowVersionId: versionId, currentNodeId: nodeId,
     currentNode: node, version: 1, status: 'RUNNING', taskProjectionVersion: 0 };
   const task = { id: id(11), workflowInstanceId: instanceId, workflowVersionId: versionId, workflowNodeId: nodeId, organizationId: org,
@@ -37,7 +40,7 @@ function fixture(config: Record<string, unknown> = { assignment, processEightD: 
   const query = jest.fn(async (raw: TemplateStringsArray | Prisma.Sql) => {
     const sql = Array.isArray(raw) ? raw.join('?') : (raw as Prisma.Sql).text;
     if (sql.includes('transaction_isolation')) return [{ transaction_isolation: 'read committed' }];
-    if (sql.includes('SELECT id FROM workflow_nodes') && sql.includes("config ? 'processEightD'")) return controlledVersion ? [{ id: ownerId }] : [];
+    if (sql.includes('SELECT id FROM workflow_nodes')) return controlledVersion && sql.includes(`config ? '${marker}'`) ? [{ id: ownerId }] : [];
     if (sql.includes(' AS allowed')) return [{ allowed: true }];
     if (sql.includes('SELECT DISTINCT node_id')) return [{ nodeId: ownerId }];
     if (sql.includes(' AS total')) return [{ total: 0, items: [] }];
@@ -80,9 +83,9 @@ function fixture(config: Record<string, unknown> = { assignment, processEightD: 
   return { tx, transaction, prisma, audit, outbox, problems, runtime, node, owner, version, problem, instance, task, command, start, replay };
 }
 
-describe('process 8D generic runtime bypass boundary (unit)', () => {
-  it.each([null, false, {}, policy])('rejects generic handling act for every declared policy: %p', async processEightD => {
-    const f = fixture({ assignment, processEightD });
+describe('controlled 8D generic runtime bypass boundary (unit)', () => {
+  it.each([null, false, {}, policy])('rejects generic handling act for every declared policy: %p', async value => {
+    const f = fixture({ assignment, [marker]: value });
     await expect(f.runtime.submitAction(f.command, f.transaction)).rejects.toMatchObject(invalidAction);
     expect(f.tx.workflowInstance.updateMany).not.toHaveBeenCalled();
   });
@@ -99,7 +102,7 @@ describe('process 8D generic runtime bypass boundary (unit)', () => {
   });
 
   it.each([true, false])('blocks generic action receipt replay at a marked or unmarked node: %p', async marked => {
-    const f = fixture(marked ? { assignment, processEightD: policy } : { assignment }); f.replay(f.command, 'SUBMIT');
+    const f = fixture(marked ? { assignment, [marker]: policy } : { assignment }); f.replay(f.command, 'SUBMIT');
     await expect(f.runtime.submitAction(f.command, f.transaction)).rejects.toMatchObject(invalidAction);
   });
 
@@ -109,14 +112,14 @@ describe('process 8D generic runtime bypass boundary (unit)', () => {
   });
 
   it('rejects a controlled target even in an otherwise legacy version', async () => {
-    const f = fixture({ assignment }, false); f.owner.config = { ...f.owner.config, processEightD: policy };
+    const f = fixture({ assignment }, false); f.owner.config = { ...f.owner.config, [marker]: policy };
     await expect(f.runtime.submitAction(f.command, f.transaction)).rejects.toMatchObject(invalidAction);
   });
 });
 
-describe('process 8D start and capability boundary (unit)', () => {
+describe('controlled 8D start and capability boundary (unit)', () => {
   it('fails closed at the lowest fixed-start helper even when the start node is unmarked', async () => {
-    const f = fixture(); delete (f.owner.config as Record<string, unknown>).processEightD;
+    const f = fixture(); delete (f.owner.config as Record<string, unknown>)[marker];
     await expect(fixedWorkflowStart(f.transaction, org, definitionId, versionId)).rejects.toMatchObject(invalidAction);
   });
 
@@ -155,14 +158,14 @@ describe('process 8D start and capability boundary (unit)', () => {
   });
 
   it.each([true, false])('does not advertise generic capabilities for marked/unmarked controlled nodes: %p', async marked => {
-    const f = fixture(marked ? { assignment, processEightD: policy } : { assignment, isEnd: true });
+    const f = fixture(marked ? { assignment, [marker]: policy } : { assignment, isEnd: true });
     if (!marked) { f.node.type = 'CLOSE'; f.instance.status = 'COMPLETED'; }
     const result = await workflowCapabilities(f.transaction, actor, f.problem as unknown as ProblemIndex, f.instance as unknown as WorkflowInstance);
     expect(result).toMatchObject({ canAct: false, allowedActions: [], reasonCode: 'WORKFLOW_ACTION_INVALID', taskId: null, projectionPending: false });
   });
 });
 
-describe('process 8D old-task and projection boundary (unit)', () => {
+describe('controlled 8D old-task and projection boundary (unit)', () => {
   it.each(['claim', 'release', 'retry'] as const)('blocks manually seeded old tasks from %s', async operation => {
     const f = fixture(); if (operation === 'release') f.task.claimedByUserId = userId;
     if (operation === 'retry') f.task.status = 'FAILED';
@@ -190,9 +193,9 @@ describe('process 8D old-task and projection boundary (unit)', () => {
     const f = fixture(); const tasks = new TaskService(f.prisma, f.audit);
     if (operation === 'list') await tasks.list(actor, { status: 'FAILED' }); else await tasks.statistics(actor);
     const sql = f.tx.$queryRaw.mock.calls.map(([raw]) => Array.isArray(raw) ? raw.join('?') : (raw as Prisma.Sql).text).join('\n');
-    expect(sql).toContain("node.config ? 'processEightD'");
+    expect(sql).toContain(`node.config ? '${marker}'`);
     expect(sql).toContain("node.config ? 'closureReview'");
-    expect(sql).toMatch(/NOT EXISTS[\s\S]*workflow_nodes[\s\S]*config \? 'processEightD'/);
+    expect(sql).toMatch(new RegExp(`NOT EXISTS[\\s\\S]*workflow_nodes[\\s\\S]*config \\? '${marker}'`));
   });
 
   function eventFixture(config?: Record<string, unknown>, controlledVersion = true) {
@@ -206,7 +209,7 @@ describe('process 8D old-task and projection boundary (unit)', () => {
   }
 
   it.each([true, false])('does not project a generic task or notification for a marked/unmarked process node: %p', async marked => {
-    const f = eventFixture(marked ? { assignment, processEightD: policy } : { assignment });
+    const f = eventFixture(marked ? { assignment, [marker]: policy } : { assignment });
     await new WorkflowEventHandler().handle(f.transaction, f.event);
     expect(f.tx.workflowTask.create).not.toHaveBeenCalled();
     expect(f.tx.outboxEvent.createMany).not.toHaveBeenCalled();
@@ -215,7 +218,7 @@ describe('process 8D old-task and projection boundary (unit)', () => {
   });
 
   it.each(['WORKFLOW_TASK_OVERDUE', 'WORKFLOW_TASK_REMINDER', 'WORKFLOW_TASK_ESCALATION'])('does not run stale generic timing for controlled tasks: %s', async eventType => {
-    const f = eventFixture({ assignment, processEightD: policy, slaMinutes: 60 });
+    const f = eventFixture({ assignment, [marker]: policy, slaMinutes: 60 });
     f.task.dueAt = new Date(0) as unknown as null;
     const event = { ...f.event, eventType, aggregateType: 'WorkflowTask', aggregateId: f.task.id, eventKey: `workflow-task:${f.task.id}:overdue`,
       payload: { schemaVersion: 1, taskId: f.task.id, organizationId: org, problemIndexId: problemId, instanceId, workflowVersionId: versionId,
@@ -234,10 +237,24 @@ describe('process 8D old-task and projection boundary (unit)', () => {
   });
 });
 
-describe('process 8D generic upgrade boundary (unit)', () => {
+describe('controlled 8D generic upgrade boundary (unit)', () => {
+  it('does not preview or execute a generic upgrade out of an unmarked node in a controlled version', async () => {
+    const f = fixture({ assignment });
+    const adapter = { domainCode, sourceType, authorizeAndLock: async () => {},
+      prepare: jest.fn(async () => { throw new Error('UNEXPECTED_PREPARE'); }),
+      apply: jest.fn(async () => { throw new Error('UNEXPECTED_APPLY'); }) };
+    const service = new WorkflowUpgradeService(f.prisma, f.audit, f.outbox, f.problems, new WorkflowUpgradeRegistry([adapter]));
+    await expect(service.preview(actor, problemId)).resolves.toMatchObject({ canUpgrade: false, reasonCode: 'WORKFLOW_UPGRADE_NOT_ALLOWED' });
+    await expect(service.upgrade(actor, problemId, { instanceId, currentNodeId: nodeId, expectedProblemVersion: 1, expectedInstanceVersion: 1,
+      expectedDomainVersion: 1, reason: 'Upgrade' }, 'upgrade-test', 'test')).rejects.toMatchObject(invalidAction);
+    expect(adapter.prepare).not.toHaveBeenCalled();
+    expect(adapter.apply).not.toHaveBeenCalled();
+    expect(f.tx.workflowInstance.create).not.toHaveBeenCalled();
+  });
+
   it('does not preview a generic upgrade into a controlled process version', async () => {
-    const f = fixture({ assignment }, false); f.version.nodes.push({ ...f.owner, config: { ...f.owner.config, processEightD: policy } });
-    const adapter = { domainCode: 'process-quality', sourceType: 'process-defect', authorizeAndLock: async () => {},
+    const f = fixture({ assignment }, false); f.version.nodes.push({ ...f.owner, config: { ...f.owner.config, [marker]: policy } });
+    const adapter = { domainCode, sourceType, authorizeAndLock: async () => {},
       prepare: async () => ({ domainVersion: 1, targetDefinitionId: definitionId, targetVersionId: versionId, targetProblemType: 'EIGHT_D',
         allowedNodeIds: [nodeId], mappingVersion: 'v1', beforeDomainRevisionId: id(13), mappingSummary: [], evidenceFileIds: [] }),
       apply: jest.fn(async () => { throw new Error('UNEXPECTED_APPLY'); }) };
@@ -255,15 +272,17 @@ describe('process 8D generic upgrade boundary (unit)', () => {
     const originalQuery = f.tx.$queryRaw.getMockImplementation()!;
     // Distinguish source and target checks using the bound version parameter.
     f.tx.$queryRaw.mockImplementation(async function (raw, ...values: unknown[]) {
-      if (Array.isArray(raw) && raw.join('?').includes("config ? 'processEightD'")) return values[1] === targetVersionId ? [{ id: ownerId }] : [];
+      if (Array.isArray(raw) && raw.join('?').includes(`config ? '${marker}'`)) return values[1] === targetVersionId ? [{ id: ownerId }] : [];
       return originalQuery(raw);
     });
     const input = { instanceId, currentNodeId: nodeId, expectedProblemVersion: 1, expectedInstanceVersion: 1, expectedDomainVersion: 1, reason: 'Upgrade' };
     const requestDigest = createHash('sha256').update(canonical({ organizationId: org, problemId, actorUserId: actor.id, ...input })).digest('hex');
     f.tx.workflowUpgrade.findUnique.mockResolvedValue({ problemIndexId: problemId, requestDigest, response: { workflowVersionId: targetVersionId } });
-    const adapter = { domainCode: 'process-quality', sourceType: 'process-defect', authorizeAndLock: async () => {},
+    const adapter = { domainCode, sourceType, authorizeAndLock: async () => {},
       prepare: async () => { throw new Error('UNEXPECTED_PREPARE'); }, apply: async () => { throw new Error('UNEXPECTED_APPLY'); } };
     const service = new WorkflowUpgradeService(f.prisma, f.audit, f.outbox, f.problems, new WorkflowUpgradeRegistry([adapter]));
     await expect(service.upgrade(actor, problemId, input, 'upgrade-test', 'test')).rejects.toMatchObject(invalidAction);
   });
+});
+
 });
