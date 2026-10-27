@@ -6,12 +6,12 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 批准 | 2026-10-26夜间连续交付授权保留为历史；2026-10-27已取消heartbeat并继续按正常检查点推进。负责人随后要求集中把事情做好，先收齐当前链路问题、成批修复审查验证，再统一更新原PR，不再逐条发现/推送。不再沿用夜间自动合并/部署授权，配置与人工验收仍由负责人处理 |
-| 基线 | 当前生产及origin/main为28cc3049d35cf837be386d03bc32789fa3f84f01；功能分支初版7106685，PR返修提交31b6237bdadc9eb0deffd7fab9cb212665be04ad已由Git/REST分支引用回读确认；安全携入前轮纯文档归档0451bf5/01154d5，不重引已squash运行代码 |
+| 批准 | 2026-10-27已取消heartbeat并恢复正常检查点，集中收口后负责人明确“继续合并部署”，本次单次授权覆盖PR #75合并及同版本部署核验。配置与人工验收仍由负责人处理；不恢复夜间连续交付或自动进入下一开发单元 |
+| 基线 | 开发base为28cc304，审查head为7f6972be856876f4c988c2feed50474a20c14c4e，PR #75已squash为7cd2707f1003546474cac72f6701aa6d8bfc0226并部署；合并树与审查树完全一致。当前本地纯文档归档分支codex/qms-n4-ledger-release-records，发布记录不额外推送触发Actions |
 | 需求 | user回读revision311、has_more=false：REQ-0028/reczz28RDS4Bq9gG与0029/reczz28RDS4BnyEL开发中；0026/reczz28RDS4BnuCp及0027/reczz28RDS4Bp8Yn现为负责人上线验收完成。本次直接指令覆盖N4/N5剩余范围，不把该状态当全域已经实现或重复N3 |
 | 映射 | [Issue #74](https://github.com/JasonShu0722/QMS-2.0/issues/74)、[PR #75](https://github.com/JasonShu0722/QMS-2.0/pull/75)，首单元V0.0.32，REQ-0028为主；下一修订仍在原PR，不另碎片建飞书/Issue。完整客户8D/新品及N5为后续单元 |
 | 边界 | 不代配生产组织/岗位/任职或管理员授权，不发布绑定/启用新业务，不删ZLGLB、不关Issue/REQ、不改可见性、不做全局prune；N6 IMS/AI及P3/指标绩效/在线绘图/Office报告不接入 |
-| 下一动作 | e464d26后集中收口本批（V0.0.32-fix7）已完成后端及Web独立SPEC→QUALITY、API全量115文件1521项、Web8文件199项/真实PG5文件64项完整文件组合、Worker8及构建/契约；统一PR检查点接续精确新head CI/复审，不复用旧head结果。最终文档/治理/归档/静态配置收尾与提交事实见Git外current.json及PR；客户完整8D/新品及N5仍未交付 |
+| 下一动作 | V0.0.32含fix7首单元已部署7cd2707，PR CI40459347569/main CI40462688692各9项成功，最新Code Review无发现，部署40464507159成功，机器核验PASS。停在真实岗位配置/角色人工验收及后续N4完整8D/新品策划检查点；不将首单元当N4/N5全部交付，不自动继续开发 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/n4-evidence；新一次性库/任务隔离资源，禁止55440；真实服务门禁与样例/人工验收分层 |
 
 负责人补充：不只看REQ标记状态，按前期计划和实际项目代码开发进度接续。该文档只是原路线的执行细化/证据记录，不重新批准业务或替代总计划。完成判定分源码贯通、适用测试、发布包含、真实配置/人工验收四层。
@@ -70,9 +70,9 @@ Lagrange在01154d5基线只读核对现有领域与相应测试，以下“存�
 - [x] A/B/C、D及正式Web完成规格后独立质量审查，父复核真实红绿/返修/完整文件；正式UI初版RED时序偏差保留，不补造已按TDD完成。
 - [x] 使用任务隔离真实PG/对象/扫描/邮件/Worker；契约和适用API/Web/lint/build/归档/Compose/治理及真实浏览器完成，准确保留初失败/组合覆盖/未执行限制。
 - [x] 首单元本地门禁通过后提交推送7106685并创建PR #75，关联Refs #74不自动关闭；PR已附加聊天，准确保留证据与未覆盖范围。
-- [ ] 最新head云端CI与Code Review无未处理阻断后，按正常规则核对合并/发布授权；夜间临时授权已结束，不提前合并。
-- [ ] main完整CI成功再部署，验证前置快照/迁移/API Worker Web同SHA/HTTP目标变化；失败只诊断已批准范围，ENOSPC不授权全局删除或关闭校验。
-- [ ] 记录版本、配置/角色人工清单与未完成范围；当前先收口PR #75，后续N4完整8D/新品及N5依正常授权接续。不能因为能登记就宣布N4已完成；本期无N6集成或数据对外发送。
+- [x] 最新head7f6972b的9项CI及Code Review无发现后，依负责人明确单次授权合并PR #75为7cd2707。
+- [x] main完整CI40462688692的9项成功后，自动部署40464507159成功；快照在迁移前、4份迁移、同SHA API/Worker/Web及公网均实际核验。
+- [x] 记录版本、配置/角色人工清单与未完成范围；首单元已发布但客户完整8D/新品及N5仍待后续授权接续，不因能登记宣布整个N4完成。
 
 ## 4. 记录与沉淀
 
@@ -219,3 +219,16 @@ Parfit只改共同eligible一行，新增2个真实case，原11项逐字保留�
 - 父串行默认API全量115完整文件1521项通过；真实编译Worker8项、API/Web构建和生成契约检查通过，未降低Argon2参数。当前未新增新动作真实浏览器、生产角色人工验收或完整phase-2，旧首轮两条浏览器证据不代表本批新增所有边界。仍不合并部署或自动配权。
 
 Boyle记录的Editor在409重读后同时改变baseline阶段/保留组件草稿/旧候选迟到的精确联合case仍是覆盖建议；当前实现包含阶段identity与abort/代次隔离、已选非法target保稿禁写，未发现确定实现缺陷，不为穷举继续扩展新功能或伪称穷尽全部组合。
+
+### 5.11 首单元合并部署核验（2026-10-27，机器PASS）
+
+负责人明确授权“继续合并部署”。PR #75最终head7f6972b，CI40459347569全部9项成功，Code Review机器人状态绑定同head且completed/has_any_findings=false/has_unresolved_findings=false，完整7线程均已解决；独立Security Review未运行，不称安全扫描通过。
+
+PR精确SHA保护的squash合并为7cd2707f1003546474cac72f6701aa6d8bfc0226，文件树与审查head相同。main CI40462688692/attempt1全部9项成功，自动部署40464507159/attempt1、job122056584033成功；日志明确引用源CI40462688692、attempt1、该完整SHA及Full validation scope，SSH部署步骤未跳过。
+
+- 15:09:07（Asia/Taipei）记录`Pre-migration encrypted database snapshot verified: 7cd2707f1003546474cac72f6701aa6d8bfc0226`，早于15:09:10迁移。标记SHA是发布源码SHA，不是数据库内容哈希；快照为本机加密数据库备份，不是异地灾备或恢复演练。
+- 120份迁移链中本次4份实际应用：20261026230000_customer_complaint_ledger、20261026231000_customer_complaint_analysis、20261026232000_customer_ledger_permissions、20261027010000_customer_ledger_stale_handoff_permission，随后All migrations have been successfully applied。
+- 最终compose显示API/Worker共用qms2-foundation-api:7cd2707完整SHA，Web为qms2-foundation-web:同SHA，均Up，API healthy。15:09:24记录Deployment successful:同SHA。该版本deploy.sh成功前强制验证当前StartedAt的Worker日志含QMS_WORKER_READY，原始Worker stdout未复制到Actions，不声称直接看到该READY行。
+- 15:11公网独立匿名GET核验：登录、OpenAPI和新index-DYDlGc2P.js均200；新JS970454字节，SHA256为199ad5e21764c58341e28549e41cb00dc9eb093fc70557ed12df89e24b4d08ea，含恢复标记。客诉台账10条/解析8条公开契约及archived/projectQualified/恢复能力字段正确，6个匿名业务读取均401。旧资源index-B3q2V0GD.js和台账0条作为部署前对照保留。
+
+Git外证据目录D:/WorkSpace/QMS-2.0-local/n4-evidence/n4-release-20261027，包含完整部署日志、主CI/部署job快照、前后公网资料及可执行断言；release-verification.json为PASS。未登录生产创建/修改业务、未配权、未启用流程绑定、未删除Docker数据或关闭Issue/REQ。客户完整多源8D、新品同源和N5仍属后续，不以本首单元部署代替人工验收或全部完成。配置和角色验收按本计划既有范围由负责人接续；本地仅归档文档，不再额外推送触发部署。
