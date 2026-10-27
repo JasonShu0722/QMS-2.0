@@ -77,8 +77,12 @@ export class CustomerComplaintAnalysisService {
   }
 
   private async staleAssignment(tx: AdminTransaction, row: StoredAnalysis) {
-    return !(await this.organizations.currentAssignments(row.assigneeUserId, row.organizationId, new Date(), tx))
-      .some(item => item.id === row.assigneeAssignmentId && item.department.id === row.departmentId);
+    try {
+      return (await this.candidate(tx, row.organizationId, row.assigneeUserId, row.assigneeAssignmentId, row.section)).departmentId !== row.departmentId;
+    } catch (error) {
+      if (error instanceof HttpException && (error.getResponse() as { code: string }).code === 'CUSTOMER_ANALYSIS_CANDIDATE_INVALID') return true;
+      throw error;
+    }
   }
 
   private plain(row: StoredAnalysis): AnalysisSnapshot {

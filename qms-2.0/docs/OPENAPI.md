@@ -2,6 +2,8 @@
 
 ## N4本地契约接续（2026-10-27，尚未发布）
 
+集中批次追加两个可选只读投影：`CustomerLedgerItemDto.archived`来自真实归档时间，`CustomerLedgerCandidateDto.projectQualified`来自服务端完整工程师资格。候选既有`componentCode`参数在匹配成功时按实际阶段过滤，未匹配使用显式`stage`兜底；标记不代替实际写授权，超长原文不当作候选查询参数。SUPPLEMENT预览和提交共用字段/职责/客户/版本准备，完整合并事实决定异常与跳错，跳过回滚本行准备副作用；无新增迁移或权限。FAE失效恢复也复用实际候选全资格，任职仍存在但读/写/FAE许可丢失时可由独立授权者恢复。生成/check及真实用例见[N4计划5.10](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md)。
+
 客诉新事实入口为`/api/v1/customer-quality/ledger`及其详情、候选、收件、关闭/恢复、`import/preview`和`import/commit`；逐行ADD/SKIP/SUPPLEMENT与取消/继续/跳错误行使用同一生成DTO，raw与normalized分开，缺客户/工程师/有效业务字段可留空或保原文警告，不补造风险/数量。映射响应直接复用`ComponentProjectResolutionDto`，中文类型别名仅规范化值，不改原单元格。
 
 V0.0.32-fix2新增`POST /api/v1/customer-quality/ledger/:id/reassign`与生成的`CustomerLedgerReassignDto`，包含expectedVersion、qualityEngineerAssignmentId、reason及可选organizationId。仅修复已保存人员的失效任职，read/write/reassign分权；当前目标任职和新品资格、闭后编辑、归档、CAS、幂等重放均服务端复验。仅登记新权限，不自动授予生产角色，不借交接修改原数量、映射或解析/8D。

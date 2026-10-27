@@ -10674,6 +10674,7 @@ export interface components {
             /** @enum {string} */
             status: "FOLLOWING" | "CLOSED";
             legacyStatus: string;
+            archived?: boolean;
             /** Format: uuid */
             customerId: string | null;
             normalized: components["schemas"]["CustomerLedgerNormalizedDto"];
@@ -10711,6 +10712,7 @@ export interface components {
             pageSize: number;
         };
         CustomerLedgerCandidateDto: {
+            projectQualified?: boolean;
             /** Format: uuid */
             assignmentId: string;
             /** Format: uuid */
@@ -10788,6 +10790,7 @@ export interface components {
             /** @enum {string} */
             status: "FOLLOWING" | "CLOSED";
             legacyStatus: string;
+            archived?: boolean;
             /** Format: uuid */
             customerId: string | null;
             normalized: components["schemas"]["CustomerLedgerNormalizedDto"];

@@ -13,7 +13,7 @@ type Props = {
 };
 
 function eligible(record: LedgerDetail, permissions: string[], readOnly?: boolean) {
-  return !readOnly && !!record.qualityEngineerId?.trim()
+  return !readOnly && !record.archived && record.legacyStatus !== 'ARCHIVED' && !!record.qualityEngineerId?.trim()
     && record.warnings.some(warning => warning.code === 'ENGINEER_NO_LONGER_ELIGIBLE')
     && ['read', 'write', 'reassign'].every(action => permissions.includes(`customer-quality:complaints:${action}`))
     && (record.status !== 'CLOSED' || permissions.includes('customer-quality:complaints:closed-edit'));

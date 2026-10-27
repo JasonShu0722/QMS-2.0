@@ -16,6 +16,10 @@ export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void) {
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   useEffect(() => { controller.current = new AbortController(); return () => { controller.current?.abort(); pending.current = undefined; }; }, []);
+  function discard() {
+    if (active.current) return;
+    pending.current = undefined; unknown.current = false; setUncertain(false);
+  }
   async function write<T>(path: string, body: Body, method: 'POST' | 'PUT', canDispatch?: () => boolean): Promise<T> {
     const signal = controller.current!.signal;
     signal.throwIfAborted();
@@ -54,5 +58,5 @@ export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void) {
       throw cause;
     } finally { active.current = false; if (!signal.aborted) setBusy(false); }
   }
-  return { write, busy, uncertain, signal: () => controller.current!.signal };
+  return { write, discard, busy, uncertain, signal: () => controller.current!.signal };
 }

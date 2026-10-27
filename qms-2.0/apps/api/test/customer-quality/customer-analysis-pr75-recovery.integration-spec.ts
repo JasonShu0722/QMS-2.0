@@ -187,9 +187,25 @@ describe('PR75 analysis assignment recovery and accepted responsibility on real 
     expect((await service.candidates(fae.actor, assigned.complaintId, 'FAE')).every(item => item.departmentId === departmentId)).toBe(true);
     await expect(service.transfer(fae.actor, assigned.id, target(crossDepartment, 1), randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
     await permission(fae, faePermission, false);
-    try { await expect(recover(assigned.complaintId)).rejects.toMatchObject({ status: 409 }); }
+    try {
+      expect(await service.summary(qe.actor, assigned.complaintId)).toMatchObject({ canRecoverAssignment: true });
+      expect(await service.candidates(qe.actor, assigned.complaintId, 'FAE', true)).toEqual(expect.arrayContaining([expect.objectContaining({ assignmentId: nextFae.assignmentId })]));
+    }
     finally { await permission(fae, faePermission, true); }
+    expect(await service.summary(qe.actor, assigned.complaintId)).toMatchObject({ canRecoverAssignment: false });
     expect(await service.transfer(fae.actor, assigned.id, target(nextFae, 1), randomUUID(), randomUUID())).toMatchObject({ assigneeUserId: nextFae.actor.id });
+  });
+
+  it.each([read, write, faePermission])('recovers when the saved FAE loses %s without an appointment change', async code => {
+    const old = await person([read, write, faePermission]);
+    const assigned = await assign(await complaint(), 'FAE', old);
+    const saved = await save(old, assigned.id, 1, '原解析仍须保留');
+    await permission(old, code, false);
+    expect((await prisma.userPosition.findUniqueOrThrow({ where: { id: old.assignmentId } })).endedAt).toBeNull();
+    await expect(save(old, assigned.id, 2, '越权修改')).rejects.toMatchObject({ status: 403 });
+    expect(await service.summary(qe.actor, assigned.complaintId)).toMatchObject({ canRecoverAssignment: true });
+    expect(await recover(assigned.complaintId, nextFae, 2)).toMatchObject({ id: assigned.id, assigneeUserId: nextFae.actor.id, text: saved.text, version: 3 });
+    await expect(save(old, assigned.id, 3, '交接后越权')).rejects.toMatchObject({ status: 403 });
   });
 
   it('retains accepted NEW project qualification after mapping changes to MASS until explicit handoff', async () => {

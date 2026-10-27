@@ -26,6 +26,21 @@ it('freezes private unknown attempts and replays the exact key/body/path after l
   expect(result.current.uncertain).toBe(false);
   expect(vi.mocked(apiRequest).mock.calls[0]?.[2]).toEqual({ replayAfterReauthentication: false });
 });
+it('explicitly discards a settled private unknown attempt without sending or undoing a server request', async () => {
+  const { result } = renderHook(() => useCustomerLedgerWrite(vi.fn()));
+  vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('lost'));
+  await act(async () => { await expect(result.current.write('/ledger/close', { expectedVersion: 1, note: '原结论' }, 'POST')).rejects.toThrow(); });
+  const original = vi.mocked(apiRequest).mock.calls[0]!;
+  expect(result.current.uncertain).toBe(true);
+  act(() => { result.current.discard(); });
+  expect(result.current.uncertain).toBe(false);
+  expect(apiRequest).toHaveBeenCalledTimes(1);
+  await act(async () => { await result.current.write('/ledger/receiving', { expectedVersion: 1, courierNumber: '新单号' }, 'PUT'); });
+  const next = vi.mocked(apiRequest).mock.calls[1]!;
+  expect(next[0]).toBe('/ledger/receiving');
+  expect(next[1]?.body).toBe(JSON.stringify({ expectedVersion: 1, courierNumber: '新单号' }));
+  expect(next[1]?.headers).not.toEqual(original[1]?.headers);
+});
 it.each([401, 403, 409])('handles terminal %s without leaking a frozen attempt', async status => {
   const denied = vi.fn();
   const { result } = renderHook(() => useCustomerLedgerWrite(denied));

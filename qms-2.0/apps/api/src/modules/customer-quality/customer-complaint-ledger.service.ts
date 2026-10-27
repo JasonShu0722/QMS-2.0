@@ -101,7 +101,7 @@ export class CustomerComplaintLedgerService {
     if (row.registered_stage && stage && row.registered_stage !== stage) warnings.push({ field: 'stage', code: 'PROJECT_STAGE_CHANGED' });
     const singleAfterSales = facts.normalized.quantity === 1 && facts.normalized.complaintType === 'AFTER_SALES';
     return { id: row.id, organizationId: row.organization_id, complaintNumber: row.complaint_number, version: row.version,
-      status: ledgerDisplayStatus(row.ledger_status, row.status), legacyStatus: row.status, customerId: row.customer_id,
+      status: ledgerDisplayStatus(row.ledger_status, row.status), legacyStatus: row.status, archived: !!row.archived_at, customerId: row.customer_id,
       normalized: facts.normalized, raw: facts.raw, warnings, registeredByUserId: row.created_by_id,
       qualityEngineerId: engineerId, qualityEngineerAssignmentId: assignmentId, qualityEngineerSource: source, stage,
       mapping,
@@ -193,13 +193,16 @@ export class CustomerComplaintLedgerService {
     return this.prisma.$transaction(async tx => {
       const organizationId = await this.authorize(tx, actor);
       const items: CustomerLedgerCandidateDto[] = [];
+      const resolution = dto.componentCode ? await this.mapping(tx, organizationId, dto.componentCode) : null;
+      const stage = resolution?.outcome === 'matched' ? resolution.project!.stage : dto.stage ?? null;
       let page = 1;
       for (;;) {
         const result = await listComponentEngineerAssignments(tx, organizationId, { page, pageSize: 100, search: dto.search }, new Date());
         for (const assignment of result.items) {
-          if (!assignment.assignmentId || !await this.eligible(tx, organizationId, assignment.assignmentId, dto.stage ?? null)) continue;
+          if (!assignment.assignmentId || !await this.eligible(tx, organizationId, assignment.assignmentId, stage)) continue;
           items.push({ assignmentId: assignment.assignmentId, userId: assignment.userId!, username: assignment.username, fullName: assignment.fullName,
-            departmentName: assignment.departmentName, positionName: assignment.positionName });
+            departmentName: assignment.departmentName, positionName: assignment.positionName,
+            projectQualified: !!await this.eligible(tx, organizationId, assignment.assignmentId, 'NEW_PRODUCT') });
         }
         if (page++ * 100 >= result.total) break;
       }
@@ -273,7 +276,7 @@ export class CustomerComplaintLedgerService {
     if (customer && !facts.normalized.customerName) facts.normalized.customerName = customer.name;
     const resolution = await this.mapping(tx, organizationId, facts.normalized.componentCode);
     const stage = resolution?.outcome === 'matched' ? resolution.project!.stage : null;
-    const automaticId = stage === 'NEW_PRODUCT' ? resolution!.projectEngineer.assignmentId : resolution?.customerEngineer.assignmentId;
+    const automaticId = resolution?.outcome === 'matched' ? stage === 'NEW_PRODUCT' ? resolution.projectEngineer.assignmentId : resolution.customerEngineer.assignmentId : null;
     const assignment = await this.eligible(tx, organizationId, input.qualityEngineerAssignmentId ?? automaticId ?? null, stage);
     if (input.qualityEngineerAssignmentId && !assignment) ledgerFail('CUSTOMER_LEDGER_ENGINEER_UNAVAILABLE', 409);
     if (nonempty(input.fields.investigation) && assignment?.userId !== actor.id) ledgerFail('CUSTOMER_LEDGER_RESPONSIBILITY_DENIED', 403);
@@ -300,7 +303,7 @@ export class CustomerComplaintLedgerService {
     tx => this.createRow(tx, actor, dto, traceId), async tx => { await this.authorize(tx, actor, [LEDGER_PERMISSIONS.read,LEDGER_PERMISSIONS.write]); });
   }
 
-  private async updateRow(tx: AdminTransaction, actor: AdminActor, id: string, input: CustomerLedgerUpdateDto, traceId: string, supplement = false) {
+  private async prepareUpdate(tx: AdminTransaction, actor: AdminActor, id: string, input: CustomerLedgerUpdateDto, supplement = false) {
     const current = await this.lockCase(tx, actor, id, input.expectedVersion, 'update');
     const row = await this.row(tx, current.organizationId, id);
     if (supplement && input.qualityEngineerAssignmentId !== undefined) ledgerFail('CUSTOMER_LEDGER_SUPPLEMENT_SCOPE_INVALID');
@@ -320,6 +323,12 @@ export class CustomerComplaintLedgerService {
     const source = input.qualityEngineerAssignmentId === undefined ? current.qualityEngineerSource : picked ? 'MANUAL' : null;
     // Mapping changes alone retain the accepted responsibility; explicit handoff accepts the current stage.
     const responsibilityStage = input.qualityEngineerAssignmentId === undefined ? row.registered_stage ?? stage : stage;
+    return { current, row, facts, customerId, resolution, engineerId, assignmentId, source, responsibilityStage };
+  }
+
+  private async updateRow(tx: AdminTransaction, actor: AdminActor, id: string, input: CustomerLedgerUpdateDto, traceId: string, supplement = false,
+    prepared?: Awaited<ReturnType<CustomerComplaintLedgerService['prepareUpdate']>>) {
+    const { current, row, facts, customerId, resolution, engineerId, assignmentId, source, responsibilityStage } = prepared ?? await this.prepareUpdate(tx, actor, id, input, supplement);
     const [updated] = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET ledger_status = COALESCE(ledger_status,${current.status}),customer_id = ${customerId}::uuid,
       complaint_type = ${facts.normalized.complaintType},terminal_customer_name = ${facts.normalized.terminalCustomerName},product_code = ${facts.normalized.componentCode},product_model = ${facts.normalized.productModel},
       defect_description = ${facts.normalized.defectDescription},vin = ${facts.normalized.vin},mileage = ${facts.normalized.mileage}::int,purchase_date = ${facts.normalized.purchaseOn}::date,
@@ -472,7 +481,11 @@ export class CustomerComplaintLedgerService {
         if (row.action === 'ADD' || row.action === 'SUPPLEMENT') {
           try {
             if (row.action === 'ADD') await this.prepareCreation(tx, actor, row);
-            else await this.lockCase(tx, actor, row.targetId!, row.expectedVersion!, 'update');
+            else {
+              const prepared = await this.prepareUpdate(tx, actor, row.targetId!, { ...row, expectedVersion: row.expectedVersion! }, true);
+              item.warnings = prepared.facts.warnings;
+              if (dto.mode === 'SKIP_ERRORS' && item.warnings.some(w => ['INVALID_VALUE','BEFORE_PRODUCTION'].includes(w.code))) item.outcome = 'SKIPPED';
+            }
           }
           catch (error) {
             if (!(error instanceof HttpException)) throw error;
@@ -500,11 +513,19 @@ export class CustomerComplaintLedgerService {
       const item = await this.mutations.run(mutation('CUSTOMER_LEDGER_IMPORT_ROW', { mode: dto.mode, row }, rowKey), async tx => {
         const warnings = normalizeComplaintFields(row.fields).warnings;
         if (dto.mode === 'CANCEL') return this.receipt(row, 'CANCELLED');
-        if (row.action === 'SKIP' || (dto.mode === 'SKIP_ERRORS' && warnings.some(w => ['INVALID_VALUE','BEFORE_PRODUCTION'].includes(w.code)))) return this.receipt(row, 'SKIPPED');
+        if (row.action === 'SKIP' || (row.action === 'ADD' && dto.mode === 'SKIP_ERRORS' && warnings.some(w => ['INVALID_VALUE','BEFORE_PRODUCTION'].includes(w.code)))) return this.receipt(row, 'SKIPPED');
         await tx.$executeRaw`SAVEPOINT customer_ledger_import_row`;
         try {
+          const update = { fields: row.fields, customerId: row.customerId, qualityEngineerAssignmentId: row.qualityEngineerAssignmentId, expectedVersion: row.expectedVersion! };
+          const prepared = row.action === 'SUPPLEMENT' ? await this.prepareUpdate(tx, actor, row.targetId!, update, true) : undefined;
+          if (prepared && dto.mode === 'SKIP_ERRORS' && prepared.facts.warnings.some(w => ['INVALID_VALUE','BEFORE_PRODUCTION'].includes(w.code))) {
+            // Target checks can reconcile responsibility; a skipped row must retain every original fact.
+            await tx.$executeRaw`ROLLBACK TO SAVEPOINT customer_ledger_import_row`;
+            await tx.$executeRaw`RELEASE SAVEPOINT customer_ledger_import_row`;
+            return { ...this.receipt(row, 'SKIPPED'), warnings: prepared.facts.warnings };
+          }
           const record = row.action === 'ADD' ? await this.createRow(tx, actor, row, traceId)
-            : await this.updateRow(tx, actor, row.targetId!, { fields: row.fields, customerId: row.customerId, qualityEngineerAssignmentId: row.qualityEngineerAssignmentId, expectedVersion: row.expectedVersion! }, traceId, true);
+            : await this.updateRow(tx, actor, row.targetId!, update, traceId, true, prepared);
           await tx.$executeRaw`RELEASE SAVEPOINT customer_ledger_import_row`;
           return this.receipt(row, row.action === 'ADD' ? 'CREATED' : 'SUPPLEMENTED', record);
         } catch (error) {

@@ -108,7 +108,7 @@ describe('N4 genuine archive boundary and accepted engineer handoff on PostgreSQ
       : operation === 'close' ? ledger.close(engineer, archived.id, input, randomUUID(), randomUUID()) : ledger.reopen(engineer, archived.id, input, randomUUID(), randomUUID());
     await expect(write).rejects.toMatchObject(archivedError);
     expect(await snapshot(archived.id)).toEqual(before);
-    expect(await ledger.detail(registrar, archived.id)).toMatchObject({ status: 'CLOSED', legacyStatus: 'ARCHIVED' });
+    expect(await ledger.detail(registrar, archived.id)).toMatchObject({ status: 'CLOSED', legacyStatus: 'ARCHIVED', archived: true });
   });
 
   it('rejects archive SUPPLEMENT in preview and commit without adopting or changing its history', async () => {

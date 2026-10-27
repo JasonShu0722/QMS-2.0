@@ -54,6 +54,196 @@ function mount(onDenied = vi.fn(), sourceRecord?: Source) {
   return { ...view, rerenderSource: (record: Source) => view.rerender(content(record)) };
 }
 const faeSection = () => screen.getByRole('region', { name: 'FAE 解析' });
+const summaryReads = () => vi.mocked(apiRequest).mock.calls.filter(([path]) => path === `${base}/complaints/c1?organizationId=selected`);
+
+it.each(['reopen', 'handoff'] as const)('refreshes real false dispatch/recovery flags after parent %s without replacing drafts or attachments', async change => {
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  Object.assign(summary, { canDispatch: false, canRecoverAssignment: false });
+  summary.supplier = { ...fae, id: 'analysis-sqe', section: 'SUPPLIER', progress: null, result: null, faeStatus: null };
+  source = { ...source, ...(change === 'reopen' ? { status: 'CLOSED' as const } : { qualityEngineerId: 'former-qe' }) };
+  const original = handler;
+  handler = (path, init) => path.startsWith('/api/v1/system/my-permissions')
+    ? { organizationId: 'selected', permissions: [...permissions, 'customer-quality:complaints:reassign'] } : original(path, init);
+  const { rerenderSource } = mount(vi.fn(), source);
+  const text = await screen.findByLabelText('FAE 解析文字');
+  const attachment = screen.getByLabelText(`attachments-${fae.id}`);
+  // Both drafts must survive even when the refresh response contains newer saved records.
+  fireEvent.change(text, { target: { value: '保留 FAE 草稿' } });
+  fireEvent.change(screen.getByLabelText('供应商分析结果'), { target: { value: '保留 SQE 草稿' } });
+  let release!: (value: Summary) => void;
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise<Summary>(resolve => { release = resolve; }) : original(path, init);
+  rerenderSource({ ...source, version: 2, status: 'FOLLOWING', qualityEngineerId: 'qe' });
+  expect(screen.queryByRole('button', { name: '恢复 FAE 派工' })).not.toBeInTheDocument();
+  await waitFor(() => expect(release).toBeDefined());
+  await act(async () => release({ ...summary, canDispatch: true, canRecoverAssignment: true, fae: { ...fae, text: '服务端新正文', version: 99 } }));
+  expect(screen.getByRole('button', { name: '恢复 FAE 派工' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '指定 SQE' })).toBeEnabled();
+  expect(screen.getByLabelText('FAE 解析文字')).toBe(text);
+  expect(text).toHaveValue('保留 FAE 草稿');
+  expect(screen.getByLabelText('供应商分析结果')).toHaveValue('保留 SQE 草稿');
+  expect(screen.getByLabelText(`attachments-${fae.id}`)).toBe(attachment);
+  expect(within(faeSection()).getByText('2')).toBeVisible();
+  expect(summaryReads()).toHaveLength(2);
+  rerenderSource({ ...source, version: 2, status: 'FOLLOWING', qualityEngineerId: 'qe' });
+  expect(summaryReads()).toHaveLength(2);
+});
+
+it.each(['archived', 'legacy'] as const)('keeps a FOLLOWING source read-only when %s archive evidence is present', async archive => {
+  source = Object.assign({ ...source }, archive === 'archived' ? { archived: true } : { legacyStatus: 'ARCHIVED' as const });
+  Object.assign(summary, { canDispatch: true, canRecoverAssignment: true });
+  summary.supplier = { ...fae, id: 'analysis-sqe', section: 'SUPPLIER', progress: '保留进度', faeStatus: null };
+  mount(vi.fn(), source);
+  expect(await screen.findByLabelText('FAE 解析文字')).toBeDisabled();
+  expect(screen.getByLabelText('供应商分析进度')).toBeDisabled();
+  expect(within(faeSection()).getByRole('button', { name: '模拟上传待扫描' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: '保存 FAE 解析' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '同部门转派 FAE' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '查看 FAE 历史' })).toBeEnabled();
+});
+
+it('disables stale true capabilities while syncing, retries only flags, and preserves dirty sibling drafts', async () => {
+  Object.assign(summary, { canDispatch: true });
+  summary.supplier = { ...fae, id: 'analysis-sqe', section: 'SUPPLIER', progress: null, result: null, faeStatus: null };
+  const { rerenderSource } = mount(vi.fn(), source);
+  const text = await screen.findByLabelText('FAE 解析文字');
+  fireEvent.change(text, { target: { value: 'FAE 未保存' } });
+  fireEvent.change(screen.getByLabelText('供应商分析结果'), { target: { value: 'SQE 未保存' } });
+  const attachment = screen.getByLabelText(`attachments-${fae.id}`);
+  const original = handler; let reject!: (cause: unknown) => void;
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise((_resolve, fail) => { reject = fail; }) : original(path, init);
+  rerenderSource({ ...source, version: 2 });
+  expect(text).toBeDisabled();
+  expect(within(faeSection()).getByRole('button', { name: '模拟上传待扫描' })).toBeDisabled();
+  await waitFor(() => expect(reject).toBeDefined());
+  await act(async () => reject(new TypeError('network')));
+  expect(text).toBeDisabled();
+  handler = original;
+  fireEvent.click(await screen.findByRole('button', { name: '重试同步解析权限' }));
+  await waitFor(() => expect(text).toBeEnabled());
+  expect(text).toHaveValue('FAE 未保存');
+  expect(screen.getByLabelText('供应商分析结果')).toHaveValue('SQE 未保存');
+  expect(screen.getByLabelText(`attachments-${fae.id}`)).toBe(attachment);
+  expect(summaryReads()).toHaveLength(3);
+  expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path.startsWith('/api/v1/customer-quality/ledger/'))).toHaveLength(1);
+  expect(getSession).toHaveBeenCalledTimes(1);
+});
+
+it.each(['close', 'warning', 'archive'] as const)('never lets a late capability response revive writes after parent %s', async change => {
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  Object.assign(summary, { canDispatch: true, canRecoverAssignment: true });
+  const original = handler;
+  handler = (path, init) => path.startsWith('/api/v1/system/my-permissions')
+    ? { organizationId: 'selected', permissions: [...permissions, 'customer-quality:complaints:reassign'] } : original(path, init);
+  const { rerenderSource } = mount(vi.fn(), source);
+  await screen.findByRole('button', { name: '恢复 FAE 派工' });
+  const releases: ((value: Summary) => void)[] = [];
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise<Summary>(resolve => { releases.push(resolve); }) : original(path, init);
+  rerenderSource({ ...source, version: 2 });
+  await waitFor(() => expect(releases).toHaveLength(1));
+  expect(screen.queryByRole('button', { name: '恢复 FAE 派工' })).not.toBeInTheDocument();
+  rerenderSource(Object.assign({ ...source, version: 3 }, change === 'close' ? { status: 'CLOSED' as const }
+    : change === 'archive' ? { archived: true } : { warnings: [{ field: 'qualityEngineerId', code: 'ENGINEER_NO_LONGER_ELIGIBLE' }] }));
+  await waitFor(() => expect(releases).toHaveLength(2));
+  await act(async () => { releases[1]({ ...summary, canDispatch: false, canRecoverAssignment: false }); releases[0](summary); });
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '恢复 FAE 派工' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method)).toHaveLength(0);
+});
+
+it.each([401, 403])('clears sensitive data on capability-sync %s even while a sibling response is late', async status => {
+  const onDenied = vi.fn(); const { rerenderSource } = mount(onDenied, source);
+  fireEvent.change(await screen.findByLabelText('FAE 解析文字'), { target: { value: '敏感草稿' } });
+  const original = handler;
+  handler = (path, init) => { if (path === `${base}/complaints/c1?organizationId=selected`) throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, status); return original(path, init); };
+  rerenderSource({ ...source, version: 2 });
+  await waitFor(() => expect(onDenied).toHaveBeenCalledWith(expect.objectContaining({ status })));
+  expect(screen.queryByLabelText('FAE 解析文字')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(`attachments-${fae.id}`)).not.toBeInTheDocument();
+});
+
+it('rejects an older generation even when a same-version parent returns to the identical engineer identity', async () => {
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  source = { ...source, qualityEngineerId: 'other-qe' };
+  Object.assign(summary, { canDispatch: false });
+  const { rerenderSource } = mount(vi.fn(), source);
+  await screen.findByLabelText('FAE 解析文字');
+  const original = handler; const releases: ((value: Summary) => void)[] = [];
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise<Summary>(resolve => { releases.push(resolve); }) : original(path, init);
+  rerenderSource({ ...source, version: 2, qualityEngineerId: 'qe' });
+  await waitFor(() => expect(releases).toHaveLength(1));
+  rerenderSource({ ...source, version: 2 });
+  await waitFor(() => expect(releases).toHaveLength(2));
+  rerenderSource({ ...source, version: 2, qualityEngineerId: 'qe' });
+  await waitFor(() => expect(releases).toHaveLength(3));
+  await act(async () => releases[2](summary));
+  await act(async () => { releases[0]({ ...summary, canDispatch: true }); releases[1]({ ...summary, canDispatch: true }); });
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  expect(summaryReads()).toHaveLength(4);
+});
+
+it('keeps same-version parent eligibility warnings authoritative and only restores dispatch after fresh flags', async () => {
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  Object.assign(summary, { canDispatch: true });
+  const { rerenderSource } = mount(vi.fn(), source);
+  await screen.findByRole('button', { name: '指定 SQE' });
+  const original = handler; const releases: ((value: Summary) => void)[] = [];
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise<Summary>(resolve => { releases.push(resolve); }) : original(path, init);
+  rerenderSource({ ...source, warnings: [{ field: 'qualityEngineerId', code: 'ENGINEER_NO_LONGER_ELIGIBLE' }] });
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  await waitFor(() => expect(releases).toHaveLength(1));
+  await act(async () => releases[0](summary));
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  rerenderSource({ ...source, warnings: [] });
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  await waitFor(() => expect(releases).toHaveLength(2));
+  await act(async () => releases[1](summary));
+  expect(screen.getByRole('button', { name: '指定 SQE' })).toBeEnabled();
+});
+
+it('does not dispatch a deferred write using a late old-source capability response', async () => {
+  let releaseCsrf!: (value: string) => void;
+  const { rerenderSource } = mount(vi.fn(), source);
+  fireEvent.change(await screen.findByLabelText('FAE 解析文字'), { target: { value: '令牌等待草稿' } });
+  vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(resolve => { releaseCsrf = resolve; }));
+  fireEvent.click(screen.getByRole('button', { name: '保存 FAE 解析' }));
+  await waitFor(() => expect(releaseCsrf).toBeDefined());
+  const original = handler; const releases: ((value: Summary) => void)[] = [];
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise<Summary>(resolve => { releases.push(resolve); }) : original(path, init);
+  rerenderSource({ ...source, version: 2 });
+  await waitFor(() => expect(releases).toHaveLength(1));
+  rerenderSource({ ...source, version: 3 });
+  await waitFor(() => expect(releases).toHaveLength(2));
+  await act(async () => { releases[0]({ ...summary, canDispatch: true }); releaseCsrf('late-csrf'); });
+  expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method)).toHaveLength(0);
+  expect(screen.getByLabelText('FAE 解析文字')).toBeDisabled();
+  await act(async () => releases[1](summary));
+  expect(screen.getByLabelText('FAE 解析文字')).toBeEnabled();
+  expect(screen.getByLabelText('FAE 解析文字')).toHaveValue('令牌等待草稿');
+});
+
+it('ignores a capability response after the session scope changes', async () => {
+  useWorkTabsStore.getState().bindSession('INTERNAL:selected:fae');
+  const onDenied = vi.fn(); const { rerenderSource } = mount(onDenied, source);
+  await screen.findByLabelText('FAE 解析文字');
+  const original = handler; let reject!: (cause: unknown) => void;
+  handler = (path, init) => path === `${base}/complaints/c1?organizationId=selected`
+    ? new Promise((_resolve, fail) => { reject = fail; }) : original(path, init);
+  rerenderSource({ ...source, version: 2 });
+  await waitFor(() => expect(reject).toBeDefined());
+  const signal = summaryReads().at(-1)![1]!.signal!;
+  // Keep the new session's initial load separate from the old session's late response.
+  vi.mocked(getSession).mockImplementationOnce(() => new Promise(() => {}));
+  await act(async () => { useWorkTabsStore.getState().bindSession('INTERNAL:other:other-user'); reject(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, 403)); });
+  expect(signal.aborted).toBe(true);
+  expect(onDenied).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText('FAE 解析文字')).not.toBeInTheDocument();
+});
 
 it('reads the selected organization, uses stable analysis resources, and does not invent a completion date', async () => {
   mount(); await screen.findByLabelText('FAE 解析文字');
@@ -326,10 +516,12 @@ it('applies parent close and reopen immediately without remounting or clearing e
   expect(screen.getByRole('button', { name: '查看 FAE 历史' })).toBeEnabled();
   rerenderSource({ ...source, version: 3 });
   expect(screen.getByLabelText('FAE 解析文字')).toBe(text);
-  expect(text).toBeEnabled(); expect(text).toHaveValue('FAE 保留草稿');
+  expect(text).toBeDisabled();
+  await waitFor(() => expect(text).toBeEnabled()); expect(text).toHaveValue('FAE 保留草稿');
   expect(screen.getByLabelText('供应商分析结果')).toHaveValue('SQE 保留草稿');
   expect(screen.getByRole('button', { name: '保存供应商分析' })).toBeEnabled();
-  expect(vi.mocked(apiRequest).mock.calls).toHaveLength(reads);
+  expect(vi.mocked(apiRequest).mock.calls).toHaveLength(reads + 2);
+  expect(summaryReads()).toHaveLength(3);
 });
 
 it('revokes the former source engineer dispatch on parent handoff and keeps readonly analysis content', async () => {
@@ -351,7 +543,8 @@ it('restores dispatch only for the current source engineer after parent reopen a
   rerenderSource({ ...source, version: 2, status: 'CLOSED', qualityEngineerId: 'new-qe', qualityEngineerAssignmentId: 'new-appointment' });
   expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
   rerenderSource({ ...source, version: 3, qualityEngineerId: 'new-qe', qualityEngineerAssignmentId: 'new-appointment' });
-  expect(screen.getByRole('button', { name: '指定 SQE' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: '指定 SQE' })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: '指定 SQE' })).toBeEnabled());
   expect(screen.getByLabelText('FAE 解析文字')).toBeDisabled();
 });
 
@@ -363,7 +556,8 @@ it('does not replace its newer fetched source with an older parent record', asyn
   expect(text).toBeDisabled();
   expect(screen.queryByRole('button', { name: '保存 FAE 解析' })).not.toBeInTheDocument();
   rerenderSource({ ...initialSource, version: 6 });
-  expect(text).toBeEnabled();
+  expect(text).toBeDisabled();
+  await waitFor(() => expect(text).toBeEnabled());
 });
 
 it.each([{ id: 'other-complaint' }, { organizationId: 'other-org' }])('ignores a parent source from another scope: %j', async mismatch => {
@@ -408,7 +602,8 @@ it('preserves a frozen unknown attempt and its sibling draft across parent close
   expect(screen.getByLabelText('FAE 解析文字')).toHaveValue('冻结原稿');
   expect(screen.getByLabelText('供应商分析结果')).toHaveValue('兄弟分区未保存');
   rerenderSource({ ...source, version: 3 });
-  expect(retry).toBeEnabled(); fireEvent.click(retry);
+  expect(retry).toBeDisabled();
+  await waitFor(() => expect(retry).toBeEnabled()); fireEvent.click(retry);
   await waitFor(() => expect(screen.getByLabelText('FAE 解析文字')).toBeEnabled());
   const calls = vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method);
   expect(calls).toHaveLength(2); expect(calls[1]).toEqual(calls[0]);

@@ -1,11 +1,12 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Input, Modal } from 'antd';
-import { useState } from 'react';
-import { ApiError } from '../../api/client';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, apiRequest } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerFields, rawText, type LedgerFields } from './customer-ledger-import';
-import { candidateLabel, LedgerConflicts, LedgerError, ledgerBase, ledgerChanges, ledgerConflicts, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
-import { useCustomerLedgerWrite } from './customer-ledger-write';
+import { candidateLabel, LedgerConflicts, LedgerError, ledgerBase, ledgerChanges, ledgerConflicts, scopedLedger, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
+import { ledgerDenied, useCustomerLedgerWrite } from './customer-ledger-write';
 
 const choices: Partial<Record<keyof LedgerFields, readonly (readonly [string, string])[]>> = {
   complaintType: [['ZERO_KM', '零公里'], ['AFTER_SALES', '售后']],
@@ -32,6 +33,35 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
   const [confirmed, setConfirmed] = useState(false);
   const writer = useCustomerLedgerWrite(onDenied);
   const [refreshing, setRefreshing] = useState(false);
+  const scope = useWorkTabsStore(state => state.sessionScope);
+  const rawCode = rawText(fields.componentCode).trim();
+  const componentCode = rawCode.length <= 100 ? rawCode : '';
+  const candidateStage = baseline?.stage ?? null;
+  const scopedCandidatesRequired = !!componentCode && (!baseline || componentCode !== rawText(baseline.raw.componentCode).trim());
+  const [candidateRetry, setCandidateRetry] = useState(0);
+  const [candidateRead, setCandidateRead] = useState<{ code: string; stage: typeof candidateStage; scope: typeof scope; organizationId?: string; status: 'loading' | 'ready' | 'error'; items: LedgerCandidate[]; error?: unknown }>();
+  const denied = useRef(onDenied); denied.current = onDenied;
+  useEffect(() => {
+    if (!scopedCandidatesRequired) return;
+    const controller = new AbortController();
+    const current = () => !controller.signal.aborted && useWorkTabsStore.getState().sessionScope === scope;
+    const context = { code: componentCode, stage: candidateStage, scope, organizationId };
+    setCandidateRead({ ...context, status: 'loading', items: [] });
+    const query = new URLSearchParams({ componentCode });
+    if (candidateStage) query.set('stage', candidateStage);
+    void apiRequest<components['schemas']['CustomerLedgerCandidatesDto']>(scopedLedger(`${ledgerBase}/candidates?${query}`, organizationId), { signal: controller.signal }).then(value => {
+      if (current()) setCandidateRead({ ...context, status: 'ready', items: value.items });
+    }).catch(cause => {
+      if (!current()) return;
+      setCandidateRead({ ...context, status: 'error', items: [], error: cause });
+      if (ledgerDenied(cause)) denied.current(cause);
+    });
+    return () => controller.abort();
+  }, [componentCode, candidateStage, scopedCandidatesRequired, organizationId, scope, candidateRetry]);
+  const currentCandidates = candidateRead?.code === componentCode && candidateRead.stage === candidateStage && candidateRead.scope === scope && candidateRead.organizationId === organizationId ? candidateRead : undefined;
+  const availableCandidates = scopedCandidatesRequired ? currentCandidates?.items ?? [] : candidateStage === 'NEW_PRODUCT' ? candidates.filter(candidate => candidate.projectQualified !== false) : candidates;
+  const candidatesPending = scopedCandidatesRequired && currentCandidates?.status !== 'ready';
+  const assignmentInvalid = !!assignment && !availableCandidates.some(candidate => candidate.assignmentId === assignment);
   const requestLeave = useNavigationGuard();
   useNavigationBusy(writer.busy || refreshing);
   useUnsavedChanges(dirty || writer.uncertain);
@@ -57,7 +87,7 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
     finally { if (!writer.signal().aborted) setRefreshing(false); }
   }
   async function save() {
-    if (writer.busy || refreshing || conflictPending || sourcePending || (record && version === undefined)) return;
+    if (writer.busy || refreshing || conflictPending || sourcePending || candidatesPending || assignmentInvalid || (record && version === undefined)) return;
     setError(undefined);
     const changed = record ? ledgerChanges(values(baseline), draftValues()) : draftValues();
     const editable: LedgerFields = Object.fromEntries(Object.entries(changed).filter(([key]) => ledgerFields.some(([field]) => field === key)));
@@ -77,8 +107,10 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
       }
     }
   }
-  return <Modal open title={title} width={820} onCancel={close} keyboard={!writer.busy} mask={{ closable: !writer.busy }} closable={!writer.busy} footer={<div className="qms-dialog-actions"><Button onClick={close} disabled={writer.busy || refreshing}>取消</Button><Button aria-label={record ? '保存台账' : '登记'} type="primary" loading={writer.busy} disabled={refreshing || conflictPending || sourcePending || !!record && version === undefined} onClick={() => void save()}>{writer.uncertain ? '核对并重试原请求' : record ? '保存台账' : '登记'}</Button></div>}>
+  return <Modal open title={title} width={820} onCancel={close} keyboard={!writer.busy} mask={{ closable: !writer.busy }} closable={!writer.busy} footer={<div className="qms-dialog-actions"><Button onClick={close} disabled={writer.busy || refreshing}>取消</Button><Button aria-label={record ? '保存台账' : '登记'} type="primary" loading={writer.busy} disabled={refreshing || conflictPending || sourcePending || candidatesPending || assignmentInvalid || !!record && version === undefined} onClick={() => void save()}>{writer.uncertain ? '核对并重试原请求' : record ? '保存台账' : '登记'}</Button></div>}>
     <LedgerError cause={error} />
+    {scopedCandidatesRequired && currentCandidates?.status === 'error' ? <><LedgerError cause={currentCandidates.error} /><Button onClick={() => setCandidateRetry(value => value + 1)}>重试组件候选人员</Button></> : candidatesPending ? <Alert type="info" showIcon title="正在读取组件候选人员，请稍候；原草稿保留。" /> : null}
+    {assignmentInvalid && !candidatesPending ? <Alert type="warning" showIcon title="草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。" /> : null}
     {conflict ? <Alert type="warning" showIcon title="已刷新服务器版本，草稿保留；请核对变更后再次保存。" /> : null}
     <LedgerConflicts conflicts={conflicts} confirmed={confirmed} onConfirm={setConfirmed} disabled={writer.busy || writer.uncertain || refreshing} />
     {record && version === undefined ? <Button onClick={() => void refreshVersion()} loading={refreshing}>重试读取最新版本</Button> : null}
@@ -98,7 +130,7 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
       })}
       {record && canInvestigate ? <label className="customer-ledger-form-wide"><span>调查情况</span><Input.TextArea aria-label="调查情况" rows={4} value={rawText(fields.investigation)} onChange={event => { setFields(current => ({ ...current, investigation: event.target.value })); setConfirmed(false); setDirty(true); }} /></label> : null}
       <label><span>实际跟进质量工程师</span><select aria-label="实际跟进质量工程师" value={assignment ?? '__KEEP__'} onChange={event => { setAssignment(event.target.value === '__KEEP__' ? undefined : event.target.value); setConfirmed(false); setDirty(true); }}>
-        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '由映射带出；无可用映射可待分配'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定；跟进中仍按映射带出，无可用人选则待分配' : '未指定，仍按映射带出；无可用人选则待分配'}</option>{candidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
+        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '由映射带出；无可用映射可待分配'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定；跟进中仍按映射带出，无可用人选则待分配' : '未指定，仍按映射带出；无可用人选则待分配'}</option>{assignmentInvalid ? <option value={assignment} disabled>草稿选择（不在当前候选，请重新选择）</option> : null}{availableCandidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
       </select></label>
     </fieldset>
   </Modal>;

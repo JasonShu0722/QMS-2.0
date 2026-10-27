@@ -20,6 +20,9 @@ const titles: Record<Section, string> = { FAE: 'FAE 解析', SUPPLIER: '供应�
 const keys = ['FAE', 'SUPPLIER'] as const;
 const slot = (section: Section) => section === 'FAE' ? 'fae' : 'supplier';
 const actionLabels: Record<CustomerAnalysisHistory['action'], string> = { ASSIGNED: '指定', TRANSFERRED: '转派', SAVED: '保存' };
+const sourceIdentity = (source?: Props['sourceRecord']) => source && JSON.stringify([source.id, source.organizationId, source.version,
+  source.status, source.legacyStatus, source.archived === true, source.qualityEngineerId,
+  source.qualityEngineerAssignmentId, source.stage, source.warnings]);
 
 export function CustomerAnalysisPanel(props: Props) {
   const sessionScope = useWorkTabsStore(state => state.sessionScope);
@@ -49,10 +52,14 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   const [assignment, setAssignment] = useState<Assignment>();
   const [history, setHistory] = useState<{ section: Section; rows?: CustomerAnalysisHistory[] }>();
   const [dialogError, setDialogError] = useState<unknown>();
+  const [capabilitySource, setCapabilitySource] = useState<string>();
+  const [capabilityLoading, setCapabilityLoading] = useState(false);
+  const [capabilityError, setCapabilityError] = useState<unknown>();
   const lifetime = useRef<AbortController>(undefined);
   const alive = useRef(false);
   const denied = useRef(false);
   const readGeneration = useRef(0);
+  const capabilityGeneration = useRef(0);
   const dialogGeneration = useRef(0);
   const mutationLock = useRef(false);
   const writer = useRef<ReturnType<typeof createCustomerAnalysisWrite>>(undefined);
@@ -62,7 +69,11 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   const readyFiles = useRef<Record<Section, Map<string, Attachment>>>({ FAE: new Map(), SUPPLIER: new Map() });
   const deniedCallback = useRef(onDenied); deniedCallback.current = onDenied;
   const parentSource = useRef(sourceRecord); parentSource.current = sourceRecord;
-  const canWrite = source?.status === 'FOLLOWING' && actor?.accountType === 'INTERNAL' && actor.organizationId === source.organizationId && permissions.includes('customer-quality:complaints:write');
+  const identity = sourceIdentity(source);
+  const latestIdentity = useRef(identity); latestIdentity.current = identity;
+  const capabilitiesCurrent = !!identity && capabilitySource === identity;
+  const canWrite = capabilitiesCurrent && source?.status === 'FOLLOWING' && source.legacyStatus !== 'ARCHIVED'
+    && !source.archived && actor?.accountType === 'INTERNAL' && actor.organizationId === source.organizationId && permissions.includes('customer-quality:complaints:write');
   const canAssign = canWrite && source?.qualityEngineerId === actor?.userId && !!source?.qualityEngineerAssignmentId
     && !source.warnings?.some(warning => warning.code === 'ENGINEER_NO_LONGER_ELIGIBLE') && (summary?.canDispatch ?? (source.stage !== 'NEW_PRODUCT' || permissions.includes('new-product-quality:projects:write')));
   const canRecover = !!canAssign && !!summary?.fae && summary.canRecoverAssignment === true && permissions.includes('customer-quality:complaints:reassign');
@@ -83,17 +94,18 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   useNavigationBusy(busy || uploading);
 
   useLayoutEffect(() => {
-    if (!sourceRecord || sourceRecord.id !== complaintId || (organizationId && sourceRecord.organizationId !== organizationId)) return;
+    if (denied.current || !sourceRecord || sourceRecord.id !== complaintId || (organizationId && sourceRecord.organizationId !== organizationId)) return;
     // Sync confirmed source facts before paint without resetting either analysis draft.
     setSource(previous => !previous || (previous.organizationId === sourceRecord.organizationId && sourceRecord.version >= previous.version) ? sourceRecord : previous);
   }, [sourceRecord, complaintId, organizationId]);
 
   function revoke(cause: ApiError) {
     if (!current()) return;
-    denied.current = true; lifetime.current?.abort(); readGeneration.current++; dialogGeneration.current++;
+    denied.current = true; lifetime.current?.abort(); readGeneration.current++; capabilityGeneration.current++; dialogGeneration.current++;
     writer.current = undefined; operation.current = undefined; readyFiles.current = { FAE: new Map(), SUPPLIER: new Map() };
     setSummary(undefined); setSource(undefined); setActor(undefined); setPermissions([]); setFaeDraft(undefined); setSupplierDraft(undefined);
     setAssignment(undefined); setHistory(undefined); setDialogError(undefined); setDirty({ FAE: false, SUPPLIER: false });
+    setCapabilitySource(undefined); setCapabilityLoading(false); setCapabilityError(undefined);
     setPending({ FAE: false, SUPPLIER: false }); setUploadIntent({ FAE: false, SUPPLIER: false }); setBusy(false); setUncertain(false); setLoading(false); setLost(true); setError(cause);
     deniedCallback.current?.(cause);
   }
@@ -109,6 +121,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   }
   async function load() {
     const generation = ++readGeneration.current;
+    capabilityGeneration.current++; setCapabilitySource(undefined); setCapabilityLoading(false); setCapabilityError(undefined);
     const sourceAtStart = parentSource.current;
     setLoading(true); setError(undefined);
     try {
@@ -126,6 +139,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
       if (next.complaintId !== complaintId || detail.id !== complaintId || detail.organizationId !== access.organizationId || (organizationId && access.organizationId !== organizationId)
         || keys.some(section => { const record = next[slot(section)]; return record && (record.section !== section || record.complaintId !== complaintId || record.organizationId !== detail.organizationId); })) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
       setActor(session); setPermissions(access.permissions); setSummary(next);
+      setCapabilitySource(sourceIdentity(detail));
       setSource(previous => previous?.organizationId === detail.organizationId
         && (previous.version > detail.version || (previous.version === detail.version && parentSource.current !== sourceAtStart)) ? previous : detail);
       setFaeDraft(next.fae ? customerFaeDraft(next.fae) : undefined); setSupplierDraft(next.supplier ? customerSupplierDraft(next.supplier) : undefined);
@@ -140,6 +154,28 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     void load();
     return () => { alive.current = false; lifetime.current?.abort(); unsubscribe(); };
   }, []);
+
+  async function refreshCapabilities() {
+    if (!current() || !identity || !source) return;
+    const generation = ++capabilityGeneration.current;
+    const read = readGeneration.current;
+    const active = () => current() && generation === capabilityGeneration.current && read === readGeneration.current && latestIdentity.current === identity;
+    setCapabilitySource(undefined); setCapabilityLoading(true); setCapabilityError(undefined);
+    try {
+      const next = await apiRequest<CustomerAnalysisSummary>(scoped(`${base}/complaints/${encodeURIComponent(complaintId)}`), { signal: lifetime.current!.signal });
+      if (!active()) return;
+      if (next.complaintId !== complaintId || keys.some(section => { const record = next[slot(section)]; return record && (record.section !== section || record.complaintId !== complaintId || record.organizationId !== source.organizationId); })) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+      // Capability refresh must never install returned records or reset sibling drafts/attachments.
+      setSummary(previous => previous ? { ...previous, canDispatch: next.canDispatch, canRecoverAssignment: next.canRecoverAssignment } : previous);
+      setCapabilitySource(identity);
+    } catch (cause) {
+      if (customerAnalysisDenied(cause)) failure(cause);
+      else if (active()) setCapabilityError(cause);
+    } finally { if (active()) setCapabilityLoading(false); }
+  }
+  useEffect(() => {
+    if (!loading && summary && !capabilitiesCurrent) void refreshCapabilities();
+  }, [identity, loading]);
 
   const pendingFae = useCallback((value: boolean) => { if (current()) { pendingRef.current = { ...pendingRef.current, FAE: value }; setPending(pendingRef.current); } }, []);
   const pendingSupplier = useCallback((value: boolean) => { if (current()) { pendingRef.current = { ...pendingRef.current, SUPPLIER: value }; setPending(pendingRef.current); } }, []);
@@ -232,6 +268,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     <header className="customer-analysis__heading"><div><Typography.Title level={4}>{t('解析协作')}</Typography.Title><Typography.Text type="secondary">{t('FAE 与 SQE 独立维护，不增加审批或发单关卡。')}</Typography.Text></div>
       {!lost && <Button disabled={locked} onClick={() => guard(() => { setAssignment(undefined); setHistory(undefined); dialogGeneration.current++; void load(); })}>{t('刷新解析')}</Button>}</header>
     {error ? <Alert showIcon type={lost ? 'warning' : 'error'} title={t(errorMessage(error))} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
+    {!lost && capabilityError ? <Alert showIcon type="error" title={t(errorMessage(capabilityError))} action={<Button disabled={capabilityLoading} onClick={() => void refreshCapabilities()}>{t('重试同步解析权限')}</Button>} /> : null}
     {uncertain && <Alert showIcon type="warning" title={t('操作结果尚未确认，当前输入已锁定。重试只发送原请求。')} action={<Button disabled={busy || uploading || !canRetry} onClick={() => void mutate()}>{t('重试确认解析结果')}</Button>} />}
     {loading ? <Spin aria-label={t('正在加载解析')} /> : !lost && !summary ? <Button onClick={() => void load()}>{t('重试加载解析')}</Button> : null}
     {!lost && summary && <div className="customer-analysis__sections">{keys.map(section => {

@@ -144,9 +144,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-25",
+        "reviewedOn": "2026-10-27",
         "maxAgeDays": 90,
-        "reason": "定向复核REQ0030显式平台marker、真实授权来源与运行时投影分离、受控资源scope及有界表单筛选接缝；沿现有架构最小扩展，生产权限/角色职责不随代码部署自动变更。 2026-10-27定向复核N4失效任职交接生成契约与同事务守卫，ADR-002/004/005不变。 2026-10-27 fix5失效FAE恢复与已接受责任阶段接缝复核，真实/CI/人工证据分层，未发布。",
+        "reason": "定向复核REQ0030显式平台marker、真实授权来源与运行时投影分离、受控资源scope及有界表单筛选接缝；沿现有架构最小扩展，生产权限/角色职责不随代码部署自动变更。 2026-10-27定向复核N4失效任职交接生成契约与同事务守卫，ADR-002/004/005不变。 2026-10-27 fix5失效FAE恢复与已接受责任阶段接缝复核，真实/CI/人工证据分层，未发布。 2026-10-27集中批次复核：集中收口公开只读归档与候选资格、统一准备/回滚及完整资格恢复；ADR薄公共索引、Swagger单一契约和事实审计同事务边界不变。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md",
@@ -158,7 +158,7 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "0db92434e8626021537b2cf4690adcde8efba8a69dad9a63d870ab85f4290232"
+            "sha256": "11b16d663c9ff383876668029e2e2efdfb3121f21342b14f70de035d1f05a843"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -234,9 +234,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reviewedOn": "2026-10-25",
+        "reviewedOn": "2026-10-27",
         "maxAgeDays": 30,
-        "reason": "复核能力总账N3已部署及恢复正常授权后的单次发布事实；机器人仍仅只读分析，不扩大为代码、可见性、生产配置执行者。 2026-10-26复核REQ0030本地开发状态，机器人只读职责和生产独立授权边界不变。 2026-10-27回查能力总账PR75返修和夜间授权取消；机器人只读职责不扩大。",
+        "reason": "复核能力总账N3已部署及恢复正常授权后的单次发布事实；机器人仍仅只读分析，不扩大为代码、可见性、生产配置执行者。 2026-10-26复核REQ0030本地开发状态，机器人只读职责和生产独立授权边界不变。 2026-10-27回查能力总账PR75返修和夜间授权取消；机器人只读职责不扩大。 2026-10-27集中批次复核：集中批次仍未部署/业务验收，负责人要求一次收齐再统一推送；机器人只读边界和外部授权不扩大。",
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "595d8c572e186afa6f1ccc77ad2120e9a96c0a058bb465c483bad2f70622f117"
+            "sha256": "b9b66c97d401b43e5b578803e187eda2587a48a2aca7461ed9ef1e051be18658"
           },
           {
             "path": "README.md",
@@ -390,9 +390,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（基础交互体系设计评审）",
-        "reviewedOn": "2026-10-25",
+        "reviewedOn": "2026-10-27",
         "maxAgeDays": 90,
-        "reason": "复核D管理定位与删除依赖界面及其测试；Dewey规格和Sartre质量独立通过，targeting48/workspace32及父剩余两文件30分别通过，保原业务断言和timeout/motion。真实几何与业务验收另列。 N4本地FAE待办新增按页签读取、会话隔离与来源组织跳转，父3完整文件12项通过，独立审查仍待，不称发布/人工验收。 N4正式台账/解析及原始清单附件已逐轴规格后质量复审，真实fixture两完整浏览器用例、最终160文件组合覆盖成立；默认主题1440/375几何及截图与生产/人工边界分开。 2026-10-27交接入口及未知/冲突/失权/附件实时保护经Banach规格和Averroes质量窄审，4完整文件97项组合覆盖，不替代业务验收。 2026-10-27 fix3闭后禁清工程师及待办可见性时序窄修经Mencius规格/Maxwell质量通过，父完整45及23项，不替代人工验收。 fix5按server当前调用者能力呈现恢复入口，Hubble规格/Pascal质量，父3完整文件54项，未作新增动作浏览器或人工验收。",
+        "reason": "复核D管理定位与删除依赖界面及其测试；Dewey规格和Sartre质量独立通过，targeting48/workspace32及父剩余两文件30分别通过，保原业务断言和timeout/motion。真实几何与业务验收另列。 N4本地FAE待办新增按页签读取、会话隔离与来源组织跳转，父3完整文件12项通过，独立审查仍待，不称发布/人工验收。 N4正式台账/解析及原始清单附件已逐轴规格后质量复审，真实fixture两完整浏览器用例、最终160文件组合覆盖成立；默认主题1440/375几何及截图与生产/人工边界分开。 2026-10-27交接入口及未知/冲突/失权/附件实时保护经Banach规格和Averroes质量窄审，4完整文件97项组合覆盖，不替代业务验收。 2026-10-27 fix3闭后禁清工程师及待办可见性时序窄修经Mencius规格/Maxwell质量通过，父完整45及23项，不替代人工验收。 fix5按server当前调用者能力呈现恢复入口，Hubble规格/Pascal质量，父3完整文件54项，未作新增动作浏览器或人工验收。 2026-10-27集中批次复核：集中Web由Hume规格/Boyle质量最终通过，生命周期/归档/能力同步/候选与身份分离，199项完整文件组合及失败保留，不替代真实角色验收。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md",
@@ -644,7 +644,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-analysis-panel.tsx",
-            "sha256": "8276858de6f57ee191f0ec5eab12c4a33958bf99a8caa12512b8e173ccda6971"
+            "sha256": "b797be97b727810514b5ca31fe46dfc03062cff84ed285ac14047dec74456b13"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-source-attachments.tsx",
@@ -652,19 +652,19 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-handoff.tsx",
-            "sha256": "8f6a5cf2baf9651b0b78014c0cc82ad37a880934ec5c8033b5058ff4c81da92b"
+            "sha256": "8bf20e44999b893e8c5f0464191e55a6605134ad350d8dffe5000db346b02a7f"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-detail.tsx",
-            "sha256": "82f40d2c7294a66b570bae90716f10732cdbb13fb780a9fdc1e8efceb36d8dd9"
+            "sha256": "b95ff312c8ef13afb2b3cf8d5a624afe9c68744fea03ae672de96de35be858a2"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-write.ts",
-            "sha256": "0e132f301f5d1c8b1806e2b152883e779b305ccf5a64afb0f15c2746225ca08f"
+            "sha256": "c1a4f3be5c191b550c994c7b38cea3ba55644a54750ec315216821ea64dafba1"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-editor.tsx",
-            "sha256": "2739c60c606fdfeae535c1419cc9610c9efc7738b57d651e1fe229479dd830c9"
+            "sha256": "1d622a1bb21efe6bbce7b43dbd8c8adb634dcb558822600a3b46a7e9fc5047c9"
           }
         ]
       }
@@ -694,9 +694,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（跨板块问题管理研讨准备）",
-        "reviewedOn": "2026-10-25",
+        "reviewedOn": "2026-10-27",
         "maxAgeDays": 90,
-        "reason": "REQ0030已获P0/开发中及当前会话明确开工授权；治理、删除/审计、制程入口及资源/配置scope修复的分层证据保留，最后近期认证窄复核及父最终验证接续，不把旧PASS替代最终树或提前关闭整包需求。；REQ-0030 fix2发布事实复核：负责人手工原始片段与代理CI/审查/公网证据分层，Actions失败保留，人工业务验收未关闭。；N4接续依据原路线/确认规格和实际源码差距，当前明确N4→N5夜间开发发布授权，生产配置/验收不代办。 2026-10-27复核PR75 fix2交接/日期回归与正常授权恢复，保留全部初失败与后续未交付范围。 PR75新发现闭后清空人员封口及实际CI失败修复，未合并部署。 fix4仅修随机traceId42测试误报，独立规格/质量与目标实测分层，不改变生产错误契约。 2026-10-27 fix5失效FAE恢复与已接受责任阶段接缝复核，真实/CI/人工证据分层，未发布。 fix6共同资格统一read+write，Anscombe规格/Hegel质量及父真实3文件32项通过，不自动配权。",
+        "reason": "REQ0030已获P0/开发中及当前会话明确开工授权；治理、删除/审计、制程入口及资源/配置scope修复的分层证据保留，最后近期认证窄复核及父最终验证接续，不把旧PASS替代最终树或提前关闭整包需求。；REQ-0030 fix2发布事实复核：负责人手工原始片段与代理CI/审查/公网证据分层，Actions失败保留，人工业务验收未关闭。；N4接续依据原路线/确认规格和实际源码差距，当前明确N4→N5夜间开发发布授权，生产配置/验收不代办。 2026-10-27复核PR75 fix2交接/日期回归与正常授权恢复，保留全部初失败与后续未交付范围。 PR75新发现闭后清空人员封口及实际CI失败修复，未合并部署。 fix4仅修随机traceId42测试误报，独立规格/质量与目标实测分层，不改变生产错误契约。 2026-10-27 fix5失效FAE恢复与已接受责任阶段接缝复核，真实/CI/人工证据分层，未发布。 fix6共同资格统一read+write，Anscombe规格/Hegel质量及父真实3文件32项通过，不自动配权。 2026-10-27集中批次复核：集中8组问题先收齐再批量修复，API/Worker/真实PG/Web分层与组合证据准确；只接原PR，不自动合并部署。",
         "sources": [
           {
             "path": "../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md",
@@ -740,7 +740,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md",
-            "sha256": "6fb1d156dfe2c93a21cdcc43b576cf5e20d4761ca698dc65b5659071651f152a"
+            "sha256": "4f8e980373fe6cf90f6f408232d3b0eee83c978d491a0de9d1f5f8db092315e0"
           }
         ]
       }

@@ -85,6 +85,38 @@ it('requires an actual assignment and bounded nonblank reason, sending only hand
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
+it.each(['archived', 'legacy'] as const)('excludes archived %s records even with closed-edit and stale engineer permissions', mode => {
+  const props = defaults();
+  show({ ...props, permissions: [...permissions, 'customer-quality:complaints:closed-edit'], record: Object.assign({ ...record, status: 'CLOSED' as const }, mode === 'archived' ? { archived: true } : { legacyStatus: 'ARCHIVED' }) });
+  expect(screen.queryByRole('button', { name: '交接失效跟进人' })).not.toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalled();
+});
+
+it('blocks handoff when conflict reload discovers an archived source', async () => {
+  const props = { ...defaults(), permissions: [...permissions, 'customer-quality:complaints:closed-edit'], refreshDetail: vi.fn().mockResolvedValue(Object.assign({ ...record, status: 'CLOSED', version: 9 }, { archived: true })) };
+  show(props); const dialog = await open(); fill(dialog);
+  vi.mocked(apiRequest).mockRejectedValueOnce(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409));
+  fireEvent.click(dialog.getByRole('button', { name: '确认交接' }));
+  fireEvent.click(await dialog.findByRole('button', { name: '读取最新记录' }));
+  fireEvent.click(await dialog.findByLabelText('确认基于最新记录继续交接'));
+  expect(dialog.getByRole('button', { name: '确认交接' })).toBeDisabled();
+  fireEvent.click(dialog.getByRole('button', { name: '确认交接' }));
+  expect(apiRequest).toHaveBeenCalledTimes(1);
+});
+
+it('aborts an open handoff when its source becomes archived during CSRF preparation', async () => {
+  let resolve!: (token: string) => void;
+  const props = defaults(); const view = show(props); const dialog = await open(); fill(dialog);
+  vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fireEvent.click(dialog.getByRole('button', { name: '确认交接' }));
+  await waitFor(() => expect(csrfToken).toHaveBeenCalledTimes(1));
+  view.update({ ...props, record: Object.assign({ ...record, version: 8 }, { archived: true }) });
+  await act(async () => { resolve('late'); });
+  expect(apiRequest).not.toHaveBeenCalled();
+  expect(props.onSaved).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
 it('freezes an unknown request through a CSRF failure and retries the same private body and key', async () => {
   show(); const dialog = await open(); fill(dialog);
   vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('lost response'));

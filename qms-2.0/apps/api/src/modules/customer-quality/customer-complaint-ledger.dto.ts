@@ -129,6 +129,7 @@ export class CustomerLedgerItemDto {
   @ApiProperty() version!: number;
   @ApiProperty({ enum: ['FOLLOWING', 'CLOSED'] }) status!: LedgerStatus;
   @ApiProperty() legacyStatus!: string;
+  @ApiPropertyOptional({ type: Boolean }) archived?: boolean;
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) customerId!: string | null;
   @ApiProperty({ type: CustomerLedgerNormalizedDto }) normalized!: ComplaintNormalized;
   @ApiProperty({ type: CustomerLedgerFieldsDto }) raw!: ComplaintFields;
@@ -173,6 +174,7 @@ export class CustomerLedgerImportResultDto {
   @ApiProperty() pendingCorrection!: number;
 }
 export class CustomerLedgerCandidateDto {
+  @ApiPropertyOptional({ type: Boolean }) projectQualified?: boolean;
   @ApiProperty({ format: 'uuid' }) assignmentId!: string;
   @ApiProperty({ format: 'uuid' }) userId!: string;
   @ApiProperty({ type: String, nullable: true }) username!: string | null;

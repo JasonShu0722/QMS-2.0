@@ -251,7 +251,12 @@ describe('PR75 explicitly authorized stale-engineer handoff on real PostgreSQL',
     const newCandidates = await ledger.candidates(operator, Object.assign(new CustomerLedgerListDto(), { stage: 'NEW_PRODUCT' }));
     expect(massCandidates.items.map(p => p.assignmentId)).toContain(cqe.assignmentId);
     expect(newCandidates.items.map(p => p.assignmentId)).not.toContain(cqe.assignmentId);
+    expect(massCandidates.items.find(p => p.assignmentId === cqe.assignmentId)).toMatchObject({ projectQualified: false });
+    expect(newCandidates.items.find(p => p.assignmentId === newQe.assignmentId)).toMatchObject({ projectQualified: true });
     await components.updateProject(configurer, organizationId, project.id, { expectedVersion: project.version + 1, stage: 'NEW_PRODUCT' }, randomUUID(), randomUUID());
+    const componentCandidates = await ledger.candidates(operator, Object.assign(new CustomerLedgerListDto(), { componentCode: project.code }));
+    expect(componentCandidates.items.map(p => p.assignmentId)).not.toContain(cqe.assignmentId);
+    expect(componentCandidates.items.map(p => p.assignmentId)).toContain(newQe.assignmentId);
     await post(operator, row.id, input(row.version)).expect(409);
     const handed = await post(operator, row.id, input(row.version, newQe.assignmentId)).expect(201);
     expect(handed.body).toMatchObject({ qualityEngineerId: newQe.id, stage: 'NEW_PRODUCT' });

@@ -204,6 +204,23 @@ it('clears the formal ledger parent when a mounted analysis slot reports a curre
 });
 
 const assignedCandidates = [{ assignmentId: 'assignment', userId: 'user', fullName: '实际工程师', username: 'qe', positionName: '项目质量', departmentName: '质量' }];
+it('keeps accepted CQE editing while offering only qualified NEW assignment options', async () => {
+  const candidates = [{ ...assignedCandidates[0], projectQualified: false }, { ...assignedCandidates[0], assignmentId: 'project-assignment', userId: 'project-user', fullName: '项目工程师', projectQualified: true }];
+  showContent(<CustomerLedgerDetail record={item} candidates={candidates} userId="user" permissions={permissions} onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={async () => item} />);
+  fireEvent.click(screen.getByLabelText('编辑台账'));
+  await waitFor(() => expect(screen.getByLabelText('实际跟进质量工程师')).toBeVisible());
+  const choices = within(screen.getByLabelText('实际跟进质量工程师'));
+  expect(choices.queryByRole('option', { name: /实际工程师/ })).not.toBeInTheDocument();
+  expect(choices.getByRole('option', { name: /项目工程师/ })).toBeEnabled();
+  expect(choices.getByRole('option', { name: '保留当前实际跟进人' })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('调查情况'), { target: { value: '保留已接受责任的更新' } });
+  fireEvent.click(screen.getByLabelText('保存台账'));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  const body = JSON.parse(String(writes()[0][1]?.body));
+  expect(body.fields.investigation).toBe('保留已接受责任的更新');
+  expect(body).not.toHaveProperty('qualityEngineerAssignmentId');
+});
+
 it.each(['FOLLOWING', 'CLOSED'] as const)('only permits clearing an engineer while %s is following', async status => {
   const record = { ...item, status };
   showContent(<CustomerLedgerEditor record={record} candidates={assignedCandidates} onDenied={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} refreshDetail={async () => record} />);
@@ -222,6 +239,126 @@ it.each(['FOLLOWING', 'CLOSED'] as const)('only permits clearing an engineer whi
 function detailContent(record = item) {
   return <CustomerLedgerDetail record={record} candidates={assignedCandidates} userId="user" permissions={permissions} onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={async () => record} />;
 }
+it.each(['close', 'receiving'] as const)('discards only the confirmed local unknown %s attempt before starting the other action', async first => {
+  const fallback = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init, options) => init?.method && writes().length === 1 ? Promise.reject(new TypeError('lost response')) : fallback(path, init, options));
+  showContent(detailContent());
+  fireEvent.click(screen.getByLabelText(first === 'close' ? '关闭台账' : '维护收件'));
+  const label = first === 'close' ? '调查结论 / 关闭结果' : '快递单号';
+  fireEvent.change(screen.getByLabelText(label), { target: { value: '原动作原文' } });
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await screen.findByText(/保存结果未知/);
+  await waitFor(() => expect(screen.getByText(/不会撤销服务端/)).toBeVisible());
+  const original = writes()[0]!;
+  fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
+  fireEvent.click(await screen.findByText('继续编辑', { selector: 'button span' }));
+  expect(screen.getByLabelText(label)).toHaveValue('原动作原文');
+  expect(screen.getByLabelText(label)).toBeDisabled();
+  expect(writes()).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
+  fireEvent.click(await screen.findByText('放弃修改并关闭', { selector: 'button span' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(writes()).toHaveLength(1);
+  fireEvent.click(screen.getByLabelText(first === 'close' ? '维护收件' : '关闭台账'));
+  const nextLabel = first === 'close' ? '快递单号' : '调查结论 / 关闭结果';
+  expect(screen.getByLabelText(nextLabel)).toBeEnabled();
+  fireEvent.change(screen.getByLabelText(nextLabel), { target: { value: '新动作原文' } });
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await waitFor(() => expect(writes()).toHaveLength(2));
+  const next = writes()[1]!;
+  expect(next[0]).toBe(`${base}/${id}/${first === 'close' ? 'receiving' : 'close'}`);
+  expect(JSON.parse(String(next[1]?.body))).toEqual({ expectedVersion: 1, ...(first === 'close' ? { courierNumber: '新动作原文' } : { note: '新动作原文' }) });
+  expect(next[1]?.headers).not.toEqual(original[1]?.headers);
+});
+
+it.each(['close', 'receiving'] as const)('keeps the exact unknown %s attempt when retrying without confirmed discard', async action => {
+  const fallback = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init, options) => init?.method && writes().length === 1 ? Promise.reject(new TypeError('lost response')) : fallback(path, init, options));
+  showContent(detailContent());
+  fireEvent.click(screen.getByLabelText(action === 'close' ? '关闭台账' : '维护收件'));
+  fireEvent.change(screen.getByLabelText(action === 'close' ? '调查结论 / 关闭结果' : '快递单号'), { target: { value: '同一原文' } });
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await screen.findByText(/保存结果未知/);
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await waitFor(() => expect(writes()).toHaveLength(2));
+  expect(writes()[1]).toEqual(writes()[0]);
+});
+
+it.each(['archived', 'legacy'] as const)('retains archived %s read/history but excludes edit, receiving, reopening and source upload', async mode => {
+  const record = Object.assign({ ...item, status: 'CLOSED' as const }, mode === 'archived' ? { archived: true } : { legacyStatus: 'ARCHIVED' });
+  showContent(detailContent(record));
+  await waitFor(() => expect(screen.queryByLabelText('正在读取来源附件')).not.toBeInTheDocument());
+  expect(screen.getByRole('region', { name: '客诉详情' })).toBeVisible();
+  expect(screen.getByText('台账历史（0）')).toBeInTheDocument();
+  expect(screen.getByText('登记事实与原填写（含待补正值）')).toBeInTheDocument();
+  for (const name of ['编辑台账', '维护收件', '恢复跟进', '关闭台账']) expect(screen.queryByLabelText(name)).not.toBeInTheDocument();
+  expect(within(screen.getByRole('region', { name: '客诉来源附件' })).queryByLabelText('选择附件')).not.toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
+});
+
+it.each(['edit', 'close', 'receiving'] as const)('blocks an open %s dispatch if the source becomes archived while CSRF is pending', async action => {
+  let resolve!: (token: string) => void;
+  const view = showContent(detailContent());
+  fireEvent.click(screen.getByLabelText(action === 'edit' ? '编辑台账' : action === 'close' ? '关闭台账' : '维护收件'));
+  fireEvent.change(screen.getByLabelText(action === 'edit' ? '详细故障描述' : action === 'close' ? '调查结论 / 关闭结果' : '快递单号'), { target: { value: '归档前的本地输入' } });
+  vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fireEvent.click(screen.getByLabelText(action === 'edit' ? '保存台账' : '保存台账动作'));
+  await waitFor(() => expect(csrfToken).toHaveBeenCalledTimes(1));
+  view.rerender(testContent(detailContent(Object.assign({ ...item, version: 2 }, { archived: true }))));
+  await act(async () => { resolve('late'); });
+  expect(writes()).toHaveLength(0);
+});
+
+it('blocks an already open editor as soon as its source becomes archived', async () => {
+  const view = showContent(detailContent());
+  fireEvent.click(screen.getByLabelText('编辑台账'));
+  fireEvent.change(screen.getByLabelText('详细故障描述'), { target: { value: '本地草稿' } });
+  view.rerender(testContent(detailContent(Object.assign({ ...item, version: 2 }, { archived: true }))));
+  expect(screen.queryByRole('dialog', { name: '编辑台账' })).not.toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
+});
+
+it('keeps ordinary CLOSED records editable with closed-edit and leaves reopening available', async () => {
+  showContent(detailContent(Object.assign({ ...item, status: 'CLOSED' as const }, { archived: false })));
+  expect(screen.getByLabelText('恢复跟进')).toBeEnabled();
+  expect(screen.getByLabelText('维护收件')).toBeEnabled();
+  fireEvent.click(screen.getByLabelText('编辑台账'));
+  fireEvent.change(screen.getByLabelText('详细故障描述'), { target: { value: '关闭后补充的事实' } });
+  fireEvent.click(screen.getByLabelText('保存台账'));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  expect(JSON.parse(String(writes()[0]?.[1]?.body))).toEqual({ expectedVersion: 1, fields: { defectDescription: '关闭后补充的事实' } });
+});
+
+it('uses CAS after a local unknown discard instead of undoing or replaying the original server action', async () => {
+  const fallback = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init, options) => {
+    if (init?.method && writes().length === 1) throw new TypeError('lost close response');
+    if (init?.method && writes().length === 2) throw new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409);
+    return fallback(path, init, options);
+  });
+  const latest = { ...item, status: 'CLOSED' as const, version: 2 };
+  const refresh = vi.fn().mockResolvedValue(latest);
+  showContent(<CustomerLedgerDetail record={item} candidates={assignedCandidates} userId="user" permissions={permissions} onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={refresh} />);
+  fireEvent.click(screen.getByLabelText('关闭台账'));
+  fireEvent.change(screen.getByLabelText('调查结论 / 关闭结果'), { target: { value: '服务端可能已经关闭' } });
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await screen.findByText(/保存结果未知/);
+  fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
+  fireEvent.click(await screen.findByText('放弃修改并关闭', { selector: 'button span' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByLabelText('维护收件'));
+  fireEvent.change(screen.getByLabelText('快递单号'), { target: { value: '新收件原文' } });
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await screen.findByText(/已刷新服务器版本，草稿保留/);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText('快递单号')).toHaveValue('新收件原文');
+  fireEvent.click(screen.getByLabelText('保存台账动作'));
+  await waitFor(() => expect(writes()).toHaveLength(3));
+  expect(writes().map(([path]) => path)).toEqual([`${base}/${id}/close`, `${base}/${id}/receiving`, `${base}/${id}/receiving`]);
+  expect(JSON.parse(String(writes()[1]?.[1]?.body))).toEqual({ expectedVersion: 1, courierNumber: '新收件原文' });
+  expect(JSON.parse(String(writes()[2]?.[1]?.body))).toEqual({ expectedVersion: 2, courierNumber: '新收件原文' });
+});
+
 it('maintains only courier and received date, with no fabricated received quantity or date', async () => {
   showContent(detailContent());
   fireEvent.click(screen.getByLabelText('维护收件'));
