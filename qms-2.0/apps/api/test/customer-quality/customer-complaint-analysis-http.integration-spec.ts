@@ -100,4 +100,23 @@ describe('registered analysis HTTP controllers, guards and file adapter on real 
     expect((await get(reader, `/complaints/${id}`).expect(200)).body.fae.text).toBe('retain on transfer');
     expect(await prisma.workflowTask.count({ where: { organizationId } })).toBe(0);
   });
+
+  it('validates explicit stale recovery through the real candidates and assignment HTTP routes', async () => {
+    const recoveringQe = await person([read, write, 'customer-quality:complaints:reassign']);
+    const old = await person([read, write, 'customer-quality:analyses:fae']);
+    const id = await complaint();
+    await prisma.customerQualityComplaint.update({ where: { id }, data: { qualityEngineerId: recoveringQe.userId, qualityEngineerAssignmentId: recoveringQe.assignmentId } });
+    const assigned = await post(recoveringQe, `/complaints/${id}/assign/FAE`, target(old)).expect(201);
+    await put(old, `/${assigned.body.id}/fae`, { expectedVersion: 1, text: '保留原解析' }).expect(200);
+    await post(recoveringQe, `/complaints/${id}/assign/FAE`, { ...target(nextFae, 2), recoverStale: true }).expect(409);
+    await prisma.userPosition.update({ where: { id: old.assignmentId }, data: { endedAt: new Date() } });
+    await get(recoveringQe, `/complaints/${id}/candidates/FAE?recoverStale=invalid`).expect(400);
+    const candidates = await get(recoveringQe, `/complaints/${id}/candidates/FAE?recoverStale=true`).expect(200);
+    expect(candidates.body).toEqual(expect.arrayContaining([expect.objectContaining({ assignmentId: nextFae.assignmentId })]));
+    const key = randomUUID(), input = { ...target(nextFae, 2), recoverStale: true };
+    const recovered = await post(recoveringQe, `/complaints/${id}/assign/FAE`, input, key).expect(201);
+    expect(recovered.body).toMatchObject({ id: assigned.body.id, version: 3, text: '保留原解析', assigneeUserId: nextFae.userId });
+    expect((await post(recoveringQe, `/complaints/${id}/assign/FAE`, input, key).expect(201)).body).toEqual(recovered.body);
+    expect((await get(recoveringQe, `/complaints/${id}`).expect(200)).body).toMatchObject({ canDispatch: true, canRecoverAssignment: false });
+  });
 });

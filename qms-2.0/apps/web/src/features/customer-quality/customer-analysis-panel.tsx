@@ -14,7 +14,7 @@ import { createCustomerAnalysisWrite, customerAnalysisBase as base, customerAnal
 import './customer-analysis.css';
 
 type Props = { complaintId: string; onDenied?: (cause: ApiError) => void; organizationId?: string; sourceRecord?: components['schemas']['CustomerLedgerDetailDto'] };
-type Assignment = { section: Section; transfer: boolean; candidates?: CustomerAnalysisCandidate[]; selected?: string };
+type Assignment = { section: Section; transfer: boolean; recoverStale?: boolean; candidates?: CustomerAnalysisCandidate[]; selected?: string };
 type Operation = { section: Section; path: string; method: 'POST' | 'PUT'; body: CustomerAnalysisBody };
 const titles: Record<Section, string> = { FAE: 'FAE 解析', SUPPLIER: '供应商分析' };
 const keys = ['FAE', 'SUPPLIER'] as const;
@@ -64,12 +64,14 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   const parentSource = useRef(sourceRecord); parentSource.current = sourceRecord;
   const canWrite = source?.status === 'FOLLOWING' && actor?.accountType === 'INTERNAL' && actor.organizationId === source.organizationId && permissions.includes('customer-quality:complaints:write');
   const canAssign = canWrite && source?.qualityEngineerId === actor?.userId && !!source?.qualityEngineerAssignmentId
-    && !source.warnings?.some(warning => warning.code === 'ENGINEER_NO_LONGER_ELIGIBLE') && (source.stage !== 'NEW_PRODUCT' || permissions.includes('new-product-quality:projects:write'));
+    && !source.warnings?.some(warning => warning.code === 'ENGINEER_NO_LONGER_ELIGIBLE') && (summary?.canDispatch ?? (source.stage !== 'NEW_PRODUCT' || permissions.includes('new-product-quality:projects:write')));
+  const canRecover = !!canAssign && !!summary?.fae && summary.canRecoverAssignment === true && permissions.includes('customer-quality:complaints:reassign');
   const writable = (section: Section) => !!canWrite && summary?.[slot(section)]?.assigneeUserId === actor?.userId && permissions.includes(`customer-quality:analyses:${section === 'FAE' ? 'fae' : 'supplier'}`);
-  const eligibility = useRef({ assign: false, FAE: false, SUPPLIER: false });
-  eligibility.current = { assign: !!canAssign, FAE: writable('FAE'), SUPPLIER: writable('SUPPLIER') };
-  const assignmentAllowed = !!assignment && eligibility.current[assignment.transfer ? assignment.section : 'assign'];
+  const eligibility = useRef({ assign: false, recover: false, FAE: false, SUPPLIER: false });
+  eligibility.current = { assign: !!canAssign, recover: canRecover, FAE: writable('FAE'), SUPPLIER: writable('SUPPLIER') };
+  const assignmentAllowed = !!assignment && eligibility.current[assignment.recoverStale ? 'recover' : assignment.transfer ? assignment.section : 'assign'];
   function canMutate(attempt: Operation) {
+    if ('recoverStale' in attempt.body && attempt.body.recoverStale === true) return eligibility.current.recover;
     return attempt.method === 'PUT' || attempt.path.endsWith('/transfer') ? eligibility.current[attempt.section] : eligibility.current.assign;
   }
   const canRetry = !!operation.current && canMutate(operation.current);
@@ -101,7 +103,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     else if (dialog) setDialogError(cause); else setError(cause);
   }
   function install(record: CustomerAnalysis) {
-    setSummary(previous => previous ? { ...previous, [slot(record.section)]: record } : previous);
+    setSummary(previous => previous ? { ...previous, ...(record.section === 'FAE' ? { canRecoverAssignment: false } : {}), [slot(record.section)]: record } : previous);
     if (record.section === 'FAE') setFaeDraft(customerFaeDraft(record)); else setSupplierDraft(customerSupplierDraft(record));
     setDirty(previous => ({ ...previous, [record.section]: false }));
   }
@@ -194,13 +196,15 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     if (summary?.supplier) setSupplierDraft(customerSupplierDraft(summary.supplier));
     setDirty({ FAE: false, SUPPLIER: false });
   }
-  async function openAssignment(section: Section, transfer: boolean) {
-    if (!current() || !eligibility.current[transfer ? section : 'assign']) return;
+  async function openAssignment(section: Section, transfer: boolean, recoverStale = false) {
+    const eligibilityKey = recoverStale ? 'recover' : transfer ? section : 'assign';
+    if (!current() || !eligibility.current[eligibilityKey]) return;
     const generation = ++dialogGeneration.current;
-    setAssignment({ section, transfer }); setHistory(undefined); setDialogError(undefined);
+    setAssignment({ section, transfer, recoverStale }); setHistory(undefined); setDialogError(undefined);
     try {
-      const candidates = await apiRequest<CustomerAnalysisCandidate[]>(scoped(`${base}/complaints/${encodeURIComponent(complaintId)}/candidates/${section}`), { signal: lifetime.current!.signal });
-      if (current() && generation === dialogGeneration.current && eligibility.current[transfer ? section : 'assign']) setAssignment({ section, transfer, candidates });
+      const path = scoped(`${base}/complaints/${encodeURIComponent(complaintId)}/candidates/${section}`);
+      const candidates = await apiRequest<CustomerAnalysisCandidate[]>(`${path}${recoverStale ? `${organizationId ? '&' : '?'}recoverStale=true` : ''}`, { signal: lifetime.current!.signal });
+      if (current() && generation === dialogGeneration.current && eligibility.current[eligibilityKey]) setAssignment({ section, transfer, recoverStale, candidates });
     } catch (cause) { if (customerAnalysisDenied(cause) || generation === dialogGeneration.current) failure(cause, true); }
   }
   function confirmAssignment() {
@@ -208,7 +212,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     const target = assignment.candidates?.find(candidate => `${candidate.userId}:${candidate.assignmentId}` === assignment.selected);
     if (!target || !source) return;
     const record = summary?.[slot(assignment.section)];
-    const body: components['schemas']['AssignCustomerAnalysisDto'] = { organizationId: source.organizationId, expectedVersion: record?.version ?? 0, assigneeUserId: target.userId, assigneeAssignmentId: target.assignmentId };
+    const body: components['schemas']['AssignCustomerAnalysisDto'] = { organizationId: source.organizationId, expectedVersion: record?.version ?? 0, assigneeUserId: target.userId, assigneeAssignmentId: target.assignmentId, ...(assignment.recoverStale ? { recoverStale: true } : {}) };
     void mutate({ section: assignment.section, method: 'POST', body, path: assignment.transfer && record ? `${base}/${encodeURIComponent(record.id)}/transfer` : `${base}/complaints/${encodeURIComponent(complaintId)}/assign/${assignment.section}` });
   }
   async function openHistory(section: Section) {
@@ -238,6 +242,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
           {section === 'FAE' && record && <Tag color={record.faeStatus === 'ANALYSED' ? 'green' : 'default'}>{t(record.faeStatus === 'ANALYSED' ? '已解析' : '未解析')}</Tag>}
           {record && <Button disabled={busy || uncertain || !!assignment} onClick={() => void openHistory(section)}>{t(section === 'FAE' ? '查看 FAE 历史' : '查看供应商分析历史')}</Button>}
           {canAssign && (section === 'SUPPLIER' || !record) && <Button disabled={locked} onClick={() => guard(() => { resetDrafts(); void openAssignment(section, false); })}>{t(section === 'FAE' ? '指定 FAE' : '指定 SQE')}</Button>}
+          {section === 'FAE' && canRecover && <Button disabled={locked} onClick={() => guard(() => { resetDrafts(); void openAssignment(section, false, true); })}>{t('恢复 FAE 派工')}</Button>}
           {section === 'FAE' && record && edit && <Button disabled={locked} onClick={() => guard(() => { resetDrafts(); void openAssignment(section, true); })}>{t('同部门转派 FAE')}</Button>}
         </Space></div>
         {!record ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('尚未指定解析人，请由当前质量工程师先指定，再上传附件。')} /> : <>
@@ -274,11 +279,11 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
         </>}
       </section>;
     })}</div>}
-    {!lost && <Modal open={!!assignment} title={t(assignment?.transfer ? '同部门转派 FAE' : assignment?.section === 'FAE' ? '指定 FAE' : '指定 SQE')} onCancel={closeAssignment} footer={<div className="qms-dialog-actions"><Button disabled={busy || uncertain} onClick={closeAssignment}>{t('取消')}</Button>{uncertain ? <Button type="primary" disabled={busy || uploading || !canRetry} loading={busy} onClick={() => void mutate()}>{t('重试确认解析结果')}</Button> : <Button type="primary" disabled={locked || !assignment?.selected || !assignmentAllowed} loading={busy} onClick={confirmAssignment}>{t(assignment?.transfer ? '确认转派' : '确认指定')}</Button>}</div>} closable={!busy && !uncertain} mask={{ closable: !busy && !uncertain }}>
-      {dialogError && assignment ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button disabled={busy || uncertain || !assignmentAllowed} onClick={() => void openAssignment(assignment.section, assignment.transfer)}>{t('重试加载候选人')}</Button>} /> : null}
+    {!lost && <Modal open={!!assignment} title={t(assignment?.recoverStale ? '恢复 FAE 派工' : assignment?.transfer ? '同部门转派 FAE' : assignment?.section === 'FAE' ? '指定 FAE' : '指定 SQE')} onCancel={closeAssignment} footer={<div className="qms-dialog-actions"><Button disabled={busy || uncertain} onClick={closeAssignment}>{t('取消')}</Button>{uncertain ? <Button type="primary" disabled={busy || uploading || !canRetry} loading={busy} onClick={() => void mutate()}>{t('重试确认解析结果')}</Button> : <Button type="primary" disabled={locked || !assignment?.selected || !assignmentAllowed} loading={busy} onClick={confirmAssignment}>{t(assignment?.recoverStale ? '确认恢复派工' : assignment?.transfer ? '确认转派' : '确认指定')}</Button>}</div>} closable={!busy && !uncertain} mask={{ closable: !busy && !uncertain }}>
+      {dialogError && assignment ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button disabled={busy || uncertain || !assignmentAllowed} onClick={() => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale)}>{t('重试加载候选人')}</Button>} /> : null}
       {error && assignment ? <Alert type="error" showIcon title={t(errorMessage(error))} /> : null}
       {assignment?.candidates ? <Form layout="vertical"><Form.Item label={t('解析人及有效任职')}><Select aria-label={t('解析人及有效任职')} placeholder={t('选择解析人及任职')} disabled={busy || uncertain || !assignmentAllowed} value={assignment.selected} options={assignment.candidates.map(candidate => ({ value: `${candidate.userId}:${candidate.assignmentId}`, label: `${candidate.username} · ${t('任职')} ${candidate.assignmentId}` }))} onChange={selected => setAssignment({ ...assignment, selected })} /></Form.Item>{!assignment.candidates.length && <Empty description={t('当前没有具备权限和有效任职的候选人')} />}</Form> : assignment && !dialogError ? <Spin aria-label={t('正在加载候选人')} /> : null}
-      <Typography.Paragraph type="secondary">{t(assignment?.transfer ? '仅当前 FAE 可在同部门内转派；服务端会重新校验任职、权限和版本。' : '由当前质量工程师指定；指定成功后才可上传解析附件。')}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{t(assignment?.recoverStale ? '仅恢复已失效的 FAE 任职，需独立交接权限；原解析及附件保留，服务端重新校验资格和版本。' : assignment?.transfer ? '仅当前 FAE 可在同部门内转派；服务端会重新校验任职、权限和版本。' : '由当前质量工程师指定；指定成功后才可上传解析附件。')}</Typography.Paragraph>
     </Modal>}
     {!lost && <Modal open={!!history} title={t(history?.section === 'FAE' ? 'FAE 解析历史' : '供应商分析历史')} footer={null} onCancel={() => { dialogGeneration.current++; setHistory(undefined); setDialogError(undefined); }}>
       {dialogError && history ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button onClick={() => void openHistory(history.section)}>{t('重试加载解析历史')}</Button>} /> : null}

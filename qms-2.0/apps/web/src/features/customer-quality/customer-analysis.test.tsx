@@ -99,6 +99,53 @@ it('starts with assignment and no attachment picker when no stable analysis exis
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}/complaints/c1/assign/FAE`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 'selected', expectedVersion: 0, assigneeUserId: 'target', assigneeAssignmentId: 'appointment-b' }) }), expect.anything()));
 });
 
+it.each([[true, 'NEW_PRODUCT'], [false, 'MASS_PRODUCTION']] as const)('uses the accepted server dispatch capability %s rather than the current %s mapping', async (canDispatch, stage) => {
+  summary.fae = null;
+  Object.assign(summary, { canDispatch });
+  source = { ...source, stage };
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  mount();
+  await screen.findByRole('heading', { name: 'FAE 解析' });
+  await waitFor(() => expect(screen.queryByLabelText('正在加载解析')).not.toBeInTheDocument());
+  if (canDispatch) expect(screen.getByRole('button', { name: '指定 FAE' })).toBeEnabled();
+  else expect(screen.queryByRole('button', { name: '指定 FAE' })).not.toBeInTheDocument();
+});
+
+it('recovers stale FAE dispatch explicitly without enabling QE edits or ordinary FAE transfer', async () => {
+  Object.assign(summary, { canDispatch: true, canRecoverAssignment: true });
+  source = { ...source, stage: 'NEW_PRODUCT' };
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  const original = handler;
+  handler = (path, init) => path.startsWith('/api/v1/system/my-permissions')
+    ? { organizationId: 'selected', permissions: [...permissions, 'customer-quality:complaints:reassign'] } : original(path, init);
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: '恢复 FAE 派工' }));
+  const dialog = await screen.findByRole('dialog', { name: '恢复 FAE 派工' });
+  await waitFor(() => expect(within(dialog).getByRole('combobox')).toBeVisible());
+  fireEvent.mouseDown(within(dialog).getByRole('combobox'));
+  fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-b'));
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认恢复派工' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}/complaints/c1/assign/FAE`, expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ organizationId: 'selected', expectedVersion: 2, assigneeUserId: 'target', assigneeAssignmentId: 'appointment-b', recoverStale: true }),
+  }), expect.anything()));
+  expect(apiRequest).toHaveBeenCalledWith(`${base}/complaints/c1/candidates/FAE?organizationId=selected&recoverStale=true`, expect.anything());
+  expect(screen.getByLabelText('FAE 解析文字')).toBeDisabled();
+  expect(screen.getByLabelText('FAE 解析文字')).toHaveValue('已保存解析');
+  expect(screen.queryByRole('button', { name: '恢复 FAE 派工' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '同部门转派 FAE' })).not.toBeInTheDocument();
+});
+
+it.each([false, true])('requires both explicit recovery permission and the server recovery flag (%s)', async grant => {
+  Object.assign(summary, { canDispatch: true, canRecoverAssignment: !grant });
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'qe' });
+  const original = handler;
+  handler = (path, init) => path.startsWith('/api/v1/system/my-permissions')
+    ? { organizationId: 'selected', permissions: grant ? [...permissions, 'customer-quality:complaints:reassign'] : permissions } : original(path, init);
+  mount(); await screen.findByLabelText('FAE 解析文字');
+  expect(screen.queryByRole('button', { name: '恢复 FAE 派工' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '指定 FAE' })).not.toBeInTheDocument();
+});
+
 it('transfers FAE with its current version and the exact chosen assignment identity', async () => {
   mount(); fireEvent.click(await screen.findByRole('button', { name: '同部门转派 FAE' }));
   const dialog = await screen.findByRole('dialog', { name: '同部门转派 FAE' });

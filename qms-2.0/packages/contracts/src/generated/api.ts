@@ -10902,6 +10902,8 @@ export interface components {
         CustomerAnalysisSummaryDto: {
             /** Format: uuid */
             complaintId: string;
+            canDispatch?: boolean;
+            canRecoverAssignment?: boolean;
             fae: components["schemas"]["CustomerAnalysisDto"] | null;
             supplier: components["schemas"]["CustomerAnalysisDto"] | null;
         };
@@ -10923,6 +10925,7 @@ export interface components {
             assigneeUserId: string;
             /** Format: uuid */
             assigneeAssignmentId: string;
+            recoverStale?: boolean;
         };
         CustomerAnalysisHistoryDto: {
             /** Format: uuid */
@@ -10954,7 +10957,6 @@ export interface components {
         TransferCustomerAnalysisDto: {
             /** Format: uuid */
             organizationId?: string;
-            /** @description 0 for the first assignment; otherwise the analysis version. */
             expectedVersion: number;
             /** Format: uuid */
             assigneeUserId: string;
@@ -23056,6 +23058,7 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string;
+                recoverStale?: boolean;
             };
             header?: never;
             path: {

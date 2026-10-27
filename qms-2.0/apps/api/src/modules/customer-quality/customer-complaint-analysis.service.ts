@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -72,8 +72,13 @@ export class CustomerComplaintAnalysisService {
     if (source.qualityEngineerId !== actor.id || !source.qualityEngineerAssignmentId) analysisFail('CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 403);
     const assignments = await this.organizations.currentAssignments(actor.id, source.organizationId, new Date(), tx);
     if (!assignments.some(item => item.id === source.qualityEngineerAssignmentId)) analysisFail('CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 403);
-    await assertAdminAccess(tx, actor, source.organizationId, source.stage === 'NEW_PRODUCT'
+    await assertAdminAccess(tx, actor, source.organizationId, (source.responsibilityStage ?? source.stage) === 'NEW_PRODUCT'
       ? [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, LEDGER_PERMISSIONS.project] : [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write]);
+  }
+
+  private async staleAssignment(tx: AdminTransaction, row: StoredAnalysis) {
+    return !(await this.organizations.currentAssignments(row.assigneeUserId, row.organizationId, new Date(), tx))
+      .some(item => item.id === row.assigneeAssignmentId && item.department.id === row.departmentId);
   }
 
   private plain(row: StoredAnalysis): AnalysisSnapshot {
@@ -100,7 +105,16 @@ export class CustomerComplaintAnalysisService {
     const rows = await tx.$queryRaw<StoredAnalysis[]>(Prisma.sql`SELECT ${columns} FROM customer_complaint_analyses WHERE complaint_id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid ORDER BY id FOR SHARE`);
     const snapshots = [];
     for (const row of rows) snapshots.push(await this.project(tx, actor, row));
-    return { complaintId, fae: snapshots.find(row => row.section === 'FAE') ?? null, supplier: snapshots.find(row => row.section === 'SUPPLIER') ?? null };
+    let canDispatch = false;
+    try { await this.dispatcher(tx, actor, await this.ledger.readCase(tx, actor, complaintId, 'analysis')); canDispatch = true; }
+    catch (error) {
+      if (!(error instanceof HttpException) || !['CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 'CUSTOMER_ANALYSIS_SOURCE_CLOSED',
+        'CUSTOMER_LEDGER_ARCHIVED', 'ORGANIZATION_SCOPE_DENIED', 'FEATURE_PERMISSION_DENIED'].includes((error.getResponse() as { code: string }).code)) throw error;
+    }
+    const fae = rows.find(row => row.section === 'FAE');
+    const canRecoverAssignment = canDispatch && !!fae && (await adminPermissions(tx, actor.id, organizationId)).includes(LEDGER_PERMISSIONS.reassign)
+      && await this.staleAssignment(tx, fae);
+    return { complaintId, canDispatch, canRecoverAssignment, fae: snapshots.find(row => row.section === 'FAE') ?? null, supplier: snapshots.find(row => row.section === 'SUPPLIER') ?? null };
   }
 
   summary(actor: AdminActor, complaintId: string) {
@@ -114,13 +128,19 @@ export class CustomerComplaintAnalysisService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
-  async candidates(actor: AdminActor, complaintId: string, rawSection: string) {
+  async candidates(actor: AdminActor, complaintId: string, rawSection: string, recoverStale?: boolean) {
     const section = sectionValue(rawSection); const organizationId = this.scope(actor); uuid(complaintId);
+    if (recoverStale !== undefined && typeof recoverStale !== 'boolean' || recoverStale && section !== 'FAE') analysisFail('CUSTOMER_ANALYSIS_INPUT_INVALID');
     return this.prisma.$transaction(async tx => {
-      const source = await this.ledger.readCase(tx, actor, complaintId, 'read');
+      const source = await this.ledger.readCase(tx, actor, complaintId, 'analysis');
       const [existing] = await tx.$queryRaw<StoredAnalysis[]>(Prisma.sql`SELECT ${columns} FROM customer_complaint_analyses WHERE complaint_id = ${complaintId}::uuid AND section = ${section} AND organization_id = ${organizationId}::uuid FOR SHARE`);
       let departmentId: string | undefined;
-      if (existing && section === 'FAE') { await this.writer(tx, actor, existing, source); departmentId = existing.departmentId; }
+      if (recoverStale) {
+        await this.dispatcher(tx, actor, source);
+        await assertAdminAccess(tx, actor, organizationId, LEDGER_PERMISSIONS.reassign);
+        if (!existing || !await this.staleAssignment(tx, existing)) analysisFail('CUSTOMER_ANALYSIS_RECOVERY_NOT_REQUIRED', 409);
+      }
+      else if (existing && section === 'FAE') { await this.writer(tx, actor, existing, source); departmentId = existing.departmentId; }
       else await this.dispatcher(tx, actor, source);
       const users = await tx.user.findMany({ where: { organizationId, accountType: 'INTERNAL', status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } });
       const result = [];
@@ -157,15 +177,29 @@ export class CustomerComplaintAnalysisService {
   async assign(actor: AdminActor, complaintId: string, rawSection: string, input: AnalysisAssignmentInput, traceId: string, key?: string) {
     const section = sectionValue(rawSection); const organizationId = this.scope(actor); uuid(complaintId); version(input.expectedVersion, 0);
     uuid(input.assigneeUserId); uuid(input.assigneeAssignmentId);
-    const authorize = async (tx: AdminTransaction) => { const source = await this.ledger.readCase(tx, actor, complaintId, 'analysis'); await this.dispatcher(tx, actor, source); };
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_ANALYSIS_ASSIGNED', payload: { complaintId, section, ...input }, permission: [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write], isolationLevel: 'ReadCommitted' }, async tx => {
+    if (input.recoverStale !== undefined && typeof input.recoverStale !== 'boolean' || input.recoverStale && section !== 'FAE') analysisFail('CUSTOMER_ANALYSIS_INPUT_INVALID');
+    const permission = [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, ...(input.recoverStale ? [LEDGER_PERMISSIONS.reassign] : [])];
+    const authorize = async (tx: AdminTransaction) => {
+      const source = await this.ledger.readCase(tx, actor, complaintId, 'analysis'); await this.dispatcher(tx, actor, source);
+      if (input.recoverStale) {
+        await assertAdminAccess(tx, actor, organizationId, LEDGER_PERMISSIONS.reassign);
+        await this.candidate(tx, organizationId, input.assigneeUserId, input.assigneeAssignmentId, section);
+      }
+    };
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_ANALYSIS_ASSIGNED', payload: { complaintId, section, ...input }, permission, isolationLevel: 'ReadCommitted' }, async tx => {
       const [existing] = await tx.$queryRaw<StoredAnalysis[]>(Prisma.sql`SELECT ${columns} FROM customer_complaint_analyses WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${complaintId}::uuid AND section = ${section} FOR UPDATE`);
       if ((existing?.version ?? 0) !== input.expectedVersion) analysisFail('CONCURRENCY_CONFLICT', 409);
-      if (existing && section === 'FAE') analysisFail('CUSTOMER_ANALYSIS_TRANSFER_REQUIRED', 409);
+      // Only new writes require stale ownership; a receipt replay still rechecks all current authority.
+      if (input.recoverStale) {
+        if (!existing || !await this.staleAssignment(tx, existing)) analysisFail('CUSTOMER_ANALYSIS_RECOVERY_NOT_REQUIRED', 409);
+      } else if (existing && section === 'FAE') analysisFail('CUSTOMER_ANALYSIS_TRANSFER_REQUIRED', 409);
       const target = await this.candidate(tx, organizationId, input.assigneeUserId, input.assigneeAssignmentId, section);
       const id = existing?.id ?? randomUUID();
-      if (existing) await tx.$executeRaw`UPDATE customer_complaint_analyses SET assignee_user_id = ${target.userId}::uuid, assignee_assignment_id = ${target.assignmentId}::uuid, department_id = ${target.departmentId}::uuid,
-        version = version + 1, updated_by_user_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND version = ${input.expectedVersion}`;
+      if (existing) {
+        const changed = await tx.$executeRaw`UPDATE customer_complaint_analyses SET assignee_user_id = ${target.userId}::uuid, assignee_assignment_id = ${target.assignmentId}::uuid, department_id = ${target.departmentId}::uuid,
+          version = version + 1, updated_by_user_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND version = ${input.expectedVersion}`;
+        if (changed !== 1) analysisFail('CONCURRENCY_CONFLICT', 409);
+      }
       else await tx.$executeRaw`INSERT INTO customer_complaint_analyses (id, organization_id, complaint_id, section, assignee_user_id, assignee_assignment_id, department_id, updated_by_user_id)
         VALUES (${id}::uuid, ${organizationId}::uuid, ${complaintId}::uuid, ${section}, ${target.userId}::uuid, ${target.assignmentId}::uuid, ${target.departmentId}::uuid, ${actor.id}::uuid)`;
       await authorize(tx);

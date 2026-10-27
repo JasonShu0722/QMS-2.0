@@ -6,6 +6,8 @@
 
 V0.0.32-fix2新增`POST /api/v1/customer-quality/ledger/:id/reassign`与生成的`CustomerLedgerReassignDto`，包含expectedVersion、qualityEngineerAssignmentId、reason及可选organizationId。仅修复已保存人员的失效任职，read/write/reassign分权；当前目标任职和新品资格、闭后编辑、归档、CAS、幂等重放均服务端复验。仅登记新权限，不自动授予生产角色，不借交接修改原数量、映射或解析/8D。
 
+fix5沿现有解析`assign/FAE`及`candidates/FAE`新增可选`recoverStale`：仅真实对应质量工程师另具独立交接权限时，恢复原任职已失效的FAE；正常有效FAE仍只能按本人/同科室转派。summary可选`canDispatch`、`canRecoverAssignment`只是当前调用者呈现能力，不进入不可变解析快照或替代写入授权。派工资格使用已接受责任阶段，组件实时映射阶段变化不自动移交。Swagger生成/check通过，真实HTTP候选参数转换、非法值、恢复/回放及原正文保留均有完整文件证据。
+
 两个新import端点单独允许7 MiB请求体，以容纳100条各64000字节raw加行元数据；API及Web网关均有对应边界，普通API保留100 kB JSON默认值，其他既有import限额不变。先3项运输/静态断言失败后完整5项通过；该配置测试不是完整域授权或公网网关实测。
 
 `/api/v1/customer-quality/analysis`提供真实派工、FAE同部门转派、FAE与SQE各自保存及不可变历史；`fae-tasks`是当前有效解析职责投影，不伪造通用WorkflowTask。附件资源为稳定`customer-complaint-analysis` UUID，当前资格和CLEAN状态仍由服务器校验。旧`/complaints`仅接未采用新语义的历史行，旧问题幂等回放保留非变更性历史结果；客户完整problemId多源8D仍是后续单元。

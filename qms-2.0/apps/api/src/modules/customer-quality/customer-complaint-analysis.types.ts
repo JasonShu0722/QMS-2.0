@@ -20,7 +20,7 @@ export interface AnalysisSnapshot extends AnalysisContent {
   assigneeUserId: string; assigneeAssignmentId: string; departmentId: string;
   faeStatus: FaeAnalysisStatus | null; updatedByUserId: string; updatedAt: string;
 }
-export interface AnalysisAssignmentInput { expectedVersion: number; assigneeUserId: string; assigneeAssignmentId: string }
+export interface AnalysisAssignmentInput { expectedVersion: number; assigneeUserId: string; assigneeAssignmentId: string; recoverStale?: boolean }
 export interface AnalysisSaveInput extends AnalysisContentInput { expectedVersion: number }
 export function analysisFail(code: string, status = 400): never { throw new HttpException({ code, message: code }, status); }
 export function faeAnalysisStatus(text: string | null, files: number): FaeAnalysisStatus { return text?.trim() || files > 0 ? 'ANALYSED' : 'NOT_ANALYSED'; }

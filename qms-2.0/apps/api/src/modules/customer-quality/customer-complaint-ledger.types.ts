@@ -97,4 +97,5 @@ export interface CustomerLedgerCase {
   id: string; organizationId: string; version: number; status: LedgerStatus; legacyStatus: string;
   registeredByUserId: string; qualityEngineerId: string | null; qualityEngineerAssignmentId: string | null;
   qualityEngineerSource: 'MANUAL' | 'MAPPING' | null; stage: LedgerStage | null;
+  responsibilityStage?: LedgerStage | null;
 }

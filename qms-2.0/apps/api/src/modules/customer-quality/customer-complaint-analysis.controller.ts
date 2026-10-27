@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { CustomerComplaintAnalysisService } from './customer-complaint-analysis.service.js';
-import { AssignCustomerAnalysisDto, CustomerAnalysisCandidateDto, CustomerAnalysisDto, CustomerAnalysisHistoryDto, CustomerAnalysisScopeDto, CustomerAnalysisSummaryDto, CustomerFaeAnalysisTaskDto, SaveCustomerFaeAnalysisDto, SaveCustomerSupplierAnalysisDto, TransferCustomerAnalysisDto } from './customer-complaint-analysis.dto.js';
+import { AssignCustomerAnalysisDto, CustomerAnalysisCandidateDto, CustomerAnalysisCandidatesQueryDto, CustomerAnalysisDto, CustomerAnalysisHistoryDto, CustomerAnalysisScopeDto, CustomerAnalysisSummaryDto, CustomerFaeAnalysisTaskDto, SaveCustomerFaeAnalysisDto, SaveCustomerSupplierAnalysisDto, TransferCustomerAnalysisDto } from './customer-complaint-analysis.dto.js';
 
 function actor(request: Request) { const authorized = request as AuthorizedRequest; const session = authorized[AUTHENTICATED_SESSION]!; return { ...session.user, sessionId: session.id, scopeOrganizationId: authorized.authorizedOrganizationId }; }
 const queryScope = { source: 'query', field: 'organizationId', optional: true } as const;
@@ -27,7 +27,7 @@ export class CustomerComplaintAnalysisController {
 
   @Get('complaints/:id/candidates/:section') @ApiOkResponse({ type: [CustomerAnalysisCandidateDto] })
   @RequireAccess({ featurePermission: 'customer-quality:complaints:read', organizationScope: queryScope })
-  candidates(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('section') section: string, @Query() _query: CustomerAnalysisScopeDto) { return this.service.candidates(actor(request), id, section); }
+  candidates(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('section') section: string, @Query() query: CustomerAnalysisCandidatesQueryDto) { return this.service.candidates(actor(request), id, section, query.recoverStale); }
 
   @Post('complaints/:id/assign/:section') @ApiCreatedResponse({ type: CustomerAnalysisDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'customer-quality:complaints:write', organizationScope: bodyScope })

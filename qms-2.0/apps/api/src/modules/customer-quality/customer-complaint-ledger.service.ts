@@ -159,7 +159,8 @@ export class CustomerComplaintLedgerService {
     }
     return { id: item.id, organizationId, version: item.version, status: item.status, legacyStatus: item.legacyStatus,
       registeredByUserId: item.registeredByUserId, qualityEngineerId: item.qualityEngineerId,
-      qualityEngineerAssignmentId: item.qualityEngineerAssignmentId, qualityEngineerSource: item.qualityEngineerSource, stage: item.stage };
+      qualityEngineerAssignmentId: item.qualityEngineerAssignmentId, qualityEngineerSource: item.qualityEngineerSource, stage: item.stage,
+      responsibilityStage: row.registered_stage ?? item.stage };
   }
 
   assertReadCase(tx: AdminTransaction, actor: AdminActor, id: string) { return this.readCase(tx, actor, id, 'read'); }

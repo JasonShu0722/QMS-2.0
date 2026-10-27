@@ -1,17 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import type { AnalysisSection, FaeAnalysisStatus } from './customer-complaint-analysis.types.js';
 
 export class CustomerAnalysisScopeDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
 }
+export class CustomerAnalysisCandidatesQueryDto extends CustomerAnalysisScopeDto {
+  @ApiPropertyOptional({ type: Boolean }) @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() recoverStale?: boolean;
+}
 export class AssignCustomerAnalysisDto extends CustomerAnalysisScopeDto {
   @ApiProperty({ minimum: 0, maximum: 2147483647, description: '0 for the first assignment; otherwise the analysis version.' }) @IsInt() @Min(0) @Max(2147483647) expectedVersion!: number;
   @ApiProperty({ format: 'uuid' }) @IsUUID() assigneeUserId!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() assigneeAssignmentId!: string;
+  @ApiPropertyOptional({ type: Boolean }) @IsOptional() @IsBoolean() recoverStale?: boolean;
 }
-export class TransferCustomerAnalysisDto extends AssignCustomerAnalysisDto {
-  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) declare expectedVersion: number;
+export class TransferCustomerAnalysisDto extends CustomerAnalysisScopeDto {
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() assigneeUserId!: string;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() assigneeAssignmentId!: string;
 }
 export class SaveCustomerAnalysisFilesDto extends CustomerAnalysisScopeDto {
   @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
@@ -51,6 +58,8 @@ export class CustomerAnalysisDto {
 }
 export class CustomerAnalysisSummaryDto {
   @ApiProperty({ format: 'uuid' }) complaintId!: string;
+  @ApiPropertyOptional({ type: Boolean }) canDispatch?: boolean;
+  @ApiPropertyOptional({ type: Boolean }) canRecoverAssignment?: boolean;
   @ApiProperty({ type: CustomerAnalysisDto, nullable: true }) fae!: CustomerAnalysisDto | null;
   @ApiProperty({ type: CustomerAnalysisDto, nullable: true }) supplier!: CustomerAnalysisDto | null;
 }
