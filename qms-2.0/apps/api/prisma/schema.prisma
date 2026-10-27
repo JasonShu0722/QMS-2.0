@@ -1328,20 +1328,30 @@ model CustomerQualityComplaint {
   id                    String    @id @default(uuid()) @db.Uuid
   organizationId        String    @map("organization_id") @db.Uuid
   complaintNumber       String    @map("complaint_number") @db.VarChar(80)
-  customerId            String    @map("customer_id") @db.Uuid
-  complaintType         String    @map("complaint_type") @db.VarChar(20)
+  customerId            String?   @map("customer_id") @db.Uuid
+  complaintType         String?   @map("complaint_type") @db.VarChar(20)
   terminalCustomerName  String?   @map("terminal_customer_name") @db.VarChar(200)
   productCode           String?   @map("product_code") @db.VarChar(100)
   productModel          String?   @map("product_model") @db.VarChar(100)
-  defectDescription     String    @map("defect_description") @db.Text
+  defectDescription     String?   @map("defect_description") @db.Text
   vin                   String?   @db.VarChar(100)
   mileage               Int?
   purchaseDate          DateTime? @map("purchase_date") @db.Date
   returnRequired        Boolean   @default(false) @map("return_required")
   physicalAnalysisRequired Boolean @default(false) @map("physical_analysis_required")
-  severity              String    @db.VarChar(32)
-  severityPolicyVersion String    @map("severity_policy_version") @db.VarChar(100)
-  severitySnapshot      Json      @map("severity_snapshot")
+  severity              String?   @db.VarChar(32)
+  severityPolicyVersion String?   @map("severity_policy_version") @db.VarChar(100)
+  severitySnapshot      Json?     @map("severity_snapshot")
+  ledgerStatus          String?   @map("ledger_status") @db.VarChar(16)
+  ledgerRaw             Json?     @map("ledger_raw")
+  ledgerNormalized      Json?     @map("ledger_normalized")
+  ledgerMappingSnapshot Json?     @map("ledger_mapping_snapshot")
+  qualityEngineerId     String?   @map("quality_engineer_id") @db.Uuid
+  qualityEngineerAssignmentId String? @map("quality_engineer_assignment_id") @db.Uuid
+  qualityEngineerSource String?   @map("quality_engineer_source") @db.VarChar(16)
+  registeredStage       String?   @map("registered_stage") @db.VarChar(24)
+  courierNumber         String?   @map("courier_number") @db.VarChar(200)
+  receivedOn            DateTime? @map("received_on") @db.Date
   status                String    @default("OPEN") @db.VarChar(32)
   category              String?   @db.VarChar(32)
   categoryNote          String?   @map("category_note") @db.VarChar(200)

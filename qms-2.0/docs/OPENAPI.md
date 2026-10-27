@@ -1,8 +1,22 @@
 # OpenAPI 契约
 
+## N4本地契约接续（2026-10-27，尚未发布）
+
+集中批次追加两个可选只读投影：`CustomerLedgerItemDto.archived`来自真实归档时间，`CustomerLedgerCandidateDto.projectQualified`来自服务端完整工程师资格。候选既有`componentCode`参数在匹配成功时按实际阶段过滤，未匹配使用显式`stage`兜底；标记不代替实际写授权，超长原文不当作候选查询参数。SUPPLEMENT预览和提交共用字段/职责/客户/版本准备，完整合并事实决定异常与跳错，跳过回滚本行准备副作用；无新增迁移或权限。FAE失效恢复也复用实际候选全资格，任职仍存在但读/写/FAE许可丢失时可由独立授权者恢复。生成/check及真实用例见[N4计划5.10](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md)。
+
+客诉新事实入口为`/api/v1/customer-quality/ledger`及其详情、候选、收件、关闭/恢复、`import/preview`和`import/commit`；逐行ADD/SKIP/SUPPLEMENT与取消/继续/跳错误行使用同一生成DTO，raw与normalized分开，缺客户/工程师/有效业务字段可留空或保原文警告，不补造风险/数量。映射响应直接复用`ComponentProjectResolutionDto`，中文类型别名仅规范化值，不改原单元格。
+
+V0.0.32-fix2新增`POST /api/v1/customer-quality/ledger/:id/reassign`与生成的`CustomerLedgerReassignDto`，包含expectedVersion、qualityEngineerAssignmentId、reason及可选organizationId。仅修复已保存人员的失效任职，read/write/reassign分权；当前目标任职和新品资格、闭后编辑、归档、CAS、幂等重放均服务端复验。仅登记新权限，不自动授予生产角色，不借交接修改原数量、映射或解析/8D。
+
+fix5沿现有解析`assign/FAE`及`candidates/FAE`新增可选`recoverStale`：仅真实对应质量工程师另具独立交接权限时，恢复原任职已失效的FAE；正常有效FAE仍只能按本人/同科室转派。summary可选`canDispatch`、`canRecoverAssignment`只是当前调用者呈现能力，不进入不可变解析快照或替代写入授权。派工资格使用已接受责任阶段，组件实时映射阶段变化不自动移交。Swagger生成/check通过，真实HTTP候选参数转换、非法值、恢复/回放及原正文保留均有完整文件证据。
+
+两个新import端点单独允许7 MiB请求体，以容纳100条各64000字节raw加行元数据；API及Web网关均有对应边界，普通API保留100 kB JSON默认值，其他既有import限额不变。先3项运输/静态断言失败后完整5项通过；该配置测试不是完整域授权或公网网关实测。
+
+`/api/v1/customer-quality/analysis`提供真实派工、FAE同部门转派、FAE与SQE各自保存及不可变历史；`fae-tasks`是当前有效解析职责投影，不伪造通用WorkflowTask。附件资源为稳定`customer-complaint-analysis` UUID，当前资格和CLEAN状态仍由服务器校验。旧`/complaints`仅接未采用新语义的历史行，旧问题幂等回放保留非变更性历史结果；客户完整problemId多源8D仍是后续单元。
+
 NestJS DTO 和 Swagger 注解是前端 API 契约唯一来源。API 在 `GET /api/v1/openapi.json` 发布 schema；Web 仅从 `@qms/contracts` 导入生成类型及其派生类型，不手写重复 DTO，也不让 API 反向依赖 contracts。
 
-## REQ-0030 契约接续（2026-10-26，本地修复，未部署）
+## REQ-0030 契约接续（2026-10-26，28cc304已部署并核验公开契约）
 
 新增可选platformScope说明真实来源组织、目标和内部平台范围；岗位授权预览保留直接来源的organizationId及平台投影信息。组织生命周期保留原blockers数组，可选deleteBlockerDetails/disableBlockerDetails提供类型、数量和处理说明。问题摘要可选有界fields承载领域可读列表字段，其他域不因此获得新业务能力。
 

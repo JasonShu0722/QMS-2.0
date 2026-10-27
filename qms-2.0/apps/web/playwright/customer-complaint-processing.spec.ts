@@ -52,6 +52,7 @@ test('registers, processes, independently closes and archives a complaint throug
   expect(assignees.users.some((user) => user.id === currentUser.id)).toBe(true);
 
   await page.goto('/app/customer-quality');
+  await page.getByRole('button', { name: '历史台账', exact: true }).click();
   await page.getByRole('button', { name: '人工登记客诉' }).click();
   await page.getByLabel('登记客户').click();
   await page.getByText(`${customer.code} · ${customer.name}`).click();
@@ -94,12 +95,14 @@ test('registers, processes, independently closes and archives a complaint throug
     const reviewerPage = await reviewerContext.newPage();
     await uiLogin(reviewerPage, reviewerName, reviewerPassword);
     await reviewerPage.goto('/app/customer-quality');
+    await reviewerPage.getByRole('button', { name: '历史台账', exact: true }).click();
     await reviewerPage.getByRole('button', { name: complaintNumber! }).click();
     await reviewerPage.getByLabel('处理说明').fill('独立复核通过');
     const closing = reviewerPage.waitForResponse((response) => response.url().endsWith('/close') && response.request().method() === 'PUT');
     await reviewerPage.getByRole('button', { name: '复核关闭' }).click();
     expect((await closing).status()).toBe(200);
     await reviewerPage.reload();
+    await reviewerPage.getByRole('button', { name: '历史台账', exact: true }).click();
     await reviewerPage.getByRole('button', { name: complaintNumber! }).click();
     await expect(reviewerPage.getByRole('button', { name: /归\s*档/ })).toBeVisible();
     const archiving = reviewerPage.waitForResponse((response) => response.url().endsWith('/archive') && response.request().method() === 'PUT');

@@ -89,10 +89,12 @@ describe('controlled validation HTTP seam (no database)', () => {
 
   it('locates real malformed draft input with a fixed Chinese message instead of validator payloads', async () => {
     const { body } = await request(app.getHttpServer()).get('/validation/document').expect(400);
-    expect(body).toMatchObject({ code: 'PROCESS_EIGHT_D_DOCUMENT_INVALID', fields: {
+    const { traceId, ...payload } = body;
+    expect(traceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(payload).toMatchObject({ code: 'PROCESS_EIGHT_D_DOCUMENT_INVALID', fields: {
       description: [PLATFORM_ERROR_MESSAGES.PROCESS_EIGHT_D_DOCUMENT_INVALID],
     } });
-    expect(JSON.stringify(body)).not.toMatch(/42|must be|SELECT|secret/);
+    expect(JSON.stringify(payload)).not.toMatch(/42|must be|SELECT|secret/);
   });
 
   it.each([400, 401, 403, 409, 500])('does not trust ordinary exception fields, issues or messages (%s)', async status => {

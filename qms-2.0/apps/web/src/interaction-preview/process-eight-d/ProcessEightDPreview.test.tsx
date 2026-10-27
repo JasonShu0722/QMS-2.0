@@ -77,6 +77,15 @@ describe('process / internal 8D isolated memory preview', () => {
 
   it('runs both sides independently and invalidates the entire returned round before resubmission', async () => {
     await openWorkspace();
+    const description = screen.getByText<HTMLLabelElement>('D2 问题描述', { selector: 'label', exact: true }).control;
+    const descriptionField = () => {
+      expect(screen.getByText<HTMLLabelElement>('D2 问题描述', { selector: 'label', exact: true }).control).toBe(description);
+      expect(description).toHaveRole('textbox');
+      expect(description).toHaveAccessibleName('D2 问题描述');
+      expect(description).toBeVisible();
+      expect(description).toBeInTheDocument();
+      return description;
+    };
     completeDraft();
     click('完整提交（演示）');
     expect(duty('专业审核')).toHaveTextContent('待审核');
@@ -86,7 +95,7 @@ describe('process / internal 8D isolated memory preview', () => {
     expect(duty('经理审核')).toHaveTextContent('已通过');
     click('专业审核退回');
     expect(current()).toHaveTextContent('整轮失效');
-    expect(screen.getByLabelText('D2 问题描述')).not.toBeDisabled();
+    expect(descriptionField()).not.toBeDisabled();
     click('完整提交（演示）');
     expect(current()).toHaveTextContent('第 2 轮');
     expect(duty('专业审核')).toHaveTextContent('待审核');
@@ -95,7 +104,7 @@ describe('process / internal 8D isolated memory preview', () => {
     expect(duty('经理审核')).toHaveTextContent('待审核');
     click('经理审核通过');
     expect(current()).toHaveTextContent('演示汇聚完成');
-    expect(screen.getByLabelText('D2 问题描述')).toBeDisabled();
+    expect(descriptionField()).toBeDisabled();
     click('轨迹');
     expect(screen.getByRole('region', { name: '轮次轨迹' })).toHaveTextContent('第 1 轮');
     expect(screen.getByRole('region', { name: '轮次轨迹' })).toHaveTextContent('旧结果不计入新轮');

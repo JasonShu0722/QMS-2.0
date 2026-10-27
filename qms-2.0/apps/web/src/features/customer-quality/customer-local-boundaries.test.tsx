@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { apiRequest, csrfToken } from '../../api/client';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { CustomerMasterSection } from './CustomerMasterSection';
-import { CustomerQualityPage } from './CustomerQualityPage';
+import { CustomerLegacyQualityPage as CustomerQualityPage } from './CustomerLegacyQualityPage';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
 
 vi.setConfig({ testTimeout: 60_000 });

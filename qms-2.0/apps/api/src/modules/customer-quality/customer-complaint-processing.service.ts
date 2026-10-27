@@ -9,6 +9,8 @@ import { validateEightDContent, type CustomerComplaintEightDContent } from './cu
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
 import { OrganizationService } from '../organization/organization.service.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { assertLegacyCustomerComplaint } from './customer-quality.service.js';
 
 type Row = Record<string, any>;
 export type ComplaintCategory = 'PRODUCT_QUALITY' | 'DELIVERY' | 'SERVICE' | 'OTHER';
@@ -47,8 +49,8 @@ export class CustomerComplaintProcessingService {
     const organizationId = this.scope(actor); id = validUuid(id);
     return this.prisma.$transaction(async (tx) => {
       await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read');
-      const complaint = await tx.$queryRaw<Row[]>`SELECT id FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`;
-      if (!complaint[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
+      const complaint = await tx.$queryRaw<Row[]>`SELECT id, ledger_status FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`;
+      assertLegacyCustomerComplaint(complaint[0]);
       return tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaint_events WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${id}::uuid ORDER BY seq ASC`;
     });
   }
@@ -58,10 +60,10 @@ export class CustomerComplaintProcessingService {
     return this.files.listResource(actor, { resourceType: 'CustomerComplaint', resourceId: id });
   }
 
-  private async locked(tx: AdminTransaction, organizationId: string, id: string, expectedVersion: number): Promise<Row> {
+  private async locked(tx: AdminTransaction, organizationId: string, id: string, expectedVersion?: number): Promise<Row> {
     const rows = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
-    if (!rows[0]) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
-    if (rows[0].version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
+    assertLegacyCustomerComplaint(rows[0]);
+    if (expectedVersion !== undefined && rows[0].version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
     return rows[0];
   }
 
@@ -80,7 +82,7 @@ export class CustomerComplaintProcessingService {
       const updated = await work(tx, organizationId, complaint);
       await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'CustomerComplaint', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: updated.version } }, tx);
       return updated;
-    });
+    }, async (tx) => { await this.locked(tx, organizationId, id); });
   }
 
   async triage(actor: AdminActor, id: string, input: TriageInput, traceId: string, key?: string) {
@@ -170,7 +172,10 @@ export class CustomerComplaintProcessingService {
       submittedAt: row.eight_d_submitted_at?.toISOString?.() ?? null, approvedAt: row.eight_d_approved_at?.toISOString?.() ?? null };
   }
 
-  private async formalWorkflow(tx: AdminTransaction, organizationId: string, complaintId: string): Promise<Row & { approvalLevel: string | null }> {
+  private async formalWorkflow(tx: AdminTransaction, organizationId: string, complaintId: string, actor: AdminActor, permission = 'customer-quality:complaints:write'): Promise<Row & { approvalLevel: string | null }> {
+    await assertActiveAuthentication(tx, actor);
+    await assertAdminAccess(tx, actor, organizationId, permission);
+    await this.locked(tx, organizationId, complaintId);
     const [row] = await tx.$queryRaw<Row[]>`SELECT p.id AS problem_id, p.version AS problem_version, p.status AS problem_status, wi.id AS instance_id, wi.workflow_version_id, wi.version AS instance_version, wi.current_node_id, wd.code AS workflow_code FROM domain_source_issue_links l JOIN problem_indexes p ON p.organization_id = l.organization_id AND p.id = l.problem_index_id JOIN workflow_instances wi ON wi.organization_id = p.organization_id AND wi.id = p.workflow_instance_id JOIN workflow_definitions wd ON wd.organization_id = wi.organization_id AND wd.id = wi.workflow_definition_id WHERE l.organization_id = ${organizationId}::uuid AND l.source_domain = 'customer-quality' AND l.source_type = 'customer-complaint' AND l.source_id = ${complaintId}::uuid AND l.removed_at IS NULL AND wd.code = 'CUSTOMER_8D' ORDER BY l.linked_at DESC LIMIT 1`;
     if (!row || row.workflow_code !== 'CUSTOMER_8D' || !row.current_node_id) fail('CUSTOMER_8D_REQUIRES_FORMAL_ISSUE', 409);
     const nodes = await tx.workflowNode.findMany({ where: { organizationId, workflowVersionId: row.workflow_version_id } });
@@ -184,8 +189,8 @@ export class CustomerComplaintProcessingService {
     return this.prisma.$transaction(async (tx) => {
       await assertAdminAccess(tx, actor, organizationId, 'customer-quality:complaints:read');
       const [row] = await tx.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid`;
-      if (!row) fail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
-      await this.formalWorkflow(tx, organizationId, id);
+      assertLegacyCustomerComplaint(row);
+      await this.formalWorkflow(tx, organizationId, id, actor, 'customer-quality:complaints:read');
       return this.eightDDto(row);
     });
   }
@@ -196,18 +201,18 @@ export class CustomerComplaintProcessingService {
     const organizationId = this.scope(actor); const complaintId = validUuid(id);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_COMPLAINT_8D_DRAFT_SAVED', payload: { id: complaintId, ...input }, permission: 'customer-quality:complaints:write', isolationLevel: 'ReadCommitted' }, async (tx) => {
       const complaint = await this.locked(tx, organizationId, complaintId, input.expectedVersion);
-      const workflow = await this.formalWorkflow(tx, organizationId, id);
+      const workflow = await this.formalWorkflow(tx, organizationId, id, actor);
       if (complaint.eight_d_status !== 'DRAFT') fail('CUSTOMER_8D_LOCKED', 409);
       const [row] = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET eight_d_content = ${JSON.stringify(content)}::jsonb, eight_d_version = eight_d_version + 1, eight_d_approval_level = ${workflow.approvalLevel}, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaint.id}::uuid AND version = ${input.expectedVersion} RETURNING *`;
       await this.audit.record({ organizationId: complaint.organization_id, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_8D_DRAFT_SAVED', resourceType: 'CustomerComplaint8D', resourceId: complaintId, outcome: 'SUCCESS', traceId, metadata: { version: row!.version, eightDVersion: row!.eight_d_version } }, tx);
       return this.eightDDto(row!);
-    });
+    }, async (tx) => { await this.locked(tx, organizationId, complaintId); });
   }
 
   async submitEightD(actor: AdminActor, id: string, input: { expectedVersion: number; content: unknown }, traceId: string, key?: string) {
     let content: CustomerComplaintEightDContent;
     try { content = validateEightDContent(input.content, 'SUBMIT'); } catch (error) { fail((error as Error).message === 'CUSTOMER_8D_SUBMISSION_INCOMPLETE' ? 'CUSTOMER_8D_SUBMISSION_INCOMPLETE' : 'CUSTOMER_8D_INPUT_INVALID', 400); }
-    const organizationId = this.scope(actor); const complaintId = validUuid(id); const workflow = await this.prisma.$transaction((tx) => this.formalWorkflow(tx, organizationId, complaintId));
+    const organizationId = this.scope(actor); const complaintId = validUuid(id); const workflow = await this.prisma.$transaction((tx) => this.formalWorkflow(tx, organizationId, complaintId, actor));
     if (!key) fail('IDEMPOTENCY_KEY_REQUIRED', 400);
     if (!this.runtime) fail('CUSTOMER_8D_WORKFLOW_CONFIGURATION_REQUIRED', 409);
     await this.runtime.submitAction({ organizationId, actor, problemIndexId: workflow.problem_id, workflowVersionId: workflow.workflow_version_id, expectedProblemVersion: workflow.problem_version, idempotencyKey: key, traceId, instanceId: workflow.instance_id, currentNodeId: workflow.current_node_id, expectedVersion: workflow.instance_version, action: 'SUBMIT', commandPayload: { complaintId, expectedVersion: input.expectedVersion } }, undefined, async (tx) => {
@@ -216,14 +221,14 @@ export class CustomerComplaintProcessingService {
       const evidence = await this.files.readEvidence(tx, actor, [{ resource: { resourceType: 'CustomerComplaint', resourceId: complaintId }, fileIds: content.verificationEvidenceFileIds }]);
       if (evidence.length !== content.verificationEvidenceFileIds.length || evidence.some((file) => !file.downloadable)) fail('CUSTOMER_8D_EVIDENCE_INVALID', 409);
       await tx.$executeRaw`UPDATE customer_quality_complaints SET eight_d_content = ${JSON.stringify(content)}::jsonb, eight_d_version = eight_d_version + 1, eight_d_status = 'SUBMITTED', eight_d_approval_level = ${workflow.approvalLevel}, eight_d_submitted_at = CURRENT_TIMESTAMP, eight_d_submitted_by_id = ${actor.id}::uuid, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaintId}::uuid AND version = ${input.expectedVersion}`;
-    }, async (tx) => { const latest = await this.formalWorkflow(tx, organizationId, complaintId); if (latest.problem_id !== workflow.problem_id || latest.instance_id !== workflow.instance_id) fail('CONCURRENCY_CONFLICT', 409); });
+    }, async (tx) => { const latest = await this.formalWorkflow(tx, organizationId, complaintId, actor); if (latest.problem_id !== workflow.problem_id || latest.instance_id !== workflow.instance_id) fail('CONCURRENCY_CONFLICT', 409); });
     const [row] = await this.prisma.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`;
     return this.eightDDto(row!);
   }
 
   async approveEightD(actor: AdminActor, id: string, input: { expectedVersion: number; note: string }, traceId: string, key?: string) {
     const noteText = note(input.note, 2000);
-    const organizationId = this.scope(actor); const complaintId = validUuid(id); const workflow = await this.prisma.$transaction((tx) => this.formalWorkflow(tx, organizationId, complaintId));
+    const organizationId = this.scope(actor); const complaintId = validUuid(id); const workflow = await this.prisma.$transaction((tx) => this.formalWorkflow(tx, organizationId, complaintId, actor));
     if (!key) fail('IDEMPOTENCY_KEY_REQUIRED', 400);
     if (!this.runtime) fail('CUSTOMER_8D_WORKFLOW_CONFIGURATION_REQUIRED', 409);
     await this.runtime.submitAction({ organizationId, actor, problemIndexId: workflow.problem_id, workflowVersionId: workflow.workflow_version_id, expectedProblemVersion: workflow.problem_version, idempotencyKey: key, traceId, instanceId: workflow.instance_id, currentNodeId: workflow.current_node_id, expectedVersion: workflow.instance_version, action: 'APPROVE', commandPayload: { complaintId, expectedVersion: input.expectedVersion, note: noteText } }, undefined, async (tx) => {
@@ -235,7 +240,7 @@ export class CustomerComplaintProcessingService {
       if (evidence.length !== content.verificationEvidenceFileIds.length || evidence.some((file) => !file.downloadable)) fail('CUSTOMER_8D_EVIDENCE_INVALID', 409);
       await tx.$executeRaw`UPDATE customer_quality_complaints SET eight_d_status = 'APPROVED', eight_d_approved_at = CURRENT_TIMESTAMP, eight_d_approved_by_id = ${actor.id}::uuid, version = version + 1, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${complaintId}::uuid AND version = ${input.expectedVersion}`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'CUSTOMER_COMPLAINT_8D_APPROVED', resourceType: 'CustomerComplaint8D', resourceId: complaintId, outcome: 'SUCCESS', traceId, metadata: { approvalLevel: complaint.eight_d_approval_level, note: noteText, version: complaint.version + 1 } }, tx);
-    }, async (tx) => { const latest = await this.formalWorkflow(tx, organizationId, complaintId); if (latest.problem_id !== workflow.problem_id || latest.instance_id !== workflow.instance_id) fail('CONCURRENCY_CONFLICT', 409); });
+    }, async (tx) => { const latest = await this.formalWorkflow(tx, organizationId, complaintId, actor); if (latest.problem_id !== workflow.problem_id || latest.instance_id !== workflow.instance_id) fail('CONCURRENCY_CONFLICT', 409); });
     const [row] = await this.prisma.$queryRaw<Row[]>`SELECT * FROM customer_quality_complaints WHERE id = ${complaintId}::uuid AND organization_id = ${organizationId}::uuid`;
     return this.eightDDto(row!);
   }

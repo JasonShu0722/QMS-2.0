@@ -10,6 +10,16 @@ import { WorkflowModule } from '../workflow/workflow.module.js';
 import { FileManagementModule } from '../file-management/file-management.module.js';
 import { CustomerComplaintFileResourceAdapter } from './customer-complaint-file-resource.adapter.js';
 import { OrganizationModule } from '../organization/organization.module.js';
+import { PlatformConfigurationModule } from '../platform-configuration/platform-configuration.module.js';
+import { CustomerComplaintLedgerService } from './customer-complaint-ledger.service.js';
+import { CustomerComplaintLedgerController } from './customer-complaint-ledger.controller.js';
+import { CustomerComplaintAnalysisController } from './customer-complaint-analysis.controller.js';
+import { CustomerComplaintAnalysisService } from './customer-complaint-analysis.service.js';
+import { CustomerComplaintAnalysisFileAdapter } from './customer-complaint-analysis-file.adapter.js';
 
-@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule, OrganizationModule], controllers: [CustomerQualityController], providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter], exports: [CustomerQualityService, CustomerIssueService] })
+@Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule, OrganizationModule, PlatformConfigurationModule],
+  controllers: [CustomerQualityController, CustomerComplaintLedgerController, CustomerComplaintAnalysisController],
+  providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter,
+    CustomerComplaintLedgerService, CustomerComplaintAnalysisService, CustomerComplaintAnalysisFileAdapter],
+  exports: [CustomerQualityService, CustomerIssueService, CustomerComplaintLedgerService] })
 export class CustomerQualityModule {}

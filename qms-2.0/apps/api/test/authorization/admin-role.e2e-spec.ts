@@ -63,7 +63,7 @@ describe('administrator role HTTP contract', () => {
     expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review']);
     const customer = response.body[3];
     expect(customer.status).toBe('active');
-    expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write']);
+    expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write', 'customer-quality:complaints:close', 'customer-quality:complaints:closed-edit', 'customer-quality:complaints:reassign', 'customer-quality:analyses:fae', 'customer-quality:analyses:supplier']);
     const newProduct = response.body[4];
     expect(newProduct.status).toBe('active');
     expect(newProduct.modules.find((module: { key: string }) => module.key === 'new-product-quality').operations.map((operation: { code: string }) => operation.code)).toEqual(['new-product-quality:projects:read', 'new-product-quality:projects:write']);

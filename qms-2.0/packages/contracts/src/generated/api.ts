@@ -3511,6 +3511,294 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintLedgerController_list"];
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintLedgerController_candidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintLedgerController_detail"];
+        put: operations["CustomerComplaintLedgerController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintLedgerController_attachments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_reassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}/receiving": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerComplaintLedgerController_receiving"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/ledger/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/fae-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintAnalysisController_tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/complaints/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintAnalysisController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/complaints/{id}/candidates/{section}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintAnalysisController_candidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/complaints/{id}/assign/{section}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintAnalysisController_assign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerComplaintAnalysisController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/{id}/fae": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerComplaintAnalysisController_saveFae"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/{id}/supplier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["CustomerComplaintAnalysisController_saveSupplier"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/analysis/{id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintAnalysisController_transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/material-masters": {
         parameters: {
             query?: never;
@@ -10251,6 +10539,432 @@ export interface components {
             actorUserId?: string | null;
             /** Format: date-time */
             changedAt: string;
+        };
+        CustomerLedgerNormalizedDto: {
+            complaintType: string | null;
+            customerName: string | null;
+            terminalCustomerName: string | null;
+            componentCode: string | null;
+            productModel: string | null;
+            defectDescription: string | null;
+            quantity: number | null;
+            vin: string | null;
+            barcode: string | null;
+            batch: string | null;
+            mileage: number | null;
+            /** Format: date */
+            occurredOn: string | null;
+            /** Format: date */
+            productionOn: string | null;
+            /** Format: date */
+            purchaseOn: string | null;
+            /** Format: date */
+            vehicleDeliveryOn: string | null;
+            /** Format: date */
+            vehicleOfflineOn: string | null;
+            /** Format: date */
+            onlineOn: string | null;
+            occurredAtLocation: string | null;
+            occurredAtRegion: string | null;
+            serviceMode: string | null;
+            interceptionStatus: string | null;
+            investigation: string | null;
+        };
+        CustomerLedgerFieldsDto: {
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            complaintType?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            customerName?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            terminalCustomerName?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            componentCode?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            productModel?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            defectDescription?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            quantity?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            vin?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            barcode?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            batch?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            mileage?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            occurredOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            productionOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            purchaseOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            vehicleDeliveryOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            vehicleOfflineOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            onlineOn?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            occurredAtLocation?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            occurredAtRegion?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            serviceMode?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            interceptionStatus?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Original JSON cell; max string length 20000, max depth 4, max 500 nodes and 64000 UTF-8 bytes per row. */
+            investigation?: (string | number | boolean | unknown[] | {
+                [key: string]: unknown;
+            }) | null;
+        };
+        CustomerLedgerWarningDto: {
+            field: string;
+            code: string;
+        };
+        CustomerLedgerItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            complaintNumber: string;
+            version: number;
+            /** @enum {string} */
+            status: "FOLLOWING" | "CLOSED";
+            legacyStatus: string;
+            archived?: boolean;
+            /** Format: uuid */
+            customerId: string | null;
+            normalized: components["schemas"]["CustomerLedgerNormalizedDto"];
+            raw: components["schemas"]["CustomerLedgerFieldsDto"];
+            warnings: components["schemas"]["CustomerLedgerWarningDto"][];
+            /** Format: uuid */
+            registeredByUserId: string;
+            /** Format: uuid */
+            qualityEngineerId: string | null;
+            /** Format: uuid */
+            qualityEngineerAssignmentId: string | null;
+            /** @enum {string|null} */
+            qualityEngineerSource: "MANUAL" | "MAPPING" | null;
+            /** @enum {string|null} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION" | null;
+            mapping: components["schemas"]["ComponentProjectResolutionDto"] | null;
+            mileageBand: string | null;
+            serviceMonths: number | null;
+            misTag: string | null;
+            courierNumber: string | null;
+            /** Format: date */
+            receivedOn: string | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** Format: uuid */
+            closedByUserId: string | null;
+            closureNote: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CustomerLedgerPageDto: {
+            items: components["schemas"]["CustomerLedgerItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CustomerLedgerCandidateDto: {
+            projectQualified?: boolean;
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            userId: string;
+            username: string | null;
+            fullName: string | null;
+            departmentName: string | null;
+            positionName: string | null;
+        };
+        CustomerLedgerCandidatesDto: {
+            items: components["schemas"]["CustomerLedgerCandidateDto"][];
+        };
+        CustomerLedgerImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @description Bounded raw cells; invalid business values are preserved with null normalized values. */
+            fields: components["schemas"]["CustomerLedgerFieldsDto"];
+            /** Format: uuid */
+            customerId?: string | null;
+            /** Format: uuid */
+            qualityEngineerAssignmentId?: string | null;
+            rowNumber: number;
+            /** @enum {string} */
+            action: "ADD" | "SKIP" | "SUPPLEMENT";
+            /** Format: uuid */
+            targetId?: string;
+            expectedVersion?: number;
+        };
+        CustomerLedgerImportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            mode: "CANCEL" | "CONTINUE" | "SKIP_ERRORS";
+            rows: components["schemas"]["CustomerLedgerImportRowDto"][];
+        };
+        CustomerLedgerImportItemDto: {
+            rowNumber: number;
+            /** @enum {string} */
+            outcome: "CREATED" | "SUPPLEMENTED" | "SKIPPED" | "FAILED" | "CANCELLED" | "PREVIEW";
+            /** Format: uuid */
+            complaintId: string | null;
+            errorCode: string | null;
+            warnings: components["schemas"]["CustomerLedgerWarningDto"][];
+            record: components["schemas"]["CustomerLedgerItemDto"] | null;
+            similarities: components["schemas"]["CustomerLedgerItemDto"][];
+        };
+        CustomerLedgerImportResultDto: {
+            items: components["schemas"]["CustomerLedgerImportItemDto"][];
+            created: number;
+            supplemented: number;
+            skipped: number;
+            failed: number;
+            pendingCorrection: number;
+        };
+        CustomerLedgerEventDto: {
+            /** Format: uuid */
+            id: string;
+            sequence: number;
+            eventType: string;
+            fromStatus: string;
+            toStatus: string;
+            note: string;
+            /** Format: uuid */
+            actorUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CustomerLedgerDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            complaintNumber: string;
+            version: number;
+            /** @enum {string} */
+            status: "FOLLOWING" | "CLOSED";
+            legacyStatus: string;
+            archived?: boolean;
+            /** Format: uuid */
+            customerId: string | null;
+            normalized: components["schemas"]["CustomerLedgerNormalizedDto"];
+            raw: components["schemas"]["CustomerLedgerFieldsDto"];
+            warnings: components["schemas"]["CustomerLedgerWarningDto"][];
+            /** Format: uuid */
+            registeredByUserId: string;
+            /** Format: uuid */
+            qualityEngineerId: string | null;
+            /** Format: uuid */
+            qualityEngineerAssignmentId: string | null;
+            /** @enum {string|null} */
+            qualityEngineerSource: "MANUAL" | "MAPPING" | null;
+            /** @enum {string|null} */
+            stage: "NEW_PRODUCT" | "MASS_PRODUCTION" | null;
+            mapping: components["schemas"]["ComponentProjectResolutionDto"] | null;
+            mileageBand: string | null;
+            serviceMonths: number | null;
+            misTag: string | null;
+            courierNumber: string | null;
+            /** Format: date */
+            receivedOn: string | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** Format: uuid */
+            closedByUserId: string | null;
+            closureNote: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            history: components["schemas"]["CustomerLedgerEventDto"][];
+        };
+        CustomerLedgerCreateDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @description Bounded raw cells; invalid business values are preserved with null normalized values. */
+            fields: components["schemas"]["CustomerLedgerFieldsDto"];
+            /** Format: uuid */
+            customerId?: string | null;
+            /** Format: uuid */
+            qualityEngineerAssignmentId?: string | null;
+        };
+        CustomerLedgerUpdateDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @description Bounded raw cells; invalid business values are preserved with null normalized values. */
+            fields: components["schemas"]["CustomerLedgerFieldsDto"];
+            /** Format: uuid */
+            customerId?: string | null;
+            /** Format: uuid */
+            qualityEngineerAssignmentId?: string | null;
+            expectedVersion: number;
+        };
+        CustomerLedgerReassignDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            qualityEngineerAssignmentId: string;
+            reason: string;
+        };
+        CustomerLedgerReceivingDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            courierNumber?: string | null;
+            /** Format: date */
+            receivedOn?: string | null;
+        };
+        CustomerLedgerNoteDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            note: string;
+        };
+        CustomerAnalysisDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            complaintId: string;
+            /** @enum {string} */
+            section: "FAE" | "SUPPLIER";
+            version: number;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** Format: uuid */
+            assigneeAssignmentId: string;
+            /** Format: uuid */
+            departmentId: string;
+            text: string | null;
+            progress: string | null;
+            result: string | null;
+            /** Format: date */
+            completedOn: string | null;
+            failedPart: string | null;
+            failedMaterialCode: string | null;
+            supplierAnalysisRequired: boolean | null;
+            fileIds: string[];
+            /** @enum {string|null} */
+            faeStatus: "NOT_ANALYSED" | "ANALYSED" | null;
+            /** Format: uuid */
+            updatedByUserId: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CustomerFaeAnalysisTaskDto: {
+            /** @enum {string} */
+            kind: "CUSTOMER_COMPLAINT_FAE";
+            analysis: components["schemas"]["CustomerAnalysisDto"];
+        };
+        CustomerAnalysisSummaryDto: {
+            /** Format: uuid */
+            complaintId: string;
+            canDispatch?: boolean;
+            canRecoverAssignment?: boolean;
+            fae: components["schemas"]["CustomerAnalysisDto"] | null;
+            supplier: components["schemas"]["CustomerAnalysisDto"] | null;
+        };
+        CustomerAnalysisCandidateDto: {
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            departmentId: string;
+        };
+        AssignCustomerAnalysisDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @description 0 for the first assignment; otherwise the analysis version. */
+            expectedVersion: number;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** Format: uuid */
+            assigneeAssignmentId: string;
+            recoverStale?: boolean;
+        };
+        CustomerAnalysisHistoryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            action: "ASSIGNED" | "TRANSFERRED" | "SAVED";
+            snapshot: components["schemas"]["CustomerAnalysisDto"];
+        };
+        SaveCustomerFaeAnalysisDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            fileIds?: string[];
+            text?: string | null;
+            /** Format: date */
+            completedOn?: string | null;
+            failedPart?: string | null;
+            failedMaterialCode?: string | null;
+            supplierAnalysisRequired?: boolean | null;
+        };
+        SaveCustomerSupplierAnalysisDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            fileIds?: string[];
+            progress?: string | null;
+            result?: string | null;
+        };
+        TransferCustomerAnalysisDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            assigneeUserId: string;
+            /** Format: uuid */
+            assigneeAssignmentId: string;
         };
         MaterialMasterDto: {
             /** Format: uuid */
@@ -21842,6 +22556,704 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerIssueLinkHistoryDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                complaintType?: "ZERO_KM" | "AFTER_SALES";
+                status?: "FOLLOWING" | "CLOSED";
+                stage?: "NEW_PRODUCT" | "MASS_PRODUCTION";
+                search?: string;
+                customerId?: string;
+                componentCode?: string;
+                projectCode?: string;
+                qualityEngineerId?: string;
+                mine?: "true" | "false";
+                linked?: "true" | "false";
+                occurredFrom?: string;
+                occurredTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerCreateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_candidates: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                complaintType?: "ZERO_KM" | "AFTER_SALES";
+                status?: "FOLLOWING" | "CLOSED";
+                stage?: "NEW_PRODUCT" | "MASS_PRODUCTION";
+                search?: string;
+                customerId?: string;
+                componentCode?: string;
+                projectCode?: string;
+                qualityEngineerId?: string;
+                mine?: "true" | "false";
+                linked?: "true" | "false";
+                occurredFrom?: string;
+                occurredTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerCandidatesDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_preview: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerImportResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_commit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerImportResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerDetailDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerUpdateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_attachments: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_reassign: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerReassignDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_receiving: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerReceivingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_close: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerNoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_reopen: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerNoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_tasks: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerFaeAnalysisTaskDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_summary: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisSummaryDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_candidates: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                recoverStale?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+                section: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisCandidateDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_assign: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                section: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCustomerAnalysisDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_history: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisHistoryDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_saveFae: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCustomerFaeAnalysisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_saveSupplier: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCustomerSupplierAnalysisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintAnalysisController_transfer: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferCustomerAnalysisDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAnalysisDto"];
                 };
             };
             default: {

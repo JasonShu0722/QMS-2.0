@@ -3,7 +3,7 @@ import { Alert, Button, Modal, Space, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
-import { fileUrl, type Attachment } from '../attachments/attachments';
+import { fileUrl, type Attachment, type FileResource } from '../attachments/attachments';
 import { aborted, useEightDText, type EightDRead } from './eight-d';
 import { useEightDEvidenceScope } from './EightDEvidenceScope';
 import styles from './eight-d.module.css';
@@ -64,11 +64,14 @@ export function EightDEvidenceSection({ label, ...props }: Parameters<typeof Eig
   </details>;
 }
 
-export function EightDEvidence({ problemId, fileIds, readOnly, read, onChange }: {
+export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, onChange, onLocalPendingChange, onFileReady }: {
   problemId: string; fileIds: string[]; readOnly: boolean; read: EightDRead; onChange: (ids: string[]) => void;
+  resource?: FileResource; onLocalPendingChange?: (pending: boolean) => void;
+  onFileReady?: (file: Attachment) => boolean | void;
 }) {
   const text = useEightDText();
   const scope = useEightDEvidenceScope();
+  const targetResource = resource ?? { resourceType: 'process-eight-d', resourceId: problemId };
   const [files, setFiles] = useState<Attachment[]>([]);
   const [preview, setPreview] = useState<{ file: Attachment; url?: string }>();
   const [zoom, setZoom] = useState(100);
@@ -86,7 +89,7 @@ export function EightDEvidence({ problemId, fileIds, readOnly, read, onChange }:
     objectUrl.current = undefined; previewFile.current = undefined;
   }, []);
   const close = useCallback(() => { release(); setPreview(undefined); setBusy(false); setError(false); }, [release]);
-  useEffect(() => { close(); return release; }, [problemId, idsKey, read, close, release]);
+  useEffect(() => { close(); return release; }, [problemId, targetResource.resourceType, targetResource.resourceId, idsKey, read, close, release]);
   const denied = useCallback((cause: ApiError) => {
     revoked.current = true; close(); setFiles([]); scope.onAccessDenied?.(cause);
   }, [close, scope.onAccessDenied]);
@@ -137,9 +140,9 @@ export function EightDEvidence({ problemId, fileIds, readOnly, read, onChange }:
     } finally { if (version === generation.current) setBusy(false); }
   }
   return <>
-    <AttachmentPanel resource={{ resourceType: 'process-eight-d', resourceId: problemId }} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
-      onAccessDenied={denied} onPendingChange={scope.onPendingChange}
-      onReady={file => { if (readOnly || revoked.current) return false; if (!fileIds.includes(file.id)) onChange([...fileIds, file.id]); return true; }} onRemoved={id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }} />
+    <AttachmentPanel resource={targetResource} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
+      onAccessDenied={denied} onPendingChange={onLocalPendingChange ? undefined : scope.onPendingChange} onLocalPendingChange={onLocalPendingChange}
+      onReady={file => { if (revoked.current) return false; if (onFileReady) return onFileReady(file); if (readOnly) return false; if (!fileIds.includes(file.id)) onChange([...fileIds, file.id]); return true; }} onRemoved={id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }} />
     <Space wrap>{files.filter(file => fileIds.includes(file.id) && clean(file) && previewTypes.includes(file.contentType)).map(file => <Button key={file.id} disabled={busy} aria-label={`${text('预览附件', 'Preview attachment')} ${file.originalName}`} onClick={() => void open(file)}>{text('预览附件', 'Preview attachment')} · {file.originalName}</Button>)}</Space>
     <Modal open={!!preview} title={preview?.file.originalName} onCancel={close} destroyOnHidden width="min(1000px, 95vw)" footer={<Space wrap>
       {preview && <Button disabled={busy} onClick={() => void download(preview.file)}>{text('授权下载附件', 'Download authorized attachment')}</Button>}
