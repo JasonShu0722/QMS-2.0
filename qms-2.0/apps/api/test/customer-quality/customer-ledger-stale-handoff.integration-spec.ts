@@ -199,6 +199,50 @@ describe('PR75 explicitly authorized stale-engineer handoff on real PostgreSQL',
     expect(await snapshot(row.id)).toEqual(before);
   });
 
+  it('excludes an active write-only engineer from manual picks, candidates, mapping recovery and reassignment', async () => {
+    const { owner, row, project, code } = await fixture({ stale: false });
+    const readless = await person([P.write, P.project]);
+    await expect(ledger.create(registrar, { fields: { componentCode: code }, qualityEngineerAssignmentId: readless.assignmentId },
+      randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'CUSTOMER_LEDGER_ENGINEER_UNAVAILABLE' } });
+    await expect(ledger.update(owner, row.id, { expectedVersion: row.version, fields: {}, qualityEngineerAssignmentId: readless.assignmentId },
+      randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'CUSTOMER_LEDGER_ENGINEER_UNAVAILABLE' } });
+    for (const stage of ['NEW_PRODUCT', 'MASS_PRODUCTION'] as const) {
+      const candidates = await ledger.candidates(operator, Object.assign(new CustomerLedgerListDto(), { stage }));
+      expect(candidates.items.map(p => p.assignmentId)).not.toContain(readless.assignmentId);
+    }
+    const missingCode = randomUUID();
+    const empty = await ledger.create(registrar, { fields: { componentCode: missingCode } }, randomUUID(), randomUUID());
+    await components.updateProject(configurer, organizationId, project.id,
+      { expectedVersion: project.version + 1, customerEngineerAssignmentId: readless.assignmentId }, randomUUID(), randomUUID());
+    await components.createMapping(configurer, organizationId, { componentCode: missingCode, projectRecordId: project.id, productCategory: 'controller' }, randomUUID(), randomUUID());
+    const before = await snapshot(empty.id);
+    expect(await ledger.detail(registrar, empty.id)).toMatchObject({ version: empty.version, qualityEngineerId: null, qualityEngineerAssignmentId: null });
+    expect(await snapshot(empty.id)).toEqual(before);
+    expect(await ledger.create(registrar, { fields: { componentCode: missingCode } }, randomUUID(), randomUUID()))
+      .toMatchObject({ qualityEngineerId: null, qualityEngineerAssignmentId: null });
+    await end(owner);
+    const stale = await snapshot(row.id);
+    await post(operator, row.id, input(row.version, readless.assignmentId)).expect(409);
+    expect(await snapshot(row.id)).toEqual(stale);
+  });
+
+  it('allows explicit reassignment when a saved active engineer loses read but retains write', async () => {
+    const { owner, row } = await fixture({ stale: false });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: P.read } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: owner.roleId, permissionId: permission.id } } });
+    expect((await prisma.userPosition.findUniqueOrThrow({ where: { id: owner.assignmentId } })).endedAt).toBeNull();
+    await expect(update(owner, row.id, row.version)).rejects.toMatchObject({ status: 403 });
+    const before = await snapshot(row.id);
+    const handed = await post(operator, row.id, input(row.version)).expect(201);
+    expect(handed.body).toMatchObject({ qualityEngineerId: cqe.id, qualityEngineerAssignmentId: cqe.assignmentId, version: row.version + 1 });
+    const after = await snapshot(row.id);
+    expect(after.row).toEqual({ ...before.row, qualityEngineerId: cqe.id, qualityEngineerAssignmentId: cqe.assignmentId,
+      qualityEngineerSource: 'MANUAL', registeredStage: 'MASS_PRODUCTION', version: row.version + 1, updatedById: operator.id, updatedAt: expect.any(Date) });
+    expect(after.events.slice(0, -1)).toEqual(before.events);
+    expect(after.events.at(-1)).toMatchObject({ eventType: 'REASSIGNED', actorUserId: operator.id });
+    await expect(update(cqe, row.id, handed.body.version)).resolves.toMatchObject({ version: handed.body.version + 1 });
+  });
+
   it('uses the actual mapped stage, requiring project write for NEW but accepting a MASS CQE without it', async () => {
     const { row, project } = await fixture();
     const mass = await ledger.detail(registrar, row.id);

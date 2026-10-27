@@ -72,7 +72,7 @@ export class CustomerComplaintLedgerService {
     const assignment = await readComponentEngineerAssignment(tx, organizationId, assignmentId, new Date());
     if (!assignment.valid || !assignment.userId) return null;
     const granted = await adminPermissions(tx, assignment.userId, organizationId);
-    if (!granted.includes(LEDGER_PERMISSIONS.write) || (stage === 'NEW_PRODUCT' && !granted.includes(LEDGER_PERMISSIONS.project))) return null;
+    if (!granted.includes(LEDGER_PERMISSIONS.read) || !granted.includes(LEDGER_PERMISSIONS.write) || (stage === 'NEW_PRODUCT' && !granted.includes(LEDGER_PERMISSIONS.project))) return null;
     return assignment;
   }
 
