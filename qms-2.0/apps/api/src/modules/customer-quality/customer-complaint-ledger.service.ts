@@ -303,6 +303,7 @@ export class CustomerComplaintLedgerService {
     const current = await this.lockCase(tx, actor, id, input.expectedVersion, 'update');
     const row = await this.row(tx, current.organizationId, id);
     if (supplement && input.qualityEngineerAssignmentId !== undefined) ledgerFail('CUSTOMER_LEDGER_SUPPLEMENT_SCOPE_INVALID');
+    if (current.status === 'CLOSED' && input.qualityEngineerAssignmentId === null) ledgerFail('CUSTOMER_LEDGER_CLOSED_ENGINEER_REQUIRED', 409);
     const investigation = input.fields.investigation;
     if (investigation !== undefined && (supplement ? nonempty(investigation) : current.qualityEngineerId !== actor.id)) ledgerFail('CUSTOMER_LEDGER_RESPONSIBILITY_DENIED', 403);
     const raw = supplement ? mergeComplaintSupplement(this.fields(row), input.fields) : { ...this.fields(row), ...input.fields };

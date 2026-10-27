@@ -98,7 +98,7 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
       })}
       {record && canInvestigate ? <label className="customer-ledger-form-wide"><span>调查情况</span><Input.TextArea aria-label="调查情况" rows={4} value={rawText(fields.investigation)} onChange={event => { setFields(current => ({ ...current, investigation: event.target.value })); setConfirmed(false); setDirty(true); }} /></label> : null}
       <label><span>实际跟进质量工程师</span><select aria-label="实际跟进质量工程师" value={assignment ?? '__KEEP__'} onChange={event => { setAssignment(event.target.value === '__KEEP__' ? undefined : event.target.value); setConfirmed(false); setDirty(true); }}>
-        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '由映射带出；无可用映射可待分配'}</option><option value="">{record ? '清除指定；跟进中仍按映射带出，无可用人选则待分配' : '未指定，仍按映射带出；无可用人选则待分配'}</option>{candidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
+        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '由映射带出；无可用映射可待分配'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定；跟进中仍按映射带出，无可用人选则待分配' : '未指定，仍按映射带出；无可用人选则待分配'}</option>{candidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
       </select></label>
     </fieldset>
   </Modal>;

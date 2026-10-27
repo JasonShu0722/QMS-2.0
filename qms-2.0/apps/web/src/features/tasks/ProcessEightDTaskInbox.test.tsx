@@ -84,7 +84,7 @@ it('keeps the comment on conflict and requires a fresh task and request baseline
   });
   await mount(); fireEvent.click(screen.getByRole('button', { name: '审核延期' })); await screen.findByText('等待真实验证');
   fireEvent.change(screen.getByLabelText('延期审核意见'), { target: { value: '保留意见' } }); fireEvent.click(screen.getByRole('button', { name: '提交延期审核' }));
-  expect(await screen.findByText('延期基线已变化，请重新核对；意见已保留。')).toBeVisible();
+  await waitFor(() => expect(screen.getByText('延期基线已变化，请重新核对；意见已保留。')).toBeVisible());
   expect(screen.getByLabelText('延期审核意见')).toHaveValue('保留意见');
   expect(screen.getByRole('button', { name: '提交延期审核' })).toBeDisabled();
 });

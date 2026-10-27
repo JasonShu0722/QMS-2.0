@@ -204,6 +204,21 @@ it('clears the formal ledger parent when a mounted analysis slot reports a curre
 });
 
 const assignedCandidates = [{ assignmentId: 'assignment', userId: 'user', fullName: '实际工程师', username: 'qe', positionName: '项目质量', departmentName: '质量' }];
+it.each(['FOLLOWING', 'CLOSED'] as const)('only permits clearing an engineer while %s is following', async status => {
+  const record = { ...item, status };
+  showContent(<CustomerLedgerEditor record={record} candidates={assignedCandidates} onDenied={vi.fn()} onSaved={vi.fn()} onClose={vi.fn()} refreshDetail={async () => record} />);
+  const engineer = screen.getByLabelText('实际跟进质量工程师');
+  const clear = within(engineer).getByRole('option', { name: /清除指定/ });
+  if (status === 'CLOSED') expect(clear).toBeDisabled(); else expect(clear).toBeEnabled();
+  expect(within(engineer).getByRole('option', { name: '保留当前实际跟进人' })).toBeEnabled();
+  expect(within(engineer).getByRole('option', { name: /实际工程师/ })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('详细故障描述'), { target: { value: '允许正常补充事实' } });
+  fireEvent.click(screen.getByLabelText('保存台账'));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  expect(JSON.parse(String(writes()[0]?.[1]?.body))).toMatchObject({ fields: { defectDescription: '允许正常补充事实' }, expectedVersion: 1 });
+  expect(JSON.parse(String(writes()[0]?.[1]?.body))).not.toHaveProperty('qualityEngineerAssignmentId');
+});
+
 function detailContent(record = item) {
   return <CustomerLedgerDetail record={record} candidates={assignedCandidates} userId="user" permissions={permissions} onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={async () => record} />;
 }

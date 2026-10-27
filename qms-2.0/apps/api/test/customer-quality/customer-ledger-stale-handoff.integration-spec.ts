@@ -228,6 +228,18 @@ describe('PR75 explicitly authorized stale-engineer handoff on real PostgreSQL',
     expect(await snapshot(archivedId)).toEqual(archived);
   });
 
+  it('rejects clearing a closed engineer without side effects and keeps the same engineer able to edit and reopen', async () => {
+    const { owner, row } = await fixture({ stale: false, closed: true });
+    const before = await snapshot(row.id);
+    await expect(ledger.update(owner, row.id, { expectedVersion: row.version, fields: {}, qualityEngineerAssignmentId: null },
+      randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'CUSTOMER_LEDGER_CLOSED_ENGINEER_REQUIRED' } });
+    expect(await snapshot(row.id)).toEqual(before);
+    const edited = await update(owner, row.id, row.version);
+    expect(edited).toMatchObject({ status: 'CLOSED', qualityEngineerId: owner.id, qualityEngineerAssignmentId: owner.assignmentId, version: row.version + 1 });
+    const reopened = await ledger.reopen(owner, row.id, { expectedVersion: edited.version, note: 'Same engineer can still restore following' }, randomUUID(), randomUUID());
+    expect(reopened).toMatchObject({ status: 'FOLLOWING', qualityEngineerId: owner.id, qualityEngineerAssignmentId: owner.assignmentId, version: edited.version + 1 });
+  });
+
   it('uses exact CAS and idempotency, replays once without another event, and rejects conflicting bodies or competing writes', async () => {
     const { row } = await fixture();
     const before = await snapshot(row.id), key = randomUUID(), body = input(row.version);
