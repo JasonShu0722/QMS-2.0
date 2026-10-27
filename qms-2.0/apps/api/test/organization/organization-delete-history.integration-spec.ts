@@ -15,15 +15,14 @@ import { AuditExportService } from '../../src/modules/audit-log/audit-export.ser
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { AdminMutationService, type AdminActor } from '../../src/common/security/admin-mutation.service.js';
 import { archivedOrganizationDelete } from '../../src/modules/organization/organization-history-archive.js';
+import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
 const connection = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined;
 if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
-  || !process.env.QMS_ORGANIZATION_DELETE_TEST_DB
-  || decodeURIComponent(connection.pathname.slice(1)) !== process.env.QMS_ORGANIZATION_DELETE_TEST_DB
-  || !['postgres:', 'postgresql:'].includes(connection.protocol)
-  || !['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname)
-  || connection.port === '55440' || connection.search || connection.hash) {
-  throw new Error('Requires the parent-provisioned dedicated organization-delete PostgreSQL database; never preview/production.');
+  || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
+  || (process.env.QMS_ORGANIZATION_DELETE_TEST_DB !== undefined
+    && decodeURIComponent(connection.pathname.slice(1)) !== process.env.QMS_ORGANIZATION_DELETE_TEST_DB)) {
+  throw new Error('Requires disposable loopback PostgreSQL and the dedicated organization-delete database when specified; never preview/production.');
 }
 jest.setTimeout(120_000);
 

@@ -9,9 +9,9 @@
 | 批准 | 首单元已部署；负责人批准完成N4剩余客户完整8D与新品同源，并于2026-10-27追加空组织受控删除修正。2026-10-28最新明确开启夜间模式，授权持续推进N4→N5及通过门禁后的PR、合并部署；20分钟heartbeat已创建为qms-n4-n5。此新授权替代此前正常停止点，不扩大到N6、生产配权、启用绑定或实际删除组织 |
 | 基线 | 首单元开发base为28cc304，审查head为7f6972be856876f4c988c2feed50474a20c14c4e，PR #75已squash为7cd2707f1003546474cac72f6701aa6d8bfc0226并部署；合并树与审查树完全一致。本批分支codex/qms-n4-complete-internal-eight-d，HEAD 824f51355e323f1dad8b2b9c7090f20215707715，安全携入首单元纯文档归档 |
 | 需求 | 首单元user回读revision311、has_more=false：REQ-0028/reczz28RDS4Bq9gG与0029/reczz28RDS4BnyEL开发中；0026/reczz28RDS4BnuCp及0027/reczz28RDS4Bp8Yn现为负责人上线验收完成。本批重新回读0026/0027/0028，直接指令仅覆盖N4剩余两单元；不把状态当全域已经实现，不扩N5或重复N3 |
-| 映射 | 首单元V0.0.32：[Issue #74](https://github.com/JasonShu0722/QMS-2.0/issues/74)、[PR #75](https://github.com/JasonShu0722/QMS-2.0/pull/75)。本批V0.0.33：[Issue #76](https://github.com/JasonShu0722/QMS-2.0/issues/76)，客户完整8D及新品同源闭环；尚未创建本批PR |
+| 映射 | 首单元V0.0.32：[Issue #74](https://github.com/JasonShu0722/QMS-2.0/issues/74)、[PR #75](https://github.com/JasonShu0722/QMS-2.0/pull/75)。本批V0.0.33：[Issue #76](https://github.com/JasonShu0722/QMS-2.0/issues/76)、[PR #77](https://github.com/JasonShu0722/QMS-2.0/pull/77)，初始head fcfab03；原提交与集中审查、CI及后续fix分开记录 |
 | 边界 | 不代配生产组织/岗位/任职或管理员授权，不发布绑定/启用新业务，不删ZLGLB、不关Issue/REQ、不改可见性、不做全局prune；N6 IMS/AI及P3/指标绩效/在线绘图/Office报告不接入 |
-| 下一动作 | V0.0.33两域完整链及组织删除修正已完成本地实现与主体门禁，最后CSS回归168项通过、真实浏览器2故事通过。完成最终窄审和文档/构建复核后主动提交PR，按最新夜间授权接续同head检查、合并部署，再按既有需求和实际代码推进N5；不将机器验证当成人工验收 |
+| 下一动作 | PR #77初始head云端Code Review completed/无发现，CI40540859499的组织删除专项因本地专用库变量缺失在preflight失败，首分片其余36完整文件600项通过。V0.0.33-fix1仅修测试环境接入并批查新增测试guard，保留真实库安全限制及22项完整断言；完成双审/本地复验后统一推送，再以新head完整门禁接续发布和N5，不重跑已结束的业务开发 |
 | 证据 | 首单元Git外D:/WorkSpace/QMS-2.0-local/n4-evidence；本批n4-remaining-evidence。三个独立一次性库，禁止55440；真实服务门禁与样例/人工验收分层 |
 
 负责人补充：不只看REQ标记状态，按前期计划和实际项目代码开发进度接续。该文档只是原路线的执行细化/证据记录，不重新批准业务或替代总计划。完成判定分源码贯通、适用测试、发布包含、真实配置/人工验收四层。
@@ -269,7 +269,7 @@ Git外证据目录D:/WorkSpace/QMS-2.0-local/n4-evidence/n4-release-20261027，�
 - [x] 当前明确授权、main/checkout与原路线/来源差距核对，user回读3REQ，复用归档建立功能分支及Issue #76。
 - [x] A/B/C/D TDD及完整范围规格审查后质量审查；独立写集并行、共享整合串行。最后CSS/browser窄审及复测单列下节。
 - [x] 父完整域链与既有过程/平台邻近真实回归；契约/构建/归档/Compose/治理及安全范围扫描。最终文档改动复核单列下节。
-- [ ] 客户和新品两个完整目标分别核对后统一提交/推送PR，精确head CI与云端集中复审，不逐条找补。
+- [x] 客户和新品两个完整目标分别核对后统一提交/推送PR #77；精确head CI与云端集中复审记录于6.8，不以PR创建代表所有检查通过。
 - [ ] 获准后合并部署及分域业务配置/人工验收，Issue/整包REQ未经授权不关闭。
 
 证据统一Git外D:/WorkSpace/QMS-2.0-local/n4-remaining-evidence。只使用标签已核对的一次性容器、新DB/对象前缀/邮箱；禁止55440、不删除旧数据、不改生产业务配置。历史首单元的PASS与失败保留，不能替代本批最终树。开发、CI、部署、配置与人工验收分别记事实；此前禁止自动接续N5的限制已由本页顶部最新夜间授权替代。
@@ -325,3 +325,13 @@ Git外证据目录D:/WorkSpace/QMS-2.0-local/n4-evidence/n4-release-20261027，�
 最后CSS/browser由Boole规格窄审、Kuhn独立质量窄审通过，均未发现P1/P2。父另行执行process-eight-d/internal-eight-d两个目录共10完整文件168项默认预算回归，0失败/跳过；CSS后Web lint及build退出0，既有chunk告警保留。浏览器最终2故事0重试/跳过、1944输入首尾一致；两份真实UI下载PDF分别56864/56699字节。上述只覆盖默认主题自动化与几何边界，不替代全部窄屏触屏操作、六主题或人工业务验收。
 
 2026-10-28负责人重新明确夜间N4→N5开发、PR与合并部署授权，20分钟heartbeat已创建并回读为ACTIVE，替代先前停止边界。下一步按同head检查/审查和发布快照/迁移/服务SHA逐层推进，不因新授权跳过门禁或自动开通生产业务；需求/Issue关闭及Base回填仍不执行。
+
+### 6.8 PR #77 与测试环境接入纠错（2026-10-28）
+
+初始head fcfab03fef3aa117d3e50a020a9041e627ad5151，CI40540859499；Code Review机器人状态绑定该head、completed且两项findings=false，Security Review未运行。治理及API纯测通过；集成首分片36完整文件600项通过，但organization-delete-history整文件要求本地专用QMS_ORGANIZATION_DELETE_TEST_DB，CI实际使用已标识的一次性loopback qms2库而无该附加变量，启动前失败。该遗漏属于测试接入，不是已执行22项业务失败，更不能将整批CI记PASS。
+
+父检查本批所有新增API测试的guard，其他新真实PG文件均复用disposable-postgres既有安全校验，只有此专项附加本地变量。fix1范围限定测试：复用已批准的loopback/禁止55440/显式disposable校验，明确指定专用库时仍校验名称；不改运行代码、迁移、CI权限、case断言或超时。原完整日志保留Git外pr77-integration-first.log，修复与复验另外归档。
+
+Einstein完成单文件修正：同一一次性环境移除专用变量后先真实preflight RED，修后22项完整文件通过；guard安全矩阵21项、既有共享guard单测11项通过。父在另一已配置123迁移的一次性库独立移除该变量，再跑完整22项通过，源码hash首尾相同。原CI四组Web随后全部成功，初轮最终失败仅集成及其汇总依赖，不能记为整轮通过；fix1仍需精确新head云端全门禁。
+
+Lorentz独立SPEC、Huygens独立QUALITY均通过此次单文件修正；`jest.setTimeout`至文件末尾与原head逐字一致。当前补丁不涉及DTO、运行服务或迁移，原业务验证仍明确属于fcfab03，新增完整22项父复验及最终文档治理单独对应fix1，不伪称已经跑过新head完整CI。
