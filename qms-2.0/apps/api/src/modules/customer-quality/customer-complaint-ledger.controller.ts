@@ -8,7 +8,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { CustomerComplaintLedgerService } from './customer-complaint-ledger.service.js';
 import { CustomerLedgerCandidatesDto, CustomerLedgerCreateDto, CustomerLedgerDetailDto, CustomerLedgerImportDto,
   CustomerLedgerImportResultDto, CustomerLedgerItemDto, CustomerLedgerListDto, CustomerLedgerNoteDto,
-  CustomerLedgerPageDto, CustomerLedgerReceivingDto, CustomerLedgerScopeDto, CustomerLedgerUpdateDto } from './customer-complaint-ledger.dto.js';
+  CustomerLedgerPageDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerScopeDto, CustomerLedgerUpdateDto } from './customer-complaint-ledger.dto.js';
 import { LEDGER_PERMISSIONS } from './customer-complaint-ledger.types.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import { FileDto } from '../file-management/file.dto.js';
@@ -62,6 +62,10 @@ export class CustomerComplaintLedgerController {
   @Put(':id') @ApiOkResponse({ type: CustomerLedgerItemDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: LEDGER_PERMISSIONS.write, organizationScope: bodyScope })
   update(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CustomerLedgerUpdateDto) { return this.service.update(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }
+
+  @Post(':id/reassign') @ApiCreatedResponse({ type: CustomerLedgerItemDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: LEDGER_PERMISSIONS.reassign, organizationScope: bodyScope })
+  reassign(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CustomerLedgerReassignDto) { return this.service.reassign(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }
 
   @Put(':id/receiving') @ApiOkResponse({ type: CustomerLedgerItemDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: LEDGER_PERMISSIONS.write, organizationScope: bodyScope })

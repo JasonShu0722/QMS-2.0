@@ -51,6 +51,12 @@ export class CustomerLedgerCreateDto extends CustomerLedgerScopeDto {
 export class CustomerLedgerUpdateDto extends CustomerLedgerCreateDto {
   @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
 }
+export class CustomerLedgerReassignDto extends CustomerLedgerScopeDto {
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+  @ApiProperty({ format: 'uuid' }) @IsUUID() qualityEngineerAssignmentId!: string;
+  @ApiProperty({ minLength: 1, maxLength: 10000 }) @IsString() @MaxLength(10000)
+  @ValidateBy({ name: 'nonblankReason', validator: { validate: (value: unknown) => typeof value === 'string' && value.trim().length > 0 && !value.includes('\u0000') } }) reason!: string;
+}
 export class CustomerLedgerImportRowDto extends CustomerLedgerCreateDto {
   @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) rowNumber!: number;
   @ApiProperty({ enum: ['ADD', 'SKIP', 'SUPPLEMENT'] }) @IsIn(['ADD', 'SKIP', 'SUPPLEMENT']) action!: 'ADD' | 'SKIP' | 'SUPPLEMENT';

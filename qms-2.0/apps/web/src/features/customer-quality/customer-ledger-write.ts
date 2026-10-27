@@ -4,7 +4,7 @@ import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 type Body = components['schemas']['CustomerLedgerCreateDto'] | components['schemas']['CustomerLedgerUpdateDto'] |
-  components['schemas']['CustomerLedgerImportDto'] | components['schemas']['CustomerLedgerReceivingDto'] | components['schemas']['CustomerLedgerNoteDto'];
+  components['schemas']['CustomerLedgerImportDto'] | components['schemas']['CustomerLedgerReceivingDto'] | components['schemas']['CustomerLedgerNoteDto'] | components['schemas']['CustomerLedgerReassignDto'];
 export const ledgerDenied = (cause: unknown) => cause instanceof ApiError && [401, 403].includes(cause.status ?? 0);
 
 export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void) {

@@ -20,8 +20,99 @@ import { TaskTransferService } from '../../src/modules/task-notification/task-tr
 import { NotificationService } from '../../src/modules/task-notification/notification.service.js';
 import { OUTBOX_HANDLER, OutboxWorkerService, type AtomicOutboxHandler } from '../../src/modules/task-notification/outbox-worker.service.js';
 import { clearTimingEvents, timingFixture } from './workflow-timing-fixture.js';
+import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
-if (!process.env.DATABASE_URL) throw new Error('Real PostgreSQL DATABASE_URL is required for task inbox.');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Explicit disposable loopback PostgreSQL is required for task inbox.');
+}
+
+type TaskFixtureCalendar = { now: Date; dayStart: Date; dayEnd: Date; weekEnd: Date };
+
+function pendingTaskDateCounts(dueAt: Date | null, calendar: TaskFixtureCalendar) {
+  return {
+    overdue: Number(dueAt !== null && dueAt < calendar.now),
+    dueToday: Number(dueAt !== null && dueAt >= calendar.dayStart && dueAt < calendar.dayEnd),
+    dueThisWeek: Number(dueAt !== null && dueAt >= calendar.dayStart && dueAt < calendar.weekEnd),
+  };
+}
+
+async function sampleTaskStatistics(
+  readCalendar: () => Promise<TaskFixtureCalendar>,
+  readStatistics: () => ReturnType<TaskService['statistics']>,
+) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const calendar = await readCalendar();
+    const statistics = await readStatistics();
+    const after = await readCalendar();
+    // Independent transactions must bracket statistics within the same PostgreSQL day.
+    if (calendar.dayStart.getTime() === after.dayStart.getTime()
+      && calendar.dayEnd.getTime() === after.dayEnd.getTime()
+      && calendar.weekEnd.getTime() === after.weekEnd.getTime()) {
+      return { calendar, statistics };
+    }
+  }
+  throw new Error('Task statistics calendar changed across both samples');
+}
+
+describe('task inbox fixture calendar', () => {
+  it('resamples statistics once across midnight and rejects a second unstable sample', async () => {
+    const before = {
+      now: new Date('2026-10-26T23:59:59Z'),
+      dayStart: new Date('2026-10-26T00:00:00Z'),
+      dayEnd: new Date('2026-10-27T00:00:00Z'),
+      weekEnd: new Date('2026-11-02T00:00:00Z'),
+    };
+    const after = {
+      now: new Date('2026-10-27T00:00:01Z'),
+      dayStart: before.dayEnd,
+      dayEnd: new Date('2026-10-28T00:00:00Z'),
+      weekEnd: new Date('2026-11-03T00:00:00Z'),
+    };
+    const statistics = { total: 1, pending: 1, inProgress: 0, overdue: 0, unclaimed: 1, mine: 0, dueToday: 1, dueThisWeek: 1, failed: 0 };
+    for (const calendars of [[before, before], [before, after, after, after], [before, after, before, after]]) {
+      let calendarReads = 0;
+      let statisticsReads = 0;
+      const sample = sampleTaskStatistics(async () => {
+        expect(statisticsReads).toBe(Math.ceil(calendarReads / 2));
+        return calendars[calendarReads++]!;
+      }, async () => {
+        expect(calendarReads).toBe(statisticsReads * 2 + 1);
+        statisticsReads += 1;
+        return { ...statistics, dueToday: statisticsReads - 1 };
+      });
+      if (calendars.length === 4 && calendars[2] === before) {
+        await expect(sample).rejects.toThrow('Task statistics calendar changed across both samples');
+      } else {
+        await expect(sample).resolves.toEqual({ calendar: calendars[2] ?? before, statistics: { ...statistics, dueToday: calendars.length === 4 ? 1 : 0 } });
+      }
+      expect(calendarReads).toBe(calendars.length);
+      expect(statisticsReads).toBe(calendars.length / 2);
+    }
+  });
+
+  it('counts a 60-minute SLA across midnight and at midday using the supplied calendar bounds', () => {
+    const calendar = {
+      now: new Date('2026-10-26T23:05:00Z'),
+      dayStart: new Date('2026-10-26T00:00:00Z'),
+      dayEnd: new Date('2026-10-27T00:00:00Z'),
+      weekEnd: new Date('2026-11-02T00:00:00Z'),
+    };
+    expect(pendingTaskDateCounts(new Date('2026-10-27T00:05:00Z'), calendar)).toEqual({ overdue: 0, dueToday: 0, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(new Date('2026-10-26T13:00:00Z'), { ...calendar, now: new Date('2026-10-26T12:00:00Z') })).toEqual({ overdue: 0, dueToday: 1, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(calendar.dayStart, { ...calendar, now: calendar.dayStart })).toEqual({ overdue: 0, dueToday: 1, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(calendar.dayEnd, calendar)).toEqual({ overdue: 0, dueToday: 0, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(calendar.weekEnd, calendar)).toEqual({ overdue: 0, dueToday: 0, dueThisWeek: 0 });
+    expect(pendingTaskDateCounts(calendar.now, calendar)).toEqual({ overdue: 0, dueToday: 1, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(new Date(calendar.now.getTime() - 1), calendar)).toEqual({ overdue: 1, dueToday: 1, dueThisWeek: 1 });
+    expect(pendingTaskDateCounts(null, calendar)).toEqual({ overdue: 0, dueToday: 0, dueThisWeek: 0 });
+    expect(pendingTaskDateCounts(new Date('2026-11-02T00:05:00Z'), {
+      now: new Date('2026-11-01T23:05:00Z'),
+      dayStart: new Date('2026-11-01T04:00:00Z'),
+      dayEnd: new Date('2026-11-02T05:00:00Z'),
+      weekEnd: new Date('2026-11-08T05:00:00Z'),
+    })).toEqual({ overdue: 0, dueToday: 1, dueThisWeek: 1 });
+  });
+});
 
 describe('authorized task inbox on PostgreSQL', () => {
   let module: TestingModule;
@@ -117,7 +208,18 @@ describe('authorized task inbox on PostgreSQL', () => {
     const context = await fixture();
     expect(await tasks.list(context.actor, { pageSize: 1 })).toMatchObject({ total: 1, items: [{ id: context.task.id, canAct: true, canClaim: true, canRelease: false }] });
     expect(await tasks.list(context.actor, { offset: 5 })).toEqual({ total: 1, items: [] });
-    expect(await tasks.statistics(context.actor)).toMatchObject({ total: 1, pending: 1, inProgress: 0, overdue: 0, unclaimed: 1, mine: 0, dueToday: 1, dueThisWeek: 1 });
+    // The fixture SLA can cross midnight; use PostgreSQL's calendar, not the machine's local date.
+    const { calendar, statistics } = await sampleTaskStatistics(async () => {
+      const [calendar] = await prisma.$queryRaw<(TaskFixtureCalendar & { timezone: string })[]>`
+        SELECT CURRENT_TIMESTAMP AS now, current_setting('TimeZone') AS timezone,
+          CURRENT_DATE::timestamptz AS "dayStart",
+          (CURRENT_DATE + INTERVAL '1 day')::timestamptz AS "dayEnd",
+          (CURRENT_DATE + INTERVAL '7 days')::timestamptz AS "weekEnd"`;
+      return calendar!;
+    }, () => tasks.statistics(context.actor));
+    const expectedDates = pendingTaskDateCounts(context.task.dueAt, calendar);
+    console.info('Task inbox calendar fixture', JSON.stringify({ enteredAt: context.task.enteredAt, dueAt: context.task.dueAt, calendar, expectedDates, statistics }));
+    expect(statistics).toMatchObject({ total: 1, pending: 1, inProgress: 0, overdue: expectedDates.overdue, unclaimed: 1, mine: 0, dueToday: expectedDates.dueToday, dueThisWeek: expectedDates.dueThisWeek });
   });
 
   describe('with a real multi-organization event backlog', () => {

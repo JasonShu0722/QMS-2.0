@@ -6,6 +6,7 @@ import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../
 import { ledgerFields, rawText } from './customer-ledger-import';
 import { CustomerLedgerEditor } from './customer-ledger-editor';
 import { CustomerLedgerSourceAttachments } from './customer-ledger-source-attachments';
+import { CustomerLedgerHandoff } from './customer-ledger-handoff';
 import { LedgerConflicts, LedgerError, LedgerWarnings, ledgerBase, ledgerChanges, ledgerConflicts, stageLabel, typeLabel, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import { useCustomerLedgerWrite } from './customer-ledger-write';
 
@@ -81,6 +82,8 @@ export function CustomerLedgerDetail({ record, candidates, customers = [], userI
       {canReceive ? <Button aria-label="维护收件" onClick={() => start('receiving')}>维护收件</Button> : null}
       {canClose ? <Button aria-label={record.status === 'CLOSED' ? '恢复跟进' : '关闭台账'} onClick={() => start(record.status === 'CLOSED' ? 'reopen' : 'close')}>{record.status === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
     </Space></header>
+    <CustomerLedgerHandoff record={record} candidates={candidates} permissions={permissions} organizationId={organizationId}
+      sourcePending={sourcePending} canDispatch={() => !sourcePendingRef.current} onDenied={onDenied} onSaved={onSaved} refreshDetail={refreshDetail} />
     <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} items={[
       { key: 'engineer', label: '实际跟进质量工程师', children: assigned?.fullName || assigned?.username || (record.qualityEngineerId ? `原跟进人 ${record.qualityEngineerId}（当前任职不可用）` : '待分配') },
       { key: 'source', label: '人员来源', children: record.qualityEngineerSource === 'MANUAL' ? '人工指定' : record.qualityEngineerSource === 'MAPPING' ? '映射带出' : '未分配' },

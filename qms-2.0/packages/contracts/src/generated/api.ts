@@ -3607,6 +3607,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/ledger/{id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerComplaintLedgerController_reassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/ledger/{id}/receiving": {
         parameters: {
             query?: never;
@@ -10823,6 +10839,14 @@ export interface components {
             /** Format: uuid */
             qualityEngineerAssignmentId?: string | null;
             expectedVersion: number;
+        };
+        CustomerLedgerReassignDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: uuid */
+            qualityEngineerAssignmentId: string;
+            reason: string;
         };
         CustomerLedgerReceivingDto: {
             /** Format: uuid */
@@ -22812,6 +22836,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerComplaintLedgerController_reassign: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerLedgerReassignDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLedgerItemDto"];
                 };
             };
             default: {

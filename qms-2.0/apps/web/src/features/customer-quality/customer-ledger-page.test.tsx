@@ -51,6 +51,17 @@ function showContent(content: ReactNode, route = '/app/customer-quality') { retu
 function show(route = '/app/customer-quality') { return showContent(<CustomerQualityPage renderAnalysis={complaintId => <div>解析插槽 {complaintId}</div>} />, route); }
 const writes = () => vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method);
 
+it('mounts the authorized stale-engineer handoff in the formal ledger detail', async () => {
+  const stale = { ...item, warnings: [{ field: 'qualityEngineerId', code: 'ENGINEER_NO_LONGER_ELIGIBLE' }] };
+  showContent(<CustomerLedgerDetail record={stale} candidates={[]} permissions={[...permissions, 'customer-quality:complaints:reassign']} organizationId={org}
+    onDenied={vi.fn()} onSaved={vi.fn()} refreshDetail={vi.fn().mockResolvedValue(stale)} />);
+  const handoff = screen.getByRole('button', { name: '交接失效跟进人' });
+  fireEvent.click(handoff);
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '接任质量工程师' })).toBeVisible());
+  expect(screen.getByLabelText('交接原因')).toBeVisible();
+  expect(writes()).toHaveLength(0);
+});
+
 it('loads three formal views and paginates at the server without the legacy strict importer', async () => {
   show();
   expect(await screen.findByLabelText('CQ-N4-1')).toBeVisible();

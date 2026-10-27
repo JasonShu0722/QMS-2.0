@@ -11,7 +11,7 @@ import { ComponentProjectService, listComponentEngineerAssignments, readComponen
 import type { ComponentProjectResolutionDto } from '../platform-configuration/component-project.dto.js';
 import { OrganizationService } from '../organization/organization.service.js';
 import { complaintMileageBand, complaintMisTag, complaintServiceMonths, parseComplaintDate } from './customer-complaint-derived.js';
-import { CustomerLedgerCreateDto, CustomerLedgerImportDto, CustomerLedgerListDto, CustomerLedgerNoteDto, CustomerLedgerReceivingDto, CustomerLedgerUpdateDto,
+import { CustomerLedgerCreateDto, CustomerLedgerImportDto, CustomerLedgerListDto, CustomerLedgerNoteDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerUpdateDto,
   type CustomerLedgerCandidateDto, type CustomerLedgerDetailDto, type CustomerLedgerImportItemDto, type CustomerLedgerImportResultDto,
   type CustomerLedgerImportRowDto, type CustomerLedgerItemDto } from './customer-complaint-ledger.dto.js';
 import { LEDGER_PERMISSIONS, ledgerDisplayStatus, ledgerFail, mergeComplaintSupplement, normalizeComplaintFields,
@@ -349,6 +349,51 @@ export class CustomerComplaintLedgerService {
     return this.mutations.run({ actor, organizationId: this.scope(actor), key, traceId, action: 'CUSTOMER_LEDGER_UPDATED', payload: { id,...dto },
       permission: [LEDGER_PERMISSIONS.read,LEDGER_PERMISSIONS.write], isolationLevel: 'ReadCommitted' },
     tx => this.updateRow(tx, actor, id, dto, traceId), async tx => { await this.readCase(tx, actor, id, 'update'); });
+  }
+
+  private async reassignmentCase(tx: AdminTransaction, actor: AdminActor, id: string, assignmentId: string) {
+    const organizationId = await this.authorize(tx, actor, [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, LEDGER_PERMISSIONS.reassign]);
+    // Do not reconcile an empty engineer here: this capability only repairs a saved stale responsibility.
+    const row = await this.row(tx, organizationId, id);
+    if (row.archived_at) ledgerFail('CUSTOMER_LEDGER_ARCHIVED', 409);
+    const status = ledgerDisplayStatus(row.ledger_status, row.status);
+    if (status === 'CLOSED') await assertAdminAccess(tx, actor, organizationId, LEDGER_PERMISSIONS.closedEdit);
+    const resolution = await this.mapping(tx, organizationId, normalizeComplaintFields(this.fields(row)).normalized.componentCode);
+    const stage: LedgerStage | null = resolution?.outcome === 'matched' ? resolution.project!.stage : row.registered_stage ?? null;
+    const target = await this.eligible(tx, organizationId, assignmentId, stage);
+    if (!target) ledgerFail('CUSTOMER_LEDGER_ENGINEER_UNAVAILABLE', 409);
+    return { row, status, stage, target, resolution };
+  }
+
+  async reassign(actor: AdminActor, id: string, input: CustomerLedgerReassignDto, traceId: string, key?: string) {
+    const dto = await this.input(CustomerLedgerReassignDto, input); validId(id);
+    const organizationId = this.scope(actor);
+    if (dto.organizationId !== undefined && dto.organizationId !== organizationId) ledgerFail('ORGANIZATION_SCOPE_DENIED', 403);
+    const authorize = async (tx: AdminTransaction) => { await this.reassignmentCase(tx, actor, id, dto.qualityEngineerAssignmentId); };
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_LEDGER_REASSIGNED', payload: { id, ...dto },
+      permission: [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, LEDGER_PERMISSIONS.reassign], isolationLevel: 'ReadCommitted' }, async tx => {
+      const { row, status, stage, target, resolution } = await this.reassignmentCase(tx, actor, id, dto.qualityEngineerAssignmentId);
+      if (row.version !== dto.expectedVersion) ledgerFail('CONCURRENCY_CONFLICT', 409);
+      const previous = await this.eligible(tx, organizationId, row.quality_engineer_assignment_id, row.registered_stage ?? stage);
+      if (!row.quality_engineer_id || previous?.userId === row.quality_engineer_id) ledgerFail('CUSTOMER_LEDGER_STALE_ENGINEER_REQUIRED', 409);
+      const [updated] = await tx.$queryRaw<Row[]>`UPDATE customer_quality_complaints SET
+        quality_engineer_id = ${target.userId}::uuid,quality_engineer_assignment_id = ${target.assignmentId}::uuid,quality_engineer_source = 'MANUAL',registered_stage = ${stage},
+        version = version + 1,updated_by_id = ${actor.id}::uuid,updated_at = CURRENT_TIMESTAMP
+        WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid AND version = ${dto.expectedVersion} RETURNING *`;
+      if (!updated) ledgerFail('CONCURRENCY_CONFLICT', 409);
+      await authorize(tx);
+      const change = json({ operation: 'STALE_ENGINEER_HANDOFF', reason: dto.reason,
+        previousAssignmentBasis: { userId: row.quality_engineer_id, assignmentId: row.quality_engineer_assignment_id, source: row.quality_engineer_source, stage: row.registered_stage ?? stage },
+        assignmentBasis: { userId: target.userId, assignmentId: target.assignmentId, source: 'MANUAL', stage } });
+      if (change.length <= 10000) await this.recordEvent(tx, actor, row, 'REASSIGNED', status, change);
+      else {
+        const changeId = randomUUID();
+        for (let start = 0; start < change.length; start += 4000) await this.recordEvent(tx, actor, row, 'REASSIGNED', status,
+          json({ changeId, part: start / 4000 + 1, parts: Math.ceil(change.length / 4000), chunk: change.slice(start, start + 4000) }));
+      }
+      await this.recordAudit(tx, actor, updated, 'CUSTOMER_LEDGER_REASSIGNED', traceId);
+      return this.project(tx, updated, resolution);
+    }, authorize);
   }
 
   private async transition(actor: AdminActor, id: string, input: CustomerLedgerNoteDto, traceId: string, key: string | undefined, close: boolean) {

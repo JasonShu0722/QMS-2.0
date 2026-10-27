@@ -4,6 +4,7 @@ import { parseComplaintDate } from './customer-complaint-derived.js';
 export const LEDGER_PERMISSIONS = {
   read: 'customer-quality:complaints:read', write: 'customer-quality:complaints:write',
   close: 'customer-quality:complaints:close', closedEdit: 'customer-quality:complaints:closed-edit',
+  reassign: 'customer-quality:complaints:reassign',
   project: 'new-product-quality:projects:write',
 } as const;
 export type LedgerOperation = 'read' | 'update' | 'analysis' | 'receiving' | 'close' | 'reopen' | 'closed-edit';
