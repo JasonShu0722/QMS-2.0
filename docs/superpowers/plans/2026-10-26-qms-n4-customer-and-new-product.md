@@ -11,7 +11,7 @@
 | 需求 | user回读revision311、has_more=false：REQ-0028/reczz28RDS4Bq9gG与0029/reczz28RDS4BnyEL开发中；0026/reczz28RDS4BnuCp及0027/reczz28RDS4Bp8Yn现为负责人上线验收完成。本次直接指令覆盖N4/N5剩余范围，不把该状态当全域已经实现或重复N3 |
 | 映射 | [Issue #74](https://github.com/JasonShu0722/QMS-2.0/issues/74)、[PR #75](https://github.com/JasonShu0722/QMS-2.0/pull/75)，首单元V0.0.32，REQ-0028为主；下一修订仍在原PR，不另碎片建飞书/Issue。完整客户8D/新品及N5为后续单元 |
 | 边界 | 不代配生产组织/岗位/任职或管理员授权，不发布绑定/启用新业务，不删ZLGLB、不关Issue/REQ、不改可见性、不做全局prune；N6 IMS/AI及P3/指标绩效/在线绘图/Office报告不接入 |
-| 下一动作 | fix2已推送13ff46c，CI40433615480及复审又发现闭后可清空工程师P2和一个原8D待办测试可见性失败。fix3已最小封口，父完整PG11项、Web台账45项/待办23项通过，独立规格/质量通过，接续构建/治理后提交同PR并等待精确新head CI。fix2其他门禁按原版本分层保留，不拿旧CI合并；客户完整8D/新品及N5仍未交付 |
+| 下一动作 | fix3已推送a6aff49，CI40436229815的integration/Web分片3通过，但API-unit有旧随机traceId误报。fix4仅拆分该测试trace格式与正文泄漏检查，4邻近文件212项及父目标13项、Harvey规格/Franklin质量通过；接续提交同PR等待精确新head CI。其他版本门禁分层保留，不拿旧CI合并；客户完整8D/新品及N5仍未交付 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/n4-evidence；新一次性库/任务隔离资源，禁止55440；真实服务门禁与样例/人工验收分层 |
 
 负责人补充：不只看REQ标记状态，按前期计划和实际项目代码开发进度接续。该文档只是原路线的执行细化/证据记录，不重新批准业务或替代总计划。完成判定分源码贯通、适用测试、发布包含、真实配置/人工验收四层。
@@ -166,3 +166,9 @@ f8156f1同步后CI40415676632的集成步骤失败：UTC23:05创建的60分钟SL
 同head CI的Web分片3有另一真实失败：ProcessEightDTaskInbox原冲突意见测试在提示刚入DOM但尚不可见时即断言可见（原1失败/425通过）。仅将该断言改为等待实际可见，不改业务、默认超时、motion或其他断言；其整文件复验和独立审查另记。此次没有迁移或DTO变化，不再重复生成或执行无关全域测试；旧head所有结果仍只代表对应旧树。
 
 最后父独立完整交接PG11项通过（37.22秒）、台账页面45项通过、待办页面23项通过；Mencius独立SPEC及Maxwell独立QUALITY通过，待办一行时序修复另经同两名审查者分别签核。Ampere首轮测试参数透传错误导致扩大运行，已中止单独保留，不计PASS；正确整文件及父独立复验均23项通过。无默认timeout/motion放宽，无新增依赖、契约或迁移。
+
+### 5.7 fix3云端随机追踪ID测试误报（V0.0.32-fix4）
+
+a6aff49762b2ee334607aefc209a238e6b80b00d已推送并由PR回读一致，四个已报告线程均已依据实际修复和证据回写解决；不等于新head无新发现。CI40436229815的API纯测试115文件中114通过，1个旧测试失败（1520项通过/1失败）：controlled-validation-http对整个错误响应执行负向/42|must be|SELECT|secret/，随机traceId恰含42（27c39a5c-e30e-42c0-bd13-6b6a5e019b9c）误报正文泄漏。
+
+fix4仅修改该测试：traceId单独断言UUID v4，其他payload完整保留原中文字段预期及所有负向泄漏检查；生产requestTraceId的私有Symbol及randomUUID、错误过滤器、默认timeout均不变，不添加mock或client header。原CI是真实RED，未伪造本地重现。工作者完整4个邻近文件212项通过，父完整目标文件13项通过，Harvey独立SPEC、Franklin独立QUALITY通过。没有运行代码/契约/迁移变动，不重新构建或跑无关全域；最终仍等待新head CI。
