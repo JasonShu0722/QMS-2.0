@@ -1,5 +1,11 @@
 # 问题工作空间与领域接入
 
+## N4客户/新品新内部8D接入（本地实施，未发布）
+
+客户新报告以problemId持有，覆盖`customer-quality/customer-complaint`；没有新报告时保留旧受控事实读取。新品新报告注册独立`new-product-quality/new-product-defect-selection`，sourceId为selectionId，不覆盖历史`new-product-issue`或复制原过程事实。新域列表使用有界姓名/期限/阶段摘要，关闭后读取固定修订，不逐条加载完整报告。
+
+工作空间按固定domainUiKey选择三域共用编辑器，各自使用真实领域API、权限、附件resource和报告路径；不开放generic claim/action/upgrade绕过领域守卫。公共不可变报告没有真实UUID修订时返回不可用，当前草稿走对应领域受控报告入口，不伪造修订ID。旧简报及历史升级保持已有兼容路径，依需求069不另建设简报线、不将旧流程无条件升级至本批新受控版本。最终验证与限制见N4计划第6节，尚非上线/人工验收证据。
+
 阶段二提供公共问题查询、个人视图、工作空间、只读报告、问题追溯和受控流程升级，初始领域适配器注册表留空。后续注册由对应领域实现和验收，不把初始空表约束当成永久禁止接入。中性验收模块只存在于 `apps/api/test/problem-index/` 与 `apps/web/playwright/fixtures/`，不由生产入口导入。
 
 ## N3过程接入（2026-10-26，V0.0.31含fix1已部署）

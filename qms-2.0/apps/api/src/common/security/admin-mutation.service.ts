@@ -55,7 +55,7 @@ export class AdminMutationService {
     this.secret = configured ?? 'qms-development-rate-limit-secret-not-for-production';
   }
 
-  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>): Promise<Result> {
+  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel; archivedReceipt?: { organizationId: string; find: (transaction: AdminTransaction) => Promise<{ organizationId: string; action: string; requestDigest: string; response: Prisma.JsonValue } | undefined> } }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>): Promise<Result> {
     try {
       if (!input.key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(input.key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       const key = input.key;
@@ -71,11 +71,15 @@ export class AdminMutationService {
         for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);
         await authorizeResource?.(transaction);
         const identity = { actorUserId: input.actor.id, organizationId: input.organizationId, key };
-        const existing = await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
+        // Archived namespaces never consult or populate the surviving scope's live key space.
+        const existing = input.archivedReceipt ? await input.archivedReceipt.find(transaction)
+          : await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: identity } });
         if (existing) {
+          if (input.archivedReceipt && existing.organizationId !== input.archivedReceipt.organizationId) adminError('IDEMPOTENCY_REPLAY', 409);
           if (existing.action !== input.action || !requestDigests.includes(existing.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
           return (existing.response as { value: Result }).value;
         }
+        if (input.archivedReceipt) adminError('ORGANIZATION_NOT_FOUND', 404);
         const result = await work(transaction, granted);
         const response = JSON.parse(JSON.stringify({ value: result ?? null })) as Prisma.InputJsonObject;
         await transaction.adminMutation.create({ data: { ...identity, action: input.action, requestDigest, response } });

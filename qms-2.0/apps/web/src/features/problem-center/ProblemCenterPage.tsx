@@ -103,14 +103,17 @@ function Feedback({ error, t }: { error?: ErrorState; t: (text: string) => strin
   return <Alert role="alert" type="error" showIcon title={t(error.message)} description={error.traceId ? <span>{t('追踪标识')}: <code>{error.traceId}</code></span> : undefined} />;
 }
 
-export function ProblemCenterPage({ processQuality = false }: { processQuality?: boolean }) {
+type EightDDomain = 'customer-quality' | 'new-product-quality';
+export function ProblemCenterPage({ processQuality = false, eightDDomain }: { processQuality?: boolean; eightDDomain?: EightDDomain }) {
   const [searchParams] = useSearchParams();
   const session = useWorkTabsStore(state => state.sessionScope);
   const explicitOrganization = searchParams.get('organizationId')?.trim() ?? '';
-  return <ProblemCenterScope key={`${session}:${processQuality}:${explicitOrganization || 'session-primary-organization'}`} explicitOrganization={explicitOrganization} processQuality={processQuality} />;
+  return <ProblemCenterScope key={`${session}:${processQuality}:${eightDDomain}:${explicitOrganization || 'session-primary-organization'}`} explicitOrganization={explicitOrganization} processQuality={processQuality} eightDDomain={eightDDomain} />;
 }
 
-function ProblemCenterScope({ explicitOrganization, processQuality }: { explicitOrganization: string; processQuality: boolean }) {
+function ProblemCenterScope({ explicitOrganization, processQuality: processOnly, eightDDomain }: { explicitOrganization: string; processQuality: boolean; eightDDomain?: EightDDomain }) {
+  const processQuality = processOnly || !!eightDDomain;
+  const followupTitle = eightDDomain === 'customer-quality' ? '客户问题跟进' : eightDDomain === 'new-product-quality' ? '新品问题跟进' : '制程问题跟进';
   const { locale, t } = useLanguage();
   const severityText = useEightDSeverityText();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -231,12 +234,15 @@ function ProblemCenterScope({ explicitOrganization, processQuality }: { explicit
     if (!organizationId || accessLost) return undefined;
     const value: ProblemQuery = { organizationId, page, pageSize, ...appliedFilters, sortBy: sort.sortBy, sortDirection: sort.sortDirection };
     if (processQuality) {
-      value.domainCode = 'process-quality';
-      value.problemType = 'PROCESS_DEFECT';
+      value.domainCode = eightDDomain ?? 'process-quality';
+      if (eightDDomain) {
+        value.sourceType = eightDDomain === 'customer-quality' ? 'customer-complaint' : 'new-product-defect-selection';
+        delete value.problemType;
+      } else value.problemType = 'PROCESS_DEFECT';
       value.responseForm = 'EIGHT_D';
     }
     return value;
-  }, [appliedFilters, organizationId, page, pageSize, sort, processQuality, accessLost]);
+  }, [appliedFilters, organizationId, page, pageSize, sort, processQuality, eightDDomain, accessLost]);
 
   useEffect(() => {
     if (!query || processQuality && !scopeActive.current) return;
@@ -265,11 +271,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality }: { explicit
   const selectedView = views.find((view) => view.id === selectedViewId);
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
-    filters: { ...filters, ...(processQuality ? { domainCode: 'process-quality', problemType: 'PROCESS_DEFECT' } : {}) },
+    filters: { ...filters, ...(processQuality ? { domainCode: eightDDomain ?? 'process-quality', problemType: eightDDomain ? undefined : 'PROCESS_DEFECT' } : {}) },
     sort: { ...sort },
     visibleColumns: [...visibleColumns],
     columnOrder: [...columnOrder],
-  }), [columnOrder, filters, sort, visibleColumns, processQuality]);
+  }), [columnOrder, filters, sort, visibleColumns, processQuality, eightDDomain]);
 
   const applyConfiguration = useCallback((next: ProblemViewConfiguration, name?: string) => {
     const normalized = normalizeConfiguration(next);
@@ -412,10 +418,10 @@ function ProblemCenterScope({ explicitOrganization, processQuality }: { explicit
 
   const disabledWrites = writeForbidden || mutating || viewsLoading;
   const visibleColumnLabels = processQuality ? { ...columnLabels, severity: '风险', responsibleParty: '责任科室', ownerId: '负责人', dueAt: '问题截止时间' } : columnLabels;
-  if (accessLost) return <main className="problem-center"><Typography.Title level={1}>{t('制程问题跟进')}</Typography.Title><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
+  if (accessLost) return <main className="problem-center"><Typography.Title level={1}>{t(followupTitle)}</Typography.Title><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
   return <main className="problem-center">
     <div className="problem-center__heading">
-      <div><Typography.Title level={1}>{t(processQuality ? '制程问题跟进' : '问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t(processQuality ? '固定制程领域，一张正式8D一行；编号进入既有问题处理工作空间。' : '在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
+      <div><Typography.Title level={1}>{t(processQuality ? followupTitle : '问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t(processQuality ? '固定领域及来源，一张正式8D一行；编号进入既有问题处理工作空间。' : '在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
       <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
     </div>
     <Feedback error={organizationError} t={t} />

@@ -6,8 +6,8 @@ import PDFDocument from 'pdfkit';
 import type { ProcessEightDControlledReportDto } from './process-eight-d-report.dto.js';
 
 const fontPath = createRequire(import.meta.url).resolve('@expo-google-fonts/noto-sans-sc/400Regular/NotoSansSC_400Regular.ttf');
-const { report, images: rawImages, dimensions } = workerData as {
-  report: ProcessEightDControlledReportDto; images: Map<string, Uint8Array>; dimensions: Map<string, { width: number; height: number }>;
+const { report, images: rawImages, dimensions, domainLabel } = workerData as {
+  report: ProcessEightDControlledReportDto; images: Map<string, Uint8Array>; dimensions: Map<string, { width: number; height: number }>; domainLabel: string;
 };
 const images = new Map([...rawImages].map(([id, bytes]) => [id, Buffer.from(bytes)]));
 
@@ -56,7 +56,7 @@ const labels: Record<string, string> = {
 async function render(): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const pdf = new PDFDocument({ size: 'A4', margins: { top: 83, bottom: 58, left: 38, right: 38 }, autoFirstPage: false,
-      bufferPages: true, info: { Title: `过程内部8D ${report.reportNumber}`, Author: 'QMS' } }) as PDFKit.PDFDocument & Readable;
+      bufferPages: true, info: { Title: `${domainLabel}内部8D ${report.reportNumber}`, Author: 'QMS' } }) as PDFKit.PDFDocument & Readable;
     const chunks: Buffer[] = [];
     let outputBytes = 0;
     pdf.on('data', (chunk: Buffer) => {
@@ -76,7 +76,7 @@ async function render(): Promise<Buffer> {
         pdf.save().fillColor('#e8edf1').opacity(0.55).fontSize(26);
         pdf.rotate(-25, { origin: [280, 420] }).text(`${report.label} / V${report.contentVersion}`, 80, 420, { lineBreak: false });
         pdf.restore();
-        pdf.fillColor('#123b52').fontSize(15).text('过程内部 8D 报告', 38, 28, { lineBreak: false });
+        pdf.fillColor('#123b52').fontSize(15).text(`${domainLabel}内部 8D 报告`, 38, 28, { lineBreak: false });
         pdf.fontSize(8).text(`${report.reportNumber} | 内容 V${report.contentVersion} / 行 V${report.rowVersion} | ${report.label}`, 38, 51, { width, lineBreak: false });
         pdf.moveTo(38, 70).lineTo(557, 70).strokeColor('#b9c9d3').stroke();
         pdf.fillColor('#182e3c').fontSize(9); pdf.x = 38; pdf.y = 83;
@@ -158,7 +158,7 @@ async function render(): Promise<Buffer> {
         }
       };
       const snapshot = report.snapshot; const document = snapshot.document;
-      heading('版本与过程基础');
+      heading(`版本与${domainLabel}基础`);
       line('报告状态', report.label); line('修订ID', report.revisionId); line('生成时间（非审批时间）', report.generatedAt);
       line('问题ID', report.problemId); line('负责人ID', snapshot.ownerUserId); line('实际发单 / 专业审核人ID', snapshot.professionalUserId);
       line('责任科室ID', snapshot.responsibleSectionDepartmentId); line('协作者ID', snapshot.collaboratorUserIds.join('、'));
@@ -171,7 +171,7 @@ async function render(): Promise<Buffer> {
         ['完整提交', snapshot.deadlines.submissionDueAt, snapshot.submittedAt],
         ['关闭', snapshot.deadlines.closureDueAt, snapshot.problem.closedAt],
       ]);
-      heading('D2 问题描述与过程来源'); line('问题描述', document.description);
+      heading(`D2 问题描述与${domainLabel}来源`); line('问题描述', document.description);
       snapshot.sources.forEach((source, index) => {
         heading(`来源 ${index + 1} / ${source.sourceId} / V${source.sourceVersion}`);
         line('来源域 / 类型', `${source.sourceDomain} / ${source.sourceType}`); details(source.sourceSnapshot);

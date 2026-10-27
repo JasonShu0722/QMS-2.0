@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Pagination, Radio, Space, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { EightDField } from './EightDDocumentEditor';
-import { aborted, useEightDText, type EightDRead, type EightDReport } from './eight-d';
+import { aborted, useEightDText, type EightDRead } from './eight-d';
 import styles from './eight-d.module.css';
 
 type Defect = components['schemas']['ProcessDefectDto'];
@@ -10,7 +10,7 @@ type Defects = components['schemas']['ProcessDefectPageDto'];
 type SourceChange = Pick<components['schemas']['ProcessEightDSourcesDto'], 'add' | 'removeDefectIds' | 'primaryDefectId' | 'sourceConfirmations'>;
 type Preview = components['schemas']['ProcessEightDSourcePreviewDto'];
 type Confirmation = components['schemas']['ProcessEightDSourceConfirmationDto'];
-export function EightDSourcePicker({ report, read, disabled, onChange }: { report: EightDReport; read: EightDRead; disabled: boolean; onChange: (value?: SourceChange) => void }) {
+export function EightDSourcePicker({ report, read, disabled, onChange }: { report: components['schemas']['ProcessEightDReportDto']; read: EightDRead; disabled: boolean; onChange: (value?: SourceChange) => void }) {
   const text = useEightDText();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);

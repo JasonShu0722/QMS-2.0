@@ -2,10 +2,11 @@ import { Button, Popconfirm, Space } from 'antd';
 import type { components } from '@qms/contracts';
 import { useRef, type ReactNode } from 'react';
 import { EightDEvidenceSection } from './EightDEvidence';
+import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
 import { useEightDText, type EightDDocument, type EightDRead } from './eight-d';
 import styles from './eight-d.module.css';
 
-type Props = { problemId: string; anchorId?: string; document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; onChange: (change: (current: EightDDocument) => EightDDocument) => void };
+type Props = { problemId: string; domain?: InternalEightDDomain; anchorId?: string; document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; onChange: (change: (current: EightDDocument) => EightDDocument) => void };
 const containmentPositions = [
   ['PCBA', '在制品'], ['PCBA', '智新库存'],
   ['成品', '客户端'], ['成品', '运输中'], ['成品', '智新库存'], ['成品', '在制品'], ['成品', 'VMI 仓'],
@@ -15,7 +16,7 @@ export function EightDField({ label, children }: { label: string; children: Reac
   return <label className={styles.field}><span>{label}</span>{children}</label>;
 }
 
-export function EightDDocumentEditor({ problemId, anchorId = problemId, document: doc, disabled, removalBlocked = false, read, onChange }: Props) {
+export function EightDDocumentEditor({ problemId, domain = 'process', anchorId = problemId, document: doc, disabled, removalBlocked = false, read, onChange }: Props) {
   const text = useEightDText();
   const savedDocumentNames = useRef(new Set(doc.standardization.map(row => row.id)));
   const update = <K extends keyof EightDDocument>(key: K, value: EightDDocument[K] | ((current: EightDDocument[K]) => EightDDocument[K])) => { if (!disabled) onChange(current => ({ ...current, [key]: typeof value === 'function' ? value(current[key]) : value })); };
@@ -23,7 +24,7 @@ export function EightDDocumentEditor({ problemId, anchorId = problemId, document
   const input = (label: string, value: string | null, change: (value: string) => void, type = 'text') => <EightDField label={label}><input type={type} aria-label={label} disabled={disabled} value={type === 'date' ? value?.slice(0, 10) ?? '' : value ?? ''} onChange={event => change(event.target.value)} /></EightDField>;
   const quantity = (label: string, value: number | null, change: (value: number | null) => void) => <EightDField label={label}><input type="number" min={0} step={1} aria-label={label} disabled={disabled} value={value ?? ''} onChange={event => change(event.target.value === '' ? null : Number(event.target.value))} /></EightDField>;
   // Merge each receipt against current state, including multiple CLEAN callbacks in one render.
-  const evidence = (label: string, ids: string[], change: (apply: (current: string[]) => string[]) => void) => <EightDEvidenceSection label={label} problemId={problemId} fileIds={ids} readOnly={disabled} read={read} onChange={next => change(current => [...current.filter(id => !ids.includes(id) || next.includes(id)), ...next.filter(id => !current.includes(id))])} />;
+  const evidence = (label: string, ids: string[], change: (apply: (current: string[]) => string[]) => void) => <EightDEvidenceSection label={label} problemId={problemId} resource={{ resourceType: eightDDomain(domain).resourceType, resourceId: problemId }} fileIds={ids} readOnly={disabled} read={read} onChange={next => change(current => [...current.filter(id => !ids.includes(id) || next.includes(id)), ...next.filter(id => !current.includes(id))])} />;
   const remove = (label: string, change: () => void) => !disabled && <Popconfirm title={label} description={text('仅修改当前草稿，保存后才生效。', 'Only changes the current draft; takes effect after saving.')} okText={text('确认移除', 'Confirm removal')} cancelText={text('取消', 'Cancel')} onConfirm={() => { if (!disabled && !removalBlocked) change(); }}><Button danger disabled={removalBlocked} aria-label={label}>{label}</Button></Popconfirm>;
   const section = (id: string, title: string, children: ReactNode) => <section className={styles.section} tabIndex={-1} id={`eight-d-${anchorId}-${id}`}><h3>{id} · {title}</h3>{children}</section>;
   const containment = (key: 'containment' | 'optionalAffectedContainment', title: string) => {

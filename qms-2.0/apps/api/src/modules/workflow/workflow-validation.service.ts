@@ -117,7 +117,7 @@ export class WorkflowValidationService {
     const handling = nodes.filter(node => node.config?.processEightD !== undefined);
     const processGates = nodes.filter(node => {
       const review = node.config?.closureReview;
-      return this.object(review) && review.domainCode === 'process-quality';
+      return this.object(review) && ['process-quality', 'customer-quality', 'new-product-quality'].includes(review.domainCode as string) && review.policy === 'INTERNAL';
     });
     if (handling.length || processGates.length) {
       if (handling.length !== 1 || processGates.length !== 1) errors.push('WORKFLOW_PROCESS_HANDLING_REQUIRED');

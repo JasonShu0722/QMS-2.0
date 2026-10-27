@@ -38,14 +38,13 @@ import { SupplierInspectionStandardsModule } from './modules/supplier-inspection
 import { SupplierBarcodeModule } from './modules/supplier-barcode/supplier-barcode.module.js';
 import { SupplierAsnModule } from './modules/supplier-asn/supplier-asn.module.js';
 import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js';
+import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEightDRuntime } from './common/eight-d/internal-eight-d-runtime.js';
+import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d-reminder.js';
 
 @Module({
-  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService],
-    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService): AtomicOutboxHandler => ({
-      eventTypes: [...legacy.eventTypes, ...closure.eventTypes, ...process.eventTypes],
-      handle: (tx, event) => process.eventTypes.includes(event.eventType) ? process.handle(tx, event)
-        : closure.eventTypes.includes(event.eventType) ? closure.handle(tx, event) : legacy.handle(tx, event),
-    }) }],
+  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService, CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME],
+    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService, customer: InternalEightDRuntime, newProduct: InternalEightDRuntime): AtomicOutboxHandler =>
+      internalEightDReminderHandler([process, customer.reminders, newProduct.reminders, closure, legacy]) }],
   imports: [
     DatabaseModule,
     IdentityModule,

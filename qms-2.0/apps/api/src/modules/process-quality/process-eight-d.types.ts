@@ -2,6 +2,14 @@ import type { Prisma, ProblemIndex, WorkflowInstance, WorkflowNode } from '../..
 import type { AdminActor } from '../../common/security/admin-mutation.service.js';
 import type { ProcessEightDDocument } from './process-eight-d-document.js';
 import type { WorkflowDeadlineContext } from '../workflow/workflow-deadline-extension.types.js';
+import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
+
+export interface InternalEightDSourcePort {
+  sourceReference(actor: ProcessEightDActor, id: string): Promise<DomainSourceReference>;
+  lockAndResolve(tx: Prisma.TransactionClient, reference: DomainSourceReference, actor?: ProcessEightDActor): Promise<DomainSourceRecord | null>;
+  // Prelock lifecycle owners before source rows; apply only after a successful, non-replayed link write.
+  prepareSourceLinks?(tx: Prisma.TransactionClient, references: DomainSourceReference[], actor: ProcessEightDActor): Promise<() => Promise<void>>;
+}
 
 export type ProcessEightDActor = AdminActor;
 export type ProcessEightDPurpose = 'READ' | 'EDIT' | 'SUBMIT' | 'DECIDE' | 'CANCEL' | 'DEADLINE';

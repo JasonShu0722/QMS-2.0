@@ -7,8 +7,6 @@ import { LanguageProvider } from '../../i18n/Language';
 import { ProblemCenterPage } from './ProblemCenterPage';
 import * as api from './problem-center-api';
 
-vi.setConfig({ testTimeout: 30_000 });
-
 vi.mock('./problem-center-api', () => ({
   getProblemOrganizationId: vi.fn(),
   getProblemIndex: vi.fn(),
@@ -72,6 +70,15 @@ const renderPage = (path = '/app/problem-center') => render(
   <MemoryRouter initialEntries={[path]}><LanguageProvider><ProblemCenterPage /></LanguageProvider></MemoryRouter>,
 );
 
+it.each([['customer-quality', 'customer-complaint'], ['new-product-quality', 'new-product-defect-selection']])('keeps %s follow-up constrained after reset and foreign saved views', async (domainCode, sourceType) => {
+  render(<MemoryRouter><LanguageProvider><ProblemCenterPage eightDDomain={domainCode as 'customer-quality' | 'new-product-quality'} /></LanguageProvider></MemoryRouter>);
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenCalledWith(expect.objectContaining({ domainCode, sourceType, responseForm: 'EIGHT_D' }), expect.any(AbortSignal)));
+  expect(screen.queryByLabelText('领域代码')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText(/重\s*置/, { selector: 'button span' }));
+  fireEvent.click(screen.getByText(/查\s*询/, { selector: 'button span' }));
+  await waitFor(() => expect(vi.mocked(api.getProblemIndex).mock.lastCall?.[0]).toEqual(expect.objectContaining({ domainCode, sourceType, responseForm: 'EIGHT_D' })));
+});
+
 it('uses the explicit organization query and never lets its stale response overwrite a newly selected organization', async () => {
   let resolveOld: (value: typeof emptyPage & { items: ReturnType<typeof problem>[] }) => void = () => undefined;
   vi.mocked(api.getProblemIndex).mockImplementation(({ organizationId }) => {
@@ -82,7 +89,7 @@ it('uses the explicit organization query and never lets its stale response overw
   await waitFor(() => expect(api.getProblemIndex).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-b' }), expect.any(AbortSignal)));
 
   fireEvent.change(screen.getByLabelText('组织上下文'), { target: { value: 'organization-c' } });
-  fireEvent.click(screen.getByRole('button', { name: '切换组织' }));
+  fireEvent.click(screen.getByText('切换组织', { selector: 'button span' }));
   expect((await screen.findAllByText('NEW-ORG')).length).toBeGreaterThan(0);
   resolveOld({ ...emptyPage, items: [problem('old', 'OLD-ORG')], total: 1 });
 
@@ -105,7 +112,7 @@ it('restores only whitelisted saved-view filters, sorting, and visible columns',
   renderPage('/app/problem-center?organizationId=organization-b');
 
   fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
-  fireEvent.click(screen.getByRole('button', { name: '应用视图' }));
+  fireEvent.click(screen.getByText('应用视图', { selector: 'button span' }));
 
   await waitFor(() => expect(api.getProblemIndex).toHaveBeenLastCalledWith(expect.objectContaining({
     organizationId: 'organization-b', status: 'OPEN', search: 'QMS-OLD', sortBy: 'dueAt', sortDirection: 'desc', page: 1,
@@ -132,17 +139,17 @@ it('keeps the local draft on a CAS conflict and reloads only when explicitly req
   vi.mocked(api.updateProblemView).mockRejectedValue(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: 'private detail', traceId: 'conflict-trace' }));
   renderPage('/app/problem-center?organizationId=organization-b');
   fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
-  fireEvent.click(screen.getByRole('button', { name: '应用视图' }));
+  fireEvent.click(screen.getByText('应用视图', { selector: 'button span' }));
   const search = screen.getByLabelText('报告编号检索');
   fireEvent.change(search, { target: { value: 'LOCAL-DRAFT' } });
 
-  fireEvent.click(screen.getByRole('button', { name: '更新视图' }));
+  fireEvent.click(screen.getByText('更新视图', { selector: 'button span' }));
   expect(await screen.findByText('记录已被其他用户更新，请刷新后重试')).toBeVisible();
   expect(screen.getByText('conflict-trace')).toBeVisible();
   expect(search).toHaveValue('LOCAL-DRAFT');
   expect(api.updateProblemView).toHaveBeenCalledWith('organization-b', 'view-1', expect.objectContaining({ expectedVersion: 3 }));
 
-  fireEvent.click(screen.getByRole('button', { name: '重新加载保存视图' }));
+  fireEvent.click(screen.getByText('重新加载保存视图', { selector: 'button span' }));
   await waitFor(() => expect(search).toHaveValue('QMS-OLD'));
 });
 
@@ -161,10 +168,10 @@ it('keeps the newest same-scope saved-view reload when an older request finishes
   vi.mocked(api.updateProblemView).mockRejectedValue(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: 'private detail' }));
   renderPage('/app/problem-center?organizationId=organization-b');
   fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
-  fireEvent.click(screen.getByRole('button', { name: '应用视图' }));
-  fireEvent.click(screen.getByRole('button', { name: '更新视图' }));
+  fireEvent.click(screen.getByText('应用视图', { selector: 'button span' }));
+  fireEvent.click(screen.getByText('更新视图', { selector: 'button span' }));
 
-  const reload = await screen.findByRole('button', { name: '重新加载保存视图' });
+  const reload = (await screen.findByText('重新加载保存视图', { selector: 'button span' })).closest('button')!;
   act(() => { reload.click(); reload.click(); });
   await waitFor(() => expect(api.getProblemViews).toHaveBeenCalledTimes(3));
   expect(reload).toBeDisabled();
@@ -182,12 +189,12 @@ it('does not duplicate a pending write or render its result after switching orga
   await waitFor(() => expect(api.getProblemViews).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-b' }), expect.any(AbortSignal)));
   fireEvent.change(screen.getByLabelText('视图名称'), { target: { value: '迟到视图' } });
 
-  const save = screen.getByRole('button', { name: '保存新视图' });
+  const save = screen.getByText('保存新视图', { selector: 'button span' }).closest('button')!;
   act(() => { save.click(); save.click(); });
   expect(api.createProblemView).toHaveBeenCalledTimes(1);
 
   fireEvent.change(screen.getByLabelText('组织上下文'), { target: { value: 'organization-c' } });
-  fireEvent.click(screen.getByRole('button', { name: '切换组织' }));
+  fireEvent.click(screen.getByText('切换组织', { selector: 'button span' }));
   await waitFor(() => expect(api.getProblemViews).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-c' }), expect.any(AbortSignal)));
   await act(async () => { resolveCreate({ ...savedView, name: '迟到视图' }); });
 
@@ -199,7 +206,7 @@ it('names the personal view and explains the delete scope before sending DELETE'
   vi.mocked(api.getProblemViews).mockResolvedValue({ items: [savedView], total: 1 });
   renderPage('/app/problem-center?organizationId=organization-b');
   fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
-  fireEvent.click(screen.getByRole('button', { name: '删除视图' }));
+  fireEvent.click(screen.getByText('删除视图', { selector: 'button span' }));
   const dialog = await screen.findByRole('tooltip');
   expect(dialog).toHaveTextContent('我的逾期问题');
   expect(dialog).toHaveTextContent('个人视图');

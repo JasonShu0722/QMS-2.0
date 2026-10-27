@@ -48,6 +48,15 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
   });
   afterAll(async () => { await app?.close(); });
 
+  async function legacyInitialization(organizationId: string) {
+    // Model the old transaction-default timestamps explicitly; current creation has independent statement timestamps.
+    const { createdAt } = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+    await prisma.$executeRaw`DELETE FROM organization_initializations WHERE organization_id = ${organizationId}::uuid`;
+    await prisma.role.updateMany({ where: { organizationId }, data: { createdAt } });
+    await prisma.auditEvent.updateMany({ where: { resourceId: organizationId, action: 'ORGANIZATION_CREATED' }, data: { createdAt, metadata: { resourceVersion: 1 } } });
+    await prisma.adminMutation.updateMany({ where: { action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: organizationId } }, data: { createdAt } });
+  }
+
   async function fixture(codes = [...new Set([...ADMIN_PERMISSIONS, 'organization:read'])]) {
     const root = await prisma.organization.create({ data: { code: randomUUID(), name: 'N1 root', type: 'INTERNAL' } });
     const actor = await prisma.user.create({ data: { organizationId: root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
@@ -80,7 +89,7 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
   it.each([false, true])('REQ0030 deletes verified old/new initialization by another explicit platform admin (legacy=%s)', async legacy => {
     const f = await fixture();
     const org = await f.child();
-    if (legacy) await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: { resourceVersion: 1 } } });
+    if (legacy) await legacyInitialization(org.id);
     await f.send('patch', `/${org.id}`, { expectedVersion: 1, name: 'Creator corrected typo' }).expect(200);
     const before = await prisma.auditEvent.findMany({ where: { organizationId: org.id } });
     const originalReceipt = await prisma.adminMutation.findFirstOrThrow({ where: { organizationId: f.root.id, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: org.id } } });
@@ -94,14 +103,14 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     expect(await prisma.role.count({ where: { organizationId: org.id } })).toBe(0);
     expect(await prisma.userRole.count({ where: { userId: admin.user.id, roleId: admin.role.id } })).toBe(1);
     expect(await prisma.adminMutation.findUniqueOrThrow({ where: { id: originalReceipt.id } })).toEqual(originalReceipt);
-    for (const event of before) expect(await prisma.auditEvent.findUniqueOrThrow({ where: { id: event.id } })).toEqual({ ...event, organizationId: f.root.id, metadata: { ...event.metadata as object, organizationId: org.id } });
+    for (const event of before) expect(await prisma.auditEvent.findUniqueOrThrow({ where: { id: event.id } })).toMatchObject({ ...event, organizationId: f.root.id, metadata: { ...event.metadata as object, organizationId: org.id } });
     expect(await prisma.auditEvent.count({ where: { resourceId: org.id, action: 'ORGANIZATION_DELETED', actorUserId: admin.user.id } })).toBe(1);
   });
 
   it('REQ0030 permits the original creator with legacy provenance without any platform marker', async () => {
     const f = await fixture();
     const org = await f.child();
-    await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: { resourceVersion: 1 } } });
+    await legacyInitialization(org.id);
     await f.send('delete', `/${org.id}`, { expectedVersion: 1 }).expect(200);
     expect(await prisma.auditEvent.findFirstOrThrow({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' } })).toMatchObject({ organizationId: f.root.id, actorUserId: f.actor.id, metadata: { resourceVersion: 1, organizationId: org.id } });
   });
@@ -112,25 +121,25 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     const admin = await manager(f, false, org.id);
     const before = await prisma.userRole.findMany({ where: { organizationId: org.id }, orderBy: [{ userId: 'asc' }, { roleId: 'asc' }] });
     const lifecycle = (await admin.send('get', org.id).expect(200)).body;
-    expect(lifecycle.deleteBlockers).toContain('存在非初始化授权或管理使用记录');
+    expect(lifecycle.deleteBlockers).toContain('存在无法识别为初始化的实际角色或授权');
     expect(lifecycle.deleteBlockerDetails).toContainEqual(expect.objectContaining({ code: 'NON_INITIALIZATION_GRANTS', count: 1 }));
     await admin.send('delete', org.id, { expectedVersion: 1 }).expect(409);
     expect(await prisma.userRole.findMany({ where: { organizationId: org.id }, orderBy: [{ userId: 'asc' }, { roleId: 'asc' }] })).toEqual(before);
   });
 
-  it.each(['missing-receipt', 'partial-modern', 'changed-permissions', 'other-management'] as const)('REQ0030 refuses legacy initialization with %s even for explicit platform admins', async kind => {
+  it.each(['missing-receipt', 'partial-modern', 'changed-permissions'] as const)('REQ0030 refuses legacy initialization with %s even for explicit platform admins', async kind => {
     const f = await fixture();
     const org = await f.child();
-    await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: kind === 'partial-modern' ? { resourceVersion: 1, organizationId: org.id } : { resourceVersion: 1 } } });
+    await legacyInitialization(org.id);
+    if (kind === 'partial-modern') await prisma.auditEvent.updateMany({ where: { resourceId: org.id, action: 'ORGANIZATION_CREATED' }, data: { metadata: { resourceVersion: 1, organizationId: org.id } } });
     if (kind === 'missing-receipt') await prisma.adminMutation.deleteMany({ where: { organizationId: f.root.id, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: org.id } } });
     if (kind === 'changed-permissions') {
       const governor = await prisma.role.findFirstOrThrow({ where: { organizationId: org.id } });
       const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'organization:structure:read' } });
       await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: governor.id, permissionId: permission.id } } });
     }
-    if (kind === 'other-management') await prisma.auditEvent.create({ data: { organizationId: org.id, actorUserId: f.actor.id, action: 'ROLE_UPDATED', resourceType: 'Role', outcome: 'SUCCESS', traceId: randomUUID(), metadata: {} } });
     const admin = await manager(f, true);
-    const reason = kind === 'changed-permissions' ? 'INITIALIZATION_PERMISSIONS_CHANGED' : kind === 'other-management' ? 'OTHER_MANAGEMENT_EVENTS' : 'INITIALIZATION_PROVENANCE_MISSING';
+    const reason = kind === 'changed-permissions' ? 'INITIALIZATION_PERMISSIONS_CHANGED' : 'NON_INITIALIZATION_ROLES';
     expect((await admin.send('get', org.id).expect(200)).body.deleteBlockerDetails).toContainEqual(expect.objectContaining({ code: reason, count: 1 }));
     await admin.send('delete', org.id, { expectedVersion: 1 }).expect(409);
     expect(await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).toMatchObject({ version: 1 });
@@ -570,7 +579,8 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     expect(await prisma.organization.findUnique({ where: { id: org.id } })).toBeNull();
     expect(await prisma.role.count({ where: { organizationId: org.id } })).toBe(0);
     expect(await prisma.userRole.count({ where: { organizationId: org.id } })).toBe(0);
-    expect(await prisma.auditEvent.findUniqueOrThrow({ where: { id: createEvent.id } })).toEqual({ ...createEvent, organizationId: f.root.id });
+    expect(await prisma.auditEvent.findUniqueOrThrow({ where: { id: createEvent.id } })).toEqual({ ...createEvent, organizationId: f.root.id,
+      metadata: { ...createEvent.metadata as object, originalOrganizationId: org.id, originalOrganizationCode: org.code, originalOrganizationName: org.name } });
     const deleted = await prisma.auditEvent.findFirstOrThrow({ where: { resourceId: org.id, action: 'ORGANIZATION_DELETED' } });
     expect(deleted).toMatchObject({ organizationId: f.root.id, metadata: { organizationId: org.id, structureCode: org.code, structureName: org.name, resourceVersion: 1 } });
     expect(await prisma.adminMutation.findFirstOrThrow({ where: { actorUserId: f.actor.id, key } })).toMatchObject({ organizationId: f.root.id });
@@ -605,6 +615,8 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
       ORDER BY c.relname, a.attname`;
     expect(unprotected).toEqual([
       { tableName: 'mfa_challenges', columnName: 'organization_id' },
+      { tableName: 'organization_initializations', columnName: 'organization_id' },
+      { tableName: 'organization_mutation_archives', columnName: 'organization_id' },
       { tableName: 'password_change_challenges', columnName: 'organization_id' },
     ]);
   });
@@ -670,7 +682,7 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     await f.send('delete', `/${org.id}`, { expectedVersion: 3 }).expect(200);
     for (const original of before) {
       const archived = await prisma.auditEvent.findUniqueOrThrow({ where: { id: original.id } });
-      expect(archived).toEqual({ ...original, organizationId: f.root.id, metadata: { ...(original.metadata as object), organizationId: org.id } });
+      expect(archived).toMatchObject({ ...original, organizationId: f.root.id, metadata: { ...(original.metadata as object), organizationId: org.id } });
     }
     expect(await prisma.adminMutation.count({ where: { organizationId: org.id } })).toBe(0);
     const queried = await request(app.getHttpServer()).get(`/api/v1/admin/audit-events?organizationId=${f.root.id}&pageSize=100`).set('Cookie', f.cookie).expect(200);

@@ -1,8 +1,10 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
+import { INTERNAL_EIGHT_D_DOMAIN, INTERNAL_EIGHT_D_DOMAINS, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
+import { internalEightDReminderConfiguration } from '../../common/eight-d/internal-eight-d-reminder.js';
 import { inboxPage } from '../task-notification/task.service.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
 import { WorkflowDeadlineExtensionService } from '../workflow/workflow-deadline-extension.service.js';
@@ -19,7 +21,10 @@ const inaccessible = (error: unknown) => error instanceof HttpException && [403,
 @Injectable()
 export class ProcessEightDTaskService {
   constructor(private readonly prisma: PrismaService, private readonly reports: ProcessEightDService,
-    private readonly extensions: WorkflowDeadlineExtensionService, private readonly rounds: WorkflowClosureRoundService, private readonly reminders: ProcessEightDReminderService) {}
+    private readonly extensions: WorkflowDeadlineExtensionService, private readonly rounds: WorkflowClosureRoundService, private readonly reminders: ProcessEightDReminderService,
+    @Optional() @Inject(INTERNAL_EIGHT_D_DOMAIN) private readonly domain: InternalEightDDomainDescriptor = INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
+    internalEightDReminderConfiguration(domain);
+  }
 
   async list(actor: WorkflowActor, query: ProcessEightDTaskQueryDto): Promise<ProcessEightDTaskPageDto> {
     this.validate(actor, query);
@@ -98,7 +103,7 @@ export class ProcessEightDTaskService {
     const rows = await this.transaction(async tx => {
       await this.authorize(tx, actor, 'notification:read');
       return tx.$queryRaw<Array<{ id: string; problemId: string; kind: ProcessEightDNotificationKind; subject: string; body: string; context: unknown; deliveredAt: Date }>>(Prisma.sql`
-        SELECT id, problem_id AS "problemId", kind, subject, body, context, delivered_at AS "deliveredAt" FROM process_eight_d_notifications
+        SELECT id, problem_id AS "problemId", kind, subject, body, context, delivered_at AS "deliveredAt" FROM ${internalEightDReminderConfiguration(this.domain).notifications}
         WHERE organization_id = ${actor.organizationId}::uuid AND recipient_user_id = ${actor.id}::uuid
         ${query.problemId ? Prisma.sql`AND problem_id = ${query.problemId}::uuid` : Prisma.empty} ORDER BY problem_id, delivered_at DESC, id DESC`);
     });

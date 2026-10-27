@@ -150,10 +150,12 @@ function InternalShell() {
         {processPath === '/app/process-quality' ? <ProcessDefectLedgerPage /> : null}
         {processPath === '/app/process-quality/problems' ? <ProblemCenterPage processQuality /> : null}
         {processPath === '/app/process-quality/shipment-reports' ? <ProcessShipmentReportPage /> : null}
-        {location.pathname.startsWith('/app/customer-quality') ? <CustomerQualityPage /> : null}
+        {processPath === '/app/customer-quality' ? <CustomerQualityPage /> : null}
+        {processPath === '/app/customer-quality/problems' ? <ProblemCenterPage eightDDomain="customer-quality" /> : null}
         {location.pathname.startsWith('/app/audits') ? <AuditManagementPage /> : null}
         {location.pathname.startsWith('/app/audit-standards') ? <AuditStandardsPage /> : null}
-        {location.pathname.startsWith('/app/new-product-quality') ? <NewProductQualityPage /> : null}
+        {processPath === '/app/new-product-quality' ? <NewProductQualityPage /> : null}
+        {processPath === '/app/new-product-quality/problems' ? <ProblemCenterPage eightDDomain="new-product-quality" /> : null}
         {location.pathname.startsWith('/app/quality-data') ? <QualityDataPage /> : null}
         {location.pathname.startsWith('/app/task-statistics') ? <TaskStatisticsPage /> : null}
         {location.pathname.startsWith('/app/announcements') ? <AnnouncementsPage /> : null}

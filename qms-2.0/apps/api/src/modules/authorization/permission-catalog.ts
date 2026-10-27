@@ -72,7 +72,16 @@ export const PERMISSION_CATALOG: Group[] = [
       operation('customer-quality:analyses:fae', '办理本人负责的客诉功能解析'),
       operation('customer-quality:analyses:supplier', '办理本人负责的客诉供应商分析'),
     ] },
-    { key: 'customer-issues', name: '客户问题管理', status: 'planned', operations: [] },
+    { key: 'customer-issues', name: '客户问题管理', status: 'active', operations: [
+      operation('customer-quality:issues:read', '查看客户8D及报告'),
+      operation('customer-quality:issues:report', '导出有权读取的客户8D报告'),
+      operation('customer-quality:issues:issue', '发起客户8D'),
+      operation('customer-quality:issues:work', '办理本人负责或协作的客户8D'),
+      operation('customer-quality:issues:sources', '调整客户8D来源范围'),
+      operation('customer-quality:issues:risk', '调整客户8D风险'),
+      operation('customer-quality:issues:reassign', '撤回重派客户8D责任范围'),
+      operation('customer-quality:issues:deadlines', '设置客户8D质量侧期限'),
+    ] },
   ] },
   { key: 'new-product', name: '新品质量', status: 'active', modules: [
     { key: 'new-product-quality', name: '新品质量管理', status: 'active', operations: [
@@ -80,6 +89,16 @@ export const PERMISSION_CATALOG: Group[] = [
       operation('new-product-quality:projects:write', '维护新品质量项目'),
     ] },
     { key: 'new-product-early-flow', name: '试产与初期流动', status: 'planned', operations: [] },
+    { key: 'new-product-issues', name: '新品问题管理', status: 'active', operations: [
+      operation('new-product-quality:issues:read', '查看新品8D及报告'),
+      operation('new-product-quality:issues:report', '导出有权读取的新品8D报告'),
+      operation('new-product-quality:issues:issue', '发起新品8D'),
+      operation('new-product-quality:issues:work', '办理本人负责或协作的新品8D'),
+      operation('new-product-quality:issues:sources', '调整新品8D来源范围'),
+      operation('new-product-quality:issues:risk', '调整新品8D风险'),
+      operation('new-product-quality:issues:reassign', '撤回重派新品8D责任范围'),
+      operation('new-product-quality:issues:deadlines', '设置新品8D质量侧期限'),
+    ] },
   ] },
   { key: 'audit', name: '审核管理', status: 'active', modules: [
     { key: 'audit-core', name: '审核计划与整改', status: 'active', operations: [

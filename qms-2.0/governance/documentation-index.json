@@ -158,11 +158,11 @@
           },
           {
             "path": "docs/OPENAPI.md",
-            "sha256": "038c30803f6adf920b7c6e58fcd09dad6f077e7bc4c2b39c0471ac49c9906a78"
+            "sha256": "1b93fc2eafe2ca73d165bb8eb76c0ac15b92fae3a140835b18920002b1fb8f42"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "5f40694300aeb42e398ee1204801a60d0d27ca9c4f7e4910cf39f1cabd7b124f"
+            "sha256": "32d1c43ee23ff45abf67bb0f3b28119d2e7b7d54bc892d261ae40a31f89a0450"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -188,7 +188,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "5f40694300aeb42e398ee1204801a60d0d27ca9c4f7e4910cf39f1cabd7b124f"
+            "sha256": "32d1c43ee23ff45abf67bb0f3b28119d2e7b7d54bc892d261ae40a31f89a0450"
           }
         ]
       }
@@ -218,7 +218,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "5f40694300aeb42e398ee1204801a60d0d27ca9c4f7e4910cf39f1cabd7b124f"
+            "sha256": "32d1c43ee23ff45abf67bb0f3b28119d2e7b7d54bc892d261ae40a31f89a0450"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -248,7 +248,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "ee9efff6c340f3d3d756ac59af83e0494afa5850050fe29b65d699e48a2e0e15"
+            "sha256": "c957b616570a43ea8eb63b6d26d8d7a4ddccf70a7deaf73dbb24036d5b6edef3"
           },
           {
             "path": "README.md",
@@ -448,7 +448,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "8c76db2a10d5637516f4862c29aeceaac1a7bea9d508d28b170638fe71413a64"
+            "sha256": "bab84869ae04169e0844ea28c25437f23ce3784ac44a79ea53e3dd0ce282bb7d"
           },
           {
             "path": "apps/web/organization-preview.html",
@@ -488,7 +488,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationAdministration.tsx",
-            "sha256": "e905655bf404cf27820c13a4205d33e6176e90ed643665974688f729b4d93722"
+            "sha256": "a4d1a247a54db1bbbf9288c771f558db4f84f6abfea063c0ee7c41d0fcae8fd7"
           },
           {
             "path": "apps/web/src/features/governance/StructureAdministration.tsx",
@@ -500,7 +500,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "0d3e4e2bd64b53cfa184bb0950ddf4e7d040d62cd64db8ac201dbadbef002b51"
+            "sha256": "9255dbbea728e925f9e0ac4ce85211f883a8ca25198982a3cfafce3ce50f1f46"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -600,7 +600,7 @@
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowListPage.tsx",
-            "sha256": "332b0a429dcfcd7d7f70781fc4d2c0348408ce41501d0f050aeaa791fe1aab74"
+            "sha256": "d4dac881d9c3aaec97f18319a6fac3b0cbf057e5bddea32fef47d19c3f239870"
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowClosurePreview.tsx",
@@ -612,7 +612,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
-            "sha256": "ccf70afb237605572f7276915e6bfd6d49473116653f90df7c009b330e945796"
+            "sha256": "b45cf625fa1d51d1abbf22fc32324a841c95bb1f341c38b6b5a9fe64cf619e13"
           },
           {
             "path": "apps/web/src/features/tasks/ClosureTaskInbox.tsx",
@@ -640,7 +640,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/CustomerQualityPage.tsx",
-            "sha256": "223615b8634d92b60743e3fefbaff6394aa9e2deb27bd6a37eec88e76c707e3c"
+            "sha256": "b5b941348eeef4f7c6a7f12dcd9b15b1e49cf65efe850c9d70cd2f951a1cf1aa"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-analysis-panel.tsx",
@@ -660,7 +660,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-write.ts",
-            "sha256": "c1a4f3be5c191b550c994c7b38cea3ba55644a54750ec315216821ea64dafba1"
+            "sha256": "18e94fe169fb19474710f27cea0a7568354f1fd20e2fef7c3bbd603494dbbce1"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-editor.tsx",
@@ -712,11 +712,11 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md",
-            "sha256": "8c76db2a10d5637516f4862c29aeceaac1a7bea9d508d28b170638fe71413a64"
+            "sha256": "bab84869ae04169e0844ea28c25437f23ce3784ac44a79ea53e3dd0ce282bb7d"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-problem-management-requirements-list.md",
-            "sha256": "fb05ef9d95fa4ebe81b59a8ca503195d5a0c42f2b05e7da43b8773a7f8eee940"
+            "sha256": "b32c5c7293ed83992cc843737148607c6f18a01745103406894521ae2897ec75"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-24-qms-five-requirement-submission.md",
@@ -736,11 +736,11 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-26-req0030-admin-process-fix.md",
-            "sha256": "7409e8218a32d470a68d3c93e1f5a3ecca4ee25a17fb5e28b2e6c41ec8e5effe"
+            "sha256": "0a18f1ffafa543e12871ebcf3637fe35e90610818335307cc63e8246cf54c1cd"
           },
           {
             "path": "../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md",
-            "sha256": "db59f185534fb103677e58619e441f117da468a757ab9c2e828d4581442f9113"
+            "sha256": "9a7f7c5fe6b7cd25e6d6d92cc718ada6b06cdce56cbf8ade31a5339158c92e10"
           }
         ]
       }
@@ -918,7 +918,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "3eb039bcb1edcdce7a4dc6d28107cba043be6873c9cb64eaccdec764cdc107f4"
+            "sha256": "56aa071d1add905b1a64ccb6ab70ee5515286ea627bf6cf6ba0a6eaf931ecf4d"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1032,7 +1032,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "5f40694300aeb42e398ee1204801a60d0d27ca9c4f7e4910cf39f1cabd7b124f"
+            "sha256": "32d1c43ee23ff45abf67bb0f3b28119d2e7b7d54bc892d261ae40a31f89a0450"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

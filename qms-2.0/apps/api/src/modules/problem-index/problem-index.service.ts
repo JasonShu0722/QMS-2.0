@@ -1,4 +1,5 @@
 import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import type { Prisma, ProblemIndex } from '../../generated/prisma/client.js';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -7,6 +8,13 @@ import { NumberingService } from './numbering.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 
 type ProblemStatus = 'OPEN' | 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'ARCHIVED';
+
+export type SourceLinkedProblemState = Pick<ProblemIndex, 'reportNumber' | 'status' | 'severity'> & {
+  problemId: string;
+  problemVersion: number;
+  createdAt: string;
+  sourceIds: string[];
+};
 
 export interface CreateProblemIndexInput {
   organizationId: string;
@@ -82,6 +90,33 @@ export class ProblemIndexService {
     const problem = await transaction.problemIndex.findFirst({ where: { organizationId, id, archivedAt: null } });
     if (!problem) throw new HttpException({ code: 'PROBLEM_NOT_FOUND' }, 404);
     return problem;
+  }
+
+  // The calling domain authorizes its source scope; use its transaction, never a fabricated actor or report read.
+  async readSourceLinkedStates(transaction: Prisma.TransactionClient, input: {
+    organizationId: string; domainCode: string; sourceType: string; sourceIds: string[];
+  }): Promise<SourceLinkedProblemState[]> {
+    if (!isUUID(input.organizationId) || typeof input.domainCode !== 'string' || !input.domainCode.trim() || input.domainCode.length > 100
+      || typeof input.sourceType !== 'string' || !input.sourceType.trim() || input.sourceType.length > 100 || !Array.isArray(input.sourceIds)
+      || input.sourceIds.some(id => !isUUID(id))) throw new HttpException({ code: 'PROBLEM_SOURCE_READ_INPUT_INVALID' }, 400);
+    if (!input.sourceIds.length) return [];
+    const sourceIds = [...new Set(input.sourceIds)];
+    const sourceScope = { organizationId: input.organizationId, sourceDomain: input.domainCode, sourceType: input.sourceType, sourceId: { in: sourceIds } };
+    const rows = await transaction.problemIndex.findMany({
+      where: { organizationId: input.organizationId, domainCode: input.domainCode, sourceType: input.sourceType,
+        OR: [{ sourceId: { in: sourceIds } }, { domainSourceLinks: { some: { ...sourceScope, removedAt: null } } }] },
+      select: { id: true, reportNumber: true, status: true, severity: true, version: true, createdAt: true, sourceId: true,
+        domainSourceLinks: { where: sourceScope, select: { sourceId: true, removedAt: true } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const requested = new Set(sourceIds);
+    return rows.map(row => {
+      // Preserve historical primary-only facts, but a removed link must not be resurrected by a stale primary.
+      const primary = row.sourceId && requested.has(row.sourceId) && !row.domainSourceLinks.some(link => link.sourceId === row.sourceId && link.removedAt !== null) ? [row.sourceId] : [];
+      return { problemId: row.id, reportNumber: row.reportNumber, status: row.status, severity: row.severity,
+        problemVersion: row.version, createdAt: row.createdAt.toISOString(),
+        sourceIds: [...new Set([...row.domainSourceLinks.filter(link => link.removedAt === null).map(link => link.sourceId), ...primary])].sort() };
+    }).filter(state => state.sourceIds.length > 0);
   }
 
   async applyWorkflowState(transaction: Prisma.TransactionClient, input: {

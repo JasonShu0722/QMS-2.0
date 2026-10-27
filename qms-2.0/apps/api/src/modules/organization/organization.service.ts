@@ -10,11 +10,12 @@ import { effectivePositionAssignmentWhere, effectiveRoleGrants } from '../../com
 import { assertLegacyPositionRoleWrite, assertPositionRoleCeiling, assertPositionRolesGrantable, positionRoleDefinitions } from '../../common/security/position-role-policy.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
-import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
+import { organizationInitialization, organizationGovernancePermissions, recordOrganizationInitialization, rejectDeletedOrganizationCreation } from './organization-initialization.js';
+import { archiveOrganizationHistory, archivedOrganizationDelete } from './organization-history-archive.js';
 import { ministerAssignmentReferences, positionManagementReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
-const governancePermissions = ['organization:read', 'organization:manage', 'organization:structure:read', 'organization:structure:manage', 'organization:positions:assign'];
+const governancePermissions = organizationGovernancePermissions;
 const organizationSelect = { id: true, code: true, name: true, type: true, parentId: true, status: true, version: true } as const;
 const departmentSelect = { id: true, organizationId: true, code: true, name: true, parentId: true, status: true, version: true } as const;
 const positionSelect = { id: true, organizationId: true, code: true, name: true, departmentId: true, categoryId: true, status: true, version: true } as const;
@@ -93,10 +94,12 @@ export class OrganizationService {
       const permissions = await transaction.permission.findMany({ where: { code: { in: governancePermissions.filter((code) => granted.includes(code)) } } });
       const role = await transaction.role.create({ data: { organizationId: child.id, code: 'ORGANIZATION_GOVERNOR', name: '组织治理', permissions: { create: permissions.map(({ id }) => ({ permissionId: id })) } } });
       await transaction.userRole.create({ data: { userId: actor.id, roleId: role.id, organizationId: child.id } });
+      await recordOrganizationInitialization(transaction, child, role.id, actor.id, permissions.map(({ code }) => code).sort(), key!);
       await this.audit.record({ actorUserId: actor.id, organizationId: child.id, action: 'ORGANIZATION_CREATED', resourceType: 'Organization', resourceId: child.id, outcome: 'SUCCESS', traceId,
         metadata: { organizationId: child.id, resourceVersion: child.version, structureCode: child.code, structureName: child.name, structureGovernorRoleId: role.id, permissionCode: permissions.map(({ code }) => code).sort().join(',') } }, transaction);
       return child;
     }, async (transaction) => {
+      if (key) await rejectDeletedOrganizationCreation(transaction, actor.id, parentId, key);
       const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId: parentId, key } } }) : null;
       if (previous?.action === 'ORGANIZATION_CREATED') {
         const childId = this.receiptValue(previous.response)?.id;
@@ -222,6 +225,20 @@ export class OrganizationService {
     if (!target) {
       // Only this actor's committed delete receipt may recover the frozen parent after deletion.
       const receipt = key ? await this.prisma.adminMutation.findFirst({ where: { actorUserId: actor.id, key, action: 'ORGANIZATION_DELETED', response: { path: ['value', 'id'], equals: organizationId } } }) : null;
+      if (!receipt && key) {
+        const archived = await archivedOrganizationDelete(this.prisma, actor.id, key, organizationId);
+        if (archived) {
+          const resolve = async (transaction: AdminTransaction) => {
+            const current = await archivedOrganizationDelete(transaction, actor.id, key, organizationId);
+            if (!current || current.id !== archived.id || current.scopeOrganizationId !== archived.scopeOrganizationId) adminError('CONCURRENCY_CONFLICT', 409);
+            return current;
+          };
+          return this.mutations.run({ actor, organizationId: archived.scopeOrganizationId, key, action: 'ORGANIZATION_DELETED',
+            payload: { organizationId, parentId: archived.organizationId, ...dto }, permission: 'organization:manage', traceId,
+            archivedReceipt: { organizationId: archived.organizationId, find: resolve },
+          }, async () => { adminError('ORGANIZATION_NOT_FOUND', 404); }, async transaction => { await resolve(transaction); });
+        }
+      }
       if (!receipt || this.receiptValue(receipt.response)?.deleted !== true) adminError('ORGANIZATION_NOT_FOUND', 404);
       parentId = receipt.organizationId;
     }
@@ -241,13 +258,11 @@ export class OrganizationService {
       const initialization = await this.initializationAttachments(transaction, actor, current);
       if (initialization.blocked) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       if (initialization.roleId) {
-        await transaction.userRole.deleteMany({ where: { organizationId, roleId: initialization.roleId, userId: initialization.creatorUserId } });
+        await transaction.userRole.deleteMany({ where: { organizationId, roleId: initialization.roleId, userId: initialization.grantUserId } });
         await transaction.rolePermission.deleteMany({ where: { roleId: initialization.roleId } });
         await transaction.role.delete({ where: { id: initialization.roleId } });
       }
-      // Move only verified governance evidence into its surviving parent scope, retaining original facts.
-      for (const event of initialization.events) await transaction.auditEvent.update({ where: { id: event.id }, data: { organizationId: frozenParentId, metadata: { ...event.metadata as Prisma.InputJsonObject, organizationId } } });
-      if (initialization.mutationIds.length) await transaction.adminMutation.deleteMany({ where: { id: { in: initialization.mutationIds }, organizationId } });
+      await archiveOrganizationHistory(transaction, current, frozenParentId);
       await this.record(transaction, actor, frozenParentId, 'ORGANIZATION_DELETED', 'Organization', organizationId, traceId, current.version,
         { organizationId, structureCode: current.code, structureName: current.name, status: current.status });
       await transaction.organization.delete({ where: { id: organizationId } });
@@ -287,69 +302,9 @@ export class OrganizationService {
     return typeof value?.id === 'string' ? { id: value.id, deleted: value.deleted === true } : undefined;
   }
 
-  private async initializationAttachments(transaction: AdminTransaction, actor: AdminActor, organization: { id: string; parentId: string | null; type: string }) {
-    const organizationId = organization.id;
-    const events = await transaction.auditEvent.findMany({ where: { organizationId } });
-    const creations = events.filter((event) => event.resourceId === organizationId && event.resourceType === 'Organization' && event.action === 'ORGANIZATION_CREATED' && event.outcome === 'SUCCESS');
-    const event = creations.length === 1 ? creations[0] : undefined;
-    const roles = await transaction.role.findMany({ where: { organizationId }, include: { permissions: { include: { permission: true } }, userRoles: true, positions: true } });
-    const grants = await transaction.userRole.findMany({ where: { organizationId } });
-    const receipts = event && organization.parentId ? await transaction.adminMutation.findMany({ where: { organizationId: organization.parentId, actorUserId: event.actorUserId ?? undefined, action: 'ORGANIZATION_CREATED', response: { path: ['value', 'id'], equals: organizationId } } }) : [];
-    const metadata = event?.metadata as Record<string, unknown> | undefined;
-    const created = receipts.length === 1 ? (receipts[0]!.response as { value?: Record<string, Prisma.JsonValue> })?.value : undefined;
-    const role = roles.length === 1 ? roles[0] : undefined;
-    const creatorUserId = event?.actorUserId ?? undefined;
-    const details: NonNullable<OrganizationLifecycleDto['deleteBlockerDetails']> = [];
-    const reason = (code: string, count: number, message: string) => { if (count) details.push({ code, count, message }); };
-    const legacy = metadata?.resourceVersion === 1 && Object.keys(metadata).length === 1;
-    const provenance = Boolean(creatorUserId && created?.id === organizationId && created.parentId === organization.parentId && created.version === 1
-      && typeof created.code === 'string' && typeof created.name === 'string' && created.type === organization.type && created.status === 'ACTIVE'
-      && Object.keys(created).sort().join(',') === 'code,id,name,parentId,status,type,version'
-      && receipts[0]?.actorUserId === creatorUserId && receipts[0]?.organizationId === organization.parentId
-      && metadata?.resourceVersion === 1 && (legacy || (metadata.organizationId === organizationId
-        && metadata.structureCode === created.code && metadata.structureName === created.name && metadata.structureGovernorRoleId === role?.id)));
-    reason('INITIALIZATION_PROVENANCE_MISSING', provenance ? 0 : 1, '创建审计、原创建人或父组织创建回执无法相互核验；请核对原始记录，勿补造凭据。');
-    const permissionCodes = role?.permissions.map(({ permission }) => permission.code).sort() ?? [];
-    // Old events did not snapshot permissions; only the complete known bootstrap set is unambiguous.
-    const permissionsValid = permissionCodes.length > 0 && permissionCodes.every(code => governancePermissions.includes(code))
-      && permissionCodes.includes('organization:read') && permissionCodes.includes('organization:manage')
-      && permissionCodes.join(',') === (legacy ? [...governancePermissions].sort().join(',') : metadata?.permissionCode);
-    reason('INITIALIZATION_PERMISSIONS_CHANGED', role && !permissionsValid ? 1 : 0, '初始化治理权限与原始证据不一致，或旧版权限不完整；请核对权限变更历史。');
-    const governorValid = role?.code === 'ORGANIZATION_GOVERNOR' && !role.mfaRequired && role.positions.length === 0;
-    reason('INITIALIZATION_ROLE_MISSING', roles.length ? 0 : 1, '缺少可核验的初始化治理角色，不能自动清理。');
-    reason('NON_INITIALIZATION_ROLES', roles.length && !(roles.length === 1 && governorValid) ? Math.max(roles.length - 1, 1) : 0, '存在非初始化角色、岗位映射或安全配置，不能作为初始化附属项清理。');
-    const expectedGrant = (grant: { organizationId: string; roleId: string; userId: string }) => grant.organizationId === organizationId && grant.roleId === role?.id && grant.userId === creatorUserId;
-    const grantsValid = grants.length === 1 && grants.every(expectedGrant) && role?.userRoles.length === 1 && role.userRoles.every(expectedGrant);
-    reason('INITIALIZATION_GRANT_MISSING', grants.length && role?.userRoles.length ? 0 : 1, '缺少原创建人的唯一初始化授权，不能自动清理。');
-    reason('NON_INITIALIZATION_GRANTS', grantsValid || !grants.length ? 0 : Math.max(1, grants.filter(grant => !expectedGrant(grant)).length, role?.userRoles.filter(grant => !expectedGrant(grant)).length ?? 0), '存在额外授权或原创建人初始化授权已变化；请先核对授权来源，不能自动删除。');
-    const initialized = provenance && permissionsValid && governorValid && grantsValid;
-    const mutations = await transaction.adminMutation.findMany({ where: { organizationId } });
-    // Only this initializer's name/code/status maintenance of the same object and unchanged parent is ancillary.
-    const isMaintenance = (mutation: typeof mutations[number]) => {
-      const value = (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value;
-      return provenance && mutation.actorUserId === creatorUserId && mutation.action === 'ORGANIZATION_UPDATED'
-        && value?.id === organizationId && value.parentId === organization.parentId && value.type === created?.type
-        && typeof value.version === 'number' && value.version > 1
-        && events.some((entry) => entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS'
-          && entry.actorUserId === creatorUserId && entry.resourceType === 'Organization' && entry.resourceId === organizationId
-          && (entry.metadata as Record<string, unknown> | null)?.resourceVersion === value.version);
-    };
-    const isAncillaryEvent = (entry: typeof events[number]) => {
-      const details = entry.metadata as Record<string, unknown> | null;
-      if (details?.organizationId !== undefined && details.organizationId !== organizationId) return false;
-      if (entry.action === 'ACTION_REJECTED' && entry.outcome === 'DENIED' && ['Administration', 'Authorization'].includes(entry.resourceType)) return true;
-      if (entry.id === event?.id) return provenance;
-      return provenance && entry.action === 'ORGANIZATION_UPDATED' && entry.outcome === 'SUCCESS' && entry.actorUserId === creatorUserId
-        && entry.resourceType === 'Organization' && entry.resourceId === organizationId
-        && mutations.some((mutation) => (mutation.response as { value?: Record<string, Prisma.JsonValue> })?.value?.version === details?.resourceVersion);
-    };
-    reason('OTHER_MANAGEMENT_MUTATIONS', mutations.filter(mutation => !isMaintenance(mutation)).length, '存在非原创建人基础维护的管理回执；请定位管理审计并核对操作。');
-    reason('OTHER_MANAGEMENT_EVENTS', events.filter(entry => entry.id !== event?.id && !isAncillaryEvent(entry)).length, '存在其他管理操作或无法对应回执的审计；请定位审计，保留真实使用历史。');
-    reason('INITIALIZATION_OTHER_CREATOR', initialized && creatorUserId !== actor.id && !await hasPlatformAdministrator(transaction, actor.id) ? 1 : 0, '当前操作者不是原创建人，需要显式平台管理员授权。');
-    const blocked = details.length > 0;
-    return { blocked, details, creatorUserId, roleId: !blocked && initialized ? role!.id : undefined, events: blocked ? [] : events, mutationIds: blocked ? [] : mutations.map(({ id }) => id) };
+  private initializationAttachments(transaction: AdminTransaction, _actor: AdminActor, organization: { id: string; parentId: string | null; type: string }) {
+    return organizationInitialization(transaction, organization);
   }
-
   private async organizationLifecycleState(transaction: AdminTransaction, actor: AdminActor, current: { id: string; parentId: string | null; type: string }) {
     const organizationId = current.id;
     const deleteBlockers: string[] = [];
@@ -390,7 +345,7 @@ export class OrganizationService {
     add('delete', 'APPOINTMENTS', assignmentCount, '请核对任职历史；结束任职不等于可以清除历史。');
     add('disable', 'EFFECTIVE_APPOINTMENTS', effectiveAssignments, '请先结束有效或待生效任职。');
     const initialization = await this.initializationAttachments(transaction, actor, current);
-    if (initialization.blocked) deleteBlockers.push('存在非初始化授权或管理使用记录');
+    if (initialization.blocked) deleteBlockers.push('存在无法识别为初始化的实际角色或授权');
     deleteBlockerDetails.push(...initialization.details);
     const business = await structureBusinessReferences(transaction, organizationId, 'organization');
     if (business.referenced) deleteBlockers.push('存在业务、配置或历史引用');

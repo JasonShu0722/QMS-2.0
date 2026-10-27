@@ -44,7 +44,7 @@ export class WorkflowClosureTemplateService {
     return {
       nodes: [
         { id: 'owner', type: 'ACTION', name: '负责人处理', config: { isStart: true, assignment: { permission: 'workflow:act' },
-          ...(body.policy === 'INTERNAL' && body.domainCode === 'process-quality' ? { processEightD: {
+          ...(body.policy === 'INTERNAL' && ['process-quality', 'customer-quality', 'new-product-quality'].includes(body.domainCode) ? { processEightD: {
             schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null,
           } } : {}) } },
         { id: 'closure', type: 'APPROVAL', name: '关闭审核', config: { closureReview: { schemaVersion: 1, policy: body.policy, domainCode: body.domainCode } } },

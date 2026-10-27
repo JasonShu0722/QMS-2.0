@@ -4,6 +4,17 @@ import { Type } from 'class-transformer';
 import type { TrialMetricCode } from './new-product-quality.service.js';
 
 export class NewProductScopeDto { @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string; }
+export class NewProductDefectSelectionDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organization_id!: string;
+  @ApiProperty({ format: 'uuid' }) project_id!: string;
+  @ApiProperty({ format: 'uuid' }) defect_id!: string;
+  @ApiProperty({ minimum: 1 }) source_version!: number;
+  @ApiProperty({ type: Object, additionalProperties: true }) source_snapshot!: Record<string, unknown>;
+  @ApiProperty({ type: String, nullable: true }) selection_reason!: string | null;
+  @ApiProperty({ format: 'uuid' }) selected_by_id!: string;
+  @ApiProperty({ format: 'date-time' }) selected_at!: string;
+}
 export class CreateNewProductProjectDto extends NewProductScopeDto {
   @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) code!: string;
   @ApiProperty({ maxLength: 200 }) @IsString() @MaxLength(200) name!: string;
@@ -107,10 +118,10 @@ export class NewProductProjectDetailDto extends NewProductProjectDto {
   @ApiProperty({ type: [NewProductStageDto] }) stages!: NewProductStageDto[];
   @ApiProperty({ type: [NewProductLessonCheckDto] }) lessons!: NewProductLessonCheckDto[];
   @ApiProperty({ type: [NewProductTrialBatchDto] }) batches!: NewProductTrialBatchDto[];
-  @ApiProperty({ type: [Object] }) selected_defects!: Record<string, unknown>[];
+  @ApiProperty({ type: [NewProductDefectSelectionDto] }) selected_defects!: NewProductDefectSelectionDto[];
   @ApiPropertyOptional({ type: () => NewProductHandoverDto, nullable: true }) handover!: NewProductHandoverDto | null;
   @ApiPropertyOptional({ type: () => NewProductEarlyFlowDto, nullable: true }) early_flow!: NewProductEarlyFlowDto | null;
-  @ApiPropertyOptional({ type: Object }) issues!: Record<string, unknown>;
+  @ApiPropertyOptional({ type: () => NewProductIssueListDto }) issues?: NewProductIssueListDto | null;
 }
 export class HandoverNewProductProjectDto extends NewProductScopeDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
@@ -288,9 +299,22 @@ export class NewProductIssueStatsDto {
   @ApiProperty() in_progress!: number;
   @ApiProperty() verified!: number;
   @ApiProperty() closed!: number;
+  @ApiProperty() pending!: number;
+  @ApiProperty() resolved!: number;
+  @ApiProperty() archived!: number;
+}
+export class NewProductInternalEightDIssueDto {
+  @ApiProperty({ format: 'uuid' }) problemId!: string;
+  @ApiProperty() reportNumber!: string;
+  @ApiProperty() status!: string;
+  @ApiProperty() severity!: string;
+  @ApiProperty() problemVersion!: number;
+  @ApiProperty({ format: 'date-time' }) createdAt!: string;
+  @ApiProperty({ type: [String], format: 'uuid' }) selectionIds!: string[];
 }
 export class NewProductIssueListDto {
   @ApiProperty({ type: [NewProductIssueDto] }) items!: NewProductIssueDto[];
+  @ApiProperty({ type: [NewProductInternalEightDIssueDto] }) internalEightDIssues!: NewProductInternalEightDIssueDto[];
   @ApiProperty({ type: NewProductIssueStatsDto }) stats!: NewProductIssueStatsDto;
 }
 export class CreateNewProductLegacyIssueDto extends NewProductScopeDto {

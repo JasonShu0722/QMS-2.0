@@ -36,6 +36,18 @@ it.each([true, false])('shows actionable lifecycle details and only exposes an a
   } else expect(dialog.queryByRole('link')).not.toBeInTheDocument();
 });
 
+it('explains that retained management logs do not block deletion while keeping final server checks', async () => {
+  const fetcher = vi.fn(async (_path: RequestInfo | URL, _init?: RequestInit) => json({ deleteBlockers: [], disableBlockers: [] }));
+  vi.stubGlobal('fetch', fetcher);
+  render(<MemoryRouter><StructureLifecycleActions path="/api/v1/organizations/child" record={organization} auditOrganizationId={org.id} onChanged={vi.fn()} /></MemoryRouter>);
+  await userEvent.click(screen.getByRole('button', { name: /^删\s*除$/ }));
+  const dialog = within(await screen.findByRole('dialog'));
+  await waitFor(() => expect(dialog.getByRole('button', { name: '确认删除' })).toBeEnabled());
+  expect(dialog.getByText('管理日志与技术回执不单独阻止空组织删除；审计按存续组织授权范围保留，真实关系和业务历史仍受保护。')).toBeVisible();
+  expect(dialog.getByRole('link', { name: '定位此组织审计' })).toHaveAttribute('href', expect.stringContaining('section=audit-log'));
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+});
+
 it('places management responsibilities inside the selected department workspace', async () => {
   stub();
   view([org]);

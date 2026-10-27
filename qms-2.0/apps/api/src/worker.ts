@@ -8,6 +8,7 @@ import { RecoveryMailService } from './modules/identity/recovery-mail.service.js
 import { FileScanWorkerService } from './modules/file-management/file-scan-worker.service.js';
 import { TemporaryPasswordService } from './modules/identity/temporary-password.service.js';
 import { ProcessEightDReminderService } from './modules/process-quality/process-eight-d-reminder.service.js';
+import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEightDRuntime } from './common/eight-d/internal-eight-d-runtime.js';
 
 async function bootstrap(): Promise<void> {
   const options = parseWorkerOptions(process.argv.slice(2), process.env);
@@ -34,6 +35,8 @@ async function bootstrap(): Promise<void> {
       await app.get(AuditExportService).purgeExpired();
       await app.get(TemporaryPasswordService).purgeExpired();
       await app.get(ProcessEightDReminderService).poll(options.batchSize);
+      await app.get<InternalEightDRuntime>(CUSTOMER_EIGHT_D_RUNTIME).reminders.poll(options.batchSize);
+      await app.get<InternalEightDRuntime>(NEW_PRODUCT_EIGHT_D_RUNTIME).reminders.poll(options.batchSize);
       if (mailEnabled) await app.get(RecoveryMailService).dispatchPending(options.batchSize);
       nextMaintenance = Date.now() + 60000;
     }, logCycles ? (result) => console.info(`QMS_WORKER_CYCLE ${JSON.stringify({ ...result, observedAt: new Date().toISOString() })}`) : undefined);

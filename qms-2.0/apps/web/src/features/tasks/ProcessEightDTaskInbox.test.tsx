@@ -31,6 +31,14 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+it.each([['客户8D', 'customer-quality'], ['新品8D', 'new-product-quality']])('connects %s to its own task endpoints and workspace links', async (label, domain) => {
+  render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><MyTasksPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+  fireEvent.click(screen.getByRole('tab', { name: label }));
+  expect(await screen.findByText('8D-123')).toBeVisible();
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/tasks?pageSize=25&offset=0`, expect.anything());
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/notifications?pageSize=25&offset=0`, expect.anything());
+  expect(screen.getByRole('link', { name: '打开8D报告' })).toHaveAttribute('href', '/app/problem-workspace/problem?view=report');
+});
 async function mount(page = false) {
   const view = render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider>{page ? <MyTasksPage /> : <ProcessEightDTaskInbox />}</UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   if (page) fireEvent.click(screen.getByRole('tab', { name: '过程8D' }));

@@ -1,8 +1,10 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { INTERNAL_EIGHT_D_DOMAIN, INTERNAL_EIGHT_D_DOMAINS, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
+import { internalEightDReminderConfiguration } from '../../common/eight-d/internal-eight-d-reminder.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 import type { AtomicOutboxHandler, OutboxEvent } from '../task-notification/outbox-worker.service.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
@@ -20,10 +22,15 @@ const ignored = (error: unknown) => error instanceof HttpException && [403, 404]
 
 @Injectable()
 export class ProcessEightDReminderService implements AtomicOutboxHandler {
-  readonly eventTypes = ['PROCESS_EIGHT_D_REMINDER_DUE', 'WORKFLOW_DEADLINE_EXTENSION_CHANGED'];
+  readonly eventTypes: string[];
   private cursor: string | null = null;
   constructor(private readonly prisma: PrismaService, private readonly reports: ProcessEightDService,
-    private readonly extensions: WorkflowDeadlineExtensionService, private readonly rounds: WorkflowClosureRoundService, private readonly outbox: OutboxService) {}
+    private readonly extensions: WorkflowDeadlineExtensionService, private readonly rounds: WorkflowClosureRoundService, private readonly outbox: OutboxService,
+    @Optional() @Inject(INTERNAL_EIGHT_D_DOMAIN) private readonly domain: InternalEightDDomainDescriptor = INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
+    this.eventTypes = [this.configuration.eventType, 'WORKFLOW_DEADLINE_EXTENSION_CHANGED'];
+  }
+
+  private get configuration() { return internalEightDReminderConfiguration(this.domain); }
 
   // Register in the real worker maintenance cycle; outbox delivery uses the normal atomic handler/retry receipts.
   async poll(limit = 25, now = new Date()): Promise<{ examined: number; enqueued: number }> {
@@ -41,11 +48,11 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
           let count = 0;
           for (const notice of notices) {
             if (notice.slot === null || !notice.recipients.length || notice.kind === 'EXTENSION_CANCELLED') continue;
-            const eventKey = `eight-d:${c.problemId}:${notice.fingerprint}:${notice.slot}`;
-            const inserted = await tx.$executeRaw`INSERT INTO process_eight_d_reminder_slots (event_key, organization_id, problem_id)
+            const eventKey = `${this.configuration.eventKeyPrefix}:${c.problemId}:${notice.fingerprint}:${notice.slot}`;
+            const inserted = await tx.$executeRaw`INSERT INTO ${this.configuration.slots} (event_key, organization_id, problem_id)
               VALUES (${eventKey}, ${c.organizationId}::uuid, ${c.problemId}::uuid) ON CONFLICT (event_key) DO NOTHING`;
             if (!inserted) continue;
-            await this.outbox.enqueue({ eventKey, aggregateType: 'ProcessEightDReminder', aggregateId: c.problemId, eventType: 'PROCESS_EIGHT_D_REMINDER_DUE',
+            await this.outbox.enqueue({ eventKey, aggregateType: this.configuration.aggregateType, aggregateId: c.problemId, eventType: this.configuration.eventType,
               payload: { schemaVersion: 1, organizationId: c.organizationId, problemId: c.problemId, fingerprint: notice.fingerprint, slot: notice.slot } }, tx);
             count++;
           }
@@ -57,16 +64,21 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
     return { examined: candidates.length, enqueued };
   }
 
-  async handle(tx: Prisma.TransactionClient, event: OutboxEvent): Promise<void> {
+  async handle(tx: Prisma.TransactionClient, event: OutboxEvent): Promise<'deferred' | void> {
     const p = jsonObject(event.payload);
-    if (p.schemaVersion !== 1 || typeof p.organizationId !== 'string' || !isUUID(p.organizationId) || typeof p.problemId !== 'string' || !isUUID(p.problemId)) throw new Error('PROCESS_EIGHT_D_REMINDER_EVENT_INVALID');
+    if (p.schemaVersion !== 1 || typeof p.organizationId !== 'string' || !isUUID(p.organizationId) || typeof p.problemId !== 'string' || !isUUID(p.problemId)) throw new Error(this.configuration.invalidEvent);
     const extensionEvent = event.eventType === 'WORKFLOW_DEADLINE_EXTENSION_CHANGED';
     if (extensionEvent) {
       if (event.aggregateType !== 'WorkflowDeadlineExtension' || typeof p.requestId !== 'string' || !isUUID(p.requestId) || event.aggregateId !== p.requestId
-        || !Number.isSafeInteger(p.requestVersion) || Number(p.requestVersion) < 1 || event.eventKey !== `deadline:${p.requestId}:${p.requestVersion}`) throw new Error('PROCESS_EIGHT_D_REMINDER_EVENT_INVALID');
-    } else if (event.eventType !== 'PROCESS_EIGHT_D_REMINDER_DUE' || event.aggregateType !== 'ProcessEightDReminder' || event.aggregateId !== p.problemId
+        || !Number.isSafeInteger(p.requestVersion) || Number(p.requestVersion) < 1 || event.eventKey !== `deadline:${p.requestId}:${p.requestVersion}`) throw new Error(this.configuration.invalidEvent);
+      // Shared extension events must reach their owning handler before any resolver can mutate them.
+      const [ownership] = await tx.$queryRaw<{ allowed: boolean }[]>`SELECT EXISTS (SELECT 1 FROM problem_indexes
+        WHERE organization_id = ${p.organizationId}::uuid AND id = ${p.problemId}::uuid
+          AND domain_code = ${this.domain.domainCode} AND source_type = ${this.domain.sourceType}) AS allowed`;
+      if (ownership?.allowed !== true) return 'deferred';
+    } else if (event.eventType !== this.configuration.eventType || event.aggregateType !== this.configuration.aggregateType || event.aggregateId !== p.problemId
       || typeof p.fingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(p.fingerprint) || !Number.isSafeInteger(p.slot) || Number(p.slot) < 0
-      || event.eventKey !== `eight-d:${p.problemId}:${p.fingerprint}:${p.slot}`) throw new Error('PROCESS_EIGHT_D_REMINDER_EVENT_INVALID');
+      || event.eventKey !== `${this.configuration.eventKeyPrefix}:${p.problemId}:${p.fingerprint}:${p.slot}`) throw new Error(this.configuration.invalidEvent);
     const c = await this.reports.notificationContext(tx, p.organizationId, p.problemId);
     if (!c) return;
     const notices = await this.notices(tx, c, new Date());
@@ -74,12 +86,12 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
       : notices.find(n => n.fingerprint === p.fingerprint && n.slot === p.slot);
     if (!notice || !notice.recipients.length) return;
     const problem = await tx.problemIndex.findFirstOrThrow({ where: { id: c.problemId, organizationId: c.organizationId }, select: { reportNumber: true } });
-    const subject = notice.kind === 'EXTENSION_CANCELLED' ? '延期申请失效，请重新申请' : notice.kind === 'EXTENSION_PENDING' ? '延期审批待办' : notice.kind === 'CLOSURE_REMINDER' ? '关闭审核催办' : '过程8D办理催办';
+    const subject = notice.kind === 'EXTENSION_CANCELLED' ? '延期申请失效，请重新申请' : notice.kind === 'EXTENSION_PENDING' ? '延期审批待办' : notice.kind === 'CLOSURE_REMINDER' ? '关闭审核催办' : this.configuration.handlingSubject;
     for (const recipient of notice.recipients) {
       // Recheck after resolver waits, immediately before atomic projection; never synthesize a user session.
       if (!await this.recipient(tx, c, recipient) || (notice.current && !await notice.current(recipient))) continue;
       const { current: _current, ...saved } = notice;
-      await tx.$executeRaw`INSERT INTO process_eight_d_notifications (id, organization_id, problem_id, recipient_user_id, event_key, kind, subject, body, context)
+      await tx.$executeRaw`INSERT INTO ${this.configuration.notifications} (id, organization_id, problem_id, recipient_user_id, event_key, kind, subject, body, context)
         VALUES (${randomUUID()}::uuid, ${c.organizationId}::uuid, ${c.problemId}::uuid, ${recipient}::uuid, ${event.eventKey}, ${notice.kind}, ${subject},
           ${`问题 ${problem.reportNumber}：${subject}。请进入问题工作区查看当前职责、原期限和延期记录。`},
           ${JSON.stringify({ ...saved, recipients: undefined })}::jsonb) ON CONFLICT (event_key, recipient_user_id) DO NOTHING`;

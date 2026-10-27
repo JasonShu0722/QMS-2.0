@@ -1,5 +1,11 @@
 # OpenAPI 契约
 
+## N4剩余两域8D契约（V0.0.33本地实施，未发布）
+
+本地已增加`/api/v1/customer-quality/eight-d`及`/api/v1/new-product-quality/eight-d`的独立绑定/启用、来源预览、发单、正文、人员/风险/来源/期限维护、待办/通知及受控报告/PDF路由；沿用真实会话、目标组织、CSRF、幂等、CAS与专业职责校验。新域公开来源字段为`sourceId`，不以过程`defectId`命名客户行或新品selection；原过程契约保持兼容。
+
+`NewProductDefectSelectionDto`公开既有来源选择输出，项目新问题以`internalEightDIssues`与旧`items`区分；`ProblemIndexQueryDto.sourceType`在服务端授权eligible集合内过滤后才计算分页/总数/状态统计。Swagger仍为唯一契约源，生成/检查由父串行执行，最终源码门禁仍待收口；这些本地契约尚未随当前7cd2707公开站点发布。
+
 ## N4首单元契约（2026-10-27已部署）
 
 下列台账/解析契约已随PR #75、源码7cd2707上线，公网OpenAPI验证台账10条/解析8条路径与archived/projectQualified/恢复能力字段，6个匿名读取401；生成类型与公开契约不代表生产角色已授权，完整证据见[计划5.11](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md)。

@@ -2,8 +2,10 @@ import type { components } from '@qms/contracts';
 import { theme } from 'antd';
 import type { CSSProperties } from 'react';
 import { useLanguage } from '../../i18n/Language';
+import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
+import type { InternalEightDReport } from '../internal-eight-d/source-picker';
 
-export type EightDReport = components['schemas']['ProcessEightDReportDto'];
+export type EightDReport = components['schemas']['ProcessEightDReportDto'] | InternalEightDReport;
 export type EightDDocument = components['schemas']['ProcessEightDDocumentDto'];
 export type EightDFields = components['schemas']['ErrorResponse']['fields'];
 export type EightDRead = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -11,9 +13,10 @@ export type EightDWriteBody = components['schemas']['SaveProcessEightDDto']
   | components['schemas']['ProcessEightDVersionDto'] | components['schemas']['ProcessEightDAnalysisCompleteDto']
   | components['schemas']['ProcessEightDCollaboratorsDto'] | components['schemas']['ReassignProcessEightDDto']
   | components['schemas']['ProcessEightDRiskDto'] | components['schemas']['ProcessEightDSourcesDto']
-  | components['schemas']['ProcessEightDDeadlinesDto'] | components['schemas']['RequestWorkflowDeadlineExtensionDto'];
+  | components['schemas']['ProcessEightDDeadlinesDto'] | components['schemas']['RequestWorkflowDeadlineExtensionDto']
+  | components['schemas']['CustomerEightDSourcesDto'] | components['schemas']['NewProductEightDSourcesDto'];
 export type EightDWrite = (path: string, method: 'PUT' | 'POST', body: EightDWriteBody) => Promise<boolean>;
-export const eightDPath = (id: string) => `/api/v1/process-quality/eight-d/${encodeURIComponent(id)}`;
+export const eightDPath = (id: string, domain: InternalEightDDomain = 'process') => `${eightDDomain(domain).basePath}/${encodeURIComponent(id)}`;
 export const extensionPath = (id: string) => `/api/v1/workflow-deadline-extensions/problems/${encodeURIComponent(id)}/requests`;
 export const roundPath = (id: string) => `/api/v1/workflow-closure/problems/${encodeURIComponent(id)}/rounds`;
 const fieldSections: Record<keyof EightDDocument, string> = {

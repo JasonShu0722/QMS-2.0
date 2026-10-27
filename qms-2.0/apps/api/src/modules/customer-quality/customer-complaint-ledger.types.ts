@@ -7,6 +7,7 @@ export const LEDGER_PERMISSIONS = {
   reassign: 'customer-quality:complaints:reassign',
   project: 'new-product-quality:projects:write',
 } as const;
+export const CUSTOMER_SOURCE_PERMISSIONS = ['customer-quality:issues:issue', 'customer-quality:issues:sources'] as const;
 export type LedgerOperation = 'read' | 'update' | 'analysis' | 'receiving' | 'close' | 'reopen' | 'closed-edit';
 export type LedgerStatus = 'FOLLOWING' | 'CLOSED';
 export type LedgerStage = 'NEW_PRODUCT' | 'MASS_PRODUCTION';
