@@ -6,6 +6,7 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [组织/用户强制删除与跨组织管理统一方案](../../docs/superpowers/specs/2026-10-28-qms-admin-force-delete-and-scope-design.md) | 2026-10-28管理治理研讨；真实权限投影复现、组织/用户强删和补配、全管理视角动作矩阵；未实现/未生产变更 |
 | [本轮整体开发与分批上线路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md) | N1～N3及fix2已部署28cc304；N4→N5按已批准范围接续，真实配置/人工验收和业务开通独立 |
 | [N4客诉协同与新品同源执行计划](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md) | 复用整体路线和已确认规则，仅登记源码/测试/部署的实际差距、实现所有权和证据；Issue #74，首单元V0.0.32 |
 | [N5供应商独立8D与门户闭环计划](../../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md) | V0.0.34 / Issue #78；受控复制披露、先SQE后分级管理、专用延期及报告，N4/N5部署串行、生产业务放行独立 |
