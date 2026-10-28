@@ -49,6 +49,27 @@ describe('supplier notification real conflict recovery', () => {
   const pending = (f: Fixture) => f.db.$transaction(tx => app.get(SupplierEightDDeadlineService).notificationPending(tx, f.f.org.id, f.draft.id));
   const notices = (f: Fixture, eventKey: string) => f.db.$queryRaw<{ id: string }[]>`SELECT id FROM supplier_eight_d_notifications WHERE supplier_problem_id = ${f.draft.id}::uuid AND event_key = ${eventKey}`;
 
+  it('keeps concurrent pending-extension projections on shared domain locks', async () => {
+    const f = await setup(), extension = await request(f), current = await f.read();
+    let arrived = 0;
+    let release!: () => void;
+    const ready = new Promise<void>(resolve => { release = resolve; });
+    const read = () => f.db.$transaction(async tx => {
+      // Both public inbox projections already hold a shared problem lock before reading extensions.
+      await tx.$queryRaw`SELECT id FROM problem_indexes WHERE id = ${current.problemId}::uuid FOR SHARE`;
+      if (++arrived === 2) release();
+      await ready;
+      return app.get(SupplierEightDDeadlineService).notificationPending(tx, f.f.org.id, f.draft.id);
+    }, { timeout: 15000 });
+    const results = await Promise.allSettled([read(), read()]);
+    for (const result of results) if (result.status === 'rejected') console.info('CONCURRENT_PROJECTION_FAILURE', result.reason);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'fulfilled']);
+    for (const result of results) {
+      if (result.status !== 'fulfilled') throw result.reason;
+      expect(result.value).toEqual([expect.objectContaining({ id: extension.id })]);
+    }
+  }, 30000);
+
   it('propagates actual lockFacts version mismatch through both ports and the application atomic worker, then retries after facts recover', async () => {
     const f = await setup(), c = await f.read();
     const event = await f.db.outboxEvent.findFirstOrThrow({ where: { aggregateId: f.draft.id, eventType: 'SUPPLIER_EIGHT_D_CHANGED', payload: { path: ['action'], equals: 'RELEASE' } } });

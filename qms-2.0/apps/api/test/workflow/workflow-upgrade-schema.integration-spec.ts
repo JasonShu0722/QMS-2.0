@@ -61,6 +61,16 @@ describe('workflow upgrade and immutable problem history', () => {
     return { ...context, task };
   }
 
+  async function drainEvents(eventKeys: string[]) {
+    // The worker owns a shared queue; a batch count cannot prove delivery of our events.
+    for (let batch = 0; batch < 10; batch += 1) {
+      await worker().processAtomicDue(100, handler);
+      const events = await prisma.outboxEvent.findMany({ where: { eventKey: { in: eventKeys } }, include: { deliveryAttempts: true } });
+      if (events.length === eventKeys.length && events.every((event) => ['PROCESSED', 'FAILED'].includes(event.status))) return events;
+    }
+    throw new Error(`Owned outbox events did not reach terminal states within 10 batches: ${eventKeys.join(', ')}`);
+  }
+
   async function holdLock(lock: Prisma.Sql, beforeRelease?: (tx: Prisma.TransactionClient) => Promise<unknown>) {
     let release!: () => void;
     let acquired!: (pid: number) => void;
@@ -121,15 +131,35 @@ describe('workflow upgrade and immutable problem history', () => {
     expect(await prisma.workflowUpgrade.count({ where: { problemIndexId: context.problem.id } })).toBe(1);
   });
 
-  it('quietly acknowledges the legitimate old START after upgrade without creating an obsolete task', async () => {
+  it.each([false, true])('quietly acknowledges the legitimate old START after upgrade without creating an obsolete task (foreign failure: %s)', async (foreignFailure) => {
+    const foreign = foreignFailure ? await timingFixture(prisma, organizations) : null;
+    const poison = foreign && await prisma.outboxEvent.update({ where: { eventKey: `workflow:${foreign.started.instanceId}:1` },
+      data: { payload: { schemaVersion: 0 }, attempts: 4 } });
+    if (foreign) {
+      // More than one claim limit of foreign failures must not starve either START.
+      await prisma.outboxEvent.createMany({ data: Array.from({ length: 100 }, (_, index) => ({
+        eventKey: `foreign-malformed:${foreign.started.instanceId}:${index}`, aggregateType: 'WorkflowInstance',
+        aggregateId: foreign.started.instanceId, eventType: 'WORKFLOW_STARTED', payload: { schemaVersion: 0 }, attempts: 4,
+      })) });
+    }
     const context = await upgradeFixture(prisma, organizations);
     const upgraded = await service.upgrade(context.actor, context.problem.id, context.input, randomUUID(), randomUUID());
-    const worker = new OutboxWorkerService(prisma, () => new Date(Date.now() + 1000));
-    const processed = await worker.processAtomicDue(100, new WorkflowEventHandler());
-    expect(processed.failed).toBe(0);
-    expect(processed.processed).toBeGreaterThanOrEqual(2);
+    const events = await drainEvents([`workflow:${context.started.instanceId}:1`, `workflow:${upgraded.afterInstanceId}:1`]);
+    for (const event of events) {
+      expect(event).toMatchObject({ status: 'PROCESSED', attempts: 0, lastError: null, processingAt: null, processedAt: expect.any(Date) });
+      expect(event.deliveryAttempts).toEqual([expect.objectContaining({ outcome: 'PROCESSED', attemptNumber: 1, reasonCode: null })]);
+    }
     expect(await prisma.workflowTask.count({ where: { workflowInstanceId: context.started.instanceId } })).toBe(0);
     expect(await prisma.workflowTask.count({ where: { workflowInstanceId: upgraded.afterInstanceId } })).toBe(1);
+    if (poison) {
+      const failures = await prisma.outboxEvent.findMany({ where: { aggregateId: foreign!.started.instanceId }, include: { deliveryAttempts: true } });
+      expect(failures).toHaveLength(101);
+      for (const failure of failures) expect(failure).toMatchObject({
+        status: 'FAILED', attempts: 5, lastError: 'WORKFLOW_EVENT_INVALID', processedAt: null,
+        deliveryAttempts: [expect.objectContaining({ outcome: 'FAILED', attemptNumber: 5, reasonCode: 'OUTBOX_HANDLER_ERROR' })],
+      });
+      expect(await prisma.workflowTask.count({ where: { workflowInstanceId: foreign!.started.instanceId } })).toBe(0);
+    }
   });
 
   it('keeps a genuine old failed event visible and safely retryable after the current pointer changes', async () => {
@@ -140,13 +170,27 @@ describe('workflow upgrade and immutable problem history', () => {
     }
     await prisma.session.update({ where: { id: context.session.id }, data: { mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() } });
     const event = await prisma.outboxEvent.findUniqueOrThrow({ where: { eventKey: `workflow:${context.started.instanceId}:1` } });
-    await prisma.outboxEvent.update({ where: { id: event.id }, data: { status: 'FAILED', attempts: 5 } });
-    await service.upgrade(context.actor, context.problem.id, context.input, randomUUID(), randomUUID());
+    await prisma.outboxEvent.update({ where: { id: event.id }, data: { payload: { schemaVersion: 0 }, attempts: 4 } });
+    expect(await drainEvents([event.eventKey])).toEqual([expect.objectContaining({
+      status: 'FAILED', attempts: 5, lastError: 'WORKFLOW_EVENT_INVALID', processedAt: null,
+      deliveryAttempts: [expect.objectContaining({ outcome: 'FAILED', attemptNumber: 5 })],
+    })]);
+    await prisma.outboxEvent.update({ where: { id: event.id }, data: { payload: event.payload as Prisma.InputJsonObject } });
+    const upgraded = await service.upgrade(context.actor, context.problem.id, context.input, randomUUID(), randomUUID());
     const admin = new OutboxAdministrationService(prisma, audit);
     expect(await admin.list(context.actor, {})).toMatchObject({ total: 1, items: [{ id: event.id }] });
     await admin.retry(context.actor, event.id, context.organization.id, randomUUID());
-    expect(await new OutboxWorkerService(prisma, () => new Date(Date.now() + 1000)).processAtomicDue(100, new WorkflowEventHandler())).toMatchObject({ retried: 0, failed: 0 });
+    const delivered = await drainEvents([event.eventKey, `workflow:${upgraded.afterInstanceId}:1`]);
+    for (const receipt of delivered) {
+      expect(receipt).toMatchObject({ status: 'PROCESSED', attempts: 0, lastError: null, processingAt: null, processedAt: expect.any(Date) });
+      expect(receipt.deliveryAttempts.filter((attempt) => attempt.outcome === 'PROCESSED')).toEqual([
+        expect.objectContaining({ attemptNumber: 1, reasonCode: null }),
+      ]);
+    }
+    expect(delivered.find((receipt) => receipt.id === event.id)?.deliveryAttempts.map((attempt) => attempt.outcome)).toEqual(
+      expect.arrayContaining(['FAILED', 'RETRY_REQUESTED', 'PROCESSED']));
     expect(await prisma.workflowTask.count({ where: { workflowInstanceId: context.started.instanceId } })).toBe(0);
+    expect(await prisma.workflowTask.count({ where: { workflowInstanceId: upgraded.afterInstanceId } })).toBe(1);
   });
 
   it('describes executable actions before task projection without mutating state', async () => {

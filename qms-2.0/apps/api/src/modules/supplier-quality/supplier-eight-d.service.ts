@@ -131,7 +131,7 @@ export class SupplierEightDService {
     try {
       const source = await tx.supplierQualityProblem.findFirst({ where: { id, ownerOrganizationId: organizationId }, select: { problemIndexId: true } });
       if (!source?.problemIndexId) return null;
-      const record = await this.lockFacts(tx, organizationId, source.problemIndexId);
+      const record = await this.lockFacts(tx, organizationId, source.problemIndexId, true);
       if (!this.notificationActive(record) || record.node.type !== 'ACTION'
         || jsonObject(jsonObject(record.node.config).supplierEightD).schemaVersion !== 1 || record.control.submittedRevisionId
         || stage === 'ANALYSIS' && record.control.analysisCompletedAt) return null;
