@@ -7,10 +7,10 @@
 | 项目 | 当前事实 |
 | --- | --- |
 | 授权 | 负责人2026-10-28已取消夜间交付，heartbeat qms-n4-n5经管理工具确认删除，随后明确“继续推进开发”。当前恢复常规本地实现、审查、验证及提交推送PR授权；不自动合并部署，不授权生产配权/启用绑定/实际释放供应商资料或人工验收代签，不回填Base/关闭整包REQ。先前夜间授权仅作历史记录，不再沿用 |
-| 基线 | 活动D:/WorkSpace/QMS-2.0，分支codex/qms-n5-supplier-eight-d，PR #79已推送fix2 d82523674bf548fdd371de1fe6cda238f15748f9；其CI40667443334的四Web/检查/API单测及171真实PG文件全部成功，仅最后复用积累库的Worker生命周期两项失败，fix3限定CI新库隔离。生产仍为N4 PR #77的a60a189，不重复N4开发或部署 |
+| 基线 | 活动D:/WorkSpace/QMS-2.0，分支codex/qms-n5-supplier-eight-d，PR #79已推送fix3 b56adbdab055334440bd6a041ea40be5570ca2eb；CI40673495486后端完整集成及独立Worker、检查/API单测/Web1、3、4成功，唯独Web2一条既有趋势同步查询竞态，fix4仅修该测试等待。生产仍为N4 PR #77的a60a189，不重复N4开发或部署 |
 | 映射 | V0.0.34及同范围V0.0.34-fix1，[Issue #78](https://github.com/JasonShu0722/QMS-2.0/issues/78)、[PR #79](https://github.com/JasonShu0722/QMS-2.0/pull/79)。REQ-0029/reczz28RDS4BnyEL及REQ-0026/reczz28RDS4BnuCp供应商部分；user回读revision311仅作溯源，不据状态冒称实际交付 |
 | 目标 | 现有供应商单据、门户、修订和SUPPLIER关闭策略真实接线，完成独立整改、受控复制披露、阶段期限及专用延期、受控报告和闭后补充，不重建门户或并行主台账 |
-| 下一动作 | fix3只隔离CI生命周期专属数据库，保留原四分片数据/失败历史、原完整迁移seed和Worker断言/超时；父真实新库130迁移/seed及Worker8项通过，根新测试完整15项通过，独立审查/治理后推同PR。组织强制删除按新规则同步独立方案，见REQ0030计划第8节，未混入本PR生产实现、不自动合并部署 |
+| 下一动作 | fix4仅将趋势用例的数据等待改为实际异步完成并加可控延迟回归，保留业务数值/来源/接口及原预算；完整9项通过，父复核/审查/治理后推同PR等待精确新head。组织强制删除新方向在DISC004/REQ0030计划第8节及Issue76，未混入本PR生产实现、不自动合并部署 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/n5-evidence；前置N4证据n4-remaining-evidence。一次性DB/存储/扫描/Worker/浏览器，禁止55440，不删除旧库/上传，不做prune |
 
 ## 1. 已批准依据和范围
@@ -208,3 +208,11 @@ fix2 d825236的CI40667443334已实际通过全部四组Web、API纯测、检查�
 Ohm仅改CI步骤七行shell与根测试：根完整15项先14通过/1失败，修后15通过；父独立新库`qms_pr79_fix3_worker_20261028`完整130迁移、seed及原编译Worker8项通过（56.686秒），保留先前四分片库及其数据。新URL经Node只替换pathname后mask，仅export本步骤，不写GITHUB_ENV；没有修改任何生产或API/Web运行代码。父再跑根完整文件，独立SPEC/QUALITY及治理实际结论接续后统一推送。
 
 父独立根完整15项、文档/边界21项及治理37文档/385链接/20来源/149依赖对通过。Epicurus窄SPEC、Confucius独立QUALITY均通过；定向来源hash首次遗漏根测试登记导致治理FAIL保留，实际核读新增隔离断言后只更新对应来源，再跑PASS。无运行时代码变化，不重复API/Web全套；提交同PR后只认新head真实CI，不自动合并部署。
+
+### 7.8 fix4：趋势测试等待真实数据渲染
+
+fix3 b56adbd的CI40673495486后端integration（含最后独立编译Worker）成功，四组Web中的1/3/4、检查/API单测成功；Web2仅既有quality-data测试同步读取0.95失败。实际指标区域会先渲染，再异步加载趋势事实，等待指标名称/区域出现不证明数据已到。限定该case引入可控trend Promise，确认真实区域已出现而数值未出现，再释放原相同95/100及MES/batch-1数据；原同步查询取得RED，再改为默认预算的异步findByText。其余8case、原fixture数据/来源/接口断言和生产代码均不变，不引入指标新功能或放宽timeout/motion。
+
+Newton完整9项GREEN及修改前后副本保存在Git外`pr79-fix4/quality-trend`；父独立SPEC确认上述范围，父完整复测/类型检查与独立QUALITY接续，不将其他head成功状态当本次最终CI通过。原所有FAIL和新修复分别保留。
+
+父独立完整9项和Web类型检查均退出0，Carson限定QUALITY通过；仅测试/计划/来源索引变更，不重跑完全相同运行代码的API构建或数据库。治理最终复核后提交推送同PR，最终CI另核，未获合并部署授权。
