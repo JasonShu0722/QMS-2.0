@@ -6,11 +6,11 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 授权 | 负责人2026-10-28已取消夜间交付，heartbeat qms-n4-n5经管理工具确认删除，随后明确“继续推进开发”。当前恢复常规本地实现、审查、验证及提交推送PR授权；不自动合并部署，不授权生产配权/启用绑定/实际释放供应商资料或人工验收代签，不回填Base/关闭整包REQ。先前夜间授权仅作历史记录，不再沿用 |
-| 基线 | 活动D:/WorkSpace/QMS-2.0，分支codex/qms-n5-supplier-eight-d，PR #79已推送fix3 b56adbdab055334440bd6a041ea40be5570ca2eb；CI40673495486后端完整集成及独立Worker、检查/API单测/Web1、3、4成功，唯独Web2一条既有趋势同步查询竞态，fix4仅修该测试等待。生产仍为N4 PR #77的a60a189，不重复N4开发或部署 |
-| 映射 | V0.0.34及同范围V0.0.34-fix1，[Issue #78](https://github.com/JasonShu0722/QMS-2.0/issues/78)、[PR #79](https://github.com/JasonShu0722/QMS-2.0/pull/79)。REQ-0029/reczz28RDS4BnyEL及REQ-0026/reczz28RDS4BnuCp供应商部分；user回读revision311仅作溯源，不据状态冒称实际交付 |
+| 授权 | 夜间授权已撤回、heartbeat已删除；负责人2026-10-28明确“通过了，先继续推进n5合并部署”，本次单独授权已执行。不配置生产岗位/启用业务绑定/实际释放供应商资料，不实际删除组织、不回填Base或关闭整包REQ；不恢复夜间自动化 |
+| 基线 | 最终PR head acf071cdce088c50ae0b94091b44a97f8dce2c02已合并为86d68f8506165bae2650986ba2b0cbbcac77825d并部署。活动D:/WorkSpace/QMS-2.0当前纯文档归档分支codex/qms-n5-release-records基于该main，不额外推送触发Actions；a60a189为前置N4运行历史 |
+| 映射 | V0.0.34含fix1～fix4，[Issue #78](https://github.com/JasonShu0722/QMS-2.0/issues/78)、[PR #79](https://github.com/JasonShu0722/QMS-2.0/pull/79)。REQ-0029/reczz28RDS4BnyEL及REQ-0026/reczz28RDS4BnuCp供应商部分；user回读revision311仅作溯源，不据状态冒称人工验收或整包关闭 |
 | 目标 | 现有供应商单据、门户、修订和SUPPLIER关闭策略真实接线，完成独立整改、受控复制披露、阶段期限及专用延期、受控报告和闭后补充，不重建门户或并行主台账 |
-| 下一动作 | fix4仅将趋势用例的数据等待改为实际异步完成并加可控延迟回归，保留业务数值/来源/接口及原预算；完整9项通过，父复核/审查/治理后推同PR等待精确新head。组织强制删除新方向在DISC004/REQ0030计划第8节及Issue76，未混入本PR生产实现、不自动合并部署 |
+| 下一动作 | N5机器部署核验PASS，详见第8节；归档后停止自动发布，接续生产岗位/流程配置与第9节人工清单。组织强制删除新方向在DISC004/REQ0030计划第8节及Issue76，只有方案，未混作本次已交付；不进入N6 |
 | 证据 | Git外D:/WorkSpace/QMS-2.0-local/n5-evidence；前置N4证据n4-remaining-evidence。一次性DB/存储/扫描/Worker/浏览器，禁止55440，不删除旧库/上传，不做prune |
 
 ## 1. 已批准依据和范围
@@ -98,10 +98,10 @@ type SupplierDeadlineStage = 'ANALYSIS' | 'SUBMISSION' | 'CLOSURE';
 ## 5. 交付门禁和停止边界
 
 - [x] 既有计划/需求及实际源码评审，user回读REQ0029、查重建Issue #78、固定版本/分支。
-- [ ] 各单元TDD及独立SPEC→QUALITY，父完整链/原内部/旧门户受影响真实回归，集中矩阵审查。
-- [ ] Swagger生成/检查、API/Web测试及构建/归档/两种Compose静态/治理/迁移不可变/敏感材料扫描。
+- [x] 各单元独立SPEC→QUALITY及受影响真实回归、集中矩阵审查完成；局部未取得实现前RED的方法偏差及原失败在第7节保留，不追认严格全程TDD。
+- [x] Swagger生成/检查、API/Web测试及构建/归档/两种Compose静态/治理/迁移不可变/敏感材料扫描；最终PR及main完整CI均成功，中间本地全量FAIL仍保留。
 - [x] N4精确head完整CI/云端审查→合并→main完整CI→快照/迁移/同SHA服务/公网核验；发布证据为n4-remaining-evidence/release/release-verification.json PASS，人工业务验收仍另列。
-- [ ] 本地N5最终冻结→常规提交推送PR→最新headCI/审查集中修复；合并及同版本部署需按已恢复的正常检查点另核对授权。
+- [x] 本地冻结→PR #79→fix1～fix4集中修复及独立审查→最终headCI成功；负责人单次授权后合并、mainCI及同版本部署核验PASS，见第8节。
 - [ ] 角色配置/业务流程发布绑定启用/实际对外披露与真实用户人工验收另由负责人放行；Issue/REQ关闭和Base回填另核对授权，不伪勾完成。
 
 所有结果记录精确源码、完整文件/用例、命令、资源/时间、失败及重跑。组合验证明确源码影响与重叠，不拼单文件局部case消红。主体证据写入原供应商交接、PHASE-4、能力/运维/契约等权威文档并同步索引；本计划仅接续本次范围，不复制成第二套通用治理。
@@ -216,3 +216,28 @@ fix3 b56adbd的CI40673495486后端integration（含最后独立编译Worker）�
 Newton完整9项GREEN及修改前后副本保存在Git外`pr79-fix4/quality-trend`；父独立SPEC确认上述范围，父完整复测/类型检查与独立QUALITY接续，不将其他head成功状态当本次最终CI通过。原所有FAIL和新修复分别保留。
 
 父独立完整9项和Web类型检查均退出0，Carson限定QUALITY通过；仅测试/计划/来源索引变更，不重跑完全相同运行代码的API构建或数据库。治理最终复核后提交推送同PR，最终CI另核，未获合并部署授权。
+
+## 8. N5发布核验（2026-10-28，机器PASS，非人工验收）
+
+- 本次负责人明确授权合并部署。PR #79最终head `acf071cdce088c50ae0b94091b44a97f8dce2c02`，CI [40677414269](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40677414269)全部9项成功；三条云端审查发现均有实际修复/回归及解决记录，fix3/fix4限定改动另经独立SPEC→QUALITY。没有最终head新云端审查“无发现”收据，不将早期或本地审查冒称其结果，也未单独运行Security Review。
+- SHA保护的squash合并为 `86d68f8506165bae2650986ba2b0cbbcac77825d`，合并文件树与最终PR CI head完全一致；main CI [40681314703](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40681314703) / attempt1全部9项成功。
+- 自动部署 [40684505960](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40684505960) / attempt1、job122803292488成功。来源校验明确main run40681314703/attempt1/head86d68f8及Full validation scope，实际SSH部署步骤成功，未跳过。
+- 20:21:11（Asia/Taipei）日志标记`Pre-migration encrypted database snapshot verified: 86d68f8506165bae2650986ba2b0cbbcac77825d`；在其后20:21:14开始本次7份迁移，130迁移链全部应用成功。快照为本机加密数据库快照及解密比对校验，不是异地灾备/完整恢复演练；标记SHA是源码版本，不是备份文件内容校验码。
+- 本次迁移：20261028010000生命周期、20261028011000权限登记、20261028020000披露、20261028030000来源复制、20261028040000延期、20261028050000提醒、20261028051000状态通知来源守卫。未自动授予岗位/人员业务权限或启用绑定。
+- 20:21:28成功出口和compose实际状态显示API/Worker使用`qms2-foundation-api:86d68f8完整SHA`、Web使用对应web同SHA镜像；API healthy，Worker/Web running。该版本deploy.sh在成功出口前强制核验当前启动的Worker日志有READY，不能冒称Actions直接复制了原始READY stdout。
+- 20:22:23独立公网GET机器核验PASS：登录/OpenAPI/新`/assets/index-o8yAXJMx.js`均200，主JS1079741字节、SHA256 `18f4d2f44c62c7d98dd9ffad44198f21290ff4a967450fe823c1adf8d5a2e518`，区别于发布前index-BSGGZEmm.js；30条N5契约出现，门户披露附件/受控报告/来源协作等6个匿名读取均401。
+
+原始证据及断言位于Git外`n5-evidence/n5-release-20261028`，`release-verification.json`为PASS，脚本同时核对PR/main各9项、精确source/attempt、快照先于7迁移、三服务同SHA和公网变化。中间CI失败与修复保留在第7节。发布记录仅本地纯文档归档，不额外推送触发Actions；本轮相关检查及部署已结束，可由负责人恢复闭源，代理不更改仓库可见性。
+
+## 9. 发布后配置与人工验收（全部待执行）
+
+| 前置/角色 | 操作与可观察预期 | 当前结果 |
+| --- | --- | --- |
+| 86d68f8、管理员、真实组织岗位任职 | 配置SQE/经理/部长和分管；设计器发布正确SUPPLIER流程，绑定先保存disabled再单独启用，不靠代码部署自动启用 | 待负责人配置/验收 |
+| 真实SQE、过程/客户/新品来源 | 选择公开授权来源→外发预览→修改独立草稿→发单；不暴露内部私密字段，两单不强制同步关闭 | 待人工验收 |
+| SQE、目标企业两个供应商账号 | CLEAN附件明确选择后释放；本企业只读下载已选附件，未选/他企业不可见，已释放才有正式处理入口 | 待人工验收；fix1新附件UI未单独取得新版业务浏览器证据 |
+| 供应商、SQE/经理/部长 | 完整D2～D8及首批/前后/有效性证据→提交锁版→SQE→分级管理；高重大两管理并行，同人一次两职责；退回重审 | 待人工验收 |
+| 申请人、SQE/经理 | 四风险延期终批才改期限，保留原超期，同人不跳阶段；并发打开任务/通知无读锁死锁 | 待人工验收 |
+| 本单SQE/有效经理、供应商 | 当前/批准/历史/PDF及内部补充分层，不改原批准、不外泄补充；未知/失权/冲突/刷新保护生效 | 待人工验收 |
+
+不关闭Issue #78/整包REQ，不写Base状态，不配置生产权限或实际释放资料；组织强制删除仍在Issue #76独立待开发，不随本版冒称修好。

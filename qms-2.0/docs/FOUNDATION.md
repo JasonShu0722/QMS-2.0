@@ -1,5 +1,9 @@
 # 底座与阶段二平台验收记录
 
+## N5发布核验（2026-10-28，V0.0.34含fix1～fix4）
+
+PR #79最终acf071c已合并并部署`86d68f8506165bae2650986ba2b0cbbcac77825d`。PR CI40677414269和main CI40681314703各9项成功，deploy40684505960/attempt1/job122803292488成功；来源校验固定main run/attempt/SHA。20:21:11迁移前加密快照标记先于20:21:14本次7迁移，130链成功；API/Worker/Web同SHA，API healthy、Worker/Web running，20:21:28成功。当前Worker READY由该源码deploy.sh成功门禁支持，不虚构原始stdout。公网新index-o8yAXJMx.js、30条N5契约及6匿名401独立核验PASS，完整证据见[N5计划第8节](../../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md)及Git外release-verification.json。非异地恢复演练、生产配权/业务绑定或人工验收；组织强制删除仍待开发，Issue/REQ不关闭。下面本地FAIL及未发布记录保留历史，不替代该最新发布事实。
+
 ## N5恢复常规开发后的分项验证（2026-10-28，未发布）
 
 fix2 d825236的CI40667443334现已取得全部四组Web、API单测、检查和171个真实集成文件2167项通过；仅其后的独立Worker步骤2失败/6通过，要求空队列/单批处理却复用业务分片积累库。fix3只为该步骤新建独立一次性库并完整迁移seed，父相同实际130迁移/seed及原Worker8项通过，根完整15项测试通过，详见计划7.7。不改生产Worker、不放宽断言或超时、不删除前四分片数据；最终精确fix3 CI未完成前不称整体通过。

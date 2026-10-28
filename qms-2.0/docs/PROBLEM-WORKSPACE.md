@@ -1,5 +1,9 @@
 # 问题工作空间与领域接入
 
+## 当前领域发布事实（2026-10-28）
+
+N4客户/新品已随PR #77发布；N5供应商专用受控工作区现随PR #79 / V0.0.34含fix1～fix4部署`86d68f8506165bae2650986ba2b0cbbcac77825d`。内部待办直达`/app/supplier-quality/eight-d/:UUID`，以真实supplierProblemId挂正式Workspace，不附带旧台账详情读取权限；门户独立只读已释放披露附件不混入正文。发布核验及人工清单见[N5计划第8～9节](../../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md)。下方本地实施时点保留历史；代码部署不代替真实岗位/流程开通或人工验收。
+
 ## N4客户/新品新内部8D接入（本地实施，未发布）
 
 客户新报告以problemId持有，覆盖`customer-quality/customer-complaint`；没有新报告时保留旧受控事实读取。新品新报告注册独立`new-product-quality/new-product-defect-selection`，sourceId为selectionId，不覆盖历史`new-product-issue`或复制原过程事实。新域列表使用有界姓名/期限/阶段摘要，关闭后读取固定修订，不逐条加载完整报告。
