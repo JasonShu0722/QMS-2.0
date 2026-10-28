@@ -1,7 +1,7 @@
 import { Alert, Button, Descriptions, Empty, Form, Input, InputNumber, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
-import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { createSupplierMutation, severityLabels, statusLabels, supplierApi, supplierError, supplierPath, type ProblemDraft, type ProblemPage, type ProblemQuery, type ResponseContent, type SupplierProblem } from './supplierQuality';
@@ -10,6 +10,10 @@ import { SupplierProfilesPage } from './SupplierProfilesPage';
 import { SupplierResponseHistory } from './SupplierResponseHistory';
 import { SupplierWorkflowActions } from './SupplierWorkflowActions';
 import { useSupplierData } from './useSupplierData';
+import { ApiError } from '../../api/client';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { SupplierEightDWorkspace } from '../supplier-eight-d/SupplierEightDWorkspace';
+import { SupplierEightDIssueButton } from './SupplierEightDIssueButton';
 import './supplier-quality.css';
 
 function LoadError({ error, retry }: { error?: string; retry: () => void }) {
@@ -50,16 +54,18 @@ function ProblemLedger({ portal }: { portal: boolean }) {
 
 const required = [{ required: true, message: '请填写此项' }];
 
-function ProblemForm({ record, saved }: { record?: SupplierProblem; saved: (value: SupplierProblem, notice: string) => void }) {
+function ProblemForm({ record, saved, onIssued, onDenied }: { record?: SupplierProblem; saved: (value: SupplierProblem, notice: string) => void; onIssued?: () => void; onDenied?: (cause: unknown) => void }) {
   const [form] = Form.useForm<ProblemDraft>();
   const mode = Form.useWatch('replyMode', form);
   const [mutate] = useState(createSupplierMutation);
   const [busy, setBusy] = useState(false);
+  const [issueBusy, setIssueBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [dirty, setDirty] = useState(false);
   useUnsavedChanges(dirty);
   useNavigationBusy(busy);
   async function submit(values: ProblemDraft) {
+    if (busy || issueBusy) return;
     setBusy(true); setError(undefined);
     const body: ProblemDraft = { profileId: values.profileId, title: values.title, materialCode: values.materialCode, materialCategory: values.materialCategory, defectDescription: values.defectDescription, defectQuantity: values.defectQuantity, severity: values.severity, responseForm: values.responseForm, replyMode: values.replyMode, ...(values.replyMode === 'INTERNAL' ? { internalResponderId: values.internalResponderId } : {}) };
     try { const result = await mutate<SupplierProblem>(`${supplierApi(false)}/drafts${record ? `/${record.id}` : ''}`, record ? 'PUT' : 'POST', record ? { ...body, expectedVersion: record.version } : body); setDirty(false); saved(result, '草稿已保存'); }
@@ -75,7 +81,7 @@ function ProblemForm({ record, saved }: { record?: SupplierProblem; saved: (valu
   }
   return <section className="supplier-card"><Typography.Title level={3}>问题资料</Typography.Title>
     {error ? <Alert type="error" showIcon title={error} /> : null}
-    <Form form={form} layout="vertical" initialValues={record ?? { replyMode: 'SUPPLIER' }} onValuesChange={() => setDirty(true)} onFinish={submit} disabled={busy}>
+    <Form form={form} layout="vertical" initialValues={record ?? { replyMode: 'SUPPLIER' }} onValuesChange={() => setDirty(true)} onFinish={submit} disabled={busy || issueBusy}>
       <Form.Item name="title" label="问题标题" rules={required}><Input maxLength={500} /></Form.Item>
       <div className="supplier-form-grid">
         <Form.Item name="profileId" label="责任供应商" rules={required}><SupplierReferenceSelect path={`${supplierApi(false)}/reference-options?kind=profiles`} placeholder="选择一家供应商" /></Form.Item>
@@ -88,9 +94,11 @@ function ProblemForm({ record, saved }: { record?: SupplierProblem; saved: (valu
         {mode === 'INTERNAL' ? <Form.Item name="internalResponderId" label="内部回复人" rules={required}><SupplierReferenceSelect path={`${supplierApi(false)}/reference-options?kind=responders`} /></Form.Item> : null}
       </div>
       <Form.Item name="defectDescription" label="不良描述" rules={required}><Input.TextArea rows={4} maxLength={10000} showCount /></Form.Item>
-      <Space wrap><Button type="primary" htmlType="submit" loading={busy}>保存问题草稿</Button>{record ? <Button onClick={() => void issue()} disabled={dirty || busy} loading={busy}>正式发单</Button> : null}</Space>
+      <Space wrap><Button type="primary" htmlType="submit" loading={busy}>保存问题草稿</Button>{record && !record.controlledEightD ? <Button onClick={() => void issue()} disabled={dirty || busy} loading={busy}>正式发单</Button> : null}</Space>
       {record && dirty ? <Typography.Paragraph type="secondary">请先保存当前修改，再正式发单。</Typography.Paragraph> : null}
     </Form>
+    {record?.controlledEightD && record.stage === 'DRAFT' ? <SupplierEightDIssueButton id={record.id} version={record.version} disabled={dirty || busy} onLockChange={setIssueBusy}
+      onIssued={() => onIssued?.()} onDenied={cause => { setError(supplierError(cause)); onDenied?.(cause); }} /> : null}
   </section>;
 }
 
@@ -154,11 +162,13 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
 }
 
 function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
+  const leave = useNavigationGuard();
   const [revisionPage, setRevisionPage] = useState(1);
   const result = useSupplierData<SupplierProblem>(`${supplierApi(portal)}/problems/${id}?revisionPage=${revisionPage}&revisionPageSize=10`);
   const [savedRecord, setSavedRecord] = useState<SupplierProblem>();
   const [notice, setNotice] = useState<string>();
-  useEffect(() => { if (result.data) setSavedRecord(undefined); }, [result.data]);
+  const [accessDenied, setAccessDenied] = useState(false);
+  useEffect(() => { if (result.data) { setSavedRecord(undefined); setAccessDenied(false); } }, [result.data]);
   const record = savedRecord ?? result.data;
   function saved(value: SupplierProblem, message: string) {
     const draftSaved = message === '草稿已保存' || message === '回复草稿已保存';
@@ -168,11 +178,16 @@ function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
     result.reload();
   }
   function reload() { setSavedRecord(undefined); setNotice(undefined); result.reload(); }
-  return <><div className="supplier-toolbar"><Link to={supplierPath(portal)}>返回台账</Link><Button onClick={reload}>重新加载</Button></div>
-    <LoadError error={result.error} retry={reload} />
+  function denied(cause: unknown) {
+    if (!(cause instanceof ApiError) || ![401, 403].includes(cause.status ?? 0)) return;
+    setAccessDenied(true); setSavedRecord(undefined); setNotice(undefined);
+  }
+  return <><div className="supplier-toolbar"><Link to={supplierPath(portal)}>返回台账</Link><Button onClick={() => leave(reload)}>重新加载</Button></div>
+    <LoadError error={result.error} retry={() => leave(reload)} />
+    {accessDenied ? <Alert type="error" showIcon title="当前会话或权限已失效，敏感资料已清除；请重新加载核对。" /> : null}
     {result.loading ? <Spin /> : null}
     {notice ? <Alert type="success" showIcon title={notice} /> : null}
-    {record && !result.error ? <div key={record.id}>
+    {record && !result.error && !accessDenied ? <div key={record.id}>
       <section className="supplier-card"><Typography.Title level={2}>{record.title}</Typography.Title><Descriptions column={{ xs: 1, sm: 2 }} items={[
         { key: 'supplier', label: '供应商', children: record.supplierName }, { key: 'number', label: '报告编号', children: record.reportNumber ?? '草稿尚未编号' },
         { key: 'status', label: '进度', children: record.problemStatus ? statusLabels[record.problemStatus] : '草稿' },
@@ -184,10 +199,14 @@ function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
         { key: 'description', label: '不良描述', children: <span className="supplier-text">{record.defectDescription}</span>, span: 'filled' },
       ]} /></section>
       {!portal && record.problemIndexId && record.organizationId ? <Link to={`/app/problem-workspace/${record.problemIndexId}?organizationId=${encodeURIComponent(record.organizationId)}`}>打开公共问题工作空间，查看升级预览与追溯</Link> : null}
-      {!portal && record.canEditFacts ? <ProblemForm record={record} saved={saved} /> : null}
-      <ResponseForm record={record} portal={portal} saved={saved} />
-      {!portal ? <SupplierWorkflowActions record={record} changed={saved} reload={reload} /> : null}
-      <SupplierResponseHistory record={record} page={revisionPage} changePage={setRevisionPage} />
+      {!portal && record.canEditFacts ? <ProblemForm record={record} saved={saved} onDenied={denied} onIssued={() => { reload(); setNotice('正式8D已发起，资料释放需另行确认。'); }} /> : null}
+      {!portal && !record.canEditFacts && record.controlledEightD && record.stage === 'DRAFT' ? <SupplierEightDIssueButton id={record.id} version={record.version}
+        onIssued={() => { reload(); setNotice('正式8D已发起，资料释放需另行确认。'); }} onDenied={denied} /> : null}
+      {record.controlledEightD ? record.stage === 'ISSUED' ? <SupplierEightDWorkspace supplierProblemId={record.id} portal={portal} onDenied={denied} /> : null : <>
+        <ResponseForm record={record} portal={portal} saved={saved} />
+        {!portal ? <SupplierWorkflowActions record={record} changed={saved} reload={reload} /> : null}
+        <SupplierResponseHistory record={record} page={revisionPage} changePage={setRevisionPage} />
+      </>}
     </div> : null}
   </>;
 }
@@ -196,11 +215,17 @@ export function SupplierQualityPage({ portal = false }: { portal?: boolean }) {
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
+  const sessionScope = useWorkTabsStore(state => state.sessionScope);
   const base = supplierPath(portal);
   const suffix = location.pathname.slice(base.length);
+  const direct = !portal && (suffix === '/eight-d' || suffix.startsWith('/eight-d/'));
+  const directMatch = /^\/eight-d\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(suffix);
   const match = /^\/problems\/([0-9a-f-]{36})$/i.exec(suffix);
+  if (direct) return <main className="supplier-quality-page">{directMatch
+    ? <SupplierEightDWorkspace key={JSON.stringify([sessionScope, directMatch[1]])} supplierProblemId={directMatch[1]} portal={false} />
+    : <Alert role="alert" type="error" showIcon title={t('无效的供应商8D问题标识')} />}</main>;
   return <main className="supplier-quality-page"><div className="supplier-heading"><div><Typography.Title level={1}>{portal ? '问题与整改' : t('供应商问题台账')}</Typography.Title></div>
     {!portal ? <Space wrap><Link to={base}>问题台账</Link><Link to={`${base}/profiles`}>供应商资料</Link></Space> : null}</div>
-    {match ? <ProblemDetail key={match[1]} id={match[1]} portal={portal} /> : !portal && suffix === '/new' ? <><Link to={base}>返回台账</Link><ProblemForm saved={(value) => navigate(`${base}/problems/${value.id}`)} /></> : !portal && suffix === '/profiles' ? <SupplierProfilesPage /> : <ProblemLedger portal={portal} />}
+    {match ? <ProblemDetail key={JSON.stringify([sessionScope, portal, match[1]])} id={match[1]} portal={portal} /> : !portal && suffix === '/new' ? <><Link to={base}>返回台账</Link><ProblemForm saved={(value) => navigate(`${base}/problems/${value.id}`)} /></> : !portal && suffix === '/profiles' ? <SupplierProfilesPage /> : <ProblemLedger portal={portal} />}
   </main>;
 }

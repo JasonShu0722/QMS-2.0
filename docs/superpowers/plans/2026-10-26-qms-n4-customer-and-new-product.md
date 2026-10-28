@@ -6,12 +6,12 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 批准 | 首单元已部署；负责人批准完成N4剩余客户完整8D与新品同源，并于2026-10-27追加空组织受控删除修正。2026-10-28最新明确开启夜间模式，授权持续推进N4→N5及通过门禁后的PR、合并部署；20分钟heartbeat已创建为qms-n4-n5。此新授权替代此前正常停止点，不扩大到N6、生产配权、启用绑定或实际删除组织 |
+| 批准 | 首单元已部署；负责人批准完成N4剩余客户完整8D与新品同源，并于2026-10-27追加空组织受控删除修正。2026-10-28夜间模式下N4已发布；负责人随后取消夜间交付，heartbeat qms-n4-n5已删除，当前仅恢复常规开发到PR，合并部署另核授权，不扩大到N6、生产配权、启用绑定或实际删除组织 |
 | 基线 | 首单元开发base为28cc304，审查head为7f6972be856876f4c988c2feed50474a20c14c4e，PR #75已squash为7cd2707f1003546474cac72f6701aa6d8bfc0226并部署；合并树与审查树完全一致。本批分支codex/qms-n4-complete-internal-eight-d，HEAD 824f51355e323f1dad8b2b9c7090f20215707715，安全携入首单元纯文档归档 |
-| 需求 | 首单元user回读revision311、has_more=false：REQ-0028/reczz28RDS4Bq9gG与0029/reczz28RDS4BnyEL开发中；0026/reczz28RDS4BnuCp及0027/reczz28RDS4Bp8Yn现为负责人上线验收完成。本批重新回读0026/0027/0028，直接指令仅覆盖N4剩余两单元；不把状态当全域已经实现，不扩N5或重复N3 |
+| 需求 | 首单元user回读revision311、has_more=false：REQ-0028/reczz28RDS4Bq9gG与0029/reczz28RDS4BnyEL开发中；0026/reczz28RDS4BnuCp及0027/reczz28RDS4Bp8Yn现为负责人上线验收完成。本批重新回读0026/0027/0028，不把状态当全域已实现。N5按最新常规开发授权以0029/Issue #78独立接续，不重复N3 |
 | 映射 | 首单元V0.0.32：[Issue #74](https://github.com/JasonShu0722/QMS-2.0/issues/74)、[PR #75](https://github.com/JasonShu0722/QMS-2.0/pull/75)。本批V0.0.33：[Issue #76](https://github.com/JasonShu0722/QMS-2.0/issues/76)、[PR #77](https://github.com/JasonShu0722/QMS-2.0/pull/77)，初始head fcfab03；原提交与集中审查、CI及后续fix分开记录 |
 | 边界 | 不代配生产组织/岗位/任职或管理员授权，不发布绑定/启用新业务，不删ZLGLB、不关Issue/REQ、不改可见性、不做全局prune；N6 IMS/AI及P3/指标绩效/在线绘图/Office报告不接入 |
-| 下一动作 | PR #77的fcfab03及fix1的7710a88已分别进入云端；测试接入guard后，fix1云端又暴露旧CSV表头和弹窗可见性等待遗漏。fix2集中修两个测试，不改运行功能/SQL。父已切回精确N4分支独立验证，N5开发断点仅保留独立本地分支，不混入本PR。修复、双审及最终门禁后统一推送，按最新head检查推进发布 |
+| 下一动作 | PR #77最终978f831同head完整CI/审查通过，已squash并部署a60a189503ff63717aa8bb1a6cad74a7dfbd8c56，机器发布核验PASS，见6.10。N4运行开发停止，生产岗位/流程配置及人工验收留给负责人；继续N5 Issue #78独立开发，不重复N4发布或提前关闭整包 |
 | 证据 | 首单元Git外D:/WorkSpace/QMS-2.0-local/n4-evidence；本批n4-remaining-evidence。三个独立一次性库，禁止55440；真实服务门禁与样例/人工验收分层 |
 
 负责人补充：不只看REQ标记状态，按前期计划和实际项目代码开发进度接续。该文档只是原路线的执行细化/证据记录，不重新批准业务或替代总计划。完成判定分源码贯通、适用测试、发布包含、真实配置/人工验收四层。
@@ -270,7 +270,8 @@ Git外证据目录D:/WorkSpace/QMS-2.0-local/n4-evidence/n4-release-20261027，�
 - [x] A/B/C/D TDD及完整范围规格审查后质量审查；独立写集并行、共享整合串行。最后CSS/browser窄审及复测单列下节。
 - [x] 父完整域链与既有过程/平台邻近真实回归；契约/构建/归档/Compose/治理及安全范围扫描。最终文档改动复核单列下节。
 - [x] 客户和新品两个完整目标分别核对后统一提交/推送PR #77；精确head CI与云端集中复审记录于6.8，不以PR创建代表所有检查通过。
-- [ ] 获准后合并部署及分域业务配置/人工验收，Issue/整包REQ未经授权不关闭。
+- [x] 获准后PR #77合并及同版本机器部署核验，精确证据见6.10。
+- [ ] 分域生产岗位/业务流程配置及人工验收；Issue/整包REQ未经授权不关闭。
 
 证据统一Git外D:/WorkSpace/QMS-2.0-local/n4-remaining-evidence。只使用标签已核对的一次性容器、新DB/对象前缀/邮箱；禁止55440、不删除旧数据、不改生产业务配置。历史首单元的PASS与失败保留，不能替代本批最终树。开发、CI、部署、配置与人工验收分别记事实；此前禁止自动接续N5的限制已由本页顶部最新夜间授权替代。
 
@@ -347,3 +348,13 @@ Carson修正既定追加原组织三列后的15列表头，保留原11项，新�
 组织弹窗测试仅将原说明的toBeVisible包装在既有waitFor中，保留原文本、88个断言位置、33个case、正常动画和所有预算；按钮按依赖请求解除disabled不代表缩放动画已经完成。Nietzsche本地原版完整33项通过，作为CI失败的间歇性基线如实保留，不伪造本地RED；最终版本复测及窄审结果继续追加本节。
 
 Nietzsche修后仅一次完整33项通过，463项Web覆盖输入首尾仅目标文件改变；Hume SPEC、Arendt独立QUALITY通过。父随后在精确N4分支独立执行受影响用例通过，其余32项未选中不算此轮覆盖，整文件33项证据仍独立保留。fix2只包含CSV测试契约及此可见性等待，两项运行功能/DTO/SQL均未追加变化；后续必须以新提交的云端检查为放行依据。
+
+### 6.10 N4剩余两单元合并部署核验（2026-10-28，机器PASS）
+
+PR #77最终head978f831d1489d1cb3fb1276ae91a90b5ed61b8fe，CI40553578814全部9项成功；Code Review绑定该head、completed且两项findings=false，Security Review未单独运行。精确SHA保护squash为a60a189503ff63717aa8bb1a6cad74a7dfbd8c56，父fetch后比较两棵树一致。main CI40559224545/attempt1全部9项成功，部署40562446790/attempt1、job122394791126成功，实际验证与SSH步骤未跳过；日志引用同源CI/attempt/SHA及Full validation scope。
+
+- 同次原始日志的迁移前加密数据库快照标记为a60a189，位于3份新增迁移之前；123链实际应用20261027120000_internal_eight_d_domains、20261027210000_organization_initialization_and_mutation_archives、20261027211000_organization_creation_tombstones，随后全部迁移成功。标记SHA是发布源码，不是DB文件内容hash；本机加密快照不等于异地灾备或恢复演练。
+- 02:47:05（Asia/Taipei）最终compose中API/Worker共用qms2-foundation-api:a60a189完整SHA，Web为qms2-foundation-web:同SHA，均Up且API healthy；随后Deployment successful同SHA。deploy.sh成功前的当前Worker启动核查沿实际脚本执行，不声称Actions直接打印全部Worker stdout。
+- 02:56公网独立GET核验登录/OpenAPI/新index-BSGGZEmm.js均200；新JS1010305字节，SHA256 fc124272ecdf82a5d4d5eb14625364268faab3cfd7e7eb7832b3f239abae3fdd。客户/新品各17条新8D契约、6个匿名业务读取均401；部署前两域0条及旧JS保留对照。
+
+Git外release/verify-release.mjs实际断言PR/main/部署来源与attempt、步骤成功、快照顺序/3迁移/同SHA服务及公网结果，release-verification.json为PASS。未登录生产写业务、未配岗位、未启用绑定、未删除ZLGLB、未关闭Issue/REQ或回填Base；N5不在此发布，单列Issue #78。工程部署与真实角色业务验收分层，下一步不重复N4开发或发布。

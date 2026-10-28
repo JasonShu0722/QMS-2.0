@@ -1,11 +1,12 @@
 import { Alert, Button, Select } from 'antd';
-import { useEffect, useState } from 'react';
-import { apiRequest } from '../../api/client';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, apiRequest } from '../../api/client';
 import { supplierError, type ReferenceOption, type ReferenceOptions } from './supplierQuality';
 
-export function SupplierReferenceSelect({ path, value, onChange, id, disabled, placeholder }: {
-  path: string; value?: string; onChange?: (value: string) => void; id?: string; disabled?: boolean; placeholder?: string;
+export function SupplierReferenceSelect({ path, value, onChange, onDenied, id, disabled, placeholder }: {
+  path: string; value?: string; onChange?: (value: string) => void; onDenied?: (cause: unknown) => void; id?: string; disabled?: boolean; placeholder?: string;
 }) {
+  const deniedCallback = useRef(onDenied); deniedCallback.current = onDenied;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ReferenceOption[]>([]);
@@ -24,7 +25,11 @@ export function SupplierReferenceSelect({ path, value, onChange, id, disabled, p
         if (!current) return;
         setItems((previous) => page === 1 ? result.items : [...new Map([...previous, ...result.items].map((item) => [item.id, item])).values()]);
         setTotal(result.total);
-      }).catch((cause) => { if (current) setError(supplierError(cause)); }).finally(() => { if (current) setLoading(false); });
+      }).catch((cause) => {
+        if (!current) return;
+        if (deniedCallback.current && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) { deniedCallback.current(cause); return; }
+        setError(supplierError(cause));
+      }).finally(() => { if (current) setLoading(false); });
     }, 200);
     return () => { current = false; window.clearTimeout(timer); };
   }, [path, separator, page, search, revision]);
@@ -36,7 +41,11 @@ export function SupplierReferenceSelect({ path, value, onChange, id, disabled, p
         setSelected(result.items[0]);
         if (!result.items.length) setSelectedError('原选择已不可用，请重新选择');
       }
-    }).catch((cause) => { if (current) setSelectedError(supplierError(cause)); });
+    }).catch((cause) => {
+      if (!current) return;
+      if (deniedCallback.current && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) { deniedCallback.current(cause); return; }
+      setSelectedError(supplierError(cause));
+    });
     return () => { current = false; };
   }, [path, separator, value, revision]);
   const options = [...new Map([...(selected ? [selected] : []), ...items].map((item) => [item.id, item])).values()];

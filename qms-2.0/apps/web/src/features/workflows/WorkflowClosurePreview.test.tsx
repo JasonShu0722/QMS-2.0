@@ -47,11 +47,11 @@ function mount(policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL', disabled = false) {
   return { ...view, change: (next: 'INTERNAL' | 'SUPPLIER', off = false) => view.rerender(tree(next, off)) };
 }
 async function choose(label: string, text: string) {
-  const input = screen.getByLabelText(label);
+  const input = within(previewDialog()).getByLabelText(label);
   await waitFor(() => expect(input).toBeEnabled());
   fireEvent.mouseDown(input);
   const option = await waitFor(() => {
-    const option = screen.getAllByText(text).find(element => element.closest('.ant-select-item-option-content') && !element.closest('.ant-select-dropdown-hidden'));
+    const option = screen.getAllByText(text, { selector: '.ant-select-item-option-content' }).find(element => !element.closest('.ant-select-dropdown-hidden'));
     expect(option).toBeDefined();
     return option!;
   });
@@ -59,15 +59,18 @@ async function choose(label: string, text: string) {
   expect(input.closest('.ant-select')).toHaveTextContent(text);
 }
 async function configure(policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL') {
-  fireEvent.click(screen.getByRole('button', { name: '打开关闭职责预览' }));
+  const open = screen.getByText('打开关闭职责预览', { selector: 'button span' }).closest('button')!;
+  expect(open).toBeEnabled(); fireEvent.click(open);
   await waitFor(() => expect(reads()).toHaveLength(1));
   await choose('责任科室', '质量科 (QA)');
   await choose('专业人员（配置测试）', '专业张工 (engineer)');
   if (policy === 'INTERNAL') await choose('内部负责人（配置测试）', '负责人李工 (owner)');
 }
+// Modal already exposes its title through aria-labelledby; avoid full-page visibility scans.
+const previewDialog = () => screen.getByLabelText('关闭职责预览', { selector: '[role="dialog"]' });
+const runControl = () => within(previewDialog()).getByLabelText('运行配置预览', { selector: 'button' });
 async function submit() {
-  // The existing label avoids rescanning every portal control on each submit.
-  const button = screen.getByLabelText('运行配置预览');
+  const button = runControl();
   expect(button).toBeVisible(); expect(button).toBeEnabled();
   fireEvent.click(button); await waitFor(() => expect(posts()).toHaveLength(1));
 }
@@ -86,9 +89,9 @@ it('loads only on demand, posts generated contract inputs and presents read-only
   expect(posts()[0]).toEqual(['/api/v1/workflows/closure-preview', expect.objectContaining({ method: 'POST', signal: expect.anything(), headers: { 'x-csrf-token': 'csrf-test' }, body: JSON.stringify({ policy: 'INTERNAL', severity: 'MEDIUM', responsibleSectionDepartmentId: section, professionalUserId: professional, ownerUserId: owner }) }), { replayAfterReauthentication: false }]);
   expect((await screen.findAllByText('待审'))[0]).toBeVisible();
   expect(screen.getByText('同人跳过')).toBeVisible();
-  expect(screen.getByRole('dialog')).toHaveTextContent('不会发单或审批');
+  expect(previewDialog()).toHaveTextContent('不会发单或审批');
   fireEvent.click(screen.getAllByText('展开来源明细')[0]!);
-  expect(screen.getByRole('dialog')).toHaveTextContent(section);
+  expect(previewDialog()).toHaveTextContent(section);
   expect(screen.queryByRole('button', { name: '确认审批' })).not.toBeInTheDocument();
 });
 
@@ -115,9 +118,9 @@ it('shows two waiting supplier management duties for the same person without mix
   expect(JSON.parse(posts()[0]![1]!.body as string)).toMatchObject({ policy: 'SUPPLIER', severity: 'HIGH' });
   expect(JSON.parse(posts()[0]![1]!.body as string)).not.toHaveProperty('ownerUserId');
   expect(await screen.findByText('同人职责说明')).toBeVisible();
-  expect(screen.getByRole('dialog')).toHaveTextContent('一次确认两项管理职责；正式办理时需明确两项职责并原子记录，本页不执行确认。');
+  expect(previewDialog()).toHaveTextContent('一次确认两项管理职责；正式办理时需明确两项职责并原子记录，本页不执行确认。');
   expect(screen.getAllByText('尚未启动')).toHaveLength(2);
-  expect(screen.getByRole('dialog')).toHaveTextContent('科室经理'); expect(screen.getByRole('dialog')).toHaveTextContent('部长');
+  expect(previewDialog()).toHaveTextContent('科室经理'); expect(previewDialog()).toHaveTextContent('部长');
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
 });
 
@@ -127,7 +130,7 @@ it('excludes supplier owner and renders WAITING without claiming execution eligi
   expect(JSON.parse(posts()[0]![1]!.body as string)).not.toHaveProperty('ownerUserId');
   expect(screen.queryByRole('combobox', { name: '内部负责人（配置测试）' })).not.toBeInTheDocument();
   expect(await screen.findByText('尚未启动')).toBeVisible();
-  expect(screen.getByRole('dialog')).toHaveTextContent('不代表执行授权');
+  expect(previewDialog()).toHaveTextContent('不代表执行授权');
 });
 
 it('searches and pages the bounded directory, retaining selected labels across pages', async () => {
@@ -135,8 +138,8 @@ it('searches and pages the bounded directory, retaining selected labels across p
   mount(); await configure();
   fireEvent.click(screen.getByTitle('2'));
   await waitFor(() => expect(reads().some(([path]) => path.includes('page=2') && path.includes('pageSize=20'))).toBe(true));
-  expect(screen.getByRole('dialog')).toHaveTextContent('专业张工 (engineer)');
-  expect(screen.getByRole('dialog')).toHaveTextContent('质量科 (QA)');
+  expect(previewDialog()).toHaveTextContent('专业张工 (engineer)');
+  expect(previewDialog()).toHaveTextContent('质量科 (QA)');
   fireEvent.change(screen.getByRole('textbox', { name: '搜索科室或内部人员' }), { target: { value: 'missing' } });
   await waitFor(() => expect(reads().some(([path]) => path.includes('search=missing') && path.includes('page=1'))).toBe(true));
   await submit();
@@ -148,7 +151,7 @@ it('invalidates the displayed result on edits and submits the edited severity', 
   expect(await screen.findByText('同人跳过')).toBeVisible();
   await choose('严重度', '高');
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
-  const run = screen.getByLabelText('运行配置预览');
+  const run = runControl();
   expect(run).toBeVisible(); expect(run).toBeEnabled();
   fireEvent.click(run);
   await waitFor(() => expect(posts()).toHaveLength(2));
@@ -173,10 +176,11 @@ it('shows a safe preview error and retries only after explicit activation', asyn
 it.each(['directory', 'preview'])('locks all operations on %s 403 without leaking previous results', async source => {
   const forbidden = new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'unsafe', traceId: 'denied-trace' }, 403);
   mount();
-  if (source === 'directory') { vi.mocked(apiRequest).mockRejectedValueOnce(forbidden); fireEvent.click(screen.getByRole('button', { name: '打开关闭职责预览' })); }
+  if (source === 'directory') { vi.mocked(apiRequest).mockRejectedValueOnce(forbidden); fireEvent.click(screen.getByText('打开关闭职责预览', { selector: 'button span' }).closest('button')!); }
   else { await configure(); vi.mocked(apiRequest).mockRejectedValueOnce(forbidden); await submit(); }
+  await waitFor(() => expect(previewDialog()).toBeVisible());
   await waitFor(() => expect(screen.getByText('denied-trace')).toBeVisible());
-  expect(screen.getByRole('button', { name: '运行配置预览' })).toBeDisabled();
+  expect(runControl()).toBeDisabled();
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /重试/ })).not.toBeInTheDocument();
 });
@@ -185,16 +189,18 @@ it('serializes keyboard submit and repeated clicks and cannot close while CSRF i
   const user = userEvent.setup();
   const token = deferred<string>(); vi.mocked(csrfToken).mockReturnValue(token.promise);
   mount(); await configure();
-  const form = screen.getByRole('form', { name: '关闭职责配置测试' });
-  screen.getByLabelText('搜索科室或内部人员').focus();
+  const dialog = previewDialog();
+  const form = within(dialog).getByLabelText('关闭职责配置测试', { selector: 'form' });
+  within(dialog).getByLabelText('搜索科室或内部人员').focus();
   await user.keyboard('{Enter}');
   expect(csrfToken).toHaveBeenCalledTimes(1);
   fireEvent.submit(form); fireEvent.submit(form);
-  fireEvent.click(screen.getByRole('button', { name: '运行配置预览' }));
+  fireEvent.click(runControl());
   expect(csrfToken).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('button', { name: '关闭预览' })).toBeDisabled();
-  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
-  expect(screen.getByRole('dialog')).toBeVisible();
+  const close = within(dialog).getByText('关闭预览', { selector: 'button span' }).closest('button')!;
+  expect(close).toBeVisible(); expect(close).toBeDisabled();
+  fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+  expect(dialog).toBeVisible();
   await act(async () => token.resolve('late-csrf'));
   await waitFor(() => expect(posts()).toHaveLength(1));
 });
@@ -202,7 +208,7 @@ it('serializes keyboard submit and repeated clicks and cannot close while CSRF i
 it.each(['policy', 'session', 'disabled', 'unmount'])('never dispatches after late CSRF when %s invalidates the scope', async reason => {
   const token = deferred<string>(); vi.mocked(csrfToken).mockReturnValue(token.promise);
   const view = mount(); await configure();
-  fireEvent.click(screen.getByRole('button', { name: '运行配置预览' }));
+  fireEvent.click(runControl());
   const signal = vi.mocked(csrfToken).mock.calls[0]![0]!;
   if (reason === 'policy') view.change('SUPPLIER');
   if (reason === 'session') act(() => useWorkTabsStore.getState().bindSession('INTERNAL:other:new-actor'));
@@ -236,9 +242,9 @@ it('finishes current-session 401 navigation through the shared busy guard', asyn
 it('supports keyboard activation and closing with no unsaved-draft prompt', async () => {
   const user = userEvent.setup(); mount();
   screen.getByRole('button', { name: '打开关闭职责预览' }).focus(); await user.keyboard('{Enter}');
-  await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
+  await waitFor(() => expect(previewDialog()).toBeVisible());
   await waitFor(() => expect(screen.getByRole('combobox', { name: '责任科室' })).toBeEnabled());
-  within(screen.getByRole('dialog')).getByRole('button', { name: '关闭预览' }).focus(); await user.keyboard('{Enter}');
+  within(previewDialog()).getByRole('button', { name: '关闭预览' }).focus(); await user.keyboard('{Enter}');
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('button', { name: '打开关闭职责预览' })).toHaveFocus();
 });
@@ -285,7 +291,7 @@ it('clears an already displayed result and all identities on policy change', asy
   view.change('SUPPLIER');
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '打开关闭职责预览' }));
-  expect(screen.getByRole('button', { name: '运行配置预览' })).toBeDisabled();
+  expect(runControl()).toBeDisabled();
   expect(screen.queryByText('负责人李工 (owner)')).not.toBeInTheDocument();
 });
 

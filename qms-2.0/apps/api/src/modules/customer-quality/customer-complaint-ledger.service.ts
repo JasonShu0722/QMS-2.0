@@ -6,11 +6,14 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { featurePredicate } from '../workflow/workflow-access-policy.js';
+import type { SupplierCollaborationProjection } from '../../common/eight-d/supplier-collaboration.types.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ComponentProjectService, listComponentEngineerAssignments, readComponentEngineerAssignment } from '../platform-configuration/component-project.service.js';
 import type { ComponentProjectResolutionDto } from '../platform-configuration/component-project.dto.js';
 import { OrganizationService } from '../organization/organization.service.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
+import type { SupplierCopyMaterial, SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 import { complaintMileageBand, complaintMisTag, complaintServiceMonths, parseComplaintDate } from './customer-complaint-derived.js';
 import { CustomerLedgerCreateDto, CustomerLedgerImportDto, CustomerLedgerListDto, CustomerLedgerNoteDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerUpdateDto,
   type CustomerLedgerCandidateDto, type CustomerLedgerDetailDto, type CustomerLedgerImportItemDto, type CustomerLedgerImportResultDto,
@@ -63,6 +66,65 @@ export class CustomerComplaintLedgerService {
     const granted = await adminPermissions(tx, actor.id, organizationId);
     if (!CUSTOMER_SOURCE_PERMISSIONS.some(permission => granted.includes(permission))) ledgerFail('FEATURE_PERMISSION_DENIED', 403);
     return organizationId;
+  }
+
+  async supplierCollaborationPredicate(tx: AdminTransaction, actualActor: AdminActor, sourceIdSql: Prisma.Sql): Promise<Prisma.Sql> {
+    const organizationId = this.scope(actualActor);
+    await assertActiveAuthentication(tx, actualActor, 'SHARE');
+    return Prisma.sql`(
+      ${featurePredicate(Prisma.sql`${actualActor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'customer-quality:complaints:read'`)}
+      AND ${featurePredicate(Prisma.sql`${actualActor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'customer-quality:analyses:supplier'`)}
+      AND EXISTS (SELECT 1 FROM customer_quality_complaints collaboration_complaint
+        JOIN customer_complaint_analyses collaboration_analysis ON collaboration_analysis.organization_id = collaboration_complaint.organization_id AND collaboration_analysis.complaint_id = collaboration_complaint.id
+        JOIN user_positions collaboration_assignment ON collaboration_assignment.id = collaboration_analysis.assignee_assignment_id
+          AND collaboration_assignment.organization_id = collaboration_analysis.organization_id AND collaboration_assignment.user_id = collaboration_analysis.assignee_user_id
+        JOIN positions collaboration_position ON collaboration_position.id = collaboration_assignment.position_id AND collaboration_position.organization_id = collaboration_assignment.organization_id
+        JOIN departments collaboration_department ON collaboration_department.id = collaboration_position.department_id AND collaboration_department.organization_id = collaboration_position.organization_id
+        JOIN organizations collaboration_organization ON collaboration_organization.id = collaboration_assignment.organization_id
+        WHERE collaboration_complaint.organization_id = ${organizationId}::uuid AND collaboration_complaint.id = ${sourceIdSql}
+          AND collaboration_complaint.archived_at IS NULL AND (collaboration_complaint.ledger_status = 'FOLLOWING'
+            OR collaboration_complaint.ledger_status IS NULL AND collaboration_complaint.status NOT IN ('CLOSED', 'ARCHIVED'))
+          AND collaboration_analysis.section = 'SUPPLIER' AND collaboration_analysis.assignee_user_id = ${actualActor.id}::uuid
+          AND collaboration_department.id = collaboration_analysis.department_id
+          AND collaboration_assignment.started_at <= statement_timestamp() AND (collaboration_assignment.ended_at IS NULL OR collaboration_assignment.ended_at > statement_timestamp())
+          AND collaboration_position.status = 'ACTIVE' AND collaboration_department.status = 'ACTIVE' AND collaboration_organization.status = 'ACTIVE')
+    )`;
+  }
+
+  async supplierCollaborationProjection(tx: AdminTransaction, actualActor: AdminActor, sourceId: string): Promise<SupplierCollaborationProjection[]> {
+    validId(sourceId);
+    const organizationId = await this.authorize(tx, actualActor, [LEDGER_PERMISSIONS.read, 'customer-quality:analyses:supplier']);
+    // Do not use readCase: a GET must not reconcile an empty quality engineer.
+    const [row] = await tx.$queryRaw<Row[]>`SELECT ledger_status, status, archived_at FROM customer_quality_complaints
+      WHERE organization_id = ${organizationId}::uuid AND id = ${sourceId}::uuid`;
+    if (!row) ledgerFail('CUSTOMER_COMPLAINT_NOT_FOUND', 404);
+    if (row.archived_at || ledgerDisplayStatus(row.ledger_status, row.status) === 'CLOSED') return [];
+    const assignments = await this.organizations.currentAssignments(actualActor.id, organizationId, new Date(), tx);
+    const rows = await tx.$queryRaw<Array<{ id: string; assignmentId: string; departmentId: string; progress: string | null; result: string | null }>>`
+      SELECT id, assignee_assignment_id AS "assignmentId", department_id AS "departmentId", content->>'progress' AS progress, content->>'result' AS result
+      FROM customer_complaint_analyses WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${sourceId}::uuid
+        AND section = 'SUPPLIER' AND assignee_user_id = ${actualActor.id}::uuid ORDER BY id`;
+    return rows.filter(row => assignments.some(a => a.id === row.assignmentId && a.department.id === row.departmentId)).map(row => ({
+      sourceKind: 'CUSTOMER_LEDGER', sourceId, canonicalFactKey: `CUSTOMER_LEDGER:${sourceId}`, materialItemId: row.id,
+      verification: null, progress: row.progress, result: row.result }));
+  }
+
+  async supplierCopyProjection(tx: AdminTransaction, actor: AdminActor, source: SupplierCopySource): Promise<SupplierCopyProjection> {
+    if (source.kind !== 'CUSTOMER_LEDGER') ledgerFail('CUSTOMER_LEDGER_REFERENCE_INVALID');
+    validId(source.sourceId); version(source.sourceVersion);
+    const organizationId = await this.authorize(tx, actor, [LEDGER_PERMISSIONS.read, 'supplier-quality:issues:copy']);
+    const row = await this.row(tx, organizationId, source.sourceId);
+    if (row.archived_at || row.status === 'ARCHIVED') ledgerFail('CUSTOMER_LEDGER_ARCHIVED', 409);
+    if (row.version !== source.sourceVersion) ledgerFail('CONCURRENCY_CONFLICT', 409);
+    const normalized = row.ledger_normalized ?? normalizeComplaintFields(row.ledger_raw ?? this.fields(row)).normalized;
+    // FAE completion/text is not a prerequisite. Only saved failed-part facts are eligible, never its analysis or files.
+    const failed = await tx.$queryRaw<Array<{ id: string; materialCode: string | null; materialName: string | null }>>`
+      SELECT id, content->>'failedMaterialCode' AS "materialCode", content->>'failedPart' AS "materialName"
+      FROM customer_complaint_analyses WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${row.id}::uuid AND section = 'FAE'`;
+    const materials: SupplierCopyMaterial[] = failed.filter(item => item.materialCode || item.materialName).map(item => ({ ...item,
+      materialBatch: null, supplierProfileId: null, supplierOrganizationId: null }));
+    return { organizationId, source, facts: [{ factKey: `CUSTOMER_LEDGER:${row.id}`,
+      defectDescription: normalized.defectDescription ?? row.defect_description ?? '', defectQuantity: normalized.quantity ?? null, materials }] };
   }
 
   async sourceReference(actor: AdminActor, id: string): Promise<DomainSourceReference> {

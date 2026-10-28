@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -12,7 +12,30 @@ const cases = [
   { name: 'recovery completion', Page: PasswordRecoveryPage, tab: '使用邮件凭证', path: '/api/v1/auth/password-recovery/complete', fields: [['邮件凭证', 't'.repeat(43)], ['新密码', 'ReplacementPassword123!']] },
 ];
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(async () => {
+  await cleanupPasswordPage();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+async function cleanupPasswordPage() {
+  cleanup();
+  // AntD Form's useDebounce leaves 0/10ms useDelayState callbacks alive after unmount.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+}
+
+it('settles the real form debounce callbacks after unmount before teardown', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true, advanceTimeDelta: 1 });
+  try {
+    render(<MemoryRouter><ResetPasswordPage /></MemoryRouter>);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    await cleanupPasswordPage();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    vi.useRealTimers();
+  }
+});
 
 async function mount(testCase: typeof cases[number]) {
   let finish!: (response: Response) => void;

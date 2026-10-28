@@ -23,7 +23,7 @@ export interface ProblemDomainReadAdapter {
   readonly domainCode: string;
   readonly sourceType: string;
   readonly revisionResourceType?: string;
-  listRevisionIds?(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[]>;
+  listRevisionIds?(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[] | null>;
   visibilityPredicate(actor: WorkflowActor, organizationId: string): Prisma.Sql;
   responseFormPredicate?(form: DomainSourceResponseForm): Prisma.Sql;
   authorizeRead(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<void>;

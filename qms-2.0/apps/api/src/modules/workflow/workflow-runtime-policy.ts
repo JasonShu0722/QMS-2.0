@@ -15,18 +15,19 @@ export function isClosureReviewNode(node: { config: unknown }): boolean {
   return Object.hasOwn(jsonObject(node.config), 'closureReview');
 }
 
-export function isProcessEightDNode(node: { config: unknown }): boolean {
-  return Object.hasOwn(jsonObject(node.config), 'processEightD');
+export function isControlledEightDNode(node: { config: unknown }): boolean {
+  const config = jsonObject(node.config);
+  return Object.hasOwn(config, 'processEightD') || Object.hasOwn(config, 'supplierEightD');
 }
 
 export function isDomainControlledNode(node: { config: unknown }): boolean {
-  return isClosureReviewNode(node) || isProcessEightDNode(node);
+  return isClosureReviewNode(node) || isControlledEightDNode(node);
 }
 
-export async function isProcessEightDVersion(tx: Prisma.TransactionClient, organizationId: string, versionId: string): Promise<boolean> {
+export async function isControlledEightDVersion(tx: Prisma.TransactionClient, organizationId: string, versionId: string): Promise<boolean> {
   const [node] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM workflow_nodes
     WHERE organization_id = ${organizationId}::uuid AND workflow_version_id = ${versionId}::uuid
-      AND config ? 'processEightD' LIMIT 1`;
+      AND (config ? 'processEightD' OR config ? 'supplierEightD') LIMIT 1`;
   return !!node;
 }
 

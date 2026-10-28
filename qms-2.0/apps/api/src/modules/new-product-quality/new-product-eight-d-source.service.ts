@@ -1,13 +1,16 @@
 import { HttpException, Injectable } from '@nestjs/common';
+import type { SupplierCollaborationProjection } from '../../common/eight-d/supplier-collaboration.types.js';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { mfaPolicy } from '../../common/security/session-security.js';
+import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { ProcessDefectLedgerService } from '../process-quality/process-defect-ledger.service.js';
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
+import type { SupplierCopyMaterial, SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 
 export const NEW_PRODUCT_SELECTION_SOURCE = Object.freeze({
   sourceDomain: 'new-product-quality',
@@ -94,6 +97,77 @@ export class NewProductEightDSourceService implements NewProductEightDSourcePort
       warnings: [...(occurredAt === null ? ['OCCURRED_AT_UNKNOWN'] : []), 'HISTORICAL_MAPPING_UNAVAILABLE'],
     };
     return { ...facts, inclusion: JSON.parse(JSON.stringify(inclusion)) as Prisma.InputJsonObject };
+  }
+
+  async prepareSupplierCopyProjection(tx: AdminTransaction, actor: AdminActor, sources: SupplierCopySource[]): Promise<string[]> {
+    if (!sources.length) return [];
+    await NewProductEightDSourceService.assertRead(tx, actor);
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
+    await assertAdminAccess(tx, actor, organizationId, 'supplier-quality:issues:copy');
+    const ids = [...new Set(sources.map(source => uuid(source.sourceId)))];
+    await tx.$queryRaw(Prisma.sql`SELECT p.id FROM new_product_projects p WHERE p.organization_id = ${organizationId}::uuid
+      AND p.id IN (SELECT project_id FROM new_product_defect_selections WHERE organization_id = ${organizationId}::uuid
+        AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})) ORDER BY p.id FOR SHARE OF p`);
+    // Freeze wrapper identities before the caller locks the combined direct/wrapped process rows.
+    const selections = await tx.$queryRaw<{ defect_id: string }[]>(Prisma.sql`SELECT defect_id FROM new_product_defect_selections
+      WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})
+      ORDER BY id FOR UPDATE`);
+    return selections.map(selection => selection.defect_id);
+  }
+
+  async supplierCollaborationPredicate(tx: AdminTransaction, actualActor: AdminActor, sourceIdSql: Prisma.Sql): Promise<Prisma.Sql> {
+    const organizationId = actualActor.scopeOrganizationId ?? actualActor.organizationId;
+    // Delegate process-owned ACL/current material assignment rather than querying its private tables.
+    const process = await this.ledger.supplierCollaborationPredicate(tx, actualActor, Prisma.sql`collaboration_selection.defect_id`);
+    return Prisma.sql`(
+      ${featurePredicate(Prisma.sql`${actualActor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'new-product-quality:projects:read'`)}
+      AND EXISTS (SELECT 1 FROM new_product_defect_selections collaboration_selection
+        JOIN new_product_projects collaboration_project ON collaboration_project.id = collaboration_selection.project_id AND collaboration_project.organization_id = collaboration_selection.organization_id
+        WHERE collaboration_selection.organization_id = ${organizationId}::uuid AND collaboration_selection.id = ${sourceIdSql}
+          AND collaboration_project.status = 'ACTIVE' AND ${process})
+    )`;
+  }
+
+  async supplierCollaborationProjection(tx: AdminTransaction, actualActor: AdminActor, sourceId: string): Promise<SupplierCollaborationProjection[]> {
+    uuid(sourceId);
+    await NewProductEightDSourceService.assertRead(tx, actualActor);
+    const organizationId = actualActor.scopeOrganizationId ?? actualActor.organizationId;
+    const [selected] = await tx.$queryRaw<{ defectId: string }[]>`SELECT s.defect_id AS "defectId" FROM new_product_defect_selections s
+      JOIN new_product_projects p ON p.id = s.project_id AND p.organization_id = s.organization_id
+      WHERE s.organization_id = ${organizationId}::uuid AND s.id = ${sourceId}::uuid AND p.status = 'ACTIVE'`;
+    if (!selected) return [];
+    const facts = await this.ledger.supplierCollaborationProjection(tx, actualActor, selected.defectId);
+    return facts.map(fact => ({ ...fact, sourceKind: 'NEW_PRODUCT_SELECTION', sourceId,
+      reviewSource: { kind: 'PROCESS_LEDGER', id: selected.defectId } }));
+  }
+
+  async supplierCopyProjection(tx: AdminTransaction, actor: AdminActor, source: SupplierCopySource): Promise<SupplierCopyProjection> {
+    if (source.kind !== 'NEW_PRODUCT_SELECTION' || !Number.isSafeInteger(source.sourceVersion) || source.sourceVersion < 1) fail('NEW_PRODUCT_INPUT_INVALID', 400);
+    uuid(source.sourceId);
+    await NewProductEightDSourceService.assertRead(tx, actor);
+    const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
+    await assertAdminAccess(tx, actor, organizationId, 'supplier-quality:issues:copy');
+    const [project] = await tx.$queryRaw<{ status: string }[]>`SELECT p.status FROM new_product_projects p
+      JOIN new_product_defect_selections s ON s.project_id = p.id AND s.organization_id = p.organization_id
+      WHERE s.organization_id = ${organizationId}::uuid AND s.id = ${source.sourceId}::uuid FOR SHARE OF p`;
+    if (!project) fail('NEW_PRODUCT_SELECTION_NOT_FOUND', 404);
+    if (project.status === 'ARCHIVED') fail('NEW_PRODUCT_PROJECT_ARCHIVED', 409);
+    const selected = await this.selection(tx, actor, source.sourceId, true);
+    if (!selected) fail('NEW_PRODUCT_SELECTION_NOT_FOUND', 404);
+    if (selected.source_version !== source.sourceVersion) fail('CONCURRENCY_CONFLICT', 409);
+    const current = await this.ledger.lockAndResolve(tx, { sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: selected.defect_id,
+      sourceVersion: selected.source_version, sourceSnapshot: selected.source_snapshot, createdBy: selected.selected_by_id });
+    if (!current || current.organizationId !== organizationId) fail('PROCESS_DEFECT_NOT_FOUND', 404);
+    if (current.archivedAt) fail('PROCESS_DEFECT_ARCHIVED', 409);
+    const facts = selected.source_snapshot;
+    const text = (value: unknown) => typeof value === 'string' ? value : null;
+    const materials: SupplierCopyMaterial[] = Array.isArray(facts.materials) ? facts.materials.flatMap(value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value) || !isUUID(String(value.id))) return [];
+      return [{ id: String(value.id), materialCode: text(value.materialCode), materialName: text(value.materialName), materialBatch: text(value.materialBatch),
+        supplierProfileId: text(value.supplierProfileId), supplierOrganizationId: text(value.supplierOrganizationId) }];
+    }) : [];
+    return { organizationId, source, facts: [{ factKey: `PROCESS_LEDGER:${selected.defect_id}`, defectDescription: text(facts.description) ?? '',
+      defectQuantity: typeof facts.defectQuantity === 'number' ? facts.defectQuantity : null, materials }] };
   }
 
   async sourceReference(actor: AdminActor, selectionId: string): Promise<DomainSourceReference> {

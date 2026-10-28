@@ -30,7 +30,14 @@ export class WorkflowProcessEightDDto {
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 8760 }) @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) @Max(8760) reminderEveryHours!: number | null;
 }
 
+export class WorkflowSupplierEightDDto {
+  @ApiProperty({ enum: [1] }) @IsIn([1]) schemaVersion!: 1;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 8760 }) @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) @Max(8760) reminderEveryHours!: number | null;
+}
+
 export class WorkflowNodeConfigDto {
+  // Preserve absent markers through class transformation; a declared marker is fail-closed.
+  @ApiPropertyOptional({ type: WorkflowSupplierEightDDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowSupplierEightDDto) declare supplierEightD?: WorkflowSupplierEightDDto;
   @ApiPropertyOptional({ type: WorkflowProcessEightDDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowProcessEightDDto) processEightD?: WorkflowProcessEightDDto;
   @ApiPropertyOptional({ type: WorkflowClosureReviewDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => WorkflowClosureReviewDto) closureReview?: WorkflowClosureReviewDto;
   @ApiPropertyOptional({ type: WorkflowAssignmentDto }) @IsOptional() @ValidateNested() @Type(() => WorkflowAssignmentDto) assignment?: WorkflowAssignmentDto;

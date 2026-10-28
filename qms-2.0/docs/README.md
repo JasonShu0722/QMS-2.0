@@ -8,6 +8,7 @@
 | --- | --- |
 | [本轮整体开发与分批上线路径](../../docs/superpowers/plans/2026-10-24-qms-problem-management-delivery-roadmap.md) | N1～N3及fix2已部署28cc304；N4→N5按已批准范围接续，真实配置/人工验收和业务开通独立 |
 | [N4客诉协同与新品同源执行计划](../../docs/superpowers/plans/2026-10-26-qms-n4-customer-and-new-product.md) | 复用整体路线和已确认规则，仅登记源码/测试/部署的实际差距、实现所有权和证据；Issue #74，首单元V0.0.32 |
+| [N5供应商独立8D与门户闭环计划](../../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md) | V0.0.34 / Issue #78；受控复制披露、先SQE后分级管理、专用延期及报告，N4/N5部署串行、生产业务放行独立 |
 | [N2配置与流程基础细化](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md) | N2-A组件 / 导入 / 批量维护及组织职责、N2-B受控关闭审核基础已部署a32615c；历史失败、修复、发布与人工边界分记 |
 | [N3过程人工台账与完整内部8D](../../docs/superpowers/plans/2026-10-25-qms-n3-process-eight-d.md) | REQ-0026 / 0027的N3完整人工链；独立样例、TDD / 双审、真实验证，准备PR时停O3提醒开源，不提前推送或发布 |
 | [N1 到期维护事项事实复核](N1-MAINTENANCE-REVIEW-2026-10-24.md) | 正式开工时复核弃用、备份容量及运维观测，三项仍开放；真实定向结果、失败与未知边界，不靠改日期或假关闭解除门禁 |

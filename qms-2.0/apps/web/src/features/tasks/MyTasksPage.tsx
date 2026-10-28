@@ -8,6 +8,7 @@ import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { ClosureTaskInbox } from './ClosureTaskInbox';
 import { ProcessEightDTaskInbox } from './ProcessEightDTaskInbox';
 import { CustomerFaeTaskInbox } from './CustomerFaeTaskInbox';
+import { SupplierEightDTaskInbox } from './SupplierEightDTaskInbox';
 
 import './tasks.css';
 
@@ -81,6 +82,7 @@ export function MyTasksPage() {
       { key: 'process-eight-d', label: t('过程8D'), children: activeTab === 'process-eight-d' ? <ProcessEightDTaskInbox /> : null },
       { key: 'customer-eight-d', label: t('客户8D'), children: activeTab === 'customer-eight-d' ? <ProcessEightDTaskInbox domain="customer-quality" /> : null },
       { key: 'new-product-eight-d', label: t('新品8D'), children: activeTab === 'new-product-eight-d' ? <ProcessEightDTaskInbox domain="new-product-quality" /> : null },
+      { key: 'supplier-eight-d', label: t('供应商8D'), children: activeTab === 'supplier-eight-d' ? <SupplierEightDTaskInbox /> : null },
       { key: 'closure', label: t('关闭审核'), children: activeTab === 'closure' ? <ClosureTaskInbox /> : null },
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">

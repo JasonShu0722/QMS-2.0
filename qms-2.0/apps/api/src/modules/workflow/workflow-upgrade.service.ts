@@ -10,7 +10,7 @@ import { assertActiveAuthentication } from '../../common/security/session-securi
 import { assertWorkflowFeature, canProcessWorkflowNode, type WorkflowActor } from './workflow-access-policy.js';
 import { WorkflowUpgradeRegistry, type WorkflowMappingOutcome, type WorkflowUpgradeContext, type WorkflowUpgradePlan, type WorkflowUpgradeRevision } from './workflow-upgrade.registry.js';
 import { WorkflowUpgradePreviewDto, WorkflowUpgradeRequestDto, WorkflowUpgradeResultDto } from './workflow-upgrade.dto.js';
-import { canonical, isDomainControlledNode, isProcessEightDVersion, jsonObject, workflowError } from './workflow-runtime-policy.js';
+import { canonical, isDomainControlledNode, isControlledEightDVersion, jsonObject, workflowError } from './workflow-runtime-policy.js';
 import { createWorkflowStart, fixedWorkflowStart } from './workflow-start.js';
 
 @Injectable()
@@ -61,11 +61,11 @@ export class WorkflowUpgradeService {
       await assertActiveAuthentication(tx, actor);
       await assertWorkflowFeature(tx, actor, organizationId, 'workflow:act');
       await adapter.authorizeAndLock(tx, actor, context.problem, receipt ? 'history' : 'upgrade');
-      if (isDomainControlledNode(context.node) || await isProcessEightDVersion(tx, organizationId, context.instance.workflowVersionId)) workflowError('WORKFLOW_ACTION_INVALID', 409);
+      if (isDomainControlledNode(context.node) || await isControlledEightDVersion(tx, organizationId, context.instance.workflowVersionId)) workflowError('WORKFLOW_ACTION_INVALID', 409);
       if (!await canProcessWorkflowNode(tx, actor.id, organizationId, jsonObject(context.node.config).assignment)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
       if (receipt) {
         const targetVersionId = jsonObject(receipt.response).workflowVersionId;
-        if (typeof targetVersionId === 'string' && await isProcessEightDVersion(tx, organizationId, targetVersionId)) workflowError('WORKFLOW_ACTION_INVALID', 409);
+        if (typeof targetVersionId === 'string' && await isControlledEightDVersion(tx, organizationId, targetVersionId)) workflowError('WORKFLOW_ACTION_INVALID', 409);
         if (receipt.requestDigest !== digest || receipt.problemIndexId !== problemId) workflowError('IDEMPOTENCY_REPLAY', 409);
         return receipt.response as unknown as WorkflowUpgradeResultDto;
       }
@@ -122,7 +122,7 @@ export class WorkflowUpgradeService {
   }
 
   private async assertEligible(tx: Prisma.TransactionClient, context: WorkflowUpgradeContext) {
-    if (isDomainControlledNode(context.node) || await isProcessEightDVersion(tx, context.problem.organizationId, context.instance.workflowVersionId)) workflowError('WORKFLOW_UPGRADE_NOT_ALLOWED', 409);
+    if (isDomainControlledNode(context.node) || await isControlledEightDVersion(tx, context.problem.organizationId, context.instance.workflowVersionId)) workflowError('WORKFLOW_UPGRADE_NOT_ALLOWED', 409);
     if (context.problem.archivedAt || ['ARCHIVED', 'CLOSED'].includes(context.problem.status) || context.instance.status !== 'RUNNING'
       || context.problem.workflowInstanceId !== context.instance.id) workflowError('WORKFLOW_UPGRADE_NOT_ALLOWED', 409);
     await assertWorkflowFeature(tx, context.actor, context.problem.organizationId, 'workflow:act');

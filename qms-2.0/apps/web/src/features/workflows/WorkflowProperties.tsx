@@ -64,6 +64,9 @@ export function WorkflowProperties({ graph, selected, readOnly, options, onChang
   const config = node.config ?? {};
   const closure = config.closureReview;
   const eightD = config.processEightD;
+  const supplierEightD = config.supplierEightD;
+  const otherSupplierOwner = graph.nodes.some(entry => entry.id !== selected && entry.config?.supplierEightD);
+  const processOwner = graph.nodes.some(entry => entry.config?.processEightD);
   function update(patch: Partial<WorkflowNode>) { if (!readOnly) onChange({ ...graph, nodes: graph.nodes.map((entry) => entry.id === selected ? { ...entry, ...patch } : entry) }); }
   function configure(patch: Partial<Config>) { update({ config: { ...config, ...patch } }); }
   function mark(key: 'isStart' | 'isEnd', checked: boolean) {
@@ -73,18 +76,19 @@ export function WorkflowProperties({ graph, selected, readOnly, options, onChang
   const actions = node.type === 'CLOSE' ? ['REOPEN', 'RETURN'] : node.type === 'CC' ? ['SUBMIT'] : [node.type === 'APPROVAL' ? 'APPROVE' : node.type === 'VERIFICATION' ? 'VERIFY' : 'SUBMIT', 'RETURN', 'REJECT'];
   return <Card title={t('节点属性')}><fieldset disabled={readOnly} className="workflow-properties-fields">
     <label>{t('节点名称')}<input aria-label={t('节点名称')} maxLength={200} value={node.name} onChange={(event) => update({ name: event.target.value })} /></label>
-    <label>{t('节点类型')}<select aria-label={t('节点类型')} value={node.type} onChange={(event) => {
+    <label>{t('节点类型')}<select aria-label={t('节点类型')} disabled={!!supplierEightD} value={node.type} onChange={(event) => {
+      if (supplierEightD) return;
       const type = event.target.value as WorkflowNode['type'];
       update({ type, config: { ...config, processEightD: type === 'ACTION' ? eightD : undefined, closureReview: type === 'APPROVAL' ? closure : undefined, isEnd: type === 'CLOSE' ? config.isEnd : undefined, requireIndependentVerification: type === 'CLOSE' ? config.requireIndependentVerification : undefined, isStart: type === 'CLOSE' ? undefined : config.isStart } });
     }}>{!nodeTypes.some((type) => type === node.type) && <option value={node.type}>{t(workflowLabel(node.type))}</option>}{nodeTypes.map((type) => <option key={type} value={type}>{t(workflowLabel(type))}</option>)}</select></label>
-    {node.type !== 'CLOSE' && <label className="workflow-check"><input type="checkbox" disabled={!!eightD} checked={config.isStart === true} onChange={(event) => mark('isStart', event.target.checked)} />{t('起始节点')}</label>}
+    {node.type !== 'CLOSE' && <label className="workflow-check"><input type="checkbox" disabled={!!eightD || !!supplierEightD || otherSupplierOwner} checked={config.isStart === true} onChange={(event) => mark('isStart', event.target.checked)} />{t('起始节点')}</label>}
     {node.type === 'CLOSE' && <><label className="workflow-check"><input type="checkbox" checked={config.isEnd === true} onChange={(event) => mark('isEnd', event.target.checked)} />{t('结束节点')}</label>
       <label className="workflow-check"><input type="checkbox" checked={config.requireIndependentVerification === true} onChange={(event) => configure({ requireIndependentVerification: event.target.checked })} />{t('验证人与关闭人须不同')}</label></>}
     {node.type === 'APPROVAL' && !config.isStart && !config.isEnd && <fieldset><legend>{t('受控关闭审核')}</legend>
       <label className="workflow-check"><input aria-label={t('受控关闭审核')} type="checkbox" checked={!!closure} onChange={(event) => configure(event.target.checked ? { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: '' }, assignment: undefined, escalation: undefined } : { closureReview: undefined })} />{t('受控关闭审核')}</label>
       <p>{t('专业审核与管理审核按受控规则解析；此处配置规则，不指定具体人员 UUID。关闭后须手动配置普通处理范围，不会恢复或编造人员。')}</p>
       {closure && <>
-        <label>{t('关闭审核策略')}<select aria-label={t('关闭审核策略')} value={closure.policy} onChange={(event) => configure({ closureReview: { ...closure, policy: event.target.value as typeof closure.policy }, assignment: undefined, escalation: undefined })}>
+        <label>{t('关闭审核策略')}<select aria-label={t('关闭审核策略')} value={closure.policy} onChange={(event) => configure({ closureReview: { ...closure, policy: event.target.value as typeof closure.policy, domainCode: event.target.value === 'SUPPLIER' ? 'supplier-quality' : closure.domainCode }, assignment: undefined, escalation: undefined })}>
           <option value="INTERNAL">{t('内部问题')}</option><option value="SUPPLIER">{t('供应商问题')}</option>
         </select></label>
         <label>{t('关闭审核领域代码')}<input aria-label={t('关闭审核领域代码')} required maxLength={100} value={closure.domainCode} onChange={(event) => configure({ closureReview: { ...closure, domainCode: event.target.value }, assignment: undefined, escalation: undefined })} /></label>
@@ -92,8 +96,8 @@ export function WorkflowProperties({ graph, selected, readOnly, options, onChang
       </>}
     </fieldset>}
     {node.type === 'ACTION' && <fieldset><legend>{t('过程8D负责人策略')}</legend>
-      <label className="workflow-check"><input aria-label={t('过程8D负责人处理')} type="checkbox" checked={!!eightD} onChange={event => {
-        if (readOnly) return;
+      <label className="workflow-check"><input aria-label={t('过程8D负责人处理')} type="checkbox" disabled={!!supplierEightD || otherSupplierOwner} checked={!!eightD} onChange={event => {
+        if (readOnly || supplierEightD || otherSupplierOwner) return;
         if (!event.target.checked) { configure({ processEightD: undefined, assignment: undefined }); return; }
         onChange({ ...graph, nodes: graph.nodes.map(entry => entry.id === selected ? { ...entry, config: { ...config, isStart: true, assignment: { permission: 'workflow:act' }, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null }, slaMinutes: undefined, reminders: undefined, escalation: undefined } } : entry.config?.isStart ? { ...entry, config: { ...entry.config, isStart: false } } : entry) });
       }} />{t('过程8D负责人处理')}</label>
@@ -105,9 +109,21 @@ export function WorkflowProperties({ graph, selected, readOnly, options, onChang
         }} /></label><p>{t('留空关闭提醒；填写1～8760整数小时。不使用通用SLA提醒。')}</p>
       </>}
     </fieldset>}
-    {!closure && !eightD && <AssignmentFields label="处理范围" value={config.assignment} options={options} onChange={(assignment) => configure({ assignment })} />}
-    {!eightD && <label>{t('处理时限（分钟）')}<input aria-label={t('处理时限（分钟）')} type="number" min={1} max={2147483647} value={config.slaMinutes ?? ''} onChange={(event) => configure(event.target.value ? { slaMinutes: Number(event.target.value) } : { slaMinutes: undefined, reminders: undefined, escalation: undefined })} /></label>}
-    {!eightD && config.slaMinutes !== undefined && <>
+    {node.type === 'ACTION' && <fieldset><legend>{t('供应商8D负责人策略')}</legend>
+      <label className="workflow-check"><input aria-label={t('供应商8D负责人处理')} type="checkbox" disabled={processOwner || otherSupplierOwner} checked={!!supplierEightD} onChange={event => {
+        if (readOnly || processOwner || otherSupplierOwner) return;
+        if (!event.target.checked) { configure({ supplierEightD: undefined, assignment: undefined }); return; }
+        onChange({ ...graph, nodes: graph.nodes.map(entry => entry.id === selected ? { ...entry, config: { ...config, isStart: true, assignment: { permission: 'supplier-quality:responses:write' }, supplierEightD: { schemaVersion: 1, reminderEveryHours: null }, slaMinutes: undefined, reminders: undefined, escalation: undefined } } : entry.config?.isStart ? { ...entry, config: { ...entry.config, isStart: false } } : entry) });
+      }} />{t('供应商8D负责人处理')}</label>
+      {supplierEightD && <><p>{t('供应商完整门户8D专用策略；固定回复权限，不指定具体人员。先关闭此策略才能切换节点类型。')}</p>
+        <label>{t('供应商8D提醒间隔（小时）')}<input aria-label={t('供应商8D提醒间隔（小时）')} type="number" min={1} max={8760} step={1} value={supplierEightD.reminderEveryHours ?? ''} onChange={event => {
+          const value = event.target.value === '' ? null : Number(event.target.value);
+          if (value === null || (Number.isInteger(value) && value >= 1 && value <= 8760)) configure({ supplierEightD: { ...supplierEightD, reminderEveryHours: value } });
+        }} /></label><p>{t('留空关闭提醒；填写1～8760整数小时。不使用通用SLA提醒。')}</p></>}
+    </fieldset>}
+    {!closure && !eightD && !supplierEightD && <AssignmentFields label="处理范围" value={config.assignment} options={options} onChange={(assignment) => configure({ assignment })} />}
+    {!eightD && !supplierEightD && <label>{t('处理时限（分钟）')}<input aria-label={t('处理时限（分钟）')} type="number" min={1} max={2147483647} value={config.slaMinutes ?? ''} onChange={(event) => configure(event.target.value ? { slaMinutes: Number(event.target.value) } : { slaMinutes: undefined, reminders: undefined, escalation: undefined })} /></label>}
+    {!eightD && !supplierEightD && config.slaMinutes !== undefined && <>
       <fieldset><legend>{t('截止前提醒')}</legend>{config.reminders?.map((reminder, index) => <Space key={index}>
         <label>{t('提前分钟')} {index + 1}<input aria-label={`${t('提前分钟')} ${index + 1}`} type="number" min={0} max={config.slaMinutes} value={reminder.offsetMinutes} onChange={(event) => configure({ reminders: config.reminders!.map((entry, position) => position === index ? { offsetMinutes: Number(event.target.value) } : entry) })} /></label>
         <Button onClick={() => configure({ reminders: config.reminders!.filter((_entry, position) => position !== index) })}>{t('移除提醒')}</Button>

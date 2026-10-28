@@ -4,7 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminError, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { canProcessWorkflowNode } from '../workflow/workflow-access-policy.js';
-import { isDomainControlledNode, isProcessEightDVersion, jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
+import { isDomainControlledNode, isControlledEightDVersion, jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
 import type { TaskTransferDto, TaskTransferResultDto } from './task-inbox.dto.js';
 
 const PERMISSION = 'task:transfer';
@@ -37,7 +37,7 @@ export class TaskTransferService {
     }, async (tx) => {
       for (const item of input.items) {
         const task = await tx.workflowTask.findFirst({ where: { id: item.id, organizationId }, include: { workflowNode: true } });
-        if (!task || isDomainControlledNode(task.workflowNode) || await isProcessEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
+        if (!task || isDomainControlledNode(task.workflowNode) || await isControlledEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
       }
     });
   }

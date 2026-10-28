@@ -23,6 +23,7 @@ export const getWorkflows = (query: URLSearchParams, signal?: AbortSignal) => ap
 export const getWorkflow = (id: string, signal?: AbortSignal) => apiRequest<components['schemas']['WorkflowDefinitionDetailDto']>(`/api/v1/workflows/${id}`, { signal });
 export const getWorkflowVersion = (id: string, version: string, signal?: AbortSignal) => apiRequest<WorkflowDefinition>(`/api/v1/workflows/${id}/versions/${version}`, { signal });
 export const getWorkflowOptions = (search = '', signal?: AbortSignal) => apiRequest<WorkflowOptions>(`/api/v1/workflows/options?${new URLSearchParams({ search, limit: '100' })}`, { signal });
+export const getSupplierWorkflowBindings = (signal?: AbortSignal) => apiRequest<components['schemas']['SupplierWorkflowBindingsDto']>('/api/v1/supplier-quality/workflow-bindings', { signal });
 export const getWorkflowClosureTemplates = (signal?: AbortSignal) => apiRequest<components['schemas']['WorkflowClosureTemplatesDto']>('/api/v1/workflows/closure-templates', { signal });
 export async function createWorkflowClosureTemplate(body: WorkflowClosureTemplateInput, key: string, signal?: AbortSignal): Promise<WorkflowDefinition> {
   const session = useWorkTabsStore.getState().sessionScope;

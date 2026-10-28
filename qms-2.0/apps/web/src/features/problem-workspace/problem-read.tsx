@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Space, Tag } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -47,20 +47,33 @@ export function ProblemNodes({ nodes }: { nodes: ProblemReport['nodes'] }) {
     <span>{t('已记录动作')}：{node.actionCount}</span>
   </li>)}</ol></section>;
 }
-export function ProblemEvidence({ evidence }: { evidence: ProblemReport['evidence'] }) {
+export function ProblemEvidence({ evidence, onDenied }: { evidence: ProblemReport['evidence']; onDenied?: () => void }) {
   const { t } = useLanguage();
   const [error, setError] = useState<unknown>();
   const [pending, setPending] = useState<string>();
+  const activeScope = useRef<AbortController | undefined>(undefined);
+  useLayoutEffect(() => {
+    const scope = new AbortController();
+    activeScope.current = scope;
+    setError(undefined); setPending(undefined);
+    return () => scope.abort();
+  }, [evidence, onDenied]);
   async function download(id: string) {
-    if (pending) return;
+    const scope = activeScope.current;
+    if (pending || !scope || scope.signal.aborted) return;
     setPending(id); setError(undefined);
     try {
       const url = await attachmentDownload(id);
+      if (scope.signal.aborted) return;
       const anchor = document.createElement('a');
       anchor.href = url; anchor.rel = 'noreferrer noopener'; anchor.referrerPolicy = 'no-referrer'; anchor.target = '_blank';
       anchor.click();
-    } catch (cause) { setError(cause); }
-    finally { setPending(undefined); }
+    } catch (cause) {
+      if (scope.signal.aborted) return;
+      setError(cause);
+      if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) onDenied?.();
+    }
+    finally { if (!scope.signal.aborted) setPending(undefined); }
   }
   return <section className="problem-section"><h3>{t('证据附件')}</h3><ProblemError cause={error} />
     {!evidence.length ? <p>{t('暂无关联证据')}</p> : <ul className="problem-evidence">{evidence.map((file) => <li key={file.id}><Space wrap>

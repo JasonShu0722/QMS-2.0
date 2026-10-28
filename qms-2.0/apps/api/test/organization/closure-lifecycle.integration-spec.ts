@@ -29,9 +29,9 @@ describe('closure state lifecycle dependency classification on PostgreSQL', () =
     const roundId = randomUUID();
     const context = JSON.stringify({ responsibleSectionDepartmentId: section.id });
     await prisma.$executeRaw`INSERT INTO workflow_closure_rounds
-      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, status, created_by)
+      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, status, created_by, creator_organization_id)
       VALUES (${roundId}::uuid, ${organization.id}::uuid, ${problem.id}::uuid, ${instance.id}::uuid, ${version.id}::uuid, ${node.id}::uuid,
-        1, '{}'::jsonb, ${context}::jsonb, 1, ${status}, ${user.id}::uuid)`;
+        1, '{}'::jsonb, ${context}::jsonb, 1, ${status}, ${user.id}::uuid, ${organization.id}::uuid)`;
     return { organization, user, section, roundId };
   }
 
@@ -76,6 +76,7 @@ describe('closure state lifecycle dependency classification on PostgreSQL', () =
       details: [
         { tableName: 'closure_notifications', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'problem_indexes', columnName: 'organization_id', count: 1, liveCount: 0 },
+        { tableName: 'workflow_closure_rounds', columnName: 'creator_organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_closure_rounds', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_definitions', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_instances', columnName: 'organization_id', count: 1, liveCount: 0 },

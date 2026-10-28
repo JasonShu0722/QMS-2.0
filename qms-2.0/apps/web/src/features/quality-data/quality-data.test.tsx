@@ -49,17 +49,23 @@ it('distinguishes a real zero from missing values and identifies a missing unit'
 });
 
 it('shows metric definition and source-backed trend values', async () => {
+  const trendFacts = [{ id: 'fact-1', metricDefinitionId: 'metric-1', periodStart: '2026-09-01T00:00:00Z', periodEnd: '2026-09-30T00:00:00Z', numerator: 95, denominator: 100, value: 0.95, sourceSystem: 'MES', sourceRecordKey: 'batch-1' }];
+  let resolveTrend!: (facts: typeof trendFacts) => void;
+  const trendResponse = new Promise<typeof trendFacts>((resolve) => { resolveTrend = resolve; });
   vi.mocked(apiRequest).mockImplementation((path) => {
     const requestPath = String(path);
     if (requestPath === '/api/v1/quality-data/metrics') return Promise.resolve([{ id: 'metric-1', code: 'FPY', name: '一次合格率', unit: '%', numeratorLabel: '合格数', denominatorLabel: '生产数', formulaVersion: 'v1', active: true, version: 1 }]);
-    if (requestPath.startsWith('/api/v1/quality-data/trend')) return Promise.resolve([{ id: 'fact-1', metricDefinitionId: 'metric-1', periodStart: '2026-09-01T00:00:00Z', periodEnd: '2026-09-30T00:00:00Z', numerator: 95, denominator: 100, value: 0.95, sourceSystem: 'MES', sourceRecordKey: 'batch-1' }]);
+    if (requestPath.startsWith('/api/v1/quality-data/trend')) return trendResponse;
     if (requestPath.startsWith('/api/v1/quality-data/insights')) return Promise.resolve([]);
     return Promise.resolve(undefined);
   });
   render(<QualityDataPage />);
   expect(await screen.findByText('一次合格率 (FPY)')).toBeVisible();
   const trend = await screen.findByRole('region', { name: '指标趋势' });
-  expect(within(trend).getByText('0.95')).toBeVisible();
+  expect(trend).toBeVisible();
+  expect(within(trend).queryByText('0.95')).not.toBeInTheDocument();
+  resolveTrend(trendFacts);
+  expect(await within(trend).findByText('0.95')).toBeVisible();
   expect(within(trend).getByText('MES')).toBeVisible();
   expect(within(trend).getByText('batch-1')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith('/api/v1/quality-data/metrics');

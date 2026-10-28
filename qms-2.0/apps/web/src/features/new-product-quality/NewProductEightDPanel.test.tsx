@@ -27,6 +27,33 @@ beforeEach(() => {
 function mount(active = true, onDenied = vi.fn(), projectContext?: { code: string; product_code: string }) {
   return render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><NewProductEightDPanel projectId="project" organizationId={org} projectContext={projectContext} active={active} onDenied={onDenied} /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
 }
+it('opens supplier copy for an immutable selection with copy-only access without enabling new-product issue', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { permissions: ['new-product-quality:projects:read', 'process-quality:defects:read', 'supplier-quality:issues:copy'] };
+    if (path.includes('/reference-options')) return { items: [{ id: org, label: '复制目标档案' }], total: 1 };
+    if (path.endsWith('/source-copies/preview')) return { token: org, expiresAt: '2099-01-01T00:00:00Z', facts: [] };
+    return read(path, init);
+  });
+  mount();
+  const copy = await screen.findByRole('button', { name: '复制为供应商草稿' });
+  expect(copy).toBeDisabled();
+  fireEvent.click(await screen.findByLabelText('选择新品来源 selection-id'));
+  await waitFor(() => expect(copy).toBeEnabled());
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByRole('dialog', { name: '受控复制为供应商草稿' })).toBeVisible());
+  expect(screen.queryByRole('button', { name: '发起新品8D' })).not.toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByLabelText('目标供应商档案'));
+  fireEvent.click(await screen.findByText('复制目标档案', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(screen.getByRole('button', { name: '读取受控预览' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ organizationId: org, supplierProfileId: org, sources: [{ kind: 'NEW_PRODUCT_SELECTION', sourceId: selection.id, sourceVersion: selection.source_version }] }) }), { replayAfterReauthentication: false }));
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/source-copies/drafts'))).toBe(false);
+});
+
+it('hides supplier copy without its real copy permission and in an archived project', async () => {
+  mount(false); await screen.findByText('新品同源事实');
+  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+});
 it('shows project and component clues separately from mapping eligibility, with explicit ledger filters', async () => {
   mount(true, vi.fn(), { code: 'NP-042', product_code: 'COMP-042' });
   const trigger = await screen.findByText('纳入过程事实', { selector: 'button span' });

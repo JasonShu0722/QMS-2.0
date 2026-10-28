@@ -11,7 +11,7 @@ const assignment = { permission: 'workflow:act' };
 const notFound = { status: 404, response: { code: 'TASK_NOT_FOUND' } };
 
 // Transaction doubles exercise the real transfer and mutation services, not PostgreSQL.
-function fixture(config: Record<string, unknown> = { assignment }, controlledVersion = false) {
+function transferFixture(config: Record<string, unknown>, controlledVersion: boolean, marker: string) {
   const user = { id: actor.id, organizationId, accountType: 'INTERNAL', status: 'ACTIVE', organization: { status: 'ACTIVE' },
     mfaEnabled: false, mfaPreference: 'DISABLED', mfaRequirementOverride: null, mustChangePassword: false, securityVersion: 1 };
   const target = { ...user, id: id(4) };
@@ -22,7 +22,7 @@ function fixture(config: Record<string, unknown> = { assignment }, controlledVer
   const tx = {
     $queryRaw: jest.fn(async (raw: TemplateStringsArray | Prisma.Sql) => {
       const sql = Array.isArray(raw) ? raw.join('?') : (raw as Prisma.Sql).text;
-      if (sql.includes("config ? 'processEightD'")) return state.controlledVersion ? [{ id: id(7) }] : [];
+      if (sql.includes(`config ? '${marker}'`)) return state.controlledVersion ? [{ id: id(7) }] : [];
       if (sql.includes(' AS allowed')) return [{ allowed: true }];
       return [{ id: task.id }];
     }),
@@ -52,9 +52,10 @@ function fixture(config: Record<string, unknown> = { assignment }, controlledVer
   return { tx, task, state, audit, input, transfer };
 }
 
-describe('generic task transfer controlled boundary (unit)', () => {
-  it.each([null, false, {}, { schemaVersion: 1 }])('rejects a declared process owner policy: %p', async processEightD => {
-    const f = fixture({ assignment, processEightD });
+describe.each(['processEightD', 'supplierEightD'])('generic task transfer %s boundary (unit)', marker => {
+  const fixture = (config: Record<string, unknown> = { assignment }, controlledVersion = false) => transferFixture(config, controlledVersion, marker);
+  it.each([null, false, {}, { schemaVersion: 1 }])('rejects a declared controlled owner policy: %p', async value => {
+    const f = fixture({ assignment, [marker]: value });
     const before = { ...f.task };
     await expect(f.transfer()).rejects.toMatchObject(notFound);
     expect(f.task).toEqual(before);
@@ -79,7 +80,7 @@ describe('generic task transfer controlled boundary (unit)', () => {
   it.each([true, false])('rechecks marked/unmarked controlled resources before returning a valid receipt: %p', async marked => {
     const f = fixture();
     await f.transfer();
-    if (marked) f.task.workflowNode.config = { assignment, processEightD: null };
+    if (marked) f.task.workflowNode.config = { assignment, [marker]: null };
     else f.state.controlledVersion = true;
     const before = { ...f.task };
     f.tx.workflowTask.update.mockClear();
@@ -94,7 +95,7 @@ describe('generic task transfer controlled boundary (unit)', () => {
 
   it('authorizes the entire batch before mutating an ordinary first item', async () => {
     const f = fixture();
-    const controlled = { ...f.task, id: id(9), workflowNode: { config: { assignment, processEightD: null } } };
+    const controlled = { ...f.task, id: id(9), workflowNode: { config: { assignment, [marker]: null } } };
     f.tx.workflowTask.findFirst.mockImplementation(async ({ where }) => where.id === controlled.id ? controlled : f.task);
     f.input.items.push({ id: controlled.id, expectedVersion: 1 });
     await expect(f.transfer()).rejects.toMatchObject(notFound);

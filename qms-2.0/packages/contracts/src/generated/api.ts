@@ -2327,6 +2327,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/workflow-bindings/activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierWorkflowBindingController_activate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-quality/profiles/import": {
         parameters: {
             query?: never;
@@ -2400,6 +2416,486 @@ export interface paths {
         };
         get?: never;
         put: operations["SupplierMasterController_setStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/assignment-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDAssignmentController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDTaskController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDTaskController_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDTaskController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDTaskController_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/drafts/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDController_read"];
+        put: operations["SupplierEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/analysis-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDController_analysisComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SupplierEightDController_deadlines"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDController_read"];
+        put: operations["SupplierPortalEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/analysis-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalEightDController_analysisComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalEightDController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/disclosure-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDDisclosureController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDDisclosureController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/disclosure-attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDDisclosureController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/deadline-extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDDeadlineController_history"];
+        put?: never;
+        post: operations["SupplierEightDDeadlineController_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/deadline-extensions/{requestId}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDDeadlineController_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/deadline-extensions/{requestId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDDeadlineController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/deadline-extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDDeadlineController_history"];
+        put?: never;
+        post: operations["SupplierPortalEightDDeadlineController_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/deadline-extensions/{requestId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalEightDDeadlineController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDReportController_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDReportController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDReportController_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDReportController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/eight-d/{id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDRevisionController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDRevisionController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/source-copies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDSourceController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/source-copies/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDSourceController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/source-collaboration/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierSourceCollaborationController_tasks"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4071,422 +4567,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/material-masters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["MaterialMasterController_list"];
-        put?: never;
-        post: operations["MaterialMasterController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/material-masters/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["MaterialMasterController_update"];
-        trace?: never;
-    };
-    "/api/v1/material-masters/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["MaterialMasterController_import"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/plans/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_plan"];
-        put: operations["AuditManagementController_updatePlan"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_createPlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/plans/{id}/postponements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_postpone"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/postponements/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_decide"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_createTemplate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/templates/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_updateTemplate"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/templates/{id}/publish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_publishTemplate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_createExecution"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_execution"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{id}/ncs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_executionNcs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{id}/report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_executionReport"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/plans/{id}/report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_planReport"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{id}/checklist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_checklist"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_submit"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/nc-deadline-policies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_registerDeadlinePolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/executions/{executionId}/checklist/{resultId}/nc": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_createNc"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/ncs/{id}/assign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_assign"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/ncs/{id}/response": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_respond"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/ncs/{id}/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_verify"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/ncs/{id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_close"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/imports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AuditManagementController_imports"];
-        put?: never;
-        post: operations["AuditManagementController_importRow"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/imports/{id}/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["AuditManagementController_reviewImport"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit-management/imports/{id}/issue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AuditManagementController_issueImport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/new-product-quality/projects": {
         parameters: {
             query?: never;
@@ -5313,6 +5393,422 @@ export interface paths {
         get?: never;
         put: operations["NewProductEightDController_deadlines"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/material-masters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MaterialMasterController_list"];
+        put?: never;
+        post: operations["MaterialMasterController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/material-masters/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["MaterialMasterController_update"];
+        trace?: never;
+    };
+    "/api/v1/material-masters/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MaterialMasterController_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_plan"];
+        put: operations["AuditManagementController_updatePlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/plans/{id}/postponements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_postpone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/postponements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_decide"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_createTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_updateTemplate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/templates/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_publishTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_createExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_execution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/ncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_executionNcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_executionReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/plans/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_planReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_checklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/nc-deadline-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_registerDeadlinePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/executions/{executionId}/checklist/{resultId}/nc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_createNc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/ncs/{id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_assign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/ncs/{id}/response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_respond"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/ncs/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_verify"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/ncs/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_close"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditManagementController_imports"];
+        put?: never;
+        post: operations["AuditManagementController_importRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AuditManagementController_reviewImport"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-management/imports/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuditManagementController_issueImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8923,6 +9419,11 @@ export interface components {
             action?: components["schemas"]["WorkflowAction"];
             condition?: components["schemas"]["WorkflowConditionDto"];
         };
+        WorkflowSupplierEightDDto: {
+            /** @enum {number} */
+            schemaVersion: 1;
+            reminderEveryHours: number | null;
+        };
         WorkflowProcessEightDDto: {
             /** @enum {number} */
             schemaVersion: 1;
@@ -8951,6 +9452,7 @@ export interface components {
             y: number;
         };
         WorkflowNodeConfigDto: {
+            supplierEightD?: components["schemas"]["WorkflowSupplierEightDDto"];
             processEightD?: components["schemas"]["WorkflowProcessEightDDto"];
             closureReview?: components["schemas"]["WorkflowClosureReviewDto"];
             assignment?: components["schemas"]["WorkflowAssignmentDto"];
@@ -9440,6 +9942,8 @@ export interface components {
             replyMode: "INTERNAL" | "SUPPLIER";
             /** Format: uuid */
             internalResponderId?: string;
+            /** @description 使用完整8D工作区；旧详情不返回其正文或内部补充资料 */
+            controlledEightD?: boolean;
             id: string;
             supplierOrganizationId: string | null;
             supplierName: string;
@@ -9562,6 +10066,8 @@ export interface components {
             workflowStatus: "DRAFT" | "PUBLISHED" | "RETIRED";
             /** @description 固定流程版本回复节点的分钟数；未配置则为 null */
             responseSlaMinutes: number | null;
+            /** @description 完整供应商8D；绑定后仍须显式启用，不使用旧节点SLA */
+            controlledEightD?: boolean;
             /** Format: uuid */
             createdById: string;
             /** Format: date-time */
@@ -9580,6 +10086,16 @@ export interface components {
             expectedVersion: number;
             /** Format: uuid */
             workflowVersionId: string;
+            enabled: boolean;
+        };
+        ActivateSupplierWorkflowBindingDto: {
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            /** @enum {string} */
+            replyMode: "INTERNAL" | "SUPPLIER";
+            expectedVersion: number;
             enabled: boolean;
         };
         SupplierProfileImportRowDto: {
@@ -9659,6 +10175,500 @@ export interface components {
             /** @enum {string} */
             status: "ACTIVE" | "DISABLED";
             expectedSecurityVersion: number;
+        };
+        SupplierEightDAssignmentDto: {
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            positionName: string;
+            /** Format: uuid */
+            departmentId: string;
+            departmentName: string;
+        };
+        SupplierEightDAssignmentPageDto: {
+            items: components["schemas"]["SupplierEightDAssignmentDto"][];
+            total: number;
+        };
+        SupplierEightDTaskDto: {
+            id: string;
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            kind: "HANDLING" | "CLOSURE" | "EXTENSION";
+            /** @enum {string} */
+            stage: "ANALYSIS" | "SUBMISSION" | "CLOSURE";
+            /** @enum {string} */
+            status: "HANDLING" | "PENDING" | "QUALITY_PENDING" | "MANAGER_PENDING";
+            /** @enum {string|null} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER" | "SQE" | "MANAGER" | null;
+            rowVersion: number;
+            contentVersion: number;
+            instanceVersion: number;
+            /** Format: date-time */
+            dueAt: string | null;
+            overdue: boolean;
+            /** Format: uuid */
+            roundId: string | null;
+            roundVersion: number | null;
+            /** Format: uuid */
+            requestId: string | null;
+            requestVersion: number | null;
+            /** Format: date-time */
+            requestedDueAt: string | null;
+            actions: ("OPEN_REPORT" | "ANALYSIS_COMPLETE" | "SUBMIT" | "DECIDE_CLOSURE" | "DECIDE_EXTENSION")[];
+        };
+        SupplierEightDTaskPageDto: {
+            items: components["schemas"]["SupplierEightDTaskDto"][];
+            examined: number;
+            /** Format: uuid */
+            nextCursor: string | null;
+        };
+        SupplierEightDNotificationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** Format: uuid */
+            problemId: string;
+            /** @enum {string} */
+            kind: "HANDLING_REMINDER" | "CLOSURE_REMINDER" | "EXTENSION_PENDING";
+            subject: string;
+            body: string;
+            /** @enum {string} */
+            channel: "IN_APP";
+            /** @enum {string} */
+            status: "DELIVERED";
+            /** Format: date-time */
+            deliveredAt: string;
+        };
+        SupplierEightDNotificationPageDto: {
+            items: components["schemas"]["SupplierEightDNotificationDto"][];
+            examined: number;
+            /** Format: uuid */
+            nextCursor: string | null;
+        };
+        IssueSupplierEightDDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            sqeAssignmentId: string;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
+        };
+        ProcessEightDTemporaryMeasureDto: {
+            id: string;
+            description: string;
+            departmentOwner: string;
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            introducedAt: string | null;
+            fileIds: string[];
+        };
+        ProcessEightDContainmentDto: {
+            id: string;
+            group: string;
+            location: string;
+            quantity: number | null;
+            measure: string;
+            owner: string;
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            plannedAt: string | null;
+            completion: string;
+            ngQuantity: number | null;
+        };
+        ProcessEightDCorrectiveActionDto: {
+            id: string;
+            /** @enum {string} */
+            causeKind: "OCCURRENCE" | "ESCAPE" | "SYSTEM";
+            action: string;
+            owner: string;
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            plannedAt: string | null;
+            verificationMethod: string;
+            fileIds: string[];
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            implementationAt: string | null;
+            result: string;
+            beforeState: string;
+            afterState: string;
+            firstBatch: string;
+            followUpBatchCount: number | null;
+            followUpDuration: string;
+            verificationRecord: string;
+            verificationFileIds: string[];
+            effective: boolean | null;
+        };
+        ProcessEightDHorizontalDeploymentDto: {
+            id: string;
+            scope: string;
+            inspectionResult: string;
+            action: string;
+            owner: string;
+            completion: string;
+            fileIds: string[];
+        };
+        ProcessEightDStandardizationDto: {
+            id: string;
+            key: string;
+            documentName: string;
+            needsUpdate: boolean | null;
+            departmentOwner: string;
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            plannedAt: string | null;
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            completedAt: string | null;
+            /** @description COMPLETED 表示本项完成；NOT_APPLICABLE 须说明 reason；不等于受控文件已发布 */
+            status: string;
+            reason: string;
+        };
+        ProcessEightDDocumentDto: {
+            description: string;
+            okFileIds: string[];
+            ngFileIds: string[];
+            temporaryMeasures: components["schemas"]["ProcessEightDTemporaryMeasureDto"][];
+            containment: components["schemas"]["ProcessEightDContainmentDto"][];
+            optionalAffectedContainment: components["schemas"]["ProcessEightDContainmentDto"][];
+            analysisProcess: string;
+            analysisFileIds: string[];
+            occurrenceCause: string;
+            escapeCause: string;
+            systemCause: string;
+            correctiveActions: components["schemas"]["ProcessEightDCorrectiveActionDto"][];
+            horizontalDeployment: components["schemas"]["ProcessEightDHorizontalDeploymentDto"][];
+            standardization: components["schemas"]["ProcessEightDStandardizationDto"][];
+            closureSummary: string;
+        };
+        SupplierEightDReportDto: {
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** Format: uuid */
+            problemId: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            instanceId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            reportNumber: string;
+            title: string;
+            severity: string;
+            status: string;
+            rowVersion: number;
+            contentVersion: number;
+            instanceVersion: number;
+            /** Format: uuid */
+            sqeUserId: string;
+            /** Format: uuid */
+            sqeAssignmentId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+            /** Format: uuid */
+            submittedRevisionId: string | null;
+            /** Format: uuid */
+            approvedRevisionId: string | null;
+            /** Format: date-time */
+            analysisDueAt: string | null;
+            /** Format: date-time */
+            analysisCompletedAt: string | null;
+            /** Format: date-time */
+            submissionDueAt: string | null;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            closureDueAt: string | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** Format: date-time */
+            releasedToSupplierAt: string | null;
+            allowedActions: string[];
+            closure: components["schemas"]["WorkflowClosureRoundDto"] | null;
+        };
+        SaveSupplierEightDDto: {
+            expectedRowVersion: number;
+            expectedInstanceVersion: number;
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+        };
+        SupplierEightDAnalysisCompleteDto: {
+            expectedRowVersion: number;
+            expectedInstanceVersion: number;
+            /** Format: date-time */
+            submissionDueAt: string;
+        };
+        SupplierEightDVersionDto: {
+            expectedRowVersion: number;
+            expectedInstanceVersion: number;
+        };
+        SupplierEightDDeadlinesDto: {
+            expectedRowVersion: number;
+            expectedInstanceVersion: number;
+            /** Format: date-time */
+            analysisDueAt?: string;
+            /** Format: date-time */
+            closureDueAt?: string;
+        };
+        SupplierDisclosurePreviewDto: {
+            expectedRowVersion: number;
+            selectedFileIds: string[];
+        };
+        SupplierDisclosureFactsDto: {
+            title: string;
+            materialCode: string;
+            /** @enum {string} */
+            materialCategory?: "STRUCTURE" | "ELECTRONIC";
+            defectDescription: string;
+            defectQuantity: number;
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            reportNumber: string;
+        };
+        SupplierDisclosurePreviewResultDto: {
+            /** Format: uuid */
+            previewToken: string;
+            /** Format: uuid */
+            supplierOrganizationId: string;
+            supplierName: string;
+            rowVersion: number;
+            /** Format: date-time */
+            expiresAt: string;
+            publicFacts: components["schemas"]["SupplierDisclosureFactsDto"];
+            selectedFileIds: string[];
+            attachments: components["schemas"]["FileEvidenceDto"][];
+            warnings: string[];
+        };
+        SupplierDisclosureReleaseDto: {
+            expectedRowVersion: number;
+            selectedFileIds: string[];
+            /** Format: uuid */
+            previewToken: string;
+            /** @enum {number} */
+            confirmed: true;
+        };
+        SupplierDisclosureReleaseResultDto: {
+            /** Format: uuid */
+            publicationId: string;
+            /** Format: date-time */
+            releasedAt: string;
+            rowVersion: number;
+            contentVersion: number;
+            eligibleRecipientCount: number;
+            /**
+             * @description 通知事件已入队，不表示供应商已经收到或签收
+             * @enum {string}
+             */
+            notificationState: "PENDING_PROJECTION";
+        };
+        SupplierEightDDeadlineResultDto: {
+            allowedActions?: ("approve-sqe" | "return-sqe" | "approve-manager" | "return-manager" | "cancel")[];
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** @enum {string} */
+            stage: "ANALYSIS" | "SUBMISSION" | "CLOSURE";
+            /** @enum {string} */
+            severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            /** @enum {string} */
+            status: "QUALITY_PENDING" | "MANAGER_PENDING" | "APPROVED" | "RETURNED" | "CANCELLED";
+            /** Format: date-time */
+            originalDueAt: string;
+            /** Format: date-time */
+            requestedDueAt: string;
+            originallyOverdue: boolean;
+            reason: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SupplierEightDDeadlineRequestDto: {
+            /** @enum {string} */
+            stage: "ANALYSIS" | "SUBMISSION" | "CLOSURE";
+            /** Format: date-time */
+            requestedDueAt: string;
+            reason: string;
+            expectedRowVersion: number;
+            expectedContentVersion: number;
+            expectedInstanceVersion: number;
+        };
+        SupplierEightDDeadlineDecisionDto: {
+            expectedVersion: number;
+            comment: string;
+            /** @enum {string} */
+            duty: "SQE" | "MANAGER";
+            /** @enum {string} */
+            decision: "APPROVE" | "RETURN";
+        };
+        SupplierEightDDeadlineCancelDto: {
+            expectedVersion: number;
+            comment: string;
+        };
+        ProcessEightDReportSourceDto: {
+            sourceDomain: string;
+            sourceType: string;
+            /** Format: uuid */
+            sourceId: string;
+            sourceVersion: number;
+            sourceSnapshot: {
+                [key: string]: unknown;
+            };
+        };
+        ProcessEightDReportSnapshotDto: {
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+            sources: components["schemas"]["ProcessEightDReportSourceDto"][];
+            problem: {
+                [key: string]: unknown;
+            };
+            instance: {
+                [key: string]: unknown;
+            };
+            deadlines: {
+                [key: string]: string | null;
+            };
+            contentVersion: number;
+            rowVersion: number;
+            ownerUserId: string | null;
+            /** Format: uuid */
+            professionalUserId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            collaboratorUserIds: string[];
+            analysisCompletedAt: string | null;
+            submittedAt: string | null;
+            approval?: {
+                [key: string]: unknown;
+            };
+            approvalRounds?: {
+                [key: string]: unknown;
+            }[];
+        };
+        ProcessEightDReportAttachmentDto: {
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            contentType: string;
+            sizeBytes: number;
+            sha256: string;
+            objectVersionId: string;
+            version: number;
+            uses: string[];
+            /** @enum {string} */
+            rendering: "EMBEDDED" | "LISTED";
+            note: string;
+        };
+        SupplierEightDControlledReportDto: {
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** @enum {string} */
+            view: "CURRENT" | "APPROVED" | "HISTORICAL";
+            /** Format: uuid */
+            revisionId: string | null;
+            /** @enum {string} */
+            status: "DRAFT" | "IN_REVIEW" | "CLOSED_SUPPLEMENT" | "APPROVED" | "HISTORICAL";
+            label: string;
+            contentVersion: number;
+            rowVersion: number;
+            /** Format: date-time */
+            generatedAt: string;
+            snapshot: components["schemas"]["ProcessEightDReportSnapshotDto"];
+            attachments: components["schemas"]["ProcessEightDReportAttachmentDto"][];
+            /** Format: uuid */
+            supplierProblemId: string;
+        };
+        SupplierEightDRevisionDto: {
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            approved: boolean;
+        };
+        SupplierEightDRevisionPageDto: {
+            items: components["schemas"]["SupplierEightDRevisionDto"][];
+            nextBefore: number | null;
+        };
+        SupplierCopySourceDto: {
+            /** @enum {string} */
+            kind: "PROCESS_LEDGER" | "CUSTOMER_LEDGER" | "NEW_PRODUCT_SELECTION";
+            /** Format: uuid */
+            sourceId: string;
+            sourceVersion: number;
+            /** Format: uuid */
+            materialItemId?: string;
+        };
+        SupplierCopyPreviewInputDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            supplierProfileId: string;
+            sources: components["schemas"]["SupplierCopySourceDto"][];
+        };
+        SupplierCopyMaterialDto: {
+            /** Format: uuid */
+            id: string;
+            materialCode: string | null;
+            materialName: string | null;
+            materialBatch: string | null;
+        };
+        SupplierCopyFactDto: {
+            factKey: string;
+            defectDescription: string;
+            defectQuantity: number | null;
+            materials: components["schemas"]["SupplierCopyMaterialDto"][];
+        };
+        SupplierCopyPreviewDto: {
+            /** Format: uuid */
+            token: string;
+            /** Format: date-time */
+            expiresAt: string;
+            facts: components["schemas"]["SupplierCopyFactDto"][];
+        };
+        SupplierCopyDraftInputDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            token: string;
+            draft: components["schemas"]["SupplierProblemDraftDto"];
+        };
+        SupplierCopyDraftReceiptDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @enum {string} */
+            stage: "DRAFT";
+        };
+        SupplierSourceCollaborationTaskDto: {
+            id: string;
+            /** @enum {string} */
+            kind: "SOURCE_SQE_COLLABORATION";
+            title: string;
+            /** @enum {string} */
+            sourceKind: "PROCESS_LEDGER" | "CUSTOMER_LEDGER" | "NEW_PRODUCT_SELECTION";
+            /** Format: uuid */
+            sourceId: string;
+            /** Format: uuid */
+            materialItemId: string;
+            /** @enum {string|null} */
+            verification: "UNREVIEWED" | "CONFIRMED_DEFECT" | "NOT_MATERIAL" | "NEGOTIATED" | "RETURN_ANALYSIS" | null;
+            progress: string | null;
+            result: string | null;
+            link: string;
+        };
+        SupplierSourceCollaborationPageDto: {
+            items: components["schemas"]["SupplierSourceCollaborationTaskDto"][];
+            scannedCount: number;
+            /** Format: uuid */
+            nextCursor: string | null;
         };
         CreateProcessProductionDto: {
             /** Format: uuid */
@@ -10222,141 +11232,6 @@ export interface components {
         ProcessEightDNotificationPageDto: {
             items: components["schemas"]["ProcessEightDNotificationDto"][];
             total: number;
-        };
-        ProcessEightDTemporaryMeasureDto: {
-            id: string;
-            description: string;
-            departmentOwner: string;
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            introducedAt: string | null;
-            fileIds: string[];
-        };
-        ProcessEightDContainmentDto: {
-            id: string;
-            group: string;
-            location: string;
-            quantity: number | null;
-            measure: string;
-            owner: string;
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            plannedAt: string | null;
-            completion: string;
-            ngQuantity: number | null;
-        };
-        ProcessEightDCorrectiveActionDto: {
-            id: string;
-            /** @enum {string} */
-            causeKind: "OCCURRENCE" | "ESCAPE" | "SYSTEM";
-            action: string;
-            owner: string;
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            plannedAt: string | null;
-            verificationMethod: string;
-            fileIds: string[];
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            implementationAt: string | null;
-            result: string;
-            beforeState: string;
-            afterState: string;
-            firstBatch: string;
-            followUpBatchCount: number | null;
-            followUpDuration: string;
-            verificationRecord: string;
-            verificationFileIds: string[];
-            effective: boolean | null;
-        };
-        ProcessEightDHorizontalDeploymentDto: {
-            id: string;
-            scope: string;
-            inspectionResult: string;
-            action: string;
-            owner: string;
-            completion: string;
-            fileIds: string[];
-        };
-        ProcessEightDStandardizationDto: {
-            id: string;
-            key: string;
-            documentName: string;
-            needsUpdate: boolean | null;
-            departmentOwner: string;
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            plannedAt: string | null;
-            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
-            completedAt: string | null;
-            /** @description COMPLETED 表示本项完成；NOT_APPLICABLE 须说明 reason；不等于受控文件已发布 */
-            status: string;
-            reason: string;
-        };
-        ProcessEightDDocumentDto: {
-            description: string;
-            okFileIds: string[];
-            ngFileIds: string[];
-            temporaryMeasures: components["schemas"]["ProcessEightDTemporaryMeasureDto"][];
-            containment: components["schemas"]["ProcessEightDContainmentDto"][];
-            optionalAffectedContainment: components["schemas"]["ProcessEightDContainmentDto"][];
-            analysisProcess: string;
-            analysisFileIds: string[];
-            occurrenceCause: string;
-            escapeCause: string;
-            systemCause: string;
-            correctiveActions: components["schemas"]["ProcessEightDCorrectiveActionDto"][];
-            horizontalDeployment: components["schemas"]["ProcessEightDHorizontalDeploymentDto"][];
-            standardization: components["schemas"]["ProcessEightDStandardizationDto"][];
-            closureSummary: string;
-        };
-        ProcessEightDReportSourceDto: {
-            sourceDomain: string;
-            sourceType: string;
-            /** Format: uuid */
-            sourceId: string;
-            sourceVersion: number;
-            sourceSnapshot: {
-                [key: string]: unknown;
-            };
-        };
-        ProcessEightDReportSnapshotDto: {
-            document: components["schemas"]["ProcessEightDDocumentDto"];
-            sources: components["schemas"]["ProcessEightDReportSourceDto"][];
-            problem: {
-                [key: string]: unknown;
-            };
-            instance: {
-                [key: string]: unknown;
-            };
-            deadlines: {
-                [key: string]: string | null;
-            };
-            contentVersion: number;
-            rowVersion: number;
-            ownerUserId: string | null;
-            /** Format: uuid */
-            professionalUserId: string;
-            /** Format: uuid */
-            responsibleSectionDepartmentId: string;
-            collaboratorUserIds: string[];
-            analysisCompletedAt: string | null;
-            submittedAt: string | null;
-            approval?: {
-                [key: string]: unknown;
-            };
-            approvalRounds?: {
-                [key: string]: unknown;
-            }[];
-        };
-        ProcessEightDReportAttachmentDto: {
-            /** Format: uuid */
-            id: string;
-            originalName: string;
-            contentType: string;
-            sizeBytes: number;
-            sha256: string;
-            objectVersionId: string;
-            version: number;
-            uses: string[];
-            /** @enum {string} */
-            rendering: "EMBEDDED" | "LISTED";
-            note: string;
         };
         ProcessEightDControlledReportDto: {
             /** Format: uuid */
@@ -11707,402 +12582,6 @@ export interface components {
             /** Format: date-time */
             closureDueAt?: string;
         };
-        MaterialMasterDto: {
-            /** Format: uuid */
-            id: string;
-            materialCode: string;
-            materialName: string;
-            version: number;
-        };
-        CreateMaterialMasterDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            materialCode: string;
-            materialName: string;
-        };
-        UpdateMaterialMasterDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            materialName: string;
-        };
-        MaterialMasterImportRowDto: {
-            rowNumber: number;
-            materialCode: string;
-            materialName: string;
-        };
-        MaterialMasterImportDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            rows: components["schemas"]["MaterialMasterImportRowDto"][];
-        };
-        MaterialMasterImportItemDto: {
-            rowNumber: number;
-            code: string;
-            /** @enum {string} */
-            status: "CREATED" | "SKIPPED_DUPLICATE" | "FAILED";
-            errorCode?: string;
-        };
-        MaterialMasterImportResultDto: {
-            items: components["schemas"]["MaterialMasterImportItemDto"][];
-            created: number;
-            skipped: number;
-            failed: number;
-        };
-        AuditPlanResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organization_id: string;
-            year: number;
-            title: string;
-            /** @enum {string} */
-            audit_type: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
-            /** Format: date-time */
-            planned_start: string;
-            /** Format: date-time */
-            planned_end: string;
-            /** @enum {string} */
-            status: "PLANNED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-            version: number;
-        };
-        CreateAuditPlanDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            year: number;
-            title: string;
-            /** @enum {string} */
-            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
-            /** Format: date-time */
-            plannedStart: string;
-            /** Format: date-time */
-            plannedEnd: string;
-        };
-        UpdateAuditPlanDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            title?: string;
-            /** Format: date-time */
-            plannedStart?: string;
-            /** Format: date-time */
-            plannedEnd?: string;
-            /** @enum {string} */
-            status?: "PLANNED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-        };
-        PostponementDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            /** Format: date-time */
-            proposedStart: string;
-            /** Format: date-time */
-            proposedEnd: string;
-            reason: string;
-        };
-        AuditPostponementResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            plan_id: string;
-            /** @enum {string} */
-            status: "PENDING" | "APPROVED" | "REJECTED";
-            plan_version: number;
-            version: number;
-            /** Format: date-time */
-            proposed_start: string;
-            /** Format: date-time */
-            proposed_end: string;
-        };
-        DecisionDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            approve: boolean;
-            expectedVersion: number;
-        };
-        CreateAuditTemplateDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            name: string;
-            /** @enum {string} */
-            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
-            definition: Record<string, never>;
-        };
-        AuditTemplateResponseDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            /** @enum {string} */
-            status: "DRAFT" | "PUBLISHED";
-            version: number;
-            draft_definition: Record<string, never>;
-        };
-        UpdateAuditTemplateDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            definition: Record<string, never>;
-        };
-        PublishAuditTemplateDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-        };
-        PublishedAuditTemplateResponseDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            /** @enum {string} */
-            status: "DRAFT" | "PUBLISHED";
-            version: number;
-            draft_definition: Record<string, never>;
-            /** Format: uuid */
-            versionId: string;
-            publishedVersion: number;
-        };
-        CreateAuditExecutionDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            /** Format: uuid */
-            planId: string;
-            /** Format: uuid */
-            templateVersionId: string;
-        };
-        AuditExecutionResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            plan_id: string;
-            /** Format: uuid */
-            template_version_id: string;
-            /** @enum {string} */
-            status: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
-            version: number;
-        };
-        AuditExecutionItemDto: {
-            key: string;
-            text: string;
-        };
-        AuditChecklistResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            execution_id: string;
-            item_key: string;
-            /** @enum {string} */
-            result: "OK" | "NG" | "NA";
-            note?: string | null;
-            version: number;
-        };
-        AuditExecutionSnapshotDto: {
-            execution: components["schemas"]["AuditExecutionResponseDto"];
-            items: components["schemas"]["AuditExecutionItemDto"][];
-            checklist: components["schemas"]["AuditChecklistResponseDto"][];
-        };
-        AuditNcResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            execution_id: string;
-            /** Format: uuid */
-            checklist_result_id: string;
-            /** @enum {string} */
-            severity: "MINOR" | "MAJOR" | "CRITICAL";
-            /** @enum {string} */
-            status: "OPEN" | "ASSIGNED" | "RESPONDED" | "VERIFIED" | "REJECTED" | "CLOSED";
-            /** Format: date-time */
-            due_at: string;
-            due_policy_version?: Record<string, never> | null;
-            calendar_version?: Record<string, never> | null;
-            due_business_days?: Record<string, never> | null;
-            /** Format: uuid */
-            assignee_user_id?: string | null;
-            response?: string | null;
-            verification_note?: string | null;
-            /** Format: uuid */
-            verified_by_id?: string | null;
-            /** Format: uuid */
-            closed_by_id?: string | null;
-            /** Format: uuid */
-            problem_index_id?: string | null;
-            version: number;
-        };
-        AuditExecutionReportDto: {
-            execution: components["schemas"]["AuditExecutionResponseDto"];
-            checklist: components["schemas"]["AuditChecklistResponseDto"][];
-            summary: Record<string, never>;
-        };
-        AuditPlanReportDto: {
-            plan: components["schemas"]["AuditPlanResponseDto"];
-            executions: components["schemas"]["AuditExecutionResponseDto"][];
-            overdueNcCount: number;
-        };
-        ChecklistResultDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion?: number;
-            itemKey: string;
-            /** @enum {string} */
-            result: "OK" | "NG" | "NA";
-            note?: string;
-        };
-        SubmitAuditExecutionDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-        };
-        RegisterAuditDeadlinePolicyDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            policyVersion: string;
-            calendarVersion: string;
-            timeZone: string;
-            workingWeekdays: number[];
-            exceptions: Record<string, never>;
-            severityDays: Record<string, never>;
-        };
-        AuditDeadlinePolicyResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organization_id: string;
-            policy_version: string;
-            calendar_version: string;
-            time_zone: string;
-            working_weekdays: number[];
-            exceptions: Record<string, never>;
-            severity_days: Record<string, never>;
-            /** Format: date-time */
-            created_at: string;
-        };
-        AuditWorkflowBindingDto: {
-            /** Format: uuid */
-            workflowDefinitionId: string;
-            /** Format: uuid */
-            workflowVersionId: string;
-            instanceKey: string;
-        };
-        CreateNcDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            /** @enum {string} */
-            severity: "MINOR" | "MAJOR" | "CRITICAL";
-            /**
-             * Format: date-time
-             * @description 可选；如提供，必须等于服务端按登记日历计算的期限
-             */
-            dueAt?: string;
-            /** @description 整改期限政策版本 */
-            duePolicyVersion: string;
-            /** @description 工作日历版本 */
-            calendarVersion: string;
-            dueBusinessDays: number;
-            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
-        };
-        AssignNcDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            /** Format: uuid */
-            assigneeUserId: string;
-            expectedVersion: number;
-        };
-        RespondNcDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            response: string;
-        };
-        VerifyNcDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            accepted: boolean;
-            verificationNote: string;
-        };
-        CloseNcDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-        };
-        ImportAuditRowDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            /** @enum {string} */
-            sourceSystem: "CUSTOMER" | "SECOND_PARTY";
-            externalKey: string;
-            payload: Record<string, never>;
-        };
-        AuditImportRowResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organization_id: string;
-            /** @enum {string} */
-            source_system: "CUSTOMER" | "SECOND_PARTY";
-            external_key: string;
-            payload: Record<string, never>;
-            /** @enum {string} */
-            status: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
-            version: number;
-            review_note?: Record<string, never> | null;
-            /** Format: uuid */
-            problem_index_id?: Record<string, never> | null;
-            /** Format: date-time */
-            created_at: string;
-        };
-        AuditImportRowPageDto: {
-            items: components["schemas"]["AuditImportRowResponseDto"][];
-            total: number;
-            page: number;
-            pageSize: number;
-        };
-        ReviewAuditImportRowDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            /** @enum {string} */
-            decision: "ACCEPTED" | "REJECTED";
-            note?: string;
-        };
-        IssueAuditImportRowDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-            problemType: string;
-            /** @enum {string} */
-            responseForm: "BRIEF" | "EIGHT_D";
-            responsibleScope: string;
-            severity: string;
-            /** Format: uuid */
-            ownerId?: string;
-            /** Format: date-time */
-            dueAt?: string;
-            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
-        };
-        AuditImportIssueProblemDto: {
-            /** Format: uuid */
-            id: string;
-            reportNumber: string;
-            /** Format: uuid */
-            workflowInstanceId: string;
-            version: number;
-        };
-        AuditImportIssueSourceDto: {
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            createdBy: string;
-            sourceVersion: number;
-            sourceSnapshot: Record<string, never>;
-            /** Format: date-time */
-            archivedAt?: string | null;
-        };
-        AuditImportIssueResultDto: {
-            problem: components["schemas"]["AuditImportIssueProblemDto"];
-            source: components["schemas"]["AuditImportIssueSourceDto"];
-            sources: components["schemas"]["AuditImportIssueSourceDto"][];
-            replayed: boolean;
-        };
         CreateNewProductProjectDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -12784,6 +13263,402 @@ export interface components {
             analysisDueAt?: string;
             /** Format: date-time */
             closureDueAt?: string;
+        };
+        MaterialMasterDto: {
+            /** Format: uuid */
+            id: string;
+            materialCode: string;
+            materialName: string;
+            version: number;
+        };
+        CreateMaterialMasterDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            materialCode: string;
+            materialName: string;
+        };
+        UpdateMaterialMasterDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            materialName: string;
+        };
+        MaterialMasterImportRowDto: {
+            rowNumber: number;
+            materialCode: string;
+            materialName: string;
+        };
+        MaterialMasterImportDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            rows: components["schemas"]["MaterialMasterImportRowDto"][];
+        };
+        MaterialMasterImportItemDto: {
+            rowNumber: number;
+            code: string;
+            /** @enum {string} */
+            status: "CREATED" | "SKIPPED_DUPLICATE" | "FAILED";
+            errorCode?: string;
+        };
+        MaterialMasterImportResultDto: {
+            items: components["schemas"]["MaterialMasterImportItemDto"][];
+            created: number;
+            skipped: number;
+            failed: number;
+        };
+        AuditPlanResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            year: number;
+            title: string;
+            /** @enum {string} */
+            audit_type: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            /** Format: date-time */
+            planned_start: string;
+            /** Format: date-time */
+            planned_end: string;
+            /** @enum {string} */
+            status: "PLANNED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+            version: number;
+        };
+        CreateAuditPlanDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            year: number;
+            title: string;
+            /** @enum {string} */
+            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            /** Format: date-time */
+            plannedStart: string;
+            /** Format: date-time */
+            plannedEnd: string;
+        };
+        UpdateAuditPlanDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            title?: string;
+            /** Format: date-time */
+            plannedStart?: string;
+            /** Format: date-time */
+            plannedEnd?: string;
+            /** @enum {string} */
+            status?: "PLANNED" | "APPROVED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+        };
+        PostponementDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** Format: date-time */
+            proposedStart: string;
+            /** Format: date-time */
+            proposedEnd: string;
+            reason: string;
+        };
+        AuditPostponementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            plan_id: string;
+            /** @enum {string} */
+            status: "PENDING" | "APPROVED" | "REJECTED";
+            plan_version: number;
+            version: number;
+            /** Format: date-time */
+            proposed_start: string;
+            /** Format: date-time */
+            proposed_end: string;
+        };
+        DecisionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            approve: boolean;
+            expectedVersion: number;
+        };
+        CreateAuditTemplateDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            name: string;
+            /** @enum {string} */
+            auditType: "SYSTEM" | "PROCESS" | "PRODUCT" | "SECOND_PARTY" | "CUSTOMER";
+            definition: Record<string, never>;
+        };
+        AuditTemplateResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            draft_definition: Record<string, never>;
+        };
+        UpdateAuditTemplateDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            definition: Record<string, never>;
+        };
+        PublishAuditTemplateDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        PublishedAuditTemplateResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            version: number;
+            draft_definition: Record<string, never>;
+            /** Format: uuid */
+            versionId: string;
+            publishedVersion: number;
+        };
+        CreateAuditExecutionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            templateVersionId: string;
+        };
+        AuditExecutionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            plan_id: string;
+            /** Format: uuid */
+            template_version_id: string;
+            /** @enum {string} */
+            status: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
+            version: number;
+        };
+        AuditExecutionItemDto: {
+            key: string;
+            text: string;
+        };
+        AuditChecklistResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            execution_id: string;
+            item_key: string;
+            /** @enum {string} */
+            result: "OK" | "NG" | "NA";
+            note?: string | null;
+            version: number;
+        };
+        AuditExecutionSnapshotDto: {
+            execution: components["schemas"]["AuditExecutionResponseDto"];
+            items: components["schemas"]["AuditExecutionItemDto"][];
+            checklist: components["schemas"]["AuditChecklistResponseDto"][];
+        };
+        AuditNcResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            execution_id: string;
+            /** Format: uuid */
+            checklist_result_id: string;
+            /** @enum {string} */
+            severity: "MINOR" | "MAJOR" | "CRITICAL";
+            /** @enum {string} */
+            status: "OPEN" | "ASSIGNED" | "RESPONDED" | "VERIFIED" | "REJECTED" | "CLOSED";
+            /** Format: date-time */
+            due_at: string;
+            due_policy_version?: Record<string, never> | null;
+            calendar_version?: Record<string, never> | null;
+            due_business_days?: Record<string, never> | null;
+            /** Format: uuid */
+            assignee_user_id?: string | null;
+            response?: string | null;
+            verification_note?: string | null;
+            /** Format: uuid */
+            verified_by_id?: string | null;
+            /** Format: uuid */
+            closed_by_id?: string | null;
+            /** Format: uuid */
+            problem_index_id?: string | null;
+            version: number;
+        };
+        AuditExecutionReportDto: {
+            execution: components["schemas"]["AuditExecutionResponseDto"];
+            checklist: components["schemas"]["AuditChecklistResponseDto"][];
+            summary: Record<string, never>;
+        };
+        AuditPlanReportDto: {
+            plan: components["schemas"]["AuditPlanResponseDto"];
+            executions: components["schemas"]["AuditExecutionResponseDto"][];
+            overdueNcCount: number;
+        };
+        ChecklistResultDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion?: number;
+            itemKey: string;
+            /** @enum {string} */
+            result: "OK" | "NG" | "NA";
+            note?: string;
+        };
+        SubmitAuditExecutionDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        RegisterAuditDeadlinePolicyDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            policyVersion: string;
+            calendarVersion: string;
+            timeZone: string;
+            workingWeekdays: number[];
+            exceptions: Record<string, never>;
+            severityDays: Record<string, never>;
+        };
+        AuditDeadlinePolicyResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            policy_version: string;
+            calendar_version: string;
+            time_zone: string;
+            working_weekdays: number[];
+            exceptions: Record<string, never>;
+            severity_days: Record<string, never>;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditWorkflowBindingDto: {
+            /** Format: uuid */
+            workflowDefinitionId: string;
+            /** Format: uuid */
+            workflowVersionId: string;
+            instanceKey: string;
+        };
+        CreateNcDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            severity: "MINOR" | "MAJOR" | "CRITICAL";
+            /**
+             * Format: date-time
+             * @description 可选；如提供，必须等于服务端按登记日历计算的期限
+             */
+            dueAt?: string;
+            /** @description 整改期限政策版本 */
+            duePolicyVersion: string;
+            /** @description 工作日历版本 */
+            calendarVersion: string;
+            dueBusinessDays: number;
+            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
+        };
+        AssignNcDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            assigneeUserId: string;
+            expectedVersion: number;
+        };
+        RespondNcDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            response: string;
+        };
+        VerifyNcDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            accepted: boolean;
+            verificationNote: string;
+        };
+        CloseNcDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        ImportAuditRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** @enum {string} */
+            sourceSystem: "CUSTOMER" | "SECOND_PARTY";
+            externalKey: string;
+            payload: Record<string, never>;
+        };
+        AuditImportRowResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** @enum {string} */
+            source_system: "CUSTOMER" | "SECOND_PARTY";
+            external_key: string;
+            payload: Record<string, never>;
+            /** @enum {string} */
+            status: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
+            version: number;
+            review_note?: Record<string, never> | null;
+            /** Format: uuid */
+            problem_index_id?: Record<string, never> | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditImportRowPageDto: {
+            items: components["schemas"]["AuditImportRowResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ReviewAuditImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            /** @enum {string} */
+            decision: "ACCEPTED" | "REJECTED";
+            note?: string;
+        };
+        IssueAuditImportRowDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+            problemType: string;
+            /** @enum {string} */
+            responseForm: "BRIEF" | "EIGHT_D";
+            responsibleScope: string;
+            severity: string;
+            /** Format: uuid */
+            ownerId?: string;
+            /** Format: date-time */
+            dueAt?: string;
+            workflowBinding: components["schemas"]["AuditWorkflowBindingDto"];
+        };
+        AuditImportIssueProblemDto: {
+            /** Format: uuid */
+            id: string;
+            reportNumber: string;
+            /** Format: uuid */
+            workflowInstanceId: string;
+            version: number;
+        };
+        AuditImportIssueSourceDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            createdBy: string;
+            sourceVersion: number;
+            sourceSnapshot: Record<string, never>;
+            /** Format: date-time */
+            archivedAt?: string | null;
+        };
+        AuditImportIssueResultDto: {
+            problem: components["schemas"]["AuditImportIssueProblemDto"];
+            source: components["schemas"]["AuditImportIssueSourceDto"];
+            sources: components["schemas"]["AuditImportIssueSourceDto"][];
+            replayed: boolean;
         };
         MetricDefinitionDto: {
             /** Format: uuid */
@@ -14544,7 +15419,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "ORGANIZATION_DIRECTORY_QUERY_INVALID" | "SUPPLIER_EIGHT_D_DOCUMENT_INVALID" | "SUPPLIER_EIGHT_D_ANALYSIS_INCOMPLETE" | "SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE" | "SUPPLIER_EIGHT_D_DUE_AT_INVALID" | "SUPPLIER_EIGHT_D_DUE_AT_REQUIRED" | "SUPPLIER_EIGHT_D_EVIDENCE_CHANGED" | "SUPPLIER_EIGHT_D_EVIDENCE_INVALID" | "SUPPLIER_EIGHT_D_EVIDENCE_NOT_CLEAN" | "SUPPLIER_EIGHT_D_EXTENSION_REQUIRED" | "SUPPLIER_EIGHT_D_REQUIRED" | "SUPPLIER_EIGHT_D_RESPONDER_INVALID" | "SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_REVISION_NOT_FOUND" | "SUPPLIER_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT" | "SUPPLIER_EIGHT_D_REPORT_PRIVATE_SUPPLEMENT" | "SUPPLIER_EIGHT_D_REPORT_ACCESS_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_INVALID" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_OBJECT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_QUERY_INVALID" | "SUPPLIER_EIGHT_D_REPORT_RENDER_FAILED" | "SUPPLIER_EIGHT_D_REPORT_STORAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -20537,6 +21412,42 @@ export interface operations {
             };
         };
     };
+    SupplierWorkflowBindingController_activate: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateSupplierWorkflowBindingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierWorkflowBindingDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     SupplierMasterController_import: {
         parameters: {
             query?: never;
@@ -20732,6 +21643,1174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierAccountDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDAssignmentController_list: {
+        parameters: {
+            query?: {
+                departmentId?: string;
+                search?: string;
+                limit?: components["schemas"]["Object"];
+                offset?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDAssignmentPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDTaskController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                supplierProblemId?: string;
+                /** @description Last examined supplier problem ID, not a task ID. */
+                cursor?: string;
+                /** @description Maximum problems examined; each problem may have multiple real duties. */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDTaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDTaskController_notifications: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                supplierProblemId?: string;
+                /** @description Last examined supplier problem ID, not a task ID. */
+                cursor?: string;
+                /** @description Maximum problems examined; each problem may have multiple real duties. */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDTaskController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                supplierProblemId?: string;
+                /** @description Last examined supplier problem ID, not a task ID. */
+                cursor?: string;
+                /** @description Maximum problems examined; each problem may have multiple real duties. */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDTaskPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDTaskController_notifications: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                supplierProblemId?: string;
+                /** @description Last examined supplier problem ID, not a task ID. */
+                cursor?: string;
+                /** @description Maximum problems examined; each problem may have multiple real duties. */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDNotificationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_issue: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueSupplierEightDDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_save: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSupplierEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_analysisComplete: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDAnalysisCompleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDController_deadlines: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlinesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_save: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSupplierEightDDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_analysisComplete: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDAnalysisCompleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDisclosureController_preview: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierDisclosurePreviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDisclosurePreviewResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDisclosureController_release: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierDisclosureReleaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDisclosureReleaseResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDDisclosureController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDeadlineController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDeadlineController_request: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlineRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDeadlineController_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlineDecisionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDDeadlineController_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlineCancelDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDDeadlineController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDDeadlineController_request: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlineRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDDeadlineController_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierEightDDeadlineCancelDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDDeadlineResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDReportController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDControlledReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDReportController_pdf: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDReportController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDControlledReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDReportController_pdf: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
+                revisionId?: string;
+                view?: "CURRENT" | "APPROVED";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDRevisionController_list: {
+        parameters: {
+            query?: {
+                pageSize?: components["schemas"]["Object"];
+                before?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDRevisionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDRevisionController_list: {
+        parameters: {
+            query?: {
+                pageSize?: components["schemas"]["Object"];
+                before?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierEightDRevisionPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDSourceController_preview: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierCopyPreviewInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCopyPreviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierEightDSourceController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierCopyDraftInputDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierCopyDraftReceiptDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierSourceCollaborationController_tasks: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                cursor?: string;
+                /** @description Maximum candidate problems examined, not a total task count. */
+                scanLimit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierSourceCollaborationPageDto"];
                 };
             };
             default: {
@@ -24878,994 +26957,6 @@ export interface operations {
             };
         };
     };
-    MaterialMasterController_list: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialMasterDto"][];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    MaterialMasterController_create: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateMaterialMasterDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialMasterDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    MaterialMasterController_update: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateMaterialMasterDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialMasterDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    MaterialMasterController_import: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialMasterImportDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialMasterImportResultDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_plan: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPlanResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_updatePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAuditPlanDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPlanResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_createPlan: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAuditPlanDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPlanResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_postpone: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PostponementDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_decide: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DecisionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_createTemplate: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAuditTemplateDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_updateTemplate: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAuditTemplateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_publishTemplate: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PublishAuditTemplateDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublishedAuditTemplateResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_createExecution: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAuditExecutionDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_execution: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditExecutionSnapshotDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_executionNcs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"][];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_executionReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditExecutionReportDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_planReport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditPlanReportDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_checklist: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChecklistResultDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditChecklistResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_submit: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubmitAuditExecutionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_registerDeadlinePolicy: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterAuditDeadlinePolicyDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditDeadlinePolicyResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_createNc: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                executionId: string;
-                resultId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateNcDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_assign: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignNcDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_respond: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RespondNcDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_verify: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyNcDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_close: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloseNcDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditNcResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_imports: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-                sourceSystem?: "CUSTOMER" | "SECOND_PARTY";
-                status?: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
-                page?: components["schemas"]["Object"];
-                pageSize?: components["schemas"]["Object"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditImportRowPageDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_importRow: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportAuditRowDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_reviewImport: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReviewAuditImportRowDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AuditManagementController_issueImport: {
-        parameters: {
-            query?: never;
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueAuditImportRowDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditImportIssueResultDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     NewProductQualityController_createProject: {
         parameters: {
             query?: never;
@@ -27860,6 +28951,994 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_create: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaterialMasterDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMaterialMasterDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    MaterialMasterController_import: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialMasterImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialMasterImportResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_plan: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_updatePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAuditPlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_createPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAuditPlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPlanResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_postpone: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostponementDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPostponementResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_createTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAuditTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_updateTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAuditTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_publishTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishAuditTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedAuditTemplateResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_createExecution: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAuditExecutionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_execution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionSnapshotDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_executionNcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_executionReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_planReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPlanReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_checklist: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecklistResultDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditChecklistResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitAuditExecutionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExecutionResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_registerDeadlinePolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterAuditDeadlinePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditDeadlinePolicyResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_createNc: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                executionId: string;
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNcDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_assign: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignNcDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_respond: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespondNcDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_verify: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyNcDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_close: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseNcDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditNcResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_imports: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                sourceSystem?: "CUSTOMER" | "SECOND_PARTY";
+                status?: "PENDING_REVIEW" | "ACCEPTED" | "REJECTED" | "ISSUED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_importRow: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportAuditRowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_reviewImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewAuditImportRowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportRowResponseDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AuditManagementController_issueImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueAuditImportRowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditImportIssueResultDto"];
                 };
             };
             default: {

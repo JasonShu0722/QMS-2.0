@@ -1,6 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
-import type { Prisma, ProblemIndex, WorkflowInstance, WorkflowNode } from '../../generated/prisma/client.js';
+import { Prisma, type ProblemIndex, type WorkflowInstance, type WorkflowNode } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
@@ -171,16 +171,28 @@ export class SupplierQualityService {
     portal ? this.portal(actor) : this.internal(actor);
     return this.prisma.$transaction(async (transaction) => {
       const granted = await assertAdminAccess(transaction, actor, this.scope(actor), portal ? 'supplier-quality:responses:read' : 'supplier-quality:problems:read');
-      const where: Prisma.SupplierQualityProblemWhereInput = { AND: [this.resourceWhere(actor, portal), {
-        ...(query.severity ? { severity: query.severity } : {}), ...(query.responseForm ? { responseForm: query.responseForm } : {}),
-        ...(query.stage ? { problemIndexId: query.stage === 'DRAFT' ? null : { not: null } } : {}),
-        ...(query.search ? { OR: [{ title: { contains: query.search, mode: 'insensitive' } }, { materialCode: { contains: query.search, mode: 'insensitive' } }] } : {}),
-      }] };
-      const [records, total] = await Promise.all([
-        transaction.supplierQualityProblem.findMany({ where, include: problemInclude, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: query.pageSize, skip: (query.page - 1) * query.pageSize }),
-        transaction.supplierQualityProblem.count({ where }),
+      const where = Prisma.sql`${this.readScope(actor, portal, granted)}
+        ${query.severity ? Prisma.sql`AND supplier.severity = ${query.severity}` : Prisma.empty}
+        ${query.responseForm ? Prisma.sql`AND supplier.response_form = ${query.responseForm}` : Prisma.empty}
+        ${query.stage ? query.stage === 'DRAFT' ? Prisma.sql`AND supplier.problem_index_id IS NULL` : Prisma.sql`AND supplier.problem_index_id IS NOT NULL` : Prisma.empty}
+        ${query.search ? Prisma.sql`AND (strpos(lower(supplier.title), lower(${query.search})) > 0 OR strpos(lower(supplier.material_code), lower(${query.search})) > 0)` : Prisma.empty}`;
+      const [page, [count]] = await Promise.all([
+        transaction.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT supplier.id FROM supplier_quality_problems supplier WHERE ${where}
+          ORDER BY supplier.updated_at DESC, supplier.id ASC LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`),
+        transaction.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT count(*) AS total FROM supplier_quality_problems supplier WHERE ${where}`),
       ]);
-      return { items: await Promise.all(records.map((record) => this.serialize(transaction, actor, record, granted))), total, canCreateDraft: !portal && granted.includes('supplier-quality:problems:write') };
+      const total = Number(count!.total);
+      const records = page.length ? await transaction.supplierQualityProblem.findMany({ where: { id: { in: page.map(row => row.id) } },
+        include: { profile: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] }) : [];
+      const controlled = records.length ? await transaction.$queryRaw<{ id: string }[]>`SELECT supplier_problem_id AS id
+        FROM supplier_eight_d_controls WHERE supplier_problem_id = ANY(${records.map(record => record.id)}::uuid[])` : [];
+      const controlledIds = new Set(controlled.map(record => record.id));
+      const legacyIds = records.filter(record => !controlledIds.has(record.id)).map(record => record.id);
+      const drafts = legacyIds.length ? await transaction.supplierResponseDraft.findMany({ where: { problemId: { in: legacyIds } } }) : [];
+      const draftByProblem = new Map(drafts.map(draft => [draft.problemId, draft]));
+      return { items: await Promise.all(records.map(record => this.serialize(transaction, actor,
+        { ...record, responseDraft: draftByProblem.get(record.id) ?? null }, granted, controlledIds.has(record.id)))),
+      total, canCreateDraft: !portal && granted.includes('supplier-quality:problems:write') };
     });
   }
 
@@ -188,6 +200,9 @@ export class SupplierQualityService {
     portal ? this.portal(actor) : this.internal(actor);
     return this.prisma.$transaction(async (transaction) => {
       const granted = await assertAdminAccess(transaction, actor, this.scope(actor), portal ? 'supplier-quality:responses:read' : 'supplier-quality:problems:read');
+      const [visible] = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT supplier.id FROM supplier_quality_problems supplier
+        WHERE supplier.id = ${id}::uuid AND ${this.readScope(actor, portal, granted)}`);
+      if (!visible) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
       return this.serializeDetail(transaction, actor, await this.find(transaction, actor, id, portal), granted, query);
     }, { isolationLevel: 'ReadCommitted' });
   }
@@ -203,10 +218,15 @@ export class SupplierQualityService {
   }
 
   async createDraftFromIncoming(transaction: AdminTransaction, actor: AdminActor, dto: SupplierProblemDraftDto, traceId: string): Promise<{ id: string; version: number }> {
+    return this.createDraftInTransaction(transaction, actor, dto, traceId);
+  }
+
+  async createDraftInTransaction(transaction: AdminTransaction, actor: AdminActor, dto: SupplierProblemDraftDto, traceId: string): Promise<{ id: string; version: number }> {
     this.internal(actor);
     const organizationId = this.scope(actor);
     if (dto.organizationId && dto.organizationId !== organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(transaction, actor, organizationId, 'supplier-quality:problems:write');
+    await transaction.$queryRaw`SELECT id FROM supplier_business_profiles WHERE id = ${dto.profileId}::uuid AND owner_organization_id = ${organizationId}::uuid FOR SHARE`;
     const facts = await this.facts(transaction, actor, dto);
     const record = await transaction.supplierQualityProblem.create({ data: { ...facts, ownerOrganizationId: organizationId, profileId: dto.profileId, createdById: actor.id } });
     await this.record(transaction, actor, organizationId, 'SUPPLIER_PROBLEM_DRAFT_CREATED', record.id, traceId);
@@ -222,6 +242,7 @@ export class SupplierQualityService {
       if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       let record = await transaction.supplierQualityProblem.findFirst({ where: { id, ownerOrganizationId: organizationId }, include: problemInclude });
       if (!record) adminError('SUPPLIER_RECORD_NOT_FOUND', 404);
+      if (await this.controlled(transaction, record.id)) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       if (record.problemIndexId && !record.workflowBindingId) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       if (!record.problemIndexId && record.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
       if (record.replyMode === 'SUPPLIER') {
@@ -234,6 +255,7 @@ export class SupplierQualityService {
       }
       const issuedRecord = record;
       const binding = await this.bindings.resolve(transaction, organizationId, { severity: record.severity as never, responseForm: record.responseForm as never, replyMode: record.replyMode as never });
+      if (binding.controlledEightD) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       const problemIndex = await this.indexes.createFromDomain(transaction as never, {
         organizationId, domainCode: 'supplier-quality', problemType: record.responseForm, sourceType: 'supplier-quality', sourceId: record.id,
         severity: record.severity, ...(record.supplierOrganizationId ? { responsibleParty: record.supplierOrganizationId } : {}), ownerId: actor.id,
@@ -300,6 +322,7 @@ export class SupplierQualityService {
     if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
     return this.prisma.$transaction(async (transaction) => {
       const record = await this.find(transaction, actor, id, portal);
+      if (await this.controlled(transaction, record.id)) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       const granted = await assertAdminAccess(transaction, actor, actor.accountType === 'SUPPLIER' ? actor.organizationId : record.ownerOrganizationId, 'supplier-quality:responses:write');
       if (!record.problemIndexId) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       const content = this.validate(() => validateResponseContent(record.responseForm as 'BRIEF' | 'EIGHT_D', dto.content, 'SUBMIT'));
@@ -354,6 +377,7 @@ export class SupplierQualityService {
     if (!key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
     return this.prisma.$transaction(async (transaction) => {
       const record = await this.find(transaction, actor, id, false);
+      if (await this.controlled(transaction, record.id)) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       const granted = await assertAdminAccess(transaction, actor, record.ownerOrganizationId, 'supplier-quality:problems:write');
       if (!record.problemIndexId) adminError('SUPPLIER_DRAFT_LOCKED', 409);
       if (record.version !== dto.expectedContentVersion) adminError('CONCURRENCY_CONFLICT', 409);
@@ -409,6 +433,30 @@ export class SupplierQualityService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
+  // Keep controlled read eligibility ahead of count/page selection, without changing legacy write permissions.
+  private readScope(actor: AdminActor, portal: boolean, granted: string[]): Prisma.Sql {
+    const scope = portal
+      ? Prisma.sql`supplier.supplier_organization_id = ${actor.organizationId}::uuid AND supplier.reply_mode = 'SUPPLIER'
+          AND supplier.released_to_supplier_at IS NOT NULL AND supplier.problem_index_id IS NOT NULL`
+      : Prisma.sql`supplier.owner_organization_id = ${this.scope(actor)}::uuid`;
+    const controlledAccess = portal
+      ? Prisma.sql`problem.archived_at IS NULL AND problem.status <> 'ARCHIVED'`
+      : Prisma.sql`${granted.includes('supplier-quality:issues:read')} AND control.organization_id = ${actor.organizationId}::uuid`;
+    return Prisma.sql`${scope} AND (
+      NOT EXISTS (SELECT 1 FROM supplier_eight_d_controls control
+        WHERE control.supplier_problem_id = supplier.id OR control.problem_index_id = supplier.problem_index_id)
+      OR EXISTS (SELECT 1 FROM supplier_eight_d_controls control
+        JOIN problem_indexes problem ON problem.id = control.problem_index_id AND problem.organization_id = control.organization_id
+        JOIN organizations owner ON owner.id = control.organization_id AND owner.type = 'INTERNAL' AND owner.status = 'ACTIVE'
+        JOIN supplier_business_profiles profile ON profile.id = supplier.profile_id AND profile.owner_organization_id = owner.id
+          AND profile.supplier_organization_id IS NOT DISTINCT FROM supplier.supplier_organization_id
+        WHERE control.supplier_problem_id = supplier.id AND control.organization_id = supplier.owner_organization_id
+          AND problem.id = supplier.problem_index_id AND problem.source_id = supplier.id
+          AND problem.domain_code = 'supplier-quality' AND problem.source_type = 'supplier-quality'
+          AND problem.problem_type = 'EIGHT_D' AND supplier.response_form = 'EIGHT_D' AND ${controlledAccess})
+    )`;
+  }
+
   private resourceWhere(actor: AdminActor, portal: boolean): Prisma.SupplierQualityProblemWhereInput {
     return portal ? { supplierOrganizationId: actor.organizationId, replyMode: 'SUPPLIER', releasedToSupplierAt: { not: null }, problemIndexId: { not: null } } : { ownerOrganizationId: this.scope(actor) };
   }
@@ -429,6 +477,7 @@ export class SupplierQualityService {
 
   private async openForDraft(transaction: AdminTransaction, record: ProblemRecord) {
     if (!record.problemIndexId) return true;
+    if (await this.controlled(transaction, record.id)) return false;
     const index = await transaction.problemIndex.findFirst({ where: { id: record.problemIndexId, organizationId: record.ownerOrganizationId, archivedAt: null }, select: { status: true, workflowInstanceId: true } });
     if (!index || !['OPEN', 'IN_PROGRESS', 'PENDING'].includes(String(index.status)) || !index.workflowInstanceId) return false;
     const instance = await transaction.workflowInstance.findFirst({ where: { id: index.workflowInstanceId, organizationId: record.ownerOrganizationId }, select: { currentNodeId: true, workflowVersionId: true } });
@@ -437,7 +486,15 @@ export class SupplierQualityService {
     return node?.type === 'ACTION' && jsonObject(jsonObject(node.config).assignment).permission === 'supplier-quality:responses:write';
   }
 
-  private async serialize(transaction: AdminTransaction, actor: AdminActor, record: ProblemRecord, granted: string[]): Promise<SupplierProblemDto> {
+  private async controlled(transaction: AdminTransaction, id: string): Promise<boolean> {
+    const [record] = await transaction.$queryRaw<{ id: string }[]>`SELECT supplier_problem_id AS id FROM supplier_eight_d_controls WHERE supplier_problem_id = ${id}::uuid`;
+    return !!record;
+  }
+
+  private async serialize(transaction: AdminTransaction, actor: AdminActor, record: ProblemRecord, granted: string[], controlled?: boolean): Promise<SupplierProblemDto> {
+    const completeEightD = controlled ?? await this.controlled(transaction, record.id);
+    const completeRoute = completeEightD || !record.problemIndexId && await this.bindings.controlledDraft(transaction, record.ownerOrganizationId,
+      { severity: record.severity as SupplierProblemDraftDto['severity'], responseForm: record.responseForm as SupplierProblemDraftDto['responseForm'], replyMode: record.replyMode as SupplierProblemDraftDto['replyMode'] });
     const index = record.problemIndexId ? await this.indexes.findById(record.problemIndexId, record.ownerOrganizationId, transaction as never) : null;
     const ownReply = record.replyMode === 'INTERNAL' ? actor.accountType === 'INTERNAL' && actor.id === record.internalResponderId : actor.accountType === 'SUPPLIER' && actor.organizationId === record.supplierOrganizationId && !!record.releasedToSupplierAt;
     return {
@@ -445,15 +502,17 @@ export class SupplierQualityService {
       title: record.title, materialCode: record.materialCode, ...(record.materialCategory ? { materialCategory: record.materialCategory as 'STRUCTURE' | 'ELECTRONIC' } : {}),
       defectDescription: record.defectDescription, defectQuantity: record.defectQuantity, severity: record.severity as SupplierProblemDto['severity'], responseForm: record.responseForm as SupplierProblemDto['responseForm'], replyMode: record.replyMode as SupplierProblemDto['replyMode'],
       ...(record.internalResponderId ? { internalResponderId: record.internalResponderId } : {}), version: record.version, updatedAt: record.updatedAt.toISOString(), stage: record.problemIndexId ? 'ISSUED' : 'DRAFT',
-      ...(index ? { reportNumber: String(index.reportNumber), problemStatus: String(index.status) as SupplierProblemDto['problemStatus'], ...(index.dueAt instanceof Date ? { dueAt: index.dueAt.toISOString() } : {}) } : {}),
+      ...(index ? { ...(actor.accountType === 'INTERNAL' ? { problemIndexId: String(index.id) } : {}), reportNumber: String(index.reportNumber), problemStatus: String(index.status) as SupplierProblemDto['problemStatus'], ...(index.dueAt instanceof Date ? { dueAt: index.dueAt.toISOString() } : {}) } : {}),
       canEditFacts: actor.accountType === 'INTERNAL' && !record.problemIndexId && granted.includes('supplier-quality:problems:write'),
-      canEditResponse: ownReply && granted.includes('supplier-quality:responses:write') && await this.openForDraft(transaction, record),
-      responseDraft: (record.responseDraft?.content ?? {}) as SupplierProblemDto['responseDraft'],
+      canEditResponse: !completeRoute && ownReply && granted.includes('supplier-quality:responses:write') && await this.openForDraft(transaction, record),
+      responseDraft: (completeRoute ? {} : record.responseDraft?.content ?? {}) as SupplierProblemDto['responseDraft'],
+      ...(completeRoute ? { controlledEightD: true } : {}),
     };
   }
 
   private async serializeDetail(transaction: AdminTransaction, actor: AdminActor, record: ProblemRecord, granted: string[], query: SupplierProblemDetailQueryDto): Promise<SupplierProblemDto> {
     const result = await this.serialize(transaction, actor, record, granted);
+    if (result.controlledEightD) return result;
     const revision = await transaction.supplierResponseRevision.findFirst({ where: { problemId: record.id }, orderBy: { revision: 'desc' }, include: { evidence: { orderBy: { fileId: 'asc' } } } });
     const [history, total] = await Promise.all([
       transaction.supplierResponseRevision.findMany({ where: { problemId: record.id }, orderBy: { revision: 'desc' }, skip: (query.revisionPage - 1) * query.revisionPageSize, take: query.revisionPageSize, include: { evidence: { orderBy: { fileId: 'asc' } } } }),

@@ -7,6 +7,7 @@ import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerDenied, useCustomerLedgerWrite } from '../customer-quality/customer-ledger-write';
 import { InternalEightDIssueDrawer } from '../internal-eight-d/InternalEightDIssueDrawer';
+import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
 
 type Selection = components['schemas']['NewProductDefectSelectionDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
@@ -37,12 +38,13 @@ function SourcePanel({ projectId, organizationId, projectContext, active, onDeni
   const [defects, setDefects] = useState<DefectPage>();
   const [defectsError, setDefectsError] = useState<unknown>();
   const [issueOpen, setIssueOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [issued, setIssued] = useState<components['schemas']['NewProductEightDIssueResultDto']>();
   const lifetime = useRef<AbortController>(undefined);
   const denyCallback = useRef(onDenied); denyCallback.current = onDenied;
   const leave = useNavigationGuard();
   function revoke(cause: unknown) {
-    lifetime.current?.abort(); setDenied(true); setPermissions([]); setSelections([]); setSelected([]); setDefects(undefined); setIssued(undefined); setIssueOpen(false); setIncluding(false); setReason(''); setError(cause);
+    lifetime.current?.abort(); setDenied(true); setPermissions([]); setSelections([]); setSelected([]); setDefects(undefined); setIssued(undefined); setIssueOpen(false); setCopyOpen(false); setIncluding(false); setReason(''); setError(cause);
     denyCallback.current?.(cause);
   }
   const writer = useCustomerLedgerWrite(revoke);
@@ -76,6 +78,7 @@ function SourcePanel({ projectId, organizationId, projectContext, active, onDeni
   }, [including, denied, organizationId, search, candidateFilters, page, revision]);
   const canInclude = active && permissions.includes('new-product-quality:projects:write');
   const canIssue = active && permissions.includes('new-product-quality:issues:issue');
+  const canCopy = active && permissions.includes('supplier-quality:issues:copy');
   async function include(row: Defect) {
     if (!canInclude || writer.busy || denied) return;
     const body: components['schemas']['SelectNewProductDefectDto'] = { organizationId, defectId: row.id, expectedVersion: row.version, ...(reason.trim() ? { reason: reason.trim() } : {}) };
@@ -91,16 +94,18 @@ function SourcePanel({ projectId, organizationId, projectContext, active, onDeni
       <Space wrap><h3>新品同源来源</h3><Button disabled={loading || writer.busy} onClick={() => leave(() => setRevision(value => value + 1))}>刷新新品来源</Button>
         {canInclude && <Button disabled={writer.busy} onClick={() => leave(() => setIncluding(true))}>纳入过程事实</Button>}
         {canIssue && <Button disabled={!selected.length || writer.busy || loading} onClick={() => leave(() => setIssueOpen(true))}>发起新品8D</Button>}
-        {canIssue && <span>已选择 {selected.length}/100 条</span>}
+        {canCopy && <Button disabled={!selected.length || writer.busy || loading || !!error} onClick={() => leave(() => setCopyOpen(true))}>复制为供应商草稿</Button>}
+        {(canIssue || canCopy) && <span>已选择 {selected.length}/100 条</span>}
       </Space>
       <p>先按项目映射及发生/纳入依据选择过程事实，再以 selection 发起正式8D；不改写原事实，不以问题关闭替代阶段门。</p>
       {issued && <Alert type="success" title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${encodeURIComponent(issued.problem.id)}`}>查看问题</Link>} />}
       {loading ? <Spin aria-label="正在加载新品来源" /> : !selections.length ? <p>暂无已纳入来源</p> : selections.slice((selectionPage - 1) * 20, selectionPage * 20).map(row => <div key={row.id}>
-        {canIssue && <Checkbox aria-label={`选择新品来源 ${row.id}`} checked={selected.includes(row.id)} disabled={writer.busy || selected.length >= 100 && !selected.includes(row.id)} onChange={event => setSelected(previous => event.target.checked ? [...previous, row.id] : previous.filter(id => id !== row.id))} />}
+        {(canIssue || canCopy) && <Checkbox aria-label={`选择新品来源 ${row.id}`} checked={selected.includes(row.id)} disabled={writer.busy || selected.length >= 100 && !selected.includes(row.id)} onChange={event => setSelected(previous => event.target.checked ? [...previous, row.id] : previous.filter(id => id !== row.id))} />}
         <span>{String(row.source_snapshot.description ?? row.id)}</span> · v{row.source_version}{row.selection_reason ? <p>{row.selection_reason}</p> : null}
       </div>)}
       {!loading && selections.length > 20 && <Pagination aria-label="新品来源分页" current={selectionPage} pageSize={20} total={selections.length} showSizeChanger={false} onChange={setSelectionPage} />}
       {issueOpen && <InternalEightDIssueDrawer domain="new-product-quality" organizationId={organizationId} sources={selections.filter(row => selected.includes(row.id)).map(row => ({ id: row.id, version: row.source_version, organizationId: row.organization_id, projectId: row.project_id, description: String(row.source_snapshot.description ?? row.id) }))} onDenied={revoke} onClose={() => setIssueOpen(false)} onIssued={value => { setIssued(value); setIssueOpen(false); setSelected([]); }} />}
+      {canCopy && copyOpen && <SupplierSourceCopyDialog organizationId={organizationId} sources={selections.filter(row => selected.includes(row.id)).map(row => ({ kind: 'NEW_PRODUCT_SELECTION', sourceId: row.id, sourceVersion: row.source_version }))} onDenied={revoke} onClose={() => setCopyOpen(false)} />}
       {including && <Modal open title="纳入过程事实" footer={null} onCancel={() => { if (!writer.busy) leave(() => { writer.discard(); setIncluding(false); setReason(''); }, true); }} closable={!writer.busy} mask={{ closable: !writer.busy }} keyboard={!writer.busy}>
         {!!error && <Alert role="alert" type="error" showIcon title={safeAccountError(error)} />}
         <p>仅提交明确选择的事实。服务器复验项目映射和当前新品资格；历史量产/已归档项目只保留既有记录。</p>

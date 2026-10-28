@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
@@ -39,6 +39,35 @@ const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', re
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 
+it('opens supplier copy from selected process facts without enabling internal issue for copy-only access', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/my-permissions')) return { permissions: ['process-quality:defects:read', 'supplier-quality:issues:copy'] };
+    if (path.includes('/reference-options')) return { items: [{ id: section.id, label: '复制目标档案' }], total: 1 };
+    if (path.endsWith('/source-copies/preview')) return { token: owner.id, expiresAt: '2099-01-01T00:00:00Z', facts: [] };
+    return baseResponse(path);
+  });
+  mount();
+  const toolbar = within((await screen.findByLabelText('搜索制程不良')).closest('.process-quality-toolbar')!);
+  const copy = await toolbar.findByRole('button', { name: '复制为供应商草稿' });
+  expect(copy).toBeDisabled();
+  fireEvent.click(await screen.findByLabelText(`选择制程不良 ${defect.description}`));
+  await waitFor(() => expect(copy).toBeEnabled());
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]')).toBeVisible());
+  const dialog = within(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]') as HTMLElement);
+  expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  await selectOption('目标供应商档案', '复制目标档案');
+  fireEvent.click(dialog.getByRole('button', { name: '读取受控预览' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ organizationId, supplierProfileId: section.id, sources: [{ kind: 'PROCESS_LEDGER', sourceId: defect.id, sourceVersion: defect.version }] }) }), { replayAfterReauthentication: false }));
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/source-copies/drafts'))).toBe(false);
+});
+
+it('hides supplier copy without its real copy permission', async () => {
+  mount(); await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+});
+
 function baseResponse(path: string) {
   if (path.includes('/my-permissions')) return { permissions };
   if (path.includes('/defects?')) return list;
@@ -58,10 +87,126 @@ beforeEach(() => {
   vi.mocked(apiRequest).mockReset().mockImplementation(async path => baseResponse(path));
 });
 afterEach(() => vi.unstubAllEnvs());
-function mount() { return render(<LanguageProvider><MemoryRouter initialEntries={['/app/process-quality']}><UnsavedChangesProvider><Routes><Route path="/app/process-quality" element={<ProcessDefectLedgerPage />} /><Route path="/login" element={<div>会话已退出，请登录</div>} /></Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider>); }
-async function selectOption(label: string, text: string) {
-  await waitFor(() => expect(screen.getByLabelText(label)).not.toBeDisabled());
-  fireEvent.mouseDown(screen.getByLabelText(label));
+function mount(route = '/app/process-quality', navigation?: ReactNode) { return render(<LanguageProvider><MemoryRouter initialEntries={[route]}><UnsavedChangesProvider>{navigation}<Routes><Route path="/app/process-quality" element={<ProcessDefectLedgerPage />} /><Route path="/login" element={<div>会话已退出，请登录</div>} /></Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider>); }
+
+const sourceLink = (id = defect.id, org = organizationId) => `/app/process-quality?organizationId=${org}&defectId=${id}`;
+const sourceDetailCalls = () => vi.mocked(apiRequest).mock.calls.filter(([path]) => new URL(path, 'https://qms.invalid').pathname === `/api/v1/process-quality/defects/${defect.id}`);
+function sourceReadResponse(path: string) {
+  const url = new URL(path, 'https://qms.invalid');
+  if (url.pathname === '/api/v1/process-quality/defects') return { ...list, items: [] };
+  return baseResponse(url.pathname);
+}
+
+it('opens a source deep-link only after scoped READ authorization, without selecting or issuing and without reopening on refresh', async () => {
+  let authorize!: (value: { permissions: string[] }) => void;
+  let permissionReads = 0;
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/my-permissions') && permissionReads++ === 0) return new Promise(done => { authorize = done; });
+    return sourceReadResponse(path);
+  });
+  mount(sourceLink());
+  await waitFor(() => expect(authorize).toBeTypeOf('function'));
+  expect(sourceDetailCalls()).toHaveLength(0);
+  await act(async () => authorize({ permissions }));
+  await waitFor(() => expect(screen.getByText('来源详情').closest('[role="dialog"]')).toBeVisible(), { timeout: 5000 });
+  await screen.findByText('表面划伤');
+  expect(sourceDetailCalls()).toHaveLength(1);
+  const [path, init] = sourceDetailCalls()[0];
+  expect(new URL(path, 'https://qms.invalid').searchParams.get('organizationId')).toBe(organizationId);
+  expect(init?.signal).toBeInstanceOf(AbortSignal);
+  expect(screen.getByText('已选择 0 条来源')).toBeVisible();
+  expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
+  const drawer = screen.getByText('来源详情').closest('[role="dialog"]') as HTMLElement;
+  fireEvent.click(within(drawer).getByRole('button', { name: /^(close|关闭)$/i }));
+  await waitFor(() => expect(screen.queryByText('来源详情')).not.toBeInTheDocument(), { timeout: 5000 });
+  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  await waitFor(() => expect(permissionReads).toBeGreaterThan(1));
+  expect(sourceDetailCalls()).toHaveLength(1);
+  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+});
+
+it.each(['missing', '403'] as const)('does not read a source deep-link before actual READ access is granted: %s', async mode => {
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/my-permissions')) {
+      if (mode === '403') throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, 403);
+      return { permissions: ['supplier-quality:issues:copy'] };
+    }
+    return sourceReadResponse(path);
+  });
+  mount(sourceLink());
+  await screen.findByText('暂无制程不良访问权限');
+  expect(sourceDetailCalls()).toHaveLength(0);
+  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+});
+
+it('clears private source content and aborts both detail reads when a deep-link target returns 403', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (new URL(path, 'https://qms.invalid').pathname === `/api/v1/process-quality/defects/${defect.id}`) throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'private' }, 403);
+    return sourceReadResponse(path);
+  });
+  mount(sourceLink());
+  await screen.findByText('暂无制程不良访问权限');
+  const reads = vi.mocked(apiRequest).mock.calls.filter(([path]) => new URL(path, 'https://qms.invalid').pathname.startsWith(`/api/v1/process-quality/defects/${defect.id}`));
+  expect(reads).toHaveLength(2);
+  expect(reads.every(([, options]) => options?.signal?.aborted)).toBe(true);
+  expect(screen.queryByText('表面划伤')).not.toBeInTheDocument();
+  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
+});
+
+it.each([`?defectId=not-a-uuid`, `?organizationId=bad&defectId=${defect.id}`])('rejects an invalid source deep-link before any API call: %s', async query => {
+  mount(`/app/process-quality${query}`);
+  expect(await screen.findByText('制程来源链接参数无效')).toBeVisible();
+  expect(apiRequest).not.toHaveBeenCalled();
+});
+
+it('aborts a replaced source deep-link and identity, ignores late data, and preserves existing selection without auto-issue', async () => {
+  const nextId = '77777777-7777-4777-8777-777777777777';
+  let resolveOld!: (value: typeof defect) => void;
+  let identityChanged = false;
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    const url = new URL(path, 'https://qms.invalid');
+    if (identityChanged && path.includes('/my-permissions')) return new Promise(() => {});
+    if (url.pathname === `/api/v1/process-quality/defects/${defect.id}`) return new Promise(done => { resolveOld = done; });
+    if (url.pathname === `/api/v1/process-quality/defects/${nextId}`) return { ...defect, id: nextId, description: '当前链接目标' };
+    if (url.pathname === '/api/v1/process-quality/defects') return identityChanged ? { ...list, items: [] } : list;
+    return sourceReadResponse(path);
+  });
+  mount(`/app/process-quality?organizationId=${organizationId}`, <><Link to={sourceLink()}>来源A</Link><Link to={sourceLink(nextId)}>来源B</Link><Link to={`${sourceLink(nextId)}&view=other`}>无关参数</Link></>);
+  fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
+  fireEvent.click(screen.getByText('来源A'));
+  await waitFor(() => expect(sourceDetailCalls()).toHaveLength(1));
+  const oldSignal = sourceDetailCalls()[0][1]?.signal;
+  fireEvent.click(screen.getByText('来源B'));
+  await screen.findByText('当前链接目标');
+  expect(oldSignal?.aborted).toBe(true);
+  await act(async () => resolveOld({ ...defect, description: '迟到链接私密内容' }));
+  expect(screen.queryByText('迟到链接私密内容')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('选择制程不良 表面划伤')).toBeChecked();
+  expect(screen.getByText('已选择 1 条来源')).toBeVisible();
+  fireEvent.click(screen.getByText('无关参数'));
+  const nextCalls = () => vi.mocked(apiRequest).mock.calls.filter(([path]) => new URL(path, 'https://qms.invalid').pathname === `/api/v1/process-quality/defects/${nextId}`);
+  expect(nextCalls()).toHaveLength(1);
+  const nextSignal = nextCalls()[0][1]?.signal;
+  identityChanged = true;
+  act(() => useWorkTabsStore.getState().bindSession('INTERNAL:another-org:another-user'));
+  await waitFor(() => expect(nextSignal?.aborted).toBe(true));
+  expect(screen.queryByText('当前链接目标')).not.toBeInTheDocument();
+  expect(screen.getByText('已选择 0 条来源')).toBeVisible();
+  expect(nextCalls()).toHaveLength(1);
+  expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
+});
+
+it('preserves legacy BRIEF issue permission independently from formal 8D issue permission', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : baseResponse(path));
+  mount(); await screen.findByLabelText('选择制程不良 表面划伤');
+  expect(screen.getByRole('button', { name: '发起问题' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
+});
+async function selectOption(label: string, text: string, queries: Pick<typeof screen, 'getByLabelText'> = screen) {
+  const control = queries.getByLabelText(label);
+  await waitFor(() => expect(control).not.toBeDisabled());
+  fireEvent.mouseDown(control);
   fireEvent.click(await screen.findByText(text, { selector: '.ant-select-item-option-content' }));
 }
 async function openIssue() {
@@ -71,10 +216,11 @@ async function openIssue() {
   return onIssued;
 }
 async function fillIssue() {
-  fireEvent.click(screen.getByLabelText('非复发'));
-  await selectOption('风险等级', '高');
-  await selectOption('责任科室', '制造科');
-  await selectOption('负责人', '真实负责人');
+  const drawer = within(screen.getByText('发起正式内部8D').closest('[role="dialog"]') as HTMLElement);
+  fireEvent.click(drawer.getByLabelText('非复发'));
+  await selectOption('风险等级', '高', drawer);
+  await selectOption('责任科室', '制造科', drawer);
+  await selectOption('负责人', '真实负责人', drawer);
 }
 
 it('previews visible and hidden relations without defaulting recurrence; posts server-bound 8D with exact token', async () => {
@@ -280,13 +426,14 @@ it('keeps owner search keyboard-editable while loading and blocks issuing with s
   });
   await openIssue();
   await fillIssue();
-  const input = screen.getByLabelText('负责人');
+  const drawer = within(screen.getByText('发起正式内部8D').closest('[role="dialog"]') as HTMLElement);
+  const input = drawer.getByLabelText('负责人');
   await user.type(input, 'a');
   await waitFor(() => expect(searching).toBe(true));
   expect(input).toBeEnabled();
   expect(input).toHaveFocus();
   expect(screen.queryByText('真实负责人', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
-  expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
+  expect(drawer.getByText('确认发起8D').closest('button')).toBeDisabled();
   await act(async () => { resolve({ departments: [section], users: [owner], departmentTotal: 1, userTotal: 1, page: 1, pageSize: 100 }); });
   await screen.findByText('真实负责人', { selector: '.ant-select-item-option-content' });
 });

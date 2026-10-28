@@ -4,7 +4,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate, workflowAccessPredicate, type WorkflowActor } from '../workflow/workflow-access-policy.js';
-import { isDomainControlledNode, isProcessEightDVersion, jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
+import { isDomainControlledNode, isControlledEightDVersion, jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
 import { TaskDto, TaskPageDto, TaskQueryDto, TaskStatisticsDto } from './task-inbox.dto.js';
 
 export function inboxPage(query: { pageSize?: number; offset?: number }) {
@@ -24,10 +24,10 @@ function taskScope(actor: WorkflowActor, organizationId: string, statuses: reado
     WHERE task.organization_id = ${organizationId}::uuid AND task.status::text IN (${statusList})
       AND instance.status = 'RUNNING' AND instance.current_node_id = task.workflow_node_id AND instance.version = task.entry_instance_version
       AND problem.archived_at IS NULL AND problem.status NOT IN ('CLOSED', 'ARCHIVED')
-      AND NOT (node.config ? 'closureReview' OR node.config ? 'processEightD')
+      AND NOT (node.config ? 'closureReview' OR node.config ? 'processEightD' OR node.config ? 'supplierEightD')
       AND NOT EXISTS (SELECT 1 FROM workflow_nodes controlled
         WHERE controlled.organization_id = task.organization_id AND controlled.workflow_version_id = task.workflow_version_id
-          AND controlled.config ? 'processEightD')
+          AND (controlled.config ? 'processEightD' OR controlled.config ? 'supplierEightD'))
       AND ${workflowAccessPredicate(Prisma.sql`${actor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`node.config->'assignment'`)}`;
 }
 
@@ -116,7 +116,7 @@ export class TaskService {
       await assertActiveAuthentication(tx, actor);
       await assertWorkflowFeature(tx, actor, organizationId, 'task:claim');
       const task = await tx.workflowTask.findUniqueOrThrow({ where: { id }, include: { workflowNode: true } });
-      if (isDomainControlledNode(task.workflowNode) || await isProcessEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
+      if (isDomainControlledNode(task.workflowNode) || await isControlledEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
       if (task.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       if (task.status !== 'FAILED') workflowError('TASK_RETRY_UNAVAILABLE', 409);
       const current = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT task.id ${taskScope(actor, organizationId, ['FAILED'])} AND task.id = ${id}::uuid`);
@@ -141,7 +141,7 @@ export class TaskService {
       await assertActiveAuthentication(tx, actor);
       await assertWorkflowFeature(tx, actor, organizationId, 'task:claim');
       const task = await tx.workflowTask.findUniqueOrThrow({ where: { id }, include: { workflowNode: true } });
-      if (isDomainControlledNode(task.workflowNode) || await isProcessEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
+      if (isDomainControlledNode(task.workflowNode) || await isControlledEightDVersion(tx, organizationId, task.workflowVersionId)) workflowError('TASK_NOT_FOUND', 404);
       if (task.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       const current = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT task.id ${taskScope(actor, organizationId)} AND task.id = ${id}::uuid`);
       if (!current.length) workflowError('TASK_NOT_FOUND', 404);

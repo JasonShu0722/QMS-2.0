@@ -3,14 +3,14 @@ import type { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { OutboxService } from '../task-notification/outbox.service.js';
 import type { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import type { StartWorkflowInstanceInput, WorkflowActionResult, WorkflowCommand } from './workflow-runtime.service.js';
-import { isClosureReviewNode, isProcessEightDNode, jsonObject, workflowError } from './workflow-runtime-policy.js';
+import { isClosureReviewNode, isControlledEightDNode, jsonObject, workflowError } from './workflow-runtime-policy.js';
 
 export interface WorkflowWriters { audit: AuditLogService; outbox: OutboxService; problems: ProblemIndexService }
 
 export async function fixedWorkflowStart(tx: Prisma.TransactionClient, organizationId: string, definitionId: string, versionId: string, domainAccess = false) {
   const version = await tx.workflowVersion.findFirst({ where: { id: versionId, organizationId, workflowDefinitionId: definitionId, status: 'PUBLISHED' }, include: { nodes: true } });
   if (!version) workflowError('WORKFLOW_VERSION_NOT_FOUND', 404);
-  if (!domainAccess && version.nodes.some(isProcessEightDNode)) workflowError('WORKFLOW_ACTION_INVALID', 409);
+  if (!domainAccess && version.nodes.some(isControlledEightDNode)) workflowError('WORKFLOW_ACTION_INVALID', 409);
   const starts = version.nodes.filter((node) => jsonObject(node.config).isStart === true);
   if (starts.length !== 1 || starts[0]!.type === 'CLOSE' || isClosureReviewNode(starts[0]!)) workflowError('WORKFLOW_DRAFT_INVALID', 409);
   return { version, node: starts[0]! };

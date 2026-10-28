@@ -29,6 +29,6 @@ const NewProductEightDDeliveryController = internalEightDDeliveryController(INTE
   providers: [NewProductQualityService, NewProductFileResourceAdapter, NewProductQualityUpgradeAdapter, NewProductEightDSourceService,
     internalEightDRuntimeProvider(NEW_PRODUCT_EIGHT_D_RUNTIME, NewProductEightDSourceService, INTERNAL_EIGHT_D_DOMAINS.NEW_PRODUCT),
     { provide: NewProductEightDService, inject: [NEW_PRODUCT_EIGHT_D_RUNTIME], useFactory: (runtime: InternalEightDRuntime) => new NewProductEightDService(runtime.core) }],
-  exports: [NewProductQualityService, NewProductEightDService, NEW_PRODUCT_EIGHT_D_RUNTIME],
+  exports: [NewProductQualityService, NewProductEightDService, NewProductEightDSourceService, NEW_PRODUCT_EIGHT_D_RUNTIME],
 })
 export class NewProductQualityModule {}

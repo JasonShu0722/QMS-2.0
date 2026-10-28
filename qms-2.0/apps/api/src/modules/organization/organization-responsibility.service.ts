@@ -5,6 +5,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import type {
   CreateManagementBindingDto, CreateMinisterScopeDto, ManagementBindingDto,
   ManagementConfigurationQueryDto, ManagementResponsibilitiesDto, MinisterScopeDto,
@@ -35,6 +36,32 @@ export class OrganizationResponsibilityService {
     const where: Prisma.DepartmentWhereInput = { organizationId, status: 'ACTIVE', ...(sectionDepartmentId ? { id: sectionDepartmentId } : {}), ...(search ? { OR: [{ code: { contains: search, mode: 'insensitive' } }, { name: { contains: search, mode: 'insensitive' } }] } : {}) };
     const [items, total] = await Promise.all([tx.department.findMany({ where, select: { id: true, code: true, name: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take, skip }), tx.department.count({ where })]);
     return { items, total };
+  }
+
+  async workflowAppointmentOptions(tx: AdminTransaction, organizationId: string,
+    query: { departmentId?: string; search?: string; limit: number; offset: number }, requiredPermissions: readonly string[]) {
+    await this.activeOrganization(tx, organizationId);
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 100 || !Number.isSafeInteger(query.offset)
+      || query.offset < 0 || query.offset > 10000 || requiredPermissions.length < 1 || requiredPermissions.length > 10) adminError('ORGANIZATION_DIRECTORY_QUERY_INVALID', 400);
+    const pattern = `%${query.search?.replace(/[\\%_]/g, '\\$&') ?? ''}%`;
+    type Item = { assignmentId: string; userId: string; username: string; fullName: string | null; positionName: string; departmentId: string; departmentName: string };
+    const [page] = await tx.$queryRaw<{ items: Item[]; total: number }[]>(Prisma.sql`
+      WITH eligible AS MATERIALIZED (
+        SELECT a.id AS "assignmentId", u.id AS "userId", u.username, u.full_name AS "fullName",
+          pos.name AS "positionName", dept.id AS "departmentId", dept.name AS "departmentName"
+        FROM user_positions a JOIN users u ON u.id = a.user_id AND u.organization_id = a.organization_id
+        JOIN positions pos ON pos.id = a.position_id AND pos.organization_id = a.organization_id
+        JOIN departments dept ON dept.id = pos.department_id AND dept.organization_id = a.organization_id
+        WHERE a.organization_id = ${organizationId}::uuid AND a.started_at <= CURRENT_TIMESTAMP
+          AND (a.ended_at IS NULL OR a.ended_at > CURRENT_TIMESTAMP) AND u.status = 'ACTIVE' AND u.account_type = 'INTERNAL'
+          AND pos.status = 'ACTIVE' AND dept.status = 'ACTIVE'
+          ${query.departmentId ? Prisma.sql`AND dept.id = ${query.departmentId}::uuid` : Prisma.empty}
+          ${query.search ? Prisma.sql`AND (u.username ILIKE ${pattern} OR u.full_name ILIKE ${pattern} OR pos.name ILIKE ${pattern})` : Prisma.empty}
+          AND ${Prisma.join(requiredPermissions.map(permission => featurePredicate(Prisma.sql`u.id`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`${permission}`)), ' AND ')}
+      ) SELECT (SELECT count(*)::int FROM eligible) AS total,
+        COALESCE((SELECT jsonb_agg(page ORDER BY page.username, page."assignmentId") FROM
+          (SELECT * FROM eligible ORDER BY username, "assignmentId" LIMIT ${query.limit} OFFSET ${query.offset}) page), '[]'::jsonb) AS items`);
+    return page ?? { items: [], total: 0 };
   }
 
   async listManagementBindings(organizationId: string, query: ManagementConfigurationQueryDto): Promise<ManagementBindingDto[]> {

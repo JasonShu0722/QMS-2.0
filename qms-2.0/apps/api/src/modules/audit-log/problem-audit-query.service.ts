@@ -27,7 +27,8 @@ export class ProblemAuditQueryService {
     const pageSize = query.pageSize ?? 25;
     return this.prisma.$transaction(async (tx) => {
       const { adapter, context } = await this.problems.authorized(tx, actor, organizationId, id, 'history');
-      const revisions = adapter.listRevisionIds ? await adapter.listRevisionIds(tx, context) : [];
+      const revisionIds = adapter.listRevisionIds ? await adapter.listRevisionIds(tx, context) : null;
+      const revisions = revisionIds ?? [];
       if (revisions.length > 1000 || revisions.some((revisionId) => !isUUID(revisionId)) || new Set(revisions).size !== revisions.length) throw new BadRequestException();
       const evidence = await this.workspaces.evidence(tx, adapter, context, null);
       const fileIds = evidence.map((file) => file.id);
@@ -52,7 +53,7 @@ export class ProblemAuditQueryService {
         resourceVersion: typeof event.resourceVersion === 'number' && Number.isSafeInteger(event.resourceVersion) && event.resourceVersion > 0 ? event.resourceVersion : null,
         reasonCode: typeof event.reasonCode === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(event.reasonCode) ? event.reasonCode : null })),
         nextCursor: events.length > pageSize && last ? Buffer.from(JSON.stringify({ at: last.createdAt.toISOString(), id: last.id })).toString('base64url') : null,
-        domainRevisionTrailAvailable: !!adapter.listRevisionIds };
+        domainRevisionTrailAvailable: revisionIds !== null };
     }, { isolationLevel: 'ReadCommitted' });
   }
 }

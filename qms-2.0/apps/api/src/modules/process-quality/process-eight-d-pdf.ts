@@ -57,7 +57,7 @@ export async function renderProcessEightDPdf(report: ProcessEightDControlledRepo
   // PDFKit's asynchronous PNG callbacks can throw outside its stream; isolate the whole renderer.
   const workerUrl = new URL(import.meta.url.endsWith('.ts') ? './process-eight-d-pdf.worker.ts' : './process-eight-d-pdf.worker.js', import.meta.url);
   return new Promise((resolve, reject) => {
-    const domainLabel = ({ 'process-quality': '过程', 'customer-quality': '客户', 'new-product-quality': '新品' } as Record<string, string>)[domainCode] ?? '';
+    const domainLabel = ({ 'process-quality': '过程', 'customer-quality': '客户', 'new-product-quality': '新品', 'supplier-quality': '供应商' } as Record<string, string>)[domainCode] ?? '';
     const worker = new Worker(workerUrl, { workerData: { report, images: embedded, dimensions, domainLabel }, execArgv: [],
       resourceLimits: { maxOldGenerationSizeMb: 192, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 } });
     let settled = false;

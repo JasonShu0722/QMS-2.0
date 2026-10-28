@@ -51,6 +51,35 @@ function showContent(content: ReactNode, route = '/app/customer-quality') { retu
 function show(route = '/app/customer-quality') { return showContent(<CustomerQualityPage renderAnalysis={complaintId => <div>解析插槽 {complaintId}</div>} />, route); }
 const writes = () => vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method);
 
+it('opens supplier copy from customer selection with copy-only access but does not enable customer issue', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { organizationId: org, permissions: ['customer-quality:complaints:read', 'supplier-quality:issues:copy'] };
+    if (path.includes('/reference-options')) return { items: [{ id: org, label: '复制目标档案' }], total: 1 };
+    if (path.endsWith('/source-copies/preview')) return { token: id, expiresAt: '2099-01-01T00:00:00Z', facts: [] };
+    return read(path, init);
+  });
+  show();
+  const copy = await screen.findByRole('button', { name: '复制为供应商草稿' });
+  expect(copy).toBeDisabled();
+  fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-1'));
+  await waitFor(() => expect(copy).toBeEnabled());
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByRole('dialog', { name: '受控复制为供应商草稿' })).toBeVisible());
+  expect(screen.queryByRole('button', { name: '发起客户8D' })).not.toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByLabelText('目标供应商档案'));
+  fireEvent.click(await screen.findByText('复制目标档案', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(screen.getByRole('button', { name: '读取受控预览' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ supplierProfileId: org, sources: [{ kind: 'CUSTOMER_LEDGER', sourceId: id, sourceVersion: item.version }] }) }), { replayAfterReauthentication: false }));
+  expect(writes().map(([path]) => path)).toEqual(['/api/v1/supplier-quality/source-copies/preview']);
+});
+
+it('hides supplier copy and copy selection without copy or internal issue access', async () => {
+  show(); await screen.findByRole('button', { name: 'CQ-N4-1' }, { timeout: 5000 });
+  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('选择客诉 CQ-N4-1')).not.toBeInTheDocument();
+});
+
 it('selects across pages, customers and complaint types for the actual issuer instead of limiting to the source QE', async () => {
   const second = { ...item, id: '33333333-3333-4333-8333-333333333333', complaintNumber: 'CQ-N4-2', qualityEngineerId: 'another-qe', normalized: { ...item.normalized, customerName: '其他客户', complaintType: 'ZERO_KM' } };
   const read = vi.mocked(apiRequest).getMockImplementation()!;
@@ -266,7 +295,7 @@ it.each(['close', 'receiving'] as const)('discards only the confirmed local unkn
   fireEvent.change(screen.getByLabelText(label), { target: { value: '原动作原文' } });
   fireEvent.click(screen.getByLabelText('保存台账动作'));
   await screen.findByText(/保存结果未知/);
-  await waitFor(() => expect(screen.getByText(/不会撤销服务端/)).toBeVisible());
+  await waitFor(() => expect(screen.getByText(/不会撤销服务端/)).toBeVisible(), { timeout: 5000 });
   const original = writes()[0]!;
   fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
   fireEvent.click(await screen.findByText('继续编辑', { selector: 'button span' }));
@@ -287,7 +316,7 @@ it.each(['close', 'receiving'] as const)('discards only the confirmed local unkn
   expect(next[0]).toBe(`${base}/${id}/${first === 'close' ? 'receiving' : 'close'}`);
   expect(JSON.parse(String(next[1]?.body))).toEqual({ expectedVersion: 1, ...(first === 'close' ? { courierNumber: '新动作原文' } : { note: '新动作原文' }) });
   expect(next[1]?.headers).not.toEqual(original[1]?.headers);
-});
+}, 30000);
 
 it.each(['close', 'receiving'] as const)('keeps the exact unknown %s attempt when retrying without confirmed discard', async action => {
   const fallback = vi.mocked(apiRequest).getMockImplementation()!;

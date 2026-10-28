@@ -98,3 +98,44 @@ it('does not even prepare CSRF while source uploads are already pending', async 
   expect(csrfToken).not.toHaveBeenCalled();
   expect(apiRequest).not.toHaveBeenCalled();
 });
+
+it('keeps existing internal writers closed to an actual supplier session', async () => {
+  useWorkTabsStore.getState().bindSession('SUPPLIER:vendor:person');
+  vi.mocked(getSession).mockResolvedValue({ accountType: 'SUPPLIER', organizationId: 'vendor', userId: 'person', landingPath: '/supplier/inbox' } as Awaited<ReturnType<typeof getSession>>);
+  const denied = vi.fn();
+  const { result } = renderHook(() => useCustomerLedgerWrite(denied));
+  await act(async () => { await expect(result.current.write('/ledger', { fields: {} }, 'PUT')).rejects.toThrow(); });
+  expect(apiRequest).not.toHaveBeenCalled();
+  expect(denied).toHaveBeenCalledTimes(1);
+});
+
+it('allows an explicit supplier writer without impersonation and preserves the original unknown attempt', async () => {
+  useWorkTabsStore.getState().bindSession('SUPPLIER:vendor:person');
+  vi.mocked(getSession).mockResolvedValue({ accountType: 'SUPPLIER', organizationId: 'vendor', userId: 'person', landingPath: '/supplier/inbox' } as Awaited<ReturnType<typeof getSession>>);
+  const denied = vi.fn();
+  const { result } = renderHook(() => useCustomerLedgerWrite(denied, 'SUPPLIER'));
+  vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('lost supplier response'));
+  await act(async () => { await expect(result.current.write('/supplier/original', { fields: {} }, 'PUT')).rejects.toThrow(); });
+  const original = vi.mocked(apiRequest).mock.calls[0]!;
+  expect(result.current.uncertain).toBe(true);
+  await act(async () => { await result.current.write('/supplier/changed', { fields: { investigation: 'must not replace original' } }, 'POST'); });
+  const retried = vi.mocked(apiRequest).mock.calls[1]!;
+  expect(retried[0]).toBe(original[0]);
+  expect(retried[1]?.body).toBe(original[1]?.body);
+  expect(retried[1]?.headers).toEqual(original[1]?.headers);
+  expect(denied).not.toHaveBeenCalled();
+});
+
+it('never replays a private unknown body as another actual principal even without a bound tab scope', async () => {
+  useWorkTabsStore.getState().reset();
+  const onDenied = vi.fn();
+  const { result } = renderHook(() => useCustomerLedgerWrite(onDenied));
+  vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('unknown first outcome'));
+  await act(async () => { await expect(result.current.write('/private-a', { fields: { investigation: 'actor A private draft' } }, 'PUT')).rejects.toThrow(); });
+  expect(result.current.uncertain).toBe(true);
+  vi.mocked(getSession).mockResolvedValue({ ...session, userId: 'other-actor' });
+  await act(async () => { await expect(result.current.write('/private-a', { fields: { investigation: 'actor B draft' } }, 'PUT')).rejects.toMatchObject({ status: 401 }); });
+  expect(apiRequest).toHaveBeenCalledTimes(1);
+  expect(onDenied).toHaveBeenCalledTimes(1);
+  expect(result.current.uncertain).toBe(false);
+});

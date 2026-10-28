@@ -1,7 +1,7 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -10,6 +10,7 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
+import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
 import { categoryLabels, categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, verificationLabels } from './process-ledger';
 
 type Defect = components['schemas']['ProcessDefectDto'];
@@ -33,10 +34,14 @@ function errorText(cause: unknown, fallback: string) {
 
 export function ProcessDefectLedgerPage() {
   const scope = useWorkTabsStore(state => state.sessionScope);
-  return <ProcessLedgerContent key={scope ?? 'unbound'} />;
+  const [query] = useSearchParams();
+  const organizationId = query.get('organizationId') ?? undefined;
+  const defectId = query.get('defectId') ?? undefined;
+  if (organizationId !== undefined && !uuidPattern.test(organizationId) || defectId !== undefined && !uuidPattern.test(defectId)) return <Alert type="error" showIcon title="制程来源链接参数无效" />;
+  return <ProcessLedgerContent key={`${scope ?? 'unbound'}:${organizationId ?? 'current'}`} organizationId={organizationId} initialDefectId={defectId} />;
 }
 
-function ProcessLedgerContent() {
+function ProcessLedgerContent({ organizationId, initialDefectId }: { organizationId?: string; initialDefectId?: string }) {
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const [form] = Form.useForm<IssueValues>();
@@ -59,9 +64,11 @@ function ProcessLedgerContent() {
   const [issued, setIssued] = useState<IssueResult>();
   const [issueDirty, setIssueDirty] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsChecked, setPermissionsChecked] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
   const [formalOpen, setFormalOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [editor, setEditor] = useState<Defect | 'new'>();
   const [suppliers, setSuppliers] = useState<components['schemas']['SupplierProfileDto'][]>([]);
   const [supplierError, setSupplierError] = useState<unknown>();
@@ -71,16 +78,22 @@ function ProcessLedgerContent() {
   const [ledgerStatus, setLedgerStatus] = useState<Defect['ledgerStatus']>();
   const alive = useRef(true);
   const detailRequest = useRef(0);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; detailRequest.current += 1; }; }, []);
+  const detailController = useRef<AbortController>(undefined);
+  const listController = useRef<AbortController>(undefined);
+  const linkedTarget = useRef<string>(undefined);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; detailController.current?.abort(); detailRequest.current += 1; }; }, []);
+  const canRead = permissions.includes('process-quality:defects:read');
   const canWrite = permissions.includes('process-quality:defects:write');
   const canClose = permissions.includes('process-quality:defects:close');
   const canReview = permissions.includes('process-quality:materials:review');
   const canIssue = permissions.includes('process-quality:issues:issue');
+  const canCopy = permissions.includes('supplier-quality:issues:copy');
   const canReadSuppliers = permissions.includes('supplier-quality:profiles:read');
   function revoke(cause?: unknown) {
     if (!alive.current) return;
+    detailController.current?.abort(); listController.current?.abort();
     detailRequest.current += 1; setAccessLost(true); setResult(undefined); setSelected({}); setDetail(undefined); setLinked([]);
-    setDetailOpen(false); setIssueOpen(false); setFormalOpen(false); setEditor(undefined); setAction(undefined); setSuppliers([]);
+    setDetailOpen(false); setIssueOpen(false); setFormalOpen(false); setCopyOpen(false); setEditor(undefined); setAction(undefined); setSuppliers([]);
     setIssueDirty(false); if (issueOpen || issueDirty) form.resetFields();
     if (cause instanceof ApiError && cause.status === 401) setUnauthorized(true);
   }
@@ -100,10 +113,13 @@ function ProcessLedgerContent() {
   }
 
   useEffect(() => {
-    let active = true;
-    void apiRequest<components['schemas']['PermissionsResponseDto']>('/api/v1/system/my-permissions').then(value => { if (active) setPermissions(value.permissions ?? []); }).catch(cause => { if (active) { setPermissions([]); if (denied(cause)) revoke(cause); } });
-    return () => { active = false; };
-  }, [revision]);
+    const controller = new AbortController();
+    void apiRequest<components['schemas']['PermissionsResponseDto']>(scoped('/api/v1/system/my-permissions'), { signal: controller.signal }).then(value => { if (!controller.signal.aborted) { setPermissions(value.permissions ?? []); setPermissionsChecked(true); } }).catch(cause => { if (!controller.signal.aborted) { setPermissions([]); setPermissionsChecked(false); if (denied(cause)) revoke(cause); } });
+    return () => controller.abort();
+  }, [revision, organizationId]);
+  function scoped(path: string) {
+    return organizationId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(organizationId)}` : path;
+  }
   useEffect(() => {
     if (!canReadSuppliers || accessLost) { setSuppliers([]); return; }
     let active = true;
@@ -113,7 +129,7 @@ function ProcessLedgerContent() {
       const items: components['schemas']['SupplierProfileDto'][] = [];
       let page = 1;
       while (active) {
-        const value = await apiRequest<components['schemas']['SupplierProfilePageDto']>(`/api/v1/supplier-quality/profiles?page=${page}&pageSize=100`, { signal: controller.signal });
+        const value = await apiRequest<components['schemas']['SupplierProfilePageDto']>(scoped(`/api/v1/supplier-quality/profiles?page=${page}&pageSize=100`), { signal: controller.signal });
         items.push(...value.items);
         if (items.length >= value.total) return items;
         if (!value.items.length) throw new Error('供应商资料分页不完整');
@@ -144,21 +160,23 @@ function ProcessLedgerContent() {
 
   useEffect(() => {
     if (accessLost) return;
-    let active = true;
+    const controller = new AbortController(); listController.current = controller;
     setLoading(true);
     setListError(undefined);
     const query = new URLSearchParams({ page: String(page), pageSize: '20' });
     if (search) query.set('search', search);
     if (ledgerStatus) query.set('ledgerStatus', ledgerStatus);
-    void apiRequest<DefectPage>(`/api/v1/process-quality/defects?${query}`).then((value) => {
-      if (active) setResult(value);
+    void apiRequest<DefectPage>(scoped(`/api/v1/process-quality/defects?${query}`), { signal: controller.signal }).then((value) => {
+      if (!controller.signal.aborted) setResult(value);
     }).catch((cause) => {
-      if (active) { setResult(undefined); setListError(cause); if (denied(cause)) revoke(cause); }
-    }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [page, search, revision, ledgerStatus, accessLost]);
+      if (!controller.signal.aborted) { setResult(undefined); setListError(cause); if (denied(cause)) revoke(cause); }
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [page, search, revision, ledgerStatus, accessLost, organizationId]);
 
   async function openDetail(id: string) {
+    detailController.current?.abort();
+    const controller = new AbortController(); detailController.current = controller;
     const request = ++detailRequest.current;
     setDetailOpen(true);
     setDetail(undefined);
@@ -167,13 +185,25 @@ function ProcessLedgerContent() {
     setDetailLoading(true);
     try {
       const [record, problems] = await Promise.all([
-        apiRequest<Defect>(`/api/v1/process-quality/defects/${id}`),
-        apiRequest<LinkedProblem[]>(`/api/v1/process-quality/defects/${id}/issues`),
+        apiRequest<Defect>(scoped(`/api/v1/process-quality/defects/${id}`), { signal: controller.signal }),
+        apiRequest<LinkedProblem[]>(scoped(`/api/v1/process-quality/defects/${id}/issues`), { signal: controller.signal }),
       ]);
-      if (alive.current && request === detailRequest.current) { setDetail(record); setLinked(problems); }
-    } catch (cause) { if (alive.current && request === detailRequest.current) { setDetailError(cause); if (denied(cause)) revoke(cause); } }
-    finally { if (alive.current && request === detailRequest.current) setDetailLoading(false); }
+      if (!controller.signal.aborted && alive.current && request === detailRequest.current) { setDetail(record); setLinked(problems); }
+    } catch (cause) { if (!controller.signal.aborted && alive.current && request === detailRequest.current) { setDetailError(cause); if (denied(cause)) revoke(cause); } }
+    finally { if (!controller.signal.aborted && alive.current && request === detailRequest.current) setDetailLoading(false); }
   }
+
+  useEffect(() => {
+    if (!initialDefectId) {
+      if (linkedTarget.current) { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); linkedTarget.current = undefined; }
+      return;
+    }
+    if (!permissionsChecked || accessLost) return;
+    if (!canRead) { revoke(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, 403)); return; }
+    linkedTarget.current = initialDefectId;
+    void openDetail(initialDefectId);
+    return () => { detailController.current?.abort(); detailRequest.current += 1; };
+  }, [initialDefectId, permissionsChecked, canRead, accessLost]);
 
   function toggle(record: Defect, checked: boolean) {
     setSelected((current) => {
@@ -185,7 +215,7 @@ function ProcessLedgerContent() {
   }
 
   async function issue(values: IssueValues) {
-    if (issuing) return;
+    if (issuing || !canWrite) return;
     const sources = Object.values(selected).map((record) => ({ defectId: record.id, expectedVersion: record.version }));
     if (!sources.length) return;
     const body: IssueBody = {
@@ -240,7 +270,8 @@ function ProcessLedgerContent() {
         <Input.Search aria-label="搜索制程不良" placeholder="搜索现象、批次或工单" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
         <Select aria-label="台账状态" placeholder="全部台账状态" allowClear value={ledgerStatus} options={[{ value: 'FOLLOWING', label: '跟进中' }, { value: 'CLOSED', label: '已关闭' }]} onChange={value => { setPage(1); setLedgerStatus(value); }} />
         {canIssue ? <Button type="primary" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起内部8D</Button> : null}
-        <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button>
+        {canCopy ? <Button disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setCopyOpen(true))}>复制为供应商草稿</Button> : null}
+        {canWrite ? <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button> : null}
         <Typography.Text type="secondary">已选择 {Object.keys(selected).length} 条来源</Typography.Text>
         <Typography.Text type="secondary">跨页保留，最多100条</Typography.Text>
         {selectedCount ? <Button disabled={locked} onClick={() => requestLeave(() => setSelected({}))}>清空选择</Button> : null}
@@ -253,7 +284,7 @@ function ProcessLedgerContent() {
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
       {!listError ? <Table<Defect> rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize: 20, total: result?.total ?? 0, showSizeChanger: false, onChange: setPage }} /> : null}
     </section>
-    <Drawer title="来源详情" open={detailOpen} onClose={() => { detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
+    <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
         <Descriptions bordered size="small" column={1} items={[
           { key: 'type', label: '失效类型', children: detail.defectTypeCode },
@@ -278,10 +309,11 @@ function ProcessLedgerContent() {
         <MaterialDetails record={detail} supplierName={supplierName} onReview={canReview && !detail.archivedAt ? materialId => setAction({ mode: 'verification', record: detail, materialId }) : undefined} />
         <Space wrap>{canWrite && !detail.archivedAt ? <Button onClick={() => requestLeave(() => setEditor(detail))}>维护台账</Button> : null}{canClose && !detail.archivedAt ? <Button onClick={() => setAction({ mode: detail.ledgerStatus === 'CLOSED' ? 'reopen' : 'close', record: detail })}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}</Space>
         {!selected[detail.id] && selectedCount >= 100 ? <Alert type="warning" showIcon title="已选满100条来源，请先取消一条已选来源，再选择此条。" /> : null}
-        {!detail.archivedAt ? <Button type="primary" disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(detail, true); setDetailOpen(false); setIssueError(undefined); setIssueOpen(true); })}>选择此条并发起问题</Button> : null}
+        {canWrite && !detail.archivedAt ? <Button type="primary" disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(detail, true); setDetailOpen(false); setIssueError(undefined); setIssueOpen(true); })}>选择此条并发起问题</Button> : null}
       </> : null}
     </Drawer>
     {formalOpen ? <ProcessEightDIssueDrawer sources={Object.values(selected)} onClose={() => setFormalOpen(false)} onDenied={revoke} onIssued={response => { setIssued(response); setFormalOpen(false); setSelected({}); setRevision(value => value + 1); }} /> : null}
+    {canCopy && copyOpen ? <SupplierSourceCopyDialog organizationId={Object.values(selected)[0]?.organizationId} sources={Object.values(selected).map(row => ({ kind: 'PROCESS_LEDGER', sourceId: row.id, sourceVersion: row.version }))} onClose={() => setCopyOpen(false)} onDenied={revoke} /> : null}
     {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} suppliers={suppliers} canReadSuppliers={canReadSuppliers} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} /> : null}
     {action ? <ProcessLedgerAction {...action} onClose={() => setAction(undefined)} onSaved={record => { saved(record); setAction(undefined); }} onDenied={revoke} /> : null}
     <Drawer title="发起制程问题" open={issueOpen} onClose={closeIssue} closable={!issuing} keyboard={!issuing} mask={{ closable: !issuing }} size="min(620px, 100vw)" destroyOnHidden={false}>

@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.mocked(csrfToken).mockReset();
   vi.mocked(csrfToken).mockResolvedValue('csrf-token');
   vi.mocked(getSession).mockResolvedValue({ userId: 'user', organizationId: defect.organizationId, accountType: 'INTERNAL', landingPath: '/app/workbench' });
-  vi.mocked(apiRequest).mockImplementation(async (path) => path.endsWith('/issues') ? [] : path.endsWith(defect.id) ? { ...defect, evidence: [] } : page);
+  vi.mocked(apiRequest).mockImplementation(async (path) => path === '/api/v1/system/my-permissions' ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : path.endsWith('/issues') ? [] : path.endsWith(defect.id) ? { ...defect, evidence: [] } : page);
 });
 
 it('loads the defect ledger and opens source detail with linked issues', async () => {
@@ -31,12 +31,11 @@ it('loads the defect ledger and opens source detail with linked issues', async (
   expect(await screen.findByText('表面划伤')).toBeVisible();
   fireEvent.click(screen.getByText('查看详情'));
   expect(await screen.findByText('来源详情')).toBeVisible();
-  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`);
-  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`);
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`, { signal: expect.any(AbortSignal) });
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`, { signal: expect.any(AbortSignal) });
 });
 
 it('keeps shipment requests out of the defect ledger and retains authorized registration in the heading', async () => {
-  vi.mocked(apiRequest).mockImplementation(async path => path.includes('my-permissions') ? { permissions: ['process-quality:defects:write'] } : page);
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   const register = await screen.findByRole('button', { name: '登记不良' });
   expect(register.closest('header')).toHaveClass('process-quality-heading');
@@ -45,9 +44,11 @@ it('keeps shipment requests out of the defect ledger and retains authorized regi
 });
 
 it('does not expose registration to a read-only user', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path === '/api/v1/system/my-permissions' ? { permissions: ['process-quality:defects:read'] } : page);
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   await screen.findByText('表面划伤');
   expect(screen.queryByRole('button', { name: '登记不良' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
 });
 
 it('protects an unfinished process issue when navigating away', async () => {
@@ -66,6 +67,7 @@ it('protects an unfinished process issue when navigating away', async () => {
 it('keeps selected sources and form entries after a version conflict, then reuses the idempotency key', async () => {
   let issueAttempts = 0;
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path === '/api/v1/system/my-permissions') return { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] };
     if (path === '/api/v1/process-quality/issues' && init?.method === 'POST') {
       issueAttempts += 1;
       if (issueAttempts === 1) throw new ApiError({ code: 'CONCURRENCY_CONFLICT', message: 'conflict' }, 409);
@@ -89,7 +91,9 @@ it('keeps selected sources and form entries after a version conflict, then reuse
   await screen.findByText(/PQ-001/);
   const requests = vi.mocked(apiRequest).mock.calls.filter(([path, init]) => path === '/api/v1/process-quality/issues' && init?.method === 'POST');
   expect(requests).toHaveLength(2);
-  expect(JSON.parse(String(requests[0]?.[1]?.body))).toMatchObject({ sources: [{ defectId: defect.id, expectedVersion: 2 }], problemType: 'PROCESS_DEFECT', responseForm: 'BRIEF', responsibleScope: 'process-quality', severity: 'HIGH' });
+  expect(JSON.parse(String(requests[0]?.[1]?.body))).toEqual({ sources: [{ defectId: defect.id, expectedVersion: 2 }], problemType: 'PROCESS_DEFECT', responseForm: 'BRIEF', responsibleScope: 'process-quality', severity: 'HIGH', workflowBinding: { workflowDefinitionId: '55555555-5555-4555-8555-555555555555', workflowVersionId: '66666666-6666-4666-8666-666666666666', instanceKey: 'process-issue-1' } });
+  expect(requests[1]?.[1]?.body).toBe(requests[0]?.[1]?.body);
+  expect(new Headers(requests[0]?.[1]?.headers).get('Idempotency-Key')).toBeTruthy();
   expect(new Headers(requests[0]?.[1]?.headers).get('Idempotency-Key')).toBe(new Headers(requests[1]?.[1]?.headers).get('Idempotency-Key'));
 }, 20000);
 

@@ -165,10 +165,15 @@ describe('authorized task inbox on PostgreSQL', () => {
     const maxBatches = Math.ceil(queued / 100);
     for (let batch = 0; batch < maxBatches; batch += 1) {
       const result = await worker.processAtomicDue(100, handler);
-      expect(result).toMatchObject({ failed: 0, retried: 0 });
       const task = await prisma.workflowTask.findFirst({ where });
-      if (task) return task;
-      if (!result.processed) throw new Error(`Task projection made no progress for ${instanceId}: ${JSON.stringify(result)}`);
+      if (task) {
+        // Other fixtures share the queue; prove this START's actual delivery, not global batch success.
+        const event = await prisma.outboxEvent.findUniqueOrThrow({ where: { eventKey: `workflow:${instanceId}:1` } });
+        expect(event).toMatchObject({ status: 'PROCESSED', attempts: 0, lastError: null, processedAt: expect.any(Date) });
+        expect(await prisma.outboxDeliveryAttempt.findMany({ where: { outboxEventId: event.id }, select: { outcome: true } })).toEqual([{ outcome: 'PROCESSED' }]);
+        return task;
+      }
+      if (!result.processed && !result.failed && !result.retried) throw new Error(`Task projection made no progress for ${instanceId}: ${JSON.stringify(result)}`);
     }
     throw new Error(`Task projection missing for ${instanceId} after ${maxBatches} batches (${queued} queued events)`);
   }
@@ -203,6 +208,19 @@ describe('authorized task inbox on PostgreSQL', () => {
     }
     throw new Error('Request did not wait for the independently held PostgreSQL lock');
   }
+
+  it('projects its own start while preserving an unrelated malformed event as a real failure', async () => {
+    const foreign = await timingFixture(prisma, organizations);
+    const event = await prisma.outboxEvent.update({ where: { eventKey: `workflow:${foreign.started.instanceId}:1` },
+      data: { payload: { schemaVersion: 0 }, attempts: 4, createdAt: new Date('1900-01-01T00:00:00Z') } });
+    const context = await fixture();
+    expect(context.task.workflowInstanceId).toBe(context.started.instanceId);
+    expect(await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).toMatchObject({
+      status: 'FAILED', attempts: 5, lastError: 'WORKFLOW_EVENT_INVALID', processedAt: null,
+    });
+    expect(await prisma.outboxDeliveryAttempt.findMany({ where: { outboxEventId: event.id }, select: { outcome: true } })).toEqual([{ outcome: 'FAILED' }]);
+    expect(await prisma.workflowTask.count({ where: { workflowInstanceId: foreign.started.instanceId } })).toBe(0);
+  });
 
   it('lists eligible role tasks and retains the total on an empty page', async () => {
     const context = await fixture();

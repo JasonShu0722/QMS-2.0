@@ -131,8 +131,12 @@ export class FileLifecycleService {
       const grant = await this.access(tx, actor, resource, 'read');
       const files = await tx.fileObject.findMany({ where: {
         organizationId: grant.organizationId, resourceType: resource.resourceType, resourceId: resource.resourceId,
+        ...(grant.readableFileIds === undefined ? {} : { id: { in: [...grant.readableFileIds] } }),
         status: { not: 'DELETED' }, OR: [{ objectVersionId: { not: null } }, { scanStatus: 'WAITING_UPLOAD', uploadExpiresAt: { gt: new Date() } }],
       }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: this.policy.maxFiles });
+      const current = await this.resources.authorizeAndLock(tx, actor, resource, 'read');
+      this.assertSameGrant(grant, current, 'read');
+      this.assertReadable(current, files.map(file => file.id));
       return files.map(fileDto);
     }, { isolationLevel: 'ReadCommitted' });
   }
@@ -145,7 +149,11 @@ export class FileLifecycleService {
     if (isolation?.transaction_isolation !== 'read committed') workflowError('WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED', 409);
     const ordered = [...groups].sort((first, second) => resourceKey(first.resource).localeCompare(resourceKey(second.resource)));
     const grants = new Map<string, FileResourceGrant>();
-    for (const group of ordered) grants.set(resourceKey(group.resource), await this.resources.authorizeAndLock(tx, actor, group.resource, 'read'));
+    for (const group of ordered) {
+      const grant = await this.resources.authorizeAndLock(tx, actor, group.resource, 'read');
+      this.assertReadable(grant, group.fileIds);
+      grants.set(resourceKey(group.resource), grant);
+    }
     const candidates = await tx.fileObject.findMany({ where: { id: { in: ids } } });
     if (candidates.length !== ids.length) workflowError('FILE_RESOURCE_DENIED', 403);
     for (const group of ordered) {
@@ -158,7 +166,8 @@ export class FileLifecycleService {
     for (const group of ordered) {
       const current = await this.resources.authorizeAndLock(tx, actor, group.resource, 'read');
       const initial = grants.get(resourceKey(group.resource))!;
-      if (current.organizationId !== initial.organizationId || current.version !== initial.version) workflowError('CONCURRENCY_CONFLICT', 409);
+      this.assertReadable(current, group.fileIds);
+      this.assertSameGrant(initial, current, 'read');
     }
     const files = await tx.fileObject.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
     for (const file of files) {
@@ -179,7 +188,11 @@ export class FileLifecycleService {
     if (isolation?.transaction_isolation !== 'read committed') workflowError('WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED', 409);
     const ordered = [...groups].sort((a, b) => resourceKey(a.resource).localeCompare(resourceKey(b.resource)));
     const grants = new Map<string, FileResourceGrant>();
-    for (const group of ordered) grants.set(resourceKey(group.resource), await this.resources.authorizeAndLock(tx, actor, group.resource, 'read'));
+    for (const group of ordered) {
+      const grant = await this.resources.authorizeAndLock(tx, actor, group.resource, 'read');
+      this.assertReadable(grant, group.fileIds);
+      grants.set(resourceKey(group.resource), grant);
+    }
     const assertScope = (files: FileObject[]) => {
       if (files.length !== ids.length) workflowError('FILE_RESOURCE_DENIED', 403);
       for (const file of files) {
@@ -201,7 +214,8 @@ export class FileLifecycleService {
     for (const group of ordered) {
       const current = await this.resources.authorizeAndLock(tx, actor, group.resource, 'read');
       const initial = grants.get(resourceKey(group.resource))!;
-      if (current.organizationId !== initial.organizationId || current.version !== initial.version) workflowError('CONCURRENCY_CONFLICT', 409);
+      this.assertReadable(current, group.fileIds);
+      this.assertSameGrant(initial, current, 'read');
     }
     const files = await tx.fileObject.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
     assertScope(files);
@@ -217,13 +231,24 @@ export class FileLifecycleService {
   }
 
   async download(actor: FileActor, id: string, traceId: string): Promise<FileDownloadDto> {
-    const file = await this.prisma.$transaction(async (tx) => {
-      const current = (await this.authorizedFile(tx, actor, id, 'read')).file;
-      this.assertAvailable(current);
-      await this.record(tx, actor, current, 'ATTACHMENT_DOWNLOAD_AUTHORIZED', traceId);
+    const selected = await this.prisma.$transaction(async (tx) => {
+      const current = await this.authorizedFile(tx, actor, id, 'read');
+      this.assertAvailable(current.file);
       return current;
     }, { isolationLevel: 'ReadCommitted' });
-    return { url: await this.storage.createDownloadUrl(file.objectKey, file.objectVersionId!, file.originalName), expiresAt: new Date(Date.now() + 60000).toISOString() };
+    const { file } = selected;
+    const url = await this.storage.createDownloadUrl(file.objectKey, file.objectVersionId!, file.originalName);
+    // Signing is outside database locks; revalidate before disclosing the capability URL.
+    await this.prisma.$transaction(async tx => {
+      const current = await this.authorizedFile(tx, actor, id, 'read');
+      this.assertSameGrant(selected.grant, current.grant, 'read');
+      this.assertAvailable(current.file);
+      if (current.file.organizationId !== file.organizationId || current.file.resourceType !== file.resourceType
+        || current.file.resourceId !== file.resourceId || current.file.version !== file.version || current.file.objectKey !== file.objectKey
+        || current.file.objectVersionId !== file.objectVersionId || current.file.sha256 !== file.sha256) workflowError('CONCURRENCY_CONFLICT', 409);
+      await this.record(tx, actor, current.file, 'ATTACHMENT_DOWNLOAD_AUTHORIZED', traceId);
+    }, { isolationLevel: 'ReadCommitted' });
+    return { url, expiresAt: new Date(Date.now() + 60000).toISOString() };
   }
 
   async deleteLogically(actor: FileActor, id: string, expectedVersion: number, traceId: string): Promise<FileDto> {
@@ -255,6 +280,7 @@ export class FileLifecycleService {
 
   private async access(tx: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction, fileIds: string[] = []): Promise<FileResourceGrant> {
     const initial = await this.resources.authorizeAndLock(tx, actor, resource, action);
+    if (action === 'read') this.assertReadable(initial, fileIds);
     const scope = `file-resource:${resource.resourceType}:${resource.resourceId}`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${scope}, 0))::text`;
     const candidates = await tx.fileObject.findMany({ where: { id: { in: fileIds } }, select: { organizationId: true, resourceType: true, resourceId: true } });
@@ -263,8 +289,20 @@ export class FileLifecycleService {
     const authentication = await assertActiveAuthentication(tx, actor);
     if (authentication.user.organizationId !== actor.organizationId || authentication.user.accountType !== actor.accountType) workflowError('AUTH_SESSION_REQUIRED', 401);
     const current = await this.resources.authorizeAndLock(tx, actor, resource, action);
-    if (initial.organizationId !== current.organizationId || initial.version !== current.version) workflowError('CONCURRENCY_CONFLICT', 409);
+    if (action === 'read') this.assertReadable(current, fileIds);
+    this.assertSameGrant(initial, current, action);
     return current;
+  }
+
+  private assertReadable(grant: FileResourceGrant, fileIds: readonly string[]): void {
+    if (grant.readableFileIds !== undefined && fileIds.some(id => !grant.readableFileIds!.includes(id))) workflowError('FILE_RESOURCE_DENIED', 403);
+  }
+
+  private assertSameGrant(initial: FileResourceGrant, current: FileResourceGrant, action: FileResourceAction): void {
+    const before = initial.readableFileIds, after = current.readableFileIds;
+    if (initial.organizationId !== current.organizationId || initial.version !== current.version
+      || action === 'read' && (before === undefined ? after !== undefined
+        : after === undefined || before.length !== after.length || before.some(id => !after.includes(id)))) workflowError('CONCURRENCY_CONFLICT', 409);
   }
 
   private async authorizedFile(tx: Prisma.TransactionClient, actor: FileActor, id: string, action: FileResourceAction) {

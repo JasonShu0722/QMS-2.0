@@ -9,6 +9,7 @@ import * as api from './workflow-api';
 import { workflowLabel } from './workflow-labels';
 import { WorkflowClosureTemplateDialog } from './WorkflowClosureTemplateDialog';
 import { ProcessEightDBinding, type EightDBindingDomain } from './ProcessEightDBinding';
+import { SupplierEightDBinding } from './SupplierEightDBinding';
 import './workflows.css';
 
 type CreateAttempt = { action: 'create'; path: '/api/v1/workflows'; method: 'POST'; rawBody: string; key: string };
@@ -142,5 +143,6 @@ function List({ session }: { session?: string }) {
       <Link to={`/app/workflow-designer/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
     </li>)}</ul></Card>}
     <ProcessEightDBinding domain={bindingDomain} onDomainChange={setBindingDomain} />
+    <SupplierEightDBinding />
   </section>;
 }

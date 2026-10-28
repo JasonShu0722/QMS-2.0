@@ -5,6 +5,12 @@ import type { WorkflowClosureDuty, WorkflowClosureParticipant, WorkflowClosurePl
 
 export type { WorkflowClosureDuty } from './workflow-closure-policy.js';
 export type WorkflowClosureOperation = 'READ' | 'SUBMIT' | 'DECIDE' | 'CANCEL';
+export type WorkflowSupplierSubmissionInput = {
+  supplierProblemId: string;
+  responseRevisionId: string;
+  expectedContentVersion: number;
+  expectedInstanceVersion: number;
+};
 export type WorkflowClosureContext = {
   organizationId: string;
   problemId: string;
@@ -25,6 +31,7 @@ export type WorkflowClosureContext = {
 export interface WorkflowClosureAdapter {
   readonly domainCode: string;
   lockAndRead(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, operation: WorkflowClosureOperation): Promise<WorkflowClosureContext>;
+  lockSupplierSubmission?(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, input: WorkflowSupplierSubmissionInput): Promise<WorkflowClosureContext>;
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
   // Session-independent READ scope: also reject stale domain content/person/section facts in context.
