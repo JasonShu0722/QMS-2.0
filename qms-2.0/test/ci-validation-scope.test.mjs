@@ -234,6 +234,37 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   assert.match(aggregate, /toJSON\(needs\)/);
 });
 
+test('standalone CI Worker lifecycle uses a fresh migrated and seeded database after the original integration shards', () => {
+  const integration = jobBlock(foundation, 'integration');
+  const step = (name) => integration.match(new RegExp(`^      - name: ${name}\\r?\\n([\\s\\S]*?)(?=^      - |$(?![\\s\\S]))`, 'm'))?.[1];
+  const shards = step('Real PostgreSQL integration tests');
+  const worker = step('Real worker process lifecycle');
+  assert.ok(shards && worker, 'both real database test steps must exist');
+  assert.match(integration, /-e POSTGRES_DB=qms2/);
+  assert.match(integration, /DATABASE_URL="postgresql:\/\/qms:\$POSTGRES_PASSWORD@127\.0\.0\.1:\$PG_PORT\/qms2"/);
+  assert.match(shards, /for shard in 1 2 3 4; do\s+pnpm --filter @qms\/api test:integration --shard="\$shard\/4"\s+done/);
+  assert.doesNotMatch(shards, /DATABASE_URL|qms_worker_lifecycle|GITHUB_ENV/);
+  assert.match(worker, /^        env:\r?\n          NODE_ENV: development\r?\n        run: \|\r?\n          set -euo pipefail\r?\n/);
+  const ordered = [
+    'docker exec "$PG_CONTAINER" psql -U qms -d qms2 -v ON_ERROR_STOP=1 -c \'CREATE DATABASE qms_worker_lifecycle\'',
+    'WORKER_DATABASE_URL=$(node -e \'const url = new URL(process.env.DATABASE_URL); url.pathname = "/qms_worker_lifecycle"; process.stdout.write(url.href);\')',
+    'echo "::add-mask::$WORKER_DATABASE_URL"',
+    'export DATABASE_URL="$WORKER_DATABASE_URL"',
+    'pnpm --filter @qms/api db:migrate:deploy',
+    'pnpm --filter @qms/api db:seed',
+    'pnpm --filter @qms/api test:worker-process:built',
+  ];
+  let previous = -1;
+  for (const command of ordered) {
+    const index = worker.indexOf(command);
+    assert.ok(index > previous, `Worker step must execute in order: ${command}`);
+    previous = index;
+  }
+  assert.doesNotMatch(worker, /GITHUB_ENV|docker run|DROP|TRUNCATE|DELETE|continue-on-error|\|\| true/);
+  assert.ok(integration.indexOf('name: Real PostgreSQL integration tests') < integration.indexOf('name: Real worker process lifecycle'));
+  assert.ok(integration.indexOf('name: Real worker process lifecycle') < integration.indexOf('name: Validate foundation Compose'));
+});
+
 test('deploy workflow checks the source attempt before SSH and preserves repository/main/push restrictions', () => {
   for (const guard of ["workflow_run.event == 'push'", "workflow_run.head_branch == 'main'", 'workflow_run.head_repository.full_name == github.repository', "workflow_run.conclusion == 'success'"]) assert.ok(deploy.includes(guard), guard);
   assert.match(deploy, /actions: read/);
