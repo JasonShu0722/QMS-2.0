@@ -53,6 +53,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetcher);
 });
 
+it.each([[false, null], [false, '2026-10-28T00:00:00Z'], [true, null]] as const)('does not mount portal disclosure for portal=%s released=%s', async (portal, released) => {
+  current.releasedToSupplierAt = released;
+  mount(portal); await screen.findByDisplayValue('供应商实际问题');
+  expect(screen.queryByRole('region', { name: '已披露附件' })).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([path]) => String(path).endsWith('/disclosure-attachments'))).toBe(false);
+});
+
 it.each([false, true])('loads the issued document and saves all D2-D8 to the correct portal=%s endpoint', async portal => {
   mount(portal);
   expect(await screen.findByDisplayValue('供应商实际问题')).toBeVisible();

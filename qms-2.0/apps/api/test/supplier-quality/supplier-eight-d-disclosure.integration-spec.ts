@@ -61,11 +61,21 @@ describe('supplier disclosure through actual application and enterprise accounts
     expect(Buffer.from(await (await fetch(download.url)).arrayBuffer())).toEqual(png);
     const listed = await app.get(FileLifecycleService).listResource(f.vendor.actor, { resourceType: 'supplier-eight-d-disclosure', resourceId: f.draft.id });
     expect(listed.map((file: { id: string }) => file.id)).toEqual([selected]);
+    const portalFiles = (await f.http(f.vendor.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(200)).body;
+    expect(portalFiles).toEqual([expect.objectContaining({ id: selected, resourceType: 'supplier-eight-d-disclosure', resourceId: f.draft.id, scanStatus: 'CLEAN' })]);
+    expect(JSON.stringify(portalFiles)).not.toContain(hidden);
+    expect(portalFiles[0]).not.toHaveProperty('objectKey');
+    expect(portalFiles[0]).not.toHaveProperty('objectVersionId');
+    await f.http(f.otherVendor.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(404);
+    await f.http(f.sqe.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(403);
+    await f.db.rolePermission.deleteMany({ where: { roleId: f.vendor.role.id, permission: { code: 'supplier-quality:responses:read' } } });
+    await f.http(f.vendor.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(403);
   }, 30_000);
 
   it('requires an explicit bound preview before a real same-enterprise release and replays only the original operation', async () => {
     const f = await supplierEightDFixture(app);
     await f.http(f.vendor.cookie, 'get', f.portal).expect(404);
+    await f.http(f.vendor.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(404);
     const preview = await f.http(f.sqe.cookie, 'post', `${f.prefix}/disclosure-preview`, {
       expectedRowVersion: f.issued.rowVersion, selectedFileIds: [],
     });
@@ -82,6 +92,7 @@ describe('supplier disclosure through actual application and enterprise accounts
     expect(released.body.notificationState).toBe('PENDING_PROJECTION');
     const visible = (await f.http(f.vendor.cookie, 'get', f.portal).expect(200)).body;
     expect(visible.releasedToSupplierAt).toBe(released.body.releasedAt);
+    expect((await f.http(f.vendor.cookie, 'get', `${f.portal}/disclosure-attachments`).expect(200)).body).toEqual([]);
     await f.http(f.otherVendor.cookie, 'get', f.portal).expect(404);
     expect((await f.http(f.sqe.cookie, 'post', `${f.prefix}/release`, input, key).expect(200)).body).toEqual(released.body);
     await f.http(f.sqe.cookie, 'post', `${f.prefix}/release`, { ...input, confirmed: false }, key).expect(400);

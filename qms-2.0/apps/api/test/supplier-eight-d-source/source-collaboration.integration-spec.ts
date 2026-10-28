@@ -22,8 +22,9 @@ import { SessionService } from '../../src/modules/identity/session.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SupplierSourceCollaborationReadModel } from '../../src/modules/problem-index/supplier-source-collaboration.read-model.js';
 
-if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
-  || new URL(process.env.DATABASE_URL!).pathname !== '/qms_n5_20261028_deadline') throw new Error('Exclusive N5 deadline PG required');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Disposable loopback PostgreSQL required; never preview 55440.');
+}
 
 describe('source SQE collaboration public ports', () => {
   let app: INestApplication; let db: PrismaService;

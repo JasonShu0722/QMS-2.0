@@ -22,7 +22,7 @@ import { SupplierEightDController, SupplierPortalEightDController } from './supp
 import { SupplierEightDClosureAdapter } from './supplier-eight-d-closure.adapter.js';
 import { SupplierEightDSupplementFileAdapter } from './supplier-eight-d-supplement-file.adapter.js';
 import { SupplierEightDDisclosureService } from './supplier-eight-d-disclosure.service.js';
-import { SupplierEightDDisclosureController } from './supplier-eight-d-disclosure.controller.js';
+import { SupplierEightDDisclosureController, SupplierPortalEightDDisclosureController } from './supplier-eight-d-disclosure.controller.js';
 import { SupplierEightDDisclosureFileAdapter } from './supplier-eight-d-disclosure-file.adapter.js';
 import { SupplierEightDDeadlineService } from './supplier-eight-d-deadline.service.js';
 import { SupplierEightDDeadlineController, SupplierPortalEightDDeadlineController } from './supplier-eight-d-deadline.controller.js';
@@ -40,7 +40,7 @@ import { SupplierEightDReadAdapter } from './supplier-eight-d-read.adapter.js';
 
 @Module({
   imports: [AdminMutationModule, AuditLogModule, FileManagementModule, IdentityModule, OrganizationModule, ProblemIndexModule, ProblemReadModule, WorkflowModule, TaskNotificationModule],
-  controllers: [SupplierQualityController, SupplierPortalController, SupplierWorkflowBindingController, SupplierMasterController, SupplierEightDAssignmentController, SupplierEightDTaskController, SupplierPortalEightDTaskController, SupplierEightDController, SupplierPortalEightDController, SupplierEightDDisclosureController,
+  controllers: [SupplierQualityController, SupplierPortalController, SupplierWorkflowBindingController, SupplierMasterController, SupplierEightDAssignmentController, SupplierEightDTaskController, SupplierPortalEightDTaskController, SupplierEightDController, SupplierPortalEightDController, SupplierEightDDisclosureController, SupplierPortalEightDDisclosureController,
     SupplierEightDDeadlineController, SupplierPortalEightDDeadlineController, SupplierEightDReportController, SupplierPortalEightDReportController,
     SupplierEightDRevisionController, SupplierPortalEightDRevisionController],
   providers: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierQualityFileResourceAdapter, SupplierQualityUpgradeAdapter, SupplierAccountService, SupplierProfileImportService,

@@ -332,8 +332,8 @@ describe('workflow closure rounds real PostgreSQL', () => {
   it('enforces same-organization foreign keys, one pending round and one row per round duty in PostgreSQL itself', async () => {
     const f = await fixture(); const other = await fixture(); const r = await f.start();
     await expect(prisma.$executeRaw`INSERT INTO workflow_closure_rounds
-      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by)
-      SELECT ${randomUUID()}::uuid, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, 2, created_by
+      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by, creator_organization_id)
+      SELECT ${randomUUID()}::uuid, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, 2, created_by, creator_organization_id
       FROM workflow_closure_rounds WHERE id = ${r.id}::uuid`).rejects.toBeDefined();
     await expect(prisma.$executeRaw`INSERT INTO workflow_closure_duties (id, organization_id, round_id, duty, status, user_id, participant)
       SELECT ${randomUUID()}::uuid, organization_id, round_id, duty, status, user_id, participant FROM workflow_closure_duties WHERE round_id = ${r.id}::uuid AND duty = 'PROFESSIONAL'`).rejects.toBeDefined();

@@ -47,16 +47,18 @@ it('opens supplier copy from selected process facts without enabling internal is
     return baseResponse(path);
   });
   mount();
-  const copy = await screen.findByRole('button', { name: '复制为供应商草稿' });
+  const toolbar = within((await screen.findByLabelText('搜索制程不良')).closest('.process-quality-toolbar')!);
+  const copy = await toolbar.findByRole('button', { name: '复制为供应商草稿' });
   expect(copy).toBeDisabled();
   fireEvent.click(await screen.findByLabelText(`选择制程不良 ${defect.description}`));
   await waitFor(() => expect(copy).toBeEnabled());
   fireEvent.click(copy);
   await waitFor(() => expect(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]')).toBeVisible());
+  const dialog = within(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]') as HTMLElement);
   expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
   await selectOption('目标供应商档案', '复制目标档案');
-  fireEvent.click(screen.getByRole('button', { name: '读取受控预览' }));
+  fireEvent.click(dialog.getByRole('button', { name: '读取受控预览' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ organizationId, supplierProfileId: section.id, sources: [{ kind: 'PROCESS_LEDGER', sourceId: defect.id, sourceVersion: defect.version }] }) }), { replayAfterReauthentication: false }));
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/source-copies/drafts'))).toBe(false);
 });
@@ -201,9 +203,10 @@ it('preserves legacy BRIEF issue permission independently from formal 8D issue p
   expect(screen.getByRole('button', { name: '发起问题' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
 });
-async function selectOption(label: string, text: string) {
-  await waitFor(() => expect(screen.getByLabelText(label)).not.toBeDisabled());
-  fireEvent.mouseDown(screen.getByLabelText(label));
+async function selectOption(label: string, text: string, queries: Pick<typeof screen, 'getByLabelText'> = screen) {
+  const control = queries.getByLabelText(label);
+  await waitFor(() => expect(control).not.toBeDisabled());
+  fireEvent.mouseDown(control);
   fireEvent.click(await screen.findByText(text, { selector: '.ant-select-item-option-content' }));
 }
 async function openIssue() {
@@ -213,10 +216,11 @@ async function openIssue() {
   return onIssued;
 }
 async function fillIssue() {
-  fireEvent.click(screen.getByLabelText('非复发'));
-  await selectOption('风险等级', '高');
-  await selectOption('责任科室', '制造科');
-  await selectOption('负责人', '真实负责人');
+  const drawer = within(screen.getByText('发起正式内部8D').closest('[role="dialog"]') as HTMLElement);
+  fireEvent.click(drawer.getByLabelText('非复发'));
+  await selectOption('风险等级', '高', drawer);
+  await selectOption('责任科室', '制造科', drawer);
+  await selectOption('负责人', '真实负责人', drawer);
 }
 
 it('previews visible and hidden relations without defaulting recurrence; posts server-bound 8D with exact token', async () => {
@@ -422,13 +426,14 @@ it('keeps owner search keyboard-editable while loading and blocks issuing with s
   });
   await openIssue();
   await fillIssue();
-  const input = screen.getByLabelText('负责人');
+  const drawer = within(screen.getByText('发起正式内部8D').closest('[role="dialog"]') as HTMLElement);
+  const input = drawer.getByLabelText('负责人');
   await user.type(input, 'a');
   await waitFor(() => expect(searching).toBe(true));
   expect(input).toBeEnabled();
   expect(input).toHaveFocus();
   expect(screen.queryByText('真实负责人', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
-  expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
+  expect(drawer.getByText('确认发起8D').closest('button')).toBeDisabled();
   await act(async () => { resolve({ departments: [section], users: [owner], departmentTotal: 1, userTotal: 1, page: 1, pageSize: 100 }); });
   await screen.findByText('真实负责人', { selector: '.ant-select-item-option-content' });
 });

@@ -84,7 +84,7 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
   const tasks = useProjection<Task>(`${base}/tasks${scope}`, lifetime, current, revoke);
   const notices = useProjection<Notice>(`${base}/notifications${scope}`, lifetime, current, revoke);
   const collaboration = useSupplierSourceCollaboration(organizationId, lifetime, current, revoke, !portal);
-  const workspace = (id: string) => `${portal ? '/supplier/corrections' : '/app/supplier-quality'}/problems/${encodeURIComponent(id)}`;
+  const workspace = (id: string) => `${portal ? '/supplier/corrections/problems' : '/app/supplier-quality/eight-d'}/${encodeURIComponent(id)}`;
   const date = (value: string | null) => value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : t('未设置期限');
   const error = (cause: unknown, label: string, retry: () => void) => <Alert type="error" showIcon title={t(`${label}加载失败，请重试`)}
     description={<>{t(safeAccountError(cause))}{cause instanceof ApiError && cause.traceId && <code> {cause.traceId}</code>}</>}

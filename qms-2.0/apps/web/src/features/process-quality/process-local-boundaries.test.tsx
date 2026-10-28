@@ -51,7 +51,7 @@ it('retains a new shipment report when closing is declined', async () => {
 
 it('retains a process issue form when closing is declined', async () => {
   const defect = { id: 'defect-1', description: '表面划伤', defectTypeCode: 'SCRATCH', defectQuantity: 1, responsibilityCategory: 'PROCESS', occurredAt: '2026-10-01', version: 1 };
-  vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: [] } : { items: [], total: 0 });
+  vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : { items: [], total: 0 });
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(screen.getByText('发起问题'));

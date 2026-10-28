@@ -12,6 +12,7 @@ import { supplierEightDPath, type SupplierCommand, type SupplierReport, type Sup
 import { SupplierDisclosure } from './SupplierDisclosure';
 import { SupplierDeadlines } from './SupplierDeadlines';
 import { SupplierControlledReport } from './SupplierControlledReport';
+import { SupplierDisclosedAttachments } from './SupplierDisclosedAttachments';
 import styles from './supplier-eight-d.module.css';
 
 export type SupplierEightDWorkspaceProps = { supplierProblemId: string; portal: boolean; onDenied?: (cause: unknown) => void };
@@ -204,6 +205,7 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
         }}>{text('确认提交', 'Confirm submission')}</Button></Space></>}
         <Button disabled={busy || pending || evidencePending > 0} onClick={() => leave(() => { setAction(undefined); setFormDirty(false); }, true)}>{text('取消操作', 'Cancel action')}</Button>
       </section>}
+      {portal && report.releasedToSupplierAt !== null && <SupplierDisclosedAttachments report={report} base={base} read={read} />}
       <EightDDocumentEditor problemId={supplierProblemId} document={draft} resource={{ resourceType: report.closedAt && !portal ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: supplierProblemId }} disabled={!editable || locked || !!action} removalBlocked={evidencePending > 0} read={read} onChange={change => { if (editable && !locked && !action) { setDraft(value => value && change(value)); setDirty(true); } }} />
       {report.closure && <section className={styles.section}><h3>{text('当前关闭轮次', 'Current closure round')} {report.closure.roundNumber}</h3><p>{text('固定内容版本', 'Fixed content version')} {report.closure.contentVersion} · {report.closure.status}</p><p>{text('先SQE后管理，高 / 重大风险管理侧并行；任一退回后供应商重新提交，整轮重审。', 'SQE precedes management. High / critical management duties run in parallel. Any return requires supplier resubmission and a full new review.')}</p>{report.closure.duties.map(duty => <p key={duty.id}>{duty.duty === 'PROFESSIONAL' ? 'SQE' : duty.duty === 'SECTION_MANAGER' ? text('科室经理', 'Section manager') : text('部长', 'Minister')} · {duty.status} · {duty.userId}{!portal && duty.comment && <> · {duty.comment}</>}</p>)}</section>}
       {!portal && <section className={styles.section}><Button disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => setInbox(true)}>{text('打开关闭职责待办', 'Open closure duty inbox')}</Button>{inbox && <><Button onClick={() => leave(() => { setInbox(false); void load(); }, true)}>{text('关闭职责待办并刷新', 'Close duty inbox and refresh')}</Button><ClosureTaskInbox onDenied={revoke} /></>}</section>}

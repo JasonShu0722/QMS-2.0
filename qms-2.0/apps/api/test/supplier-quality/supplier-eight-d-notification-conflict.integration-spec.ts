@@ -10,8 +10,9 @@ import { SupplierEightDDeadlineService } from '../../src/modules/supplier-qualit
 import { supplierEightDDocument, supplierEightDFixture } from './supplier-eight-d.fixture.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
-if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
-  || new URL(process.env.DATABASE_URL!).pathname !== '/qms_n5_20261028_tasks') throw new Error('Dedicated supplier task disposable PostgreSQL required');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Disposable loopback PostgreSQL required; never preview 55440.');
+}
 
 type Fixture = Awaited<ReturnType<typeof supplierEightDFixture>>;
 describe('supplier notification real conflict recovery', () => {

@@ -8,6 +8,7 @@ import { isSecurityConcurrencyConflict } from '../../common/security/session-sec
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
+import type { FileDto } from '../file-management/file.dto.js';
 import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import { canonical } from '../workflow/workflow-runtime-policy.js';
 import { SupplierEightDService } from './supplier-eight-d.service.js';
@@ -23,6 +24,11 @@ type Preview = { id: string; rowVersion: number; contentVersion: number; instanc
 export class SupplierEightDDisclosureService {
   constructor(private readonly prisma: PrismaService, private readonly core: SupplierEightDService,
     private readonly audit: AuditLogService, private readonly outbox: OutboxService, private readonly files: FileLifecycleService) {}
+
+  listReleasedAttachments(actor: SupplierEightDActor, id: string): Promise<FileDto[]> {
+    if (actor.accountType !== 'SUPPLIER') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+    return this.files.listResource(actor, { resourceType: 'supplier-eight-d-disclosure', resourceId: id });
+  }
 
   preview(actor: SupplierEightDActor, id: string, input: SupplierDisclosurePreviewDto, traceId: string): Promise<SupplierDisclosurePreviewResultDto> {
     this.selection(input.selectedFileIds);

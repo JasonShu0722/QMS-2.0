@@ -39,10 +39,12 @@ afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); se
 it('uses generated duties and source-case links, preserves two duties on one problem and never writes', async () => {
   const requests = api(({ path }) => path.includes('/eight-d/tasks') ? json(page([task, { ...task, id: 'duty-2', duty: 'MINISTER' }])) : undefined);
   mount(false, '?organizationId=selected');
-  expect(await screen.findByText('科室经理')).toBeVisible();
-  expect(screen.getByText('部长')).toBeVisible();
-  expect(screen.getAllByRole('link', { name: '审核关闭' })).toHaveLength(2);
-  for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href')).toBe('/app/supplier-quality/problems/source-case');
+  const manager = await screen.findByText('科室经理');
+  const tasks = within(manager.closest('section')!);
+  expect(manager).toBeVisible();
+  expect(tasks.getByText('部长')).toBeVisible();
+  expect(tasks.getAllByRole('link', { name: '审核关闭' })).toHaveLength(2);
+  for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href')).toBe('/app/supplier-quality/eight-d/source-case');
   expect(screen.getByText('当前已加载任务：2')).toBeVisible();
   expect(screen.queryByText(/总数/)).not.toBeInTheDocument();
   expect(requests.every(({ path, init }) => path.includes('organizationId=selected') && (!init?.method || init.method === 'GET'))).toBe(true);
@@ -52,6 +54,7 @@ it('portal uses only portal endpoints and omits an internal organization query',
   useWorkTabsStore.getState().bindSession('SUPPLIER:vendor:user');
   const requests = api(); mount(true, '?organizationId=internal-owner');
   expect(await screen.findByRole('link', { name: '审核关闭' })).toHaveAttribute('href', '/supplier/corrections/problems/source-case');
+  expect(await screen.findByRole('link', { name: '查看关联8D' })).toHaveAttribute('href', '/supplier/corrections/problems/source-case');
   expect(requests).toHaveLength(2);
   expect(requests.every(({ path }) => path.startsWith('/api/v1/supplier-portal/eight-d/') && !path.includes('organizationId'))).toBe(true);
 });
@@ -68,7 +71,7 @@ it('renders all actual actions as workspace links and keeps extension decisions 
     { ...task, id: 'extension', kind: 'EXTENSION', duty: 'SQE', status: 'QUALITY_PENDING', requestId: 'extension', requestedDueAt: '2026-10-30T08:00:00Z', actions: ['DECIDE_EXTENSION'] },
   ])) : undefined);
   mount();
-  for (const label of ['确认分析完成', '完整提交8D', '审核延期']) expect(await screen.findByRole('link', { name: label })).toHaveAttribute('href', '/app/supplier-quality/problems/source-case');
+  for (const label of ['确认分析完成', '完整提交8D', '审核延期']) expect(await screen.findByRole('link', { name: label })).toHaveAttribute('href', '/app/supplier-quality/eight-d/source-case');
   expect(screen.getByText('已逾期')).toBeVisible();
   expect(screen.getByText('SQE')).toBeVisible(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

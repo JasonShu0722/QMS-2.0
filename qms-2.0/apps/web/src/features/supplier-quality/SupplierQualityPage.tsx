@@ -218,7 +218,12 @@ export function SupplierQualityPage({ portal = false }: { portal?: boolean }) {
   const sessionScope = useWorkTabsStore(state => state.sessionScope);
   const base = supplierPath(portal);
   const suffix = location.pathname.slice(base.length);
+  const direct = !portal && (suffix === '/eight-d' || suffix.startsWith('/eight-d/'));
+  const directMatch = /^\/eight-d\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(suffix);
   const match = /^\/problems\/([0-9a-f-]{36})$/i.exec(suffix);
+  if (direct) return <main className="supplier-quality-page">{directMatch
+    ? <SupplierEightDWorkspace key={JSON.stringify([sessionScope, directMatch[1]])} supplierProblemId={directMatch[1]} portal={false} />
+    : <Alert role="alert" type="error" showIcon title={t('无效的供应商8D问题标识')} />}</main>;
   return <main className="supplier-quality-page"><div className="supplier-heading"><div><Typography.Title level={1}>{portal ? '问题与整改' : t('供应商问题台账')}</Typography.Title></div>
     {!portal ? <Space wrap><Link to={base}>问题台账</Link><Link to={`${base}/profiles`}>供应商资料</Link></Space> : null}</div>
     {match ? <ProblemDetail key={JSON.stringify([sessionScope, portal, match[1]])} id={match[1]} portal={portal} /> : !portal && suffix === '/new' ? <><Link to={base}>返回台账</Link><ProblemForm saved={(value) => navigate(`${base}/problems/${value.id}`)} /></> : !portal && suffix === '/profiles' ? <SupplierProfilesPage /> : <ProblemLedger portal={portal} />}

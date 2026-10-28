@@ -9,8 +9,9 @@ import { supplierEightDDocument, supplierEightDFixture } from './supplier-eight-
 import { SupplierEightDDeadlineService } from '../../src/modules/supplier-quality/supplier-eight-d-deadline.service.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 
-if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
-  || !new URL(process.env.DATABASE_URL!).pathname.includes('deadline')) throw new Error('Dedicated supplier deadline disposable PostgreSQL lease required; never preview 55440 or another agent database.');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Disposable loopback PostgreSQL required; never preview 55440.');
+}
 type Fixture = Awaited<ReturnType<typeof supplierEightDFixture>>;
 const oldDue = '2026-10-01T00:00:00.000Z', newDue = '2026-12-01T00:00:00.000Z';
 

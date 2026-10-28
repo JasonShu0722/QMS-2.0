@@ -4,6 +4,8 @@
 
 Swagger新增供应商完整8D的发单、当前正文/动作、披露预览与释放、阶段期限与延期、历史修订及受控报告/PDF；内部入口位于`/api/v1/supplier-quality/eight-d`，企业门户位于`/api/v1/supplier-portal/eight-d`。内部SQE任职目录与供应商流程绑定/启用分开，不通过目录或绑定提示自动配置生产权限。
 
+PR #79的V0.0.34-fix1补齐门户`GET /api/v1/supplier-portal/eight-d/:id/disclosure-attachments`，返回生成契约的`FileDto[]`，供独立只读附件区使用。入口要求真实SUPPLIER会话及`responses:read`，沿公共文件生命周期与原披露适配器复验本企业、已释放和已选择的固定附件；未选择文件、未释放单据、其他企业或撤权不因列表接口获得访问权。不公开对象存储密钥或内部版本标识，不改变正文证据附件。
+
 `/api/v1/supplier-quality/source-copies`提供三域来源预览及独立草稿创建；`/api/v1/supplier-quality/source-collaboration/tasks`仅返回真实具备来源协作资格的任务、扫描数量和游标，不输出未经授权的全组织总量。任务DTO的`link`为后端实际复核入口，新品来源可指向底层制程物料，不由前端拼猜selection/project身份。
 
 本轮已重新生成并检查契约，分项API/Web构建及类型检查有记录，最终整合门禁仍在进行；不把生成成功当作所有业务或上线通过。线上N4基线已是PR #77的a60a189，下文“本地未发布/7cd2707”保留其先前实施时点含义，N5尚未发布。

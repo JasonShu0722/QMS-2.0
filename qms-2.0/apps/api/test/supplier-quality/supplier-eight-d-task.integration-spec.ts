@@ -14,8 +14,9 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { supplierEightDDocument, supplierEightDFixture } from './supplier-eight-d.fixture.js';
 
-if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
-  || !new URL(process.env.DATABASE_URL!).pathname.includes('task')) throw new Error('Dedicated supplier task disposable PostgreSQL required; never preview 55440 or another agent lease.');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Disposable loopback PostgreSQL required; never preview 55440.');
+}
 type Fixture = Awaited<ReturnType<typeof supplierEightDFixture>>;
 const dueAt = '2026-10-01T00:00:00.000Z';
 

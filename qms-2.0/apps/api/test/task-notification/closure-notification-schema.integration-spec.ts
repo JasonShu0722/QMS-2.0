@@ -28,9 +28,9 @@ describe('closure notification persistence on PostgreSQL', () => {
     const instance = await prisma.workflowInstance.create({ data: { organizationId: organization.id, problemIndexId: problem.id, workflowDefinitionId: definition.id, workflowVersionId: version.id, instanceKey: randomUUID(), currentNodeId: node.id } });
     const roundId = randomUUID();
     await prisma.$executeRaw`INSERT INTO workflow_closure_rounds
-      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by)
+      (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by, creator_organization_id)
       VALUES (${roundId}::uuid, ${organization.id}::uuid, ${problem.id}::uuid, ${instance.id}::uuid,
-        ${version.id}::uuid, ${node.id}::uuid, 1, '{}'::jsonb, '{}'::jsonb, 1, ${user.id}::uuid)`;
+        ${version.id}::uuid, ${node.id}::uuid, 1, '{}'::jsonb, '{}'::jsonb, 1, ${user.id}::uuid, ${organization.id}::uuid)`;
     return { organizationId: organization.id, recipientId: user.id, roundId };
   }
 

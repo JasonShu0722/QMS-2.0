@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, getSession } from '../../api/client';
@@ -27,25 +27,31 @@ it.each([false, true])('retains the real issuer attempt and freezes sibling edit
     return record as never;
   });
   render(<LanguageProvider><MemoryRouter initialEntries={[`/app/supplier-quality/problems/${id}`]}><UnsavedChangesProvider><SupplierQualityPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
-  await screen.findByRole('option', { name: /Supplier quality/ });
-  fireEvent.change(screen.getByLabelText('SQE责任任职'), { target: { value: assignmentId } });
-  fireEvent.click(screen.getByRole('button', { name: '正式发起8D' }));
+  const assignment = await screen.findByLabelText('SQE责任任职');
+  const issuer = within(assignment.closest('section')!);
+  await within(assignment).findByRole('option', { name: /Supplier quality/ });
+  fireEvent.change(assignment, { target: { value: assignmentId } });
+  fireEvent.click(issuer.getByRole('button', { name: '正式发起8D' }));
   await screen.findByText(/发单结果未知/);
   if (canEditFacts) {
-    expect(screen.getByLabelText('问题标题')).toBeDisabled();
-    expect(screen.getByRole('button', { name: '保存问题草稿' })).toBeDisabled();
-    fireEvent.submit(screen.getByRole('button', { name: '保存问题草稿' }).closest('form')!);
+    const title = screen.getByLabelText('问题标题');
+    const save = within(title.closest('section')!).getByRole('button', { name: '保存问题草稿' });
+    expect(title).toBeDisabled();
+    expect(save).toBeDisabled();
+    fireEvent.submit(save.closest('form')!);
     expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0);
   }
   const reads = vi.mocked(apiRequest).mock.calls.filter(([, init]) => !init?.method).length;
-  fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+  const toolbar = within(screen.getByText('返回台账').closest('.supplier-toolbar')!);
+  fireEvent.click(toolbar.getByRole('button', { name: '重新加载' }));
   expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '重试原发单' })).toBeVisible();
+  const retry = issuer.getByRole('button', { name: '重试原发单' });
+  expect(retry).toBeVisible();
   expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => !init?.method)).toHaveLength(reads);
-  fireEvent.click(screen.getByRole('button', { name: '重试原发单' }));
+  fireEvent.click(retry);
   await waitFor(() => expect(writes).toBe(2));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => !init?.method).length).toBeGreaterThan(reads));
-  await screen.findByRole('option', { name: /Supplier quality/ });
+  await within(await screen.findByLabelText('SQE责任任职')).findByRole('option', { name: /Supplier quality/ });
   const attempts = vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(attempts[1]![1]?.body).toBe(attempts[0]![1]?.body);
   expect(attempts[1]![1]?.headers).toEqual(attempts[0]![1]?.headers);

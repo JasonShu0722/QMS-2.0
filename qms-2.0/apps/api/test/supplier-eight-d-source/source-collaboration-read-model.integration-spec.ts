@@ -5,9 +5,8 @@ import { Prisma } from '../../src/generated/prisma/client.js';
 import { SupplierSourceCollaborationReadModel } from '../../src/modules/problem-index/supplier-source-collaboration.read-model.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
-if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)
-  || new URL(process.env.DATABASE_URL!).pathname !== '/qms_n5_20261028_deadline') {
-  throw new Error('Only the exclusively assigned N5 deadline database is allowed');
+if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgres(process.env.DATABASE_URL)) {
+  throw new Error('Disposable loopback PostgreSQL required; never preview 55440.');
 }
 
 describe('supplier source collaboration platform public read model', () => {
@@ -35,7 +34,7 @@ describe('supplier source collaboration platform public read model', () => {
     await problem(f.organizationId, { closedAt: new Date() });
     await problem(f.organizationId, { domainCode: 'supplier-quality' });
     await problem((await fixture()).organizationId);
-    const before = await db.problemIndex.findMany({ where: { organizationId: f.organizationId } });
+    const before = await db.problemIndex.findMany({ where: { organizationId: f.organizationId }, orderBy: { id: 'asc' } });
     const read = (after?: string) => db.$transaction(async tx => {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       return model.scanTrusted(tx, f.organizationId, { after, scanLimit: 2 });
@@ -45,7 +44,7 @@ describe('supplier source collaboration platform public read model', () => {
       scannedCount: 2, nextCursor: active[1].id });
     const second = await read(first.nextCursor ?? undefined);
     expect(second).toEqual({ candidates: [{ problemId: active[2].id, domainCode: active[2].domainCode }], scannedCount: 1, nextCursor: null });
-    expect(await db.problemIndex.findMany({ where: { organizationId: f.organizationId } })).toEqual(before);
+    expect(await db.problemIndex.findMany({ where: { organizationId: f.organizationId }, orderBy: { id: 'asc' } })).toEqual(before);
   });
 
   it('rechecks current active links without a fallback to primary or a saved snapshot', async () => {
