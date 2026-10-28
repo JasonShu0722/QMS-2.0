@@ -37,4 +37,5 @@ export class SupplierAccountPageDto {
   @ApiProperty() canCreate!: boolean;
   @ApiProperty() canReset!: boolean;
   @ApiProperty() canSetStatus!: boolean;
+  @ApiProperty() canDelete!: boolean;
 }

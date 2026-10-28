@@ -7,7 +7,7 @@ import { UserAdministration } from './UserAdministration';
 import type { AdminOrganization, AdminUser } from './admin';
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 const organization: AdminOrganization = { id: 'org', name: 'Organization', code: 'O', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:update', 'account:users:status', 'account:roles:read', 'account:roles:assign'] };
-const user: AdminUser = { fullName: 'Alice', phone: '+1 123', emailVerifiedAt: null, profileVersion: 3, id: 'u1', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: 'org', organization: { id: 'org', code: 'O', name: 'Organization' }, createdAt: '', updatedAt: '' };
+const user: AdminUser = { securityVersion: 1, fullName: 'Alice', phone: '+1 123', emailVerifiedAt: null, profileVersion: 3, id: 'u1', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: 'org', organization: { id: 'org', code: 'O', name: 'Organization' }, createdAt: '', updatedAt: '' };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 beforeEach(() => {
   localStorage.clear(); document.documentElement.lang = 'zh-CN';

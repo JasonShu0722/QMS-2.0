@@ -7,6 +7,7 @@ import type { WorkflowClosureAdapter, WorkflowClosureContext, WorkflowClosureOpe
 import type { WorkflowDeadlineOperation, WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
+import type { WorkflowAdministrativeInvalidationInput } from '../workflow/workflow-administrative-invalidation.types.js';
 
 @Injectable()
 export class ProcessEightDClosureAdapter implements WorkflowClosureAdapter, OnModuleInit {
@@ -19,6 +20,7 @@ export class ProcessEightDClosureAdapter implements WorkflowClosureAdapter, OnMo
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: WorkflowActor) { return this.service.complete(tx, context, actor); }
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: WorkflowActor) { return this.service.returnForChanges(tx, context, actor); }
   canNotifyRecipient(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string) { return this.service.canNotifyClosureRecipient(tx, context, userId); }
+  administrativeInvalidation(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput) { return this.service.administrativeInvalidation(tx, input); }
 
   async deadlineContext(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor, operation: WorkflowDeadlineOperation) {
     const record = await this.service.lockRecord(tx, actor, context.problemId, operation === 'READ' || operation === 'ELIGIBILITY' ? 'READ' : 'DEADLINE');

@@ -92,6 +92,7 @@ enum NotificationStatus {
 }
 
 model Organization {
+  userIdentityHistory UserOrganizationHistory[]
   accountBatches AccountBatch[]
   id          String           @id @default(uuid()) @db.Uuid
   code        String           @unique @db.VarChar(64)
@@ -99,6 +100,8 @@ model Organization {
   type        OrganizationType
   parentId    String?          @map("parent_id") @db.Uuid
   status      OrganizationStatus @default(ACTIVE)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  configurationRequired Boolean @default(false) @map("configuration_required")
   version     Int              @default(1)
   parent      Organization?    @relation("OrganizationHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children    Organization[]   @relation("OrganizationHierarchy")
@@ -141,6 +144,7 @@ enum MfaPreference {
 }
 
 model User {
+  organizationHistory UserOrganizationHistory[]
   accountBatches AccountBatch[]
   id             String      @id @default(uuid()) @db.Uuid
   organizationId String      @map("organization_id") @db.Uuid
@@ -158,6 +162,8 @@ model User {
   passwordChangeChallenges PasswordChangeChallenge[]
   accountType    AccountType @map("account_type")
   status         UserStatus  @default(ACTIVE)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  configurationRequired Boolean @default(false) @map("configuration_required")
   mfaEnabled     Boolean     @default(false) @map("mfa_enabled")
   mfaPreference MfaPreference @default(DEFAULT) @map("mfa_preference")
   mfaRequirementOverride Boolean? @map("mfa_requirement_override")
@@ -253,6 +259,8 @@ model Department {
   code String @db.VarChar(64)
   name String @db.VarChar(200)
   status OrganizationStatus @default(ACTIVE)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  configurationRequired Boolean @default(false) @map("configuration_required")
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -275,6 +283,8 @@ model Position {
   code String @db.VarChar(64)
   name String @db.VarChar(200)
   status OrganizationStatus @default(ACTIVE)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  configurationRequired Boolean @default(false) @map("configuration_required")
   version Int @default(1)
   roleVersion Int @default(1) @map("role_version")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -300,11 +310,22 @@ model UserPosition {
   startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(3)
   endedAt DateTime? @map("ended_at") @db.Timestamptz(3)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  user User @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, map: "user_positions_current_identity_fkey")
   position Position @relation(fields: [organizationId, positionId], references: [organizationId, id], onDelete: Restrict)
 
   @@index([organizationId, userId, endedAt])
   @@map("user_positions")
+}
+
+model UserOrganizationHistory {
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@map("user_organization_history")
 }
 
 model Role {
@@ -1046,7 +1067,7 @@ model SupplierPortalNotification {
   readAt DateTime? @map("read_at") @db.Timestamptz(3)
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  recipient User @relation(fields: [supplierOrganizationId, recipientUserId], references: [organizationId, id], onDelete: Restrict, map: "supplier_portal_notifications_recipient_fkey")
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: Restrict, map: "supplier_portal_notifications_current_identity_fkey")
   workflowTask WorkflowTask @relation(fields: [ownerOrganizationId, workflowTaskId], references: [organizationId, id], onDelete: Cascade, map: "supplier_portal_notifications_task_fkey")
   supplierProblem SupplierQualityProblem @relation(fields: [supplierProblemId], references: [id], onDelete: Restrict, map: "supplier_portal_notifications_problem_fkey")
 

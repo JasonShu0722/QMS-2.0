@@ -56,6 +56,10 @@ describe('global material governance forward migration with real PostgreSQL', ()
     for (const migration of readdirSync(migrations).filter((entry) => entry < originalMigration).sort()) {
       if (/^\d{14}_/.test(migration)) await client.query(readFileSync(new URL(`${migration}/migration.sql`, migrations), 'utf8'));
     }
+    // Neutral client columns only: keep future lifecycle guards and permission migrations out of this historical fixture.
+    for (const table of ['organizations', 'departments', 'positions', 'users']) {
+      await client.query(`ALTER TABLE ${table} ADD COLUMN deleted_at timestamptz(3), ADD COLUMN configuration_required boolean NOT NULL DEFAULT false`);
+    }
     prisma = new PrismaService(url.toString());
     await prisma.organization.createMany({ data: [
       { id: internal, code: 'MATERIAL_INTERNAL', name: 'Internal', type: 'INTERNAL' },

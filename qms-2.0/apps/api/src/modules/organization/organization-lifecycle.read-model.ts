@@ -4,6 +4,7 @@ import type { AdminTransaction } from '../../common/security/admin-mutation.serv
 type ReferenceColumn = { tableName: string; columnName: string };
 const organizationOwned = new Set(['audit_events', 'admin_mutations', 'organization_initializations', 'organization_mutation_archives', 'roles', 'user_roles', 'users', 'departments', 'positions', 'user_positions']);
 const historyOnly = new Set([
+  'user_organization_history', 'administrative_deletions', 'administrative_configuration_links',
   'admin_mutations', 'account_batches', 'export_artifacts', 'number_sequences', 'problem_saved_views',
   'mfa_challenges', 'password_change_challenges', 'announcement_recipients', 'approval_signatures', 'user_signatures',
   'audit_checklist_results', 'audit_template_versions',

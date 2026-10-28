@@ -32,7 +32,7 @@ const roles: AdminRole[] = [
   { mfaRequired: false, id: 'role-b', code: 'SECOND', name: '第二角色', organizationId: organization.id, permissions: [] },
   { mfaRequired: false, id: 'global', code: 'GLOBAL', name: '全局角色', organizationId: null, permissions: [] },
 ];
-const account: AdminUser = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
+const account: AdminUser = { securityVersion: 1, fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'user', username: 'alice', email: 'alice@example.test', accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, name: organization.name, code: organization.code }, mfaEnabled: false, createdAt: '2026-09-18', updatedAt: '2026-09-18' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 function server(patch?: (init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn((path: string, init: RequestInit) => {

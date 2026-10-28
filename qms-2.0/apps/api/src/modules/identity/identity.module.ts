@@ -27,11 +27,20 @@ import { AccountAvatarService } from './account-avatar.service.js';
 import { AccountAvatarFileResourceAdapter } from './account-avatar-file-resource.adapter.js';
 import { SupplierAccountIdentityService } from './supplier-account-identity.service.js';
 import { OrganizationModule } from '../organization/organization.module.js';
+import { AdministrativeLifecycleModule } from '../../common/security/administrative-lifecycle.registry.js';
+import { AdminUserLifecycleService } from './admin-user-lifecycle.service.js';
+import { AdminUserLifecycleController } from './admin-user-lifecycle.controller.js';
+import { ESignatureModule } from '../e-signature/e-signature.module.js';
+import { AdminUserReconfigurationService } from './admin-user-reconfiguration.service.js';
+import { AdminSupplierAccountsController } from './admin-supplier-accounts.controller.js';
+import { AdminSupplierAccountsService } from './admin-supplier-accounts.service.js';
 
 @Module({
-  imports: [AuditLogModule, AdminMutationModule, FileManagementModule, OrganizationModule],
-  controllers: [AuthController, AccountController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
+  imports: [AuditLogModule, AdminMutationModule, FileManagementModule, OrganizationModule, AdministrativeLifecycleModule, ESignatureModule],
+  controllers: [AuthController, AccountController, AdminUserLifecycleController, AdminSupplierAccountsController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
+    AdminUserReconfigurationService,
+    AdminSupplierAccountsService,
     PasswordHasherService,
     AccountAvatarService,
     AccountAvatarFileResourceAdapter,
@@ -44,6 +53,7 @@ import { OrganizationModule } from '../organization/organization.module.js';
     EmailRecoveryService,
     RecoveryMailService,
     AdminUserService,
+    AdminUserLifecycleService,
     AdminUserBatchService,
     SupplierAccountIdentityService,
     PasswordResetService,
@@ -51,6 +61,6 @@ import { OrganizationModule } from '../organization/organization.module.js';
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService, AdminUserReconfigurationService, AdminUserLifecycleService],
 })
 export class IdentityModule {}

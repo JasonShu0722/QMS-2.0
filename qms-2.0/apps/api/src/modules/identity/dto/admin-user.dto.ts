@@ -146,6 +146,9 @@ export class CompletePasswordResetDto extends ResetAdminUserPasswordDto {
 }
 
 export class AdminUserDto {
+  @ApiProperty({ minimum: 1, description: '删除操作的实时身份版本，不替代资料版本。' })
+  securityVersion!: number;
+
   @ApiPropertyOptional({ type: [UserPositionSummaryDto], maxItems: 3, description: '最多展示三个有效任职，完整数量见 totalPositions。' })
   positions?: UserPositionSummaryDto[];
 
@@ -201,4 +204,57 @@ export class AdminOrganizationDto extends OrganizationSummaryDto {
 
   @ApiProperty({ type: [String] })
   permissions!: string[];
+}
+
+export class AdminOrganizationContextQueryDto {
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+}
+
+export class AdminAuthorizationSourceDto {
+  @ApiProperty({ format: 'uuid' })
+  roleId!: string;
+
+  @ApiProperty()
+  roleCode!: string;
+
+  @ApiProperty()
+  roleName!: string;
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  sourceOrganizationIds!: string[];
+
+  @ApiProperty({ enum: ['DIRECT', 'POSITION'], isArray: true })
+  sourceKinds!: ('DIRECT' | 'POSITION')[];
+
+  @ApiProperty()
+  platformAdministrator!: boolean;
+}
+
+export class AdminOrganizationContextDto {
+  @ApiProperty()
+  hasPlatformAdministrator!: boolean;
+
+  @ApiProperty({ format: 'uuid' })
+  homeOrganizationId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  targetOrganizationId!: string;
+
+  @ApiProperty({ enum: ['PLATFORM', 'ORGANIZATION', 'NONE'] })
+  accessKind!: 'PLATFORM' | 'ORGANIZATION' | 'NONE';
+
+  @ApiProperty({ enum: ['ACTIVE', 'DISABLED'] })
+  targetOrganizationStatus!: 'ACTIVE' | 'DISABLED';
+
+  @ApiProperty()
+  targetConfigurationRequired!: boolean;
+
+  @ApiProperty({ type: [String], description: '当前目标范围实际可用的管理权限，不含平台身份 marker 或业务办理权限。' })
+  permissions!: string[];
+
+  @ApiProperty({ type: [AdminAuthorizationSourceDto] })
+  authorizationSources!: AdminAuthorizationSourceDto[];
 }

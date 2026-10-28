@@ -30,6 +30,42 @@ export class OrganizationResponsibilityService {
 
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
 
+  async assertWorkflowOrganizationActive(tx: AdminTransaction, organizationId: string, lock = false): Promise<void> {
+    if (lock) await this.lockOrganization(tx, organizationId);
+    const organization = await this.activeOrganization(tx, organizationId);
+    if (organization.deletedAt || organization.configurationRequired) adminError('ORGANIZATION_DISABLED', 403);
+  }
+
+  // Reference validity only; the owning workflow must authorize its actor and the replacement duty.
+  async workflowCurrentAssignment(tx: AdminTransaction, organizationId: string,
+    reference: { assignmentId?: string; userId?: string; departmentId?: string }, lock = false): Promise<{ assignmentId: string; userId: string; departmentId: string } | null> {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!!reference.assignmentId === !!reference.userId
+      || [organizationId, reference.assignmentId, reference.userId, reference.departmentId].some(value => value !== undefined && !uuid.test(value))) {
+      adminError('STRUCTURE_REFERENCE_INVALID', 400);
+    }
+    const select = (assignmentId?: string) => Prisma.sql`SELECT a.id AS "assignmentId", u.id AS "userId", d.id AS "departmentId"
+      FROM user_positions a JOIN users u ON u.id = a.user_id AND u.organization_id = a.organization_id
+      JOIN positions p ON p.id = a.position_id AND p.organization_id = a.organization_id
+      JOIN departments d ON d.id = p.department_id AND d.organization_id = a.organization_id
+      JOIN organizations o ON o.id = a.organization_id
+      WHERE a.organization_id = ${organizationId}::uuid
+      ${assignmentId ? Prisma.sql`AND a.id = ${assignmentId}::uuid` : reference.assignmentId
+        ? Prisma.sql`AND a.id = ${reference.assignmentId}::uuid` : Prisma.sql`AND a.user_id = ${reference.userId}::uuid`}
+      ${reference.departmentId ? Prisma.sql`AND d.id = ${reference.departmentId}::uuid` : Prisma.empty}
+      AND a.started_at <= clock_timestamp() AND (a.ended_at IS NULL OR a.ended_at > clock_timestamp())
+      AND u.account_type = 'INTERNAL' AND o.type = 'INTERNAL'
+      AND u.status = 'ACTIVE' AND p.status = 'ACTIVE' AND d.status = 'ACTIVE' AND o.status = 'ACTIVE'
+      AND u.deleted_at IS NULL AND p.deleted_at IS NULL AND d.deleted_at IS NULL AND o.deleted_at IS NULL
+      AND NOT u.configuration_required AND NOT p.configuration_required AND NOT d.configuration_required AND NOT o.configuration_required
+      ORDER BY a.id LIMIT 1`;
+    type Current = { assignmentId: string; userId: string; departmentId: string };
+    const rows = await tx.$queryRaw<Current[]>(Prisma.sql`${select()} ${lock ? Prisma.sql`FOR SHARE OF u, p, d, a, o` : Prisma.empty}`);
+    if (!rows[0] || !lock) return rows[0] ?? null;
+    // Lock waits can cross an appointment's end time. Recheck only the locked identity, never select a new one.
+    return (await tx.$queryRaw<Current[]>(select(rows[0].assignmentId)))[0] ?? null;
+  }
+
   // Minimal directory projection for an already-authorized workflow transaction.
   async workflowDepartmentOptions(tx: AdminTransaction, organizationId: string, search: string | undefined, take: number, skip: number, sectionDepartmentId?: string) {
     await this.activeOrganization(tx, organizationId);

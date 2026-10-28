@@ -23,6 +23,18 @@ type PositionRolePolicy = { positionIds: string[]; roles: Awaited<ReturnType<typ
 
 @Injectable()
 export class OrganizationService {
+  // Administrative lifecycle callers hold the target identities and authorize the full impact first.
+  async administrativeAssignmentIds(transaction: AdminTransaction, impact: import('../../common/security/administrative-lifecycle.types.js').AdministrativeLifecycleImpact): Promise<string[]> {
+    const branches = [
+      ...(impact.kind === 'ORGANIZATION' && impact.organizationIds.length ? [{ organizationId: { in: impact.organizationIds } }] : []),
+      ...(impact.departmentIds.length ? [{ position: { departmentId: { in: impact.departmentIds } } }] : []),
+      ...(impact.positionIds.length ? [{ positionId: { in: impact.positionIds } }] : []),
+      ...(impact.kind === 'USER' && impact.userIds.length ? [{ userId: { in: impact.userIds } }] : []),
+    ];
+    if (!branches.length) return [];
+    return (await transaction.userPosition.findMany({ where: { OR: branches }, select: { id: true }, orderBy: { id: 'asc' } })).map(row => row.id);
+  }
+
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly onboarding: PositionOnboardingService) {}
 
   lookup(id: string, transaction: Prisma.TransactionClient = this.prisma) {
@@ -75,6 +87,8 @@ export class OrganizationService {
     const manageable = grants.filter(({ role }) => role.permissions.some(({ permission }) => permission.code === 'organization:manage')).map(({ organizationId }) => organizationId);
     return this.prisma.organization.findMany({
       where: {
+        deletedAt: null,
+        configurationRequired: false,
         id: { in: readable },
         OR: [
           { status: 'ACTIVE' },
@@ -103,7 +117,7 @@ export class OrganizationService {
       const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId: parentId, key } } }) : null;
       if (previous?.action === 'ORGANIZATION_CREATED') {
         const childId = this.receiptValue(previous.response)?.id;
-        if (!childId || !await transaction.organization.findUnique({ where: { id: childId }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+        if (!childId || !await transaction.organization.findUnique({ where: { id: childId, deletedAt: null }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       }
     });
   }
@@ -118,7 +132,7 @@ export class OrganizationService {
       await assertRecentAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'organization:manage');
       const current = await transaction.organization.findUnique({ where: { id: organizationId } });
-      if (!current) adminError('ORGANIZATION_NOT_FOUND', 404);
+      if (!current || current.deletedAt) adminError('ORGANIZATION_NOT_FOUND', 404);
       if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.status === 'DISABLED') {
         const lifecycle = await this.organizationLifecycleState(transaction, actor, current);
@@ -144,7 +158,7 @@ export class OrganizationService {
 
   async departments(organizationId: string, query: OrganizationListQueryDto) {
     await this.activeOrganization(this.prisma, organizationId);
-    return this.prisma.department.findMany({ where: { organizationId }, select: departmentSelect, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 });
+    return this.prisma.department.findMany({ where: { organizationId, deletedAt: null, configurationRequired: false }, select: departmentSelect, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 });
   }
 
   createDepartment(actor: AdminActor, organizationId: string, dto: CreateDepartmentDto, traceId: string, key?: string) {
@@ -160,7 +174,7 @@ export class OrganizationService {
       const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId, key } } }) : null;
       if (previous?.action === 'DEPARTMENT_CREATED') {
         const departmentId = this.receiptValue(previous.response)?.id;
-        if (!departmentId || !await transaction.department.findFirst({ where: { id: departmentId, organizationId }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+        if (!departmentId || !await transaction.department.findFirst({ where: { id: departmentId, organizationId, deletedAt: null, configurationRequired: false }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       }
     });
   }
@@ -171,7 +185,7 @@ export class OrganizationService {
       await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${departmentId}::uuid FOR UPDATE`;
       await this.activeOrganization(transaction, organizationId);
       const current = await transaction.department.findFirst({ where: { organizationId, id: departmentId } });
-      if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (!current || current.deletedAt) adminError('STRUCTURE_NOT_FOUND', 404);
       if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
       if (dto.parentId) {
         await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.parentId}::uuid FOR SHARE`;
@@ -375,7 +389,7 @@ export class OrganizationService {
 
   async positions(organizationId: string, query: OrganizationListQueryDto) {
     await this.activeOrganization(this.prisma, organizationId);
-    return this.prisma.position.findMany({ where: { organizationId }, select: positionSelect, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 });
+    return this.prisma.position.findMany({ where: { organizationId, deletedAt: null, configurationRequired: false }, select: positionSelect, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 });
   }
 
   async positionRoles(actor: AdminActor, organizationId: string, positionId: string) {
@@ -464,6 +478,12 @@ export class OrganizationService {
       if (organization.type === 'INTERNAL') await this.createCanonicalRole(transaction, organizationId, result);
       await this.record(transaction, actor, organizationId, 'POSITION_CREATED', 'Position', result.id, traceId, result.version);
       return result;
+    }, async (transaction) => {
+      const previous = key ? await transaction.adminMutation.findUnique({ where: { actorUserId_organizationId_key: { actorUserId: actor.id, organizationId, key } } }) : null;
+      if (previous?.action === 'POSITION_CREATED') {
+        const positionId = this.receiptValue(previous.response)?.id;
+        if (!positionId || !await transaction.position.findFirst({ where: { id: positionId, organizationId, deletedAt: null, configurationRequired: false }, select: { id: true } })) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
     });
   }
 

@@ -2,6 +2,8 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type { WorkflowActor } from './workflow-access-policy.js';
 import type { WorkflowDeadlineContext, WorkflowDeadlineOperation, WorkflowDeadlineStage } from './workflow-deadline-extension.types.js';
 import type { WorkflowClosureDuty, WorkflowClosureParticipant, WorkflowClosurePlan, WorkflowClosurePolicy, WorkflowClosureSeverity } from './workflow-closure-policy.js';
+import type { WorkflowAdministrativeInvalidationInput, WorkflowAdministrativeTarget } from './workflow-administrative-invalidation.types.js';
+import type { AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
 
 export type { WorkflowClosureDuty } from './workflow-closure-policy.js';
 export type WorkflowClosureOperation = 'READ' | 'SUBMIT' | 'DECIDE' | 'CANCEL';
@@ -38,6 +40,10 @@ export interface WorkflowClosureAdapter {
   canNotifyRecipient?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean>;
   deadlineContext?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor, operation: WorkflowDeadlineOperation): Promise<WorkflowDeadlineContext>;
   applyDeadlineExtension?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, stage: WorkflowDeadlineStage, dueAt: Date): Promise<void>;
+  // Trusted deletion transaction; return the number of cancelled domain-owned requests, not workflow rounds.
+  administrativeInvalidation?(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput): Promise<number>;
+  // Read-only discovery for domain-owned pending requests not stored in workflow tables.
+  administrativeInvalidationTargets?(tx: Prisma.TransactionClient, impact: AdministrativeLifecycleImpact): Promise<WorkflowAdministrativeTarget[]>;
 }
 
 export type WorkflowClosureStartInput = { expectedContentVersion: number; expectedInstanceVersion: number };

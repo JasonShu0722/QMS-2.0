@@ -27,7 +27,7 @@ export function buildPlan(input: Input, snapshot: Snapshot) {
   assert(snapshot.markerId, 'MARKER_MIGRATION_REQUIRED');
   assert(Number.isSafeInteger(snapshot.securityVersion) && snapshot.securityVersion > 0 && snapshot.securityVersion < 2147483647, 'INVALID_SECURITY_VERSION');
   const plan = { version: 1, ...input, expectedSecurityVersion: snapshot.securityVersion,
-    scope: 'ALL_INTERNAL_ACTIVE;DISABLED_INTERNAL_ORGANIZATION_READ_MANAGE_AND_AUDIT_READ_EXPORT_ONLY',
+    scope: 'ALL_INTERNAL_ACTIVE;DISABLED_INTERNAL_GOVERNANCE_AUDIT_AND_LIFECYCLE_ONLY',
     willChange: snapshot.markerPresent !== (input.action === 'grant'),
     ...snapshot,
   };

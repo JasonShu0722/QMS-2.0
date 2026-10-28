@@ -4,11 +4,15 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { SupplierProfile } from './supplierQuality';
 import { SupplierUsersPanel } from './SupplierUsersPanel';
 import { LanguageProvider } from '../../i18n/Language';
+import { MemoryRouter } from 'react-router-dom';
+import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { SupplierProfilesPage } from './SupplierProfilesPage';
 
 const profile = { id: 'profile-a', displayName: '供应商甲', supplierOrganizationId: null, businessCode: 'A', version: 1 } as SupplierProfile;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 const permissions = ['supplier-quality:profiles:write', 'account:users:create'];
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); });
 
 it('renders English supplier password query and reset confirmation through the real LanguageProvider', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.includes('/temporary-password') ? json({ userId: 'u', status: 'AVAILABLE', temporaryPassword: 'english-test-password' }) : json({ items: [{ id: 'u', organizationId: 's', username: 'alice', email: null, status: 'ACTIVE', securityVersion: 1 }], canCreate: false, canReset: true, canSetStatus: false })));
@@ -73,7 +77,7 @@ it('creates the first collaboration boundary explicitly and preserves the key af
   await waitFor(() => expect(writes).toHaveLength(2));
 });
 
-it.each([{ operation: 'create', status: 401 }, { operation: 'create', status: 403 }, { operation: 'status', status: 401 }, { operation: 'status', status: 403 }, { operation: 'password', status: 403 }])('clears queried passwords after $operation receives $status while retaining a create draft', async ({ operation, status }) => {
+it.each([{ operation: 'create', status: 401 }, { operation: 'create', status: 403 }, { operation: 'status', status: 401 }, { operation: 'status', status: 403 }, { operation: 'password', status: 403 }])('clears passwords and account drafts after $operation receives $status', async ({ operation, status }) => {
   let reads = 0;
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
@@ -102,7 +106,7 @@ it.each([{ operation: 'create', status: 401 }, { operation: 'create', status: 40
     })));
   }
   await waitFor(() => expect(screen.queryByText('queried-password')).not.toBeInTheDocument());
-  expect(screen.getByLabelText('用户名')).toHaveValue('retained-draft');
+  expect(screen.queryByLabelText('用户名')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '临时密码' })).not.toBeInTheDocument();
 });
 
@@ -154,7 +158,7 @@ it.each(['profile', 'organization'])('never shows a late temporary-password resp
   expect(screen.queryByRole('button', { name: '复制临时密码' })).not.toBeInTheDocument();
 });
 
-it('supports creation when the bound enterprise account list is not readable, without exposing its metadata', async () => {
+it('fails closed when the account permission source is denied, until explicit reload', async () => {
   const writes: RequestInit[] = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
@@ -162,10 +166,108 @@ it('supports creation when the bound enterprise account list is not readable, wi
     return json({ code: 'FEATURE_PERMISSION_DENIED' }, 403);
   }));
   render(<SupplierUsersPanel profile={{ ...profile, supplierOrganizationId: 'supplier-org' }} organizationId="owner" organizationPermissions={permissions} onBound={vi.fn()} onClose={vi.fn()} />);
-  await waitFor(() => expect(screen.getByLabelText('用户名')).toBeEnabled());
-  fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'created' } });
-  await userEvent.click(screen.getByRole('button', { name: '新增供应商账号' }));
-  await waitFor(() => expect(writes).toHaveLength(1));
+  await screen.findByRole('alert');
+  expect(screen.queryByLabelText('用户名')).not.toBeInTheDocument();
+  expect(writes).toHaveLength(0);
   expect(screen.queryByRole('button', { name: '停用账号' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '查询临时密码' })).not.toBeInTheDocument();
+});
+
+const account = { id: 'u', organizationId: 'supplier-org', username: 'admin', email: null, status: 'ACTIVE', securityVersion: 7 };
+const accountPage = { items: [account], canCreate: true, canReset: true, canSetStatus: true, canDelete: true };
+const panelProps = { profile, organizationId: 'owner', organizationPermissions: permissions, onBound: vi.fn(), onClose: vi.fn() };
+
+it('uses the real permanent delete with owner-profile path, target version and list refresh; trusts canDelete rather than username', async () => {
+  let canDelete = true;
+  const fetcher = vi.fn(async (path: string, options?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (options?.method === 'DELETE') return json({ userId: 'u', deleted: true, effects: [] });
+    return json({ ...accountPage, canDelete });
+  });
+  vi.stubGlobal('fetch', fetcher);
+  const view = render(<SupplierUsersPanel {...panelProps} />);
+  fireEvent.click(await screen.findByRole('button', { name: '永久删除用户' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认永久删除' }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/v1/supplier-quality/profiles/profile-a/accounts/u?organizationId=owner', expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ expectedSecurityVersion: 7 }) })));
+  await waitFor(() => expect(fetcher.mock.calls.filter(([path]) => path.endsWith('/accounts?organizationId=owner'))).toHaveLength(2));
+  view.rerender(<SupplierUsersPanel {...panelProps} organizationPermissions={['supplier-quality:profiles:read']} />);
+  await screen.findByText('admin', { selector: 'td' });
+  expect(screen.queryByRole('button', { name: '永久删除用户' })).not.toBeInTheDocument();
+  canDelete = false;
+  view.rerender(<SupplierUsersPanel {...panelProps} />);
+  await screen.findByText('admin', { selector: 'td' });
+  expect(screen.queryByRole('button', { name: '永久删除用户' })).not.toBeInTheDocument();
+});
+
+it('propagates real delete denial through the profiles page and removes sensitive parent projections', async () => {
+  const denied = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (options?.method === 'DELETE') return json({ code: 'FEATURE_PERMISSION_DENIED' }, 403);
+    return json(path.includes('/accounts') ? { ...accountPage, canCreate: false, canReset: false, canSetStatus: false } : { items: [profile], total: 1 });
+  }));
+  render(<SupplierProfilesPage organizationId="owner" organizationPermissions={[...permissions, 'supplier-quality:profiles:read']} onDenied={denied} />);
+  fireEvent.click(await screen.findByText('供应商用户账号', { selector: 'button span' }));
+  fireEvent.click(await screen.findByText('永久删除用户', { selector: 'button span' }));
+  fireEvent.click(screen.getByText('确认永久删除', { selector: 'button span' }));
+  await waitFor(() => expect(denied).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('供应商甲')).not.toBeInTheDocument();
+  expect(screen.queryByText('登记供应商资料', { selector: 'button span' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('respects the actual child unknown-result navigation guard when closing the outer modal', async () => {
+  const onClose = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (options?.method === 'DELETE') throw new TypeError('offline');
+    return json({ ...accountPage, canCreate: false, canReset: false, canSetStatus: false });
+  }));
+  render(<MemoryRouter><UnsavedChangesProvider><SupplierUsersPanel {...panelProps} onClose={onClose} /></UnsavedChangesProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByText('永久删除用户', { selector: 'button span' }));
+  fireEvent.click(screen.getByText('确认永久删除', { selector: 'button span' }));
+  await screen.findByText('重试确认结果', { selector: 'button span' });
+  fireEvent.click(screen.getByText(/^关\s*闭$/, { selector: 'button span' }));
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByText('继续编辑', { selector: 'button span' }));
+  expect(screen.getByText('重试确认结果', { selector: 'button span' })).toBeInTheDocument();
+});
+
+it('irreversibly aborts reads and CSRF-delayed writes on a synchronous principal A-B-A transition', async () => {
+  useWorkTabsStore.getState().bindSession('INTERNAL:A');
+  let csrf!: (response: Response) => void;
+  let csrfSignal: AbortSignal | null | undefined;
+  const writes: RequestInit[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
+    if (path.endsWith('/csrf')) { csrfSignal = options?.signal; return new Promise<Response>(resolve => { csrf = resolve; }); }
+    if (options?.method === 'POST') { writes.push(options); return json(account); }
+    return json(accountPage);
+  }));
+  render(<SupplierUsersPanel {...panelProps} />);
+  await screen.findByText('admin', { selector: 'td' });
+  fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'old-draft' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建专属协作边界并建账号' }));
+  await waitFor(() => expect(csrf).toBeTypeOf('function'));
+  act(() => { useWorkTabsStore.getState().bindSession('INTERNAL:B'); useWorkTabsStore.getState().bindSession('INTERNAL:A'); });
+  expect(csrfSignal?.aborted).toBe(true);
+  await act(async () => { csrf(json({ csrfToken: 'late' })); });
+  expect(writes).toHaveLength(0);
+  expect(screen.queryByLabelText('用户名')).not.toBeInTheDocument();
+  expect(screen.queryByText('admin', { selector: 'td' })).not.toBeInTheDocument();
+});
+
+it('aborts an old owner-profile read and ignores its late reply after the scope changes', async () => {
+  let resolve!: (response: Response) => void;
+  let oldSignal: AbortSignal | null | undefined;
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
+    if (path.includes('profile-a')) { oldSignal = options?.signal; return new Promise<Response>(done => { resolve = done; }); }
+    return json({ ...accountPage, items: [{ ...account, username: 'new-scope' }] });
+  }));
+  const view = render(<SupplierUsersPanel {...panelProps} />);
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  view.rerender(<SupplierUsersPanel {...panelProps} profile={{ ...profile, id: 'profile-b' }} />);
+  expect(oldSignal?.aborted).toBe(true);
+  await screen.findByText('new-scope', { selector: 'td' });
+  await act(async () => { resolve(json(accountPage)); });
+  expect(screen.queryByText('admin', { selector: 'td' })).not.toBeInTheDocument();
 });

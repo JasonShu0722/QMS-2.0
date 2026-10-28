@@ -1,5 +1,13 @@
 # 平台与供应商质量接口交接
 
+## REQ-0031 管理生命周期接续（2026-10-29，未发布候选）
+
+以[REQ-0031计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)为当前开发事实；旧受限空组织删除和REQ0030发布记录保留历史边界。本轮新命令由真实平台管理员在存续home授权，组织/部门预览Token绑定actor/scope与当前引用版本；用户删除使用securityVersion，失效原scope不会阻断独立生命周期管理。四项新权限仅登记，不在迁移中给既有admin账号自动赋权。
+
+公开注册器在真实App完整启动后固定workflow、platform-configuration、identity三owner，按取消有效在审、解除当前建议、撤凭证的顺序同事务执行；域不私写其他模块表，行政回办理经WorkflowRuntime公开端口，不生成普通退回催办或非法事件。普通目录不返回删除/待配置对象，历史身份与原租户不迁移；专门补配服务维持不可变历史，并明确恢复配置不等于启用/授权。已发单失效专业、owner或SQE的恢复走四域公开管理端口，不假冒真实责任人审批。
+
+当前分层验证与双审接续不等于生产开通。正常授权覆盖本地实现及PR，合并部署、生产身份来源核验/实际赋权、实际删除、绑定启用和需求回填分别核准；夜间heartbeat不扩大这些边界。
+
 ## REQ-0030 管理授权与删除接续（2026-10-26，V0.0.31-fix2已部署）
 
 显式平台管理员通过既有角色权限及有效任职提供公司内部组织的适用功能投影，公共只读身份接缝为`hasPlatformAdministrator(tx, userId, now?)`；ORM/SQL和公开platformScope来源须一致，不扩大实际流程角色/单据职责。迁移仅登记marker，生产初始化须先核对精确来源，使用`apps/api/scripts/platform-administrator.ts`只读预览，实际apply另核准；不按账号名匹配或自动转换历史账号。

@@ -17,7 +17,7 @@ describe('server-only platform administrator bootstrap', () => {
     expect(typeof buildPlan).toBe('function');
     const current = snapshot();
     const plan = buildPlan!(input, current);
-    expect(plan).toMatchObject({ expectedSecurityVersion: 7, willChange: true, scope: 'ALL_INTERNAL_ACTIVE;DISABLED_INTERNAL_ORGANIZATION_READ_MANAGE_AND_AUDIT_READ_EXPORT_ONLY' });
+    expect(plan).toMatchObject({ expectedSecurityVersion: 7, willChange: true, scope: 'ALL_INTERNAL_ACTIVE;DISABLED_INTERNAL_GOVERNANCE_AUDIT_AND_LIFECYCLE_ONLY' });
     expect(plan.digest).toMatch(/^[a-f0-9]{64}$/);
     expect(buildPlan!(input, { ...current, securityVersion: 8 }).digest).not.toBe(plan.digest);
     expect(buildPlan!({ ...input, roleId: randomUUID() }, current).digest).not.toBe(plan.digest);

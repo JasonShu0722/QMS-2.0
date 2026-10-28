@@ -9,7 +9,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { UserMfaPolicy } from './UserMfaPolicy';
 
 const organization: AdminOrganization = { id: 'org', code: 'org', name: 'Organization', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:reset'] };
-const user: AdminUser = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'u', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: 'org', organization: { id: 'org', code: 'org', name: 'Organization' }, mfaEnabled: false, createdAt: '', updatedAt: '' };
+const user: AdminUser = { securityVersion: 1, fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'u', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: 'org', organization: { id: 'org', code: 'org', name: 'Organization' }, mfaEnabled: false, createdAt: '', updatedAt: '' };
 const policy = { userId: 'u', required: false, bound: true, override: null, roleRequired: false, securityVersion: 4 };
 const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

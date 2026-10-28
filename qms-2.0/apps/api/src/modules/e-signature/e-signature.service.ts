@@ -6,6 +6,7 @@ import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTra
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { ApprovalSignatureQueryDto, ESignatureQueryDto, RegisterESignatureDto, RevokeESignatureDto, SignApprovalDto } from './e-signature.dto.js';
 import { APPROVAL_READ_PERMISSION, APPROVAL_SIGN_PERMISSION, SIGNATURE_READ_PERMISSION, SIGNATURE_WRITE_PERMISSION, fail, normalizeSignatureData, normalizeText } from './e-signature.rules.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 
 type Row = Record<string, unknown>;
 
@@ -18,6 +19,15 @@ function signedDigest(input: { organizationId: string; resourceType: string; res
 @Injectable()
 export class ESignatureService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
+
+  // Called inside the authorized deletion transaction; immutable approval signatures are never modified.
+  async revokeForAdministrativeLifecycle(tx: AdminTransaction, actor: AdminActor, userIds: string[], now: Date): Promise<number> {
+    if (actor.accountType !== 'INTERNAL' || !await hasPlatformAdministrator(tx, actor.id)) fail('FEATURE_PERMISSION_DENIED', 403);
+    const ids = [...new Set(userIds)].sort();
+    if (!ids.length) return 0;
+    return tx.$executeRaw(Prisma.sql`UPDATE user_signatures SET status = 'REVOKED', revoked_at = ${now}, version = version + 1
+      WHERE user_id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) AND status = 'ACTIVE'`);
+  }
 
   private personalOrganization(actor: AdminActor, requested?: string) {
     if (actor.accountType !== 'INTERNAL' || (requested && requested !== actor.organizationId)) fail('ORGANIZATION_SCOPE_DENIED', 403);

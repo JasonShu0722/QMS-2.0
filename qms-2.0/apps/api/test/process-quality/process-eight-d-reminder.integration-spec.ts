@@ -8,6 +8,7 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProcessEightDReminderService } from '../../src/modules/process-quality/process-eight-d-reminder.service.js';
 import { ProcessEightDTaskService } from '../../src/modules/process-quality/process-eight-d-task.service.js';
 import { OutboxWorkerService } from '../../src/modules/task-notification/outbox-worker.service.js';
+import { createDisposableAppDatabase } from '../disposable-app-database.js';
 import { createProcessEightDTaskFixture, clearProcessEightDTaskFixtureEvents, requireDisposableProcessEightDDatabase, waitForProcessEightDProblemLock } from './process-eight-d-task.fixture.js';
 
 requireDisposableProcessEightDDatabase();
@@ -16,12 +17,20 @@ describe('process reminders through real atomic outbox worker and PostgreSQL', (
   let reminders: ProcessEightDReminderService;
   let prisma: PrismaService;
   const organizations: string[] = [];
+  const originalDatabaseUrl = process.env.DATABASE_URL;
   beforeAll(async () => {
+    process.env.DATABASE_URL = await createDisposableAppDatabase('qms_process_reminder');
     app = await NestFactory.createApplicationContext(AppModule, { logger: false });
     reminders = app.get(ProcessEightDReminderService); prisma = app.get(PrismaService);
   }, 120000);
   afterEach(async () => clearProcessEightDTaskFixtureEvents(prisma, organizations));
-  afterAll(async () => { await app?.close(); });
+  afterAll(async () => {
+    try { await app?.close(); }
+    finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
   const fixture = () => createProcessEightDTaskFixture(app, organizations);
   const deliver = () => app.get(OutboxWorkerService).processAtomicDue(100, reminders);
   async function pollCycle() {

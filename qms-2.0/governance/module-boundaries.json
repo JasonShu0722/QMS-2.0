@@ -22,6 +22,7 @@
     "identity -> audit-log",
     "identity -> authorization",
     "identity -> file-management",
+    "identity -> e-signature",
     "identity -> organization",
     "material-master -> audit-log",
     "material-master -> authorization",

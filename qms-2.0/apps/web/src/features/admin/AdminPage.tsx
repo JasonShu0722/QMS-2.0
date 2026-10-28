@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useInRouterContext, useLocation, type Location } from 'react-router-dom';
-import { Alert, Select, Spin, Tabs, Typography } from 'antd';
+import { Alert, Button, Select, Spin, Tabs, Typography } from 'antd';
+import { ApiError } from '../../api/client';
+import { useAdminManagementContext } from './useAdminManagementContext';
+import { AdministrativeReconfiguration } from '../governance/AdministrativeReconfiguration';
+import { AdministrativeProblemReconfiguration } from '../governance/AdministrativeProblemReconfiguration';
+import { UserForceDelete } from './UserForceDelete';
+import { AdminSupplierAccounts } from './AdminSupplierAccounts';
 import { allows, type AdminOrganization } from './admin';
 import { UserAdministration } from './UserAdministration';
 import { RoleAdministration } from './RoleAdministration';
@@ -18,6 +24,7 @@ import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 type AdminPageProps = { organizations: AdminOrganization[] | null; error?: string; traceId?: string; onDirectoryChange?: () => void };
 type AdminLocation = Pick<Location, 'pathname' | 'search' | 'hash'>;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const lifecyclePermissions = new Set(['organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure']);
 
 export function AdminPage(props: AdminPageProps) {
   return useInRouterContext() ? <RoutedAdminPage {...props} /> : <AdminPageContent {...props} />;
@@ -50,9 +57,14 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     && targetKeys.every(key => query.getAll(key).length <= 1) && [...query.keys()].every(key => targetKeys.includes(key))
     && (auditTarget ? !query.has('userId') && resourceTargetValid
       : section === 'users' && uuid.test(userId) && !query.has('resourceType') && !query.has('resourceId'));
-  const organization = targeting
+  const selectedOrganization = targeting
     ? organizations?.find((entry) => entry.id.toLowerCase() === organizationId.toLowerCase())
     : organizations?.find((entry) => entry.id === selectedId) ?? organizations?.find((entry) => entry.type === 'INTERNAL') ?? organizations?.[0];
+  const management = useAdminManagementContext(selectedOrganization?.id);
+  const organization = selectedOrganization && { ...selectedOrganization, permissions: selectedOrganization.permissions.filter(code =>
+    (!management.context || management.context.targetOrganizationStatus === 'ACTIVE' && !management.context.targetConfigurationRequired || management.context.permissions.includes(code))
+    && (!lifecyclePermissions.has(code) || management.context?.hasPlatformAdministrator && management.context.permissions.includes(code))) };
+  const managementDenied = management.error instanceof ApiError && (management.error.status === 401 || management.error.status === 403);
   const targetUserId = targeting && validTarget && !auditTarget ? userId.toLowerCase() : undefined;
   function changeScope(action: () => void) {
     requestLeave(action);
@@ -76,23 +88,40 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   const customerMaster = organization.permissions.some((code) => ['customer-quality:complaints:read', 'customer-quality:complaints:write'].includes(code));
   const additionalTabs = [
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['component-project:read', 'component-project:manage'].includes(code)) ? [{ key: 'component-project', label: t('组件项目映射'), children: <ComponentProjectAdministration organization={organization} /> }] : []),
-    ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)) ? [{ key: 'supplier-master', label: t('供应商清单'), children: <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
+    ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)) ? [{ key: 'supplier-master', label: t('供应商清单'), children: <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} onDenied={management.invalidate} /> }] : []),
     ...(customerMaster ? [{ key: 'customer-master', label: t('客户清单'), children: <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
     ...(organization.type === 'INTERNAL' && organization.permissions.some((code) => ['material-master:read', 'material-master:write', 'material-master:import'].includes(code)) ? [{ key: 'material-master', label: t('物料清单'), children: <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} /> }] : []),
-    ...(organization.permissions.some((code) => ['organization:read', 'organization:structure:read'].includes(code)) ? [{ key: 'organizations', label: t('组织与岗位'), children: <OrganizationWorkspace organization={organization} organizations={organizations} onChanged={onDirectoryChange} onSelectOrganization={(id) => { setSelectedId(id); setTargetConsumed(true); }} /> }] : []),
+    ...(organization.permissions.some((code) => ['organization:read', 'organization:structure:read'].includes(code)) ? [{ key: 'organizations', label: t('组织与岗位'), children: <OrganizationWorkspace organization={organization} organizations={organizations} onChanged={onDirectoryChange} onDenied={management.invalidate} onSelectOrganization={(id) => { setSelectedId(id); setTargetConsumed(true); }} /> }] : []),
     ...(organization.permissions.includes('configuration:read') ? [{ key: 'configuration', label: t('平台配置'), children: <ConfigurationAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} target={targeting && auditTarget && resourceId ? { resourceType, resourceId } : undefined} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
+    ...(organization.permissions.includes('organization:reconfigure') ? [{ key: 'reconfiguration', label: t('待配置'), children: <AdministrativeReconfiguration organization={organization}
+      onChanged={onDirectoryChange} onDenied={management.invalidate} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER' && <UserForceDelete
+        target={{ id: item.id, organizationId: item.originalOrganizationId, username: item.label, securityVersion: item.version }}
+        canDelete={organization.permissions.includes('account:users:delete')} onRefresh={onCompleted} onDenied={management.invalidate}
+        onDeleted={() => { onCompleted(); onDirectoryChange?.(); }} />} /> }] : []),
+    ...(organization.permissions.includes('organization:reconfigure') ? [{ key: 'problem-reconfiguration', label: t('问题责任恢复'), children: <AdministrativeProblemReconfiguration
+      organization={organization} onChanged={onDirectoryChange} onDenied={management.invalidate} /> }] : []),
+    ...(organization.permissions.includes('account:users:delete') ? [{ key: 'supplier-accounts', label: t('供应商账号（全平台）'), children: <AdminSupplierAccounts
+      organization={organization} onDenied={management.invalidate} /> }] : []),
   ];
   const activeTabAllowed = (activeTab === 'users' && users) || (activeTab === 'roles' && roles) || additionalTabs.some((entry) => entry.key === activeTab);
   return <section className="admin-page">
       <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
       <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
-    <Tabs destroyOnHidden key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : targeting && validTarget ? section! : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={(key) => changeScope(() => setActiveTab(key))} items={[
-      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} /> }] : []),
+    {management.loading ? <Spin tip={t('核实管理身份')} /> : management.context ? <Alert showIcon type="info"
+      title={t(management.context.hasPlatformAdministrator ? '平台管理员：全部内部组织' : '组织管理：当前授权范围')}
+      description={<>
+        <div>{t('当前管理目标')}：{organization.name} · {organization.code}</div>
+        {management.context.targetOrganizationStatus === 'DISABLED' && <div>{t('目标组织已停用，仅显示当前可用的治理功能。')}</div>}
+      </>} />
+      : <Alert showIcon type={managementDenied ? 'error' : 'warning'} title={t(managementDenied ? '管理身份已失效，请刷新权限后重试' : '管理身份暂未核实，强删与补配操作不可用')}
+        action={<Button onClick={management.reload}>{t('重新核实')}</Button>} />}
+    {!managementDenied && <Tabs destroyOnHidden key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : targeting && validTarget ? section! : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={(key) => changeScope(() => setActiveTab(key))} items={[
+      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} onDenied={management.invalidate} /> }] : []),
       ...(roles ? [{ key: 'roles', label: t('历史授权'), children: <RoleAdministration organization={organization} readOnly /> }] : []),
       ...additionalTabs,
-    ]} />
+    ]} />}
   </section>;
 }

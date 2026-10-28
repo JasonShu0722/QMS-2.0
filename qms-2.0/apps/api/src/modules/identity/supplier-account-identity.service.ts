@@ -16,9 +16,9 @@ const accountSelect = { id: true, organizationId: true, username: true, email: t
 export class SupplierAccountIdentityService {
   constructor(private readonly passwords: PasswordService, private readonly temporary: TemporaryPasswordService, private readonly audit: AuditLogService) {}
 
-  async create(tx: AdminTransaction, actor: AdminActor, organizationId: string, input: { username: string; email?: string | null }, traceId: string) {
+  async create(tx: AdminTransaction, actor: AdminActor, organizationId: string, input: { username: string; email?: string | null }, traceId: string, ownerOrganizationId?: string) {
     await assertRecentAuthentication(tx, actor);
-    await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:create');
+    await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:create', ownerOrganizationId);
     const password = randomBytes(18).toString('base64url');
     const dto = plainToInstance(CreateAdminUserDto, { username: input.username, email: input.email?.trim().toLowerCase() || null, organizationId, accountType: 'SUPPLIER', initialPassword: password });
     if (validateSync(dto).length) adminError('SUPPLIER_INPUT_INVALID', 400);
@@ -29,36 +29,36 @@ export class SupplierAccountIdentityService {
     return user;
   }
 
-  async list(tx: AdminTransaction, actor: AdminActor, organizationId: string) {
+  async list(tx: AdminTransaction, actor: AdminActor, organizationId: string, ownerOrganizationId?: string) {
     await assertActiveAuthentication(tx, actor);
-    await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:read');
-    const users = await tx.user.findMany({ where: { organizationId, accountType: 'SUPPLIER' }, select: accountSelect, orderBy: { id: 'asc' } });
-    for (const user of users) await assertSupplierAccountTarget(tx, actor, organizationId, user.id, 'account:users:read');
-    const granted = await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:read');
+    await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:read', ownerOrganizationId);
+    const users = await tx.user.findMany({ where: { organizationId, accountType: 'SUPPLIER', deletedAt: null }, select: accountSelect, orderBy: { id: 'asc' } });
+    for (const user of users) await assertSupplierAccountTarget(tx, actor, organizationId, user.id, 'account:users:read', ownerOrganizationId);
+    const granted = await assertSupplierAccountGovernance(tx, actor, organizationId, 'account:users:read', ownerOrganizationId);
     return { items: users.sort((first, second) => first.username.localeCompare(second.username) || first.id.localeCompare(second.id)), canCreate: granted.includes('account:users:create'), canReset: granted.includes('account:users:reset'), canSetStatus: granted.includes('account:users:status') };
   }
 
-  async projectTemporaryPassword(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, traceId: string, credentialVersion?: number) {
+  async projectTemporaryPassword(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, traceId: string, credentialVersion?: number, ownerOrganizationId?: string) {
     await assertRecentAuthentication(tx, actor);
-    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:reset');
+    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:reset', ownerOrganizationId);
     if (user.status !== 'ACTIVE') adminError('ADMIN_USER_NOT_FOUND', 404);
     const result = await this.temporary.project(tx, userId, credentialVersion);
     await this.record(tx, actor, organizationId, userId, 'TEMPORARY_PASSWORD_READ', traceId);
     return result;
   }
 
-  async reset(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, traceId: string) {
+  async reset(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, traceId: string, ownerOrganizationId?: string) {
     await assertRecentAuthentication(tx, actor);
-    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:reset');
+    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:reset', ownerOrganizationId);
     if (user.status !== 'ACTIVE') adminError('ADMIN_USER_NOT_FOUND', 404);
     const result = await this.temporary.reset(tx, userId);
     await this.record(tx, actor, organizationId, userId, 'TEMPORARY_PASSWORD_RESET', traceId);
     return result;
   }
 
-  async setStatus(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, input: { status: 'ACTIVE' | 'DISABLED'; expectedSecurityVersion: number }, traceId: string) {
+  async setStatus(tx: AdminTransaction, actor: AdminActor, organizationId: string, userId: string, input: { status: 'ACTIVE' | 'DISABLED'; expectedSecurityVersion: number }, traceId: string, ownerOrganizationId?: string) {
     await assertRecentAuthentication(tx, actor);
-    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:status');
+    const user = await assertSupplierAccountTarget(tx, actor, organizationId, userId, 'account:users:status', ownerOrganizationId);
     if (user.securityVersion !== input.expectedSecurityVersion) adminError('CONCURRENCY_CONFLICT', 409);
     const result = await tx.user.update({ where: { id: userId }, data: { status: input.status, securityVersion: { increment: 1 } }, select: accountSelect });
     if (input.status === 'DISABLED') {

@@ -41,12 +41,12 @@ export function supplierError(cause: unknown): string {
 
 export function createSupplierMutation() {
   const pending = new Map<string, string>();
-  return async function mutate<Result>(path: string, method: 'POST' | 'PUT', body: MutationBody): Promise<Result> {
+  return async function mutate<Result>(path: string, method: 'POST' | 'PUT', body: MutationBody, signal?: AbortSignal): Promise<Result> {
     const signature = JSON.stringify([path, method, body]);
     if (!pending.has(signature)) pending.set(signature, crypto.randomUUID());
     const key = pending.get(signature)!;
-    const token = await csrfToken();
-    const result = await apiRequest<Result>(path, { method, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body) });
+    const token = await csrfToken(signal);
+    const result = await apiRequest<Result>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': key }, body: JSON.stringify(body) });
     if (pending.get(signature) === key) pending.delete(signature);
     return result;
   };

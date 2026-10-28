@@ -1,5 +1,17 @@
 # OpenAPI 契约
 
+## REQ-0031 生命周期契约候选（2026-10-29，未发布）
+
+本轮新增真实管理身份`GET /api/v1/admin/organizations/context`；组织/部门的`GET/POST /api/v1/organizations/:organizationId/force-delete`与`.../departments/:departmentId/force-delete`先提供影响摘要和服务端`previewToken`，确认提交携带`expectedVersion/confirmed/previewToken`，引用版本变化须重新读取并明确确认。用户`DELETE /api/v1/admin/users/:userId?organizationId=...`使用真实`expectedSecurityVersion`，不制造默认版本。均沿真实session、CSRF、幂等及服务端平台身份复验，不等同普通角色名称。
+
+`GET /api/v1/admin/reconfiguration`按ORGANIZATION/DEPARTMENT/POSITION/USER分页查询存续待配置对象，`POST /:kind/:id`只恢复当前配置。`parentId`明确为`string|null`；USER只补当前主组织、保持停用，不提供隐式岗位/任职授权。组织已删除的部门/岗位使用明确替代记录，不改历史租户。
+
+`GET /api/v1/admin/problem-reconfiguration/:domain`按PROCESS/CUSTOMER/NEW_PRODUCT/SUPPLIER提供失效职责的扫描窗口；`nextOffset`不是总数，空窗口仍可继续，不以10000截断报告扫描。`GET /:domain/assignments`仍使用组织所有者有界候选目录及真实职责权限；`POST /:domain/:id`经平台管理包封装版本/幂等，内部id为problemId，供应商为supplierProblemId。补配不代审、不改历史报告；内部回执domainCode是实际领域代码，不是路由枚举。
+
+`GET /api/v1/admin/supplier-accounts`提供八字段最小账号生命周期目录；`DELETE /:userId?organizationId=...`严格校验真实SUPPLIER账号及原企业，不删除供应商企业或其历史业务。profile专用`DELETE /api/v1/supplier-quality/profiles/:id/accounts/:userId`从服务器核定精确owner；原内部owner失效时仍可从存续平台管理范围删除账号，不因此开放原供应商业务写入。根`/admin/users/:id`仍限内部账号。
+
+Swagger仍是单一契约来源，生成文件未手工编辑；134返修后的最终generate/check均退出0，后续按[计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)执行提交门禁。不把契约可见当成PR、部署或生产授权通过。
+
 ## N5供应商完整8D契约（2026-10-28，86d68f8已部署）
 
 PR #79 / V0.0.34含fix1～fix4已部署`86d68f8506165bae2650986ba2b0cbbcac77825d`，公网30条N5契约和6个匿名401已核验，来源/运行证据见[N5计划第8节](../../docs/superpowers/plans/2026-10-28-qms-n5-supplier-eight-d.md)。契约存在不是已配生产权限或启用绑定；下方“尚未发布”为实施时点历史，当前运行以本节为准。
