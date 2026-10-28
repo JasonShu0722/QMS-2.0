@@ -9,7 +9,7 @@ export type Demo = {
   risk: Risk; samePerson: boolean; portal: boolean; disclosure: string; body: string; measuresReady: boolean;
   dates: Record<Stage, string>; round: number; records: RecordEntry[];
   approved: string; closedAt: string; supplements: { actor: Actor; text: string }[];
-  extension: null | { stage: Stage; original: string; requested: string; status: 'SQE_PENDING' | 'MANAGER_PENDING' | 'APPROVED' | 'RETURNED' };
+  extension: null | { stage: Stage; round: number; original: string; requested: string; status: 'SQE_PENDING' | 'MANAGER_PENDING' | 'APPROVED' | 'RETURNED' };
 };
 export type Action =
   | { type: 'configure'; risk: Risk; samePerson: boolean; portal: boolean }
@@ -38,6 +38,17 @@ export const editable = (s: Demo) => s.status === 'FILLING' || s.status === 'RET
 export const managementDuties = (s: Demo): Duty[] => high(s.risk) ? ['MANAGER', 'MINISTER'] : ['MANAGER'];
 export const currentRecord = (s: Demo, duty: Duty) => s.records.find(r => r.round === s.round && r.duty === duty);
 
+export function extensionReviewable(s: Demo, actor: Actor): boolean {
+  const e = s.extension;
+  // Submission advances the round; returning the body must not revive its old extension.
+  return !!e && e.round === s.round && editable(s) && ((e.status === 'SQE_PENDING' && actor === 'SQE') || (e.status === 'MANAGER_PENDING' && actor === 'MANAGER'));
+}
+
+export function dateEditable(s: Demo, actor: Actor, stage: Stage): boolean {
+  if (s.extension?.round === s.round && s.extension.stage === stage && (s.extension.status === 'SQE_PENDING' || s.extension.status === 'MANAGER_PENDING')) return false;
+  return stage === 'SUBMISSION' ? actor === 'SUPPLIER' && editable(s) && s.measuresReady : actor === 'SQE' && s.status === 'DRAFT';
+}
+
 export function transition(s: Demo, actor: Actor, a: Action): Demo {
   switch (a.type) {
     case 'configure':
@@ -50,10 +61,9 @@ export function transition(s: Demo, actor: Actor, a: Action): Demo {
     case 'edit':
       return editable(s) && actor === 'SUPPLIER' ? { ...s, body: a.body, measuresReady: a.measuresReady } : s;
     case 'date': {
-      const allowed = a.stage === 'SUBMISSION'
-        ? actor === 'SUPPLIER' && editable(s) && s.measuresReady
-        : actor === 'SQE' && s.status === 'DRAFT';
-      return allowed && (!a.date || validDate(a.date)) ? { ...s, dates: { ...s.dates, [a.stage]: a.date } } : s;
+      const current = s.dates[a.stage];
+      const preservesDeadline = s.status === 'DRAFT' || !current || (!!a.date && a.date <= current);
+      return dateEditable(s, actor, a.stage) && preservesDeadline && (!a.date || validDate(a.date)) ? { ...s, dates: { ...s.dates, [a.stage]: a.date } } : s;
     }
     case 'submit':
       return actor === 'SUPPLIER' && editable(s) && s.body.trim() && s.measuresReady && s.dates.SUBMISSION
@@ -75,10 +85,10 @@ export function transition(s: Demo, actor: Actor, a: Action): Demo {
     }
     case 'extend':
       return actor === 'SUPPLIER' && editable(s) && !s.extension && validDate(a.date) && s.dates[a.stage] && a.date > s.dates[a.stage]
-        ? { ...s, extension: { stage: a.stage, original: s.dates[a.stage], requested: a.date, status: 'SQE_PENDING' } } : s;
+        ? { ...s, extension: { stage: a.stage, round: s.round, original: s.dates[a.stage], requested: a.date, status: 'SQE_PENDING' } } : s;
     case 'extension-review': {
       const e = s.extension;
-      if (!e || !editable(s) || !((e.status === 'SQE_PENDING' && actor === 'SQE') || (e.status === 'MANAGER_PENDING' && actor === 'MANAGER'))) return s;
+      if (!e || !extensionReviewable(s, actor)) return s;
       const status = a.result === 'RETURNED' ? 'RETURNED' : e.status === 'SQE_PENDING' && high(s.risk) ? 'MANAGER_PENDING' : 'APPROVED';
       return { ...s, extension: { ...e, status }, dates: status === 'APPROVED' ? { ...s.dates, [e.stage]: e.requested } : s.dates };
     }

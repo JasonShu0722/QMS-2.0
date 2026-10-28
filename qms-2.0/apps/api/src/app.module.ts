@@ -15,6 +15,8 @@ import { APPLICATION_OUTBOX_HANDLER, type AtomicOutboxHandler } from './modules/
 import { WorkflowEventHandler } from './modules/task-notification/workflow-event.handler.js';
 import { ClosureEventHandler } from './modules/task-notification/closure-event.handler.js';
 import { SupplierQualityModule } from './modules/supplier-quality/supplier-quality.module.js';
+import { SupplierEightDSourceModule } from './modules/supplier-eight-d-source/supplier-eight-d-source.module.js';
+import { SupplierEightDReminderService } from './modules/supplier-quality/supplier-eight-d-reminder.service.js';
 import { ProcessQualityModule } from './modules/process-quality/process-quality.module.js';
 import { ProcessEightDReminderService } from './modules/process-quality/process-eight-d-reminder.service.js';
 import { CustomerQualityModule } from './modules/customer-quality/customer-quality.module.js';
@@ -42,9 +44,9 @@ import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEig
 import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d-reminder.js';
 
 @Module({
-  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService, CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME],
-    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService, customer: InternalEightDRuntime, newProduct: InternalEightDRuntime): AtomicOutboxHandler =>
-      internalEightDReminderHandler([process, customer.reminders, newProduct.reminders, closure, legacy]) }],
+  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService, CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, SupplierEightDReminderService],
+    useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService, customer: InternalEightDRuntime, newProduct: InternalEightDRuntime, supplier: SupplierEightDReminderService): AtomicOutboxHandler =>
+      internalEightDReminderHandler([process, customer.reminders, newProduct.reminders, supplier, closure, legacy]) }],
   imports: [
     DatabaseModule,
     IdentityModule,
@@ -59,6 +61,7 @@ import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d
     ProblemSavedViewModule,
     WorkflowModule,
     SupplierQualityModule,
+    SupplierEightDSourceModule,
     ProcessQualityModule,
     CustomerQualityModule,
     MaterialMasterModule,

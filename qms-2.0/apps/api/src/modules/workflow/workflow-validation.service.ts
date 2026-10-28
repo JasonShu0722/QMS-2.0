@@ -60,7 +60,8 @@ export class WorkflowValidationService {
       if (Object.hasOwn(config, 'supplierEightD')) {
         const supplier = config.supplierEightD;
         if (!this.object(supplier) || Object.keys(supplier).some(key => !['schemaVersion', 'reminderEveryHours'].includes(key))
-          || supplier.schemaVersion !== 1 || supplier.reminderEveryHours !== null) errors.push(`WORKFLOW_SUPPLIER_CONFIG_INVALID:${node.id}`);
+          || supplier.schemaVersion !== 1 || supplier.reminderEveryHours !== null
+            && (!Number.isSafeInteger(supplier.reminderEveryHours) || Number(supplier.reminderEveryHours) < 1 || Number(supplier.reminderEveryHours) > 8760)) errors.push(`WORKFLOW_SUPPLIER_CONFIG_INVALID:${node.id}`);
         const assignment = config.assignment;
         if (node.type !== 'ACTION' || config.isStart !== true || config.isEnd === true || config.closureReview !== undefined
           || config.processEightD !== undefined || config.slaMinutes !== undefined || config.reminders !== undefined || config.escalation !== undefined

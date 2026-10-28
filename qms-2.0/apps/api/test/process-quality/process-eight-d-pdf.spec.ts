@@ -78,6 +78,32 @@ it('rejects a missing required image instead of producing a success with a blank
   await expect(renderProcessEightDPdf(sampleReport(), new Map())).rejects.toThrow('PROCESS_EIGHT_D_REPORT_IMAGE_MISSING');
 });
 
+it.each(['process-quality', 'customer-quality', 'new-product-quality'])('keeps %s closed-supplement approvals factual without adding supplier base fields', async domain => {
+  const report = sampleReport(); report.status = 'CLOSED_SUPPLEMENT'; report.snapshot.document.temporaryMeasures = [];
+  Object.assign(report.snapshot.problem, { title: 'SUPPLIER_ONLY_TITLE', materialCode: 'SUPPLIER_ONLY_PART', materialCategory: 'SUPPLIER_ONLY_CATEGORY',
+    defectDescription: 'SUPPLIER_ONLY_DEFECT', defectQuantity: 987 });
+  report.snapshot.approvalRounds = [
+    { roundNumber: 1, status: 'APPROVED', contentVersion: report.contentVersion - 1, duties: [
+      { duty: 'PROFESSIONAL', status: 'APPROVED', decidedBy: 'real-professional', decidedAt: '2026-10-25T08:00:00Z' },
+      { duty: 'MANAGEMENT', status: 'SKIPPED_SAME_PERSON', userId: 'real-professional', decidedBy: null, decidedAt: null }] },
+    ...['RETURNED', 'CANCELLED'].map((status, i) => ({ roundNumber: i + 2, status, contentVersion: report.contentVersion,
+      duties: [{ duty: 'PROFESSIONAL', status: 'APPROVED', decidedBy: 'returned-reviewer', decidedAt: '2026-10-25T07:00:00Z' }] })),
+    { roundNumber: 4, status: 'PENDING', contentVersion: report.contentVersion - 1, duties: [{ duty: 'PROFESSIONAL', status: 'PENDING' }] },
+  ];
+  const loading = getDocument({ data: new Uint8Array(await renderProcessEightDPdf(report, new Map([[imageId, png]]), domain)), useSystemFonts: false });
+  try {
+    const pdf = await loading.promise; let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
+    expect(text).toContain('审批轮 1 / APPROVED / 原版本实际批准，未覆盖本次补充');
+    expect(text).toContain('实际签批 real-professional / 2026-10-25T08:00:00Z（原版本实际批准，未覆盖本次补充）');
+    expect(text).toContain('同人跳过（非签批）'); expect(text).not.toContain('实际签批 real-professional / 未记录');
+    expect(text).toContain('审批轮 2 / RETURNED / 旧轮已失效'); expect(text).toContain('审批轮 3 / CANCELLED / 旧轮已失效');
+    expect(text.match(/旧轮已失效，不作为本版批准/g)).toHaveLength(2);
+    expect(text).toContain('审批轮 4 / PENDING / 非本版审批，不作为本版批准');
+    expect(text).not.toContain('SUPPLIER_ONLY_'); expect(text).not.toContain('物料类别：'); expect(text).not.toContain('补充更新时间');
+  } finally { await loading.destroy(); }
+});
+
 it.each([['customer-quality', '客户'], ['new-product-quality', '新品']])('renders %s report titles without process-domain headings', async (domainCode, label) => {
   const report = sampleReport(); report.snapshot.problem.domainCode = domainCode;
   report.snapshot.document.temporaryMeasures = [];

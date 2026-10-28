@@ -19,6 +19,11 @@ export class SetSupplierWorkflowBindingDto extends SupplierBindingSelectorDto {
   @ApiProperty() @IsBoolean() enabled!: boolean;
 }
 
+export class ActivateSupplierWorkflowBindingDto extends SupplierBindingSelectorDto {
+  @ApiProperty({ minimum: 1, maximum: 2147483646 }) @IsInt() @Min(1) @Max(2147483646) expectedVersion!: number;
+  @ApiProperty() @IsBoolean() enabled!: boolean;
+}
+
 export class SupplierWorkflowBindingDto extends SupplierBindingSelectorDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
@@ -28,6 +33,7 @@ export class SupplierWorkflowBindingDto extends SupplierBindingSelectorDto {
   @ApiProperty() enabled!: boolean;
   @ApiProperty({ enum: ['DRAFT', 'PUBLISHED', 'RETIRED'] }) workflowStatus!: string;
   @ApiProperty({ type: Number, nullable: true, description: '固定流程版本回复节点的分钟数；未配置则为 null' }) responseSlaMinutes!: number | null;
+  @ApiPropertyOptional({ description: '完整供应商8D；绑定后仍须显式启用，不使用旧节点SLA' }) controlledEightD?: boolean;
   @ApiProperty({ format: 'uuid' }) createdById!: string;
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
 }

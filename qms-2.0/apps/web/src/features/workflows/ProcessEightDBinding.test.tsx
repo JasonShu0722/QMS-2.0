@@ -262,7 +262,8 @@ it('protects a dirty domain change and resets the binding scope only after expli
   await waitFor(() => expect(discard).toBeVisible()); fireEvent.click(discard);
   expect(await screen.findByRole('heading', { name: '客户8D流程绑定与启用' })).toBeVisible();
   await waitFor(() => expect(screen.getByLabelText('8D绑定领域')).toBeEnabled());
-  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
+  expect(screen.getAllByRole('heading', { level: 3, name: /^(过程|客户|新品)8D流程绑定与启用$/ })).toHaveLength(1);
+  expect(screen.getByRole('heading', { level: 3, name: '供应商8D流程绑定与启用' })).toBeVisible();
 });
 
 it.each(['customer-quality', 'new-product-quality'] as const)('keeps %s unknown requests private and blocks domain switches until exact retry succeeds', async domain => {

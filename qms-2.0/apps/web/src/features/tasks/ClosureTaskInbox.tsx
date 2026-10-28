@@ -60,13 +60,13 @@ function usePage<Page>(path: string, current: () => boolean, reportError: (cause
   return { data, error, loading, refresh, replace };
 }
 
-export function ClosureTaskInbox() {
+export function ClosureTaskInbox({ onDenied }: { onDenied?: (cause: unknown) => void } = {}) {
   const session = useWorkTabsStore(state => state.sessionScope);
   const location = useLocation();
-  return <ClosureInboxScope key={JSON.stringify([session, location.pathname, location.search])} session={session} />;
+  return <ClosureInboxScope key={JSON.stringify([session, location.pathname, location.search])} session={session} onDenied={onDenied} />;
 }
 
-function ClosureInboxScope({ session }: { session?: string }) {
+function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?: (cause: unknown) => void }) {
   const { t, locale } = useLanguage();
   const text = (value: string) => locale === 'en-US' ? english[value] ?? t(value) : t(value);
   const navigate = useNavigate();
@@ -76,6 +76,7 @@ function ClosureInboxScope({ session }: { session?: string }) {
   const ending = useRef(false);
   const accessRevoked = useRef(false);
   const lifetime = useRef(new AbortController());
+  const deniedCallback = useRef(onDenied); deniedCallback.current = onDenied;
   const historyController = useRef<AbortController | undefined>(undefined);
   const writing = useRef(false);
   const trigger = useRef<HTMLElement | null>(null);
@@ -105,6 +106,7 @@ function ClosureInboxScope({ session }: { session?: string }) {
     return () => { alive.current = false; abort(); unsubscribe(); };
   }, [current]);
   const reportError = useCallback((cause: unknown, writeSettled = false) => {
+    if (!current()) return;
     if (cause instanceof ApiError && cause.status === 401) {
       ending.current = true; lifetime.current.abort(); historyController.current?.abort();
       setSelected(undefined); setComment(''); setAttempt(undefined); setReceipt(undefined); setBusy(false);
@@ -116,7 +118,8 @@ function ClosureInboxScope({ session }: { session?: string }) {
       writing.current = false; setBusy(false); setChecking(false);
       setDenied(cause); setBaseline(undefined); setHistory([]); setReceipt(undefined); setReviewError('无权审核关闭职责');
     }
-  }, []);
+    if (cause instanceof ApiError && [401, 403].includes(cause.status ?? 0)) deniedCallback.current?.(cause);
+  }, [current]);
   const tasks = usePage<Tasks>(taskPath(taskOffset), current, reportError);
   const notices = usePage<Notices>(`/api/v1/notifications/closure?pageSize=${pageSize}&offset=${noticeOffset}`, current, reportError);
   useUnsavedChanges(!!selected && (comment.length > 0 || decision !== 'APPROVE' || jointConfirmed || !!attempt));

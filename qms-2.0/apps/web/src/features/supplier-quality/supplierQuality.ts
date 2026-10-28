@@ -16,7 +16,7 @@ type MutationBody = ProblemDraft | components['schemas']['UpdateSupplierProblemD
 
 export const supplierApi = (portal: boolean) => `/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}`;
 export const supplierPath = (portal: boolean) => portal ? '/supplier/corrections' : '/app/supplier-quality';
-export const severityLabels = { LOW: '低', MEDIUM: '中', HIGH: '高', CRITICAL: '紧急' };
+export const severityLabels = { LOW: '低', MEDIUM: '中', HIGH: '高', CRITICAL: '重大风险' };
 export const statusLabels = { OPEN: '待处理', IN_PROGRESS: '处理中', PENDING: '等待处理', RESOLVED: '已解决', CLOSED: '已关闭', ARCHIVED: '已归档' };
 
 export function supplierError(cause: unknown): string {

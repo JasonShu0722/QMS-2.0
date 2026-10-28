@@ -74,7 +74,7 @@ describe('bounded supplier 8D handling workflow policy', () => {
   });
 
   it.each([undefined, null, false, [], 'supplier', {}, { schemaVersion: 2, reminderEveryHours: null },
-    { schemaVersion: 1 }, { ...handling(), reminderEveryHours: 24 }, { ...handling(), reminderEveryHours: false },
+    { schemaVersion: 1 }, ...[0, -1, 8761, 1.5, '24', false].map(reminderEveryHours => ({ ...handling(), reminderEveryHours })),
     { ...handling(), defaultSlaMinutes: 60 }, { ...handling(), extensionPolicy: 'LEADER_THEN_PROFESSIONAL' },
     { ...handling(), bypass: true }])('fails closed for every declared malformed supplier marker: %p', async supplierEightD => {
     const draft = graph(); draft.nodes[0]!.config!.supplierEightD = supplierEightD;
@@ -82,6 +82,13 @@ describe('bounded supplier 8D handling workflow policy', () => {
     expect(validation.validateDraft(draft).valid).toBe(false);
     // Undefined cannot be represented as a declared JSON property on HTTP.
     if (supplierEightD !== undefined) expect(await transport(draft)).not.toHaveLength(0);
+  });
+
+  it.each([1, 24, 8760])('accepts an explicit bounded reminder cadence of %s hours without inventing a deadline', async reminderEveryHours => {
+    const draft = graph(); draft.nodes[0]!.config!.supplierEightD = { ...handling(), reminderEveryHours };
+    expect(validation.validateDraft(draft).valid).toBe(true);
+    expect(await transport(draft)).toHaveLength(0);
+    expect(draft.nodes[0]!.config).not.toHaveProperty('slaMinutes');
   });
 
   it.each(['slaMinutes', 'reminders', 'escalation', 'closureReview', 'processEightD'])('rejects generic or internal owner config: %s', field => {
@@ -158,7 +165,7 @@ describe('bounded supplier 8D handling workflow policy', () => {
       const schema = schemas.WorkflowSupplierEightDDto as SchemaObject;
       expect(schema.required).toEqual(['schemaVersion', 'reminderEveryHours']);
       expect(schema.properties!.schemaVersion).toMatchObject({ type: 'number', enum: [1] });
-      expect(schema.properties!.reminderEveryHours).toEqual({ type: 'number', nullable: true, enum: [null] });
+      expect(schema.properties!.reminderEveryHours).toEqual({ type: 'number', nullable: true, minimum: 1, maximum: 8760 });
     } finally { await app.close(); }
   });
 });

@@ -55,8 +55,9 @@ const labels: Record<string, string> = {
 
 async function render(): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const reportTitle = `${domainLabel}${domainLabel === '供应商' ? '' : '内部'}`;
     const pdf = new PDFDocument({ size: 'A4', margins: { top: 83, bottom: 58, left: 38, right: 38 }, autoFirstPage: false,
-      bufferPages: true, info: { Title: `${domainLabel}内部8D ${report.reportNumber}`, Author: 'QMS' } }) as PDFKit.PDFDocument & Readable;
+      bufferPages: true, info: { Title: `${reportTitle}8D ${report.reportNumber}`, Author: 'QMS' } }) as PDFKit.PDFDocument & Readable;
     const chunks: Buffer[] = [];
     let outputBytes = 0;
     pdf.on('data', (chunk: Buffer) => {
@@ -76,7 +77,7 @@ async function render(): Promise<Buffer> {
         pdf.save().fillColor('#e8edf1').opacity(0.55).fontSize(26);
         pdf.rotate(-25, { origin: [280, 420] }).text(`${report.label} / V${report.contentVersion}`, 80, 420, { lineBreak: false });
         pdf.restore();
-        pdf.fillColor('#123b52').fontSize(15).text(`${domainLabel}内部 8D 报告`, 38, 28, { lineBreak: false });
+        pdf.fillColor('#123b52').fontSize(15).text(`${reportTitle} 8D 报告`, 38, 28, { lineBreak: false });
         pdf.fontSize(8).text(`${report.reportNumber} | 内容 V${report.contentVersion} / 行 V${report.rowVersion} | ${report.label}`, 38, 51, { width, lineBreak: false });
         pdf.moveTo(38, 70).lineTo(557, 70).strokeColor('#b9c9d3').stroke();
         pdf.fillColor('#182e3c').fontSize(9); pdf.x = 38; pdf.y = 83;
@@ -165,6 +166,11 @@ async function render(): Promise<Buffer> {
       const severity = snapshot.problem.severity ?? snapshot.severity;
       const riskLabels: Record<string, string> = { LOW: '低风险', MEDIUM: '中风险', HIGH: '高风险', CRITICAL: '重大风险' };
       line('风险', riskLabels[String(severity)] ?? severity); line('发起时间', snapshot.problem.createdAt);
+      if (domainLabel === '供应商') {
+        line('标题', snapshot.problem.title); line('物料编码', snapshot.problem.materialCode); line('物料类别', snapshot.problem.materialCategory);
+        line('不良描述', snapshot.problem.defectDescription); line('不良数量', snapshot.problem.defectQuantity);
+        if (report.status === 'CLOSED_SUPPLEMENT') line('补充更新时间', snapshot.problem.supplementUpdatedAt);
+      }
       heading('阶段期限与实际时间');
       table(['阶段', '计划期限', '实际时间'], [
         ['分析 / 对策', snapshot.deadlines.analysisDueAt, snapshot.analysisCompletedAt],
@@ -211,15 +217,26 @@ async function render(): Promise<Buffer> {
       const rounds = snapshot.approvalRounds ?? (snapshot.approval ? [snapshot.approval] : []);
       if (!rounds.length) line('审批记录', '未记录实际批准；草稿不代表签批');
       rounds.forEach(round => {
-        const invalid = ['RETURNED', 'CANCELLED'].includes(String(round.status)) || round.contentVersion !== report.contentVersion;
-        heading(`审批轮 ${display(round.roundNumber)} / ${display(round.status)}${invalid ? ' / 旧轮已失效' : ''}`);
+        const invalid = ['RETURNED', 'CANCELLED'].includes(String(round.status));
+        const oldVersion = round.contentVersion !== report.contentVersion;
+        let qualification = invalid ? '旧轮已失效' : '';
+        // A supplement changes content, not the original round's actual approval facts.
+        if (!invalid && oldVersion) {
+          qualification = '非本版审批，不作为本版批准';
+          if (round.status === 'APPROVED') qualification = report.status === 'CLOSED_SUPPLEMENT'
+            ? '原版本实际批准，未覆盖本次补充' : '原版本实际批准，不作为本版批准';
+        }
+        heading(`审批轮 ${display(round.roundNumber)} / ${display(round.status)}${qualification ? ` / ${qualification}` : ''}`);
         line('本轮内容版本', round.contentVersion);
         if (round.context) { const context = object(round.context); line('轮次结束原因', context.endReason); line('结束操作人ID', context.endedBy); }
         for (const raw of Array.isArray(round.duties) ? round.duties : []) {
           const duty = object(raw);
+          const signed = duty.status === 'APPROVED' && !!duty.decidedBy && !!duty.decidedAt;
           const fact = duty.status === 'SKIPPED_SAME_PERSON' ? '同人跳过（非签批）'
-            : duty.status === 'APPROVED' && duty.decidedBy && duty.decidedAt ? `实际签批 ${display(duty.decidedBy)} / ${display(duty.decidedAt)}` : '未形成批准签批';
-          line(`${display(duty.duty)} / ${display(duty.status)}`, `${fact}${invalid ? '（旧轮已失效，不作为本版批准）' : ''}`);
+            : signed ? `实际签批 ${display(duty.decidedBy)} / ${display(duty.decidedAt)}` : '未形成批准签批';
+          let dutyQualification = invalid ? '旧轮已失效，不作为本版批准' : '';
+          if (!invalid && oldVersion) dutyQualification = round.status === 'APPROVED' && signed ? qualification : '非本版签批，不作为本版批准';
+          line(`${display(duty.duty)} / ${display(duty.status)}`, `${fact}${dutyQualification ? `（${dutyQualification}）` : ''}`);
           line('记录人员 / 意见', `${display(duty.userId)} / ${display(duty.comment)}`);
         }
       });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialDemo, transition } from './model';
+import { dateEditable, initialDemo, transition } from './model';
 import type { Actor, Demo, Duty, Risk } from './model';
 
 function released(risk: Risk = 'HIGH', samePerson = false) {
@@ -135,6 +135,41 @@ describe('supplier preview lifecycle (memory only)', () => {
     expect(transition(locked, 'SUPPLIER', { type: 'extend', stage: 'SUBMISSION', date: '2026-11-12' })).toBe(locked);
   });
 
+  it('locks ordinary submission-date edits throughout pending extension approval and applies only the approved request', () => {
+    let s = released();
+    s = transition(s, 'SUPPLIER', { type: 'edit', body: '摘要', measuresReady: true });
+    s = transition(s, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date: '2026-11-09' });
+    s = transition(s, 'SUPPLIER', { type: 'extend', stage: 'SUBMISSION', date: '2026-11-12' });
+    expect(s.extension?.status).toBe('SQE_PENDING');
+    const managerPending = transition(s, 'SQE', { type: 'extension-review', result: 'APPROVED' });
+    expect(managerPending.extension?.status).toBe('MANAGER_PENDING');
+    for (const state of [managerPending, s]) {
+      for (const date of ['2026-11-20', '2026-11-08', '']) {
+        expect(transition(state, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date })).toBe(state);
+      }
+      expect(state.dates.SUBMISSION).toBe('2026-11-09');
+    }
+    s = transition(managerPending, 'MANAGER', { type: 'extension-review', result: 'APPROVED' });
+    expect(s.extension?.status).toBe('APPROVED');
+    expect(s.extension?.original).toBe('2026-11-09');
+    expect(s.dates.SUBMISSION).toBe('2026-11-12');
+  });
+
+  it('never postpones or clears an existing effective date through ordinary edits, even without a pending extension', () => {
+    let s = released();
+    s = transition(s, 'SUPPLIER', { type: 'edit', body: '摘要', measuresReady: true });
+    s = transition(s, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date: '2026-11-09' });
+    const requested = transition(s, 'SUPPLIER', { type: 'extend', stage: 'SUBMISSION', date: '2026-11-12' });
+    const returned = transition(requested, 'SQE', { type: 'extension-review', result: 'RETURNED' });
+    const approved = transition(transition(requested, 'SQE', { type: 'extension-review', result: 'APPROVED' }), 'MANAGER', { type: 'extension-review', result: 'APPROVED' });
+    for (const state of [s, returned, approved, { ...s, status: 'RETURNED' as const }]) {
+      for (const date of ['2026-11-20', '']) {
+        expect(transition(state, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date })).toBe(state);
+      }
+      expect(transition(state, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date: '2026-11-08' }).dates.SUBMISSION).toBe('2026-11-08');
+    }
+  });
+
   it('rejects malformed dates without throwing and lets draft dates be cleared', () => {
     const s = initialDemo();
     expect(transition(s, 'SQE', { type: 'date', stage: 'ANALYSIS', date: '2026-99-99' })).toBe(s);
@@ -162,5 +197,48 @@ describe('supplier preview lifecycle (memory only)', () => {
       expect({ ...next, supplements: [] }).toEqual(s);
     }
     expect(transition(submitted(), 'SQE', { type: 'supplement', text: '不得代改' }).supplements).toEqual([]);
+  });
+
+  it.each([
+    ['ANALYSIS', '2026-11-05', 'SQE_PENDING'],
+    ['ANALYSIS', '2026-11-05', 'MANAGER_PENDING'],
+    ['SUBMISSION', '2026-11-12', 'SQE_PENDING'],
+    ['SUBMISSION', '2026-11-12', 'MANAGER_PENDING'],
+    ['CLOSURE', '2026-11-19', 'SQE_PENDING'],
+    ['CLOSURE', '2026-11-19', 'MANAGER_PENDING'],
+  ] as const)('never reactivates an old-round %s extension (%s, %s) on return or resubmission', (stage, date, pending) => {
+    let s = released();
+    s = transition(s, 'SUPPLIER', { type: 'edit', body: '完整摘要', measuresReady: true });
+    s = transition(s, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date: '2026-11-09' });
+    s = transition(s, 'SUPPLIER', { type: 'extend', stage, date });
+    if (pending === 'MANAGER_PENDING') s = transition(s, 'SQE', { type: 'extension-review', result: 'APPROVED' });
+    expect(s.extension?.status).toBe(pending);
+    const history = s.extension;
+    const dates = s.dates;
+    const submittedState = transition(s, 'SUPPLIER', { type: 'submit' });
+    expect(submittedState.status).toBe('SQE_PENDING');
+    expect(submittedState.extension).toEqual(history);
+    for (const duty of ['SQE', 'MANAGER', 'MINISTER'] as const) {
+      let returned = submittedState;
+      if (duty !== 'SQE') returned = review(returned, 'SQE', 'SQE');
+      returned = review(returned, duty, duty, 'RETURNED');
+      expect(returned.status).toBe('RETURNED');
+      for (const actor of ['SQE', 'MANAGER', 'MINISTER'] as const) {
+        for (const result of ['APPROVED', 'RETURNED'] as const) {
+          expect(transition(returned, actor, { type: 'extension-review', result })).toBe(returned);
+        }
+      }
+      expect(returned.extension).toEqual(history);
+      expect(returned.dates).toEqual(dates);
+      expect(dateEditable(returned, 'SUPPLIER', 'SUBMISSION')).toBe(true);
+      const earlier = transition(returned, 'SUPPLIER', { type: 'date', stage: 'SUBMISSION', date: '2026-11-08' });
+      expect(earlier.dates.SUBMISSION).toBe('2026-11-08');
+      const resubmitted = transition(earlier, 'SUPPLIER', { type: 'submit' });
+      expect(resubmitted.round).toBe(2);
+      const returnedAgain = review(resubmitted, 'SQE', 'SQE', 'RETURNED');
+      expect(transition(returnedAgain, 'SQE', { type: 'extension-review', result: 'APPROVED' })).toBe(returnedAgain);
+      expect(transition(returnedAgain, 'MANAGER', { type: 'extension-review', result: 'APPROVED' })).toBe(returnedAgain);
+      expect(returnedAgain.extension).toEqual(history);
+    }
   });
 });

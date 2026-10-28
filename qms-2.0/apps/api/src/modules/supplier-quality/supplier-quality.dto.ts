@@ -164,6 +164,7 @@ export class SupplierWorkflowNodeDto {
 }
 
 export class SupplierProblemDto extends SupplierProblemDraftDto {
+  @ApiPropertyOptional({ description: '使用完整8D工作区；旧详情不返回其正文或内部补充资料' }) controlledEightD?: boolean;
   @ApiProperty() id!: string;
   @ApiProperty({ type: String, nullable: true }) supplierOrganizationId!: string | null;
   @ApiProperty() supplierName!: string;

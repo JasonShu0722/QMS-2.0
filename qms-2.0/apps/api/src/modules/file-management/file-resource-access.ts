@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { WorkflowActor } from '../workflow/workflow-access-policy.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
@@ -6,7 +7,7 @@ import { workflowError } from '../workflow/workflow-runtime-policy.js';
 export type FileActor = WorkflowActor;
 export interface FileResourceRef { resourceType: string; resourceId: string }
 export type FileResourceAction = 'upload' | 'complete' | 'read' | 'delete' | 'attach';
-export interface FileResourceGrant { organizationId: string; version: number }
+export interface FileResourceGrant { organizationId: string; version: number; readonly readableFileIds?: readonly string[] }
 export interface FileResourceAccessAdapter {
   readonly resourceType: string;
   validateUpload?(input: { contentType: string; sizeBytes: number }): void;
@@ -47,10 +48,16 @@ export class FileResourceAccess {
     const adapter = this.adapters.find((candidate) => candidate.resourceType === resource.resourceType);
     if (!adapter) workflowError('FILE_RESOURCE_DENIED', 403);
     const grant = await adapter.authorizeAndLock(transaction, actor, resource, action);
-    if (!grant || !Number.isSafeInteger(grant.version) || grant.version < 1) workflowError('FILE_RESOURCE_DENIED', 403);
-    if (actor.accountType === 'SUPPLIER' && actor.organizationId !== grant.organizationId) workflowError('FILE_RESOURCE_DENIED', 403);
-    const organization = await transaction.organization.findUnique({ where: { id: grant.organizationId } });
+    if (!grant || typeof grant.organizationId !== 'string' || !isUUID(grant.organizationId)
+      || !Number.isSafeInteger(grant.version) || grant.version < 1) workflowError('FILE_RESOURCE_DENIED', 403);
+    if (grant.readableFileIds !== undefined && (!Array.isArray(grant.readableFileIds)
+      || Array.from(grant.readableFileIds).some(id => typeof id !== 'string' || !isUUID(id))
+      || new Set(grant.readableFileIds).size !== grant.readableFileIds.length)) workflowError('FILE_RESOURCE_DENIED', 403);
+    // Snapshot adapter-owned arrays: later mutation must not rewrite the initial grant.
+    const snapshot = { ...grant, ...(grant.readableFileIds === undefined ? {} : { readableFileIds: [...grant.readableFileIds] }) };
+    if (actor.accountType === 'SUPPLIER' && actor.organizationId !== snapshot.organizationId) workflowError('FILE_RESOURCE_DENIED', 403);
+    const organization = await transaction.organization.findUnique({ where: { id: snapshot.organizationId } });
     if (organization?.status !== 'ACTIVE') workflowError('FILE_RESOURCE_DENIED', 403);
-    return grant;
+    return snapshot;
   }
 }

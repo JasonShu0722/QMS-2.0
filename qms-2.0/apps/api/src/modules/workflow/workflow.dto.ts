@@ -32,7 +32,7 @@ export class WorkflowProcessEightDDto {
 
 export class WorkflowSupplierEightDDto {
   @ApiProperty({ enum: [1] }) @IsIn([1]) schemaVersion!: 1;
-  @ApiProperty({ type: Number, nullable: true, enum: [null] }) @IsIn([null]) reminderEveryHours!: null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 8760 }) @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) @Max(8760) reminderEveryHours!: number | null;
 }
 
 export class WorkflowNodeConfigDto {

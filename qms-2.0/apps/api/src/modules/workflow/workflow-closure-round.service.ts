@@ -12,7 +12,7 @@ import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate, type W
 import { WorkflowClosureRegistry } from './workflow-closure-registry.js';
 import { planWorkflowClosure, type WorkflowClosureParticipant, type WorkflowClosurePlan } from './workflow-closure-policy.js';
 import { canonical, jsonObject, workflowError } from './workflow-runtime-policy.js';
-import type { WorkflowClosureAdapter, WorkflowClosureCancelInput, WorkflowClosureContext, WorkflowClosureDecideInput, WorkflowClosureDuty, WorkflowClosureDutyProjection, WorkflowClosureDutyRecord, WorkflowClosureOperation, WorkflowClosureRound, WorkflowClosureSnapshot, WorkflowClosureStartInput } from './workflow-closure-round.types.js';
+import type { WorkflowClosureAdapter, WorkflowClosureCancelInput, WorkflowClosureContext, WorkflowClosureDecideInput, WorkflowClosureDuty, WorkflowClosureDutyProjection, WorkflowClosureDutyRecord, WorkflowClosureOperation, WorkflowClosureRound, WorkflowClosureSnapshot, WorkflowClosureStartInput, WorkflowSupplierSubmissionInput } from './workflow-closure-round.types.js';
 
 const roundColumns = Prisma.sql`id, organization_id AS "organizationId", problem_id AS "problemId", instance_id AS "instanceId",
   workflow_version_id AS "workflowVersionId", node_id AS "nodeId", content_version AS "contentVersion", content_snapshot AS "contentSnapshot",
@@ -33,6 +33,45 @@ export class WorkflowClosureRoundService {
   async start(actor: WorkflowActor, problemId: string, input: WorkflowClosureStartInput, key: string, traceId: string, transaction?: Prisma.TransactionClient): Promise<WorkflowClosureRound> {
     this.validateInput('SUBMIT', problemId, input, key);
     return this.command(actor, problemId, input, key, traceId, 'SUBMIT', transaction);
+  }
+
+  // Only the supplier domain's immutable submission transaction can bridge an external creator.
+  async startForSupplierSubmission(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string,
+    input: WorkflowSupplierSubmissionInput, traceId: string): Promise<WorkflowClosureRound> {
+    this.uuid(problemId);
+    if (!input || typeof input !== 'object' || Array.isArray(input)
+      || Object.keys(input).length !== 4 || Object.keys(input).some(key => !['supplierProblemId', 'responseRevisionId', 'expectedContentVersion', 'expectedInstanceVersion'].includes(key))) {
+      throw new BadRequestException();
+    }
+    this.uuid(input.supplierProblemId); this.uuid(input.responseRevisionId);
+    if (!this.positive(input.expectedContentVersion) || !this.positive(input.expectedInstanceVersion)) throw new BadRequestException();
+    const accountType = actor.accountType === 'SUPPLIER' ? 'SUPPLIER' : 'INTERNAL';
+    await this.authorize(tx, actor, accountType);
+    await assertWorkflowFeature(tx, actor, actor.organizationId, 'supplier-quality:responses:write');
+    await tx.$queryRaw`SELECT id FROM problem_indexes WHERE id = ${problemId}::uuid AND domain_code = 'supplier-quality' FOR UPDATE`;
+    const problem = await tx.problemIndex.findUnique({ where: { id: problemId } });
+    if (!problem || problem.domainCode !== 'supplier-quality' || problem.sourceType !== 'supplier-quality'
+      || problem.sourceId !== input.supplierProblemId) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+    const adapter = this.registry.get('supplier-quality');
+    if (!adapter.lockSupplierSubmission) workflowError('WORKFLOW_ACTION_INVALID', 409);
+    const context = await adapter.lockSupplierSubmission(tx, actor, problemId, input);
+    const { active } = await this.validateContext(tx, problem.organizationId, problemId, context, adapter, true);
+    if (!active || context.policy !== 'SUPPLIER') workflowError('WORKFLOW_ACTION_INVALID', 409);
+    if (context.contentVersion !== input.expectedContentVersion || context.instanceVersion !== input.expectedInstanceVersion) workflowError('CONCURRENCY_CONFLICT', 409);
+    const plan = await this.plan(tx, context);
+    if (plan.duties.some(duty => !duty.participant)) workflowError('STRUCTURE_REFERENCE_INVALID', 409);
+    const current = await this.readProjection(tx, context.organizationId, problemId);
+    if (current?.status === 'PENDING') workflowError('CONCURRENCY_CONFLICT', 409);
+    await this.authorize(tx, actor, accountType);
+    await assertWorkflowFeature(tx, actor, actor.organizationId, 'supplier-quality:responses:write');
+    const result = await this.createRound(tx, actor, context, plan, (current?.roundNumber ?? 0) + 1, input.responseRevisionId);
+    await this.audit.record({ organizationId: context.organizationId, actorUserId: actor.id, action: 'WORKFLOW_CLOSURE_CHANGED',
+      resourceType: 'WorkflowClosureRound', resourceId: result.id, outcome: 'SUCCESS', traceId,
+      metadata: { status: result.status, resourceVersion: result.version } }, tx);
+    await this.outbox.enqueue({ eventKey: `closure:${result.id}:${result.version}`, eventType: 'WORKFLOW_CLOSURE_CHANGED',
+      aggregateType: 'WorkflowClosureRound', aggregateId: result.id,
+      payload: { schemaVersion: 1, organizationId: result.organizationId, problemId: result.problemId, roundId: result.id, roundVersion: result.version } }, tx);
+    return result;
   }
 
   async decide(actor: WorkflowActor, roundId: string, input: WorkflowClosureDecideInput, key: string, traceId: string, transaction?: Prisma.TransactionClient): Promise<WorkflowClosureRound> {
@@ -235,9 +274,14 @@ export class WorkflowClosureRoundService {
     if (!before || before.organizationId !== actor.organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     const adapter = this.registry.get(before.domainCode);
     const context = await adapter.lockAndRead(tx, actor, problemId, operation);
+    return this.validateContext(tx, actor.organizationId, problemId, context, adapter, enforceGate);
+  }
+
+  private async validateContext(tx: Prisma.TransactionClient, organizationId: string, problemId: string,
+    context: WorkflowClosureContext, adapter: WorkflowClosureAdapter, enforceGate: boolean) {
     const problem = await tx.problemIndex.findUnique({ where: { id: problemId } });
-    const instance = await tx.workflowInstance.findFirst({ where: { id: context.instanceId, organizationId: actor.organizationId }, include: { currentNode: true, workflowVersion: true } });
-    if (!problem || context.organizationId !== actor.organizationId || context.problemId !== problem.id || problem.domainCode !== adapter.domainCode
+    const instance = await tx.workflowInstance.findFirst({ where: { id: context.instanceId, organizationId }, include: { currentNode: true, workflowVersion: true } });
+    if (!problem || problem.organizationId !== organizationId || context.organizationId !== organizationId || context.problemId !== problem.id || problem.domainCode !== adapter.domainCode
       || problem.workflowInstanceId !== context.instanceId || instance?.problemIndexId !== problem.id
       || instance.workflowVersionId !== context.workflowVersionId || instance.currentNodeId !== context.currentNodeId
       || instance.version !== context.instanceVersion || instance.workflowVersion.organizationId !== context.organizationId
@@ -278,15 +322,15 @@ export class WorkflowClosureRoundService {
     return this.authorize(tx, actor);
   }
 
-  private async authorize(tx: Prisma.TransactionClient, actor: WorkflowActor) {
+  private async authorize(tx: Prisma.TransactionClient, actor: WorkflowActor, accountType: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL') {
     this.uuid(actor.id); this.uuid(actor.organizationId);
     if (!actor.sessionId || !isUUID(actor.sessionId)) workflowError('AUTH_SESSION_REQUIRED', 401);
-    if (actor.accountType !== 'INTERNAL') workflowError('ORGANIZATION_SCOPE_DENIED', 403);
+    if (actor.accountType !== accountType) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertWorkflowFeature(tx, actor, actor.organizationId, 'workflow:act');
     const session = await tx.session.findFirst({ where: { id: actor.sessionId, userId: actor.id, revokedAt: null, expiresAt: { gt: new Date() }, user: { mustChangePassword: false } },
       select: { securityVersion: true, mfaVerifiedAt: true, user: { select: { securityVersion: true, organization: { select: { type: true } } } } } });
     if (!session || session.securityVersion !== session.user.securityVersion) workflowError('AUTH_SESSION_REQUIRED', 401);
-    if (session.user.organization.type !== 'INTERNAL') workflowError('ORGANIZATION_SCOPE_DENIED', 403);
+    if (session.user.organization.type !== accountType) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     if ((await mfaPolicy(tx, actor.id)).required && !session.mfaVerifiedAt) workflowError('AUTH_MFA_REQUIRED', 401);
   }
 

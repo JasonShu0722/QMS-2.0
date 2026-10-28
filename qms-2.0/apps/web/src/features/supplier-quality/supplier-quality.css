@@ -12,6 +12,10 @@
 .supplier-reference-select .ant-select { width: 100%; }
 .supplier-reference-select .ant-alert { margin-top: var(--qms-section-gap); }
 .supplier-filters .ant-select { min-width: 160px; }
+.supplier-issue { min-width: 0; max-width: 100%; margin-top: var(--qms-section-gap); }
+.supplier-issue fieldset { min-width: 0; max-width: 100%; margin: 8px 0; padding: 0; border: 0; }
+.supplier-issue label { display: grid; min-width: 0; gap: 4px; margin: 8px 0; }
+.supplier-issue select { width: 100%; min-width: 0; max-width: 100%; padding: 6px; border: 1px solid var(--qms-border); border-radius: 6px; color: var(--qms-text); background: var(--qms-surface); }
 @media (max-width: 720px) {
   .supplier-quality-page { padding: 0;  min-width: 0; }
   .supplier-heading, .supplier-toolbar { align-items: stretch; flex-direction: column; }

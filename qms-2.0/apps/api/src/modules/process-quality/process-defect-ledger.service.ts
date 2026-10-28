@@ -5,10 +5,13 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { featurePredicate } from '../workflow/workflow-access-policy.js';
+import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
+import type { SupplierCollaborationProjection } from '../../common/eight-d/supplier-collaboration.types.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
 import { SupplierQualityService } from '../supplier-quality/supplier-quality.service.js';
+import type { SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 
 export const PROCESS_RESPONSIBILITY_CATEGORIES = ['MATERIAL', 'OPERATION', 'EQUIPMENT', 'PROCESS', 'DESIGN', 'FALSE_POSITIVE'] as const;
 export const PROCESS_MATERIAL_VERIFICATIONS = ['UNREVIEWED', 'CONFIRMED_DEFECT', 'NOT_MATERIAL', 'NEGOTIATED', 'RETURN_ANALYSIS'] as const;
@@ -426,6 +429,73 @@ export class ProcessDefectLedgerService {
       const evidence = await tx.fileObject.findMany({ where: { organizationId, resourceType: 'process-defect', resourceId: id, status: 'AVAILABLE', scanStatus: 'CLEAN' }, select: { id: true, originalName: true, scanStatus: true, status: true } });
       return { ...await this.view(tx, record), evidence };
     }, { isolationLevel: 'RepeatableRead' });
+  }
+
+  async prepareSupplierCopyProjection(tx: AdminTransaction, actor: AdminActor, defectIds: string[]): Promise<void> {
+    if (!defectIds.length) return;
+    const organizationId = this.scope(actor);
+    const ids = [...new Set(defectIds.map(uuid))];
+    await assertActiveAuthentication(tx, actor, 'SHARE');
+    await assertAdminAccess(tx, actor, organizationId, ['process-quality:defects:read', 'supplier-quality:issues:copy']);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM process_defects WHERE organization_id = ${organizationId}::uuid
+      AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
+  }
+
+  async supplierCollaborationPredicate(tx: AdminTransaction, actualActor: AdminActor, sourceIdSql: Prisma.Sql): Promise<Prisma.Sql> {
+    const organizationId = this.scope(actualActor);
+    await assertActiveAuthentication(tx, actualActor, 'SHARE');
+    return Prisma.sql`(
+      ${featurePredicate(Prisma.sql`${actualActor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:defects:read'`)}
+      AND ${featurePredicate(Prisma.sql`${actualActor.id}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:materials:review'`)}
+      AND EXISTS (SELECT 1 FROM process_defects collaboration_defect
+        JOIN process_defect_material_items collaboration_material ON collaboration_material.organization_id = collaboration_defect.organization_id
+          AND collaboration_material.defect_id = collaboration_defect.id
+        WHERE collaboration_defect.organization_id = ${organizationId}::uuid AND collaboration_defect.id = ${sourceIdSql}
+          AND collaboration_defect.archived_at IS NULL AND collaboration_defect.ledger_status <> 'CLOSED'
+          AND collaboration_material.sqe_user_id = ${actualActor.id}::uuid AND collaboration_material.removed_at IS NULL)
+      AND EXISTS (SELECT 1 FROM user_positions collaboration_assignment
+        JOIN positions collaboration_position ON collaboration_position.id = collaboration_assignment.position_id AND collaboration_position.organization_id = collaboration_assignment.organization_id
+        JOIN departments collaboration_department ON collaboration_department.id = collaboration_position.department_id AND collaboration_department.organization_id = collaboration_position.organization_id
+        JOIN organizations collaboration_organization ON collaboration_organization.id = collaboration_assignment.organization_id
+        WHERE collaboration_assignment.organization_id = ${organizationId}::uuid AND collaboration_assignment.user_id = ${actualActor.id}::uuid
+          AND collaboration_assignment.started_at <= statement_timestamp() AND (collaboration_assignment.ended_at IS NULL OR collaboration_assignment.ended_at > statement_timestamp())
+          AND collaboration_position.status = 'ACTIVE' AND collaboration_department.status = 'ACTIVE' AND collaboration_organization.status = 'ACTIVE')
+    )`;
+  }
+
+  async supplierCollaborationProjection(tx: AdminTransaction, actualActor: AdminActor, sourceId: string): Promise<SupplierCollaborationProjection[]> {
+    const organizationId = this.scope(actualActor);
+    uuid(sourceId);
+    await assertActiveAuthentication(tx, actualActor, 'SHARE');
+    await assertAdminAccess(tx, actualActor, organizationId, ['process-quality:defects:read', 'process-quality:materials:review']);
+    const current = await this.find(tx, organizationId, sourceId);
+    if (current.archivedAt || current.ledgerStatus === 'CLOSED') return [];
+    const assignment = await tx.userPosition.findFirst({ where: { userId: actualActor.id, organizationId,
+      ...effectivePositionAssignmentWhere() }, select: { id: true } });
+    if (!assignment) return [];
+    const materials = await tx.$queryRaw<Array<{ id: string; verification: SupplierCollaborationProjection['verification'] }>>`
+      SELECT id, verification FROM process_defect_material_items WHERE organization_id = ${organizationId}::uuid
+        AND defect_id = ${sourceId}::uuid AND sqe_user_id = ${actualActor.id}::uuid AND removed_at IS NULL ORDER BY position, id`;
+    return materials.map(item => ({ sourceKind: 'PROCESS_LEDGER', sourceId, canonicalFactKey: `PROCESS_LEDGER:${sourceId}`,
+      materialItemId: item.id, verification: item.verification, progress: null, result: null }));
+  }
+
+  async supplierCopyProjection(tx: AdminTransaction, actor: AdminActor, source: SupplierCopySource): Promise<SupplierCopyProjection> {
+    const organizationId = this.scope(actor);
+    uuid(source.sourceId);
+    if (source.kind !== 'PROCESS_LEDGER' || !Number.isSafeInteger(source.sourceVersion) || source.sourceVersion < 1) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    await assertActiveAuthentication(tx, actor, 'SHARE');
+    await assertAdminAccess(tx, actor, organizationId, ['process-quality:defects:read', 'supplier-quality:issues:copy']);
+    await this.lock(tx, organizationId, source.sourceId);
+    const record = await this.find(tx, organizationId, source.sourceId);
+    if (record.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+    if (record.version !== source.sourceVersion) reject('CONCURRENCY_CONFLICT', 409);
+    const materials = await tx.$queryRaw<Array<{ id: string; materialCode: string | null; materialName: string | null; materialBatch: string | null;
+      supplierProfileId: string | null; supplierOrganizationId: string | null }>>`SELECT id, material_code AS "materialCode", material_name AS "materialName",
+      material_batch AS "materialBatch", supplier_profile_id AS "supplierProfileId", supplier_organization_id AS "supplierOrganizationId"
+      FROM process_defect_material_items WHERE organization_id = ${organizationId}::uuid AND defect_id = ${record.id}::uuid AND removed_at IS NULL ORDER BY position, id`;
+    return { organizationId, source, facts: [{ factKey: `PROCESS_LEDGER:${record.id}`, defectDescription: record.description,
+      defectQuantity: record.defectQuantity, materials }] };
   }
 
   async sourceReference(actor: AdminActor, id: string): Promise<DomainSourceReference> {

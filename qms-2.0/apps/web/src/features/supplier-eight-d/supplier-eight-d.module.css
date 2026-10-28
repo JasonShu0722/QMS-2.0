@@ -1,0 +1,14 @@
+.workspace { min-width: 0; color: var(--ed-text); display: grid; gap: 8px; }
+.workspace > * { min-width: 0; max-width: 100%; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.header > div { min-width: 0; overflow-wrap: anywhere; }
+.header h2 { margin: 0 0 4px; }
+.section { min-width: 0; padding: 8px; border: 1px solid var(--ed-border); background: var(--ed-bg); border-radius: 6px; overflow-wrap: anywhere; }
+.section h3 { margin: 0 0 8px; }
+.section fieldset { min-width: 0; margin: 8px 0; }
+.section p { margin: 6px 0; }
+.scroll { max-width: 100%; overflow-x: auto; }
+.section table { width: 100%; border-collapse: collapse; }
+.section th, .section td { padding: 5px; text-align: left; border-bottom: 1px solid var(--ed-border); }
+.section input, .section select, .section textarea { max-width: 100%; box-sizing: border-box; background: var(--ed-input); color: var(--ed-text); border: 1px solid var(--ed-border); border-radius: 4px; padding: 5px; }
+@media (max-width: 600px) { .header { display: grid; } .section { padding: 6px; } }

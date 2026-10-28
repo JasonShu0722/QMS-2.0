@@ -1,5 +1,13 @@
 # OpenAPI 契约
 
+## N5供应商完整8D契约（2026-10-28，本地未发布）
+
+Swagger新增供应商完整8D的发单、当前正文/动作、披露预览与释放、阶段期限与延期、历史修订及受控报告/PDF；内部入口位于`/api/v1/supplier-quality/eight-d`，企业门户位于`/api/v1/supplier-portal/eight-d`。内部SQE任职目录与供应商流程绑定/启用分开，不通过目录或绑定提示自动配置生产权限。
+
+`/api/v1/supplier-quality/source-copies`提供三域来源预览及独立草稿创建；`/api/v1/supplier-quality/source-collaboration/tasks`仅返回真实具备来源协作资格的任务、扫描数量和游标，不输出未经授权的全组织总量。任务DTO的`link`为后端实际复核入口，新品来源可指向底层制程物料，不由前端拼猜selection/project身份。
+
+本轮已重新生成并检查契约，分项API/Web构建及类型检查有记录，最终整合门禁仍在进行；不把生成成功当作所有业务或上线通过。线上N4基线已是PR #77的a60a189，下文“本地未发布/7cd2707”保留其先前实施时点含义，N5尚未发布。
+
 ## N4剩余两域8D契约（V0.0.33本地实施，未发布）
 
 本地已增加`/api/v1/customer-quality/eight-d`及`/api/v1/new-product-quality/eight-d`的独立绑定/启用、来源预览、发单、正文、人员/风险/来源/期限维护、待办/通知及受控报告/PDF路由；沿用真实会话、目标组织、CSRF、幂等、CAS与专业职责校验。新域公开来源字段为`sourceId`，不以过程`defectId`命名客户行或新品selection；原过程契约保持兼容。

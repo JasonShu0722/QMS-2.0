@@ -5,13 +5,19 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 type Body = components['schemas']['CustomerLedgerCreateDto'] | components['schemas']['CustomerLedgerUpdateDto'] |
   components['schemas']['CustomerLedgerImportDto'] | components['schemas']['CustomerLedgerReceivingDto'] | components['schemas']['CustomerLedgerNoteDto'] | components['schemas']['CustomerLedgerReassignDto'] |
-  components['schemas']['IssueCustomerEightDDto'] | components['schemas']['IssueNewProductEightDDto'] | components['schemas']['SelectNewProductDefectDto'];
+  components['schemas']['IssueCustomerEightDDto'] | components['schemas']['IssueNewProductEightDDto'] | components['schemas']['SelectNewProductDefectDto'] |
+  components['schemas']['IssueSupplierEightDDto'] | components['schemas']['SaveSupplierEightDDto'] | components['schemas']['SupplierEightDVersionDto'] |
+  components['schemas']['SupplierEightDAnalysisCompleteDto'] | components['schemas']['SupplierEightDDeadlinesDto'] |
+  components['schemas']['SupplierDisclosurePreviewDto'] | components['schemas']['SupplierDisclosureReleaseDto'] |
+  components['schemas']['SetSupplierWorkflowBindingDto'] | components['schemas']['ActivateSupplierWorkflowBindingDto'] |
+  components['schemas']['SupplierEightDDeadlineRequestDto'] | components['schemas']['SupplierEightDDeadlineDecisionDto'] | components['schemas']['SupplierEightDDeadlineCancelDto'] |
+  components['schemas']['SupplierCopyPreviewInputDto'] | components['schemas']['SupplierCopyDraftInputDto'];
 export const ledgerDenied = (cause: unknown) => cause instanceof ApiError && [401, 403].includes(cause.status ?? 0);
 
-export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void) {
+export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void, expectedAccountType: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL') {
   const scope = useWorkTabsStore(state => state.sessionScope);
   const controller = useRef<AbortController>(undefined);
-  const pending = useRef<{ path: string; body: string; method: 'POST' | 'PUT'; key: string }>(undefined);
+  const pending = useRef<{ path: string; body: string; method: 'POST' | 'PUT'; key: string; principal?: string }>(undefined);
   const active = useRef(false);
   const unknown = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -34,9 +40,11 @@ export function useCustomerLedgerWrite(onDenied: (cause: unknown) => void) {
     try {
       const session = await getSession();
       const principal = `${session.accountType}:${session.organizationId}:${session.userId}`;
+      if (attempt.principal && attempt.principal !== principal) throw new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: '' }, 401);
+      attempt.principal = principal;
       const guard = () => {
         signal.throwIfAborted();
-        if (session.accountType !== 'INTERNAL' || useWorkTabsStore.getState().sessionScope !== scope || (scope && scope !== principal)) throw new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: '' }, 401);
+        if (session.accountType !== expectedAccountType || useWorkTabsStore.getState().sessionScope !== scope || (scope && scope !== principal)) throw new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: '' }, 401);
       };
       guard();
       const token = await csrfToken(signal);

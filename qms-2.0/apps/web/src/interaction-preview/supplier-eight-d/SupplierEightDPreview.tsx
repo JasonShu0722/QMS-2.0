@@ -3,7 +3,7 @@ import { ClipboardList } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { AppearanceButton } from '../../theme/AppearanceButton';
-import { currentRecord, editable, initialDemo, managementDuties, transition } from './model';
+import { currentRecord, dateEditable, editable, extensionReviewable, initialDemo, managementDuties, transition } from './model';
 import type { Action, Actor, Duty, Risk, Stage } from './model';
 import './supplier-eight-d.css';
 
@@ -40,7 +40,7 @@ export function SupplierEightDPreview() {
   const dual = state.samePerson && (state.risk === 'HIGH' || state.risk === 'CRITICAL');
   const canSupplement = closed && (actor === 'SQE' || actor === 'MANAGER');
   const e = state.extension;
-  const canExtensionReview = editable(state) && ((e?.status === 'SQE_PENDING' && actor === 'SQE') || (e?.status === 'MANAGER_PENDING' && actor === 'MANAGER'));
+  const canExtensionReview = extensionReviewable(state, actor);
   const send = (action: Action) => {
     const next = transition(state, actor, action);
     setState(next);
@@ -87,6 +87,13 @@ export function SupplierEightDPreview() {
           <section id="se-body" className="se-panel" aria-label="供应商完整提交摘要">
             <h2>02 · 完整表单摘要</h2>
             <p>D2 问题事实 / D3 围堵 / D4 原因 / D5 对策 / D6 有效性 / D7 横展标准化 / D8 总结。此处仅模拟已完成表单的摘要，不验证真实完整性或附件。</p>
+            <p className="se-muted"><strong>字段共通、审批独立。</strong>沿用既有 D2～D8 字段规则，不沿用内部审批链；供应商仍先 SQE 后管理。</p>
+            <ul className="se-muted">
+              <li>D3 导入时间是临时措施实际投入使用时间，不等于围堵完结；附件按需，可选扩展围堵不强制。</li>
+              <li>D6 检验规范 / 设备程序变更也须记录实际应用改善的首批批次，版本 / 日期不能替代；后续批数或跟进时长二选一，不设统一阈值，不凭文件或日期自动判有效。</li>
+              <li>D7 保留七列 / 11 个预置文件，可新增；按适用性记录，不要求全部更新，不适用写理由；完成标记不代表正式发布。</li>
+              <li>D4 系统因可空，OK / NG 图齐全性不强制，不因缺图或未填系统因阻断提交。</li>
+            </ul>
             <Field id="se-body-text" label="完整表单摘要（演示）"><textarea id="se-body-text" rows={4} value={draft ? '' : state.body} disabled={!canFill} onChange={event => send({ type: 'edit', body: event.target.value, measuresReady: state.measuresReady })} /></Field>
             <Checkbox disabled={!canFill} checked={state.measuresReady} onChange={event => send({ type: 'edit', body: state.body, measuresReady: event.target.checked })}>已制定对策（演示）</Checkbox>
             <div className="se-actions"><Button type="primary" disabled={!canFill || !state.body.trim() || !state.measuresReady || !state.dates.SUBMISSION} onClick={() => send({ type: 'submit' })}>完整提交（仅内存）</Button><a href="/process-eight-d-preview.html" target="_blank" rel="noreferrer">查看既有 D2～D8 分区样例（内部规则，不是供应商审批链）</a></div>
@@ -94,12 +101,12 @@ export function SupplierEightDPreview() {
           </section>
           <section id="se-dates" className="se-panel" aria-label="阶段期限与独立延期">
             <h2>03 · 阶段期限与独立延期</h2>
-            <div className="se-grid">{(Object.keys(stages) as Stage[]).map(key => <Field key={key} id={`se-date-${key}`} label={stages[key]}><input id={`se-date-${key}`} type="date" value={state.dates[key]} disabled={key === 'SUBMISSION' ? !canFill || !state.measuresReady : actor !== 'SQE' || !draft} onChange={event => send({ type: 'date', stage: key, date: event.target.value })} /></Field>)}</div>
-            <p className="se-muted">SQE 设置分析及计划关闭；对策制定后供应商填写完整提交计划。申请不暂停，原有效期限继续计时；最终批准后才生效，历史超期不抹除。计划不等于实际关闭。</p>
+            <div className="se-grid">{(Object.keys(stages) as Stage[]).map(key => <Field key={key} id={`se-date-${key}`} label={stages[key]}><input id={`se-date-${key}`} type="date" value={state.dates[key]} max={!draft && state.dates[key] ? state.dates[key] : undefined} disabled={!dateEditable(state, actor, key)} onChange={event => send({ type: 'date', stage: key, date: event.target.value })} /></Field>)}</div>
+            <p className="se-muted">SQE 设置分析及计划关闭；对策制定后供应商填写完整提交计划。已有有效日期仅可普通提前，不可清空或普通延期；待延期审批的对应日期禁止普通编辑。申请不暂停，原有效期限继续计时；最终批准后才生效，历史超期不抹除。计划不等于实际关闭。</p>
             <p><strong>延期专用链：</strong>{state.risk === 'LOW' || state.risk === 'MEDIUM' ? '供应商 → SQE（最终）' : '供应商 → SQE → 经理（最终）'}；不需要部长，不沿用关闭双批。每次重置演示一笔延期。</p>
             <div className="se-grid"><Field id="se-extension-stage" label="申请延期阶段"><select id="se-extension-stage" value={stage} disabled={!canFill || !!e} onChange={event => setStage(event.target.value as Stage)}>{Object.entries(stages).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></Field><Field id="se-requested" label="申请延期至"><input id="se-requested" type="date" value={requested} disabled={!canFill || !!e} onChange={event => setRequested(event.target.value)} /></Field></div>
             <div className="se-actions"><Button disabled={!canFill || !!e || !requested || !state.dates[stage] || requested <= state.dates[stage]} onClick={() => send({ type: 'extend', stage, date: requested })}>申请延期（仅内存）</Button><Button disabled={!canExtensionReview} onClick={() => send({ type: 'extension-review', result: 'APPROVED' })}>批准本级延期</Button><Button danger disabled={!canExtensionReview} onClick={() => send({ type: 'extension-review', result: 'RETURNED' })}>退回延期</Button></div>
-            {e && <ScrollTable name="延期记录"><thead><tr><th>阶段</th><th>原期限</th><th>申请期限</th><th>审批状态</th></tr></thead><tbody><tr><td>{stages[e.stage]}</td><td>{e.original}</td><td>{e.requested}</td><td>{extensionStatuses[e.status]}</td></tr></tbody></ScrollTable>}
+            {e && <ScrollTable name="延期记录"><thead><tr><th>阶段</th><th>原期限</th><th>申请期限</th><th>审批状态</th></tr></thead><tbody><tr><td>{stages[e.stage]}</td><td>{e.original}</td><td>{e.requested}</td><td>{extensionStatuses[e.status]}{e.round !== state.round && (e.status === 'SQE_PENDING' || e.status === 'MANAGER_PENDING') ? ' · 旧轮失效' : ''}</td></tr></tbody></ScrollTable>}
           </section>
           <section id="se-report" className="se-panel" aria-label="批准与补充版本">
             <h2>04 · 批准依据与当前补充</h2>

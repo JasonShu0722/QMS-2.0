@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Empty, List, Pagination, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, List, Pagination, Space, Spin, Tabs, Tag, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { listSupplierNotifications, readSupplierNotification, type SupplierNotificationPage } from './supplierNotifications';
+import { SupplierEightDTaskInbox } from '../tasks/SupplierEightDTaskInbox';
 import './supplier-notifications.css';
 
 const pageSize = 25;
@@ -16,6 +17,16 @@ function InboxError({ cause }: { cause: unknown }) {
 }
 
 export function SupplierNotificationsPage() {
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState('notifications');
+  const writing = useRef(false);
+  return <Tabs activeKey={activeTab} onChange={key => { if (!writing.current) setActiveTab(key); }} items={[
+    { key: 'notifications', label: t('原通知'), children: activeTab === 'notifications' ? <LegacyNotifications writing={writing} /> : null },
+    { key: 'supplier-eight-d', label: t('供应商8D'), children: activeTab === 'supplier-eight-d' ? <SupplierEightDTaskInbox portal /> : null },
+  ]} />;
+}
+
+function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> }) {
   const { t, locale } = useLanguage();
   const [offset, setOffset] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -24,7 +35,6 @@ export function SupplierNotificationsPage() {
   const [mutationError, setMutationError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string>();
-  const writing = useRef(false);
   const refresh = () => setRevision((value) => value + 1);
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 

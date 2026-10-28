@@ -48,9 +48,15 @@ describe('supplier complete 8D with real application and PostgreSQL', () => {
       .set('Cookie', [`qms_session=${token}`, `qms_csrf=${csrf}`])
       .set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
       .send({ severity: 'HIGH', responseForm: 'EIGHT_D', replyMode: 'SUPPLIER', expectedVersion: 0,
-        workflowVersionId: published.id, enabled: true });
+        workflowVersionId: published.id, enabled: false });
     expect(response.status).toBe(200);
     expect(response.body.workflowVersionId).toBe(published.id);
     expect(response.body.responseSlaMinutes).toBeNull();
+    const activated = await request(app.getHttpServer()).put('/api/v1/supplier-quality/workflow-bindings/activation')
+      .set('Cookie', [`qms_session=${token}`, `qms_csrf=${csrf}`])
+      .set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+      .send({ severity: 'HIGH', responseForm: 'EIGHT_D', replyMode: 'SUPPLIER', expectedVersion: response.body.version, enabled: true });
+    expect(activated.status).toBe(200);
+    expect(activated.body.enabled).toBe(true);
   }, 30_000);
 });

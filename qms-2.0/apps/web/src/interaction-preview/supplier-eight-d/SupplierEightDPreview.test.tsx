@@ -124,6 +124,43 @@ describe('supplier independently clickable preview', () => {
     role('SUPPLIER'); expect(screen.queryByText('本单经理补充资料')).not.toBeInTheDocument();
   });
 
+  it('disables the pending extension date at both approval stages and prevents ordinary postponement', () => {
+    setup(); release(); role('SUPPLIER');
+    change('完整表单摘要（演示）', '摘要');
+    fireEvent.click(screen.getByLabelText('已制定对策（演示）'));
+    const date = screen.getByLabelText('完整提交计划时间');
+    expect(date).toBeEnabled();
+    change('完整提交计划时间', '2026-11-09');
+    change('申请延期阶段', 'SUBMISSION');
+    change('申请延期至', '2026-11-12'); click('申请延期（仅内存）');
+    expect(date).toBeDisabled();
+    role('SQE'); click('批准本级延期'); role('SUPPLIER');
+    expect(screen.getByRole('table', { name: '延期记录' })).toHaveTextContent('待经理审批');
+    expect(date).toBeDisabled();
+    change('完整提交计划时间', '2026-11-20');
+    expect(date).toHaveValue('2026-11-09');
+    role('MANAGER'); click('批准本级延期'); role('SUPPLIER');
+    expect(date).toBeEnabled();
+    expect(date).toHaveValue('2026-11-12');
+    expect(date).toHaveAttribute('max', '2026-11-12');
+    change('完整提交计划时间', '2026-11-20');
+    expect(date).toHaveValue('2026-11-12');
+  });
+
+  it('states the shared D2–D8 field rules without importing the internal approval chain or duplicating its editor', () => {
+    setup();
+    const summary = section('供应商完整提交摘要');
+    for (const text of [
+      '字段共通、审批独立',
+      'D3 导入时间是临时措施实际投入使用时间，不等于围堵完结；附件按需，可选扩展围堵不强制',
+      'D7 保留七列 / 11 个预置文件，可新增；按适用性记录，不要求全部更新，不适用写理由',
+      'D6 检验规范 / 设备程序变更也须记录实际应用改善的首批批次，版本 / 日期不能替代',
+      'D4 系统因可空，OK / NG 图齐全性不强制',
+    ]) expect(summary).toHaveTextContent(text);
+    expect(within(summary).getByRole('link', { name: /既有 D2～D8/ })).toHaveAttribute('href', '/process-eight-d-preview.html');
+    expect(within(summary).getAllByRole('textbox')).toHaveLength(1);
+  });
+
   it('supports keyboard activation and requires confirmation before discarding the memory scenario', async () => {
     setup();
     const user = userEvent.setup();
@@ -133,5 +170,36 @@ describe('supplier independently clickable preview', () => {
     expect(dialog).toHaveTextContent('清除');
     fireEvent.click(within(dialog).getByRole('button', { name: '继续当前样例' }));
     expect(screen.getByLabelText('供应商单独立风险')).toHaveValue('HIGH');
+  });
+
+  it.each(['SQE_PENDING', 'MANAGER_PENDING'])('keeps the old analysis extension %s inactive after SQE returns the complete submission', pending => {
+    setup(); release(); role('SUPPLIER');
+    change('申请延期至', '2026-11-05'); click('申请延期（仅内存）');
+    if (pending === 'MANAGER_PENDING') {
+      role('SQE'); click('批准本级延期');
+    }
+    submit();
+    role('SQE'); change('审核意见', '补充验证后重新提交'); click('SQE 退回');
+    expect(section('当前状态')).toHaveTextContent('退回供应商修改');
+    for (const actor of ['SQE', 'MANAGER']) {
+      role(actor);
+      expect(screen.getByRole('button', { name: '批准本级延期' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '退回延期' })).toBeDisabled();
+      click('批准本级延期');
+      expect(screen.getByLabelText('原因分析 / 对策制定期限')).toHaveValue('2026-11-02');
+    }
+    const history = screen.getByRole('table', { name: '延期记录' });
+    expect(history).toHaveTextContent('2026-11-02');
+    expect(history).toHaveTextContent('2026-11-05');
+    expect(history).toHaveTextContent('旧轮失效');
+    role('SUPPLIER');
+    expect(screen.getByLabelText('完整提交计划时间')).toBeEnabled();
+    click('完整提交（仅内存）');
+    expect(section('当前状态')).toHaveTextContent('第 2 轮');
+    role('SQE'); change('审核意见', '再次补充'); click('SQE 退回');
+    role('MANAGER');
+    expect(screen.getByRole('button', { name: '批准本级延期' })).toBeDisabled();
+    expect(screen.getByLabelText('原因分析 / 对策制定期限')).toHaveValue('2026-11-02');
+    expect(history).toHaveTextContent('旧轮失效');
   });
 });

@@ -13,6 +13,7 @@ import { CustomerLedgerEditor } from './customer-ledger-editor';
 import { CustomerLedgerImportPanel } from './customer-ledger-import-panel';
 import { ledgerDenied } from './customer-ledger-write';
 import { InternalEightDIssueDrawer } from '../internal-eight-d/InternalEightDIssueDrawer';
+import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
 import { LedgerError, LedgerWarnings, ledgerBase, scopedLedger, stageLabel, typeLabel, uuid, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import './customer-quality.css';
 
@@ -48,6 +49,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
   const [legacy, setLegacy] = useState(false);
   const [selectedSources, setSelectedSources] = useState<LedgerItem[]>([]);
   const [issueOpen, setIssueOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [issued, setIssued] = useState<components['schemas']['ProcessIssueResultDto']>();
   const life = useRef<AbortController>(undefined); const detailController = useRef<AbortController>(undefined);
   const selectedId = useRef<string | undefined>(undefined); const detailSequence = useRef(0);
@@ -56,7 +58,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
     life.current?.abort(); detailController.current?.abort(); detailSequence.current++;
     selectedId.current = undefined; setAccessLost(true); setAuthorized(false); setPermissions([]); setSession(undefined);
     setResult(undefined); setDetail(undefined); setCandidates([]); setCustomers([]); setEditorOpen(false); setImportOpen(false); setLegacy(false);
-    setSelectedSources([]); setIssueOpen(false); setIssued(undefined);
+    setSelectedSources([]); setIssueOpen(false); setCopyOpen(false); setIssued(undefined);
     setSearchDraft(''); setSearch(''); setError(cause); setDetailError(undefined); setPermissionError(undefined); setLoading(false); setDetailLoading(false); setAuxiliaryError(undefined); setAuxiliaryLoading(false);
   }, []);
   const loadAuxiliary = useCallback(async (controller: AbortController, revalidate = false) => {
@@ -134,8 +136,10 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
   }
   function refresh() { requestLeave(() => { setRevision(current => current + 1); if (selectedId.current) void openDetail(selectedId.current).catch(() => undefined); }); }
   function chooseView(next: typeof view) { requestLeave(() => { setView(next); setPage(1); setDetail(undefined); selectedId.current = undefined; detailController.current?.abort(); }); }
+  const canIssue = permissions.includes('customer-quality:issues:issue');
+  const canCopy = permissions.includes('supplier-quality:issues:copy');
   const columns: TableColumnsType<LedgerItem> = [
-    ...(permissions.includes('customer-quality:issues:issue') ? [{ title: '选择', width: 65, key: 'eight-d-select', render: (_: unknown, row: LedgerItem) => <Checkbox aria-label={`选择客诉 ${row.complaintNumber}`} checked={selectedSources.some(source => source.id === row.id)} disabled={selectedSources.length >= 100 && !selectedSources.some(source => source.id === row.id)} onChange={event => setSelectedSources(current => event.target.checked ? [...current.filter(source => source.id !== row.id), row] : current.filter(source => source.id !== row.id))} /> }] : []),
+    ...(canIssue || canCopy ? [{ title: '选择', width: 65, key: 'eight-d-select', render: (_: unknown, row: LedgerItem) => <Checkbox aria-label={`选择客诉 ${row.complaintNumber}`} checked={selectedSources.some(source => source.id === row.id)} disabled={selectedSources.length >= 100 && !selectedSources.some(source => source.id === row.id)} onChange={event => setSelectedSources(current => event.target.checked ? [...current.filter(source => source.id !== row.id), row] : current.filter(source => source.id !== row.id))} /> }] : []),
     { title: '客诉编号', width: 180, render: (_, row) => <Space><Button className="customer-ledger-number" aria-label={row.complaintNumber} type="link" onClick={() => requestLeave(() => { void openDetail(row.id).catch(() => undefined); })}>{row.complaintNumber}</Button><LedgerWarnings label={row.complaintNumber} warnings={row.warnings} raw={row.raw} /></Space> },
     { title: '客户 / 类型', width: 180, render: (_, row) => <><div>{row.normalized.customerName ?? '客户待匹配'}</div><Typography.Text type="secondary">{typeLabel(row.normalized.complaintType)}</Typography.Text></> },
     { title: '组件 / 项目 / 阶段', width: 210, render: (_, row) => <><div>{row.normalized.componentCode ?? '组件待补'}</div><div>{row.mapping?.project ? `${row.mapping.project.code} · ${row.mapping.project.name}` : '未检索到映射关系'}</div><div>{row.mapping?.mapping?.productCategory ?? '分类待匹配'}{row.mapping?.mapping?.productSubcategory ? ` / ${row.mapping.mapping.productSubcategory}` : ''}</div><Tag>{stageLabel(row.stage)}</Tag></> },
@@ -163,7 +167,9 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       <section className="customer-quality-card">
         <div className="customer-ledger-views" role="group" aria-label="台账视图">{([['ALL', '全部'], ['ZERO_KM', '零公里'], ['AFTER_SALES', '售后']] as const).map(([value, label]) => <Button key={value} aria-label={label} type={view === value ? 'primary' : 'default'} aria-pressed={view === value} onClick={() => chooseView(value)}>{label}</Button>)}</div>
         <Space wrap className="customer-quality-toolbar"><Input.Search aria-label="搜索客诉" placeholder="编号、客户、描述或原填写" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} onSearch={() => requestLeave(() => { setSearch(searchDraft); setPage(1); })} /><Checkbox checked={mine} onChange={event => { setMine(event.target.checked); setPage(1); }}>我负责的</Checkbox><Typography.Text type="secondary">权限范围内共 {result?.total ?? '—'} 条</Typography.Text>
-          {permissions.includes('customer-quality:issues:issue') ? <><Button disabled={!selectedSources.length} onClick={() => requestLeave(() => setIssueOpen(true))}>发起客户8D</Button><Typography.Text>已选择 {selectedSources.length}/100 条（跨页保留）</Typography.Text>{selectedSources.length ? <Button onClick={() => setSelectedSources([])}>清空发单选择</Button> : null}</> : null}
+          {canIssue ? <Button disabled={!selectedSources.length} onClick={() => requestLeave(() => setIssueOpen(true))}>发起客户8D</Button> : null}
+          {canCopy ? <Button disabled={!selectedSources.length || loading || !!error} onClick={() => requestLeave(() => setCopyOpen(true))}>复制为供应商草稿</Button> : null}
+          {canIssue || canCopy ? <><Typography.Text>已选择 {selectedSources.length}/100 条（跨页保留）</Typography.Text>{selectedSources.length ? <Button onClick={() => setSelectedSources([])}>清空发单选择</Button> : null}</> : null}
           {permissions.includes('customer-quality:complaints:write') ? <><Button aria-label="人工登记客诉" type="primary" onClick={() => requestLeave(() => setEditorOpen(true))}>人工登记客诉</Button><Button aria-label="粘贴 / Excel 导入" onClick={() => requestLeave(() => setImportOpen(true))}>粘贴 / Excel 导入</Button></> : null}
         </Space>
         <details className="customer-ledger-filters"><summary>筛选客户、组件 / 项目、阶段、日期、工程师及状态</summary><div className="customer-ledger-form">
@@ -185,6 +191,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       {editorOpen ? <CustomerLedgerEditor organizationId={organizationId} candidates={candidates} customers={customers} onDenied={revoke} onClose={() => setEditorOpen(false)} onSaved={saved} refreshDetail={async () => undefined} /> : null}
       {importOpen ? <CustomerLedgerImportPanel organizationId={organizationId} existing={result?.items ?? []} customers={customers} candidates={candidates} onDenied={revoke} onClose={() => setImportOpen(false)} onCommitted={() => setRevision(current => current + 1)} /> : null}
       {issueOpen ? <InternalEightDIssueDrawer domain="customer-quality" organizationId={organizationId} sources={selectedSources.map(row => ({ id: row.id, version: row.version, organizationId: row.organizationId, description: `${row.complaintNumber} · ${row.normalized.defectDescription ?? '待补正'}` }))} onClose={() => setIssueOpen(false)} onDenied={revoke} onIssued={value => { setIssued(value); setIssueOpen(false); setSelectedSources([]); setRevision(current => current + 1); }} /> : null}
+      {canCopy && copyOpen ? <SupplierSourceCopyDialog organizationId={organizationId} sources={selectedSources.map(row => ({ kind: 'CUSTOMER_LEDGER', sourceId: row.id, sourceVersion: row.version }))} onClose={() => setCopyOpen(false)} onDenied={revoke} /> : null}
     </> : loading ? <Spin /> : <Typography.Paragraph>权限读取未完成，台账未加载。请重新进入页面重试。</Typography.Paragraph>}
   </main>;
 }
