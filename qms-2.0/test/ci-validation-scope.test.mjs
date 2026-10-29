@@ -16,8 +16,10 @@ const policy = JSON.parse(await readFile(join(root, 'governance/validation-impac
 const ci = existsSync(script) ? await import(pathToFileURL(script).href) : {};
 const sha = 'a'.repeat(40);
 const source = { headSha: sha, runId: '123', runAttempt: '2' };
-const businessNames = ['web-tests (1)', 'web-tests (2)', 'web-tests (3)', 'web-tests (4)', 'api-unit', 'integration'];
-const jobsFor = (conclusion = 'success') => ['scope', 'checks', 'foundation', ...(conclusion === 'skipped' ? ['web-tests', 'api-unit', 'integration'] : businessNames)].map((name, index) => ({
+const webShards = [1, 2, 3, 4, 5, 6, 7, 8];
+const integrationShards = [1, 2, 3, 4];
+const businessNames = [...webShards.map((shard) => `web-tests (${shard})`), 'api-unit', ...integrationShards.map((shard) => `integration (${shard})`)];
+const jobsFor = (conclusion = 'success', names = conclusion === 'skipped' ? ['web-tests', 'api-unit', 'integration'] : businessNames) => ['scope', 'checks', 'foundation', ...names].map((name, index) => ({
   id: 100 + index,
   name, status: 'completed', conclusion: ['scope', 'checks', 'foundation'].includes(name) ? 'success' : conclusion,
   head_sha: sha, run_id: 123, run_attempt: 2,
@@ -122,7 +124,7 @@ test('foundation gate only accepts full success or explicitly planned documentat
   for (const scope of ['full', 'documentation']) {
     const expected = scope === 'full' ? 'success' : 'skipped';
     for (const name of Object.keys(needsFor())) {
-      for (const result of ['failure', 'cancelled', undefined, '']) {
+      for (const result of ['failure', 'cancelled', 'pending', 'queued', 'in_progress', undefined, '']) {
         assert.throws(() => ci.evaluateFoundation(scope, { ...needsFor(expected), [name]: result }), `${scope}/${name}/${result}`);
       }
     }
@@ -132,16 +134,33 @@ test('foundation gate only accepts full success or explicitly planned documentat
   }
 });
 
-test('deploy gate requires unique complete successful jobs from the exact source run, attempt and SHA', () => {
+test('deploy gate accepts only the exact 16-job full layout or unchanged six-job documentation layout', () => {
+  assert.equal(jobsFor().length, 16);
+  assert.equal(jobsFor('skipped').length, 6);
   assert.equal(ci.evaluateDeployJobs(jobsFor(), source), 'full');
   assert.equal(ci.evaluateDeployJobs(jobsFor('skipped'), source), 'documentation');
+});
+
+test('deploy gate rejects legacy and mixed matrix layouts instead of accepting partial full validation', () => {
+  const legacy = ['web-tests (1)', 'web-tests (2)', 'web-tests (3)', 'web-tests (4)', 'api-unit', 'integration'];
+  for (const names of [legacy,
+    [...webShards.map((shard) => `web-tests (${shard})`), 'api-unit', 'integration'],
+    [...legacy.filter((name) => name !== 'integration'), ...integrationShards.map((shard) => `integration (${shard})`)],
+    [...businessNames, 'integration'], [...businessNames, 'web-tests'],
+  ]) assert.throws(() => ci.evaluateDeployJobs(jobsFor('success', names), source), names.join(', '));
+});
+
+test('deploy gate requires unique complete successful jobs from the exact source run, attempt and SHA', () => {
   for (const name of jobsFor().map((job) => job.name)) {
     assert.throws(() => ci.evaluateDeployJobs(jobsFor().filter((job) => job.name !== name), source), name);
     assert.throws(() => ci.evaluateDeployJobs([...jobsFor(), jobsFor().find((job) => job.name === name)], source), name);
-    for (const conclusion of ['failure', 'cancelled', 'neutral', null]) {
+    for (const conclusion of ['failure', 'cancelled', 'neutral', 'skipped', 'pending', null, undefined]) {
       assert.throws(() => ci.evaluateDeployJobs(jobsFor().map((job) => job.name === name ? { ...job, conclusion } : job), source));
     }
-    for (const altered of [{ head_sha: 'b'.repeat(40) }, { run_id: 122 }, { run_attempt: 1 }, { status: 'in_progress' }]) {
+    for (const altered of [{ head_sha: 'b'.repeat(40) }, { run_id: 122 }, { run_attempt: 1 },
+      ...['in_progress', 'queued', 'waiting', 'pending', undefined].map((status) => ({ status })),
+      { id: jobsFor().find((job) => job.name !== name).id },
+    ]) {
       assert.throws(() => ci.evaluateDeployJobs(jobsFor().map((job) => job.name === name ? { ...job, ...altered } : job), source));
     }
   }
@@ -151,6 +170,9 @@ test('deploy gate requires unique complete successful jobs from the exact source
     assert.throws(() => ci.evaluateDeployJobs(jobsFor('skipped').filter(({ name }) => name !== job.name), source));
     assert.throws(() => ci.evaluateDeployJobs([...jobsFor('skipped'), job], source));
     assert.throws(() => ci.evaluateDeployJobs(jobsFor('skipped').map((item) => item.name === job.name ? { ...item, conclusion: 'cancelled' } : item), source));
+    for (const altered of [{ head_sha: 'b'.repeat(40) }, { run_id: 122 }, { run_attempt: 1 }, { status: 'queued' }, { status: 'in_progress' }]) {
+      assert.throws(() => ci.evaluateDeployJobs(jobsFor('skipped').map((item) => item.name === job.name ? { ...item, ...altered } : item), source));
+    }
   }
   for (const name of ['web-tests (not-required)', 'web-tests ()', "web-tests (${{ matrix.shard || 'not-required' }})", 'web-tests (${{ matrix.shard }})', 'web-tests (1)']) {
     assert.throws(() => ci.evaluateDeployJobs(jobsFor('skipped').map((job) => job.name === 'web-tests' ? { ...job, name } : job), source));
@@ -178,16 +200,16 @@ test('Actions HTTP boundary paginates only the specified attempt, and rejects AP
     const page = Number(new URL(request.url, apiUrl).searchParams.get('page'));
     response.setHeader('content-type', 'application/json');
     if (page === 1) response.setHeader('link', `<${apiUrl}/repos/owner/repo/actions/runs/123/attempts/2/jobs?per_page=100&page=2>; rel="next"`);
-    response.end(JSON.stringify({ total_count: 9, jobs: page === 1 ? jobsFor().slice(0, 3) : jobsFor().slice(3) }));
+    response.end(JSON.stringify({ total_count: jobsFor().length, jobs: page === 1 ? jobsFor().slice(0, 3) : jobsFor().slice(3) }));
   };
   assert.equal(ci.evaluateDeployJobs(await ci.fetchAttemptJobs(options), source), 'full');
   assert.deepEqual(requests, [1, 2].map((page) => `/repos/owner/repo/actions/runs/123/attempts/2/jobs?per_page=100&page=${page}`));
   for (const respond of [
     (request, response) => { response.writeHead(403); response.end('denied'); },
     (request, response) => response.end('not JSON'),
-    (request, response) => response.end(JSON.stringify({ total_count: 9, jobs: jobsFor().slice(0, 2) })),
+    (request, response) => response.end(JSON.stringify({ total_count: jobsFor().length, jobs: jobsFor().slice(0, 2) })),
     (request, response) => response.end(JSON.stringify({ jobs: jobsFor() })),
-    (request, response) => { response.setHeader('link', '<https://other.invalid/steal>; rel="next"'); response.end(JSON.stringify({ total_count: 9, jobs: jobsFor().slice(0, 2) })); },
+    (request, response) => { response.setHeader('link', '<https://other.invalid/steal>; rel="next"'); response.end(JSON.stringify({ total_count: jobsFor().length, jobs: jobsFor().slice(0, 2) })); },
   ]) {
     handler = respond;
     await assert.rejects(() => ci.fetchAttemptJobs(options));
@@ -217,14 +239,19 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   const web = jobBlock(foundation, 'web-tests');
   // Early-skipped matrix job names keep expressions unevaluated; use the default job name.
   assert.doesNotMatch(web, /^    name:/m);
-  assert.match(web, /shard: \[1, 2, 3, 4\]/);
-  assert.match(web, /--shard=\$\{\{ matrix.shard \}\}\/4 --maxWorkers=1/);
+  assert.match(web, /shard: \[1, 2, 3, 4, 5, 6, 7, 8\]/);
+  assert.match(web, /--shard=\$\{\{ matrix.shard \}\}\/8 --maxWorkers=1/);
   assert.doesNotMatch(web, /continue-on-error:/);
   assert.match(checks, /name: CI scope and result gate tests\r?\n\s+if: needs.scope.outputs.scope == 'documentation'\r?\n\s+run: node --test test\/ci-validation-scope.test.mjs/);
   const integration = jobBlock(foundation, 'integration');
   for (const retained of ['pnpm --recursive build', 'test:integration', 'test:worker-process:built', 'postgres:18', 'rustfs/rustfs:1.0.0', 'clamav/clamav@sha256:', 'prepare-ci-object-storage.mjs', 'SMTP_PORT=51026', 'docker compose -f deployment/docker-compose.foundation.yml config --quiet', 'Destroy ephemeral integration services']) assert.ok(integration.includes(retained), retained);
-  assert.match(integration, /for shard in 1 2 3 4/);
-  assert.match(integration, /test:integration --shard="\$shard\/4"/);
+  assert.doesNotMatch(integration, /^    name:/m);
+  assert.match(integration, /runs-on: ubuntu-latest/);
+  assert.match(integration, /fail-fast: false/);
+  assert.match(integration, /shard: \[1, 2, 3, 4\]/);
+  assert.match(integration, /test:integration --shard=\$\{\{ matrix.shard \}\}\/4/);
+  assert.doesNotMatch(integration, /for shard|continue-on-error:/);
+  assert.equal((integration.match(/pnpm --filter @qms\/api test:integration/g) ?? []).length, 1);
   assert.equal((integration.match(/pnpm --recursive build/g) ?? []).length, 1);
   assert.doesNotMatch(integration, /test:worker-process\s*$/m);
   const aggregate = jobBlock(foundation, 'foundation');
@@ -234,7 +261,26 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   assert.match(aggregate, /toJSON\(needs\)/);
 });
 
-test('standalone CI Worker lifecycle uses a fresh migrated and seeded database after the original integration shards', () => {
+test('Web shards retain the 30-minute job and 20-minute test budgets with always-uploaded per-shard diagnostics', () => {
+  const web = jobBlock(foundation, 'web-tests');
+  assert.match(web, /^    timeout-minutes: 30$/m);
+  const tests = web.match(/- name: Web unit tests\r?\n([\s\S]*?)(?=^      - |$(?![\s\S]))/m)?.[1];
+  assert.ok(tests);
+  assert.match(tests, /timeout-minutes: 20/);
+  assert.match(tests, /set -euo pipefail/);
+  assert.match(tests, /--reporter[= ]default/);
+  assert.match(tests, /--reporter[= ]json/);
+  assert.match(tests, /--outputFile[^\r\n]*RUNNER_TEMP/);
+  assert.match(tests, /2>&1\s*\|\s*tee[^\r\n]*RUNNER_TEMP/);
+  const upload = web.match(/- (?:name: [^\r\n]+\r?\n[\s\S]*?)?uses: actions\/upload-artifact@v4\r?\n([\s\S]*)/m)?.[0];
+  assert.ok(upload, 'each Web shard must upload its own diagnostics');
+  assert.match(upload, /if: always\(\)/);
+  assert.match(upload, /name: [^\r\n]*\$\{\{ matrix.shard \}\}/);
+  assert.match(upload, /path:[\s\S]*\$\{\{ runner.temp \}\}/);
+  assert.doesNotMatch(tests, /continue-on-error|\|\| true|--passWithNoTests|--testTimeout/);
+});
+
+test('standalone CI Worker lifecycle runs only on shard one with a fresh migrated and seeded database after its integration shard', () => {
   const integration = jobBlock(foundation, 'integration');
   const step = (name) => integration.match(new RegExp(`^      - name: ${name}\\r?\\n([\\s\\S]*?)(?=^      - |$(?![\\s\\S]))`, 'm'))?.[1];
   const shards = step('Real PostgreSQL integration tests');
@@ -242,9 +288,12 @@ test('standalone CI Worker lifecycle uses a fresh migrated and seeded database a
   assert.ok(shards && worker, 'both real database test steps must exist');
   assert.match(integration, /-e POSTGRES_DB=qms2/);
   assert.match(integration, /DATABASE_URL="postgresql:\/\/qms:\$POSTGRES_PASSWORD@127\.0\.0\.1:\$PG_PORT\/qms2"/);
-  assert.match(shards, /for shard in 1 2 3 4; do\s+pnpm --filter @qms\/api test:integration --shard="\$shard\/4"\s+done/);
+  assert.match(shards, /pnpm --filter @qms\/api test:integration --shard=\$\{\{ matrix.shard \}\}\/4/);
+  assert.doesNotMatch(shards, /for\s|&\s*$/m);
   assert.doesNotMatch(shards, /DATABASE_URL|qms_worker_lifecycle|GITHUB_ENV/);
-  assert.match(worker, /^        env:\r?\n          NODE_ENV: development\r?\n        run: \|\r?\n          set -euo pipefail\r?\n/);
+  assert.match(worker, /^        if: (?:\$\{\{\s*)?matrix.shard == 1(?:\s*\}\})?\r?\n/);
+  assert.match(worker, /        env:\r?\n          NODE_ENV: development\r?\n        run: \|\r?\n          set -euo pipefail\r?\n/);
+  assert.equal((integration.match(/pnpm --filter @qms\/api test:worker-process:built/g) ?? []).length, 1);
   const ordered = [
     'docker exec "$PG_CONTAINER" psql -U qms -d qms2 -v ON_ERROR_STOP=1 -c \'CREATE DATABASE qms_worker_lifecycle\'',
     'WORKER_DATABASE_URL=$(node -e \'const url = new URL(process.env.DATABASE_URL); url.pathname = "/qms_worker_lifecycle"; process.stdout.write(url.href);\')',
@@ -279,15 +328,41 @@ test('deploy workflow checks the source attempt before SSH and preserves reposit
   assert.ok(runLines.every((line) => !line.includes('${{')), 'event values must reach Node through env, not shell interpolation');
 });
 
-test('serial integration shards cover every configured Jest file exactly once', () => {
+test('parallel integration VM shards cover every configured Jest file exactly once', () => {
   const args = ['--experimental-vm-modules', 'node_modules/jest/bin/jest.js', '--runInBand', '--listTests', '--json',
     '--testPathPatterns=integration-spec.ts', '--testPathIgnorePatterns=worker-process-schema.integration-spec.ts'];
   const list = (extra = []) => JSON.parse(execFileSync(process.execPath, [...args, ...extra], { cwd: join(root, 'apps/api'), encoding: 'utf8' }));
   const all = list();
   assert.ok(all.length > 0);
-  const shards = [1, 2, 3, 4].flatMap((shard) => list([`--shard=${shard}/4`]));
+  const shards = integrationShards.flatMap((shard) => {
+    const files = list([`--shard=${shard}/4`]);
+    assert.ok(files.length > 0, `integration shard ${shard} must not be empty`);
+    return files;
+  });
   assert.equal(new Set(shards).size, shards.length);
   assert.deepEqual(shards.sort(), all.sort());
+});
+
+test('official Vitest BaseSequencer covers the actual configured Web files exactly once across eight shards without running tests', async (context) => {
+  const { createVitest, BaseSequencer } = await import(pathToFileURL(join(root, 'apps/web/node_modules/vitest/dist/node.js')).href);
+  const cacheDir = await mkdtemp(join(tmpdir(), 'qms-ci-web-discovery-'));
+  context.after(() => rm(cacheDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+  const vitest = await createVitest('test', { root: join(root, 'apps/web'), watch: false, cache: false },
+    { cacheDir, configLoader: 'runner', server: { watch: null } });
+  context.after(() => vitest.close());
+  assert.equal(vitest.config.testTimeout, 10000, 'CI must not inflate individual case timeouts');
+  assert.equal(vitest.config.sequence.sequencer, BaseSequencer, 'prove the actual configured sequencer');
+  const specs = await vitest.globTestSpecifications();
+  assert.ok(specs.length >= webShards.length);
+  const shards = [];
+  for (const index of webShards) {
+    const sequencer = new BaseSequencer({ config: { ...vitest.config, shard: { index, count: webShards.length } } });
+    const files = await sequencer.shard(specs);
+    assert.ok(files.length > 0, `Web shard ${index} must not be empty`);
+    shards.push(...files.map((spec) => spec.moduleId));
+  }
+  assert.equal(new Set(shards).size, shards.length, 'Web shards must not overlap');
+  assert.deepEqual(shards.sort(), specs.map((spec) => spec.moduleId).sort());
 });
 
 test('standalone Worker command still builds, while integration invokes only the built test', async () => {

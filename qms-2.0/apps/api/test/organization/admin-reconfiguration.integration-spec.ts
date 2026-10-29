@@ -249,6 +249,68 @@ describe('REQ0031 reconfiguration isolated HTTP and real PostgreSQL', () => {
     expect(directory.body.items.some((item: { id: string }) => item.id === source.id)).toBe(false);
   });
 
+  it.each(['PQE', 'P'.repeat(64)])('recovers two deleted scopes with occupied position code %s without overwriting identities or replaying writes', async code => {
+    const admin = await administrator();
+    const targetDepartment = await db.department.create({ data: { organizationId: admin.home.id, code: randomUUID(), name: 'Destination department' } });
+    const existing = await db.position.create({ data: { organizationId: admin.home.id, departmentId: targetDepartment.id, code, name: 'Existing PQE' } });
+    const existingRole = await db.positionRole.create({ data: { organizationId: admin.home.id, positionId: existing.id, roleId: admin.role.id } });
+    const existingAppointment = await db.userPosition.create({ data: { organizationId: admin.home.id, positionId: existing.id, userId: admin.user.id } });
+    const sources = [];
+    for (let index = 0; index < 2; index++) {
+      const old = await organization();
+      const department = await db.department.create({ data: { organizationId: old.id, code: randomUUID(), name: 'Historical department' } });
+      const position = await db.position.create({ data: { organizationId: old.id, departmentId: department.id, code, name: `Historical PQE ${index}`, status: 'DISABLED', configurationRequired: true } });
+      const role = await db.role.create({ data: { organizationId: old.id, code: randomUUID(), name: 'Historical role' } });
+      const positionRole = await db.positionRole.create({ data: { organizationId: old.id, positionId: position.id, roleId: role.id } });
+      const user = await db.user.create({ data: { organizationId: old.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+      const appointment = await db.userPosition.create({ data: { organizationId: old.id, positionId: position.id, userId: user.id, endedAt: new Date() } });
+      await db.organization.update({ where: { id: old.id }, data: { status: 'DISABLED', deletedAt: new Date() } });
+      sources.push({ position, positionRole, appointment });
+    }
+    const input = { expectedVersion: 1, targetOrganizationId: admin.home.id, targetDepartmentId: targetDepartment.id };
+    const replacements = [];
+    for (const { position, positionRole, appointment } of sources) {
+      const key = randomUUID();
+      const response = await restore(admin, 'POSITION', position.id, input, key).expect(201);
+      const replacement = await db.position.findUniqueOrThrow({ where: { id: response.body.replacementId as string } });
+      expect(response.body).toMatchObject({ id: position.id, originalOrganizationId: position.organizationId, targetOrganizationId: admin.home.id, status: 'DISABLED', configurationRequired: false, version: 2 });
+      expect(replacement.id).not.toBe(position.id);
+      expect(replacement.id).not.toBe(existing.id);
+      expect(replacement.code).not.toBe(code);
+      expect(replacement.code.length).toBeLessThanOrEqual(64);
+      expect(replacement.code).toMatch(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
+      expect(replacement.code.startsWith(code.slice(0, 27))).toBe(true);
+      expect(replacement.code.endsWith(replacement.id)).toBe(true);
+      expect(replacement).toMatchObject({ organizationId: admin.home.id, departmentId: targetDepartment.id, name: position.name, status: 'DISABLED', configurationRequired: false, categoryId: null });
+      expect(await db.positionRole.count({ where: { positionId: replacement.id } })).toBe(0);
+      expect(await db.userPosition.count({ where: { positionId: replacement.id } })).toBe(0);
+      expect(await db.position.findUniqueOrThrow({ where: { id: position.id } })).toEqual({ ...position, configurationRequired: false, version: 2, updatedAt: expect.any(Date) });
+      expect(await db.positionRole.findMany({ where: { positionId: position.id } })).toEqual([positionRole]);
+      expect(await db.userPosition.findMany({ where: { positionId: position.id } })).toEqual([appointment]);
+      expect(await db.$queryRaw`SELECT source_orgid, replacement_id, replacement_orgid FROM administrative_configuration_links WHERE kind = 'POSITION' AND source_id = ${position.id}::uuid`)
+        .toEqual([{ source_orgid: position.organizationId, replacement_id: replacement.id, replacement_orgid: admin.home.id }]);
+      expect((await restore(admin, 'POSITION', position.id, input, key).expect(201)).body).toEqual(response.body);
+      expect(await db.position.findUniqueOrThrow({ where: { id: replacement.id } })).toEqual(replacement);
+      expect(await db.auditEvent.count({ where: { resourceId: position.id, action: 'POSITION_RECONFIGURED' } })).toBe(1);
+      expect(await db.adminMutation.count({ where: { actorUserId: admin.user.id, key } })).toBe(1);
+      await restore(admin, 'POSITION', position.id, { ...input, expectedVersion: 2 }, key).expect(409);
+      await restore(admin, 'POSITION', position.id, input).expect(409);
+      replacements.push({ replacement, key, sourceId: position.id });
+    }
+    expect(new Set(replacements.map(({ replacement }) => replacement.id)).size).toBe(2);
+    expect(new Set(replacements.map(({ replacement }) => replacement.code)).size).toBe(2);
+    const first = replacements[0]!;
+    await db.session.update({ where: { id: admin.session.id }, data: { reauthenticatedAt: null } });
+    await restore(admin, 'POSITION', first.sourceId, input, first.key).expect(403);
+    await db.session.update({ where: { id: admin.session.id }, data: { reauthenticatedAt: new Date() } });
+    await db.rolePermission.deleteMany({ where: { roleId: admin.role.id, permission: { code: 'platform:admin' } } });
+    await restore(admin, 'POSITION', first.sourceId, input, first.key).expect(403);
+    expect(await db.position.findMany({ where: { organizationId: admin.home.id }, orderBy: { id: 'asc' } }))
+      .toEqual([existing, ...replacements.map(({ replacement }) => replacement)].sort((a, b) => a.id.localeCompare(b.id)));
+    expect(await db.positionRole.findMany({ where: { positionId: existing.id } })).toEqual([existingRole]);
+    expect(await db.userPosition.findMany({ where: { positionId: existing.id } })).toEqual([existingAppointment]);
+  });
+
   it('creates an unprivileged disabled replacement position without changing old tenant, role or appointment facts', async () => {
     const admin = await administrator();
     const old = await organization();

@@ -52,7 +52,9 @@ Foundation 使用 `scripts/ci-validation-scope.mjs`，仅将既有 `governance/v
 
 integration 构建完成后使用 `corepack pnpm --filter @qms/api test:worker-process:built` 复用本次产物。独立本地运行仍用 `corepack pnpm --filter @qms/api test:worker-process`，该入口先构建；不要从另一个源码版本或工作目录借用 dist。业务 PR/main 全套门禁和 Web 分片数本轮保留。
 
-N2-B本地全量Jest单进程实际触及4GB堆上限，不能将其计为PASS。CI integration在同一一次性数据库串行执行`test:integration --shard=1/4`至`4/4`，每片使用新进程释放VM状态，不增加并发写库或额外job；任一片失败即停止，独立Worker仍另跑。根工具用实际Jest文件清单验证四片无重叠且并集完整。本地可按完整清单分为更小的独立进程批次，必须保留清单 / 结果、无跳过与源码冻结证据，不能以挑选部分文件冒称全量。
+N2-B本地全量Jest单进程实际触及4GB堆上限，不能将其计为PASS。原CI integration在同一一次性数据库串行执行四个Jest进程释放VM；随着完整覆盖增长至约半小时，2026-10-29 PR #81 fix2改为四个独立VM各跑原生`test:integration --shard=N/4`，每VM拥有完整独立PG/存储/扫描/邮件资源，不在共享数据库后台并发写。独立compiled Worker仅1号片使用全新迁移seed数据库执行一次；foundation必须等所有四片，部署按精确job逐项核查。根工具用实际Jest清单验证四片无重叠且并集完整。本地可按完整清单分为更小的独立进程批次，必须保留清单/结果、无跳过与源码冻结证据，不能以挑选部分文件冒称全量。
+
+Web同批改为八独立VM、每片一个worker；case超时及motion配置不变，job30分钟内给测试step20分钟，失败/中断时尽量保留default文本及JSON诊断artifact。八片的文件覆盖通过实际Vitest清单及官方sequencer验证；纯文档按原计划跳过。完整部署结果严格16个同run/attempt/SHA的成功job，不接受旧9项或混合布局；队列和总runner分钟与墙钟时间分别测量，不能把并行数当实际收益。
 
 专项定向验证：`node --test test/ci-validation-scope.test.mjs`；默认 workspace 测试也包含该项。执行频率与重跑纪律依[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)，运行占用按 job 分钟累计，不把并行缩短的等待时间当成计费节省。
 

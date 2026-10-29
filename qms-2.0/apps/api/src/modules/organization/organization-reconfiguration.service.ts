@@ -100,8 +100,12 @@ export class OrganizationReconfigurationService {
         await this.department(tx, dto.targetDepartmentId, destination.id);
         let replacementId = dto.targetDepartmentId;
         if (kind === Kind.POSITION) {
-          const replacement = await tx.position.create({ data: { id: randomUUID(), organizationId: destination.id, departmentId: dto.targetDepartmentId,
-            code: target.code, name: target.name, status: 'DISABLED', configurationRequired: false } });
+          const id = randomUUID();
+          const occupied = await tx.position.findUnique({ where: { organizationId_code: { organizationId: destination.id, code: target.code } }, select: { id: true } });
+          // Keep the full new identity suffix within the existing 64-character code limit.
+          const code = occupied ? `${target.code.slice(0, 27)}-${id}` : target.code;
+          const replacement = await tx.position.create({ data: { id, organizationId: destination.id, departmentId: dto.targetDepartmentId,
+            code, name: target.name, status: 'DISABLED', configurationRequired: false } });
           replacementId = replacement.id;
         }
         await tx.$executeRaw`INSERT INTO administrative_configuration_links
