@@ -9,11 +9,11 @@
 | 授权 | 已获REQ-0031正式开发及常规提交/PR授权；负责人于2026-10-29早间取消夜间heartbeat，req0031已由管理工具确认删除，不再自动续作。当前明确要求核对Web第1分片中断、CI耗时及审查问题，继续同PR集中返修；合并部署另核授权，不生产赋权、实际删除、开启绑定或回填关闭需求 |
 | 需求 | REQ-0031 / reczz28Sq8nD4VUU，user回读rev315、P0/开发中；名称/背景/效果/方案/子任务/验收六字段与提交快照逐项一致，正文历史“仅策划”段由当前直接指令覆盖，不擅改表 |
 | 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle已提交推送c1cc534并创建PR #81，fix1返修仍在本地；不另建非活动checkout或改写历史 |
-| 版本 | V0.0.35 / PR #81 / Issue #80；fix1为待配置强删及入口，fix2为岗位替代撞码与CI并行，已推f2736d1。当前V0.0.35-fix3处理最新MFA安全P1及专业审核人失效撤审P2，不扩业务范围，不复用旧head作为新head验收 |
+| 版本 | V0.0.35 / PR #81 / Issue #80；fix1为待配置强删及入口，fix2为岗位替代撞码与CI并行，fix3已推7fa2ef8处理MFA/专业失效。当前V0.0.35-fix4将用户生命周期快照及行锁归还身份所有者公开模型，不改强删口径，不复用旧head作为新head验收 |
 | 目标 | 删除当前有效实体而不抹除历史；当前引用解除/待配置与真实补配可达；显式平台管理员身份、目标组织能力和所有管理入口一致，切组织不换actor、不跨scope重放 |
 | 停止边界 | 满足真实验证、独立审查及精确head CI后到PR；不自动合并发布，生产身份来源只读取证，所需真正赋权由负责人另授权 |
 | 证据 | Git外admin-governance-implementation；一次性PG55478/存储59078/扫描59378/邮件58178，禁止55440；不清原库/上传，不prune |
-| 当前接续 | fix2 f2736d1 / CI40800837603已16/16成功，实际13.13分钟，对比旧35.52分钟缩短63%，全部分片及Worker门禁保持。最新MFA重绑P1和专业失效撤审P2已同批fix3修复：父最终8完整文件136项及build/lint/contracts通过、10源码冻结一致，Anscombe规格/Dirac独立安全质量均通过；进入同PR推送及新head16项检查，不凭旧CI合并发布 |
+| 当前接续 | fix3 7fa2ef8 / CI40804447013已16/16成功，但最新审查comment4408023719指出组织强删直接读锁users违反模块边界。fix4已提取身份域最小公开read-model，保持同事务/锁顺序；父6完整文件91项与build/lint/contracts通过、6个API输入冻结一致，Plato规格/Tesla质量均通过，范围为6API+1治理。进入同PR推送及新head检查，未合并发布，不把旧CI当新head审查收口 |
 
 ## 1. 设计与最小架构
 
@@ -170,3 +170,19 @@ fix2实际已推`f2736d1c5b564c1be38c960a568b6c310bb9f140`，CI40800837603/attem
 父最终冻结8完整文件136项通过、零跳过，APIbuild/lint/contracts退出0，10个API文件起止RAW哈希一致；真实MFA/身份邻接、纯匹配、流程失效引擎/三域与供应商、组织确认及实际App均纳入该完整文件运行。Anscombe规格、Dirac独立SECURITY/QUALITY均通过，分别复核10输入冻结与真实证据；不是整仓安全扫描或生产放行。原RED/中间GREEN/追加邻接回归及136完整运行分层保留，未删旧断言、放宽预算或修改134份迁移。
 
 此轮CI提速已验证，已知两项安全/责任发现本地修复及双审收口；PR #81仍不能提前称为可合并或已上线。新fix3须精确head的16项检查及最新远端审查，旧f273通过不代替；heartbeat保持删除，不生产赋权、删除、绑定开通或需求回填。当前提交前记录以Issue/PR及Git外current.json接续实际新head，不再为状态归档额外推一轮完整CI。
+
+## 10. fix4：身份快照读取所有权（2026-10-29，未推送）
+
+fix3实际已推`7fa2ef80fa0a01660a6d45dc84fad86f6c84bd89`，CI40804447013精确16项成功；新自动审查comment4408023719指出`OrganizationForceDeleteService`直接`tx.user.findMany`及`SELECT ... FROM users FOR UPDATE`取得身份私有安全版本/状态。这不是MFA或撤审修复失效，而是本地边界审查遗漏；根AGENTS/API规则要求消费所有者公开端口，不能以运行测试通过忽略该项。
+
+最小修复只归还读取与行锁所有权：身份模块新增`AdministrativeIdentityReadModel.lifecycleUsers(tx, organizationId, userIds?)`，固定租户/未删除过滤、可选ID交集、四字段最小快照和ID升序；`lockLifecycleUsers(tx, ids)`保留UUID参数绑定及`ORDER BY id FOR UPDATE`，空集合不查询。两者只用调用方事务，不注入全局Prisma或另开事务，不增加HTTP接口/DTO、权限、迁移或依赖，不返回密码、邮箱或MFA资料。授权/影响分类/Token/CAS/历史处置仍在原命令与真实所有者效应中。
+
+身份所有者的叶`AdministrativeIdentityReadModule`与模型同文件，组织模块导入该叶模块，而不是导入已依赖组织模块的整个IdentityModule；不使用forwardRef或通用注册/Hook框架。必要模块依赖`organization -> identity`登记为151对；实际App启动验证DI无循环。consumer三处改为公开读/锁端口，原neutral fixture注入真实模型、唯一直接构造点同步传参，既有测试语义不变。
+
+新边界守卫三项先结构RED再GREEN，明确这是模块契约回归而非新业务RED：禁止该consumer再直接读users ORM/rawSQL，必须同tx委托公开端口。owner真实PG完整7项先6FAIL/1PASS再7PASS，覆盖最小投影/排序、禁用与待配置、墓碑排除、租户和ID交集、空集合、同事务读己之写/回滚、锁阻塞及等待后读取提交值，不以缺import或零测试当RED。
+
+父随后独立完整运行边界/owner/组织强删/实际App/三域失效/MFA用户生命周期六文件91项，全部通过，无跳过；APIbuild/lint/contracts检查均退出0，6个API源码及测试输入RAW指纹起止一致。首次父执行因Git已跟踪/未跟踪路径相对基准不同在测试前置阶段停止，已记录`parent-initial-precondition.json`，修正为显式repo根路径后复验；不计入业务失败或隐藏。独立规格后质量及最终治理接续，源证据位于Git外`admin-governance-implementation/pr81-review-fix4/`。
+
+限定范围已由Plato规格、Tesla独立质量分别通过，原6个API源码/测试冻结值及第7份治理JSON分别核对。此前父消息和规格报告一处曾把“七文件”误述为“七个API输入”，实际原始JSON始终六个API输入，治理另为第7份；父计划及QUALITY报告已明确校正，不改原证据或为计数重跑。此次边界漏项不能用CI成功解释，新增持续结构守卫防止该consumer再次回到私有ORM/SQL读取。
+
+本批仍只更新PR #81，保持8Web/4独立集成VM的已验证编排，不重跑无关UI大套、不弱化边界规则。最终根工具/治理按实际退出码接续；fix4新head须实际16项CI和远端复审，旧7fa结果仅历史，不合并部署或生产操作，heartbeat保持删除。新head/链接/运行进度继续记录Issue/PR及Git外current.json，不为纯状态回填再触发一轮完整CI。

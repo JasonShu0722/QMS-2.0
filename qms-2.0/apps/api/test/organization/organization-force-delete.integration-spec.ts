@@ -12,6 +12,7 @@ import { AdminMutationService, type AdminActor } from '../../src/common/security
 import { AdministrativeLifecycleRegistry } from '../../src/common/security/administrative-lifecycle.registry.js';
 import type { AdministrativeLifecycleImpact } from '../../src/common/security/administrative-lifecycle.types.js';
 import { OrganizationForceDeleteService } from '../../src/modules/organization/organization-force-delete.service.js';
+import { AdministrativeIdentityReadModel } from '../../src/modules/identity/administrative-identity-read-model.js';
 import { OrganizationForceDeleteController } from '../../src/modules/organization/organization-force-delete.controller.js';
 import { OrganizationService } from '../../src/modules/organization/organization.service.js';
 import { PositionOnboardingService } from '../../src/modules/organization/position-onboarding.service.js';
@@ -50,7 +51,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     } });
     registry.seal();
     app = (await Test.createTestingModule({ controllers: [OrganizationForceDeleteController], providers: [
-      PrismaService, AuditLogService, AdminMutationService, OrganizationForceDeleteService, SessionService,
+      PrismaService, AuditLogService, AdminMutationService, OrganizationForceDeleteService, AdministrativeIdentityReadModel, SessionService,
       AuthorizationService, OrganizationScopeService, { provide: AdministrativeLifecycleRegistry, useValue: registry },
       { provide: APP_GUARD, useClass: AuthenticatedGuard }, { provide: APP_GUARD, useClass: CsrfGuard },
     ] }).compile()).createNestApplication();
@@ -622,7 +623,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
 
   it('fails closed with an incomplete registry and does not commit a tombstone', async () => {
     const f = await fixture();
-    const incomplete = new OrganizationForceDeleteService(db, app.get(AdminMutationService), app.get(AuditLogService), new AdministrativeLifecycleRegistry());
+    const incomplete = new OrganizationForceDeleteService(db, app.get(AdminMutationService), app.get(AuditLogService), new AdministrativeLifecycleRegistry(), app.get(AdministrativeIdentityReadModel));
     await expect(incomplete.forceDeleteOrganization(f.admin.actor, f.target.id, await confirmation(f.admin.actor, f.target.id), trace(), randomUUID())).rejects.toThrow('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
     expect(await db.organization.findUnique({ where: { id: f.target.id } })).toEqual(f.target);
   });

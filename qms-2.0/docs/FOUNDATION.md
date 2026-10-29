@@ -1,5 +1,11 @@
 # 底座与阶段二平台验收记录
 
+## PR #81 fix4：身份所有者读取边界（2026-10-29，未发布）
+
+7fa2ef8 / CI40804447013实际16项成功，但新审查仍发现组织强删直接读锁users违反所有者边界，不能凭CI放行。当前fix4将用户四字段最小快照和有序行锁移到身份公开read-model，沿原事务调用，独立叶模块避免IdentityModule/OrganizationModule循环；不新增DTO、迁移、权限或运行依赖，不改MFA/失效分类/删除和历史口径。
+
+owner实际PG7项、结构边界3项均有先失败/后通过记录；父独立6完整文件91项与APIbuild/lint/contracts退出0，6个API源码/测试输入RAW冻结一致。PG/完整App继续验证强删、历史/Token/失效恢复和已修MFA，不为边界迁移删掉旧断言或重复无关Web大套。父初次路径前置错误保留为未启动测试，不假称业务RED。审查与后续新headCI见[计划第10节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)及Git外pr81-review-fix4，当前未合并部署、未生产操作，heartbeat已取消。
+
 ## PR #81 fix2/fix3：CI执行与审查接续（2026-10-29，未发布）
 
 fix2精确f2736d1 / run40800837603已16/16成功：实际墙钟13.13分钟，对比旧取消run35.52分钟缩短63%；sum job minutes112.48/旧125.40仅观察运行分钟，不是计费账单。八份真实云端Web诊断报告合计198完整文件2510项、无重复/跳过，与当前配置文件集合一致，Worker按设计仅1号片新库执行，严格source gate通过。见Git外`ci-result.json`与`web-cloud-coverage.json`。这证明本次提速与覆盖，不保证以后每次十分钟或将CI通过当成安全验收。

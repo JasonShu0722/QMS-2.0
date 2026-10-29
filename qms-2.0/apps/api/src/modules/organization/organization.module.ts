@@ -13,9 +13,10 @@ import { AdministrativeLifecycleModule } from '../../common/security/administrat
 import { OrganizationForceDeleteService } from './organization-force-delete.service.js';
 import { OrganizationForceDeleteController } from './organization-force-delete.controller.js';
 import { OrganizationReconfigurationService } from './organization-reconfiguration.service.js';
+import { AdministrativeIdentityReadModule } from '../identity/administrative-identity-read-model.js';
 
 @Module({
-  imports: [AdminMutationModule, AuditLogModule, AdministrativeLifecycleModule],
+  imports: [AdminMutationModule, AuditLogModule, AdministrativeLifecycleModule, AdministrativeIdentityReadModule],
   controllers: [OrganizationController, OrganizationGovernanceController, PositionOnboardingController, OrganizationResponsibilityController, OrganizationForceDeleteController],
   providers: [OrganizationScopeService, OrganizationService, PositionOnboardingService, OrganizationResponsibilityService, OrganizationForceDeleteService, OrganizationReconfigurationService],
   exports: [OrganizationScopeService, OrganizationService, PositionOnboardingService, OrganizationResponsibilityService, OrganizationReconfigurationService],

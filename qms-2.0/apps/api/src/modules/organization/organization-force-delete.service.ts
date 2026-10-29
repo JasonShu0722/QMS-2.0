@@ -10,6 +10,7 @@ import { effectivePositionAssignmentWhere } from '../../common/security/effectiv
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { adminMutationDigests } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { AdministrativeIdentityReadModel } from '../identity/administrative-identity-read-model.js';
 import type { OrganizationForceDeleteDto, OrganizationForceDeletePreviewDto, OrganizationForceDeleteResultDto } from './organization-force-delete.dto.js';
 
 type Kind = 'ORGANIZATION' | 'DEPARTMENT';
@@ -26,7 +27,8 @@ export class OrganizationForceDeleteService {
   private readonly secret: string;
 
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService,
-    private readonly audit: AuditLogService, private readonly registry: AdministrativeLifecycleRegistry) {
+    private readonly audit: AuditLogService, private readonly registry: AdministrativeLifecycleRegistry,
+    private readonly identity: AdministrativeIdentityReadModel) {
     const configured = process.env.QMS_RATE_LIMIT_SECRET?.trim();
     if (!configured && process.env.NODE_ENV === 'production') throw new Error('QMS_RATE_LIMIT_SECRET must be configured in production');
     this.secret = configured ?? 'qms-development-rate-limit-secret-not-for-production';
@@ -150,7 +152,7 @@ export class OrganizationForceDeleteService {
     await tx.$queryRaw`SELECT id FROM positions WHERE organization_id = ${organizationId}::uuid
       AND (${kind} = 'ORGANIZATION' OR department_id = ${entityId}::uuid) ORDER BY id FOR UPDATE`;
     const selection = await this.collect(tx, { organizationId }, organizationId, kind, entityId);
-    if (selection.impact.userIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE id IN (${uuidList(selection.impact.userIds)}) ORDER BY id FOR UPDATE`);
+    await this.identity.lockLifecycleUsers(tx, selection.impact.userIds);
     if (selection.assignmentIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM user_positions WHERE id IN (${uuidList(selection.assignmentIds)}) ORDER BY id FOR UPDATE`);
     if (selection.bindingIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM department_management_bindings WHERE id IN (${uuidList(selection.bindingIds)}) ORDER BY id FOR UPDATE`);
     if (selection.ministerIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM department_minister_scopes WHERE id IN (${uuidList(selection.ministerIds)}) ORDER BY id FOR UPDATE`);
@@ -167,8 +169,7 @@ export class OrganizationForceDeleteService {
     const organizations = kind === 'ORGANIZATION' ? await tx.organization.findMany({ where: { parentId: entityId, deletedAt: null }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } }) : [];
     const assignments = await tx.userPosition.findMany({ where: { organizationId, ...(kind === 'DEPARTMENT' ? { positionId: { in: ids(positions) } } : {}),
       OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
-    const users = await tx.user.findMany({ where: { organizationId, deletedAt: null,
-      ...(kind === 'DEPARTMENT' ? { id: { in: assignments.map(row => row.userId) } } : {}) }, select: { id: true, securityVersion: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
+    const users = await this.identity.lifecycleUsers(tx, organizationId, kind === 'DEPARTMENT' ? assignments.map(row => row.userId) : undefined);
     const survivingAssignments = kind === 'DEPARTMENT' && users.length ? await tx.userPosition.findMany({
       where: { userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(), positionId: { notIn: ids(positions) },
         position: { status: 'ACTIVE', deletedAt: null, configurationRequired: false,

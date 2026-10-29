@@ -27,6 +27,7 @@
     "material-master -> audit-log",
     "material-master -> authorization",
     "organization -> audit-log",
+    "organization -> identity",
     "organization -> authorization",
     "platform-configuration -> audit-log",
     "platform-configuration -> authorization",

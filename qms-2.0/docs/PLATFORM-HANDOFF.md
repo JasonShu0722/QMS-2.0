@@ -6,6 +6,8 @@
 
 公开注册器在真实App完整启动后固定workflow、platform-configuration、identity三owner，按取消有效在审、解除当前建议、撤凭证的顺序同事务执行；域不私写其他模块表，行政回办理经WorkflowRuntime公开端口，不生成普通退回催办或非法事件。普通目录不返回删除/待配置对象，历史身份与原租户不迁移；专门补配服务维持不可变历史，并明确恢复配置不等于启用/授权。已发单失效专业、owner或SQE的恢复走四域公开管理端口，不假冒真实责任人审批。
 
+PR #81 fix4的身份快照/行锁由身份所有者公开`AdministrativeIdentityReadModel`提供，组织强删不再直接读取users表。`lifecycleUsers`只返回同租户、未删用户的id/securityVersion/status/configurationRequired，`lockLifecycleUsers`保留有序UUID行锁；必须传原调用方事务，无全局client或内层独立事务。组织导入独立叶读取模块，不反向导入整个IdentityModule制造DI循环；授权、锁顺序、预览Token和各所有者效应均不改，必要151对模块依赖已登记。实际owner事务/锁及完整App/身份流程回归分层见实施计划，不把边界抽取等同上线或改变删除规则。
+
 当前分层验证与双审接续不等于生产开通。正常授权覆盖本地实现及PR，合并部署、生产身份来源核验/实际赋权、实际删除、绑定启用和需求回填分别核准；夜间heartbeat不扩大这些边界。
 
 ## REQ-0030 管理授权与删除接续（2026-10-26，V0.0.31-fix2已部署）
