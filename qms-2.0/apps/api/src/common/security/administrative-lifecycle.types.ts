@@ -12,6 +12,8 @@ export type AdministrativeLifecycleImpact = {
   unavailableUserIds?: string[];
   departmentIds: string[];
   positionIds: string[];
+  // Exact saved management sources invalidated by a severed department ancestry.
+  ministerScopeIds?: string[];
   organizationIds: string[];
 };
 export type AdministrativeLifecycleEffectResult = { module: string; changed: number; pendingConfiguration: number };

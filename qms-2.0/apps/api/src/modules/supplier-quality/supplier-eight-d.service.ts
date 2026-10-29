@@ -12,6 +12,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import type { FileResourceAction } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
+import { organizationAdministrativeAffectedAssignments } from '../organization/organization-administrative-impact.read-model.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 import { assertWorkflowFeature, featurePredicate } from '../workflow/workflow-access-policy.js';
@@ -647,13 +648,11 @@ export class SupplierEightDService {
       OR r.applicant_organization_id = ANY(${organizationIds}::uuid[])
       OR r.sqe_user_id = ANY(${userIds}::uuid[]) OR r.manager_user_id = ANY(${userIds}::uuid[])
       OR r.applicant_user_id = ANY(${userIds}::uuid[])
-      OR c.responsible_section_department_id = ANY(${impact.departmentIds}::uuid[])
-      OR EXISTS (SELECT 1 FROM user_positions up JOIN positions p ON p.id = up.position_id AND p.organization_id = up.organization_id
-        WHERE up.organization_id = r.organization_id
-        AND (up.id = r.sqe_assignment_id OR (up.user_id = r.manager_user_id AND EXISTS (
-          SELECT 1 FROM department_management_bindings b WHERE b.organization_id = r.organization_id
-          AND b.department_id = c.responsible_section_department_id AND b.responsibility = 'SECTION_MANAGER' AND b.status = 'ACTIVE' AND b.position_id = up.position_id)))
-        AND (p.department_id = ANY(${impact.departmentIds}::uuid[]) OR up.position_id = ANY(${impact.positionIds}::uuid[])))`;
+      OR (c.organization_id = ${impact.organizationId}::uuid AND c.responsible_section_department_id = ANY(${impact.departmentIds}::uuid[]))
+      OR EXISTS (SELECT 1 FROM (${organizationAdministrativeAffectedAssignments(impact.organizationId, impact.departmentIds, impact.positionIds)}) affected
+        WHERE affected.organization_id = r.organization_id
+        AND (affected.assignment_id = r.sqe_assignment_id OR (affected.user_id = r.manager_user_id
+          AND affected.section_department_id = c.responsible_section_department_id)))`;
   }
 
   async administrativeInvalidation(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput): Promise<number> {
@@ -793,15 +792,19 @@ export class SupplierEightDService {
     const assignment = await this.responsibilities.workflowCurrentAssignment(tx, c.organizationId,
       { assignmentId: input.sqeAssignmentId }, true);
     if (!assignment) fail('SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID', 403);
-    const sqe = await this.sqeAssignment(tx, c.organizationId, input.sqeAssignmentId);
-    if (sqe.userId !== assignment.userId || sqe.position.departmentId !== assignment.departmentId) fail('CONCURRENCY_CONFLICT', 409);
+    if (!await this.feature(tx, c.organizationId, assignment.userId, 'supplier-quality:issues:read')
+      || !await this.feature(tx, c.organizationId, assignment.userId, 'supplier-quality:issues:work')
+      || !await this.feature(tx, c.organizationId, assignment.userId, 'workflow:act')) fail('SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID', 403);
     let responderId = record.supplier.internalResponderId;
     if (input.internalResponderAssignmentId !== undefined) {
       if (!required.includes('internalResponderAssignmentId')) fail('WORKFLOW_ACTION_INVALID', 409);
       const responder = await this.responsibilities.workflowCurrentAssignment(tx, c.organizationId,
         { assignmentId: input.internalResponderAssignmentId }, true);
       if (!responder) fail('SUPPLIER_EIGHT_D_RESPONDER_INVALID', 403);
-      await this.internalResponder(tx, c.organizationId, responder.userId);
+      if (!await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:responses:read')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:responses:write')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:issues:read')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'workflow:act')) fail('SUPPLIER_EIGHT_D_RESPONDER_INVALID', 403);
       responderId = responder.userId;
     }
     if (!replaceSqe && responderId === record.supplier.internalResponderId) fail('WORKFLOW_ACTION_INVALID', 409);

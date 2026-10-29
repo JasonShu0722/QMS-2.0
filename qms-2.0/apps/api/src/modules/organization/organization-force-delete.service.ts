@@ -183,18 +183,31 @@ export class OrganizationForceDeleteService {
     const positionCondition = positions.length ? Prisma.sql`OR position_id IN (${uuidList(ids(positions))})` : Prisma.empty;
     const departmentCondition = departments.length ? Prisma.sql`department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
     const sectionCondition = departments.length ? Prisma.sql`section_department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
+    // Only scopes whose path to their own minister department crosses a severed node are affected.
+    const ancestryCondition = kind === 'DEPARTMENT' && departments.length ? Prisma.sql`OR id IN (
+      WITH RECURSIVE scope_paths AS (
+        SELECT s.id AS scope_id, s.department_id, d.id, d.parent_id, ARRAY[d.id] AS visited
+        FROM department_minister_scopes s JOIN departments d
+          ON d.organization_id = s.organization_id AND d.id = s.section_department_id
+        WHERE s.organization_id = ${organizationId}::uuid AND s.status = 'ACTIVE'
+        UNION ALL
+        SELECT path.scope_id, path.department_id, d.id, d.parent_id, path.visited || d.id
+        FROM scope_paths path JOIN departments d ON d.organization_id = ${organizationId}::uuid AND d.id = path.parent_id
+        WHERE path.id <> path.department_id AND NOT d.id = ANY(path.visited)
+      ) SELECT scope_id FROM scope_paths WHERE id IN (${uuidList(ids(departments))})
+    )` : Prisma.empty;
     const bindingIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; position_id: string; responsibility: string }[]>(Prisma.sql`SELECT id, version, department_id, position_id, responsibility FROM department_management_bindings
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
       AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} ${positionCondition}) ORDER BY id`);
     const assignmentCondition = assignments.length ? Prisma.sql`OR minister_assignment_id IN (${uuidList(ids(assignments))})` : Prisma.empty;
     const ministerIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; section_department_id: string; minister_assignment_id: string; valid_from: Date; valid_to: Date | null }[]>(Prisma.sql`SELECT id, version, department_id, section_department_id, minister_assignment_id, valid_from, valid_to FROM department_minister_scopes
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
-      AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} OR ${sectionCondition} ${assignmentCondition}) ORDER BY id`);
+      AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} OR ${sectionCondition} ${assignmentCondition} ${ancestryCondition}) ORDER BY id`);
     return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds),
       private: { departments, positions, organizations, assignments, users, survivingAssignments, unavailableUserIds, bindings: bindingIds, ministerScopes: ministerIds }, impact: {
       kind, entityId, organizationId, receiptOrganizationId: actor.organizationId, userIds: ids(users), departmentIds: ids(departments),
       unavailableUserIds,
-      positionIds: ids(positions), organizationIds: kind === 'ORGANIZATION' ? [entityId, ...ids(organizations)] : [],
+      positionIds: ids(positions), ministerScopeIds: ids(ministerIds), organizationIds: kind === 'ORGANIZATION' ? [entityId, ...ids(organizations)] : [],
     } };
   }
 

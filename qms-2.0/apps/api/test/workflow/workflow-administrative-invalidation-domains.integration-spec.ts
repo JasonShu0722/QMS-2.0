@@ -210,6 +210,60 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     await expect(rounds.decide(f.professional.actor, round.id, { expectedRoundVersion: approved.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Late old factor' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 401 });
   }, 30_000);
 
+  it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode cancels a minister scope severed by ancestor detachment, without disabling the surviving section', async domain => {
+    const f = await createWorkflowClosureFixture(db, rounds, 'INTERNAL', 'HIGH'), tables = internalEightDSql(domain);
+    const a = await db.department.create({ data: { organizationId: f.org.id, parentId: f.dept.id, code: randomUUID(), name: 'Removed ancestor A' } });
+    const b = await db.department.create({ data: { organizationId: f.org.id, parentId: a.id, code: randomUUID(), name: 'Detached B' } });
+    await db.department.update({ where: { id: f.section.id }, data: { parentId: b.id } });
+    const other = await db.department.create({ data: { organizationId: f.org.id, parentId: f.dept.id, code: randomUUID(), name: 'Unaffected sibling' } });
+    const inner = await db.department.create({ data: { organizationId: f.org.id, parentId: f.section.id, code: randomUUID(), name: 'Scope entirely within the retained subtree' } });
+    const otherScope = randomUUID();
+    await db.$executeRaw`INSERT INTO department_minister_scopes
+      (id,organization_id,department_id,section_department_id,minister_assignment_id,valid_from,created_by,updated_by)
+      VALUES (${otherScope}::uuid,${f.org.id}::uuid,${f.dept.id}::uuid,${other.id}::uuid,${f.minister.assignment.id}::uuid,
+      CURRENT_TIMESTAMP - INTERVAL '1 day',${f.owner.user.id}::uuid,${f.owner.user.id}::uuid)`;
+    const innerScope = randomUUID();
+    await db.$executeRaw`INSERT INTO department_minister_scopes
+      (id,organization_id,department_id,section_department_id,minister_assignment_id,valid_from,created_by,updated_by)
+      VALUES (${innerScope}::uuid,${f.org.id}::uuid,${f.section.id}::uuid,${inner.id}::uuid,${f.owner.assignment.id}::uuid,
+      CURRENT_TIMESTAMP - INTERVAL '1 day',${f.owner.user.id}::uuid,${f.owner.user.id}::uuid)`;
+    for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`]) await db.rolePermission.create({ data: {
+      roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
+    await db.problemIndex.update({ where: { id: f.problem.id }, data: { domainCode: domain.domainCode, sourceType: domain.sourceType, problemType: 'EIGHT_D' } });
+    await db.workflowNode.update({ where: { id: f.node.id }, data: { config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: domain.domainCode } } } });
+    const ownerNode = await db.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId,
+      nodeKey: 'owner', name: 'Handling after ancestry changed', type: 'ACTION', config: { isStart: true,
+        processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: 24 } } } });
+    await db.workflowTransition.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId,
+      fromNodeId: f.node.id, toNodeId: ownerNode.id, action: 'RETURN', transitionKey: 'return-owner' } });
+    await db.$executeRaw`INSERT INTO ${tables.reports} (problem_id,organization_id,responsible_section_department_id,professional_user_id,document,submitted_at,created_by,updated_by)
+      VALUES (${f.problem.id}::uuid,${f.org.id}::uuid,${f.section.id}::uuid,${f.professional.user.id}::uuid,
+      ${JSON.stringify(emptyProcessEightDDocument())}::jsonb,CURRENT_TIMESTAMP,${f.professional.user.id}::uuid,${f.professional.user.id}::uuid)`;
+    const round = await rounds.start(f.owner.actor, f.problem.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
+    const approved = await rounds.decide(f.professional.actor, round.id, { expectedRoundVersion: round.version,
+      duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Retain the actual professional approval' }, randomUUID(), randomUUID());
+    const sectionBefore = await db.department.findUniqueOrThrow({ where: { id: f.section.id } });
+    const positionBefore = await db.position.findUniqueOrThrow({ where: { id: f.owner.position.id } });
+    const unrelatedBefore = await db.$queryRaw`SELECT * FROM department_minister_scopes WHERE id=${otherScope}::uuid`;
+    const innerBefore = await db.$queryRaw`SELECT * FROM department_minister_scopes WHERE id=${innerScope}::uuid`;
+    const token = await app.get(SessionService).create(admin.owner.user.id, db, { mfaVerified: true, reauthenticated: true });
+    const session = (await app.get(SessionService).resolve(token))!, actor = { ...admin.owner.actor, sessionId: session.id };
+    const command = app.get(OrganizationForceDeleteService), preview = await command.previewDepartment(actor, f.org.id, a.id);
+    await command.forceDeleteDepartment(actor, f.org.id, a.id, { expectedVersion: preview.version, previewToken: preview.previewToken, confirmed: true }, randomUUID(), randomUUID());
+    expect((await rounds.readProjection(db, f.org.id, f.problem.id))!.status).toBe('CANCELLED');
+    expect((await rounds.readProjection(db, f.org.id, f.problem.id))!.duties.find(d => d.duty === 'PROFESSIONAL'))
+      .toMatchObject({ status: 'APPROVED', comment: 'Retain the actual professional approval' });
+    expect(await db.$queryRaw`SELECT status FROM department_minister_scopes WHERE organization_id=${f.org.id}::uuid AND section_department_id=${f.section.id}::uuid`)
+      .toEqual([{ status: 'DISABLED' }]);
+    expect(await db.$queryRaw`SELECT * FROM department_minister_scopes WHERE id=${otherScope}::uuid`).toEqual(unrelatedBefore);
+    expect(await db.$queryRaw`SELECT * FROM department_minister_scopes WHERE id=${innerScope}::uuid`).toEqual(innerBefore);
+    expect(await db.department.findUniqueOrThrow({ where: { id: f.section.id } })).toEqual(sectionBefore);
+    expect(await db.position.findUniqueOrThrow({ where: { id: f.owner.position.id } })).toEqual(positionBefore);
+    expect(await db.$queryRaw`SELECT submitted_at FROM ${tables.reports} WHERE problem_id=${f.problem.id}::uuid`).toEqual([{ submitted_at: null }]);
+    await expect(rounds.decide(f.minister.actor, round.id, { expectedRoundVersion: approved.version, duties: ['MINISTER'],
+      decision: 'APPROVE', comment: 'Late opinion on the disconnected scope' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+  }, 30_000);
+
   it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode unwinds its actual submitted report with a real cross-organization platform actor', async domain => {
     const f = await createWorkflowClosureFixture(db, rounds), tables = internalEightDSql(domain);
     for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`]) {

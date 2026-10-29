@@ -29,7 +29,8 @@ export function workflowInvalidationMatches(snapshot: WorkflowAdministrativeSnap
       const participant = jsonObject(value);
       return typeof participant.userId === 'string' && unavailableUsers.includes(participant.userId)
         || typeof participant.departmentId === 'string' && impact.departmentIds.includes(participant.departmentId)
-        || typeof participant.positionId === 'string' && impact.positionIds.includes(participant.positionId);
+        || typeof participant.positionId === 'string' && impact.positionIds.includes(participant.positionId)
+        || typeof participant.scopeId === 'string' && (impact.ministerScopeIds ?? []).includes(participant.scopeId);
     });
 }
 
@@ -54,9 +55,13 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
       if (!Array.isArray(impact.unavailableUserIds) || impact.unavailableUserIds.some(id => !impact.userIds.includes(id))) throw new BadRequestException();
       ids.push(...impact.unavailableUserIds);
     }
+    if (impact.ministerScopeIds !== undefined) {
+      if (!Array.isArray(impact.ministerScopeIds)) throw new BadRequestException();
+      ids.push(...impact.ministerScopeIds);
+    }
     if (ids.some(id => typeof id !== 'string' || !isUUID(id)) || !['USER', 'DEPARTMENT', 'ORGANIZATION'].includes(impact.kind)) throw new BadRequestException();
     const result = { module: this.module, changed: 0, pendingConfiguration: 0 };
-    if (![impact.userIds, impact.departmentIds, impact.positionIds, impact.organizationIds].some(ids => ids.length)) return result;
+    if (![impact.userIds, impact.departmentIds, impact.positionIds, impact.organizationIds, impact.ministerScopeIds ?? []].some(ids => ids.length)) return result;
     const candidates = (await this.pending(tx)).filter(row => workflowInvalidationMatches(row, impact));
     const supplier = this.registry.hasDomain('supplier-quality') ? this.registry.get('supplier-quality') : null;
     if (supplier && !supplier.administrativeInvalidationTargets) throw new HttpException({ code: 'WORKFLOW_ACTION_INVALID',

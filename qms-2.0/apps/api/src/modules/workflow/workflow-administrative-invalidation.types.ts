@@ -11,7 +11,7 @@ export type WorkflowAdministrativeInvalidationInput = {
 export type WorkflowAdministrativeTarget = { organizationId: string; problemId: string };
 
 export type WorkflowAdministrativeImpact = Pick<AdministrativeLifecycleImpact,
-  'kind' | 'userIds' | 'unavailableUserIds' | 'departmentIds' | 'positionIds' | 'organizationIds'>;
+  'kind' | 'userIds' | 'unavailableUserIds' | 'departmentIds' | 'positionIds' | 'ministerScopeIds' | 'organizationIds'>;
 
 export type WorkflowAdministrativeSnapshot = {
   organizationId: string;

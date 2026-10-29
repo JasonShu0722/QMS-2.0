@@ -66,4 +66,11 @@ describe('administrative workflow snapshot matching', () => {
     const unavailableReviewer = { ...removal, unavailableUserIds: ['approved-reviewer'] };
     expect(workflowInvalidationMatches({ ...snapshot, context: {}, participants: [{ userId: 'approved-reviewer', departmentId: null, positionId: null }] }, unavailableReviewer)).toBe(true);
   });
+
+  it('matches only the saved minister scope affected by ancestor detachment', () => {
+    const removal = { ...impact({ kind: 'DEPARTMENT', departmentIds: ['removed-ancestor'] }), ministerScopeIds: ['scope'] };
+    expect(workflowInvalidationMatches(snapshot, removal)).toBe(true);
+    expect(workflowInvalidationMatches({ ...snapshot, participants: [{ scopeId: 'unrelated' }] }, removal)).toBe(false);
+    expect(workflowInvalidationMatches({ ...snapshot, participants: [], context: { scopeId: 'scope' } }, removal)).toBe(false);
+  });
 });

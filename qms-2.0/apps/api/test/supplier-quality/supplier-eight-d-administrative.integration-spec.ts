@@ -437,4 +437,73 @@ describe('supplier current-role administrative recovery / actual App and Postgre
     const tailQuery = plainToInstance(SupplierEightDAdministrativeQueryDto, { pageSize: '20', offset: '10020' });
     expect(await validate(tailQuery)).toEqual([]); expect(tailQuery).toMatchObject({ pageSize: 20, offset: 10020 });
   });
+
+  it('bounds administrative deadline source relations to the impacted organization in both discovery and mutation', async () => {
+    const f = await fixture();
+    let row = await f.read();
+    row = (await f.http(f.sqe.cookie, 'put', `${f.prefix}/deadlines`, { ...f.version(row), analysisDueAt: '2026-11-01T00:00:00Z' }).expect(200)).body;
+    const request = (await f.http(f.outsider.cookie, 'post', `${f.prefix}/deadline-extensions`, { ...f.version(row),
+      expectedContentVersion: row.contentVersion, stage: 'ANALYSIS', requestedDueAt: '2026-12-01T00:00:00Z', reason: 'Bounded source relation' }).expect(201)).body;
+    const before = await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`;
+    const impact = { kind: 'DEPARTMENT' as const, entityId: randomUUID(), organizationId: administrator.organizationId,
+      receiptOrganizationId: administrator.organizationId, organizationIds: [], departmentIds: [],
+      positionIds: [f.f.owner.position.id], userIds: [f.sqe.actor.id] };
+    for (const foreignImpact of [impact, { ...impact, departmentIds: [f.f.section.id], positionIds: [] }]) {
+      expect(await transaction(tx => service.administrativeInvalidationTargets(tx, foreignImpact))).toEqual([]);
+      expect(await transaction(tx => service.administrativeInvalidation(tx, { organizationId: f.f.org.id,
+        problemId: f.issued.problemId, actorUserId: administrator.id, reason: 'DEPARTMENT_DELETED', impact: foreignImpact }))).toBe(0);
+    }
+    expect(await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`).toEqual(before);
+    const ownImpact = { ...impact, organizationId: f.f.org.id };
+    expect(await transaction(tx => service.administrativeInvalidationTargets(tx, ownImpact)))
+      .toEqual([{ organizationId: f.f.org.id, problemId: f.issued.problemId }]);
+    const rollback = new Error('ROLLBACK_SUPPLIER_SOURCE_RELATION');
+    await expect(transaction(async tx => {
+      expect(await service.administrativeInvalidation(tx, { organizationId: f.f.org.id, problemId: f.issued.problemId,
+        actorUserId: administrator.id, reason: 'DEPARTMENT_DELETED', impact: ownImpact })).toBe(1);
+      expect(await tx.$queryRaw`SELECT status FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`).toEqual([{ status: 'CANCELLED' }]);
+      throw rollback;
+    })).rejects.toBe(rollback);
+    expect(await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`).toEqual(before);
+  }, 60_000);
+
+  it.each(['SQE', 'MANAGER'] as const)('preserves other appointments and disabled/wrong-section bindings but matches the exact %s source', async source => {
+    const f = await fixture();
+    const unrelated = await db.department.create({ data: { organizationId: f.f.org.id, code: randomUUID(), name: 'Other appointment' } });
+    const position = await db.position.create({ data: { organizationId: f.f.org.id, departmentId: unrelated.id, code: randomUUID(), name: 'Other source' } });
+    for (const userId of [f.sqe.actor.id, f.manager.actor.id, f.outsider.actor.id]) {
+      await db.userPosition.create({ data: { organizationId: f.f.org.id, userId, positionId: position.id } });
+    }
+    for (const [departmentId, status] of [[f.f.section.id, 'DISABLED'], [unrelated.id, 'ACTIVE']]) {
+      await db.$executeRaw`INSERT INTO department_management_bindings
+        (id,organization_id,department_id,responsibility,position_id,status,created_by,updated_by)
+        VALUES (${randomUUID()}::uuid,${f.f.org.id}::uuid,${departmentId}::uuid,'SECTION_MANAGER',${position.id}::uuid,
+          ${status},${f.sqe.actor.id}::uuid,${f.sqe.actor.id}::uuid)`;
+    }
+    let row = await f.read();
+    row = (await f.http(f.sqe.cookie, 'put', `${f.prefix}/deadlines`, { ...f.version(row), analysisDueAt: '2026-11-01T00:00:00Z' }).expect(200)).body;
+    const request = (await f.http(f.outsider.cookie, 'post', `${f.prefix}/deadline-extensions`, { ...f.version(row),
+      expectedContentVersion: row.contentVersion, stage: 'ANALYSIS', requestedDueAt: '2026-12-01T00:00:00Z', reason: 'Exact administrative source' }).expect(201)).body;
+    const progressed = (await f.http(f.sqe.cookie, 'post', `${f.prefix}/deadline-extensions/${request.id}/decide`, {
+      expectedVersion: request.version, duty: 'SQE', decision: 'APPROVE', comment: 'Preserve actual decision' }).expect(200)).body;
+    const before = await snapshot(f);
+    const decisions = await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_decisions WHERE request_id=${request.id}::uuid`;
+    const impact = { kind: 'DEPARTMENT' as const, entityId: unrelated.id, organizationId: f.f.org.id,
+      receiptOrganizationId: administrator.organizationId, organizationIds: [], departmentIds: [unrelated.id],
+      positionIds: [position.id], userIds: [f.sqe.actor.id, f.manager.actor.id, f.outsider.actor.id] };
+    expect(await transaction(tx => service.administrativeInvalidationTargets(tx, impact))).toEqual([]);
+    expect(await transaction(tx => service.administrativeInvalidation(tx, { organizationId: f.f.org.id,
+      problemId: f.issued.problemId, actorUserId: administrator.id, reason: 'DEPARTMENT_DELETED', impact }))).toBe(0);
+    expect(await snapshot(f)).toEqual(before);
+    expect(await db.$queryRaw`SELECT status,version FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`)
+      .toEqual([{ status: 'MANAGER_PENDING', version: progressed.version }]);
+    const actualImpact = { ...impact, departmentIds: [], positionIds: [source === 'SQE' ? f.f.owner.position.id : f.f.manager.position.id] };
+    expect(await transaction(tx => service.administrativeInvalidationTargets(tx, actualImpact)))
+      .toEqual([{ organizationId: f.f.org.id, problemId: f.issued.problemId }]);
+    expect(await transaction(tx => service.administrativeInvalidation(tx, { organizationId: f.f.org.id,
+      problemId: f.issued.problemId, actorUserId: administrator.id, reason: 'DEPARTMENT_DELETED', impact: actualImpact }))).toBe(1);
+    expect(await db.$queryRaw`SELECT status,version FROM supplier_eight_d_deadline_requests WHERE id=${request.id}::uuid`)
+      .toEqual([{ status: 'CANCELLED', version: progressed.version + 1 }]);
+    expect(await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_decisions WHERE request_id=${request.id}::uuid`).toEqual(decisions);
+  }, 60_000);
 });
