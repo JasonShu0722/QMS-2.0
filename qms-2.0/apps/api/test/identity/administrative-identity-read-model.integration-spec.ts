@@ -72,6 +72,37 @@ describe('administrative identity owner read-model on real PostgreSQL', () => {
     finally { await module.close(); }
   });
 
+  it('provides a transaction-composable minimal eligible relation before count and page, bounded to the current identity tenant', async () => {
+    await rollback(async tx => {
+      const org = await organization(tx); const other = await organization(tx);
+      const active = await user(tx, org.id, { fullName: 'Visible identity' });
+      await user(tx, org.id, { status: 'DISABLED' });
+      await user(tx, org.id, { status: 'DISABLED', configurationRequired: true });
+      await user(tx, org.id, { status: 'DISABLED', deletedAt: new Date() });
+      await user(tx, org.id, { accountType: 'SUPPLIER' });
+      await user(tx, other.id);
+      const [result] = await tx.$queryRaw<{ total: number; items: Array<{ id: string; username: string; full_name: string | null }> }[]>(Prisma.sql`
+        WITH identity_users AS (${model.workflowEligibleUsers(org.id)}) SELECT (SELECT count(*)::int FROM identity_users) AS total,
+          (SELECT jsonb_agg(page) FROM (SELECT * FROM identity_users ORDER BY id LIMIT 1) page) AS items`);
+      expect(result).toEqual({ total: 1, items: [{ id: active.id, username: active.username, full_name: 'Visible identity' }] });
+      await tx.user.update({ where: { id: active.id }, data: { status: 'DISABLED' } });
+      expect(await tx.$queryRaw(Prisma.sql`${model.workflowEligibleUsers(org.id)}`)).toEqual([]);
+    });
+  });
+
+  it('keeps the bounded responsibility label read inside callerTx with no lifecycle secrets or cross-tenant identity', async () => {
+    const ids = await rollback(async tx => {
+      const org = await organization(tx); const other = await organization(tx);
+      const person = await user(tx, org.id, { fullName: 'Old responsibility label', status: 'DISABLED', configurationRequired: true });
+      expect(await model.responsibilityUser(tx, org.id, person.id)).toEqual({ username: person.username, fullName: 'Old responsibility label' });
+      expect(await model.responsibilityUser(tx, other.id, person.id)).toBeNull();
+      expect(await model.lockResponsibilityUsers(tx, other.id, [person.id])).toEqual([]);
+      expect(await model.lockResponsibilityUsers(tx, org.id, [person.id, person.id])).toEqual([{ id: person.id }]);
+      return { userId: person.id, organizationId: org.id };
+    });
+    expect(await db.user.findUnique({ where: { id: ids.userId } })).toBeNull();
+  });
+
   it('returns only four lifecycle keys in id order, including disabled/pending users but excluding tombstones and other tenants', async () => {
     await rollback(async tx => {
       const org = await organization(tx); const other = await organization(tx);
@@ -109,6 +140,7 @@ describe('administrative identity owner read-model on real PostgreSQL', () => {
       // PostgreSQL would reject any further query with 25P02, so success proves both paths do not query.
       expect(await model.lifecycleUsers(tx, randomUUID(), [])).toEqual([]);
       expect(await model.lockLifecycleUsers(tx, [])).toBeUndefined();
+      expect(await model.lockResponsibilityUsers(tx, randomUUID(), [])).toEqual([]);
     });
   });
 

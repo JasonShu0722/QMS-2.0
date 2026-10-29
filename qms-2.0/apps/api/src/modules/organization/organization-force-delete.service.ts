@@ -149,8 +149,10 @@ export class OrganizationForceDeleteService {
     if (kind === 'ORGANIZATION') await tx.$queryRaw`SELECT id FROM organizations WHERE parent_id = ${organizationId}::uuid ORDER BY id FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid
       AND (${kind} = 'ORGANIZATION' OR id = ${entityId}::uuid OR parent_id = ${entityId}::uuid) ORDER BY id FOR UPDATE`;
-    await tx.$queryRaw`SELECT id FROM positions WHERE organization_id = ${organizationId}::uuid
-      AND (${kind} = 'ORGANIZATION' OR department_id = ${entityId}::uuid) ORDER BY id FOR UPDATE`;
+    await tx.$queryRaw`SELECT p.id FROM positions p WHERE p.organization_id = ${organizationId}::uuid
+      AND (${kind} = 'ORGANIZATION' OR p.department_id IN (
+        SELECT d.id FROM departments d WHERE d.organization_id = ${organizationId}::uuid AND d.deleted_at IS NULL
+        AND (d.id = ${entityId}::uuid OR d.parent_id = ${entityId}::uuid))) ORDER BY p.id FOR UPDATE OF p`;
     const selection = await this.collect(tx, { organizationId }, organizationId, kind, entityId);
     await this.identity.lockLifecycleUsers(tx, selection.impact.userIds);
     if (selection.assignmentIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM user_positions WHERE id IN (${uuidList(selection.assignmentIds)}) ORDER BY id FOR UPDATE`);
@@ -165,7 +167,7 @@ export class OrganizationForceDeleteService {
     const departments = await tx.department.findMany({ where: { organizationId, deletedAt: null,
       ...(kind === 'DEPARTMENT' ? { OR: [{ id: entityId }, { parentId: entityId }] } : {}) }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
     const positions = await tx.position.findMany({ where: { organizationId, deletedAt: null,
-      ...(kind === 'DEPARTMENT' ? { departmentId: entityId } : {}) }, select: { id: true, version: true, roleVersion: true, departmentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
+      ...(kind === 'DEPARTMENT' ? { departmentId: { in: ids(departments) } } : {}) }, select: { id: true, version: true, roleVersion: true, departmentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
     const organizations = kind === 'ORGANIZATION' ? await tx.organization.findMany({ where: { parentId: entityId, deletedAt: null }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } }) : [];
     const assignments = await tx.userPosition.findMany({ where: { organizationId, ...(kind === 'DEPARTMENT' ? { positionId: { in: ids(positions) } } : {}),
       OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
@@ -179,13 +181,15 @@ export class OrganizationForceDeleteService {
     const survivingUsers = new Set(survivingAssignments.map(row => row.userId));
     const unavailableUserIds = kind === 'DEPARTMENT' ? ids(users).filter(id => !survivingUsers.has(id)) : [];
     const positionCondition = positions.length ? Prisma.sql`OR position_id IN (${uuidList(ids(positions))})` : Prisma.empty;
+    const departmentCondition = departments.length ? Prisma.sql`department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
+    const sectionCondition = departments.length ? Prisma.sql`section_department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
     const bindingIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; position_id: string; responsibility: string }[]>(Prisma.sql`SELECT id, version, department_id, position_id, responsibility FROM department_management_bindings
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
-      AND (${kind} = 'ORGANIZATION' OR department_id = ${entityId}::uuid ${positionCondition}) ORDER BY id`);
+      AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} ${positionCondition}) ORDER BY id`);
     const assignmentCondition = assignments.length ? Prisma.sql`OR minister_assignment_id IN (${uuidList(ids(assignments))})` : Prisma.empty;
     const ministerIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; section_department_id: string; minister_assignment_id: string; valid_from: Date; valid_to: Date | null }[]>(Prisma.sql`SELECT id, version, department_id, section_department_id, minister_assignment_id, valid_from, valid_to FROM department_minister_scopes
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
-      AND (${kind} = 'ORGANIZATION' OR department_id = ${entityId}::uuid OR section_department_id = ${entityId}::uuid ${assignmentCondition}) ORDER BY id`);
+      AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} OR ${sectionCondition} ${assignmentCondition}) ORDER BY id`);
     return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds),
       private: { departments, positions, organizations, assignments, users, survivingAssignments, unavailableUserIds, bindings: bindingIds, ministerScopes: ministerIds }, impact: {
       kind, entityId, organizationId, receiptOrganizationId: actor.organizationId, userIds: ids(users), departmentIds: ids(departments),

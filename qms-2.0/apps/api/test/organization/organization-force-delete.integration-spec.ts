@@ -358,7 +358,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     const pendingChildPos = await db.position.findUniqueOrThrow({ where: { id: childPos.id } });
     expect(pendingChildPos).toMatchObject({ departmentId: child.id, status: 'DISABLED', configurationRequired: true, deletedAt: null });
     const preview = await request(app.getHttpServer()).get(path(f.target.id, dep.id)).set('Cookie', f.admin.cookie).expect(200);
-    expect(preview.body).toMatchObject({ id: dep.id, version: pending.version, counts: { departments: 2, positions: 1, assignments: 0 } });
+    expect(preview.body).toMatchObject({ id: dep.id, version: pending.version, counts: { departments: 2, positions: 2, assignments: 0 } });
     const key = randomUUID();
     await expect(commands.forceDeleteDepartment(f.admin.actor, f.target.id, dep.id, stale, trace(), key))
       .rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
@@ -373,7 +373,8 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     expect(await db.department.findUnique({ where: { id: dep.id } })).toMatchObject({ organizationId: f.target.id, deletedAt: expect.any(Date), configurationRequired: false, version: 3 });
     expect(await db.department.findUnique({ where: { id: child.id } })).toMatchObject({ organizationId: f.target.id, parentId: null, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 3 });
     expect(await db.position.findUnique({ where: { id: pos.id } })).toMatchObject({ organizationId: f.target.id, departmentId: dep.id, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 3 });
-    expect(await db.position.findUnique({ where: { id: childPos.id } })).toEqual(pendingChildPos);
+    expect(await db.position.findUnique({ where: { id: childPos.id } })).toEqual({ ...pendingChildPos,
+      version: pendingChildPos.version + 1, updatedAt: expect.any(Date) });
     expect(await db.userPosition.findUnique({ where: { id: assignment.id } })).toMatchObject({ organizationId: f.target.id, endedAt: expect.any(Date) });
     expect(await db.user.findUnique({ where: { id: member.user.id } })).toEqual(member.user);
     expect(await db.auditEvent.findUnique({ where: { id: event.id } })).toEqual(event);
@@ -418,6 +419,30 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     expect(impacts[0]).toMatchObject({ userIds: [member.user.id], positionIds: [pos.id], departmentIds: expect.arrayContaining([dep.id, child.id]) });
     expect((await db.department.create({ data: { organizationId: f.target.id, code: dep.code, name: dep.name } })).id).not.toBe(dep.id);
     await expect(removeDepartment(f.admin.actor, f.home.id, dep.id, randomUUID())).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('collects positions and identity impacts for every department disabled by a parent deletion, not the retained grandchild', async () => {
+    const f = await fixture(), parent = await department(f.target.id), child = await department(f.target.id, parent.id);
+    const grandchild = await department(f.target.id, child.id), outside = await department(f.target.id);
+    const childPosition = await position(f.target.id, child.id), parentPosition = await position(f.target.id, parent.id);
+    const outsidePosition = await position(f.target.id, outside.id), grandchildPosition = await position(f.target.id, grandchild.id);
+    const onlyChild = await administrator(f.target), both = await administrator(f.target), survivor = await administrator(f.target);
+    for (const [userId, positionId] of [[onlyChild.user.id, childPosition.id], [both.user.id, parentPosition.id], [both.user.id, childPosition.id], [survivor.user.id, childPosition.id], [survivor.user.id, outsidePosition.id]]) {
+      await db.userPosition.create({ data: { organizationId: f.target.id, userId, positionId, startedAt: new Date(Date.now() - 60_000) } });
+    }
+    const untouched = await db.position.findUniqueOrThrow({ where: { id: grandchildPosition.id } });
+    const preview = await commands.previewDepartment(f.admin.actor, f.target.id, parent.id);
+    expect(preview.counts).toMatchObject({ departments: 2, positions: 2, users: 3, assignments: 4 });
+    await commands.forceDeleteDepartment(f.admin.actor, f.target.id, parent.id, { ...body, expectedVersion: preview.version, previewToken: preview.previewToken }, trace(), randomUUID());
+    const impact = impacts.at(-1)!;
+    expect([...impact.userIds].sort()).toEqual([onlyChild.user.id, both.user.id, survivor.user.id].sort());
+    expect([...impact.unavailableUserIds!].sort()).toEqual([onlyChild.user.id, both.user.id].sort());
+    expect(await db.department.findUniqueOrThrow({ where: { id: child.id } })).toMatchObject({ deletedAt: null, parentId: null, status: 'DISABLED', configurationRequired: true });
+    expect(await db.department.findUniqueOrThrow({ where: { id: grandchild.id } })).toMatchObject({ deletedAt: null, parentId: child.id, status: 'ACTIVE', configurationRequired: false });
+    expect(await db.position.findUniqueOrThrow({ where: { id: grandchildPosition.id } })).toEqual(untouched);
+    expect(await db.position.findUniqueOrThrow({ where: { id: childPosition.id } })).toMatchObject({ deletedAt: null, status: 'DISABLED', configurationRequired: true });
+    expect(await db.userPosition.count({ where: { positionId: childPosition.id, endedAt: null } })).toBe(0);
+    expect(await db.userPosition.count({ where: { userId: survivor.user.id, positionId: outsidePosition.id, endedAt: null } })).toBe(1);
   });
 
   it('requires a new department confirmation when another surviving appointment changes user availability', async () => {

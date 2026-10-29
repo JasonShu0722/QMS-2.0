@@ -166,13 +166,18 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
       .rejects.toMatchObject({ status: 409 });
   }, 30_000);
 
-  it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode cancels a submitted review when only the professional loses their last appointment', async domain => {
+  it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS).flatMap(domain => ['DIRECT', 'CHILD_ONLY', 'PARENT_AND_CHILD'].map(appointment => ({ ...domain, appointment, domain }))))('$domainCode cancels a submitted review when the professional loses $appointment appointments', async ({ domain, appointment }) => {
     const f = await createWorkflowClosureFixture(db, rounds), tables = internalEightDSql(domain);
     for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`, `${domain.permissionPrefix}:issue`]) {
       await db.rolePermission.create({ data: { roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
     }
     const removed = await db.department.create({ data: { organizationId: f.org.id, code: randomUUID(), name: 'Only professional appointment' } });
-    await db.position.update({ where: { id: f.professional.position.id }, data: { departmentId: removed.id } });
+    const detached = appointment === 'DIRECT' ? removed : await db.department.create({ data: { organizationId: f.org.id, parentId: removed.id, code: randomUUID(), name: 'Detached child professional appointment' } });
+    await db.position.update({ where: { id: f.professional.position.id }, data: { departmentId: detached.id } });
+    if (appointment === 'PARENT_AND_CHILD') {
+      const position = await db.position.create({ data: { organizationId: f.org.id, departmentId: removed.id, code: randomUUID(), name: 'Additional parent appointment' } });
+      await db.userPosition.create({ data: { organizationId: f.org.id, userId: f.professional.user.id, positionId: position.id, startedAt: new Date(Date.now() - 60_000) } });
+    }
     await db.problemIndex.update({ where: { id: f.problem.id }, data: { domainCode: domain.domainCode, sourceType: domain.sourceType, problemType: 'EIGHT_D' } });
     await db.workflowNode.update({ where: { id: f.node.id }, data: { config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: domain.domainCode } } } });
     const ownerNode = await db.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId,
