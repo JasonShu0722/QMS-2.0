@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## PR #81 fix7：CI异步清理与精确审查状态（2026-10-29，未发布）
+
+精确b83645c的CI40821656166中，其余14项成功，Web第1分片失败连带foundation聚合失败；25个实际完整文件291断言虽全过，环境拆除后仍有12次`window is not defined`未捕获异常，退出1。原artifact哈希与Actions一致，JSON的success=true不代表该进程成功，最终证据必须同时看退出码与异步异常，原失败保留。
+
+当前canonical Codex审查摘要对同一b83645c明确completed、无发现、无未解决项，9条历史thread全已resolved；没有独立security review，不把它说成安全扫描成功。不能仅因REST reviews没有新增COMMENTED记录就误称审查未完成，也不把旧意见当本轮新发现。fix7仅接续组织样例测试的卸载/延迟任务生命周期，完整原CI25文件及独立审查见[计划第13节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)，不改后端或放宽CI/断言。
+
+本地修复后：原7case文本/setup/motion/预算不变，真实回调生命周期新回归先RED后GREEN；规格Galileo、独立质量Lorentz通过。父原分片25唯一完整文件同次Vitest运行292项通过，旧291全部保留，退出0、零跳过/未捕获异常，528输入RAW冻结一致；worker两完整文件69项另计，不与父覆盖相加。该结果仅本地验证，独立安全审查、新headCI/复审及生产/人工验收不由这些数字替代。
+
 ## PR #81 fix6：跨层分管与供应商行政所有者边界（2026-10-29，未发布）
 
 fix5提交cc48038的CI40818534469成功，但最新远端审查仍发现切断祖先关系时分管scope未纳入失效，以及供应商行政延期直读组织私表。fix6先取得祖先链两完整文件31PASS/4业务FAIL及供应商完整PG19PASS/1业务FAIL、边界结构RED，再最小修复；三域待审、原批准意见/旧决策、存续子树/无关scope、固定影响组织/回滚及补配权限纳入验证。最新独立双审与父冻结结果见[计划第12节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)，不以旧CI代替新修复检查。不改Web、DTO、迁移、依赖或超时，无新增浏览器/人工/生产操作证据。

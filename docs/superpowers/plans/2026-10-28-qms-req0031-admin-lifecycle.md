@@ -8,12 +8,12 @@
 | --- | --- |
 | 授权 | 已获REQ-0031正式开发及常规提交/PR授权；负责人于2026-10-29早间取消夜间heartbeat，req0031已由管理工具确认删除，不再自动续作。当前明确要求核对Web第1分片中断、CI耗时及审查问题，继续同PR集中返修；合并部署另核授权，不生产赋权、实际删除、开启绑定或回填关闭需求 |
 | 需求 | REQ-0031 / reczz28Sq8nD4VUU，user回读rev315、P0/开发中；名称/背景/效果/方案/子任务/验收六字段与提交快照逐项一致，正文历史“仅策划”段由当前直接指令覆盖，不擅改表 |
-| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle / PR #81已推cc48038；fix6返修在本地，不另建非活动checkout或改写历史 |
-| 版本 | V0.0.35 / PR #81 / Issue #80；fix5已推cc48038，真实远端复审又发现跨层分管祖先链失效与供应商延期直读组织私表。当前V0.0.35-fix6继续同批修复两关联遗漏，不改删除层级或扩其他业务，不复用旧head作为新head验收 |
+| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle / PR #81已推b83645c；fix7仅接续已确认的Web样例测试异步清理，不另建非活动checkout或改写历史 |
+| 版本 | V0.0.35 / PR #81 / Issue #80；fix6已推b83645c，其精确head最新Codex代码审查已完成且无发现、无未解决项。当前V0.0.35-fix7修复CI Web第1分片的组织样例卸载后异步回调，不再无依据改后端/迁移或重跑PG大套 |
 | 目标 | 删除当前有效实体而不抹除历史；当前引用解除/待配置与真实补配可达；显式平台管理员身份、目标组织能力和所有管理入口一致，切组织不换actor、不跨scope重放 |
 | 停止边界 | 满足真实验证、独立审查及精确head CI后到PR；不自动合并发布，生产身份来源只读取证，所需真正赋权由负责人另授权 |
 | 证据 | Git外admin-governance-implementation；一次性PG55478/存储59078/扫描59378/邮件58178，禁止55440；不清原库/上传，不prune |
-| 当前接续 | fix5已推cc48038、CI40818534469成功，但远端新增4408746312/P2祖先分管链及4408746317/P1供应商组织所有者边界；fix6两项均真实RED→最小修复，各自SPEC→独立QUALITY通过。父冻结9完整目标文件131项、默认API156完整文件2277项及专用新库compiled Worker8项组合通过，983输入RAW一致；原共享忙库Worker4PASS/4FAIL保留，不伪称首次全绿。收尾契约/治理并同PR推送，新head远端检查另验；不合并发布或生产操作 |
+| 当前接续 | b83645c精确代码审查已completed/无发现/9历史thread全resolved，真实阻断只有CI Web1的卸载后12异步异常及连带foundation失败。fix7只改一个样例测试fixture，原7业务case/setup/motion/预算逐字保持；新增真实回调未结清RED→GREEN，独立Galileo规格/Lorentz质量通过。父原CI25唯一完整文件单次Vitest运行292项通过，保原291用例、零跳过/未捕获异常、退出0，528输入RAW不变。收尾Web构建/治理及同PR提交，新headCI/审查另验；不改后端或合并发布 |
 
 ## 1. 设计与最小架构
 
@@ -234,3 +234,21 @@ P2由Hegel规格、Hypatia独立质量通过，覆盖组织命令到失效引擎
 compiled Worker使用完整文件替换而非拼case：广套真实业务夹具运行后的共享库首次4PASS/4FAIL（首批未及时到本fixture及三个20秒预算超时），该失败及只读队列分布保留；库中已有数百已处理事件和多类待处理业务/提醒，并非“empty polls”测试的隔离前置。父按CI已有独立Worker布局新建`qms_req0031_fix6_worker_20261029`、原134迁移及seed，不删旧队列/库、不改安全或断言/预算，完整8项通过。新库PASS不被包装为繁忙积压队列的性能证明，后者不是本次新增容量验收。`final-verification.json`逐完整文件/唯一清单核对，原失败仍在。
 
 本批最终治理/契约退出码及新提交CI记录在Git外`pr81-review-fix6/`与PR，不为状态再多推一轮。仍未合并、发布、生产赋权/删除/启用绑定、回填关闭需求，也未新增浏览器或人工验收；当前通过只表明上述实际覆盖，不承诺不存在未覆盖缺陷。
+
+## 13. fix7：Web组织样例异步清理（2026-10-29，未推送）
+
+本次先回读精确b83645c，不重复假定审查又新增代码问题：PR唯一`codex-review-state:v1`摘要记录code_review commit_sha=b83645c、status=completed、has_any_findings=false、has_unresolved_findings=false；GraphQL完整9条thread全部resolved，未运行独立security review，不把未运行说成安全通过。仅看`pulls/81/reviews`没有新COMMENTED记录不能判断review仍在运行；无发现时需读取当前摘要。
+
+真实CI40821656166已结束：其余14个检查成功，Web第1分片失败连带foundation聚合失败。job123275359101完整日志显示25完整文件、291断言全过但12个未捕获`ReferenceError: window is not defined`，均在OrganizationPreview.test.tsx环境拆除后由`@rc-component/util/useDelayState`延迟setState触发。原artifact SHA256与job公布的`cfe7a6b7b0b2ebdc3d0b0bdacf27ac2445c51628dd70d66284334ce0978ea8bf`一致；JSON甚至显示success=true，所以必须同时验证进程退出0和零未捕获异常，不能用断言计数/JSON字段把CI失败抹成通过。
+
+原始日志、artifact、精确25文件清单与审查摘要保存在Git外`pr81-review-fix7/`。本轮不改后端/DTO/权限/迁移/依赖、全局测试配置或CI预算，不关异常检查、不减原七个业务用例断言，也不把现有本地样例的motion=false扩大为全局禁动效。先定位并证明样例fixture卸载/定时工作未结清，最小局部生命周期修复后按原默认预算验证完整文件与原CI25文件集合，再独立规格→质量和父验证，同PR提交推送；新head检查另验，不合并部署。
+
+### 13.1 局部生命周期修复与原分片复验
+
+唯一测试文件由Rawls实施：局部cleanup后在React act中以真实时钟等待已锁定AntD Form useDebounce的0/10ms任务执行，随后才允许环境拆除；不更改生产组件、依赖hook或全局setup。原七个case、事件/matcher、setup、motion及原30秒组预算经worker和父文本比较保持一致。新增实际setTimeout回归保留原callback/delay/handle，证明真实延迟回调先未执行、清理后确实执行，不clearAllTimers或屏蔽异常；spy零匹配会明确失败，finally恢复原方法。
+
+原七case本地baseline完整通过，不能假称本地重现了CI的window错误；诊断受控时钟探针显示卸载后15个待执行任务，仅作为诊断，不用于替代最终实时钟。新增生命周期回归先真实RED（未执行回调）、最小等待后整测试8项及model61项两个完整文件69项通过、退出0。原失败/诊断源码与日志均保留；依赖hook自身没有在本轮被修复，也不将该fixture处置泛化为全站泄漏治理。
+
+Galileo独立规格、Lorentz独立质量分别通过。父依据下载artifact的实际testResults提取25个唯一文件，而不是把numTotalTestSuites的describe计数当文件数；同一次Vitest命令、原maxWorkers=1/default与JSON reporter、原预算运行25完整文件292项通过、零跳过、进程退出0且日志无uncaught/unhandled errors。逐文件/用例核对原291项全部保留且通过，新增1项；528个Web/contracts/workspace输入RAW前后相同，测试文件RAW为`536fcc4e3e67d8938f4340d9e4350c578f95742da7c62d951fd9613724cd02f3`。单次验证2026-10-29T05:39:42Z至05:55:12Z，是Windows本地事实，不作为云端CI耗时优化或新head通过证据。
+
+本批仅一个测试文件及定向状态/验收文档变更，无后端源码或契约差异；因此不重复启动API/PG/Worker大套，不借此省略新head完整CI。最终Web类型/构建与文档治理退出码、提交head/远端状态另由Git外收尾和PR回读，不预写合并发布、生产管理员赋权/真实删除、Base回填或人工验收完成。
