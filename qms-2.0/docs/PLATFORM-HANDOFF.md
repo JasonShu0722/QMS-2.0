@@ -1,5 +1,21 @@
 # 平台与供应商质量接口交接
 
+## REQ-0031 管理生命周期接续（2026-10-29，未发布候选）
+
+以[REQ-0031计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)为当前开发事实；旧受限空组织删除和REQ0030发布记录保留历史边界。本轮新命令由真实平台管理员在存续home授权，组织/部门预览Token绑定actor/scope与当前引用版本；用户删除使用securityVersion，失效原scope不会阻断独立生命周期管理。四项新权限仅登记，不在迁移中给既有admin账号自动赋权。
+
+公开注册器在真实App完整启动后固定workflow、platform-configuration、identity三owner，按取消有效在审、解除当前建议、撤凭证的顺序同事务执行；域不私写其他模块表，行政回办理经WorkflowRuntime公开端口，不生成普通退回催办或非法事件。普通目录不返回删除/待配置对象，历史身份与原租户不迁移；专门补配服务维持不可变历史，并明确恢复配置不等于启用/授权。已发单失效专业、owner或SQE的恢复走四域公开管理端口，不假冒真实责任人审批。
+
+PR #81 fix4的身份快照/行锁由身份所有者公开`AdministrativeIdentityReadModel`提供，组织强删不再直接读取users表。`lifecycleUsers`只返回同租户、未删用户的id/securityVersion/status/configurationRequired，`lockLifecycleUsers`保留有序UUID行锁；必须传原调用方事务，无全局client或内层独立事务。组织导入独立叶读取模块，不反向导入整个IdentityModule制造DI循环；授权、锁顺序、预览Token和各所有者效应均不改，必要151对模块依赖已登记。实际owner事务/锁及完整App/身份流程回归分层见实施计划，不把边界抽取等同上线或改变删除规则。
+
+fix5补齐同一边界的职责/补配消费者：身份所有者提供固定租户有效内部账号的`workflowEligibleUsers` SQL投影、最小姓名读取及有序`FOR SHARE`锁。组织职责服务在数据库分页和计数前组合该投影与本域任职、岗位、部门数据；等待锁后重新核对同一用户和同一任职，不自动换人。部门强删影响集统一采用本命令实际停用的目标及直接子部门，岗位锁、任职、身份失效、管理职责和预览基线均覆盖该集合；未停用的更深层部门不递归扩大。同人在其他有效部门任职的存续资格继续保留。此修复仍是PR候选，不等于已部署或生产删除成功。
+
+fix6补齐“节点保留但跨层分管祖先链已断”的依赖：组织所有者沿scope自己的section到部长部门路径发现实际受影响的分管来源，到本scope部门即停止、防环且固定租户。精确scope集合进入预览基线、行锁、失效和服务器`ministerScopeIds`，流程只匹配已保存参与人的scopeId，不能为取消旧审批而递归停用全部后代或同部长其他职责。供应商延期组合组织所有者`organizationAdministrativeAffectedAssignments`公开SQL关系，只匹配该组织的保存SQE任职或经理/科室来源；原事务拥有查询和回滚，不向供应商暴露组织私有状态解释。新增行政恢复可达路径同批走公开职责端口，保留实际任职及功能权限检查。当前仍未发布。
+
+fix8补配清理通过身份所有者`revokeForReconfiguration(tx, actor, userId, organizationId)`，不再伪作永久USER删除调用注册effect；同事务锁、授权、版本与回执保持。存续账号已绑定MFA和封锁状态保留，原会话/挑战/恢复码/重置、授权任职和签署能力仍撤销；补配后仍DISABLED，普通启用与凭据签发不是同一动作，不能给仅知旧密码者重新绑定。原永久删除仍清因子并墓碑化，旧普通状态更新不能复活。
+
+当前分层验证与双审接续不等于生产开通。正常授权覆盖本地实现及PR，合并部署、生产身份来源核验/实际赋权、实际删除、绑定启用和需求回填分别核准；夜间heartbeat不扩大这些边界。
+
 ## REQ-0030 管理授权与删除接续（2026-10-26，V0.0.31-fix2已部署）
 
 显式平台管理员通过既有角色权限及有效任职提供公司内部组织的适用功能投影，公共只读身份接缝为`hasPlatformAdministrator(tx, userId, now?)`；ORM/SQL和公开platformScope来源须一致，不扩大实际流程角色/单据职责。迁移仅登记marker，生产初始化须先核对精确来源，使用`apps/api/scripts/platform-administrator.ts`只读预览，实际apply另核准；不按账号名匹配或自动转换历史账号。

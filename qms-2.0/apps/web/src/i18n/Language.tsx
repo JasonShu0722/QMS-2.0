@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { workflowTranslations } from '../features/workflows/workflow-translations';
 import { problemWorkspaceTranslations } from '../features/problem-workspace/problem-workspace-translations';
 import { problemCenterTranslations } from '../features/problem-center/problem-center-translations';
+import { administrativeTranslations } from '../features/admin/administrative-translations';
 
 const translations: Record<string, string> = {
   '组织与岗位': 'Organization and positions',
@@ -388,6 +389,7 @@ const translations: Record<string, string> = {
   ...workflowTranslations,
   ...problemWorkspaceTranslations,
   ...problemCenterTranslations,
+  ...administrativeTranslations,
   '正在验证登录状态': 'Checking sign-in status', '登录状态验证失败': 'Sign-in status check failed', '暂时无法验证登录状态': 'Unable to verify sign-in status', '请检查网络连接后重试。': 'Check your network connection and try again.',
   '重置凭证': 'Reset credential', '请输入完整重置凭证': 'Enter the complete reset credential.', '请输入管理员提供的重置凭证': 'Enter the reset credential provided by your administrator.', '密码须为 12–256 位': 'Use a password between 12 and 256 characters.',
   '问题台账': 'Issue register', '复盘': 'Review', '待处理': 'Pending', '逾期': 'Overdue', '失败重试': 'Retry failures', '流程草稿': 'Workflow drafts', '发布记录': 'Publication history',

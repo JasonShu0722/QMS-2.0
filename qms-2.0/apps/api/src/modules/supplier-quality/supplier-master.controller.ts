@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Header, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
-import { RequireAccess } from '../authorization/access.decorator.js';
+import { RequireAccess, RequireAuthenticated } from '../authorization/access.decorator.js';
 import { TemporaryPasswordDto } from '../identity/dto/password-change-challenge.dto.js';
+import { AdminUserForceDeleteResultDto, DeleteAdminUserDto } from '../identity/admin-user-lifecycle.dto.js';
 import { CreateSupplierAccountDto, CreatedSupplierAccountDto, SetSupplierAccountStatusDto, SupplierAccountDto, SupplierAccountPageDto, SupplierAccountScopeDto } from './supplier-account.dto.js';
 import { SupplierAccountService } from './supplier-account.service.js';
 import { SupplierProfileImportDto, SupplierProfileImportResultDto } from './supplier-profile-import.dto.js';
@@ -55,4 +56,13 @@ export class SupplierMasterController {
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'supplier-quality:profiles:write', organizationScope: bodyScope })
   setStatus(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: SetSupplierAccountStatusDto) { return this.accounts.setStatus(actor(request), id, userId, dto, requestTraceId(request), request.get('Idempotency-Key')); }
+
+  @Delete(':id/accounts/:userId') @ApiOkResponse({ type: AdminUserForceDeleteResultDto })
+  @Header('Cache-Control', 'no-store')
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAuthenticated()
+  deleteAccount(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('userId', ParseUUIDPipe) userId: string, @Query() query: SupplierAccountScopeDto, @Body() dto: DeleteAdminUserDto) {
+    const operator = actor(request);
+    return this.accounts.deleteAccount({ ...operator, scopeOrganizationId: query.organizationId ?? operator.organizationId }, id, userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
 }

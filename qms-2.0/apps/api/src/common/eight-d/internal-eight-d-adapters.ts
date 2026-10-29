@@ -13,6 +13,7 @@ import { assertWorkflowFeature, type WorkflowActor } from '../../modules/workflo
 import type { WorkflowClosureRegistry } from '../../modules/workflow/workflow-closure-registry.js';
 import type { WorkflowClosureAdapter, WorkflowClosureContext, WorkflowClosureOperation } from '../../modules/workflow/workflow-closure-round.types.js';
 import type { WorkflowDeadlineOperation, WorkflowDeadlineStage } from '../../modules/workflow/workflow-deadline-extension.types.js';
+import type { WorkflowAdministrativeInvalidationInput } from '../../modules/workflow/workflow-administrative-invalidation.types.js';
 import { jsonObject, workflowError } from '../../modules/workflow/workflow-runtime-policy.js';
 import { assertInternalEightDDomain, INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from './internal-eight-d-domain.js';
 import { internalEightDSections } from './internal-eight-d-sections.js';
@@ -34,6 +35,7 @@ export class InternalEightDClosureAdapter implements WorkflowClosureAdapter, OnM
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor) { return this.service.complete(tx, context, actor); }
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor) { return this.service.returnForChanges(tx, context, actor); }
   canNotifyRecipient(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string) { return this.service.canNotifyClosureRecipient(tx, context, userId); }
+  administrativeInvalidation(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput) { return this.service.administrativeInvalidation(tx, input); }
 
   async deadlineContext(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor, operation: WorkflowDeadlineOperation) {
     const record = await this.service.lockRecord(tx, actor, context.problemId, operation === 'READ' || operation === 'ELIGIBILITY' ? 'READ' : 'DEADLINE');

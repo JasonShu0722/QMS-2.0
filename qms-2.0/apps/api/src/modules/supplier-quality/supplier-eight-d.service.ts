@@ -5,17 +5,22 @@ import { Prisma, type WorkflowNode } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
+import type { AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
 import { assertActiveAuthentication, isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import type { FileResourceAction } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
+import { organizationAdministrativeAffectedAssignments } from '../organization/organization-administrative-impact.read-model.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
 import { assertWorkflowFeature, featurePredicate } from '../workflow/workflow-access-policy.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
 import type { WorkflowClosureContext, WorkflowClosureOperation, WorkflowSupplierSubmissionInput } from '../workflow/workflow-closure-round.types.js';
+import type { WorkflowAdministrativeInvalidationInput, WorkflowAdministrativeTarget } from '../workflow/workflow-administrative-invalidation.types.js';
 import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '../workflow/workflow-runtime-policy.js';
+import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { createWorkflowStart, persistWorkflowMutation } from '../workflow/workflow-start.js';
 import { analysisCompletionIssues, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from '../process-quality/process-eight-d-document.js';
 import { eightDError as fail, eightDRequestDigest } from '../process-quality/process-eight-d-policy.js';
@@ -25,6 +30,10 @@ import type { SupplierEightDActor, SupplierEightDControl, SupplierEightDDeadline
 import type { SupplierEightDReportRead } from './supplier-eight-d-report.model.js';
 import type { SupplierDeadlineStage } from './supplier-eight-d-deadline.policy.js';
 import type { SupplierEightDTaskContext } from './supplier-eight-d-task.types.js';
+import { assertAdminAccess } from '../../common/security/admin-mutation.service.js';
+import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import type { SupplierEightDAdministrativeQueryDto, SupplierEightDAdministrativeReconfigureDto,
+  SupplierEightDAdministrativePageDto, SupplierEightDAdministrativeResultDto } from './supplier-eight-d-administrative.dto.js';
 
 const columns = Prisma.sql`supplier_problem_id AS "supplierProblemId", organization_id AS "organizationId", problem_index_id AS "problemIndexId",
   sqe_user_id AS "sqeUserId", sqe_assignment_id AS "sqeAssignmentId", responsible_section_department_id AS "responsibleSectionDepartmentId",
@@ -39,7 +48,8 @@ export class SupplierEightDService {
   constructor(private readonly prisma: PrismaService, private readonly problems: ProblemIndexService,
     private readonly bindings: SupplierWorkflowBindingService, private readonly rounds: WorkflowClosureRoundService,
     private readonly responsibilities: OrganizationResponsibilityService, private readonly files: FileLifecycleService,
-    private readonly audit: AuditLogService, private readonly outbox: OutboxService) {}
+    private readonly audit: AuditLogService, private readonly outbox: OutboxService,
+    private readonly runtime: WorkflowRuntimeService) {}
 
   async read(actor: SupplierEightDActor, id: string): Promise<SupplierEightDReportDto> {
     return this.transaction(async tx => {
@@ -446,6 +456,7 @@ export class SupplierEightDService {
       this.local(actor);
       if (supplier.ownerOrganizationId !== actor.organizationId) fail('SUPPLIER_RECORD_NOT_FOUND', 404);
     } else if (supplier.supplierOrganizationId !== actor.organizationId || supplier.replyMode !== 'SUPPLIER' || !supplier.releasedToSupplierAt) fail('SUPPLIER_RECORD_NOT_FOUND', 404);
+    if (!readOnly) await this.responsibilities.assertWorkflowOrganizationActive(tx, supplier.ownerOrganizationId, true);
     return this.lockFacts(tx, supplier.ownerOrganizationId, supplier.problemIndexId, readOnly);
   }
 
@@ -482,6 +493,7 @@ export class SupplierEightDService {
   }
 
   async authorizeReply(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord) {
+    await this.responsibilities.assertWorkflowOrganizationActive(tx, record.control.organizationId);
     await this.authorizeRead(tx, actor, record);
     if (record.supplier.replyMode === 'INTERNAL') {
       if (actor.accountType !== 'INTERNAL' || actor.id !== record.supplier.internalResponderId) fail('WORKFLOW_NODE_FORBIDDEN', 403);
@@ -621,6 +633,70 @@ export class SupplierEightDService {
     await this.changed(tx, actor, await this.lockFacts(tx, context.organizationId, context.problemId), 'RETURN', randomUUID(), round.id);
   }
 
+  // Read-only server discovery: supplier requests are not stored in the workflow deadline engine.
+  async administrativeInvalidationTargets(tx: Prisma.TransactionClient, impact: AdministrativeLifecycleImpact): Promise<WorkflowAdministrativeTarget[]> {
+    return tx.$queryRaw(Prisma.sql`SELECT DISTINCT c.organization_id AS "organizationId", c.problem_index_id AS "problemId"
+      FROM supplier_eight_d_deadline_requests r JOIN supplier_eight_d_controls c
+      ON c.organization_id = r.organization_id AND c.supplier_problem_id = r.supplier_problem_id
+      WHERE r.status IN ('QUALITY_PENDING', 'MANAGER_PENDING') AND (${this.administrativeDeadlinePredicate(impact)})`);
+  }
+
+  private administrativeDeadlinePredicate(impact: AdministrativeLifecycleImpact): Prisma.Sql {
+    const userIds = impact.kind === 'USER' ? impact.userIds : impact.unavailableUserIds ?? [];
+    const organizationIds = impact.kind === 'ORGANIZATION' ? impact.organizationIds : [];
+    return Prisma.sql`r.organization_id = ANY(${organizationIds}::uuid[])
+      OR r.applicant_organization_id = ANY(${organizationIds}::uuid[])
+      OR r.sqe_user_id = ANY(${userIds}::uuid[]) OR r.manager_user_id = ANY(${userIds}::uuid[])
+      OR r.applicant_user_id = ANY(${userIds}::uuid[])
+      OR (c.organization_id = ${impact.organizationId}::uuid AND c.responsible_section_department_id = ANY(${impact.departmentIds}::uuid[]))
+      OR EXISTS (SELECT 1 FROM (${organizationAdministrativeAffectedAssignments(impact.organizationId, impact.departmentIds, impact.positionIds)}) affected
+        WHERE affected.organization_id = r.organization_id
+        AND (affected.assignment_id = r.sqe_assignment_id OR (affected.user_id = r.manager_user_id
+          AND affected.section_department_id = c.responsible_section_department_id)))`;
+  }
+
+  async administrativeInvalidation(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput): Promise<number> {
+    this.uuid(input.actorUserId); this.uuid(input.organizationId); this.uuid(input.problemId);
+    if (!await hasPlatformAdministrator(tx, input.actorUserId)) fail('WORKFLOW_NODE_FORBIDDEN', 403);
+    const record = await this.lockFacts(tx, input.organizationId, input.problemId);
+    const requests = await tx.$queryRaw<{ id: string; status: string; version: number; stage: string }[]>(Prisma.sql`
+      SELECT r.id, r.status, r.version, r.stage FROM supplier_eight_d_deadline_requests r JOIN supplier_eight_d_controls c
+      ON c.organization_id = r.organization_id AND c.supplier_problem_id = r.supplier_problem_id
+      WHERE r.organization_id = ${input.organizationId}::uuid AND r.supplier_problem_id = ${record.supplier.id}::uuid
+      AND r.status IN ('QUALITY_PENDING', 'MANAGER_PENDING') AND (${this.administrativeDeadlinePredicate(input.impact)})
+      ORDER BY r.id FOR UPDATE OF r`);
+    const traceId = randomUUID();
+    for (const request of requests) {
+      const changed = await tx.$executeRaw`UPDATE supplier_eight_d_deadline_requests SET status = 'CANCELLED', version = version + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${request.id}::uuid AND organization_id = ${input.organizationId}::uuid AND status = ${request.status}
+        AND version = ${request.version} AND version < 2147483647`;
+      if (changed !== 1) fail('CONCURRENCY_CONFLICT', 409);
+      // Administrative cancellation is audit evidence, never a fabricated APPLICANT decision/signature.
+      await this.audit.record({ organizationId: input.organizationId, actorUserId: input.actorUserId, action: 'SUPPLIER_EIGHT_D_DEADLINE_ADMINISTRATIVELY_CANCELLED',
+        resourceType: 'SupplierEightDDeadline', resourceId: request.id, outcome: 'SUCCESS', traceId,
+        metadata: { status: 'CANCELLED', reasonCode: input.reason, resourceVersion: request.version + 1 } }, tx);
+      await this.outbox.enqueue({ eventKey: `supplier-eight-d-deadline:${request.id}:v${request.version + 1}`,
+        eventType: 'SUPPLIER_EIGHT_D_DEADLINE_CHANGED', aggregateType: 'SupplierEightDDeadline', aggregateId: request.id,
+        payload: { schemaVersion: 1, organizationId: input.organizationId, supplierProblemId: record.supplier.id,
+          requestId: request.id, version: request.version + 1, stage: request.stage, status: 'CANCELLED' } }, tx);
+    }
+    if (record.control.closedAt || record.control.approvedRevisionId || record.problem.closedAt || record.instance.status !== 'RUNNING') return requests.length;
+    const round = await this.rounds.readProjection(tx, input.organizationId, input.problemId);
+    if (round?.status === 'CANCELLED' && round.instanceId === record.instance.id && round.nodeId === record.node.id
+      && round.context.instanceVersion === record.instance.version
+      && isClosureReviewNode(record.node) && record.control.submittedRevisionId
+      && jsonObject(round.context).endedBy === input.actorUserId && jsonObject(round.context).endReason === input.reason) {
+      await this.runtime.administrativeReturn(tx, { orgId: input.organizationId, problemId: input.problemId,
+        actorUserId: input.actorUserId, reason: input.reason, expectedInstanceId: record.instance.id,
+        expectedInstanceVersion: record.instance.version });
+      await this.bump(tx, { id: input.actorUserId }, record, Prisma.sql`, submitted_revision_id = NULL`);
+      await this.audit.record({ organizationId: input.organizationId, actorUserId: input.actorUserId,
+        action: 'SUPPLIER_EIGHT_D_ADMINISTRATIVELY_INVALIDATED', resourceType: 'SupplierEightDReport', resourceId: record.supplier.id,
+        outcome: 'SUCCESS', traceId, metadata: { reasonCode: input.reason, resourceVersion: record.control.rowVersion + 1 } }, tx);
+    }
+    return requests.length;
+  }
+
   async canNotifyClosureRecipient(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string) {
     try {
       const record = await this.lockFacts(tx, context.organizationId, context.problemId, true);
@@ -651,6 +727,131 @@ export class SupplierEightDService {
 
   private async assertContext(tx: Prisma.TransactionClient, record: SupplierEightDRecord, context: WorkflowClosureContext) {
     if (canonical(await this.context(tx, record)) !== canonical(context)) fail('CONCURRENCY_CONFLICT', 409);
+  }
+
+  async administrativeOrganizationId(tx: Prisma.TransactionClient, actor: SupplierEightDActor, supplierProblemId: string): Promise<string> {
+    await this.authorizeAdministrativeRecovery(tx, actor);
+    this.uuid(supplierProblemId);
+    const [row] = await tx.$queryRaw<{ organizationId: string }[]>`SELECT p.owner_organization_id AS "organizationId"
+      FROM supplier_quality_problems p JOIN supplier_eight_d_controls c ON c.supplier_problem_id=p.id
+        AND c.organization_id=p.owner_organization_id AND c.problem_index_id=p.problem_index_id
+      WHERE p.id=${supplierProblemId}::uuid AND p.response_form='EIGHT_D'`;
+    if (!row) fail('SUPPLIER_RECORD_NOT_FOUND', 404);
+    if (actor.scopeOrganizationId && actor.scopeOrganizationId !== row.organizationId) fail('ORGANIZATION_SCOPE_DENIED', 403);
+    return row.organizationId;
+  }
+
+  async administrativePending(tx: Prisma.TransactionClient, actor: SupplierEightDActor,
+    query: SupplierEightDAdministrativeQueryDto): Promise<SupplierEightDAdministrativePageDto> {
+    await this.authorizeAdministrativeRecovery(tx, actor);
+    if (!Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100
+      || !Number.isSafeInteger(query.offset) || query.offset < 0 || query.offset > 2147483647) fail('SUPPLIER_INPUT_INVALID', 400);
+    const rows = await tx.$queryRaw<SupplierEightDControl[]>(Prisma.sql`SELECT ${columns} FROM supplier_eight_d_controls
+      WHERE closed_at IS NULL ORDER BY supplier_problem_id LIMIT ${query.pageSize} OFFSET ${query.offset}`);
+    const items: SupplierEightDAdministrativePageDto['items'] = [];
+    for (const control of rows) {
+      if (actor.scopeOrganizationId && actor.scopeOrganizationId !== control.organizationId) continue;
+      const problem = await this.problems.findById(control.problemIndexId, control.organizationId, tx as never);
+      if (problem.closedAt || problem.archivedAt || ['CLOSED', 'ARCHIVED'].includes(String(problem.status))
+        || problem.domainCode !== 'supplier-quality' || problem.sourceType !== 'supplier-quality'
+        || problem.problemType !== 'EIGHT_D' || problem.sourceId !== control.supplierProblemId) continue;
+      const supplier = await tx.supplierQualityProblem.findFirst({ where: { id: control.supplierProblemId,
+        ownerOrganizationId: control.organizationId, problemIndexId: control.problemIndexId, responseForm: 'EIGHT_D' } });
+      if (!supplier) continue;
+      const requiredConfiguration = await this.administrativeRequiredConfiguration(tx, control, supplier);
+      if (requiredConfiguration.length) items.push({ supplierProblemId: supplier.id, problemId: control.problemIndexId, reportNumber: String(problem.reportNumber),
+        originalOrganizationId: control.organizationId, version: control.rowVersion, sqeUserId: control.sqeUserId,
+        sqeAssignmentId: control.sqeAssignmentId, responsibleSectionDepartmentId: control.responsibleSectionDepartmentId,
+        internalResponderId: supplier.internalResponderId, status: String(problem.status), requiredConfiguration });
+    }
+    return { items, pageSize: query.pageSize, offset: query.offset,
+      nextOffset: rows.length === query.pageSize ? query.offset + query.pageSize : null };
+  }
+
+  // The root administrative envelope owns idempotency; every domain mutation shares its transaction.
+  async administrativeReconfigure(tx: Prisma.TransactionClient, actor: SupplierEightDActor, supplierProblemId: string,
+    input: SupplierEightDAdministrativeReconfigureDto, traceId: string = randomUUID()): Promise<SupplierEightDAdministrativeResultDto> {
+    const organizationId = await this.administrativeOrganizationId(tx, actor, supplierProblemId);
+    this.uuid(supplierProblemId); this.uuid(input.sqeAssignmentId); this.positive(input.expectedVersion);
+    if (input.internalResponderAssignmentId !== undefined) this.uuid(input.internalResponderAssignmentId);
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
+    const supplier = await tx.supplierQualityProblem.findUnique({ where: { id: supplierProblemId } });
+    if (!supplier?.problemIndexId || supplier.ownerOrganizationId !== organizationId) fail('SUPPLIER_RECORD_NOT_FOUND', 404);
+    const record = await this.lockFacts(tx, supplier.ownerOrganizationId, supplier.problemIndexId);
+    const c = record.control;
+    if (c.rowVersion !== input.expectedVersion || c.rowVersion >= 2147483647) fail('CONCURRENCY_CONFLICT', 409);
+    this.editable(record);
+    if (['CLOSED', 'ARCHIVED'].includes(record.problem.status) || c.submittedRevisionId
+      || (await this.rounds.readProjection(tx, c.organizationId, record.problem.id))?.status === 'PENDING'
+      || (await tx.$queryRaw<{ id: string }[]>`SELECT id FROM supplier_eight_d_deadline_requests
+        WHERE organization_id=${c.organizationId}::uuid AND supplier_problem_id=${supplierProblemId}::uuid
+        AND status IN ('QUALITY_PENDING', 'MANAGER_PENDING') LIMIT 1`).length) fail('WORKFLOW_ACTION_INVALID', 409);
+    const required = await this.administrativeRequiredConfiguration(tx, c, record.supplier, true);
+    const replaceSqe = required.includes('sqeAssignmentId');
+    if (!replaceSqe && input.sqeAssignmentId !== c.sqeAssignmentId) fail('WORKFLOW_ACTION_INVALID', 409);
+    const assignment = await this.responsibilities.workflowCurrentAssignment(tx, c.organizationId,
+      { assignmentId: input.sqeAssignmentId }, true);
+    if (!assignment) fail('SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID', 403);
+    if (!await this.feature(tx, c.organizationId, assignment.userId, 'supplier-quality:issues:read')
+      || !await this.feature(tx, c.organizationId, assignment.userId, 'supplier-quality:issues:work')
+      || !await this.feature(tx, c.organizationId, assignment.userId, 'workflow:act')) fail('SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID', 403);
+    let responderId = record.supplier.internalResponderId;
+    if (input.internalResponderAssignmentId !== undefined) {
+      if (!required.includes('internalResponderAssignmentId')) fail('WORKFLOW_ACTION_INVALID', 409);
+      const responder = await this.responsibilities.workflowCurrentAssignment(tx, c.organizationId,
+        { assignmentId: input.internalResponderAssignmentId }, true);
+      if (!responder) fail('SUPPLIER_EIGHT_D_RESPONDER_INVALID', 403);
+      if (!await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:responses:read')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:responses:write')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'supplier-quality:issues:read')
+        || !await this.feature(tx, c.organizationId, responder.userId, 'workflow:act')) fail('SUPPLIER_EIGHT_D_RESPONDER_INVALID', 403);
+      responderId = responder.userId;
+    }
+    if (!replaceSqe && responderId === record.supplier.internalResponderId) fail('WORKFLOW_ACTION_INVALID', 409);
+    await this.authorizeAdministrativeRecovery(tx, actor);
+    if (responderId !== record.supplier.internalResponderId) {
+      if (record.supplier.version >= 2147483647 || (await tx.supplierQualityProblem.updateMany({
+        where: { id: supplierProblemId, ownerOrganizationId: c.organizationId, version: record.supplier.version },
+        data: { internalResponderId: responderId, version: { increment: 1 } },
+      })).count !== 1) fail('CONCURRENCY_CONFLICT', 409);
+    }
+    await this.bump(tx, actor, record, Prisma.sql`, sqe_user_id=${assignment.userId}::uuid, sqe_assignment_id=${assignment.assignmentId}::uuid,
+      responsible_section_department_id=${assignment.departmentId}::uuid`);
+    let problemVersion = record.problem.version;
+    if (assignment.userId !== c.sqeUserId) {
+      const updated = await this.problems.updateDomainSummary(tx as never, { organizationId: c.organizationId,
+        id: record.problem.id, expectedVersion: record.problem.version, ownerId: assignment.userId, updatedById: actor.id, traceId });
+      problemVersion = Number(updated.version);
+    }
+    await this.audit.record({ organizationId: c.organizationId, actorUserId: actor.id, action: 'SUPPLIER_EIGHT_D_RECONFIGURED',
+      resourceType: 'SupplierEightD', resourceId: supplierProblemId, outcome: 'SUCCESS', traceId,
+      metadata: { originalOrganizationId: c.organizationId, resourceVersion: c.rowVersion + 1, previousResourceVersion: c.rowVersion,
+        targetUserId: replaceSqe ? assignment.userId : responderId, departmentId: assignment.departmentId,
+        reasonCode: replaceSqe ? 'INVALID_SQE_RECONFIGURED' : 'INVALID_INTERNAL_RESPONDER_RECONFIGURED' } }, tx);
+    return { supplierProblemId, problemId: record.problem.id, reportNumber: record.problem.reportNumber, originalOrganizationId: c.organizationId, version: c.rowVersion + 1,
+      problemVersion, sqeUserId: assignment.userId, sqeAssignmentId: assignment.assignmentId,
+      responsibleSectionDepartmentId: assignment.departmentId, internalResponderId: responderId, status: record.problem.status };
+  }
+
+  private async authorizeAdministrativeRecovery(tx: Prisma.TransactionClient, actor: SupplierEightDActor) {
+    const { user } = await assertRecentAuthentication(tx, actor);
+    if (actor.accountType !== 'INTERNAL' || user.accountType !== 'INTERNAL' || user.organizationId !== actor.organizationId
+      || user.deletedAt || user.configurationRequired || user.organization.type !== 'INTERNAL'
+      || user.organization.deletedAt || user.organization.configurationRequired || !await hasPlatformAdministrator(tx, actor.id)) fail('FEATURE_PERMISSION_DENIED', 403);
+    await assertAdminAccess(tx, actor, actor.organizationId, 'organization:reconfigure');
+  }
+
+  private async administrativeRequiredConfiguration(tx: Prisma.TransactionClient, control: SupplierEightDControl,
+    supplier: SupplierEightDRecord['supplier'] | { replyMode: string; internalResponderId: string | null }, lock = false) {
+    const sqe = await this.responsibilities.workflowCurrentAssignment(tx, control.organizationId,
+      { assignmentId: control.sqeAssignmentId }, lock);
+    const required: string[] = [];
+    if (!sqe || sqe.userId !== control.sqeUserId || sqe.departmentId !== control.responsibleSectionDepartmentId) required.push('sqeAssignmentId');
+    if (supplier.replyMode === 'INTERNAL' && (!supplier.internalResponderId
+      || !await this.responsibilities.workflowCurrentAssignment(tx, control.organizationId, { userId: supplier.internalResponderId }, lock))) {
+      required.push('internalResponderAssignmentId');
+    }
+    return required;
   }
 
   private async command(actor: SupplierEightDActor, id: string, input: SupplierEightDVersionDto, action: string, traceId: string, key: string,
@@ -686,7 +887,7 @@ export class SupplierEightDService {
     });
   }
 
-  private async bump(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, fields: Prisma.Sql, content = false) {
+  private async bump(tx: Prisma.TransactionClient, actor: Pick<SupplierEightDActor, 'id'>, record: SupplierEightDRecord, fields: Prisma.Sql, content = false) {
     if (record.control.rowVersion === 2147483647 || content && record.supplier.version === 2147483647) fail('CONCURRENCY_CONFLICT', 409);
     const count = await tx.$executeRaw(Prisma.sql`UPDATE supplier_eight_d_controls SET row_version = row_version + 1, updated_by = ${actor.id}::uuid,
       updated_at = CURRENT_TIMESTAMP ${fields} WHERE supplier_problem_id = ${record.supplier.id}::uuid AND organization_id = ${record.control.organizationId}::uuid AND row_version = ${record.control.rowVersion}`);
@@ -694,7 +895,7 @@ export class SupplierEightDService {
     if (content && (await tx.supplierQualityProblem.updateMany({ where: { id: record.supplier.id, version: record.supplier.version }, data: { version: { increment: 1 } } })).count !== 1) fail('CONCURRENCY_CONFLICT', 409);
   }
 
-  private async move(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, action: string, traceId: string, closing = false) {
+  private async move(tx: Prisma.TransactionClient, actor: Pick<SupplierEightDActor, 'id' | 'organizationId' | 'accountType'>, record: SupplierEightDRecord, action: string, traceId: string, closing = false) {
     const edges = await tx.workflowTransition.findMany({ where: { organizationId: record.control.organizationId, workflowVersionId: record.instance.workflowVersionId, fromNodeId: record.node.id, action }, include: { toNode: true } });
     const target: WorkflowNode | undefined = edges[0]?.toNode;
     if (edges.length !== 1 || !target || !matchesCondition(edges[0]!.condition, record.problem)
@@ -708,7 +909,7 @@ export class SupplierEightDService {
       expectedInstanceId: record.instance.id, instanceId: record.instance.id, status: closing ? 'CLOSED' : isClosureReviewNode(target) ? 'PENDING' : 'IN_PROGRESS', actorUserId: actor.id });
     await persistWorkflowMutation(tx, { organizationId: record.control.organizationId, actor, problemIndexId: record.problem.id, workflowVersionId: record.instance.workflowVersionId,
       expectedProblemVersion: record.problem.version, idempotencyKey: randomUUID(), traceId }, eightDRequestDigest({ action, indexId: record.problem.id, instanceVersion: record.instance.version }),
-    action, record.node.id, record.node.id, { instanceId: record.instance.id, workflowVersionId: record.instance.workflowVersionId, currentNodeId: target.id,
+    closing ? 'CLOSE' : action, record.node.id, record.node.id, { instanceId: record.instance.id, workflowVersionId: record.instance.workflowVersionId, currentNodeId: target.id,
       version: record.instance.version + 1, problemVersion, status: closing ? 'COMPLETED' : 'RUNNING' }, { audit: this.audit, outbox: this.outbox });
   }
 
@@ -818,7 +1019,7 @@ export class SupplierEightDService {
     await tx.$executeRaw`INSERT INTO supplier_eight_d_receipts (organization_id, supplier_problem_id, actor_user_id, actor_organization_id, key, action, digest, response)
       VALUES (${record.control.organizationId}::uuid, ${record.supplier.id}::uuid, ${actor.id}::uuid, ${actor.organizationId}::uuid, ${key}, ${action}, ${digest}, ${JSON.stringify(response)}::jsonb)`;
   }
-  private async changed(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, action: string, traceId: string, key: string) {
+  private async changed(tx: Prisma.TransactionClient, actor: Pick<SupplierEightDActor, 'id'>, record: SupplierEightDRecord, action: string, traceId: string, key: string) {
     await this.audit.record({ organizationId: record.control.organizationId, actorUserId: actor.id, action: `SUPPLIER_EIGHT_D_${action}`, resourceType: 'SupplierEightD', resourceId: record.supplier.id,
       outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.control.rowVersion, contentVersion: record.supplier.version } }, tx);
     await this.outbox.enqueue({ eventKey: `supplier-eight-d:${record.supplier.id}:${action}:${createHash('sha256').update(`${actor.id}:${key}`).digest('hex')}`, eventType: 'SUPPLIER_EIGHT_D_CHANGED', aggregateType: 'SupplierEightD', aggregateId: record.supplier.id,

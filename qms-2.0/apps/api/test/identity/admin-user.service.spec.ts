@@ -49,7 +49,7 @@ describe('admin user lifecycle service', () => {
   it('lists only users inside the server-authorized organization scope', async () => {
     prisma.user.findMany.mockResolvedValue([]);
     await service.list(actor, { organizationId: 'org-a' });
-    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a' } }));
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', deletedAt: null, configurationRequired: false } }));
   });
 
   it('requests bounded summaries in chunks rather than truncating a user list at 100', async () => {

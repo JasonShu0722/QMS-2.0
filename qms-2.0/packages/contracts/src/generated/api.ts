@@ -1,4 +1,84 @@
 export interface paths {
+    "/api/v1/admin/reconfiguration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdministrativeReconfigurationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reconfiguration/{kind}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdministrativeReconfigurationController_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/problem-reconfiguration/{domain}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdministrativeProblemReconfigurationController_assignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/problem-reconfiguration/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdministrativeProblemReconfigurationController_pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/problem-reconfiguration/{domain}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AdministrativeProblemReconfigurationController_reconfigure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -207,6 +287,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminUserController_detail"];
+        put?: never;
+        post?: never;
+        delete: operations["AdminUserLifecycleController_deleteUser"];
+        options?: never;
+        head?: never;
+        patch: operations["AdminUserController_update"];
+        trace?: never;
+    };
+    "/api/v1/admin/supplier-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminSupplierAccountsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/supplier-accounts/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AdminSupplierAccountsController_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/batch": {
         parameters: {
             query?: never;
@@ -237,22 +365,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/users/{userId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AdminUserController_detail"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["AdminUserController_update"];
         trace?: never;
     };
     "/api/v1/admin/users/{userId}/mfa-policy": {
@@ -313,6 +425,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["AdminUserController_resetTemporaryPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/organizations/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminOrganizationController_context"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -941,6 +1069,118 @@ export interface paths {
         get: operations["OrganizationResponsibilityController_responsibilityAssignments"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/force-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationForceDeleteController_previewOrganization"];
+        put?: never;
+        post: operations["OrganizationForceDeleteController_deleteOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/departments/{departmentId}/force-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationForceDeleteController_previewDepartment"];
+        put?: never;
+        post: operations["OrganizationForceDeleteController_deleteDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/mine/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ESignatureController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ESignatureController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/e-signatures/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ESignatureController_approvals"];
+        put?: never;
+        post: operations["ESignatureController_signApproval"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2418,6 +2658,22 @@ export interface paths {
         put: operations["SupplierMasterController_setStatus"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/profiles/{id}/accounts/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["SupplierMasterController_deleteAccount"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6727,86 +6983,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/e-signatures/mine/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ESignatureController_summary"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/e-signatures/mine": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ESignatureController_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/e-signatures": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ESignatureController_register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/e-signatures/{id}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ESignatureController_revoke"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/e-signatures/approvals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ESignatureController_approvals"];
-        put?: never;
-        post: operations["ESignatureController_signApproval"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/supplier-audit/plans": {
         parameters: {
             query?: never;
@@ -7603,6 +7779,173 @@ export interface components {
             };
             traceId: string;
         };
+        Object: Record<string, never>;
+        AdministrativeReconfigurationItemDto: {
+            /** @enum {string} */
+            kind: "ORGANIZATION" | "DEPARTMENT" | "POSITION" | "USER";
+            /** Format: uuid */
+            id: string;
+            label: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            version: number;
+            reason: string;
+            requiredConfiguration: string[];
+        };
+        AdministrativeReconfigurationPageDto: {
+            items: components["schemas"]["AdministrativeReconfigurationItemDto"][];
+            total: number;
+            pageSize: number;
+            offset: number;
+        };
+        AdministrativeReconfigurationDto: {
+            /** @description 实体 version；USER 使用 securityVersion */
+            expectedVersion: number;
+            /** Format: uuid */
+            targetOrganizationId?: string;
+            /** Format: uuid */
+            targetDepartmentId?: string;
+            /**
+             * Format: uuid
+             * @description DEPARTMENT 可显式选择 null 根部门；ORGANIZATION 必须选择有效内部父组织
+             */
+            parentId?: string | null;
+        };
+        AdministrativeReconfigurationResultDto: {
+            /** @enum {string} */
+            kind: "ORGANIZATION" | "DEPARTMENT" | "POSITION" | "USER";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            /** Format: uuid */
+            targetOrganizationId: string;
+            version: number;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            /** @enum {number} */
+            configurationRequired: false;
+            /** Format: uuid */
+            replacementId?: string;
+        };
+        InternalEightDAdministrativePendingItemDto: {
+            /** Format: uuid */
+            problemId: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            domainCode: string;
+            reportNumber: string;
+            version: number;
+            problemVersion: number;
+            /** Format: uuid */
+            professionalUserId: string;
+            /** Format: uuid */
+            ownerUserId: string | null;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** @enum {string} */
+            status: "PROCESSING";
+            requiredConfiguration: ("professionalAssignmentId" | "ownerAssignmentId")[];
+        };
+        InternalEightDAdministrativePendingPageDto: {
+            items: components["schemas"]["InternalEightDAdministrativePendingItemDto"][];
+            pageSize: number;
+            offset: number;
+            /** @description Next report scan offset, not the rank among invalid references */
+            nextOffset: number | null;
+        };
+        SupplierEightDAdministrativeItemDto: {
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            version: number;
+            /** Format: uuid */
+            sqeUserId: string;
+            /** Format: uuid */
+            sqeAssignmentId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** Format: uuid */
+            internalResponderId: string | null;
+            status: string;
+            requiredConfiguration: string[];
+        };
+        SupplierEightDAdministrativePageDto: {
+            items: components["schemas"]["SupplierEightDAdministrativeItemDto"][];
+            pageSize: number;
+            offset: number;
+            /** @description 下一扫描窗口，不是失效记录排名 */
+            nextOffset: number | null;
+        };
+        InternalEightDAdministrativeResultDto: {
+            /** Format: uuid */
+            problemId: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            domainCode: string;
+            reportNumber: string;
+            version: number;
+            problemVersion: number;
+            /** Format: uuid */
+            professionalUserId: string;
+            /** Format: uuid */
+            ownerUserId: string | null;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** @enum {string} */
+            status: "PROCESSING";
+        };
+        SupplierEightDAdministrativeResultDto: {
+            /** Format: uuid */
+            supplierProblemId: string;
+            /** Format: uuid */
+            problemId: string;
+            reportNumber: string;
+            /** Format: uuid */
+            originalOrganizationId: string;
+            version: number;
+            problemVersion: number;
+            /** Format: uuid */
+            sqeUserId: string;
+            /** Format: uuid */
+            sqeAssignmentId: string;
+            /** Format: uuid */
+            responsibleSectionDepartmentId: string;
+            /** Format: uuid */
+            internalResponderId: string | null;
+            status: string;
+        };
+        AdministrativeProblemAssignmentDto: {
+            /** Format: uuid */
+            assignmentId: string;
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            fullName: string | null;
+            positionName: string;
+            /** Format: uuid */
+            departmentId: string;
+            departmentName: string;
+        };
+        AdministrativeProblemAssignmentPageDto: {
+            items: components["schemas"]["AdministrativeProblemAssignmentDto"][];
+            total: number;
+        };
+        AdministrativeProblemReconfigureDto: {
+            expectedVersion: number;
+            /** Format: uuid */
+            professionalAssignmentId?: string;
+            /** Format: uuid */
+            ownerAssignmentId?: string;
+            /** Format: uuid */
+            sqeAssignmentId?: string;
+            /** Format: uuid */
+            internalResponderAssignmentId?: string;
+        };
         CsrfResponseDto: {
             csrfToken: string;
         };
@@ -7709,6 +8052,41 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        DeleteAdminUserDto: {
+            expectedSecurityVersion: number;
+        };
+        AdminUserLifecycleEffectDto: {
+            /** @enum {string} */
+            module: "workflow" | "platform-configuration" | "identity";
+            changed: number;
+            pendingConfiguration: number;
+        };
+        AdminUserForceDeleteResultDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @enum {number} */
+            deleted: true;
+            effects: components["schemas"]["AdminUserLifecycleEffectDto"][];
+        };
+        AdminSupplierLifecycleAccountDto: {
+            /** @description 删除操作的实时身份版本，不替代资料版本。 */
+            securityVersion: number;
+            id: string;
+            username: string;
+            email?: string | null;
+            /** @enum {string} */
+            accountType: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            organizationId: string;
+            organization: components["schemas"]["OrganizationSummaryDto"];
+        };
+        AdminSupplierAccountsPageDto: {
+            items: components["schemas"]["AdminSupplierLifecycleAccountDto"][];
+            total: number;
+            pageSize: number;
+            offset: number;
+        };
         AdminUserBatchRowDto: {
             rowNumber: number;
             username: string;
@@ -7762,6 +8140,8 @@ export interface components {
             department: components["schemas"]["PositionAuthorizationDepartmentDto"];
         };
         AdminUserDto: {
+            /** @description 删除操作的实时身份版本，不替代资料版本。 */
+            securityVersion: number;
             /** @description 最多展示三个有效任职，完整数量见 totalPositions。 */
             positions?: components["schemas"]["UserPositionSummaryDto"][];
             totalPositions?: number;
@@ -7836,6 +8216,30 @@ export interface components {
         };
         ResetTemporaryPasswordDto: {
             temporaryPassword?: string;
+        };
+        AdminAuthorizationSourceDto: {
+            /** Format: uuid */
+            roleId: string;
+            roleCode: string;
+            roleName: string;
+            sourceOrganizationIds: string[];
+            sourceKinds: ("DIRECT" | "POSITION")[];
+            platformAdministrator: boolean;
+        };
+        AdminOrganizationContextDto: {
+            hasPlatformAdministrator: boolean;
+            /** Format: uuid */
+            homeOrganizationId: string;
+            /** Format: uuid */
+            targetOrganizationId: string;
+            /** @enum {string} */
+            accessKind: "PLATFORM" | "ORGANIZATION" | "NONE";
+            /** @enum {string} */
+            targetOrganizationStatus: "ACTIVE" | "DISABLED";
+            targetConfigurationRequired: boolean;
+            /** @description 当前目标范围实际可用的管理权限，不含平台身份 marker 或业务办理权限。 */
+            permissions: string[];
+            authorizationSources: components["schemas"]["AdminAuthorizationSourceDto"][];
         };
         AdminOrganizationDto: {
             id: string;
@@ -8346,6 +8750,131 @@ export interface components {
             items: components["schemas"]["ResponsibilityAssignmentDto"][];
             total: number;
         };
+        OrganizationForceDeleteCountsDto: {
+            users: number;
+            departments: number;
+            positions: number;
+            organizations: number;
+            assignments: number;
+            managementBindings: number;
+            ministerScopes: number;
+        };
+        OrganizationForceDeletePreviewDto: {
+            /** @enum {string} */
+            kind: "ORGANIZATION" | "DEPARTMENT";
+            /** Format: uuid */
+            id: string;
+            name: string;
+            code: string;
+            version: number;
+            /** @description 绑定实际操作者、范围、实体及引用版本的影响基线 */
+            previewToken: string;
+            counts: components["schemas"]["OrganizationForceDeleteCountsDto"];
+            retainedHistory: string[];
+        };
+        OrganizationForceDeleteDto: {
+            expectedVersion: number;
+            /** @enum {number} */
+            confirmed: true;
+            /** @description 本次预览的服务端影响基线；引用变化后须刷新预览再确认 */
+            previewToken: string;
+        };
+        OrganizationForceDeleteEffectDto: {
+            module: string;
+            changed: number;
+            pendingConfiguration: number;
+        };
+        OrganizationForceDeleteResultDto: {
+            /** @enum {string} */
+            kind: "ORGANIZATION" | "DEPARTMENT";
+            /** Format: uuid */
+            id: string;
+            name: string;
+            code: string;
+            version: number;
+            /** @description 绑定实际操作者、范围、实体及引用版本的影响基线 */
+            previewToken: string;
+            counts: components["schemas"]["OrganizationForceDeleteCountsDto"];
+            retainedHistory: string[];
+            /** Format: date-time */
+            deletedAt: string;
+            effects: components["schemas"]["OrganizationForceDeleteEffectDto"][];
+        };
+        ESignatureSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        ESignatureDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            userId: string;
+            label: string;
+            fingerprint: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        ESignaturePageDto: {
+            items: components["schemas"]["ESignatureDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RegisterESignatureDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            label: string;
+            /** @description 签名原文或签名图像编码，仅用于即时生成指纹，不会持久化 */
+            signatureData: string;
+        };
+        RevokeESignatureDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
+        };
+        ApprovalSignatureDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            signatureId: string;
+            /** Format: uuid */
+            signerUserId: string;
+            resourceType: string;
+            resourceId: string;
+            resourceVersion: number;
+            signatureFingerprint: string;
+            signedDigest: string;
+            note?: string | null;
+            /** Format: date-time */
+            signedAt: string;
+        };
+        SignApprovalDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            /** Format: uuid */
+            signatureId: string;
+            resourceType: string;
+            resourceId: string;
+            resourceVersion: number;
+            note?: string;
+        };
         PermissionsResponseDto: {
             organizationId: string;
             permissions: string[];
@@ -8566,7 +9095,6 @@ export interface components {
             status?: "ACTIVE" | "DISABLED";
             sortOrder?: number;
         };
-        Object: Record<string, never>;
         ComponentProjectRecordDto: {
             /** Format: uuid */
             id: string;
@@ -10141,6 +10669,7 @@ export interface components {
             canCreate: boolean;
             canReset: boolean;
             canSetStatus: boolean;
+            canDelete: boolean;
         };
         CreateSupplierAccountDto: {
             /** Format: uuid */
@@ -14585,81 +15114,6 @@ export interface components {
             /** Format: uuid */
             fileId: string;
         };
-        ESignatureSummaryDto: {
-            /** Format: uuid */
-            id: string;
-            label: string;
-            /** @enum {string} */
-            status: "ACTIVE" | "REVOKED";
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            revokedAt: string | null;
-        };
-        ESignatureDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            userId: string;
-            label: string;
-            fingerprint: string;
-            /** @enum {string} */
-            status: "ACTIVE" | "REVOKED";
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            revokedAt?: string | null;
-        };
-        ESignaturePageDto: {
-            items: components["schemas"]["ESignatureDto"][];
-            total: number;
-            page: number;
-            pageSize: number;
-        };
-        RegisterESignatureDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            label: string;
-            /** @description 签名原文或签名图像编码，仅用于即时生成指纹，不会持久化 */
-            signatureData: string;
-        };
-        RevokeESignatureDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            expectedVersion: number;
-        };
-        ApprovalSignatureDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            organizationId: string;
-            /** Format: uuid */
-            signatureId: string;
-            /** Format: uuid */
-            signerUserId: string;
-            resourceType: string;
-            resourceId: string;
-            resourceVersion: number;
-            signatureFingerprint: string;
-            signedDigest: string;
-            note?: string | null;
-            /** Format: date-time */
-            signedAt: string;
-        };
-        SignApprovalDto: {
-            /** Format: uuid */
-            organizationId?: string;
-            /** Format: uuid */
-            signatureId: string;
-            resourceType: string;
-            resourceId: string;
-            resourceVersion: number;
-            note?: string;
-        };
         SupplierAuditPlanDto: {
             /** Format: uuid */
             id: string;
@@ -15443,6 +15897,178 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    AdministrativeReconfigurationController_list: {
+        parameters: {
+            query: {
+                kind: "ORGANIZATION" | "DEPARTMENT" | "POSITION" | "USER";
+                pageSize?: components["schemas"]["Object"];
+                offset?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdministrativeReconfigurationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdministrativeReconfigurationController_restore: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                kind: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdministrativeReconfigurationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdministrativeReconfigurationResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdministrativeProblemReconfigurationController_assignments: {
+        parameters: {
+            query: {
+                pageSize?: number;
+                offset?: number;
+                organizationId: string;
+                duty: "PROFESSIONAL" | "OWNER" | "RESPONDER";
+                search?: string;
+            };
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdministrativeProblemAssignmentPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdministrativeProblemReconfigurationController_pending: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEightDAdministrativePendingPageDto"] | components["schemas"]["SupplierEightDAdministrativePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdministrativeProblemReconfigurationController_reconfigure: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                domain: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdministrativeProblemReconfigureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEightDAdministrativeResultDto"] | components["schemas"]["SupplierEightDAdministrativeResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     AuthController_csrf: {
         parameters: {
             query?: never;
@@ -15875,6 +16501,185 @@ export interface operations {
             };
         };
     };
+    AdminUserController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminUserLifecycleController_deleteUser: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAdminUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserForceDeleteResultDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminUserController_update: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAdminUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminSupplierAccountsController_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                pageSize?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSupplierAccountsPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminSupplierAccountsController_delete: {
+        parameters: {
+            query: {
+                organizationId: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAdminUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserForceDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     AdminUserController_createBatch: {
         parameters: {
             query?: never;
@@ -15960,77 +16765,6 @@ export interface operations {
         };
         responses: {
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminUserDto"];
-                };
-            };
-            /** @description Controlled API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AdminUserController_detail: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-            };
-            header?: never;
-            path: {
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminUserDto"];
-                };
-            };
-            /** @description Controlled API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    AdminUserController_update: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-            };
-            header: {
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAdminUserDto"];
-            };
-        };
-        responses: {
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16222,6 +16956,35 @@ export interface operations {
                 };
             };
             /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminOrganizationController_context: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrganizationContextDto"];
+                };
+            };
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -17863,6 +18626,336 @@ export interface operations {
                 };
             };
             /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationForceDeleteController_previewOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationForceDeletePreviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationForceDeleteController_deleteOrganization: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationForceDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationForceDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationForceDeleteController_previewDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationForceDeletePreviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationForceDeleteController_deleteDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationForceDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationForceDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureSummaryDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: "ACTIVE" | "REVOKED";
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignaturePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_register: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterESignatureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_revoke: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeESignatureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ESignatureDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_approvals: {
+        parameters: {
+            query: {
+                organizationId?: string;
+                resourceType: string;
+                resourceId: string;
+                resourceVersion: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalSignatureDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ESignatureController_signApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignApprovalDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalSignatureDto"];
+                };
+            };
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -21643,6 +22736,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierAccountDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierMasterController_deleteAccount: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAdminUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserForceDeleteResultDto"];
                 };
             };
             default: {
@@ -32248,204 +33380,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierAdmissionDocumentDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_summary: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ESignatureSummaryDto"][];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_list: {
-        parameters: {
-            query?: {
-                organizationId?: string;
-                status?: "ACTIVE" | "REVOKED";
-                page?: components["schemas"]["Object"];
-                pageSize?: components["schemas"]["Object"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ESignaturePageDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_register: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterESignatureDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ESignatureDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_revoke: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RevokeESignatureDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ESignatureDto"];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_approvals: {
-        parameters: {
-            query: {
-                organizationId?: string;
-                resourceType: string;
-                resourceId: string;
-                resourceVersion: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalSignatureDto"][];
-                };
-            };
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ESignatureController_signApproval: {
-        parameters: {
-            query?: never;
-            header: {
-                "idempotency-key": string;
-                "x-csrf-token": string;
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SignApprovalDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalSignatureDto"];
                 };
             };
             default: {

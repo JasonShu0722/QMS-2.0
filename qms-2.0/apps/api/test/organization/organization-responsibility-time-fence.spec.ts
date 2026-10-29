@@ -18,13 +18,16 @@ function fixture() {
     $queryRaw: jest.fn(async (first: Prisma.Sql | TemplateStringsArray, ...args: unknown[]) => {
       const sql = 'strings' in first ? first.strings.join('?') : Array.from(first).join('?');
       const values = 'strings' in first ? first.values : args;
-      if (sql.includes('FROM users')) {
+      if (sql.includes('FROM users') && sql.includes('FOR SHARE')) {
         const ids = values.filter((v): v is string => v === 'participant' || v === 'manager');
         userLocks.push(ids);
         return ids.map(id => ({ id }));
       }
       if (sql.includes('FROM department_management_bindings') && sql.includes("responsibility = 'SECTION_MANAGER'")) {
         return [{ id: 'binding', positionId: 'position', departmentId: 'section', version: 1 }];
+      }
+      if (sql.includes('FROM user_positions a JOIN identity_users')) {
+        return values.some(value => value instanceof Date && value >= effective) ? [assignment] : [];
       }
       return [];
     }),

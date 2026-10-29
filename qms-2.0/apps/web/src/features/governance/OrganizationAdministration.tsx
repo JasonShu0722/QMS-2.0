@@ -9,9 +9,10 @@ import { GovernanceFeedback } from './GovernanceFeedback';
 import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { AdministrativeForceDeleteDialog } from './AdministrativeForceDeleteDialog';
 
-export function StructureLifecycleActions({ path, record, onChanged, auditOrganizationId }: {
-  path: string; record: { id: string; name: string; code: string; version: number; status: 'ACTIVE' | 'DISABLED' }; onChanged: () => void; auditOrganizationId?: string;
+export function StructureLifecycleActions({ path, record, onChanged, auditOrganizationId, showDelete = true }: {
+  path: string; record: { id: string; name: string; code: string; version: number; status: 'ACTIVE' | 'DISABLED' }; onChanged: () => void; auditOrganizationId?: string; showDelete?: boolean;
 }) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
@@ -84,7 +85,7 @@ export function StructureLifecycleActions({ path, record, onChanged, auditOrgani
   }
   function close() { if (pending.current) return; generation.current++; reading.current?.abort(); setAction(undefined); setCheck(undefined); setError(undefined); setUnknownDelete(false); deletion.current = undefined; }
   return <>
-    <Space wrap><Button disabled={busy} onClick={() => requestLeave(() => void inspect(record.status === 'ACTIVE' ? 'disable' : 'enable'))}>{t(record.status === 'ACTIVE' ? '停用' : '启用')}</Button><Button danger disabled={busy} onClick={() => requestLeave(() => void inspect('delete'))}>{t('删除')}</Button></Space>
+    <Space wrap><Button disabled={busy} onClick={() => requestLeave(() => void inspect(record.status === 'ACTIVE' ? 'disable' : 'enable'))}>{t(record.status === 'ACTIVE' ? '停用' : '启用')}</Button>{showDelete && <Button danger disabled={busy} onClick={() => requestLeave(() => void inspect('delete'))}>{t('删除')}</Button>}</Space>
     <Modal title={`${t(label)} · ${record.name} · ${record.code}`} open={!!action} onCancel={close} onOk={() => void confirm()} okText={t(`确认${label}`)} cancelText={t('取消')} confirmLoading={busy} okButtonProps={{ danger: action !== 'enable', disabled: checking || !check || !!error || blockers.length > 0 || busy || unknownDelete }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
       <GovernanceFeedback error={error} />
       {checking ? <Spin /> : <>
@@ -102,8 +103,8 @@ export function StructureLifecycleActions({ path, record, onChanged, auditOrgani
   </>;
 }
 
-export function OrganizationAdministration({ organization, organizations, items, onChanged }: {
-  organization: AdminOrganization; organizations: AdminOrganization[]; items: Organization[]; onChanged?: () => void;
+export function OrganizationAdministration({ organization, organizations, items, onChanged, onDenied }: {
+  organization: AdminOrganization; organizations: AdminOrganization[]; items: Organization[]; onChanged?: () => void; onDenied?: (error: ApiError) => void;
 }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -122,6 +123,7 @@ export function OrganizationAdministration({ organization, organizations, items,
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const target = items.find(entry => entry.id === organization.id);
   const canManage = organization.permissions.includes('organization:manage');
+  const canForceDelete = organization.permissions.includes('organization:force-delete');
   function edit(mode: 'create' | 'edit') {
     if (!target || !canManage) return;
     form.resetFields(); form.setFieldsValue(mode === 'edit' ? target : {}); setDirty(false); setError(undefined); setEditor({ target, mode });
@@ -155,7 +157,9 @@ export function OrganizationAdministration({ organization, organizations, items,
         { key: 'parent', label: t('父组织'), children: items.find(entry => entry.id === target.parentId)?.name ?? '—' },
         { key: 'status', label: t('状态'), children: <Tag color={target.status === 'ACTIVE' ? 'green' : undefined}>{t(target.status === 'ACTIVE' ? '启用' : '停用')}</Tag> },
       ]} />
-      {canManage ? <Space wrap><Button disabled={saving} onClick={() => edit('edit')}>{t('编辑')}</Button>{target.status === 'ACTIVE' && <Button disabled={saving} onClick={() => edit('create')}>{t('新增子组织')}</Button>}<StructureLifecycleActions key={`${target.id}:${target.version}`} path={organizationPath(target.id)} record={target} auditOrganizationId={organization.permissions.includes('audit:read') ? organization.id : undefined} onChanged={() => onChanged?.()} /></Space> : t('只读')}
+      <Space wrap>{canManage ? <><Button disabled={saving} onClick={() => edit('edit')}>{t('编辑')}</Button>{target.status === 'ACTIVE' && <Button disabled={saving} onClick={() => edit('create')}>{t('新增子组织')}</Button>}<StructureLifecycleActions key={`${target.id}:${target.version}`} path={organizationPath(target.id)} record={target} auditOrganizationId={organization.permissions.includes('audit:read') ? organization.id : undefined} showDelete={!canForceDelete} onChanged={() => onChanged?.()} /></> : !canForceDelete ? t('只读') : null}
+        <AdministrativeForceDeleteDialog path={organizationPath(target.id, '/force-delete')} kind="ORGANIZATION" target={target} scopeKey={JSON.stringify([organization.id, [...organization.permissions].sort()])} allowed={canForceDelete} disabled={saving} onBeforeOpen={() => { if (editor) form.resetFields(); setEditor(undefined); setDirty(false); }} onDeleted={() => onChanged?.()} onDenied={onDenied} />
+      </Space>
     </> : <Alert type="info" title={t('当前组织基本信息不可读')} />}
     <Modal title={t(editor?.mode === 'create' ? '新增子组织' : '编辑')} open={!!editor} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }} onCancel={() => { if (pending.current) return; requestLeave(() => { setEditor(undefined); setDirty(false); form.resetFields(); }); }} onOk={() => form.submit()}>
       <GovernanceFeedback error={error} />

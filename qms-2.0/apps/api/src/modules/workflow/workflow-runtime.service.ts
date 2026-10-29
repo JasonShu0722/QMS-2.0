@@ -11,6 +11,7 @@ import type { WorkflowAction } from './workflow.types.js';
 import { assertWorkflowFeature, canProcessWorkflowNode } from './workflow-access-policy.js';
 import { assertActiveAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { createWorkflowStart, persistWorkflowMutation, workflowProblemStatus } from './workflow-start.js';
+import { administrativeReturn, type WorkflowAdministrativeReturnInput } from './workflow-administrative-return.js';
 
 export interface WorkflowCommand {
   organizationId: string;
@@ -61,6 +62,10 @@ export class WorkflowRuntimeService {
     private readonly outbox: OutboxService,
     private readonly problems: ProblemIndexService,
   ) {}
+
+  async administrativeReturn(tx: Prisma.TransactionClient, input: WorkflowAdministrativeReturnInput): Promise<number> {
+    return administrativeReturn(tx, input, this.problems, this.audit);
+  }
 
   async startInstance(input: StartWorkflowInstanceInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess): Promise<WorkflowActionResult> {
     return this.inTransaction(transaction, async (tx) => {

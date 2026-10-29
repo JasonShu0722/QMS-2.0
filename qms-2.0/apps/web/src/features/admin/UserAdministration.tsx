@@ -12,6 +12,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { accountAvatarEpoch } from '../account/account-avatar-state';
 import { PositionSelector } from './PositionSelector';
 import { UserPositionsEditor } from './UserPositionsEditor';
+import { UserForceDelete } from './UserForceDelete';
 import { canPreviewPositions, type AuthorizationPreview } from './position-authorization';
 
 type CreateUser = components['schemas']['CreateAdminUserDto'];
@@ -19,7 +20,7 @@ type UpdateUser = components['schemas']['UpdateAdminUserDto'];
 type UserForm = CreateUser & Pick<AdminUser, 'status'>;
 type ResetIssued = components['schemas']['PasswordResetIssuedDto'];
 
-export function UserAdministration({ organization, organizations, targetUserId }: { organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string }) {
+export function UserAdministration({ organization, organizations, targetUserId, onDenied }: { organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string; onDenied?: (error: ApiError) => void }) {
   const { t, locale } = useLanguage();
   const sessionScope = useWorkTabsStore(state => state.sessionScope);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -33,6 +34,7 @@ export function UserAdministration({ organization, organizations, targetUserId }
   function setFailure(cause: unknown) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); }
   const errorDescription = traceId ? <span>{t('追踪标识')}: <code>{traceId}</code></span> : undefined;
   const [success, setSuccess] = useState<string>();
+  const [lifecycleDenied, setLifecycleDenied] = useState(false);
   const [editing, setEditing] = useState<AdminUser | 'new'>();
   const [assignment, setAssignment] = useState<{ user: AdminUser; authorization: UserRoles }>();
   const [positionUser, setPositionUser] = useState<AdminUser>();
@@ -73,9 +75,10 @@ export function UserAdministration({ organization, organizations, targetUserId }
   const canStatus = allows(organization, 'users:status');
   const canTransfer = allows(organization, 'users:transfer');
   const canReset = allows(organization, 'users:reset');
+  const canDelete = allows(organization, 'users:delete');
   const canReadRoles = canRead && allows(organization, 'roles:read');
   const canAssignPositions = canRead && canPreviewPositions(organization);
-  useEffect(() => { scopeGeneration.current += 1; setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, form]);
+  useEffect(() => { scopeGeneration.current += 1; setLifecycleDenied(false); setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, form]);
 
   useEffect(() => {
     let current = true;
@@ -192,6 +195,7 @@ export function UserAdministration({ organization, organizations, targetUserId }
     finally { actionLock.current = false; if (alive.current && generation === scopeGeneration.current) setBusy(false); }
   }
   const organizationOptions = organizations.filter((entry) => allows(entry, editing === 'new' ? 'users:create' : 'users:transfer')).map((entry) => ({ value: entry.id, label: entry.name }));
+  if (lifecycleDenied) return <Alert type="error" showIcon title={t('管理权限或会话已失效，已清除用户内容')} description={<>{error && t(error)}{errorDescription}</>} />;
   return <>
     {targetUserId !== undefined && (!canRead ? <Alert type="error" title={t('无权查看目标账号')} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.error ? <Alert type="error" title={t(target.error)} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.user ? <section aria-label={t('目标账号')}>
       <Typography.Title level={4}>{t('目标账号')}</Typography.Title>
@@ -222,6 +226,10 @@ export function UserAdministration({ organization, organizations, targetUserId }
         {canReset && <Button size="small" disabled={busy} onClick={() => setTemporary(user)}>{t('临时密码')}</Button>}
         {canAssignPositions && user.accountType === 'INTERNAL' && user.status === 'ACTIVE' && <Button size="small" disabled={busy} onClick={() => setPositionUser(user)}>{t('调岗')}</Button>}
         {canReadRoles && <Button size="small" disabled={busy} onClick={() => void openRoles(user)}>{t('查看授权来源')}</Button>}
+        <UserForceDelete key={`${sessionScope}:${organization.id}:${user.id}`} target={user} canDelete={canDelete} disabled={busy || batchBusy} onDenied={cause => {
+          setFailure(cause); setUsers([]); setTarget(undefined); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined);
+          setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setLifecycleDenied(true); onDenied?.(cause);
+        }} onRefresh={() => setRevision(value => value + 1)} onDeleted={() => { setSuccess('用户已永久删除'); setRevision(value => value + 1); }} />
       </Space> },
     ]} />}
     {positionUser && canAssignPositions && <UserPositionsEditor key={`${sessionScope}:${organization.id}:${positionUser.id}`} organizationId={organization.id} user={positionUser} onClose={() => setPositionUser(undefined)} onSessionEnding={() => { sessionEnding.current = true; }} onSaved={() => { setPositionUser(undefined); setSuccess('任职已保存'); setRevision(value => value + 1); }} />}

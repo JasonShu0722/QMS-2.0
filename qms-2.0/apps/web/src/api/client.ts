@@ -80,6 +80,9 @@ export function getAdminUser(organizationId: string, userId: string): Promise<co
 }
 
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
+  components['schemas']['DeleteAdminUserDto'] | components['schemas']['OrganizationForceDeleteDto'] |
+  components['schemas']['AdministrativeReconfigurationDto'] |
+  components['schemas']['AdministrativeProblemReconfigureDto'] |
   components['schemas']['CreateAdminUserBatchDto'] | components['schemas']['ResetTemporaryPasswordDto'] |
   components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |
   components['schemas']['UpdateAdminRoleDto'] | components['schemas']['CopyAdminRoleDto'] | components['schemas']['AssignAdminRolesDto'] |

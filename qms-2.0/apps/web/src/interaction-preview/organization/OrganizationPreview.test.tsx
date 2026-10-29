@@ -1,6 +1,6 @@
 import { ConfigProvider } from 'antd';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { ThemeProvider } from '../../theme/ThemeProvider';
 import { OrganizationPreview } from './OrganizationPreview';
@@ -10,7 +10,41 @@ function setup() {
   return render(<LanguageProvider><ThemeProvider><ConfigProvider theme={{ token: { motion: false } }}><OrganizationPreview /></ConfigProvider></ThemeProvider></LanguageProvider>);
 }
 
+async function cleanupOrganizationPreview() {
+  cleanup();
+  // AntD Form's useDebounce schedules 0/10ms updates without unmount cleanup.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+}
+
+afterEach(cleanupOrganizationPreview);
+
 describe('organization workspace local preview', { timeout: 30000 }, () => {
+  it('settles the real form delayed updates after unmount before teardown', async () => {
+    const schedule = globalThis.setTimeout;
+    const updates: ReturnType<typeof vi.fn>[] = [];
+    const timer = vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+      if (new Error().stack?.includes('useDelayState.js')) {
+        const update = vi.fn(callback);
+        updates.push(update);
+        return schedule(update, delay, ...args);
+      }
+      return schedule(callback, delay, ...args);
+    });
+    try {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: '编辑基本信息' }));
+      expect(updates.length).toBeGreaterThan(0);
+      expect(updates.every(update => update.mock.calls.length === 0)).toBe(true);
+      await cleanupOrganizationPreview();
+      expect(screen.queryByRole('dialog', { name: '编辑基本信息' })).not.toBeInTheDocument();
+      for (const update of updates) expect(update).toHaveBeenCalledOnce();
+    } finally {
+      timer.mockRestore();
+      cleanup();
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    }
+  });
+
   it('preserves an unsaved node edit when cancellation is declined', async () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: '编辑基本信息' }));

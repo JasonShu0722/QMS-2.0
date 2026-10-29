@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     defaults:
       run:
         working-directory: qms-2.0
@@ -100,7 +100,19 @@ jobs:
           cache: true
           require-lockfile: true
       - name: Web unit tests
-        run: pnpm --filter @qms/web test --shard=${{ matrix.shard }}/4 --maxWorkers=1
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          pnpm --filter @qms/web test --shard=${{ matrix.shard }}/8 --maxWorkers=1 --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/web-tests-${{ matrix.shard }}.json" 2>&1 | tee "$RUNNER_TEMP/web-tests-${{ matrix.shard }}.log"
+      - name: Upload Web test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-tests-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/web-tests-${{ matrix.shard }}.json
+            ${{ runner.temp }}/web-tests-${{ matrix.shard }}.log
+          retention-days: 7
 
   api-unit:
     needs: scope
@@ -126,6 +138,10 @@ jobs:
     if: needs.scope.outputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       mailpit:
         image: axllent/mailpit:v1.27.8
@@ -233,11 +249,10 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           set -euo pipefail
-          # Release Jest VM state between shards without parallel writes to the disposable database.
-          for shard in 1 2 3 4; do
-            pnpm --filter @qms/api test:integration --shard="$shard/4"
-          done
+          # Each matrix job owns its VM, database, storage, scanner and mail service.
+          pnpm --filter @qms/api test:integration --shard=${{ matrix.shard }}/4
       - name: Real worker process lifecycle
+        if: matrix.shard == 1
         env:
           NODE_ENV: development
         run: |

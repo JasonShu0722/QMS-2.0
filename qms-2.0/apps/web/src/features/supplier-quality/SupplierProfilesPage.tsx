@@ -8,13 +8,13 @@ import { createSupplierMutation, supplierApi, supplierError, type ProfileInput, 
 import { SupplierMasterImport } from './SupplierMasterImport';
 import { SupplierUsersPanel } from './SupplierUsersPanel';
 
-type Props = { organizationId?: string; organizationPermissions?: string[] };
+type Props = { organizationId?: string; organizationPermissions?: string[]; onDenied?: (cause: ApiError) => void };
 const base = `${supplierApi(false)}/profiles`;
 export function SupplierProfilesPage(props: Props = {}) {
   return <ProfilesContent key={props.organizationId ?? 'current'} {...props} />;
 }
 
-function ProfilesContent({ organizationId, organizationPermissions }: Props) {
+function ProfilesContent({ organizationId, organizationPermissions, onDenied }: Props) {
   const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -27,18 +27,24 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
   const [accounts, setAccounts] = useState<SupplierProfile>();
   const [notice, setNotice] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [denied, setDenied] = useState(false);
   const alive = useRef(true);
   const sequence = useRef(0);
   const granted = organizationPermissions ?? permissions;
-  const canRead = granted.includes('supplier-quality:profiles:read');
-  const canWrite = granted.includes('supplier-quality:profiles:write');
+  const canRead = !denied && granted.includes('supplier-quality:profiles:read');
+  const canWrite = !denied && granted.includes('supplier-quality:profiles:write');
   const scope = organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : '';
+  function accountDenied(cause: ApiError) {
+    if (!alive.current) return;
+    sequence.current++; setDenied(true); setData(undefined); setEditing(undefined); setCreating(false); setAccounts(undefined);
+    setNotice(false); setSearch(''); setLoading(false); setError(cause); onDenied?.(cause);
+  }
   async function reload(reportFailure = false) {
     const request = ++sequence.current;
     setLoading(true);
     try {
       const result = await apiRequest<ProfilePage>(`${base}?page=${page}&search=${encodeURIComponent(search)}${scope}`);
-      if (alive.current && request === sequence.current) { setData(result); setError(undefined); }
+      if (alive.current && request === sequence.current) { setData(result); setDenied(false); setError(undefined); }
     } catch (cause) { if (alive.current && request === sequence.current) { setData(undefined); setError(cause); } if (reportFailure) throw cause; }
     finally { if (alive.current && request === sequence.current) setLoading(false); }
   }
@@ -68,7 +74,7 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
   }
   return <section aria-label={t('供应商档案')}>
     {notice ? <Alert type="success" title={t('供应商资料已保存')} /> : null}
-    {error ? <Alert type="error" title={t(supplierError(error))} action={canRead ? <Button onClick={() => void reload()}>{t('重新加载')}</Button> : undefined} /> : null}
+    {error ? <Alert type="error" title={t(supplierError(error))} action={granted.includes('supplier-quality:profiles:read') ? <Button onClick={() => void reload()}>{t('重新加载')}</Button> : undefined} /> : null}
     {canRead ? <><Space wrap><Input.Search aria-label={t('搜索供应商资料')} placeholder={t('搜索供应商名称或业务编码')} maxLength={100} allowClear onSearch={(value) => { setSearch(value); setPage(1); }} /><Button loading={loading} onClick={() => void reload()}>{t('重新加载')}</Button><Button loading={exporting} disabled={loading || !data?.items.length} onClick={() => void exportPage()}>{t('导出当前页供应商清单')}</Button></Space>
       <Table<SupplierProfile> rowKey="id" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 800 }} pagination={{ current: page, pageSize: 20, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }} columns={[
         { title: t('业务编码'), dataIndex: 'businessCode' }, { title: t('供应商名称'), dataIndex: 'displayName' }, { title: t('联系人'), dataIndex: 'contactName' }, { title: t('联系邮箱'), dataIndex: 'contactEmail' },
@@ -78,7 +84,7 @@ function ProfilesContent({ organizationId, organizationPermissions }: Props) {
     {canWrite ? <Space wrap><Button onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Space> : null}
     {canWrite && creating ? <ProfileCreator organizationId={organizationId} saved={saved} close={() => setCreating(false)} /> : null}
     {editing ? <ProfileEditor key={editing.id} organizationId={organizationId} record={editing} saved={saved} close={() => setEditing(undefined)} /> : null}
-    {accounts ? <SupplierUsersPanel key={accounts.id} profile={accounts} organizationId={organizationId} organizationPermissions={granted} onBound={canRead ? reload : () => undefined} onClose={() => setAccounts(undefined)} /> : null}
+    {accounts ? <SupplierUsersPanel key={accounts.id} profile={accounts} organizationId={organizationId} organizationPermissions={granted} onBound={canRead ? reload : () => undefined} onClose={() => setAccounts(undefined)} onDenied={accountDenied} /> : null}
   </section>;
 }
 

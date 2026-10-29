@@ -5,6 +5,9 @@ import { plainToInstance } from 'class-transformer';
 import { Prisma, type WorkflowNode } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
+import { adminPermissions, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
+import { InternalEightDAdministrativeQueryDto, InternalEightDAdministrativeReconfigureDto, type InternalEightDAdministrativePendingPageDto,
+  type InternalEightDAdministrativePendingItemDto, type InternalEightDAdministrativeResultDto } from '../../common/eight-d/internal-eight-d-administrative.dto.js';
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
@@ -19,6 +22,7 @@ import { OutboxService } from '../task-notification/outbox.service.js';
 import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate } from '../workflow/workflow-access-policy.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
 import type { WorkflowClosureContext, WorkflowClosureOperation } from '../workflow/workflow-closure-round.types.js';
+import type { WorkflowAdministrativeInvalidationInput } from '../workflow/workflow-administrative-invalidation.types.js';
 import type { WorkflowDeadlineContext, WorkflowDeadlinePolicy, WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
 import { deadlineDueAt, deadlineStageOpen, parseDeadlinePolicy } from '../workflow/workflow-deadline-extension.policy.js';
 import { WorkflowDeadlineExtensionService } from '../workflow/workflow-deadline-extension.service.js';
@@ -636,6 +640,154 @@ export class ProcessEightDService {
       WHERE organization_id = ${context.organizationId}::uuid AND problem_id = ${context.problemId}::uuid AND version = ${record.report.version}`;
   }
 
+  async administrativePending(tx: Prisma.TransactionClient, actor: ProcessEightDActor,
+    input: InternalEightDAdministrativeQueryDto): Promise<InternalEightDAdministrativePendingPageDto> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) workflowError('ORGANIZATION_DIRECTORY_QUERY_INVALID', 400);
+    const query = plainToInstance(InternalEightDAdministrativeQueryDto, input);
+    if (validateSync(query, { whitelist: true, forbidNonWhitelisted: true }).length) workflowError('ORGANIZATION_DIRECTORY_QUERY_INVALID', 400);
+    await this.administrativeAuthorize(tx, actor);
+    // Bound the report scan itself; an empty filtered page can still have a next window.
+    const rows = await tx.$queryRaw<{ problemId: string; organizationId: string }[]>(Prisma.sql`SELECT problem_id AS "problemId", organization_id AS "organizationId"
+      FROM ${this.tables.reports} WHERE closed_revision_id IS NULL AND submitted_at IS NULL
+      ${actor.scopeOrganizationId ? Prisma.sql`AND organization_id = ${actor.scopeOrganizationId}::uuid` : Prisma.empty}
+      ORDER BY problem_id LIMIT ${query.pageSize + 1} OFFSET ${query.offset}`);
+    const items: InternalEightDAdministrativePendingItemDto[] = [];
+    for (const row of rows.slice(0, query.pageSize)) {
+      const record = await this.lockFacts(tx, row.organizationId, row.problemId, true);
+      if (record.problem.archivedAt || record.problem.closedAt || ['CLOSED', 'ARCHIVED'].includes(record.problem.status)
+        || record.instance.status !== 'RUNNING' || record.node.type !== 'ACTION' || jsonObject(record.node.config).isStart !== true
+        || !this.deadlinePolicy(record.node.config)) continue;
+      if ((await this.rounds.readProjection(tx, row.organizationId, row.problemId))?.status === 'PENDING') continue;
+      const state = await this.administrativeReferences(tx, record);
+      if (!state.organizationAvailable || !state.professionalInvalid && !state.ownerInvalid && !state.departmentInvalid) continue;
+      items.push({ ...this.administrativeProjection(record), requiredConfiguration: [
+        ...(state.professionalInvalid ? ['professionalAssignmentId' as const] : []),
+        ...(state.ownerInvalid || state.departmentInvalid ? ['ownerAssignmentId' as const] : []),
+      ] });
+    }
+    await this.administrativeAuthorize(tx, actor);
+    return { items, pageSize: query.pageSize, offset: query.offset,
+      nextOffset: rows.length > query.pageSize ? query.offset + query.pageSize : null };
+  }
+
+  async administrativeReconfigure(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string,
+    input: InternalEightDAdministrativeReconfigureDto, traceId: string = randomUUID()): Promise<InternalEightDAdministrativeResultDto> {
+    this.uuid(problemId);
+    if (!input || typeof input !== 'object' || Array.isArray(input)) workflowError('STRUCTURE_REFERENCE_INVALID', 400);
+    const command = plainToInstance(InternalEightDAdministrativeReconfigureDto, input);
+    if (validateSync(command, { whitelist: true, forbidNonWhitelisted: true }).length) workflowError('STRUCTURE_REFERENCE_INVALID', 400);
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
+    await this.administrativeAuthorize(tx, actor);
+    const organizationId = await this.readResourceOrganizationId(tx, problemId);
+    if (actor.scopeOrganizationId && actor.scopeOrganizationId !== organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
+    const record = await this.lockFacts(tx, organizationId, problemId);
+    this.editable(record);
+    if (record.report.version !== command.expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
+    if (record.report.submittedAt || (await this.rounds.readProjection(tx, organizationId, problemId))?.status === 'PENDING') workflowError('PROCESS_EIGHT_D_APPROVAL_LOCKED', 409);
+    const state = await this.administrativeReferences(tx, record, true);
+    if (!state.organizationAvailable) workflowError('STRUCTURE_REFERENCE_INVALID', 409);
+    if (!command.professionalAssignmentId && !command.ownerAssignmentId
+      || command.professionalAssignmentId && !state.professionalInvalid
+      || command.ownerAssignmentId && !state.ownerInvalid && !state.departmentInvalid) workflowError('CONCURRENCY_CONFLICT', 409);
+    const professional = command.professionalAssignmentId ? await this.responsibilities.workflowCurrentAssignment(tx, organizationId,
+      { assignmentId: command.professionalAssignmentId }, true) : null;
+    const owner = command.ownerAssignmentId ? await this.responsibilities.workflowCurrentAssignment(tx, organizationId,
+      { assignmentId: command.ownerAssignmentId }, true) : null;
+    if (command.professionalAssignmentId && !professional || command.ownerAssignmentId && !owner
+      || owner && !state.departmentInvalid && owner.departmentId !== record.report.responsibleSectionDepartmentId) workflowError('STRUCTURE_REFERENCE_INVALID', 400);
+    for (const [candidate, required] of [[professional, [`${this.domain.permissionPrefix}:issue`, 'workflow:act']],
+      [owner, [`${this.domain.permissionPrefix}:work`, `${this.domain.permissionPrefix}:read`, 'workflow:act']]] as const) {
+      if (!candidate) continue;
+      const permissions = await adminPermissions(tx, candidate.userId, organizationId);
+      if (required.some(permission => !permissions.includes(permission))
+        || !await canProcessWorkflowNode(tx, candidate.userId, organizationId, { assigneeUserId: candidate.userId })) workflowError('STRUCTURE_REFERENCE_INVALID', 400);
+    }
+    if (owner && owner.userId !== record.problem.ownerId) {
+      await this.problems.updateDomainSummary(tx as never, { organizationId, id: problemId, expectedVersion: record.problem.version,
+        ownerId: owner.userId, updatedById: actor.id, traceId });
+    }
+    const changed = await tx.$executeRaw`UPDATE ${this.tables.reports}
+      SET professional_user_id = ${professional?.userId ?? record.report.professionalUserId}::uuid,
+        responsible_section_department_id = ${state.departmentInvalid && owner ? owner.departmentId : record.report.responsibleSectionDepartmentId}::uuid,
+        version = version + 1, updated_by = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
+      WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid AND version = ${command.expectedVersion}
+        AND closed_revision_id IS NULL AND submitted_at IS NULL`;
+    if (changed !== 1) workflowError('CONCURRENCY_CONFLICT', 409);
+    await this.administrativeAuthorize(tx, actor);
+    for (const candidate of [professional, owner]) {
+      if (candidate && canonical(await this.responsibilities.workflowCurrentAssignment(tx, organizationId,
+        { assignmentId: candidate.assignmentId }, true)) !== canonical(candidate)) workflowError('CONCURRENCY_CONFLICT', 409);
+    }
+    await this.audit.record({ organizationId, actorUserId: actor.id, action: this.auditEvent('ADMINISTRATIVELY_RECONFIGURED'),
+      resourceType: this.auditType('Report'), resourceId: problemId, outcome: 'SUCCESS', traceId,
+      metadata: { resourceVersion: record.report.version + 1, previousProfessionalUserId: record.report.professionalUserId,
+        professionalUserId: professional?.userId ?? record.report.professionalUserId,
+        previousOwnerUserId: record.problem.ownerId, ownerUserId: owner?.userId ?? record.problem.ownerId,
+        previousSectionDepartmentId: record.report.responsibleSectionDepartmentId,
+        departmentId: state.departmentInvalid && owner ? owner.departmentId : record.report.responsibleSectionDepartmentId } }, tx);
+    return this.administrativeProjection(await this.lockFacts(tx, organizationId, problemId));
+  }
+
+  private async administrativeAuthorize(tx: Prisma.TransactionClient, actor: ProcessEightDActor): Promise<void> {
+    this.uuid(actor.id); this.uuid(actor.organizationId); if (actor.scopeOrganizationId) this.uuid(actor.scopeOrganizationId);
+    const { user } = await assertRecentAuthentication(tx, actor);
+    if (actor.accountType !== 'INTERNAL' || user.accountType !== 'INTERNAL' || user.organizationId !== actor.organizationId
+      || user.deletedAt || user.configurationRequired || user.organization.type !== 'INTERNAL'
+      || user.organization.deletedAt || user.organization.configurationRequired || !await hasPlatformAdministrator(tx, actor.id)) workflowError('FEATURE_PERMISSION_DENIED', 403);
+    await assertAdminAccess(tx, actor, actor.organizationId, 'organization:reconfigure');
+  }
+
+  private async administrativeReferences(tx: Prisma.TransactionClient, record: ProcessEightDRecord, lock = false) {
+    const organizationId = record.problem.organizationId;
+    try {
+      const departments = await this.responsibilities.workflowDepartmentOptions(tx, organizationId, undefined, 1, 0, record.report.responsibleSectionDepartmentId);
+      // Current identities are checked without newly introduced business permissions or guessed baseline appointments.
+      const professional = await this.responsibilities.workflowCurrentAssignment(tx, organizationId, { userId: record.report.professionalUserId }, lock);
+      const owner = record.problem.ownerId ? await this.responsibilities.workflowCurrentAssignment(tx, organizationId,
+        { userId: record.problem.ownerId, departmentId: record.report.responsibleSectionDepartmentId }, lock) : null;
+      return { organizationAvailable: true, professionalInvalid: !professional, ownerInvalid: !owner, departmentInvalid: departments.items.length === 0 };
+    } catch (error) {
+      if (error instanceof HttpException && ['ORGANIZATION_NOT_FOUND', 'ORGANIZATION_DISABLED', 'STRUCTURE_REFERENCE_INVALID']
+        .includes(String((error.getResponse() as { code?: string }).code))) {
+        return { organizationAvailable: false, professionalInvalid: false, ownerInvalid: false, departmentInvalid: false };
+      }
+      throw error;
+    }
+  }
+
+  private administrativeProjection(record: ProcessEightDRecord): InternalEightDAdministrativeResultDto {
+    return { problemId: record.problem.id, originalOrganizationId: record.problem.organizationId, domainCode: this.domain.domainCode,
+      reportNumber: record.problem.reportNumber, version: record.report.version, problemVersion: record.problem.version,
+      professionalUserId: record.report.professionalUserId, ownerUserId: record.problem.ownerId,
+      responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId, status: 'PROCESSING' };
+  }
+
+  // Called only by the authorized deletion transaction; this is not a business review or user command.
+  async administrativeInvalidation(tx: Prisma.TransactionClient, input: WorkflowAdministrativeInvalidationInput): Promise<number> {
+    this.uuid(input.actorUserId); this.uuid(input.organizationId); this.uuid(input.problemId);
+    if (!await hasPlatformAdministrator(tx, input.actorUserId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+    const record = await this.lockFacts(tx, input.organizationId, input.problemId);
+    if (record.report.closedRevisionId || record.problem.closedAt || record.instance.status !== 'RUNNING') return 0;
+    const round = await this.rounds.readProjection(tx, input.organizationId, input.problemId);
+    if (!round || round.status !== 'CANCELLED' || round.instanceId !== record.instance.id || round.nodeId !== record.node.id
+      || round.context.instanceVersion !== record.instance.version
+      || !isClosureReviewNode(record.node) || !record.report.submittedAt
+      || jsonObject(round.context).endedBy !== input.actorUserId || jsonObject(round.context).endReason !== input.reason) return 0;
+    const traceId = randomUUID();
+    await this.runtime.administrativeReturn(tx, { orgId: input.organizationId, problemId: input.problemId,
+      actorUserId: input.actorUserId, reason: input.reason, expectedInstanceId: record.instance.id,
+      expectedInstanceVersion: record.instance.version });
+    const changed = await tx.$executeRaw`UPDATE ${this.tables.reports} SET submitted_at = NULL, version = version + 1,
+      updated_by = ${input.actorUserId}::uuid, updated_at = CURRENT_TIMESTAMP
+      WHERE organization_id = ${input.organizationId}::uuid AND problem_id = ${input.problemId}::uuid
+      AND version = ${record.report.version} AND closed_revision_id IS NULL`;
+    if (changed !== 1) workflowError('CONCURRENCY_CONFLICT', 409);
+    await this.audit.record({ organizationId: input.organizationId, actorUserId: input.actorUserId, action: this.auditEvent('ADMINISTRATIVELY_INVALIDATED'),
+      resourceType: this.auditType('Report'), resourceId: input.problemId, outcome: 'SUCCESS', traceId,
+      metadata: { reasonCode: input.reason, resourceVersion: record.report.version + 1 } }, tx);
+    return 0;
+  }
+
   async canNotifyClosureRecipient(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean> {
     try {
       const record = await this.lockFacts(tx, context.organizationId, context.problemId);
@@ -783,12 +935,12 @@ export class ProcessEightDService {
     await tx.$executeRaw`UPDATE ${this.tables.reports} SET updated_by = ${actor.id}::uuid WHERE organization_id = ${actor.organizationId}::uuid AND problem_id = ${record.problem.id}::uuid`;
   }
 
-  private async move(tx: Prisma.TransactionClient, record: ProcessEightDRecord, target: WorkflowNode, action: string, actorId: string, traceId: string, closing = false) {
+  private async move(tx: Prisma.TransactionClient, record: ProcessEightDRecord, target: WorkflowNode, action: string, actorId: string, traceId: string, closing = false, administrative = false) {
     const transitions = await tx.workflowTransition.findMany({ where: { organizationId: record.problem.organizationId, workflowVersionId: record.instance.workflowVersionId,
       fromNodeId: record.node.id, toNodeId: target.id, action: closing ? 'APPROVE' : action } });
     if (transitions.length !== 1 || !matchesCondition(transitions[0]!.condition, record.problem)) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
-    const user = await tx.user.findFirst({ where: { id: actorId, organizationId: record.problem.organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } });
-    if (!user) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+    const user = await tx.user.findFirst({ where: { id: actorId, ...(administrative ? {} : { organizationId: record.problem.organizationId }), accountType: 'INTERNAL', status: 'ACTIVE' } });
+    if (!user || administrative && !await hasPlatformAdministrator(tx, actorId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
     const changed = await tx.workflowInstance.updateMany({ where: { id: record.instance.id, organizationId: record.problem.organizationId, version: record.instance.version, status: 'RUNNING', currentNodeId: record.node.id },
       data: { currentNodeId: target.id, status: closing ? 'COMPLETED' : 'RUNNING', version: { increment: 1 }, updatedById: actorId } });
     if (changed.count !== 1) workflowError('CONCURRENCY_CONFLICT', 409);

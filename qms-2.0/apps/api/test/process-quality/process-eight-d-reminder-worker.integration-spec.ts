@@ -5,6 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import type { INestApplicationContext } from '@nestjs/common';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
+import { createDisposableAppDatabase } from '../disposable-app-database.js';
 import { createProcessEightDTaskFixture, clearProcessEightDTaskFixtureEvents, requireDisposableProcessEightDDatabase } from './process-eight-d-task.fixture.js';
 
 requireDisposableProcessEightDDatabase();
@@ -12,9 +13,19 @@ describe('compiled process 8D worker entrypoint', () => {
   let app: INestApplicationContext;
   let prisma: PrismaService;
   const organizations: string[] = [];
-  beforeAll(async () => { app = await NestFactory.createApplicationContext(AppModule, { logger: false }); prisma = app.get(PrismaService); }, 120000);
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  beforeAll(async () => {
+    process.env.DATABASE_URL = await createDisposableAppDatabase('qms_process_worker');
+    app = await NestFactory.createApplicationContext(AppModule, { logger: false }); prisma = app.get(PrismaService);
+  }, 120000);
   afterEach(async () => clearProcessEightDTaskFixtureEvents(prisma, organizations));
-  afterAll(async () => { await app?.close(); });
+  afterAll(async () => {
+    try { await app?.close(); }
+    finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
 
   function runOnce(): Promise<{ code: number | null; output: string }> {
     return new Promise((resolve, reject) => {

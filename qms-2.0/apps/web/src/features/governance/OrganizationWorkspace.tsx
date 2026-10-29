@@ -12,13 +12,13 @@ import { OrganizationAdministration } from './OrganizationAdministration';
 import { StructureAdministration } from './StructureAdministration';
 import './OrganizationWorkspace.css';
 
-type Props = { organization: AdminOrganization; organizations: AdminOrganization[]; onSelectOrganization: (id: string) => void; onChanged?: () => void };
+type Props = { organization: AdminOrganization; organizations: AdminOrganization[]; onSelectOrganization: (id: string) => void; onChanged?: () => void; onDenied?: (error: ApiError) => void };
 export function OrganizationWorkspace(props: Props) {
   const session = useWorkTabsStore(state => state.sessionScope);
   return <WorkspaceScope key={JSON.stringify([session, props.organization.id, [...props.organization.permissions].sort()])} {...props} />;
 }
 
-function WorkspaceScope({ organization, organizations, onSelectOrganization, onChanged }: Props) {
+function WorkspaceScope({ organization, organizations, onSelectOrganization, onChanged, onDenied }: Props) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
@@ -75,7 +75,7 @@ function WorkspaceScope({ organization, organizations, onSelectOrganization, onC
   function refreshStructure() { if (mounted.current) setRevision(value => value + 1); }
   function changed() { if (mounted.current) { refreshStructure(); onChanged?.(); } }
   const organizationDetails = !selectedId && (readOrganizations
-    ? <OrganizationAdministration organization={organization} organizations={organizations} items={tree} onChanged={changed} />
+    ? <OrganizationAdministration organization={organization} organizations={organizations} items={tree} onChanged={changed} onDenied={onDenied} />
     : <Alert type="info" showIcon title={t('无组织基本信息读取权限')} />);
   return <section aria-label={t('组织与岗位')} className="organization-workspace">
     <aside className="organization-workspace-tree" aria-label={t('组织架构导航')}>
@@ -88,7 +88,7 @@ function WorkspaceScope({ organization, organizations, onSelectOrganization, onC
     <div className="organization-workspace-context" key={`${revision}:${selectedId ?? ''}`}>
       {loading ? <Spin /> : <>
         {!readStructure && organizationDetails}
-        {readStructure && !structureError && <StructureAdministration organization={organization} workspace={{ departments, departmentId: selectedId, organizationDetails, onRefresh: refreshStructure, onChanged: refreshStructure }} />}
+        {readStructure && !structureError && <StructureAdministration organization={organization} onDenied={onDenied} workspace={{ departments, departmentId: selectedId, organizationDetails, onRefresh: refreshStructure, onChanged: refreshStructure }} />}
         {!!structureError && organizationDetails}
         {!!structureError && <Empty description={t('部门岗位加载失败，请重试')} />}
       </>}

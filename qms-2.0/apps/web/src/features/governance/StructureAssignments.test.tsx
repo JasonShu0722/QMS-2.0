@@ -16,7 +16,7 @@ vi.setConfig({ testTimeout: 30000 });
 const org: AdminOrganization = { id: 'org-a', code: 'A', name: '甲组织', type: 'INTERNAL', permissions: ['organization:structure:read', 'organization:positions:assign'] };
 const department: components['schemas']['DepartmentDto'] = { id: 'dept-a', organizationId: org.id, parentId: null, code: 'QA', name: '质量部', status: 'ACTIVE', version: 1 };
 const position: components['schemas']['PositionDto'] = { id: 'position-a', organizationId: org.id, departmentId: department.id, categoryId: null, code: 'QA', name: '质量工程师', status: 'ACTIVE', version: 1 };
-const user: AdminUser = { id: 'user-a', username: 'zhangsan', email: 'zhangsan@example.test', fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: org.id, organization: { id: org.id, name: org.name, code: org.code }, createdAt: '2020-01-01T00:00:00Z', updatedAt: '2020-01-01T00:00:00Z' };
+const user: AdminUser = { securityVersion: 1, id: 'user-a', username: 'zhangsan', email: 'zhangsan@example.test', fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: org.id, organization: { id: org.id, name: org.name, code: org.code }, createdAt: '2020-01-01T00:00:00Z', updatedAt: '2020-01-01T00:00:00Z' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const render = (ui: ReactNode) => renderUI(ui, { wrapper: MemoryRouter });
 function assignment(id: string, target: typeof position, startedAt = '2020-01-01T00:00:00Z', endedAt: string | null = null): components['schemas']['UserPositionDto'] {

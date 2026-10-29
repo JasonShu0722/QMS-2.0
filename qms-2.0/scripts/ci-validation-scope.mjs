@@ -4,7 +4,11 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const shaPattern = /^[0-9a-f]{40}$/;
-const businessJobs = ['web-tests (1)', 'web-tests (2)', 'web-tests (3)', 'web-tests (4)', 'api-unit', 'integration'];
+const businessJobs = [
+  ...Array.from({ length: 8 }, (_, index) => `web-tests (${index + 1})`),
+  'api-unit',
+  ...Array.from({ length: 4 }, (_, index) => `integration (${index + 1})`),
+];
 const documentationJobs = ['web-tests', 'api-unit', 'integration'];
 
 export function classifyPaths(paths, policy) {

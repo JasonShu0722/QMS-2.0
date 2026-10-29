@@ -54,12 +54,16 @@ describe('closure state lifecycle dependency classification on PostgreSQL', () =
   it('retains a persisted closure receipt as a reference without making it live work', async () => {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Receipt history only', type: 'INTERNAL' } });
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
-    expect(await structureBusinessReferences(prisma, organization.id, 'organization')).toEqual({ referenced: false, live: false, details: [] });
+    expect(await structureBusinessReferences(prisma, organization.id, 'organization')).toEqual({ referenced: true, live: false,
+      details: [{ tableName: 'user_organization_history', columnName: 'organization_id', count: 1, liveCount: 0 }] });
     const key = randomUUID();
     await prisma.$executeRaw`INSERT INTO workflow_closure_receipts (organization_id, actor_user_id, key, digest, response)
       VALUES (${organization.id}::uuid, ${user.id}::uuid, ${key}, ${'a'.repeat(64)}, '{}'::jsonb)`;
     expect(await structureBusinessReferences(prisma, organization.id, 'organization')).toEqual({ referenced: true, live: false,
-      details: [{ tableName: 'workflow_closure_receipts', columnName: 'organization_id', count: 1, liveCount: 0 }] });
+      details: [
+        { tableName: 'user_organization_history', columnName: 'organization_id', count: 1, liveCount: 0 },
+        { tableName: 'workflow_closure_receipts', columnName: 'organization_id', count: 1, liveCount: 0 },
+      ] });
     expect(await prisma.$queryRaw(Prisma.sql`SELECT t.key, (${structureReferenceLiveCondition('workflow_closure_receipts')}) AS live
       FROM workflow_closure_receipts t WHERE t.organization_id = ${organization.id}::uuid AND t.key = ${key}`))
       .toEqual([{ key, live: false }]);
@@ -76,6 +80,7 @@ describe('closure state lifecycle dependency classification on PostgreSQL', () =
       details: [
         { tableName: 'closure_notifications', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'problem_indexes', columnName: 'organization_id', count: 1, liveCount: 0 },
+        { tableName: 'user_organization_history', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_closure_rounds', columnName: 'creator_organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_closure_rounds', columnName: 'organization_id', count: 1, liveCount: 0 },
         { tableName: 'workflow_definitions', columnName: 'organization_id', count: 1, liveCount: 0 },

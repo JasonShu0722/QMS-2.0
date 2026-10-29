@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createDisposableAppDatabase } from '../disposable-app-database.js';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -28,8 +29,14 @@ describe('supplier workflow notifications on PostgreSQL', () => {
   let notifications: NotificationService;
   let portalNotifications: SupplierPortalNotificationService;
   const csrf = randomUUID();
+  const originalDatabaseUrl = process.env.DATABASE_URL;
 
   beforeAll(async () => {
+    process.env.DATABASE_URL = await createDisposableAppDatabase('qms_supplier_notification');
+  }, 120000);
+
+  beforeAll(async () => {
+    expect(process.env.DATABASE_URL).not.toBe(originalDatabaseUrl);
     app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
     app.useGlobalFilters(new GlobalExceptionFilter());
@@ -41,7 +48,13 @@ describe('supplier workflow notifications on PostgreSQL', () => {
     portalNotifications = app.get(SupplierPortalNotificationService);
   });
 
-  afterAll(async () => app?.close());
+  afterAll(async () => {
+    try { await app?.close(); }
+    finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
 
   async function fixture() {
     const owner = await prisma.organization.create({ data: { code: randomUUID(), name: 'Supplier notification owner', type: 'INTERNAL' } });

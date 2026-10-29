@@ -1,0 +1,51 @@
+.administrative-reconfiguration {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.administrative-reconfiguration-toolbar .ant-select {
+  min-width: 132px;
+}
+
+.administrative-reconfiguration-actions {
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.administrative-reconfiguration-table {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.administrative-reconfiguration-editor {
+  min-width: 0;
+  border: 1px solid var(--qms-border, rgba(128, 128, 128, 0.2));
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.administrative-reconfiguration-editor .ant-form {
+  margin-top: 12px;
+  max-width: 600px;
+}
+
+@media (max-width: 480px) {
+  .administrative-reconfiguration-editor {
+    padding: 8px;
+  }
+
+  .administrative-reconfiguration-editor .ant-space {
+    width: 100%;
+  }
+
+  .administrative-reconfiguration-editor .ant-btn {
+    max-width: 100%;
+    height: auto;
+    min-height: 32px;
+    white-space: normal;
+  }
+}

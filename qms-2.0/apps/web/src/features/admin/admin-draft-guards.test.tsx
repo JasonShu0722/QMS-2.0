@@ -15,7 +15,7 @@ vi.mock('../imports/read-xlsx', () => ({ readXlsxFile: vi.fn() }));
 const render = (children: ReactNode) => testingRender(<ConfigProvider locale={zhCN} theme={{ token: { motion: false } }}>{children}</ConfigProvider>);
 
 const organization: AdminOrganization = { id: 'org-a', code: 'A', name: 'Organization A', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:users:update', 'account:roles:read', 'account:roles:update', 'account:roles:assign', 'organization:structure:read', 'organization:positions:assign'] };
-const account: AdminUser = { id: 'user-a', username: 'alice', fullName: 'Alice', phone: null, email: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, code: organization.code, name: organization.name }, mfaEnabled: false, createdAt: '', updatedAt: '' };
+const account: AdminUser = { securityVersion: 1, id: 'user-a', username: 'alice', fullName: 'Alice', phone: null, email: null, profileVersion: 1, emailVerifiedAt: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: organization.id, organization: { id: organization.id, code: organization.code, name: organization.name }, mfaEnabled: false, createdAt: '', updatedAt: '' };
 const role: AdminRole = { id: 'role-a', code: 'READER', name: 'Reader Role', organizationId: organization.id, mfaRequired: false, permissions: [] };
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 beforeEach(() => { localStorage.clear(); // rc-component uses one shared test-id in test mode; keep dialog and Select IDs distinct.

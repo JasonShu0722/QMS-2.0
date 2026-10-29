@@ -1,4 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, type OnApplicationBootstrap } from '@nestjs/common';
+import { AdministrativeLifecycleModule, AdministrativeLifecycleRegistry } from './common/security/administrative-lifecycle.registry.js';
+import { AdministrativeReconfigurationController } from './administrative-reconfiguration.controller.js';
+import { AdministrativeProblemReconfigurationController } from './administrative-problem-reconfiguration.controller.js';
+import { AdministrativeProblemReconfigurationService } from './administrative-problem-reconfiguration.service.js';
+import { AdminMutationModule } from './common/security/admin-mutation.service.js';
 import { DatabaseModule } from './database/database.module.js';
 import { AuditLogModule } from './modules/audit-log/audit-log.module.js';
 import { AuditQueryModule } from './modules/audit-log/audit-query.module.js';
@@ -6,6 +11,7 @@ import { PlatformConfigurationModule } from './modules/platform-configuration/pl
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { FileManagementModule } from './modules/file-management/file-management.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
+import { OrganizationModule } from './modules/organization/organization.module.js';
 import { TaskNotificationModule } from './modules/task-notification/task-notification.module.js';
 import { ReportingModule } from './modules/reporting/reporting.module.js';
 import { ProblemIndexModule } from './modules/problem-index/problem-index.module.js';
@@ -44,12 +50,16 @@ import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEig
 import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d-reminder.js';
 
 @Module({
-  providers: [{ provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService, CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, SupplierEightDReminderService],
+  controllers: [AdministrativeReconfigurationController, AdministrativeProblemReconfigurationController],
+  providers: [AdministrativeProblemReconfigurationService, { provide: APPLICATION_OUTBOX_HANDLER, inject: [WorkflowEventHandler, ClosureEventHandler, ProcessEightDReminderService, CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, SupplierEightDReminderService],
     useFactory: (legacy: WorkflowEventHandler, closure: ClosureEventHandler, process: ProcessEightDReminderService, customer: InternalEightDRuntime, newProduct: InternalEightDRuntime, supplier: SupplierEightDReminderService): AtomicOutboxHandler =>
       internalEightDReminderHandler([process, customer.reminders, newProduct.reminders, supplier, closure, legacy]) }],
   imports: [
+    AdministrativeLifecycleModule,
+    AdminMutationModule,
     DatabaseModule,
     IdentityModule,
+    OrganizationModule,
     AuthorizationModule,
     AuditLogModule,
     AuditQueryModule,
@@ -86,4 +96,7 @@ import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d
     SupplierPcnModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements OnApplicationBootstrap {
+  constructor(private readonly administrativeLifecycle: AdministrativeLifecycleRegistry) {}
+  onApplicationBootstrap() { this.administrativeLifecycle.seal(); }
+}

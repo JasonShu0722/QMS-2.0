@@ -24,13 +24,16 @@ import { ClosureInboxController, ClosureNotificationController } from './workflo
 import { ClosureEventHandler } from '../task-notification/closure-event.handler.js';
 import { WorkflowDeadlineExtensionService } from './workflow-deadline-extension.service.js';
 import { WorkflowDeadlineExtensionController } from './workflow-deadline-extension.controller.js';
+import { AdministrativeLifecycleModule } from '../../common/security/administrative-lifecycle.registry.js';
+import { WorkflowAdministrativeInvalidationService } from './workflow-administrative-invalidation.service.js';
 
 @Module({
-  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule, AdminMutationModule],
+  imports: [DatabaseModule, AuditLogModule, ProblemIndexModule, TaskNotificationModule, OrganizationModule, AdminMutationModule, AdministrativeLifecycleModule],
   controllers: [WorkflowClosurePreviewController, WorkflowClosureTemplateController, WorkflowClosureRoundController, ClosureInboxController, ClosureNotificationController, WorkflowController, WorkflowUpgradeController, WorkflowDeadlineExtensionController],
   providers: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosurePreviewService,
     WorkflowClosureRoundService, WorkflowClosureRegistry, WorkflowClosureTemplateService,
     ClosureInboxService, ClosureEventHandler, WorkflowDeadlineExtensionService,
+    WorkflowAdministrativeInvalidationService,
     { provide: WORKFLOW_CLOSURE_ADAPTERS, useValue: [] },
     { provide: WORKFLOW_UPGRADE_ADAPTERS, useValue: [] }],
   exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, ClosureEventHandler, WorkflowDeadlineExtensionService],

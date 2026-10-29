@@ -11,7 +11,7 @@ const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLe
 const render = (children: ReactNode) => testingRender(<ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>);
 
 const organization: AdminOrganization = { id: 'org', name: 'Organization', code: 'O', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:roles:read', 'account:roles:assign', 'organization:structure:read', 'organization:positions:assign'] };
-const user: AdminUser = { id: 'u1', username: 'alice', fullName: null, phone: null, email: null, emailVerifiedAt: null, profileVersion: 1, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: 'org', organization: { id: 'org', code: 'O', name: 'Organization' }, createdAt: '', updatedAt: '' };
+const user: AdminUser = { securityVersion: 1, id: 'u1', username: 'alice', fullName: null, phone: null, email: null, emailVerifiedAt: null, profileVersion: 1, accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organizationId: 'org', organization: { id: 'org', code: 'O', name: 'Organization' }, createdAt: '', updatedAt: '' };
 const position = { id: 'p1', organizationId: 'org', departmentId: 'd1', categoryId: null, code: 'QA', name: 'Quality engineer', status: 'ACTIVE', version: 1 };
 const department = { id: 'd1', organizationId: 'org', parentId: null, code: 'Q', name: 'Quality department', status: 'ACTIVE', version: 1 };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });

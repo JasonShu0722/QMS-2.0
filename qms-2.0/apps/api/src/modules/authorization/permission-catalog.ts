@@ -1,5 +1,10 @@
 export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
-export const PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES = ['organization:read', 'organization:manage', 'audit:read', 'audit:export'];
+export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
+  'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
+];
+export const PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES = [
+  'organization:read', 'organization:manage', 'audit:read', 'audit:export', ...ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES,
+];
 
 export const ADMIN_PERMISSIONS = [
   'configuration:read', 'configuration:manage', 'audit:export',
@@ -133,6 +138,11 @@ export const PERMISSION_CATALOG: Group[] = [
   { key: 'system', name: '系统管理', status: 'active', modules: [
     { key: 'platform-administrator', name: '平台管理员', status: 'active', operations: [operation(PLATFORM_ADMINISTRATOR_PERMISSION, '平台管理员（全部活跃内部组织的适用权限，须显式授予）')] },
     { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },
+    { key: 'administrative-lifecycle', name: '删除与待配置管理', status: 'active', operations: [
+      operation('organization:force-delete', '强制删除组织'),
+      operation('organization:departments:force-delete', '强制删除部门或科室'),
+      operation('organization:reconfigure', '补配组织部门和用户失效关联'),
+    ] },
     { key: 'management-audit', name: '管理审计', status: 'active', operations: [operation('audit:read', '查询管理审计'), operation('audit:export', '导出管理审计')] },
     { key: 'platform-configuration', name: '平台配置', status: 'active', operations: [operation('configuration:read', '查看配置字典和通知规则'), operation('configuration:manage', '维护配置字典和通知规则')] },
     { key: 'outbox-operations', name: '通知运行监控', status: 'active', operations: [operation('outbox:read', '查看失败事件'), operation('outbox:retry', '重试失败事件')] },
@@ -140,6 +150,7 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'users', name: '用户管理', status: 'active', operations: [
       operation('account:users:read', '查看用户'), operation('account:users:create', '创建用户'), operation('account:users:update', '编辑姓名、电话和邮箱'),
       operation('account:users:status', '启用 / 停用'), operation('account:users:transfer', '变更组织 / 账号类型'), operation('account:users:reset', '重置凭证'),
+      operation('account:users:delete', '永久删除用户账号'),
     ] },
     { key: 'roles', name: '角色管理', status: 'active', operations: [
       operation('account:roles:read', '查看角色'), operation('account:roles:create', '创建 / 复制'), operation('account:roles:update', '编辑角色 / 权限'),

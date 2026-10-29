@@ -16,6 +16,7 @@ export type AdminUserActor = AdminActor;
 const USER_SELECT = {
   id: true, username: true, email: true, accountType: true, status: true, mfaEnabled: true,
   fullName: true, phone: true, profileVersion: true, emailVerifiedAt: true,
+  securityVersion: true,
   organizationId: true, createdAt: true, updatedAt: true,
   organization: { select: { id: true, code: true, name: true } },
 } as const;
@@ -28,7 +29,7 @@ export class AdminUserService {
     const organizationId = query.organizationId ?? actor.scopeOrganizationId ?? actor.organizationId;
     await assertAdminAccess(this.prisma, actor, organizationId, 'account:users:read');
     const users = await this.prisma.user.findMany({
-      where: { organizationId,
+      where: { organizationId, deletedAt: null, configurationRequired: false,
         ...(query.status ? { status: query.status } : {}),
         ...(query.accountType ? { accountType: query.accountType } : {}),
         ...(query.search ? { OR: [{ username: { contains: query.search, mode: 'insensitive' } }, { email: { contains: query.search, mode: 'insensitive' } }] } : {}),
@@ -43,7 +44,7 @@ export class AdminUserService {
 
   async detail(actor: AdminUserActor, userId: string, organizationId = actor.scopeOrganizationId ?? actor.organizationId) {
     await assertAdminAccess(this.prisma, actor, organizationId, 'account:users:read');
-    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId }, select: USER_SELECT });
+    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId, deletedAt: null }, select: USER_SELECT });
     if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
     const [summary] = await this.onboarding.summariesForUsers(this.prisma, organizationId, [user.id]);
     return { ...user, ...(summary ? { positions: summary.positions, totalPositions: summary.totalPositions } : {}) };
@@ -53,7 +54,7 @@ export class AdminUserService {
     return this.prisma.$transaction(async (transaction) => {
       await assertAdminAccess(transaction, actor, organizationId, 'account:users:read');
       if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
-      const user = await transaction.user.findFirst({ where: { id: userId, organizationId } });
+      const user = await transaction.user.findFirst({ where: { id: userId, organizationId, deletedAt: null } });
       if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
       const policy = await mfaPolicy(transaction, userId);
       return { userId, required: policy.required, bound: user.mfaEnabled, override: user.mfaRequirementOverride, roleRequired: policy.roleRequired, securityVersion: user.securityVersion, selfSessionRevoked: false };
@@ -78,7 +79,7 @@ export class AdminUserService {
     }, async (transaction) => {
       if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
       await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
-      if (!(await transaction.user.findFirst({ where: { id: userId, organizationId } }))) adminError('ADMIN_USER_NOT_FOUND', 404);
+      if (!(await transaction.user.findFirst({ where: { id: userId, organizationId, deletedAt: null } }))) adminError('ADMIN_USER_NOT_FOUND', 404);
       await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
     });
   }
@@ -109,7 +110,7 @@ export class AdminUserService {
     const additionalAccess = actor.id !== userId && dto.organizationId && dto.organizationId !== organizationId ? [{ organizationId: dto.organizationId, permission: 'account:users:transfer' }] : [];
     await this.mutations.run({ actor, organizationId, key, action: 'USER_UPDATED', payload: { userId, dto }, permission: requiredPermissions, additionalAccess, traceId, duplicateCode: 'ADMIN_USER_DUPLICATE' }, async (transaction) => {
       await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
-      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId }, select: { id: true, organizationId: true, accountType: true, fullName: true, phone: true, email: true, profileVersion: true } });
+      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId, deletedAt: null }, select: { id: true, organizationId: true, accountType: true, fullName: true, phone: true, email: true, profileVersion: true } });
       if (!existing) adminError('ADMIN_USER_NOT_FOUND', 404);
       if (profileSubmitted && (!Number.isInteger(dto.expectedProfileVersion) || dto.expectedProfileVersion! < 1 || dto.expectedProfileVersion! > 2147483647)) throw new BadRequestException('Invalid profile version');
       if (profileSubmitted && (existing.profileVersion !== dto.expectedProfileVersion || existing.profileVersion === 2147483647)) adminError('CONCURRENCY_CONFLICT', 409);
@@ -162,7 +163,7 @@ export class AdminUserService {
     return this.prisma.$transaction(async (transaction) => {
       await assertAdminAccess(transaction, actor, organizationId, permissions);
       if (targetOrganizationId !== organizationId) await assertAdminAccess(transaction, actor, targetOrganizationId, 'account:users:transfer');
-      const user = await transaction.user.findFirst({ where: { id: userId, organizationId: targetOrganizationId }, select: USER_SELECT });
+      const user = await transaction.user.findFirst({ where: { id: userId, organizationId: targetOrganizationId, deletedAt: null }, select: USER_SELECT });
       if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
       return user;
     });
@@ -170,12 +171,15 @@ export class AdminUserService {
 
   resetPassword(actor: AdminUserActor, userId: string, temporaryCode: string, organizationId: string, traceId: string, key?: string) {
     return this.mutations.run({ actor, organizationId, key, action: 'PASSWORD_RESET_ISSUED', payload: { userId, temporaryCode }, permission: 'account:users:reset', traceId }, async (transaction) => {
-      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE' }, select: { id: true } });
+      const existing = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE', deletedAt: null }, select: { id: true } });
       if (!existing) adminError('ADMIN_USER_NOT_FOUND', 404);
       await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
       const result = await this.resets.issue(transaction, userId, temporaryCode);
       await this.record(transaction, actor, organizationId, userId, 'PASSWORD_RESET_ISSUED', traceId);
       return result;
+    }, async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      if (!await transaction.user.findFirst({ where: { id: userId, organizationId, deletedAt: null }, select: { id: true } })) adminError('ADMIN_USER_NOT_FOUND', 404);
     });
   }
 
@@ -202,7 +206,7 @@ export class AdminUserService {
   async assertTemporaryPasswordTarget(transaction: AdminTransaction, actor: AdminActor, userId: string, organizationId: string) {
     await assertAdminAccess(transaction, actor, organizationId, 'account:users:reset');
     await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
-    const user = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE' } });
+    const user = await transaction.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE', deletedAt: null } });
     if (!user) adminError('ADMIN_USER_NOT_FOUND', 404);
     await this.assertTarget(transaction, actor, userId, ['account:users:reset']);
   }

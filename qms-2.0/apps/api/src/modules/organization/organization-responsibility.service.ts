@@ -5,6 +5,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { AdministrativeIdentityReadModel } from '../identity/administrative-identity-read-model.js';
 import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import type {
   CreateManagementBindingDto, CreateMinisterScopeDto, ManagementBindingDto,
@@ -19,16 +20,56 @@ const scopeColumns = Prisma.sql`id, organization_id AS "organizationId", departm
   minister_assignment_id AS "ministerAssignmentId", valid_from AS "validFrom", valid_to AS "validTo", status, version,
   created_by AS "createdBy", updated_by AS "updatedBy", created_at AS "createdAt", updated_at AS "updatedAt"`;
 const assignmentInclude = {
-  user: { select: { organizationId: true, status: true, accountType: true, username: true, fullName: true } },
   position: { select: { organizationId: true, departmentId: true, status: true, name: true, version: true, department: { select: { status: true } } } },
 } as const;
-type Assignment = Prisma.UserPositionGetPayload<{ include: typeof assignmentInclude }>;
+type Assignment = Pick<Prisma.UserPositionGetPayload<{ include: typeof assignmentInclude }>,
+  'id' | 'userId' | 'positionId' | 'startedAt' | 'endedAt' | 'position'> & { user: { username: string; fullName: string | null } };
 
 @Injectable()
 export class OrganizationResponsibilityService {
   private readonly userLockBudgets = new WeakMap<AdminTransaction, ReadonlySet<string>>();
 
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService,
+    private readonly identity: AdministrativeIdentityReadModel = new AdministrativeIdentityReadModel()) {}
+
+  async assertWorkflowOrganizationActive(tx: AdminTransaction, organizationId: string, lock = false): Promise<void> {
+    if (lock) await this.lockOrganization(tx, organizationId);
+    const organization = await this.activeOrganization(tx, organizationId);
+    if (organization.deletedAt || organization.configurationRequired) adminError('ORGANIZATION_DISABLED', 403);
+  }
+
+  // Reference validity only; the owning workflow must authorize its actor and the replacement duty.
+  async workflowCurrentAssignment(tx: AdminTransaction, organizationId: string,
+    reference: { assignmentId?: string; userId?: string; departmentId?: string }, lock = false): Promise<{ assignmentId: string; userId: string; departmentId: string } | null> {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!!reference.assignmentId === !!reference.userId
+      || [organizationId, reference.assignmentId, reference.userId, reference.departmentId].some(value => value !== undefined && !uuid.test(value))) {
+      adminError('STRUCTURE_REFERENCE_INVALID', 400);
+    }
+    type Current = { assignmentId: string; userId: string; departmentId: string };
+    const select = (current?: Current) => Prisma.sql`WITH identity_users AS (${this.identity.workflowEligibleUsers(organizationId)})
+      SELECT a.id AS "assignmentId", u.id AS "userId", d.id AS "departmentId"
+      FROM user_positions a JOIN identity_users u ON u.id = a.user_id
+      JOIN positions p ON p.id = a.position_id AND p.organization_id = a.organization_id
+      JOIN departments d ON d.id = p.department_id AND d.organization_id = a.organization_id
+      JOIN organizations o ON o.id = a.organization_id
+      WHERE a.organization_id = ${organizationId}::uuid
+      ${current ? Prisma.sql`AND a.id = ${current.assignmentId}::uuid AND a.user_id = ${current.userId}::uuid` : reference.assignmentId
+        ? Prisma.sql`AND a.id = ${reference.assignmentId}::uuid` : Prisma.sql`AND a.user_id = ${reference.userId}::uuid`}
+      ${reference.departmentId ? Prisma.sql`AND d.id = ${reference.departmentId}::uuid` : Prisma.empty}
+      AND a.started_at <= clock_timestamp() AND (a.ended_at IS NULL OR a.ended_at > clock_timestamp())
+      AND o.type = 'INTERNAL'
+      AND p.status = 'ACTIVE' AND d.status = 'ACTIVE' AND o.status = 'ACTIVE'
+      AND p.deleted_at IS NULL AND d.deleted_at IS NULL AND o.deleted_at IS NULL
+      AND NOT p.configuration_required AND NOT d.configuration_required AND NOT o.configuration_required
+      ORDER BY a.id LIMIT 1`;
+    const rows = await tx.$queryRaw<Current[]>(select());
+    if (!rows[0] || !lock) return rows[0] ?? null;
+    await this.lockUsers(tx, organizationId, [rows[0].userId]);
+    if (!(await tx.$queryRaw<Current[]>(Prisma.sql`${select(rows[0])} FOR SHARE OF p, d, a, o`))[0]) return null;
+    // Lock waits can cross an appointment's end time. Recheck only the locked identity, never select a new one.
+    return (await tx.$queryRaw<Current[]>(select(rows[0])))[0] ?? null;
+  }
 
   // Minimal directory projection for an already-authorized workflow transaction.
   async workflowDepartmentOptions(tx: AdminTransaction, organizationId: string, search: string | undefined, take: number, skip: number, sectionDepartmentId?: string) {
@@ -46,15 +87,16 @@ export class OrganizationResponsibilityService {
     const pattern = `%${query.search?.replace(/[\\%_]/g, '\\$&') ?? ''}%`;
     type Item = { assignmentId: string; userId: string; username: string; fullName: string | null; positionName: string; departmentId: string; departmentName: string };
     const [page] = await tx.$queryRaw<{ items: Item[]; total: number }[]>(Prisma.sql`
-      WITH eligible AS MATERIALIZED (
+      WITH identity_users AS (${this.identity.workflowEligibleUsers(organizationId)}), eligible AS MATERIALIZED (
         SELECT a.id AS "assignmentId", u.id AS "userId", u.username, u.full_name AS "fullName",
           pos.name AS "positionName", dept.id AS "departmentId", dept.name AS "departmentName"
-        FROM user_positions a JOIN users u ON u.id = a.user_id AND u.organization_id = a.organization_id
+        FROM user_positions a JOIN identity_users u ON u.id = a.user_id
         JOIN positions pos ON pos.id = a.position_id AND pos.organization_id = a.organization_id
         JOIN departments dept ON dept.id = pos.department_id AND dept.organization_id = a.organization_id
         WHERE a.organization_id = ${organizationId}::uuid AND a.started_at <= CURRENT_TIMESTAMP
-          AND (a.ended_at IS NULL OR a.ended_at > CURRENT_TIMESTAMP) AND u.status = 'ACTIVE' AND u.account_type = 'INTERNAL'
+          AND (a.ended_at IS NULL OR a.ended_at > CURRENT_TIMESTAMP)
           AND pos.status = 'ACTIVE' AND dept.status = 'ACTIVE'
+          AND pos.deleted_at IS NULL AND dept.deleted_at IS NULL AND NOT pos.configuration_required AND NOT dept.configuration_required
           ${query.departmentId ? Prisma.sql`AND dept.id = ${query.departmentId}::uuid` : Prisma.empty}
           ${query.search ? Prisma.sql`AND (u.username ILIKE ${pattern} OR u.full_name ILIKE ${pattern} OR pos.name ILIKE ${pattern})` : Prisma.empty}
           AND ${Prisma.join(requiredPermissions.map(permission => featurePredicate(Prisma.sql`u.id`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`${permission}`)), ' AND ')}
@@ -186,22 +228,15 @@ export class OrganizationResponsibilityService {
   async responsibilityAssignments(organizationId: string, query: ResponsibilityAssignmentsQueryDto): Promise<ResponsibilityAssignmentsDto> {
     await this.activeOrganization(this.prisma, organizationId);
     const at = new Date();
-    const where: Prisma.UserPositionWhereInput = {
-      organizationId, ...this.effectiveAssignmentWhere(organizationId, at),
-      position: { organizationId, departmentId: query.departmentId, status: 'ACTIVE', department: { status: 'ACTIVE' } },
-      ...(query.search ? { AND: [
-        { OR: [
-          { user: { username: { contains: query.search, mode: 'insensitive' } } },
-          { user: { fullName: { contains: query.search, mode: 'insensitive' } } },
-          { position: { name: { contains: query.search, mode: 'insensitive' } } },
-        ] },
-      ] } : {}),
-    };
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.userPosition.findMany({ where, include: assignmentInclude, orderBy: [{ positionId: 'asc' }, { id: 'asc' }], take: query.limit ?? 100, skip: query.offset ?? 0 }),
-      this.prisma.userPosition.count({ where }),
+    const pattern = `%${query.search?.replace(/[\\%_]/g, '\\$&') ?? ''}%`;
+    const select = Prisma.sql`${this.effectiveAssignments(organizationId, at)}
+      ${query.departmentId ? Prisma.sql`AND p.department_id = ${query.departmentId}::uuid` : Prisma.empty}
+      ${query.search ? Prisma.sql`AND (u.username ILIKE ${pattern} OR u.full_name ILIKE ${pattern} OR p.name ILIKE ${pattern})` : Prisma.empty}`;
+    const [rows, counts] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<Assignment[]>(Prisma.sql`${select} ORDER BY a.position_id, a.id LIMIT ${query.limit ?? 100} OFFSET ${query.offset ?? 0}`),
+      this.prisma.$queryRaw<{ total: number }[]>(Prisma.sql`WITH eligible AS (${select}) SELECT count(*)::int AS total FROM eligible`),
     ]);
-    return { items: rows.map((row) => this.assignmentResult(row)), total };
+    return { items: rows.map((row) => this.assignmentResult(row)), total: counts[0]!.total };
   }
 
   async resolveManagementResponsibilities(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at = new Date(), additionalUserIds: string[] = [], fenceUserLocks = false): Promise<ManagementResponsibilitiesDto> {
@@ -218,14 +253,12 @@ export class OrganizationResponsibilityService {
     const { organizationId, sectionDepartmentId } = management;
     const validSources = new Set<string>();
     for (const source of management.responsibilities) {
-      const assignment = await tx.userPosition.findFirst({ where: { id: source.assignmentId, organizationId,
-        userId: source.userId, positionId: source.positionId, ...this.effectiveAssignmentWhere(organizationId, at),
-        position: { organizationId, departmentId: source.departmentId, status: 'ACTIVE', department: { status: 'ACTIVE' } } }, select: { id: true } });
+      const [assignment] = await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, at)}
+        AND a.id = ${source.assignmentId}::uuid AND a.user_id = ${source.userId}::uuid
+        AND a.position_id = ${source.positionId}::uuid AND p.department_id = ${source.departmentId}::uuid`);
       if (!assignment) continue;
-      if (source.responsibility === 'SECTION_MANAGER' && await tx.userPosition.count({ where: {
-        organizationId, positionId: source.positionId, ...this.effectiveAssignmentWhere(organizationId, at),
-        position: { status: 'ACTIVE', department: { status: 'ACTIVE' } },
-      } }) !== 1) continue;
+      if (source.responsibility === 'SECTION_MANAGER' && (await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, at)}
+        AND a.position_id = ${source.positionId}::uuid LIMIT 2`)).length !== 1) continue;
       const [binding] = await tx.$queryRaw<{ id: string }[]>`SELECT b.id FROM department_management_bindings b
         WHERE b.id = ${source.bindingId}::uuid AND b.organization_id = ${organizationId}::uuid AND b.status = 'ACTIVE'
           AND b.version = ${source.bindingVersion} AND b.position_id = ${source.positionId}::uuid
@@ -288,12 +321,9 @@ export class OrganizationResponsibilityService {
         result.issues.push({ responsibility, code: 'STRUCTURE_INACTIVE' });
         continue;
       }
-      const assignments = await tx.userPosition.findMany({
-        where: { organizationId, positionId: binding.positionId, ...(scope ? { id: scope.ministerAssignmentId } : {}),
-          ...this.effectiveAssignmentWhere(organizationId, at),
-          position: { organizationId, departmentId: binding.departmentId, status: 'ACTIVE', department: { status: 'ACTIVE' } },
-        }, include: assignmentInclude, orderBy: { id: 'asc' },
-      });
+      const assignments = await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, at)}
+        AND a.position_id = ${binding.positionId}::uuid AND p.department_id = ${binding.departmentId}::uuid
+        ${scope ? Prisma.sql`AND a.id = ${scope.ministerAssignmentId}::uuid` : Prisma.empty} ORDER BY a.id`);
       if (assignments.length !== 1) {
         result.issues.push({ responsibility, code: assignments.length ? 'ASSIGNMENT_AMBIGUOUS' : 'ASSIGNMENT_MISSING' });
         continue;
@@ -352,7 +382,7 @@ export class OrganizationResponsibilityService {
     const userIds = [...new Set(ids)].sort();
     const budget = this.userLockBudgets.get(tx);
     if (budget && userIds.some(id => !budget.has(id))) adminError('CONCURRENCY_CONFLICT', 409);
-    return userIds.length ? tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(userIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`) : [];
+    return this.identity.lockResponsibilityUsers(tx, organizationId, userIds);
   }
 
   private async lockAssignmentRows(tx: AdminTransaction, organizationId: string, rows: { id: string; userId: string }[], write = true) {
@@ -368,7 +398,9 @@ export class OrganizationResponsibilityService {
     await this.lockAssignmentRows(tx, organizationId, [before]);
     const assignment = await tx.userPosition.findFirst({ where: { organizationId, id }, include: assignmentInclude });
     if (!assignment) adminError('STRUCTURE_REFERENCE_INVALID', 409);
-    return assignment;
+    const user = await this.identity.responsibilityUser(tx, organizationId, assignment.userId);
+    if (!user) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+    return { ...assignment, user };
   }
 
   private async refreshAccess(tx: AdminTransaction, actor: AdminActor, organizationId: string) {
@@ -385,8 +417,9 @@ export class OrganizationResponsibilityService {
     if (!await this.isDescendant(tx, organizationId, departmentId, sectionDepartmentId)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     const bindings = await this.bindings(tx, organizationId, Prisma.sql`department_id = ${departmentId}::uuid AND responsibility = 'MINISTER' AND status = 'ACTIVE'`);
     if (bindings.length !== 1 || bindings[0]!.positionId !== assignment.positionId || assignment.position.departmentId !== departmentId
-      || assignment.position.organizationId !== organizationId || assignment.position.status !== 'ACTIVE' || assignment.position.department.status !== 'ACTIVE'
-      || assignment.user.organizationId !== organizationId || assignment.user.status !== 'ACTIVE' || assignment.user.accountType !== 'INTERNAL') adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      || assignment.position.organizationId !== organizationId || assignment.position.status !== 'ACTIVE' || assignment.position.department.status !== 'ACTIVE') adminError('STRUCTURE_REFERENCE_INVALID', 409);
+    if (!(await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM (${this.identity.workflowEligibleUsers(organizationId)}) identity_users
+      WHERE id = ${assignment.userId}::uuid`))[0]) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     return bindings[0]!;
   }
 
@@ -409,10 +442,20 @@ export class OrganizationResponsibilityService {
       || from < assignment.startedAt || (assignment.endedAt !== null && (to === null || to > assignment.endedAt))) adminError('STRUCTURE_REFERENCE_INVALID', 409);
   }
 
-  private effectiveAssignmentWhere(organizationId: string, at: Date): Prisma.UserPositionWhereInput {
-    return { startedAt: { lte: at }, OR: [{ endedAt: null }, { endedAt: { gt: at } }],
-      user: { organizationId, status: 'ACTIVE', accountType: 'INTERNAL' }, organization: { status: 'ACTIVE' },
-    };
+  private effectiveAssignments(organizationId: string, at: Date): Prisma.Sql {
+    return Prisma.sql`WITH identity_users AS (${this.identity.workflowEligibleUsers(organizationId)})
+      SELECT a.id, a.user_id AS "userId", a.position_id AS "positionId", a.started_at AS "startedAt", a.ended_at AS "endedAt",
+        jsonb_build_object('username', u.username, 'fullName', u.full_name) AS "user",
+        jsonb_build_object('organizationId', p.organization_id, 'departmentId', p.department_id, 'status', p.status,
+          'name', p.name, 'version', p.version, 'department', jsonb_build_object('status', d.status)) AS position
+      FROM user_positions a JOIN identity_users u ON u.id = a.user_id
+      JOIN positions p ON p.id = a.position_id AND p.organization_id = a.organization_id
+      JOIN departments d ON d.id = p.department_id AND d.organization_id = a.organization_id
+      JOIN organizations o ON o.id = a.organization_id
+      WHERE a.organization_id = ${organizationId}::uuid AND a.started_at <= ${at} AND (a.ended_at IS NULL OR a.ended_at > ${at})
+        AND p.status = 'ACTIVE' AND d.status = 'ACTIVE' AND o.status = 'ACTIVE' AND o.type = 'INTERNAL'
+        AND p.deleted_at IS NULL AND d.deleted_at IS NULL AND o.deleted_at IS NULL
+        AND NOT p.configuration_required AND NOT d.configuration_required AND NOT o.configuration_required`;
   }
 
   private assignmentResult(row: Assignment): ResponsibilityAssignmentDto {
