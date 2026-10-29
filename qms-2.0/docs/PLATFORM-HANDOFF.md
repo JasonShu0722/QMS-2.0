@@ -1,5 +1,14 @@
 # 平台与供应商质量接口交接
 
+## REQ-0031 运行发布确认（2026-10-29）
+
+[PR #81](https://github.com/JasonShu0722/QMS-2.0/pull/81) / V0.0.35含fix1～fix8已部署`7fc80d407a65be4b6a10b683360c36b440812227`。最终PR/main各16项CI成功、精确head代码审查无发现；deploy40837564917实际成功，迁移前加密快照→4份迁移/134总链→同SHA API/Worker/Web及公网新契约/index-DBeXnAmn.js/4匿名401机器核验PASS。详见[实施计划第15节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)。
+
+已发布的管理context、强删影响确认/幂等、待配置补配、历史保留及MFA区分沿本文契约。迁移只登记四项生命周期权限，不自动授予账号角色；已有效platform marker获得相应运行投影是既定规则，普通同名admin不提升。生产精确来源初始化或实际删除不在本次代码部署内。
+
+下方候选、失败、未提交或未部署记录保留其历史范围，当前运行事实以上述发布确认为准。
+
+
 ## REQ-0031 管理生命周期接续（2026-10-29，未发布候选）
 
 以[REQ-0031计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)为当前开发事实；旧受限空组织删除和REQ0030发布记录保留历史边界。本轮新命令由真实平台管理员在存续home授权，组织/部门预览Token绑定actor/scope与当前引用版本；用户删除使用securityVersion，失效原scope不会阻断独立生命周期管理。四项新权限仅登记，不在迁移中给既有admin账号自动赋权。

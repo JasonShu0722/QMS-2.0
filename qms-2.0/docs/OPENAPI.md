@@ -1,5 +1,14 @@
 # OpenAPI 契约
 
+## REQ-0031 运行发布确认（2026-10-29）
+
+[PR #81](https://github.com/JasonShu0722/QMS-2.0/pull/81) / V0.0.35含fix1～fix8已部署`7fc80d407a65be4b6a10b683360c36b440812227`。最终PR/main各16项CI成功、精确head代码审查无发现；deploy40837564917实际成功，迁移前加密快照→4份迁移/134总链→同SHA API/Worker/Web及公网新契约/index-DBeXnAmn.js/4匿名401机器核验PASS。详见[实施计划第15节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)。
+
+公开OpenAPI路径由473增至484，包含组织/部门强删GET/POST、用户DELETE、管理context、待配置及四域问题责任恢复。公网核对仅匿名读取401及契约存在，未发送实际写请求；前端仍以Swagger生成契约为唯一来源，发布归档未改运行代码或生成类型。
+
+下方候选、失败、未提交或未部署记录保留其历史范围，当前运行事实以上述发布确认为准。
+
+
 ## REQ-0031 生命周期契约候选（2026-10-29，未发布）
 
 本轮新增真实管理身份`GET /api/v1/admin/organizations/context`；组织/部门的`GET/POST /api/v1/organizations/:organizationId/force-delete`与`.../departments/:departmentId/force-delete`先提供影响摘要和服务端`previewToken`，确认提交携带`expectedVersion/confirmed/previewToken`，引用版本变化须重新读取并明确确认。用户`DELETE /api/v1/admin/users/:userId?organizationId=...`使用真实`expectedSecurityVersion`，不制造默认版本。均沿真实session、CSRF、幂等及服务端平台身份复验，不等同普通角色名称。

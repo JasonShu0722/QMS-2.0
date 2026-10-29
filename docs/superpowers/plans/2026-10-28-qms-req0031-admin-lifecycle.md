@@ -6,14 +6,14 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 授权 | 已获REQ-0031正式开发及常规提交/PR授权；负责人于2026-10-29早间取消夜间heartbeat，req0031已由管理工具确认删除，不再自动续作。当前明确要求核对Web第1分片中断、CI耗时及审查问题，继续同PR集中返修；合并部署另核授权，不生产赋权、实际删除、开启绑定或回填关闭需求 |
+| 授权 | 负责人2026-10-29最新要求“整体看下，没问题的话继续合并部署”，本次单次授权覆盖PR81整体复核、合并及部署。夜间heartbeat仍已删除，不恢复连续交付；不生产赋权、实际删除/补配、开启绑定或回填关闭需求 |
 | 需求 | REQ-0031 / reczz28Sq8nD4VUU，user回读rev315、P0/开发中；名称/背景/效果/方案/子任务/验收六字段与提交快照逐项一致，正文历史“仅策划”段由当前直接指令覆盖，不擅改表 |
-| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle / PR #81已推b029dae；fix8同批接续真实MFA补配安全发现与Web8可见性失败，不另建非活动checkout或改写历史 |
-| 版本 | V0.0.35 / PR #81 / Issue #80；fix7已推b029dae，Web1真实CI成功；该新head又返回P1 4409212130（待配置用户补配复用永久删除清MFA）及Web8候选范围测试失败。当前V0.0.35-fix8集中修复，不把b83645c上一轮无发现当新head审查结果 |
+| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；PR最终审查head c61b426，squash/main/实际运行7fc80d407a65be4b6a10b683360c36b440812227；合并树与审查树一致。归档分支codex/req0031-release-records仅保存本地文档，不为归档额外触发发布；原功能分支保留 |
+| 版本 | V0.0.35含fix1～fix8 / PR #81已合并部署，Issue #80/REQ-0031保持开放；不把代码及机器核验当生产配置/实际删除或人工验收 |
 | 目标 | 删除当前有效实体而不抹除历史；当前引用解除/待配置与真实补配可达；显式平台管理员身份、目标组织能力和所有管理入口一致，切组织不换actor、不跨scope重放 |
-| 停止边界 | 满足真实验证、独立审查及精确head CI后到PR；不自动合并发布，生产身份来源只读取证，所需真正赋权由负责人另授权 |
+| 停止边界 | 本次授权的合并部署及机器核验已完成；停止在真实平台身份/业务配置核对和人工验收，不继续生产赋权、真实组织/部门/用户删除/补配、关闭回填或其他开发范围 |
 | 证据 | Git外admin-governance-implementation；一次性PG55478/存储59078/扫描59378/邮件58178，禁止55440；不清原库/上传，不prune |
-| 当前接续 | b029dae / CI40826739866已结束，Web8单条可见性失败连带foundation，其余14项成功；新P1 4409212130为restore误用永久删除清MFA。fix8两项已最小修复、各自SPEC→独立QUALITY通过。父新134迁移专库5完整PG/App/HTTP文件80项、5完整API单元46项通过，984API输入RAW不变；Web父2完整文件76项通过、528输入冻结，原CI23文件284项完整组合经527未改输入HEAD内容桥验证。原超时/复用库污染/邻接可见性FAIL全部保留，不伪称首次全绿。构建/类型/契约通过，收尾治理并同PR推送，新head另验；不合并发布 |
+| 当前接续 | 最新PR CI40830955074与main CI40835855614均精确16项全成功，canonical审查c61b426 completed/无发现/无未解决项；独立整体Raman质量复核无P1/P2。部署40837564917成功，前置加密快照→4迁移/134总链→同SHA API/Worker/Web及公网新index-DBeXnAmn.js/新管理契约/4匿名401机器核验PASS。详见第15节；未代办生产业务操作或人工验收，原失败保留 |
 
 ## 1. 设计与最小架构
 
@@ -278,3 +278,14 @@ Halley只改`customer-ledger-candidate-scope.test.tsx`：原14个case及所有�
 worker邻接三文件86PASS/2可见性FAIL原样保留；父不并行测试时同candidate15+原page61两个完整文件76项全部通过、exit0/零未捕获异常、528Web/contracts/workspace RAW前后相同，未改原page文件。原CI23文件的22个完整成功结果通过527个未改Web/contracts/config的精确b029dae内容比对（LF桥另记，非历史RAW伪等价）复用，失败候选完整文件由父15项替换，23唯一文件284项组合通过、原14case全保留；不是一次全分片全绿，不拼同文件部分case，原cloud FAIL不抹除。
 
 Web类型/构建退出0，原bundle体积警告保留。最终治理/文档及新headCI状态以Git外收尾和PR回读为准；不为汇报状态另推提交。仍需精确新head全CI和canonical代码审查，不能用旧已解决thread或旧head成功替代，也没有合并/发布/生产操作/需求关闭授权。
+
+## 15. V0.0.35 发布核验（2026-10-29，含fix1～fix8）
+
+负责人最新单次授权覆盖整体检查后合并部署。父重新读取PR、全部16个job、canonical代码审查摘要、合并条件及公开旧版本，独立Raman复核最终删除—失效—撤审—补配—普通启用/MFA整合链无可复现P1/P2；不是全仓逐行或独立安全扫描。PR #81最终head为`c61b42690b96fd59470f7d3fcb9fa896a3cdc9ae`，通过expected_head_sha保护的squash合并为`7fc80d407a65be4b6a10b683360c36b440812227`，回读merged=true且两树完全相同。
+
+- PR CI40830955074、main CI40835855614 / attempt1均完整16项success，8Web、4真实集成、API单元、checks、scope和foundation没有skipped/cancelled替代通过。部署40837564917 / attempt1 / job123325837323实际成功；日志明确源run40835855614、attempt1、HEAD_SHA7fc80d4及Full validation scope，两个校验/SSH步骤未跳过。
+- 2026-10-29T07:57:30.883Z先输出`Pre-migration encrypted database snapshot verified: 7fc80d407a65be4b6a10b683360c36b440812227`，再于07:57:34Z应用四份迁移：administrative_lifecycle、administrative_identity_history、administrative_configuration_links、administrative_reference_error_contract；134总迁移链全部成功。该marker为源码SHA，非dump内容哈希；备份实际是本机加密dump往返/cmp及pg_restore列表校验，不是异地灾备或完整恢复演练。
+- 最终compose显示API/Worker共用`qms2-foundation-api:7fc80d4完整SHA`，Web使用对应`qms2-foundation-web:7fc80d4完整SHA`，均Up，API healthy。deploy.sh在成功前强制读取当前Worker StartedAt对应日志中的QMS_WORKER_READY并再次核状态；Actions未直接展示该stdout，不声称已单独拿到Worker原始日志。07:57:48.440Z输出同SHA Deployment successful。
+- 独立公网https://qms.bigshuaibee.cn的/login、/api/v1/openapi.json及新主JS均200；主资源由index-o8yAXJMx.js变为index-DBeXnAmn.js，1134504bytes、SHA256为37b1441d9228326e14b9dc1ccf7d70e87e3900c86035f668d052ca412fb5e26a。公开paths473→484，新组织/部门强删GET/POST、用户DELETE、管理身份context、待配置/四域补配契约存在；四个匿名管理读取由404变401，未发送生产业务写请求。
+
+Git外`req0031-release-20261029/release-verification.json`逐项断言上述run/attempt/SHA、快照顺序、四迁移、同版本运行和公网结果为PASS，原日志保留。本地文档归档与生产SHA分开，归档提交不额外推送触发发布。当前代码及机器部署已完成，但生产管理员有效platform marker/任职、真实操作与用户人工验收未代办；不能据用户名admin假定平台身份，也不自动授予权限。Issue #80/REQ继续开放，不回填Base或进入新开发范围，负责人现可在浏览器验证管理页和实际身份范围；真实删除由负责人自行确认办理。
