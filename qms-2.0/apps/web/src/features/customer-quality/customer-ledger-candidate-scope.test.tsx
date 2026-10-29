@@ -113,6 +113,35 @@ it('uses saved-stage candidates until the raw component changes, then accepts MA
   expect(JSON.parse(String(writes()[0][1]?.body))).toMatchObject({ fields: { componentCode: 'B' }, qualityEngineerAssignmentId: 'cqe' });
 });
 
+it('shows the invalid draft warning when scoped replies settle during modal appearance', async () => {
+  const a = deferred<components['schemas']['CustomerLedgerCandidatesDto']>();
+  const b = deferred<components['schemas']['CustomerLedgerCandidatesDto']>();
+  readCandidates.mockImplementation(code => code === 'A' ? a.promise : b.promise);
+  editor();
+  const code = screen.getByLabelText('组件号');
+  const engineer = screen.getByLabelText('实际跟进质量工程师');
+  fireEvent.change(engineer, { target: { value: 'cqe' } });
+  fireEvent.change(code, { target: { value: 'A' } });
+  fireEvent.change(code, { target: { value: 'B' } });
+  await act(async () => {
+    b.resolve({ items: [project] });
+    await b.promise;
+    a.resolve({ items: [cqe] });
+  });
+  const warning = screen.getByText('草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。');
+  expect(warning.closest('[role="alert"]')).toHaveAttribute('data-show', 'true');
+  await waitFor(() => expect(screen.getByText('草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。')).toBeVisible());
+  expect(readCandidates).toHaveBeenCalledTimes(2);
+  expect(readCandidates.mock.calls[0][1]?.aborted).toBe(true);
+  expect(code).toHaveValue('B');
+  expect(engineer).toHaveValue('cqe');
+  expect(within(engineer).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
+  expect(within(engineer).getByRole('option', { name: '项目质量' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '登记' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '登记' }));
+  expect(writes()).toHaveLength(0);
+});
+
 it('aborts A, keeps the code input usable, and never lets late A overwrite B or send an invalid draft target', async () => {
   const a = deferred<components['schemas']['CustomerLedgerCandidatesDto']>();
   const b = deferred<components['schemas']['CustomerLedgerCandidatesDto']>();
@@ -130,7 +159,8 @@ it('aborts A, keeps the code input usable, and never lets late A overwrite B or 
   await act(async () => { a.resolve({ items: [cqe] }); });
   expect(screen.getByRole('textbox', { name: '组件号' })).toHaveValue('B');
   expect(select()).toHaveValue('cqe');
-  expect(screen.getByText('草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。')).toBeVisible();
+  // Scoped replies can settle before the containing Modal finishes its appear motion.
+  await waitFor(() => expect(screen.getByText('草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。')).toBeVisible());
   expect(screen.getByRole('button', { name: '登记' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '登记' }));
   expect(writes()).toHaveLength(0);

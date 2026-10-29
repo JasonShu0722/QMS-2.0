@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## PR #81 fix8：用户补配MFA与候选提示时序（2026-10-29，未发布）
+
+b029dae / CI40826739866的Web1已成功，Web8一条候选提示立即可见性断言失败连带foundation，其余14项成功。新head审查另发现真实P1 4409212130：用户补配误调用永久删除的因子清理，即便正常旧密码仍在也会要求新MFA绑定。fix8将永久删除与存续补配的服务器清理目的明确分离；真实组织/部门pending→restore→普通enable→现有MFA链先RED后修复，不能凭旧结构删除测试证明补配安全。
+
+Web受控快速A/B回执两次复现弹窗仍appear-prepare/opacity0时立即断言失败；警告自身data-show=true而非leave，修复保原14条业务断言，仅等待真实可见条件并新增时序回归，无超时/动效/生产editor变更。原云端无祖先快照，不能声称已直接采到云端隐藏父节点。完整文件、原失败和最新双审/父验证见[计划第14节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)及Git外pr81-review-fix8，不据部分GREEN提前放行。
+
+父冻结接续结果：新134迁移一次性库五完整PG/App/HTTP文件80项、五完整API单元46项通过，984API输入RAW不变；Web父candidate/page两完整文件76项通过、528输入冻结，原CI23唯一文件284项组合经527未改输入HEAD内容桥核对。原复用库超时/第一页100被旧fixture占满失败及worker邻接页面可见性失败全部保留，不改预算/断言或删数据。两项各自SPEC后独立QUALITY、API/Web构建/类型与契约检查通过，新headCI/远端复审另验，仍非生产或人工验收。
+
 ## PR #81 fix7：CI异步清理与精确审查状态（2026-10-29，未发布）
 
 精确b83645c的CI40821656166中，其余14项成功，Web第1分片失败连带foundation聚合失败；25个实际完整文件291断言虽全过，环境拆除后仍有12次`window is not defined`未捕获异常，退出1。原artifact哈希与Actions一致，JSON的success=true不代表该进程成功，最终证据必须同时看退出码与异步异常，原失败保留。

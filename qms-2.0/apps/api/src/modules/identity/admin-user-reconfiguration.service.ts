@@ -51,8 +51,7 @@ export class AdminUserReconfigurationService {
       const destination = await this.organizations.scope(tx, dto.targetOrganizationId ?? source.id, true);
       if (sourceActive && destination.id !== source.id) adminError('STRUCTURE_REFERENCE_INVALID', 400);
       // The identity owner revokes credentials, old appointments and direct roles exactly once, before changing current scope.
-      await this.lifecycle.apply(tx, actor, { kind: 'USER', entityId: id, organizationId: source.id, receiptOrganizationId: actor.organizationId,
-        userIds: [id], organizationIds: [], departmentIds: [], positionIds: [] });
+      await this.lifecycle.revokeForReconfiguration(tx, actor, id, source.id);
       // Only this authorized, locked, version-checked pending command opens the historical-scope bridge.
       if (destination.id !== source.id) await tx.$executeRaw`SELECT set_config('qms.administrative_reconfiguration', 'approved', true)`;
       const changed = await tx.user.updateMany({ where: { id, deletedAt: null, configurationRequired: true, securityVersion: dto.expectedVersion + 1 },

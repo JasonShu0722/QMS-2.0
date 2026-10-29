@@ -106,6 +106,16 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
   }
 
   async apply(tx: AdminTransaction, actor: AdminActor, impact: AdministrativeLifecycleImpact) {
+    return this.invalidate(tx, actor, impact, impact.kind === 'USER' ? 'DELETE' : 'STRUCTURAL');
+  }
+
+  // Server-only port: restore has already authorized and locked the pending identity in its original scope.
+  async revokeForReconfiguration(tx: AdminTransaction, actor: AdminActor, userId: string, organizationId: string) {
+    return this.invalidate(tx, actor, { kind: 'USER', entityId: userId, organizationId, receiptOrganizationId: actor.organizationId,
+      userIds: [userId], organizationIds: [], departmentIds: [], positionIds: [] }, 'RECONFIGURE');
+  }
+
+  private async invalidate(tx: AdminTransaction, actor: AdminActor, impact: AdministrativeLifecycleImpact, purpose: 'DELETE' | 'STRUCTURAL' | 'RECONFIGURE') {
     const ids = [...new Set(impact.userIds)].sort();
     if (!ids.length) return { module: this.module, changed: 0, pendingConfiguration: 0 };
     await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
@@ -133,7 +143,7 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       if (pending) pendingConfiguration++;
       await tx.user.update({ where: { id: user.id }, data: {
         securityVersion: { increment: 1 }, credentialVersion: { increment: 1 },
-        ...(impact.kind === 'USER' ? { mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null } : {}),
+        ...(purpose === 'DELETE' ? { mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null } : {}),
         ...(user.mustChangePassword ? { passwordHash: randomBytes(48).toString('base64url') } : {}),
         ...(pending ? { configurationRequired: true, status: 'DISABLED' } : {}),
       } });
@@ -144,8 +154,8 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       await tx.mfaRecoveryCode.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
       await tx.emailVerification.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
       await tx.recoveryDelivery.updateMany({ where: { verification: { userId: user.id }, OR: [{ encryptedPayload: { not: null } }, { status: { in: ['PENDING', 'PROCESSING'] } }] }, data: { status: 'CANCELLED', encryptedPayload: null, claimId: null, processingAt: null } });
-      // Structural changes revoke enrollment in progress, not the surviving identity's enrolled factor or lockout.
-      if (impact.kind === 'USER') await tx.mfaCredential.deleteMany({ where: { userId: user.id } });
+      // Only permanent deletion destroys the enrolled factor; surviving identities keep it and their lockout.
+      if (purpose === 'DELETE') await tx.mfaCredential.deleteMany({ where: { userId: user.id } });
       else await tx.mfaCredential.updateMany({ where: { userId: user.id }, data: { pendingSecret: null, pendingExpiresAt: null } });
       await tx.userTemporaryPassword.deleteMany({ where: { userId: user.id } });
       if (impact.kind === 'USER') await tx.userRole.deleteMany({ where: { userId: user.id } });

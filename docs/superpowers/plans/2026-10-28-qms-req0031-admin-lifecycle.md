@@ -8,12 +8,12 @@
 | --- | --- |
 | 授权 | 已获REQ-0031正式开发及常规提交/PR授权；负责人于2026-10-29早间取消夜间heartbeat，req0031已由管理工具确认删除，不再自动续作。当前明确要求核对Web第1分片中断、CI耗时及审查问题，继续同PR集中返修；合并部署另核授权，不生产赋权、实际删除、开启绑定或回填关闭需求 |
 | 需求 | REQ-0031 / reczz28Sq8nD4VUU，user回读rev315、P0/开发中；名称/背景/效果/方案/子任务/验收六字段与提交快照逐项一致，正文历史“仅策划”段由当前直接指令覆盖，不擅改表 |
-| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle / PR #81已推b83645c；fix7仅接续已确认的Web样例测试异步清理，不另建非活动checkout或改写历史 |
-| 版本 | V0.0.35 / PR #81 / Issue #80；fix6已推b83645c，其精确head最新Codex代码审查已完成且无发现、无未解决项。当前V0.0.35-fix7修复CI Web第1分片的组织样例卸载后异步回调，不再无依据改后端/迁移或重跑PG大套 |
+| 基线 | 唯一活动D:/WorkSpace/QMS-2.0，实现qms-2.0；运行/main86d68f8；原fecdbfd保留N5归档2c22304和本需求设计。当前codex/req0031-admin-lifecycle / PR #81已推b029dae；fix8同批接续真实MFA补配安全发现与Web8可见性失败，不另建非活动checkout或改写历史 |
+| 版本 | V0.0.35 / PR #81 / Issue #80；fix7已推b029dae，Web1真实CI成功；该新head又返回P1 4409212130（待配置用户补配复用永久删除清MFA）及Web8候选范围测试失败。当前V0.0.35-fix8集中修复，不把b83645c上一轮无发现当新head审查结果 |
 | 目标 | 删除当前有效实体而不抹除历史；当前引用解除/待配置与真实补配可达；显式平台管理员身份、目标组织能力和所有管理入口一致，切组织不换actor、不跨scope重放 |
 | 停止边界 | 满足真实验证、独立审查及精确head CI后到PR；不自动合并发布，生产身份来源只读取证，所需真正赋权由负责人另授权 |
 | 证据 | Git外admin-governance-implementation；一次性PG55478/存储59078/扫描59378/邮件58178，禁止55440；不清原库/上传，不prune |
-| 当前接续 | b83645c精确代码审查已completed/无发现/9历史thread全resolved，真实阻断只有CI Web1的卸载后12异步异常及连带foundation失败。fix7只改一个样例测试fixture，原7业务case/setup/motion/预算逐字保持；新增真实回调未结清RED→GREEN，独立Galileo规格/Lorentz质量通过。父原CI25唯一完整文件单次Vitest运行292项通过，保原291用例、零跳过/未捕获异常、退出0，528输入RAW不变。收尾Web构建/治理及同PR提交，新headCI/审查另验；不改后端或合并发布 |
+| 当前接续 | b029dae / CI40826739866已结束，Web8单条可见性失败连带foundation，其余14项成功；新P1 4409212130为restore误用永久删除清MFA。fix8两项已最小修复、各自SPEC→独立QUALITY通过。父新134迁移专库5完整PG/App/HTTP文件80项、5完整API单元46项通过，984API输入RAW不变；Web父2完整文件76项通过、528输入冻结，原CI23文件284项完整组合经527未改输入HEAD内容桥验证。原超时/复用库污染/邻接可见性FAIL全部保留，不伪称首次全绿。构建/类型/契约通过，收尾治理并同PR推送，新head另验；不合并发布 |
 
 ## 1. 设计与最小架构
 
@@ -252,3 +252,29 @@ compiled Worker使用完整文件替换而非拼case：广套真实业务夹具�
 Galileo独立规格、Lorentz独立质量分别通过。父依据下载artifact的实际testResults提取25个唯一文件，而不是把numTotalTestSuites的describe计数当文件数；同一次Vitest命令、原maxWorkers=1/default与JSON reporter、原预算运行25完整文件292项通过、零跳过、进程退出0且日志无uncaught/unhandled errors。逐文件/用例核对原291项全部保留且通过，新增1项；528个Web/contracts/workspace输入RAW前后相同，测试文件RAW为`536fcc4e3e67d8938f4340d9e4350c578f95742da7c62d951fd9613724cd02f3`。单次验证2026-10-29T05:39:42Z至05:55:12Z，是Windows本地事实，不作为云端CI耗时优化或新head通过证据。
 
 本批仅一个测试文件及定向状态/验收文档变更，无后端源码或契约差异；因此不重复启动API/PG/Worker大套，不借此省略新head完整CI。最终Web类型/构建与文档治理退出码、提交head/远端状态另由Git外收尾和PR回读，不预写合并发布、生产管理员赋权/真实删除、Base回填或人工验收完成。
+
+## 14. fix8：补配后MFA及候选提示时序（2026-10-29，未推送）
+
+新head b029dae的事实与前轮分开：CI40826739866中Web1成功、四真实集成/API单元/其余Web成功，Web8的`customer-ledger-candidate-scope`一条断言在Alert尚不可见时失败（282PASS/1FAIL），foundation随之失败。23个唯一完整文件的原artifact SHA256已按job核对，`f3bdd642bcd74b4a0a2afb58fb34f72a8e124c6d8b6b27e848b682c7e38e0fbc`；不是上轮12个卸载异常再次发生，不把网络或旧日志当根因。原始证据Git外`pr81-review-fix8/`。
+
+该新head的canonical审查又返回comment4409212130/P1：虽然原结构删除已保留存续账号MFA，`AdminUserReconfigurationService.restore`仍把补配伪作`kind:USER`调用删除用的identity effect，清已绑定因子但保正常旧密码；普通启用后可被仅知旧密码者重新绑定。前轮安全测试覆盖到删除后的待配置状态，没有继续覆盖真实补配和启用，这是实际漏项，不能据旧32项通过反驳。
+
+修复在身份所有者中明确分开真正永久删除与存续账号补配的清理目的，不以假冒DEPARTMENT或客户端可控preserveMFA标志绕过。补配须保已绑定因子、时间步、失败/封锁，仍撤会话、旧挑战/恢复码/重置和旧授权任职；未完成绑定及临时密码按原规则失效。真实组织/部门补配→普通启用→旧密码必须现有MFA/禁止重新绑定/原TOTP可登录、永久删除仍清因子、回滚/CAS/幂等和跨组织原归属按实际完整测试验证，未完成不预写通过。
+
+Web项独立核对受控A/B异步候选与AntD Alert可见性，保旧请求中止、迟到A不覆盖B、无效草稿不得发单和原输入全部断言，不加超时、禁动效或省略可见性；先定位证据再选最小修复。两项各自规格后质量、父冻结和适用真实回归齐备后同批推同PR，不逐条发现反复推送；不自动合并部署、生产赋权/删除/绑定启用、Base写入或需求关闭。
+
+### 14.1 真实恢复安全链与冻结验收
+
+Peirce实施两个身份服务及一个新增真实PG测试，真实组织/部门pending→restore→普通enable得到错误`MFA_ENROLLMENT_REQUIRED`先业务RED，再以身份所有者私有目的DELETE/STRUCTURAL/RECONFIGURE区分清理；公开`revokeForReconfiguration`仅服务器已授权/锁定的restore使用，无新增客户端字段或全局impact类型变更。Mill规格、Kant独立安全质量通过，覆盖唯一restore caller、注册effect所有调用及组织补配独立session端口；不是全仓安全扫描。
+
+父984个API/配置输入RAW在开始、失败接续和最终读取相同；新隔离库`qms_req0031_fix8_recovery_20261029`原134迁移/seed后串行五完整文件80项通过：组织补配HTTP14、完整App三owner6、真实MFA19、新恢复安全9、原永久删除32；另五完整API单元46项通过，无跳过，生产类型、API构建和契约check实际退出0。新测试包括原加密因子/时间步/封锁、旧会话/挑战/恢复码失效、未绑定因子、临时密码失效、跨组织历史、同key重放/并发重复以及审计失败回滚；没有用Mock替代数据库或TOTP。测试仍非生产删除或人工验收。
+
+父原复用库尝试40PASS/1旧5秒超时保留；后完整32串行通过。继续旧补配目录测试时，累积旧fixture超过第一页100，实际目标不在首100导致失败，另有旧用例5秒超时；该失败和原日志保留，不调整目录API、页大小、Argon2或超时消红。按一次性验收边界新建库不清旧库/事件/上传，完整五文件重验通过；不把不同局部case拼成一次绿灯。
+
+### 14.2 候选可见性回归与完整文件组合
+
+Halley只改`customer-ledger-candidate-scope.test.tsx`：原14个case及所有安全/行为断言保留，立即visibility改默认waitFor，新增1个快速A/B回执回归。受控祖先快照证明Modal appear-prepare/opacity0、Alert data-show=true无leave，新增回归连续两次14PASS/1FAIL，再修后candidate15项通过。Kuhn规格、Euler独立质量通过；无production editor、全局config、motion或时间预算改动。
+
+worker邻接三文件86PASS/2可见性FAIL原样保留；父不并行测试时同candidate15+原page61两个完整文件76项全部通过、exit0/零未捕获异常、528Web/contracts/workspace RAW前后相同，未改原page文件。原CI23文件的22个完整成功结果通过527个未改Web/contracts/config的精确b029dae内容比对（LF桥另记，非历史RAW伪等价）复用，失败候选完整文件由父15项替换，23唯一文件284项组合通过、原14case全保留；不是一次全分片全绿，不拼同文件部分case，原cloud FAIL不抹除。
+
+Web类型/构建退出0，原bundle体积警告保留。最终治理/文档及新headCI状态以Git外收尾和PR回读为准；不为汇报状态另推提交。仍需精确新head全CI和canonical代码审查，不能用旧已解决thread或旧head成功替代，也没有合并/发布/生产操作/需求关闭授权。
