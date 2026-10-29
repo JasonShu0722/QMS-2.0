@@ -10,6 +10,8 @@
 
 `GET /api/v1/admin/supplier-accounts`提供八字段最小账号生命周期目录；`DELETE /:userId?organizationId=...`严格校验真实SUPPLIER账号及原企业，不删除供应商企业或其历史业务。profile专用`DELETE /api/v1/supplier-quality/profiles/:id/accounts/:userId`从服务器核定精确owner；原内部owner失效时仍可从存续平台管理范围删除账号，不因此开放原供应商业务写入。根`/admin/users/:id`仍限内部账号。
 
+PR #81 fix1保留既有组织/部门强删契约：服务器自动脱离且待配置的组织不等于保护根；原内部组织已删除时，存续部门仍可经专用影响预览/强删入口处置，无须先补配或启用。自身home、真实根、普通业务写入、平台marker/独立权限、近期认证、token/CAS及历史保留边界不变。没有新增DTO/接口或放宽门户业务授权，`contracts:check`实际退出0。
+
 Swagger仍是单一契约来源，生成文件未手工编辑；134返修后的最终generate/check均退出0，后续按[计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)执行提交门禁。不把契约可见当成PR、部署或生产授权通过。
 
 ## N5供应商完整8D契约（2026-10-28，86d68f8已部署）

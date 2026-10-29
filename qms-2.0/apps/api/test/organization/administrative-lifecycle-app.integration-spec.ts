@@ -263,6 +263,43 @@ describe('REQ0031 actual App administrative lifecycle HTTP chains with all three
     expect(retained).toMatchObject({ status: 'DISABLED', deletedAt: expect.any(Date), version: deleted.version });
   }, 30_000);
 
+  it('force-deletes detached pending organizations and departments without reconfiguration through all three real owners', async () => {
+    const f = await fixture(), member = await person(f.child.id);
+    const fact = await db.problemIndex.create({ data: { organizationId: f.child.id, ownerId: member.user.id,
+      reportNumber: randomUUID(), domainCode: 'process-quality', problemType: 'defect', sourceType: 'TEST', severity: 'NORMAL' } });
+    await removeOrganization(f);
+    expect(await db.organization.findUniqueOrThrow({ where: { id: f.child.id } }))
+      .toMatchObject({ parentId: null, status: 'DISABLED', configurationRequired: true, deletedAt: null });
+    const childPath = `/api/v1/organizations/${f.child.id}/force-delete`;
+    const preview = await checked('detached organization remains force-deletable', get(f.cookie, childPath));
+    const childKey = randomUUID(), childBody = { expectedVersion: preview.version, confirmed: true, previewToken: preview.previewToken };
+    const childResult = await checked('delete detached organization without reparenting or activation', write(f.cookie, 'post', childPath, childBody, childKey), 201);
+    expect(await checked('detached organization deletion replay', write(f.cookie, 'post', childPath, childBody, childKey), 201)).toEqual(childResult);
+    expect(await db.organization.findUniqueOrThrow({ where: { id: f.child.id } }))
+      .toMatchObject({ deletedAt: expect.any(Date), status: 'DISABLED', configurationRequired: false, parentId: null });
+    expect(await db.organization.findUniqueOrThrow({ where: { id: f.grandchild.id } }))
+      .toMatchObject({ deletedAt: null, status: 'DISABLED', configurationRequired: true, parentId: null });
+    expect(await db.user.findUniqueOrThrow({ where: { id: member.user.id } }))
+      .toMatchObject({ deletedAt: null, organizationId: f.child.id, configurationRequired: true, status: 'DISABLED' });
+    expect(await sessions.resolve(member.token)).toBeNull();
+    expect(await db.userPosition.findUniqueOrThrow({ where: { id: member.assignment.id } })).toHaveProperty('endedAt', expect.any(Date));
+    expect(await db.problemIndex.findUniqueOrThrow({ where: { id: fact.id } })).toEqual(fact);
+
+    const departmentPath = `/api/v1/organizations/${f.target.id}/departments/${f.member.department.id}/force-delete`;
+    const departmentPreview = await checked('pending department under deleted original organization remains force-deletable', get(f.cookie, departmentPath));
+    const departmentKey = randomUUID(), departmentBody = { expectedVersion: departmentPreview.version, confirmed: true, previewToken: departmentPreview.previewToken };
+    const departmentResult = await checked('delete pending department without restoring its original organization', write(f.cookie, 'post', departmentPath, departmentBody, departmentKey), 201);
+    expect(await checked('pending department deletion replay', write(f.cookie, 'post', departmentPath, departmentBody, departmentKey), 201)).toEqual(departmentResult);
+    expect(await db.department.findUniqueOrThrow({ where: { id: f.member.department.id } }))
+      .toMatchObject({ deletedAt: expect.any(Date), configurationRequired: false, organizationId: f.target.id });
+    expect(await db.position.findUniqueOrThrow({ where: { id: f.member.position.id } }))
+      .toMatchObject({ deletedAt: null, status: 'DISABLED', configurationRequired: true, organizationId: f.target.id });
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.member.user.id } }))
+      .toMatchObject({ deletedAt: null, organizationId: f.target.id, configurationRequired: true });
+    expect(await db.problemIndex.findUniqueOrThrow({ where: { id: f.fact.id } })).toEqual(f.fact);
+    expect(await db.organization.findUniqueOrThrow({ where: { id: f.home.id } })).toEqual(f.home);
+  }, 30_000);
+
   it('deletes a user in a surviving pending organization and replays only under current home authority without a 5xx', async () => {
     const f = await fixture();
     const member = await person(f.child.id);

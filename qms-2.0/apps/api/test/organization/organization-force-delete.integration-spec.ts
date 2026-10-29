@@ -301,6 +301,88 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     // Neutral identity effect does not prove credential revocation/pending users; parent App matrix owns that assertion.
   });
 
+  it('previews and deletes a server-detached pending child without reparenting or reactivation, retaining descendants/users/history', async () => {
+    const f = await fixture(); const child = await organization(f.target.id); const grandchild = await organization(child.id);
+    const dep = await department(child.id); const pos = await position(child.id, dep.id); const member = await administrator(child);
+    const assignment = await db.userPosition.create({ data: { organizationId: child.id, userId: member.user.id, positionId: pos.id } });
+    const event = await db.auditEvent.create({ data: { organizationId: child.id, actorUserId: member.user.id, resourceType: 'History', action: 'OLD_HISTORY', outcome: 'SUCCESS', traceId: trace() } });
+    const receipt = await db.adminMutation.create({ data: { actorUserId: member.user.id, organizationId: child.id, key: randomUUID(), action: 'OLD_HISTORY', requestDigest: 'old', response: { value: 'keep' } } });
+    const stale = await confirmation(f.admin.actor, child.id);
+    await f.remove();
+    const detached = await db.organization.findUniqueOrThrow({ where: { id: child.id } });
+    expect(detached).toMatchObject({ parentId: null, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 2 });
+    expect(await db.organization.findUnique({ where: { id: grandchild.id } })).toEqual(grandchild);
+    const preview = await request(app.getHttpServer()).get(path(child.id)).set('Cookie', f.admin.cookie).expect(200);
+    expect(preview.body).toMatchObject({ id: child.id, version: detached.version,
+      counts: { organizations: 2, users: 1, departments: 1, positions: 1, assignments: 1 } });
+    expect(await db.organization.findUnique({ where: { id: child.id } })).toEqual(detached);
+    const key = randomUUID();
+    await expect(commands.forceDeleteOrganization(f.admin.actor, child.id, stale, trace(), key))
+      .rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await db.adminMutation.count({ where: { key } })).toBe(0);
+    const confirmed = { expectedVersion: preview.body.version, confirmed: true as const, previewToken: preview.body.previewToken };
+    const response = await request(app.getHttpServer()).post(path(child.id)).set('Cookie', f.admin.cookie)
+      .set('x-csrf-token', 'command-csrf').set('Idempotency-Key', key).send(confirmed).expect(201);
+    expect(response.body).toMatchObject({ id: child.id, version: 3, deletedAt: expect.any(String) });
+    expect(await commands.forceDeleteOrganization(f.admin.actor, child.id, confirmed, trace(), key)).toEqual(response.body);
+    expect(await db.organization.findUnique({ where: { id: child.id } })).toMatchObject({ parentId: null, status: 'DISABLED', configurationRequired: false, deletedAt: expect.any(Date), version: 3 });
+    expect(await db.organization.findUnique({ where: { id: grandchild.id } })).toMatchObject({ parentId: null, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 2 });
+    expect(await db.department.findUnique({ where: { id: dep.id } })).toMatchObject({ organizationId: child.id, status: 'DISABLED', configurationRequired: true, deletedAt: null });
+    expect(await db.position.findUnique({ where: { id: pos.id } })).toMatchObject({ organizationId: child.id, departmentId: dep.id, status: 'DISABLED', configurationRequired: true, deletedAt: null });
+    expect(await db.userPosition.findUnique({ where: { id: assignment.id } })).toMatchObject({ endedAt: expect.any(Date) });
+    expect(await db.user.findUnique({ where: { id: member.user.id } })).toEqual(member.user);
+    expect(await db.role.findUnique({ where: { id: member.role.id } })).toEqual(member.role);
+    expect(await db.userRole.count({ where: { userId: member.user.id } })).toBe(1);
+    expect(await db.auditEvent.findUnique({ where: { id: event.id } })).toEqual(event);
+    expect(await db.adminMutation.findUnique({ where: { id: receipt.id } })).toEqual(receipt);
+    expect(await db.$queryRaw`SELECT original_organization_id, original_identity FROM administrative_deletions WHERE entity_id = ${child.id}::uuid`)
+      .toEqual([{ original_organization_id: child.id, original_identity: { code: child.code, name: child.name, parentId: null, type: 'INTERNAL' } }]);
+    expect(await db.organization.findUnique({ where: { id: f.home.id } })).toEqual(f.home);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'workflow', 'platform-configuration', 'identity']);
+  });
+
+  it('previews and deletes a surviving pending department in its deleted internal organization without restoring or moving history', async () => {
+    const f = await fixture(); const dep = await department(f.target.id); const child = await department(f.target.id, dep.id);
+    const pos = await position(f.target.id, dep.id); const childPos = await position(f.target.id, child.id);
+    const member = await administrator(f.target);
+    const assignment = await db.userPosition.create({ data: { organizationId: f.target.id, userId: member.user.id, positionId: pos.id } });
+    const event = await db.auditEvent.create({ data: { organizationId: f.target.id, actorUserId: member.user.id, resourceType: 'History', action: 'OLD_HISTORY', outcome: 'SUCCESS', traceId: trace() } });
+    const receipt = await db.adminMutation.create({ data: { actorUserId: member.user.id, organizationId: f.target.id, key: randomUUID(), action: 'OLD_HISTORY', requestDigest: 'old', response: { value: 'keep' } } });
+    const stale = await confirmation(f.admin.actor, f.target.id, dep.id);
+    await f.remove();
+    const deletedOrg = await db.organization.findUniqueOrThrow({ where: { id: f.target.id } });
+    expect(deletedOrg).toMatchObject({ status: 'DISABLED', deletedAt: expect.any(Date) });
+    const pending = await db.department.findUniqueOrThrow({ where: { id: dep.id } });
+    expect(pending).toMatchObject({ organizationId: f.target.id, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 2 });
+    const pendingChildPos = await db.position.findUniqueOrThrow({ where: { id: childPos.id } });
+    expect(pendingChildPos).toMatchObject({ departmentId: child.id, status: 'DISABLED', configurationRequired: true, deletedAt: null });
+    const preview = await request(app.getHttpServer()).get(path(f.target.id, dep.id)).set('Cookie', f.admin.cookie).expect(200);
+    expect(preview.body).toMatchObject({ id: dep.id, version: pending.version, counts: { departments: 2, positions: 1, assignments: 0 } });
+    const key = randomUUID();
+    await expect(commands.forceDeleteDepartment(f.admin.actor, f.target.id, dep.id, stale, trace(), key))
+      .rejects.toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await db.adminMutation.count({ where: { key } })).toBe(0);
+    const confirmed = { expectedVersion: preview.body.version, confirmed: true as const, previewToken: preview.body.previewToken };
+    const response = await request(app.getHttpServer()).post(path(f.target.id, dep.id)).set('Cookie', f.admin.cookie)
+      .set('x-csrf-token', 'command-csrf').set('Idempotency-Key', key).send(confirmed).expect(201);
+    expect(response.body).toMatchObject({ id: dep.id, version: 3, deletedAt: expect.any(String) });
+    expect(await commands.forceDeleteDepartment(f.admin.actor, f.target.id, dep.id, confirmed, trace(), key)).toEqual(response.body);
+    await expect(commands.previewDepartment(f.admin.actor, f.target.id, dep.id)).rejects.toMatchObject({ status: 404 });
+    await expect(commands.forceDeleteDepartment(f.admin.actor, f.target.id, dep.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 404 });
+    expect(await db.department.findUnique({ where: { id: dep.id } })).toMatchObject({ organizationId: f.target.id, deletedAt: expect.any(Date), configurationRequired: false, version: 3 });
+    expect(await db.department.findUnique({ where: { id: child.id } })).toMatchObject({ organizationId: f.target.id, parentId: null, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 3 });
+    expect(await db.position.findUnique({ where: { id: pos.id } })).toMatchObject({ organizationId: f.target.id, departmentId: dep.id, status: 'DISABLED', configurationRequired: true, deletedAt: null, version: 3 });
+    expect(await db.position.findUnique({ where: { id: childPos.id } })).toEqual(pendingChildPos);
+    expect(await db.userPosition.findUnique({ where: { id: assignment.id } })).toMatchObject({ organizationId: f.target.id, endedAt: expect.any(Date) });
+    expect(await db.user.findUnique({ where: { id: member.user.id } })).toEqual(member.user);
+    expect(await db.auditEvent.findUnique({ where: { id: event.id } })).toEqual(event);
+    expect(await db.adminMutation.findUnique({ where: { id: receipt.id } })).toEqual(receipt);
+    expect(await db.organization.findUnique({ where: { id: f.target.id } })).toEqual(deletedOrg);
+    expect(await db.$queryRaw`SELECT original_organization_id, original_identity FROM administrative_deletions WHERE entity_id = ${dep.id}::uuid`)
+      .toEqual([{ original_organization_id: f.target.id, original_identity: { code: dep.code, name: dep.name, parentId: null, organizationId: f.target.id } }]);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'workflow', 'platform-configuration', 'identity']);
+  });
+
   it('deletes only the department, ends only direct-position appointments and disables only related management bindings/scopes', async () => {
     const f = await fixture(); const dep = await department(f.target.id); const child = await department(f.target.id, dep.id);
     const other = await department(f.target.id); const pos = await position(f.target.id, dep.id); const otherPos = await position(f.target.id, other.id);
@@ -341,16 +423,37 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     const f = await fixture(); const ordinary = await administrator(f.home, false);
     const confirmed = await confirmation(f.admin.actor, f.target.id);
     await expect(commands.forceDeleteOrganization(ordinary.actor, f.target.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(commands.previewOrganization(f.admin.actor, f.home.id)).rejects.toMatchObject({ status: 409 });
     await expect(commands.forceDeleteOrganization(f.admin.actor, f.home.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 409 });
     const root = await organization();
+    await expect(commands.previewOrganization(f.admin.actor, root.id)).rejects.toMatchObject({ status: 409 });
+    await expect(commands.forceDeleteOrganization(f.admin.actor, root.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await db.organization.update({ where: { id: root.id }, data: { status: 'DISABLED' } });
+    await expect(commands.previewOrganization(f.admin.actor, root.id)).rejects.toMatchObject({ status: 409 });
     await expect(commands.forceDeleteOrganization(f.admin.actor, root.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 409 });
     const supplier = await organization(f.home.id, 'SUPPLIER');
     await expect(commands.forceDeleteOrganization(f.admin.actor, supplier.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    const supplierDep = await department(supplier.id);
+    await expect(commands.previewDepartment(f.admin.actor, supplier.id, supplierDep.id)).rejects.toMatchObject({ status: 403 });
+    await expect(commands.forceDeleteDepartment(f.admin.actor, supplier.id, supplierDep.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 403 });
     const supplierAdmin = await administrator(supplier, true, 'SUPPLIER');
     await expect(commands.forceDeleteOrganization(supplierAdmin.actor, f.target.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 403 });
     await db.session.update({ where: { id: f.admin.actor.sessionId }, data: { reauthenticatedAt: new Date(Date.now() - 360_000) } });
     await expect(commands.forceDeleteOrganization(f.admin.actor, f.target.id, confirmed, trace(), randomUUID())).rejects.toMatchObject({ status: 403 });
     expect(await db.organization.findUnique({ where: { id: f.target.id } })).toEqual(f.target);
+  });
+
+  it('denies preview and deletion of the disabled pending actor home before any lifecycle effect', async () => {
+    const f = await fixture(); const confirmed = await confirmation(f.admin.actor, f.target.id);
+    const pending = await db.organization.update({ where: { id: f.home.id }, data: { parentId: null, configurationRequired: true, status: 'DISABLED' } });
+    const rejection = { status: 401, response: { code: 'AUTH_SESSION_REQUIRED' } };
+    await expect(commands.previewOrganization(f.admin.actor, f.home.id)).rejects.toMatchObject(rejection);
+    const key = randomUUID();
+    await expect(commands.forceDeleteOrganization(f.admin.actor, f.home.id, confirmed, trace(), key)).rejects.toMatchObject(rejection);
+    expect(await db.organization.findUnique({ where: { id: f.home.id } })).toEqual(pending);
+    expect(await db.adminMutation.count({ where: { key } })).toBe(0);
+    expect(await db.$queryRaw`SELECT id FROM administrative_deletions WHERE entity_id = ${f.home.id}::uuid`).toEqual([]);
+    expect(calls).toEqual([]);
   });
 
   it('rolls back stale CAS, effect failure, and audit failure without a deletion receipt or partial structure changes', async () => {

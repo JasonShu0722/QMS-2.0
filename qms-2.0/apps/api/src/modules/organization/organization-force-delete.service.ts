@@ -12,7 +12,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { OrganizationForceDeleteDto, OrganizationForceDeletePreviewDto, OrganizationForceDeleteResultDto } from './organization-force-delete.dto.js';
 
 type Kind = 'ORGANIZATION' | 'DEPARTMENT';
-type Target = { id: string; name: string; code: string; version: number; parentId: string | null; deletedAt: Date | null };
+type Target = { id: string; name: string; code: string; version: number; parentId: string | null; deletedAt: Date | null; configurationRequired: boolean };
 type Impact = { target: Target; impact: AdministrativeLifecycleImpact; assignmentIds: string[]; bindingIds: string[]; ministerIds: string[]; private: object };
 const permission = (kind: Kind) => kind === 'ORGANIZATION' ? 'organization:force-delete' : 'organization:departments:force-delete';
 const action = (kind: Kind) => `${kind}_FORCE_DELETED`;
@@ -127,7 +127,8 @@ export class OrganizationForceDeleteService {
       || !await hasPlatformAdministrator(tx, actor.id)) adminError('FEATURE_PERMISSION_DENIED', 403);
     await assertAdminAccess(tx, actor, actor.organizationId, permission(kind));
     const organization = await tx.organization.findUnique({ where: { id: organizationId } });
-    if (!organization || (organization.deletedAt && (!replay || kind !== 'ORGANIZATION'))) adminError('ORGANIZATION_NOT_FOUND', 404);
+    // Surviving departments keep their deleted INTERNAL scope for lifecycle management only.
+    if (!organization || (organization.deletedAt && kind === 'ORGANIZATION' && !replay)) adminError('ORGANIZATION_NOT_FOUND', 404);
     if (organization.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     // The real platform marker covers INTERNAL targets, including disabled ones;
     // the independent force permission is checked against the surviving actor home.
@@ -135,7 +136,8 @@ export class OrganizationForceDeleteService {
 
   private assertTarget(actor: AdminActor, kind: Kind, target: Target) {
     if (target.deletedAt) adminError(kind === 'ORGANIZATION' ? 'ORGANIZATION_NOT_FOUND' : 'STRUCTURE_NOT_FOUND', 404);
-    if (kind === 'ORGANIZATION' && (!target.parentId || target.id === actor.organizationId)) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
+    // Server-detached pending organizations are not protected roots; the actor home always is.
+    if (kind === 'ORGANIZATION' && ((!target.parentId && !target.configurationRequired) || target.id === actor.organizationId)) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
   }
 
   private async lockImpact(tx: AdminTransaction, organizationId: string, kind: Kind, entityId: string) {

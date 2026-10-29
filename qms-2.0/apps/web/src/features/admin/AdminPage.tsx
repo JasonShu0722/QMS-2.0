@@ -4,6 +4,8 @@ import { Alert, Button, Select, Spin, Tabs, Typography } from 'antd';
 import { ApiError } from '../../api/client';
 import { useAdminManagementContext } from './useAdminManagementContext';
 import { AdministrativeReconfiguration } from '../governance/AdministrativeReconfiguration';
+import { AdministrativeForceDeleteDialog } from '../governance/AdministrativeForceDeleteDialog';
+import { organizationPath } from '../governance/governance';
 import { AdministrativeProblemReconfiguration } from '../governance/AdministrativeProblemReconfiguration';
 import { UserForceDelete } from './UserForceDelete';
 import { AdminSupplierAccounts } from './AdminSupplierAccounts';
@@ -96,10 +98,15 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} target={targeting && auditTarget && resourceId ? { resourceType, resourceId } : undefined} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('organization:reconfigure') ? [{ key: 'reconfiguration', label: t('待配置'), children: <AdministrativeReconfiguration organization={organization}
-      onChanged={onDirectoryChange} onDenied={management.invalidate} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER' && <UserForceDelete
+      onChanged={onDirectoryChange} onDenied={management.invalidate} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER' ? <UserForceDelete
         target={{ id: item.id, organizationId: item.originalOrganizationId, username: item.label, securityVersion: item.version }}
         canDelete={organization.permissions.includes('account:users:delete')} onRefresh={onCompleted} onDenied={management.invalidate}
-        onDeleted={() => { onCompleted(); onDirectoryChange?.(); }} />} /> }] : []),
+        onDeleted={() => { onCompleted(); onDirectoryChange?.(); }} /> : (item.kind === 'ORGANIZATION' || item.kind === 'DEPARTMENT') && <AdministrativeForceDeleteDialog
+        path={item.kind === 'ORGANIZATION' ? organizationPath(item.id, '/force-delete') : organizationPath(item.originalOrganizationId, `/departments/${encodeURIComponent(item.id)}/force-delete`)}
+        kind={item.kind} target={{ id: item.id, name: item.label, code: '', version: item.version }}
+        scopeKey={JSON.stringify([organization.id, [...organization.permissions].sort()])}
+        allowed={organization.permissions.includes(item.kind === 'ORGANIZATION' ? 'organization:force-delete' : 'organization:departments:force-delete')}
+        onDenied={management.invalidate} onDeleted={() => { onCompleted(); onDirectoryChange?.(); }} />} /> }] : []),
     ...(organization.permissions.includes('organization:reconfigure') ? [{ key: 'problem-reconfiguration', label: t('问题责任恢复'), children: <AdministrativeProblemReconfiguration
       organization={organization} onChanged={onDirectoryChange} onDenied={management.invalidate} /> }] : []),
     ...(organization.permissions.includes('account:users:delete') ? [{ key: 'supplier-accounts', label: t('供应商账号（全平台）'), children: <AdminSupplierAccounts
