@@ -58,4 +58,12 @@ describe('administrative workflow snapshot matching', () => {
     expect(workflowInvalidationMatches({ ...sibling, participants: [{ userId: 'same-user', positionId: 'A-position' }] }, deletion)).toBe(true);
     expect(workflowInvalidationMatches(sibling, { ...deletion, kind: 'USER' })).toBe(true);
   });
+
+  it('matches users made unavailable by department removal without invalidating surviving credential users', () => {
+    const removal = { ...impact({ kind: 'DEPARTMENT', userIds: ['professional', 'approved-reviewer'], departmentIds: ['A'] }), unavailableUserIds: ['professional'] };
+    expect(workflowInvalidationMatches(snapshot, removal)).toBe(true);
+    expect(workflowInvalidationMatches({ ...snapshot, context: {}, participants: [{ userId: 'approved-reviewer' }] }, removal)).toBe(false);
+    const unavailableReviewer = { ...removal, unavailableUserIds: ['approved-reviewer'] };
+    expect(workflowInvalidationMatches({ ...snapshot, context: {}, participants: [{ userId: 'approved-reviewer', departmentId: null, positionId: null }] }, unavailableReviewer)).toBe(true);
+  });
 });

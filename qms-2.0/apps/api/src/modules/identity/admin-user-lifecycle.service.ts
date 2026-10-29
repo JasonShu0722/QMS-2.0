@@ -124,15 +124,16 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
           : { organizationId: impact.organizationId, positionId: { in: impact.positionIds } }),
       }, data: { endedAt: now } });
       const missingOrganization = impact.kind === 'ORGANIZATION' && impact.organizationIds.includes(user.organizationId);
-      const missingDepartment = impact.kind === 'DEPARTMENT' && ended.count > 0
-        && !await tx.userPosition.count({ where: { userId: user.id, ...effectivePositionAssignmentWhere(now),
+      const missingDepartment = impact.kind === 'DEPARTMENT' && (impact.unavailableUserIds !== undefined
+        ? impact.unavailableUserIds.includes(user.id)
+        : ended.count > 0 && !await tx.userPosition.count({ where: { userId: user.id, ...effectivePositionAssignmentWhere(now),
           position: { status: 'ACTIVE', deletedAt: null, configurationRequired: false,
-            department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } } } });
+            department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } } } }));
       const pending = missingOrganization || missingDepartment;
       if (pending) pendingConfiguration++;
       await tx.user.update({ where: { id: user.id }, data: {
         securityVersion: { increment: 1 }, credentialVersion: { increment: 1 },
-        mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null,
+        ...(impact.kind === 'USER' ? { mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null } : {}),
         ...(user.mustChangePassword ? { passwordHash: randomBytes(48).toString('base64url') } : {}),
         ...(pending ? { configurationRequired: true, status: 'DISABLED' } : {}),
       } });
@@ -143,7 +144,9 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       await tx.mfaRecoveryCode.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
       await tx.emailVerification.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: now } });
       await tx.recoveryDelivery.updateMany({ where: { verification: { userId: user.id }, OR: [{ encryptedPayload: { not: null } }, { status: { in: ['PENDING', 'PROCESSING'] } }] }, data: { status: 'CANCELLED', encryptedPayload: null, claimId: null, processingAt: null } });
-      await tx.mfaCredential.deleteMany({ where: { userId: user.id } });
+      // Structural changes revoke enrollment in progress, not the surviving identity's enrolled factor or lockout.
+      if (impact.kind === 'USER') await tx.mfaCredential.deleteMany({ where: { userId: user.id } });
+      else await tx.mfaCredential.updateMany({ where: { userId: user.id }, data: { pendingSecret: null, pendingExpiresAt: null } });
       await tx.userTemporaryPassword.deleteMany({ where: { userId: user.id } });
       if (impact.kind === 'USER') await tx.userRole.deleteMany({ where: { userId: user.id } });
       // Revoke future signing capability, never rewrite immutable approval_signatures or file objects.

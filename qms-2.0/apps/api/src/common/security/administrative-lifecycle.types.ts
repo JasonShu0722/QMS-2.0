@@ -8,6 +8,8 @@ export type AdministrativeLifecycleImpact = {
   organizationId: string;
   receiptOrganizationId: string;
   userIds: string[];
+  // Server-derived users losing all effective appointments, not every credential-revocation target.
+  unavailableUserIds?: string[];
   departmentIds: string[];
   positionIds: string[];
   organizationIds: string[];

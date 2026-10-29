@@ -21,12 +21,13 @@ export function workflowInvalidationMatches(snapshot: WorkflowAdministrativeSnap
   const context = jsonObject(snapshot.context);
   const participants = Array.isArray(snapshot.participants) ? snapshot.participants
     : [jsonObject(snapshot.participants).leader, jsonObject(snapshot.participants).professional];
+  const unavailableUsers = impact.kind === 'USER' ? impact.userIds : impact.unavailableUserIds ?? [];
   return impact.kind === 'ORGANIZATION' && [snapshot.organizationId, snapshot.creatorOrganizationId].some(id => typeof id === 'string' && impact.organizationIds.includes(id))
-    || impact.kind === 'USER' && [context.ownerUserId, context.professionalUserId, snapshot.applicantUserId, snapshot.creatorUserId].some(id => typeof id === 'string' && impact.userIds.includes(id))
+    || [context.ownerUserId, context.professionalUserId, snapshot.applicantUserId, snapshot.creatorUserId].some(id => typeof id === 'string' && unavailableUsers.includes(id))
     || typeof context.responsibleSectionDepartmentId === 'string' && impact.departmentIds.includes(context.responsibleSectionDepartmentId)
     || participants.some(value => {
       const participant = jsonObject(value);
-      return impact.kind === 'USER' && typeof participant.userId === 'string' && impact.userIds.includes(participant.userId)
+      return typeof participant.userId === 'string' && unavailableUsers.includes(participant.userId)
         || typeof participant.departmentId === 'string' && impact.departmentIds.includes(participant.departmentId)
         || typeof participant.positionId === 'string' && impact.positionIds.includes(participant.positionId);
     });
@@ -48,6 +49,10 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
     for (const values of [impact.userIds, impact.departmentIds, impact.positionIds, impact.organizationIds]) {
       if (!Array.isArray(values)) throw new BadRequestException();
       ids.push(...values);
+    }
+    if (impact.unavailableUserIds !== undefined) {
+      if (!Array.isArray(impact.unavailableUserIds) || impact.unavailableUserIds.some(id => !impact.userIds.includes(id))) throw new BadRequestException();
+      ids.push(...impact.unavailableUserIds);
     }
     if (ids.some(id => typeof id !== 'string' || !isUUID(id)) || !['USER', 'DEPARTMENT', 'ORGANIZATION'].includes(impact.kind)) throw new BadRequestException();
     const result = { module: this.module, changed: 0, pendingConfiguration: 0 };

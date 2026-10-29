@@ -1,10 +1,12 @@
 import 'reflect-metadata';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import request from 'supertest';
+import type { Request } from 'express';
+import { Secret, TOTP } from 'otpauth';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { AdminMutationService, type AdminActor } from '../../src/common/security/admin-mutation.service.js';
@@ -23,6 +25,14 @@ import { GlobalExceptionFilter } from '../../src/common/contracts/global-excepti
 import { createObjectStorage } from '../../src/modules/file-management/object-storage.service.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { ESignatureService } from '../../src/modules/e-signature/e-signature.service.js';
+import { encryptSecret } from '../../src/common/security/security-keyring.js';
+import { digest } from '../../src/common/security/session-security.js';
+import { PasswordHasherService } from '../../src/common/security/password-hasher.service.js';
+import { PasswordService } from '../../src/modules/identity/password.service.js';
+import { MfaService } from '../../src/modules/identity/mfa.service.js';
+import { IdentityService } from '../../src/modules/identity/identity.service.js';
+import { RateLimitService } from '../../src/modules/identity/rate-limit.guard.js';
+import { PasswordChangeChallengeService } from '../../src/modules/identity/password-change-challenge.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') {
   throw new Error('User lifecycle tests require explicitly disposable loopback PostgreSQL, never preview 55440.');
@@ -51,6 +61,7 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     app = (await Test.createTestingModule({
       controllers: [AdminUserLifecycleController],
       providers: [PrismaService, AuditLogService, AdminMutationService, ESignatureService, AdminUserLifecycleService, SessionService,
+        PasswordHasherService, PasswordService, MfaService, IdentityService, RateLimitService, PasswordChangeChallengeService,
         AuthorizationService, OrganizationScopeService,
         { provide: AdministrativeLifecycleRegistry, useValue: registry },
         { provide: APP_GUARD, useClass: AuthenticatedGuard }, { provide: APP_GUARD, useClass: CsrfGuard }],
@@ -104,9 +115,28 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     return { kind, entityId, organizationId, receiptOrganizationId: organizationId, userIds, departmentIds: kind === 'DEPARTMENT' ? [entityId] : [], positionIds, organizationIds: kind === 'ORGANIZATION' ? [entityId] : [] };
   }
 
+  async function enrolled(userId: string, mfaBlockedUntil: Date | null = null) {
+    const password = 'Lifecycle enrolled password 123!';
+    const target = await prisma.user.update({ where: { id: userId }, data: {
+      passwordHash: await app.get(PasswordService).hash(password), mfaEnabled: true,
+      mfaRequirementOverride: true, mfaFailures: 3, mfaBlockedUntil,
+    } });
+    const totp = new TOTP({ secret: new Secret({ size: 32 }), period: 30, digits: 6 });
+    const credential = await prisma.mfaCredential.create({ data: {
+      userId, encryptedSecret: encryptSecret(totp.secret.base32, `mfa:${userId}`),
+      pendingSecret: encryptSecret(new Secret({ size: 32 }).base32, `mfa:${userId}`),
+      pendingExpiresAt: new Date(Date.now() + 300_000), lastTimeStep: BigInt(Math.floor(Date.now() / 30_000) - 2),
+    } });
+    return { target, credential, totp, password };
+  }
+
+  function login(target: { username: string }, password: string) {
+    return app.get(IdentityService).login({ identifier: target.username, password }, { ip: '127.0.0.1', headers: {} } as Request);
+  }
+
   it('deletes a historical user, invalidates every reusable credential and preserves files, actors, shared roles and signed approvals', async () => {
     const f = await actor();
-    const target = await user(f.home.id);
+    const { target, credential } = await enrolled((await user(f.home.id)).id, new Date(Date.now() + 900_000));
     const other = await user(f.home.id);
     const role = await grant(target.id, f.home.id, ['account:users:read']);
     await prisma.userRole.create({ data: { userId: other.id, organizationId: f.home.id, roleId: role.id } });
@@ -116,7 +146,7 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     await prisma.passwordReset.create({ data: { userId: target.id, codeHash: 'a'.repeat(64), expiresAt } });
     await prisma.passwordChangeChallenge.create({ data: { userId: target.id, organizationId: f.home.id, credentialVersion: target.credentialVersion, tokenHash: randomUUID().replaceAll('-', '').repeat(2), expiresAt } });
     await prisma.mfaChallenge.create({ data: { userId: target.id, organizationId: f.home.id, tokenHash: randomUUID().replaceAll('-', '').repeat(2), securityVersion: target.securityVersion, passwordDigest: 'c'.repeat(64), policyDigest: 'd'.repeat(64), enrollment: true, expiresAt } });
-    await prisma.mfaCredential.create({ data: { userId: target.id, encryptedSecret: 'PRIVATE_MFA', pendingSecret: 'PRIVATE_PENDING_MFA', pendingExpiresAt: expiresAt } });
+    expect(credential.encryptedSecret).not.toBeNull();
     await prisma.mfaRecoveryCode.create({ data: { userId: target.id, codeHash: randomUUID().replaceAll('-', '').repeat(2) } });
     await prisma.userTemporaryPassword.create({ data: { userId: target.id, credentialVersion: target.credentialVersion, encryptedValue: 'PRIVATE_TEMP_PASSWORD', expiresAt } });
     const verification = await prisma.emailVerification.create({ data: { userId: target.id, email: target.email!, purpose: 'PASSWORD_RECOVERY', securityVersion: target.securityVersion, tokenHash: randomUUID().replaceAll('-', '').repeat(2), expiresAt,
@@ -138,7 +168,7 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     const response = await remove(f, target, key).expect(200);
     expect(response.body).toMatchObject({ userId: target.id, deleted: true, effects: [{ module: 'workflow' }, { module: 'platform-configuration' }, { module: 'identity', changed: 1, pendingConfiguration: 0 }] });
     const deleted = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
-    expect(deleted).toMatchObject({ username: `deleted.${target.id.replaceAll('-', '')}`, email: null, fullName: target.fullName, organizationId: target.organizationId, status: 'DISABLED', configurationRequired: false, securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1, mfaEnabled: false });
+    expect(deleted).toMatchObject({ username: `deleted.${target.id.replaceAll('-', '')}`, email: null, fullName: target.fullName, organizationId: target.organizationId, status: 'DISABLED', configurationRequired: false, securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1, mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null });
     expect(deleted.deletedAt).toBeInstanceOf(Date);
     expect(deleted.passwordHash).not.toBe(target.passwordHash);
     expect(await sessions.resolve(token)).toBeNull();
@@ -373,6 +403,101 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     const result = await prisma.$transaction(tx => service.apply(tx, f.identity, impact('DEPARTMENT', affected.department.id, f.home.id, [target.id], [affected.position.id])));
     expect(result.pendingConfiguration).toBe(1);
     expect(await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).toMatchObject({ deletedAt: null, configurationRequired: true, status: 'DISABLED' });
+  });
+
+  it.each([false, true])('honors the server-derived department unavailability snapshot over later assignment counts (unavailable=%s)', async unavailable => {
+    const f = await actor();
+    const target = await user(f.home.id);
+    const affected = await position(target.id, f.home.id);
+    // Deliberately disagree with a fresh count: the owner-locked preflight snapshot is authoritative, including [].
+    if (unavailable) await position(target.id, f.home.id);
+    const snapshot = { ...impact('DEPARTMENT', affected.department.id, f.home.id, [target.id], [affected.position.id]), unavailableUserIds: unavailable ? [target.id] : [] };
+    const result = await prisma.$transaction(tx => service.apply(tx, f.identity, snapshot));
+    expect(result.pendingConfiguration).toBe(Number(unavailable));
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).toMatchObject({
+      deletedAt: null, configurationRequired: unavailable, status: unavailable ? 'DISABLED' : 'ACTIVE',
+      securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1,
+    });
+  });
+
+  it('requires the existing MFA factor, never reenrollment, after deleting one of two department appointments', async () => {
+    const f = await actor();
+    const { target, credential, totp, password } = await enrolled((await user(f.home.id)).id, new Date(Date.now() - 60_000));
+    const affected = await position(target.id, f.home.id);
+    const retained = await position(target.id, f.home.id);
+    const token = await sessions.create(target.id, prisma, { mfaVerified: true });
+    const oldLogin = await login(target, password);
+    const expiresAt = new Date(Date.now() + 60_000);
+    await prisma.passwordReset.create({ data: { userId: target.id, codeHash: digest(randomUUID()), expiresAt } });
+    await prisma.passwordChangeChallenge.create({ data: { userId: target.id, organizationId: f.home.id, credentialVersion: target.credentialVersion, tokenHash: digest(randomUUID()), expiresAt } });
+    const recoveryCode = randomBytes(32).toString('base64url');
+    await prisma.mfaRecoveryCode.create({ data: { userId: target.id, codeHash: digest(recoveryCode) } });
+    await prisma.userTemporaryPassword.create({ data: { userId: target.id, credentialVersion: target.credentialVersion, encryptedValue: encryptSecret('temporary', `temporary:${target.id}`), expiresAt } });
+    const signatureId = randomUUID();
+    await prisma.$executeRaw`INSERT INTO user_signatures(id, organization_id, user_id, label, fingerprint) VALUES (${signatureId}::uuid, ${f.home.id}::uuid, ${target.id}::uuid, 'Structural signature', ${'e'.repeat(64)})`;
+
+    await prisma.$transaction(tx => service.apply(tx, f.identity, impact('DEPARTMENT', affected.department.id, f.home.id, [target.id], [affected.position.id])));
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    const challenge = await login(current, password);
+    expect(challenge.response.securityState).toBe('MFA_REQUIRED');
+    expect(challenge.sessionToken).toBeUndefined();
+    expect(await prisma.mfaChallenge.findUniqueOrThrow({ where: { tokenHash: digest(challenge.challengeToken!) } })).toMatchObject({ enrollment: false, securityVersion: current.securityVersion });
+    expect(current).toMatchObject({ status: 'ACTIVE', deletedAt: null, configurationRequired: false,
+      passwordHash: target.passwordHash, mfaEnabled: true, mfaFailures: target.mfaFailures, mfaBlockedUntil: target.mfaBlockedUntil,
+      securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1 });
+    expect(await prisma.mfaCredential.findUniqueOrThrow({ where: { userId: target.id } })).toMatchObject({
+      encryptedSecret: credential.encryptedSecret, lastTimeStep: credential.lastTimeStep, pendingSecret: null, pendingExpiresAt: null,
+    });
+    expect((await prisma.userPosition.findUniqueOrThrow({ where: { id: retained.assignment.id } })).endedAt).toBeNull();
+    expect(await sessions.resolve(token)).toBeNull();
+    for (const model of [prisma.passwordReset, prisma.passwordChangeChallenge, prisma.mfaRecoveryCode]) {
+      expect(await (model.count as (args: object) => Promise<number>)({ where: { userId: target.id, consumedAt: null } })).toBe(0);
+    }
+    expect(await prisma.userTemporaryPassword.count({ where: { userId: target.id } })).toBe(0);
+    expect(await prisma.$queryRaw`SELECT status FROM user_signatures WHERE id = ${signatureId}::uuid`).toEqual([{ status: 'REVOKED' }]);
+    const mfa = app.get(MfaService);
+    await expect(mfa.verifyChallenge(oldLogin.challengeToken, totp.generate(), randomUUID())).rejects.toMatchObject({ response: { code: 'AUTH_MFA_CHALLENGE_INVALID' } });
+    await expect(mfa.beginEnrollment({ challengeToken: challenge.challengeToken }, randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'AUTH_MFA_ALREADY_ENABLED' } });
+    await expect(mfa.verifyChallenge(challenge.challengeToken, recoveryCode, randomUUID())).rejects.toMatchObject({ response: { code: 'AUTH_MFA_CODE_INVALID' } });
+    const verified = await mfa.verifyChallenge(challenge.challengeToken, totp.generate(), randomUUID());
+    expect(verified.securityState).toBe('AUTHENTICATED');
+    expect(await sessions.resolve(verified.sessionToken)).not.toBeNull();
+  });
+
+  it.each(['ORGANIZATION', 'DEPARTMENT'] as const)('preserves enrolled MFA and lockout for a pending, not deleted, %s user', async kind => {
+    const f = await actor();
+    const { target, credential, password } = await enrolled((await user(f.home.id)).id, new Date(Date.now() + 900_000));
+    const affected = await position(target.id, f.home.id);
+    await prisma.$transaction(tx => service.apply(tx, f.identity, impact(kind, kind === 'ORGANIZATION' ? f.home.id : affected.department.id, f.home.id, [target.id], [affected.position.id])));
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(current).toMatchObject({ status: 'DISABLED', configurationRequired: true, deletedAt: null,
+      passwordHash: target.passwordHash, mfaEnabled: true, mfaFailures: target.mfaFailures, mfaBlockedUntil: target.mfaBlockedUntil,
+      securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1 });
+    expect(await prisma.mfaCredential.findUniqueOrThrow({ where: { userId: target.id } })).toMatchObject({
+      encryptedSecret: credential.encryptedSecret, lastTimeStep: credential.lastTimeStep, pendingSecret: null, pendingExpiresAt: null,
+    });
+    await expect(login(current, password)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('keeps an active MFA lockout when another department appointment survives', async () => {
+    const f = await actor();
+    const { target, password } = await enrolled((await user(f.home.id)).id, new Date(Date.now() + 900_000));
+    const affected = await position(target.id, f.home.id);
+    await position(target.id, f.home.id);
+    await prisma.$transaction(tx => service.apply(tx, f.identity, impact('DEPARTMENT', affected.department.id, f.home.id, [target.id], [affected.position.id])));
+    await expect(login(target, password)).rejects.toMatchObject({ status: 429, response: { code: 'AUTH_MFA_RATE_LIMITED' } });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).toMatchObject({ status: 'ACTIVE', mfaFailures: target.mfaFailures, mfaBlockedUntil: target.mfaBlockedUntil });
+  });
+
+  it.each(['ORGANIZATION', 'DEPARTMENT'] as const)('discards pending-only MFA enrollment without clearing %s security lockout', async kind => {
+    const f = await actor();
+    const { target } = await enrolled((await user(f.home.id)).id, new Date(Date.now() + 900_000));
+    await prisma.user.update({ where: { id: target.id }, data: { mfaEnabled: false } });
+    await prisma.mfaCredential.update({ where: { userId: target.id }, data: { encryptedSecret: null, lastTimeStep: null } });
+    const affected = await position(target.id, f.home.id);
+    await prisma.$transaction(tx => service.apply(tx, f.identity, impact(kind, kind === 'ORGANIZATION' ? f.home.id : affected.department.id, f.home.id, [target.id], [affected.position.id])));
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).toMatchObject({ mfaEnabled: false, mfaFailures: target.mfaFailures, mfaBlockedUntil: target.mfaBlockedUntil });
+    expect(await prisma.mfaCredential.findUniqueOrThrow({ where: { userId: target.id } })).toMatchObject({ encryptedSecret: null, pendingSecret: null, pendingExpiresAt: null, lastTimeStep: null });
   });
 
   it('excludes deleted users from existing read projections and rejects updates, policy changes and temporary credential access', async () => {

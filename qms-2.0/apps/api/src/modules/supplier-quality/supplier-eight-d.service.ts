@@ -641,7 +641,7 @@ export class SupplierEightDService {
   }
 
   private administrativeDeadlinePredicate(impact: AdministrativeLifecycleImpact): Prisma.Sql {
-    const userIds = impact.kind === 'USER' ? impact.userIds : [];
+    const userIds = impact.kind === 'USER' ? impact.userIds : impact.unavailableUserIds ?? [];
     const organizationIds = impact.kind === 'ORGANIZATION' ? impact.organizationIds : [];
     return Prisma.sql`r.organization_id = ANY(${organizationIds}::uuid[])
       OR r.applicant_organization_id = ANY(${organizationIds}::uuid[])

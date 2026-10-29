@@ -419,6 +419,24 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     await expect(removeDepartment(f.admin.actor, f.home.id, dep.id, randomUUID())).rejects.toMatchObject({ status: 404 });
   });
 
+  it('requires a new department confirmation when another surviving appointment changes user availability', async () => {
+    const f = await fixture(), removed = await department(f.target.id), surviving = await department(f.target.id);
+    const member = await administrator(f.target), removedPosition = await position(f.target.id, removed.id);
+    await db.userPosition.create({ data: { organizationId: f.target.id, userId: member.user.id, positionId: removedPosition.id } });
+    const before = await commands.previewDepartment(f.admin.actor, f.target.id, removed.id);
+    const survivingPosition = await position(f.target.id, surviving.id);
+    await db.userPosition.create({ data: { organizationId: f.target.id, userId: member.user.id, positionId: survivingPosition.id } });
+    const after = await commands.previewDepartment(f.admin.actor, f.target.id, removed.id);
+    expect(after.counts).toEqual(before.counts);
+    expect(after.previewToken).not.toBe(before.previewToken);
+    await expect(commands.forceDeleteDepartment(f.admin.actor, f.target.id, removed.id,
+      { ...body, expectedVersion: before.version, previewToken: before.previewToken }, trace(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    expect(await db.department.findUniqueOrThrow({ where: { id: removed.id } })).toMatchObject({ deletedAt: null, version: 1 });
+    await commands.forceDeleteDepartment(f.admin.actor, f.target.id, removed.id,
+      { ...body, expectedVersion: after.version, previewToken: after.previewToken }, trace(), randomUUID());
+    expect(impacts.at(-1)).toMatchObject({ userIds: [member.user.id], unavailableUserIds: [] });
+  });
+
   it('requires a real internal marker, independent permission, RecentAuth, and rejects supplier targets/root/self-home', async () => {
     const f = await fixture(); const ordinary = await administrator(f.home, false);
     const confirmed = await confirmation(f.admin.actor, f.target.id);

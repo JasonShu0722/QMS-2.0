@@ -6,6 +6,7 @@ import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, t
 import { AdministrativeLifecycleRegistry } from '../../common/security/administrative-lifecycle.registry.js';
 import type { AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
+import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 import { assertRecentAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { adminMutationDigests } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -168,6 +169,14 @@ export class OrganizationForceDeleteService {
       OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
     const users = await tx.user.findMany({ where: { organizationId, deletedAt: null,
       ...(kind === 'DEPARTMENT' ? { id: { in: assignments.map(row => row.userId) } } : {}) }, select: { id: true, securityVersion: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
+    const survivingAssignments = kind === 'DEPARTMENT' && users.length ? await tx.userPosition.findMany({
+      where: { userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(), positionId: { notIn: ids(positions) },
+        position: { status: 'ACTIVE', deletedAt: null, configurationRequired: false,
+          department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } } },
+      select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' },
+    }) : [];
+    const survivingUsers = new Set(survivingAssignments.map(row => row.userId));
+    const unavailableUserIds = kind === 'DEPARTMENT' ? ids(users).filter(id => !survivingUsers.has(id)) : [];
     const positionCondition = positions.length ? Prisma.sql`OR position_id IN (${uuidList(ids(positions))})` : Prisma.empty;
     const bindingIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; position_id: string; responsibility: string }[]>(Prisma.sql`SELECT id, version, department_id, position_id, responsibility FROM department_management_bindings
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
@@ -177,8 +186,9 @@ export class OrganizationForceDeleteService {
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
       AND (${kind} = 'ORGANIZATION' OR department_id = ${entityId}::uuid OR section_department_id = ${entityId}::uuid ${assignmentCondition}) ORDER BY id`);
     return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds),
-      private: { departments, positions, organizations, assignments, users, bindings: bindingIds, ministerScopes: ministerIds }, impact: {
+      private: { departments, positions, organizations, assignments, users, survivingAssignments, unavailableUserIds, bindings: bindingIds, ministerScopes: ministerIds }, impact: {
       kind, entityId, organizationId, receiptOrganizationId: actor.organizationId, userIds: ids(users), departmentIds: ids(departments),
+      unavailableUserIds,
       positionIds: ids(positions), organizationIds: kind === 'ORGANIZATION' ? [entityId, ...ids(organizations)] : [],
     } };
   }

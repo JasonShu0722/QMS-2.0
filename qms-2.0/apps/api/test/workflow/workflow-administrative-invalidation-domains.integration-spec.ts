@@ -15,6 +15,8 @@ import { OutboxService } from '../../src/modules/task-notification/outbox.servic
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { OrganizationForceDeleteService } from '../../src/modules/organization/organization-force-delete.service.js';
 import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
+import { AdministrativeProblemReconfigurationService } from '../../src/administrative-problem-reconfiguration.service.js';
+import { AdministrativeProblemDomain } from '../../src/administrative-problem-reconfiguration.dto.js';
 import { WorkflowAdministrativeInvalidationService } from '../../src/modules/workflow/workflow-administrative-invalidation.service.js';
 import { WorkflowClosureRegistry } from '../../src/modules/workflow/workflow-closure-registry.js';
 import { WorkflowClosureRoundService } from '../../src/modules/workflow/workflow-closure-round.service.js';
@@ -79,6 +81,18 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     expect(await db.$queryRaw`SELECT * FROM supplier_eight_d_deadline_decisions WHERE request_id=${pending.id}::uuid`).toEqual(decisions);
     await f.http(f.sqe.cookie, 'post', `${f.prefix}/deadline-extensions/${pending.id}/decide`, {
       expectedVersion: pending.version, duty: 'SQE', decision: 'APPROVE', comment: 'Late decision' }).expect(409);
+  }, 30_000);
+
+  it('cancels a supplier request whose applicant becomes unavailable without matching an unrelated saved management source', async () => {
+    const f = await supplierEightDFixture(app, 'HIGH', false, 'INTERNAL');
+    let row = await f.read();
+    row = (await f.http(f.sqe.cookie, 'put', `${f.prefix}/deadlines`, { ...f.version(row), analysisDueAt: '2026-10-01T00:00:00Z' }).expect(200)).body;
+    const pending = (await f.http(f.outsider.cookie, 'post', `${f.prefix}/deadline-extensions`, { ...f.version(row), expectedContentVersion: row.contentVersion,
+      stage: 'ANALYSIS', requestedDueAt: '2026-12-01T00:00:00Z', reason: 'Applicant loses their final appointment' }).expect(201)).body;
+    const input = { ...impact(f.f.org.id, f.outsider.actor.id), kind: 'DEPARTMENT' as const, entityId: randomUUID(), unavailableUserIds: [f.outsider.actor.id] };
+    expect(await apply(input)).toMatchObject({ changed: 1 });
+    expect(await db.$queryRaw`SELECT status FROM supplier_eight_d_deadline_requests WHERE id=${pending.id}::uuid`).toEqual([{ status: 'CANCELLED' }]);
+    expect(await db.supplierResponseRevision.count({ where: { problemId: f.draft.id } })).toBe(0);
   }, 30_000);
 
   it('actual department force deletion cancels A but preserves same-user B round, duties, deadline and domain versions', async () => {
@@ -150,6 +164,45 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     const managerSession = (await app.get(SessionService).resolve(managerToken))!;
     await expect(rounds.decide({ ...f.manager.actor, sessionId: managerSession.id }, roundA.id, { expectedRoundVersion: roundA.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: 'Late A' }, randomUUID(), randomUUID()))
       .rejects.toMatchObject({ status: 409 });
+  }, 30_000);
+
+  it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode cancels a submitted review when only the professional loses their last appointment', async domain => {
+    const f = await createWorkflowClosureFixture(db, rounds), tables = internalEightDSql(domain);
+    for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`, `${domain.permissionPrefix}:issue`]) {
+      await db.rolePermission.create({ data: { roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
+    }
+    const removed = await db.department.create({ data: { organizationId: f.org.id, code: randomUUID(), name: 'Only professional appointment' } });
+    await db.position.update({ where: { id: f.professional.position.id }, data: { departmentId: removed.id } });
+    await db.problemIndex.update({ where: { id: f.problem.id }, data: { domainCode: domain.domainCode, sourceType: domain.sourceType, problemType: 'EIGHT_D' } });
+    await db.workflowNode.update({ where: { id: f.node.id }, data: { config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: domain.domainCode } } } });
+    const ownerNode = await db.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId,
+      nodeKey: 'owner', name: 'Actual owner handling', type: 'ACTION', config: { isStart: true, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: 24 } } } });
+    await db.workflowTransition.create({ data: { organizationId: f.org.id, workflowVersionId: f.instance.workflowVersionId,
+      fromNodeId: f.node.id, toNodeId: ownerNode.id, action: 'RETURN', transitionKey: 'return-owner' } });
+    await db.$executeRaw`INSERT INTO ${tables.reports} (problem_id,organization_id,responsible_section_department_id,professional_user_id,document,submitted_at,created_by,updated_by)
+      VALUES (${f.problem.id}::uuid,${f.org.id}::uuid,${f.section.id}::uuid,${f.professional.user.id}::uuid,
+      ${JSON.stringify(emptyProcessEightDDocument())}::jsonb,CURRENT_TIMESTAMP,${f.professional.user.id}::uuid,${f.professional.user.id}::uuid)`;
+    const round = await rounds.start(f.owner.actor, f.problem.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
+    const approved = await rounds.decide(f.manager.actor, round.id, { expectedRoundVersion: round.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: 'Preserve actual manager opinion' }, randomUUID(), randomUUID());
+    expect(approved.duties.find(duty => duty.duty === 'PROFESSIONAL')!.participant).toMatchObject({ departmentId: null, positionId: null });
+    const token = await app.get(SessionService).create(admin.owner.user.id, db, { mfaVerified: true, reauthenticated: true });
+    const session = (await app.get(SessionService).resolve(token))!, actor = { ...admin.owner.actor, sessionId: session.id };
+    const commands = app.get(OrganizationForceDeleteService), preview = await commands.previewDepartment(actor, f.org.id, removed.id);
+    await commands.forceDeleteDepartment(actor, f.org.id, removed.id, { expectedVersion: preview.version, previewToken: preview.previewToken, confirmed: true }, randomUUID(), randomUUID());
+    expect((await rounds.readProjection(db, f.org.id, f.problem.id))!.status).toBe('CANCELLED');
+    expect((await rounds.readProjection(db, f.org.id, f.problem.id))!.duties.find(duty => duty.duty === 'SECTION_MANAGER')).toMatchObject({ status: 'APPROVED', comment: 'Preserve actual manager opinion' });
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.professional.user.id } })).toMatchObject({ status: 'DISABLED', configurationRequired: true });
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.manager.user.id } })).toMatchObject({ status: 'ACTIVE', configurationRequired: false });
+    const [report] = await db.$queryRaw<{ version: number; submitted_at: Date | null }[]>`SELECT version,submitted_at FROM ${tables.reports} WHERE problem_id=${f.problem.id}::uuid`;
+    expect(report!.submitted_at).toBeNull();
+    const domainKey = domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? AdministrativeProblemDomain.PROCESS : domain === INTERNAL_EIGHT_D_DOMAINS.CUSTOMER ? AdministrativeProblemDomain.CUSTOMER : AdministrativeProblemDomain.NEW_PRODUCT;
+    const recovery = app.get(AdministrativeProblemReconfigurationService);
+    const pending = await recovery.pending(actor, domainKey, { pageSize: 100, offset: 0 });
+    expect(pending.items.some(item => item.problemId === f.problem.id)).toBe(true);
+    await recovery.reconfigure(actor, domainKey, f.problem.id, { expectedVersion: report!.version, professionalAssignmentId: f.manager.assignment.id }, randomUUID(), randomUUID());
+    expect(await db.$queryRaw`SELECT professional_user_id FROM ${tables.reports} WHERE problem_id=${f.problem.id}::uuid`)
+      .toEqual([{ professional_user_id: f.manager.user.id }]);
+    await expect(rounds.decide(f.professional.actor, round.id, { expectedRoundVersion: approved.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Late old factor' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 401 });
   }, 30_000);
 
   it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode unwinds its actual submitted report with a real cross-organization platform actor', async domain => {
