@@ -1,5 +1,9 @@
 # QMS 2.0 能力状态总账
 
+## REQ-0033 前端文案、标题与导航发布（2026-10-31）
+
+[PR87](https://github.com/JasonShu0722/QMS-2.0/pull/87) / V0.0.38已部署`e37504eeaa2394b1a6e5eb2159587c1a240bf3c4`：业务单列两级折叠导航、管理分类/语义图标、正文标题与泛化文案治理、单页与返回工作台顶栏定位；主题、权限和数据模型保持。PR/main各16CI、各225文件3153项Web及[部署41117896707](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41117896707)机器核验成立；无新增迁移/生产赋权/业务数据操作。真实视觉、主题/尺寸/对比度及角色人工验收未完成，不能据CI/健康称用户验收通过。原失败、组合覆盖与人工清单见[REQ-0033计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)，Issue86保持开放，需求未标已结束；下方旧版本事实保留。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。

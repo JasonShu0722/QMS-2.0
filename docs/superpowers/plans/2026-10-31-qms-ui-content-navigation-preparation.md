@@ -12,12 +12,12 @@
 | 设计 | [专项设计](../specs/2026-10-31-qms-ui-content-navigation-design.md)进入实施；统一规范1.4已纳入文案/标题/单列导航规则，规则生效不等于实现验收通过 |
 | 基线 | 活动checkout `D:/WorkSpace/QMS-2.0`；准备时分支`codex/management-console-release`、HEAD `7f8039224366d61fec0e2b2aad21a29d69f131d9`；当前功能分支见映射行，不代表生产版本 |
 | 运行时 | 加载Git外Enter-Qms.ps1后Node v24.21.0、pnpm 11.19.0；不是业务测试 |
-| 映射 | REQ-0033→[Issue86](https://github.com/JasonShu0722/QMS-2.0/issues/86)→codex/req0033-ui-content-navigation→验证后一个PR；本单元预留V0.0.38，核对main89c2ddd、本地最新V0.0.37及无开放PR/同号Issue，提交前复查 |
-| 分别状态 | 全部实现任务分项SPEC后QUALITY通过；文档SPEC和最终整合/文档QUALITY通过，Gibbs已核隔离15项与523指纹关闭当前阻断。进入提交/PR；准确head完整CI与部署未执行，人工验收待办 |
-| 工程证据 | API162文件2356项、真实PG54项、API构建、契约/归档/Compose、治理及根工具71项通过；最终Web lint/build退出0。本地12完整文件245项为11文件+失败文件隔离复跑组合通过，非单次全绿；本地完整Web中断不计PASS，PR225文件完整CI覆盖待执行 |
+| 映射 | REQ-0033→[Issue86](https://github.com/JasonShu0722/QMS-2.0/issues/86)→codex/req0033-ui-content-navigation→[PR87](https://github.com/JasonShu0722/QMS-2.0/pull/87)；V0.0.38，head `017c5d722358bc232306dceaa24b6a6a57f09310`，base main89c2ddd |
+| 分别状态 | PR87与main e37504e各16项CI成功，各225文件3153项Web全绿；已合并并由[部署41117896707](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41117896707)成功发布；机器发布核验成立，视觉/角色/尺寸/对比度人工验收仍待办，Issue86保持open，不写需求已结束 |
+| 工程证据 | API162文件2356项、真实PG54项、API构建、契约/归档/Compose、治理及根工具71项通过；最终Web lint/build退出0。本地12文件245项为组合通过、原中断不计PASS；PR/main准确版本全225文件CI通过、生产快照/无待迁移/同SHA服务及公网新资源均有独立日志 |
 | 证据限制 | 分项测试为完整文件组合证据；无改后真实截图、可点击样例、浏览器尺寸/对比度和业务人工验收。各批次版本与原失败保留，第6节维护实际过程 |
-| 下一动作 | T7独立SPEC后原QUALITY复核、文档返修复核；重新冻结后受影响完整回归/类型构建，最新head全CI通过后按授权PR/合并部署；人工视觉保持待验收 |
-| 持续开发 | heartbeat req-0033，每20分钟；活动主会话/子代理/测试/CI/部署存在时静默观察，不抢占、不重复、不催促，仅空闲且停滞才接续 |
+| 下一动作 | 归档发布证据与本地文档检查后交付6.2人工清单；负责人反馈真实界面问题时沿本需求接续，不以机器健康关闭业务验收 |
+| 持续开发 | heartbeat req-0033曾每20分钟静默守护；机器工程及发布完成后已由automation_update回读PAUSED，避免仅人工待验期间循环唤醒；未打断在途开发/测试/CI/部署 |
 
 ## 1. 已完成与开工前置
 
@@ -131,8 +131,8 @@ corepack pnpm --filter @qms/web build
 - [ ] 更新统一规格与FRONTEND-DESIGN、Web AGENTS及documentation-index来源，保持一个权威来源；记录实际来源复核，不仅刷新hash。
 - [ ] 冻结写集，git diff --check、归档隔离、契约检查、Web lint/完整回归/build、治理；Foundation实际影响按上层额外门禁执行。
 - [ ] 真实浏览器若被信任/工具拒绝，不绕过安全，按既定人工清单列角色/版本/步骤/预期；不以样例/单测宣称真实用户验收通过，继续独立工程与CI。
-- [ ] 最终独立SPEC后QUALITY，回读REQ，核对版本占用与base/head，提交推送一个V0.0.38 PR并关联Issue86。所有必需CI覆盖最新head后按授权合并。
-- [ ] 核验main检查、自动部署、快照/迁移链（本轮预期无新增迁移）、三服务同SHA/健康、公网资源/接口；不改生产业务权限或真实业务数据。按现有发布手册清理明确归属的一次性资源。
+- [x] 最终独立SPEC后QUALITY，回读REQ，核对版本占用与base/head，提交推送一个V0.0.38 PR并关联Issue86。所有必需CI覆盖最新head后按授权合并。
+- [x] 核验main检查、自动部署、快照/迁移链（本轮预期无新增迁移）、三服务同SHA/健康、公网资源/接口；不改生产业务权限或真实业务数据。按现有发布手册清理明确归属的一次性资源。
 - [ ] 更新证据与人工验收清单，交付实际链接和未覆盖项；验收不成立不关闭Issue或写“已结束”；全部完成后停用heartbeat。
 
 ### 6.1 启动与基线实测
@@ -164,6 +164,15 @@ corepack pnpm --filter @qms/web build
 - 父最终联合：12文件自然结束为11文件通过、navigation-access两项对象标题等待失败（243通过2失败），原始`web-final-joint.log/json`保留；无源码/测试/超时变更后隔离复跑该完整文件15项全通过（27.30秒），包含两失败用例。组合为12唯一完整文件245通过，不作单次全绿或已确认环境根因；`web-joint-combined-summary.json`与523文件指纹核对0漂移。后续最新head八分片全Web CI是合并前额外硬门禁。
 - 最终Web类型及构建均退出0，实际资源为`index-CDeTdDu7.js`、`index-wm1Lcuwi.css`（后续CI构建指纹另核），保留900kB大chunk告警；`web-types-final.log`、`web-build-final.log`。提交前再回读REQ rev335仍P1/开发中，名称/方案/子任务/验收与原提交范围一致。
 - Gibbs最终整合/文档质量窄复核通过，已独立重算523指纹与15项隔离日志；允许PR检查点，原联合FAIL根因未知而非默认环境问题，最新PR八分片225文件完整覆盖仍是合并前硬门禁。审查基线7f80392、工作区83路径（含4新增）完整盘点，无删除/重命名/二进制；相对main继承后共90路径，运行变动仅Web。
+- V0.0.38提交`017c5d7`已推送PR87并附当前聊天，Issue86元数据登记版本/PR/CI，未关闭。准确head的run41113542364当前四真实集成分片、API、基础检查及部分Web已成功，13项通过；剩余Web4/5与汇总未完成前不执行合并。发布前公网资产仍为V0.0.37，不预写部署结果。本段为CI期间本地接续记录，不推送文档触发重复检查；部署后归档本地文档状态单列。
+- PR检查点完成：run41113542364对应准确head017c5d7，16/16检查success。逐八Web日志核对文件数29/29/29/29/29/29/29/22合225，测试370/492/312/669/357/345/332/276合3153，均全绿，无failed/cancelled；四真实集成分片及foundation均success。原本地失败不抹除。完整原始log与`pr87-full-ci-summary.json`保留Git外。
+- 合并检查点完成：PR实际base89c2ddd/head017c5d7、mergeable、状态及16门禁复核后，按本轮明确授权squash合并为e37504e；远端main运行源码与已验证PR head树一致。main run41115996885已启动，未在主分支检查完成前触发手工发布；生产运行仍待核验。合并响应`pr87-merged.json`与main运行只读快照留Git外。
+- main检查点完成：run41115996885对应e37504e，16/16检查success，逐八Web日志合225文件3153项全绿，与PR计数相同。读取check-runs时自动deploy已加入同SHA，汇总明确过滤deploy再断言16基础检查，不将运行中的第17项误算失败/已通过；`main-ci-summary.json`保留分片结果。workflow_run自动启动deploy41117896707，目标同e37504e，当前尚无生产成功结论。
+- 发布检查点完成：deploy41117896707/job124276771138最终success；2026-10-31 03:51:47（Asia/Taipei）先验证e37504e迁移前加密数据库快照，03:51:50显示141迁移且无待执行项，随后三服务同e37504e镜像启动，脚本Worker READY校验及服务健康通过，03:52:09记录Deployment successful并保留deployed SHA；默认builder dangling cache回收1.517GB。`deploy.log`证明顺序，不单以Action绿灯推断。
+- 公网独立核验：/login、/app/account、/console及OpenAPI均200；auth/session、console context/home/api-observations/data-exchanges/services六匿名401；新资源index-DtXrh8DW.js和index-DxN1gHYv.css及依赖200，JS含qms-navigation-domain/qms-console-scope-details、CSS含internal-shell。`public-after.json`保留资源sha256和browserVisual=false。不读取/修改生产业务数据，不把SPA路径200作为已登录业务验收。
+- 仍未完成：真实登录后的逐页视觉/主题/尺寸/触控/对比度/角色人工检查（6.2），无改后真实截图或可点击样例。工具信任拒绝未绕过；用户尚未确认效果。Issue86不关闭、REQ0033不标已结束；本轮不代设进度/优先级/验收字段。发布后归档仅本地提交，不推送触发重复部署，文档Git状态与生产运行代码分开记录。
+- 发布证据已最小同步Issue86并回读state=open；需求进度/优先级未代设。heartbeat req-0033已PAUSED（automation_update成功回执），保留20分钟与不抢占规则供后续明确恢复，不配置额外定时器。归档的治理、链接和Git差异检查完成后本地提交，不推送触发二次部署；实际归档SHA由Git记录，不把归档SHA当运行SHA。
+- 发布后独立核验Anscombe（`01a18e64-6acd-7100-b602-f78e6b03f6fe`）通过，实际重算PR/main分片、读取部署顺序/同SHA服务/公网与清理证据；READY表述限定脚本控制流校验，不虚构直接输出，真实页面验收仍未覆盖。最终deploy job回读success。归档治理37文档/456本地链接/20来源复核/157依赖对及覆盖追踪1项通过，diff --check退出0；不运行额外生产服务或整阶段验收。
 
 ### 6.2 正式页面验收操作表
 

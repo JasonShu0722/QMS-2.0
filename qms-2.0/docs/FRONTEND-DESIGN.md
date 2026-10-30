@@ -1,8 +1,10 @@
 # 前端设计实施与参考代码
 
-## REQ-0033 前端文案、标题与导航优化（2026-10-31，开发中）
+## REQ-0033 前端文案、标题与导航优化（2026-10-31，已发布待人工验收）
 
 负责人已正式启动[REQ-0033](https://larkcommunity.feishu.cn/record/MjtHrS3UkeoKx0cCIWAcutIinKg)，user回读P1／开发中（rev335），并授权PR检查、合并和部署。[Issue86](https://github.com/JasonShu0722/QMS-2.0/issues/86)统一交付解释性文案及关联排版治理、菜单层级与语义图标、两类宿主标题去重和业务单列两级折叠菜单。详见[专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md)与[实施接续计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)当前摘要；正式规范已补充新方向，实现/审查/业务与人工验收分别记账，不由规则文本推断通过或发布。业务品牌色与控制台中性色各自保持；20分钟heartbeat只在无活动执行且停滞时接续，不抢占主会话或运行任务。
+
+[PR87](https://github.com/JasonShu0722/QMS-2.0/pull/87) / V0.0.38已合并发布`e37504eeaa2394b1a6e5eb2159587c1a240bf3c4`；准确PR/main各16CI、各225文件3153项Web及独立双审通过。[部署41117896707](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41117896707)验证迁移前快照、141迁移无待执行、同SHA API/Worker/Web与健康及Worker READY，缓存回收1.517GB；公网index-DtXrh8DW.js/index-DxN1gHYv.css与新导航/范围详情标识更新，六匿名接口401。机器核验不替代真实视觉/尺寸/对比度及角色人工验收；清单见计划6.2，Issue/需求未关闭，进度字段未由本轮代设，heartbeat归档后暂停。下方V0.0.37等段落保留历史时点。
 
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
