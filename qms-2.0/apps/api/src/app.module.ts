@@ -48,6 +48,7 @@ import { SupplierAsnModule } from './modules/supplier-asn/supplier-asn.module.js
 import { SupplierPcnModule } from './modules/supplier-pcn/supplier-pcn.module.js';
 import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEightDRuntime } from './common/eight-d/internal-eight-d-runtime.js';
 import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d-reminder.js';
+import { SystemManagementModule } from './modules/system-management/system-management.module.js';
 
 @Module({
   controllers: [AdministrativeReconfigurationController, AdministrativeProblemReconfigurationController],
@@ -66,6 +67,7 @@ import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d
     PlatformConfigurationModule,
     FileManagementModule,
     TaskNotificationModule,
+    SystemManagementModule,
     ReportingModule,
     ProblemIndexModule,
     ProblemSavedViewModule,

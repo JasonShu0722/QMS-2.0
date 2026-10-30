@@ -9,9 +9,12 @@ import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { AccountCenterPage } from './AccountCenterPage';
 import { clearAccountAvatar } from './account-avatar-state';
 import { LanguageProvider } from '../../i18n/Language';
+import { getConsoleContext } from '../../console/console-api';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 const api = vi.hoisted(() => ({ getAccountProfile: vi.fn(), getAccountOverview: vi.fn(), getMySignatureSummary: vi.fn(), registerMySignature: vi.fn(), revokeMySignature: vi.fn(), updateAccountProfile: vi.fn(), getAccountSessionHistory: vi.fn() }));
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), ...api }));
+vi.mock('../../console/console-api', () => ({ getConsoleContext: vi.fn() }));
 const profile: AccountProfile = { id: 'u1', username: 'alice', fullName: null, phone: null, email: 'alice@example.test', emailVerifiedAt: null, profileVersion: 4, avatarFileId: null, avatarVersion: 1, mfaEnabled: false, status: 'ACTIVE', accountType: 'INTERNAL', organization: { id: 'o1', code: 'O', name: 'Organization' } };
 const overview: components['schemas']['AccountOverviewDto'] = { organizationId: 'o1', assignments: [{ id: 'a1', startedAt: '2026-01-01T00:00:00Z', endedAt: null, department: { id: 'd1', code: 'D', name: 'Quality' }, position: { id: 'p1', code: 'P', name: 'Engineer' } }], effectiveRoles: [{ id: 'r1', code: 'R', name: 'Inspector', sources: [{ kind: 'DIRECT' }, { kind: 'POSITION', positionId: 'p1', positionName: 'Engineer', assignmentId: 'a1' }] }], permissions: ['session:home', 'e-signature:signatures:read'] };
 beforeEach(() => {
@@ -19,6 +22,8 @@ beforeEach(() => {
   // Match the existing password-dialog fixture: nested dialogs need distinct accessibility IDs.
   vi.stubEnv('NODE_ENV', 'development');
   vi.resetAllMocks(); clearAccountAvatar();
+  useWorkTabsStore.getState().bindSession('INTERNAL:o1:u1');
+  vi.mocked(getConsoleContext).mockRejectedValue(new ApiError({ code: 'FORBIDDEN', message: 'denied' }, 403));
   api.getAccountProfile.mockResolvedValue(profile);
   api.getAccountOverview.mockResolvedValue(overview);
   api.getMySignatureSummary.mockResolvedValue([]);
@@ -26,6 +31,27 @@ beforeEach(() => {
 });
 afterEach(() => { localStorage.clear(); vi.unstubAllEnvs(); });
 function mount() { return render(<MemoryRouter><UnsavedChangesProvider><AccountCenterPage /></UnsavedChangesProvider></MemoryRouter>); }
+
+it('offers a safe console link from the real account page for a workflow-only manager', async () => {
+  const organization = { ...profile.organization, type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
+  vi.mocked(getConsoleContext).mockResolvedValue({ actor: { id: profile.id, accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false, modules: [{ key: 'workflows', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', organizationId: organization.id, permissions: ['workflow:manage'] }] });
+  mount();
+  const entry = await screen.findByRole('link', { name: '管理控制台' });
+  expect(entry).toHaveAttribute('href', '/console');
+  expect(entry).toHaveAttribute('target', '_blank');
+  expect(entry).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(screen.getByRole('button', { name: '账号安全' })).toBeVisible();
+  expect(getConsoleContext).toHaveBeenCalledWith(undefined, expect.any(AbortSignal));
+});
+
+it('does not query or expose the console entry to a supplier account', async () => {
+  api.getAccountProfile.mockResolvedValue({ ...profile, accountType: 'SUPPLIER' });
+  useWorkTabsStore.getState().bindSession('SUPPLIER:o1:u1');
+  mount();
+  await screen.findByText('供应商账号', { exact: false });
+  expect(screen.queryByRole('link', { name: '管理控制台' })).not.toBeInTheDocument();
+  expect(getConsoleContext).not.toHaveBeenCalled();
+});
 async function settings() {
   await waitFor(() => expect(document.querySelector('.qms-account-settings')).not.toBeInTheDocument());
   const trigger = await screen.findByRole('button', { name: '个人信息设置' });
@@ -51,6 +77,15 @@ it('shows two display regions, assignments and authorization sources without per
 });
 
 function mountStrict() { return render(<StrictMode><MemoryRouter><UnsavedChangesProvider><AccountCenterPage /></UnsavedChangesProvider></MemoryRouter></StrictMode>); }
+
+it('shows organization-direct appointments in the account summary and settings using only the account overview', async () => {
+  api.getAccountOverview.mockResolvedValue({ ...overview, assignments: [{ ...overview.assignments[0], department: null }] });
+  mountStrict();
+  expect(await screen.findByText('组织直属 · Engineer')).toBeVisible();
+  const dialog = await settings();
+  expect(dialog.getByText('组织直属 · Engineer')).toBeVisible();
+  expect(api.getAccountOverview).toHaveBeenCalled();
+});
 
 it.each(['INTERNAL', 'SUPPLIER'] as const)('prefills persisted personal fields in StrictMode for %s after save, reopen and page reload', async accountType => {
   const initial = { ...profile, accountType, fullName: 'Existing name', phone: '+1 234', email: 'existing@example.test' };

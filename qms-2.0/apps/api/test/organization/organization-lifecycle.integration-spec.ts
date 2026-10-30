@@ -614,6 +614,8 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
         AND NOT EXISTS (SELECT 1 FROM pg_constraint fk WHERE fk.contype = 'f' AND fk.conrelid = c.oid AND a.attnum = ANY(fk.conkey))
       ORDER BY c.relname, a.attname`;
     expect(unprotected).toEqual([
+      // Historical snapshots retain source UUIDs after their live authorization records are removed.
+      { tableName: 'legacy_authorization_archives', columnName: 'organization_id' },
       { tableName: 'mfa_challenges', columnName: 'organization_id' },
       { tableName: 'organization_initializations', columnName: 'organization_id' },
       { tableName: 'organization_mutation_archives', columnName: 'organization_id' },

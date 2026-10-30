@@ -306,7 +306,7 @@ export class WorkflowClosureRoundService {
     const now = new Date();
     const validSources = await this.responsibilities.revalidateLockedManagementResponsibilities(tx, management, now);
     const professionalActive = await tx.user.findFirst({ where: { id: c.professionalUserId, organizationId: c.organizationId, status: 'ACTIVE', accountType: 'INTERNAL',
-      positions: { some: { organizationId: c.organizationId, ...effectivePositionAssignmentWhere(now) } } }, select: { id: true } });
+      positions: { some: { organizationId: c.organizationId, ...effectivePositionAssignmentWhere(now), AND: { position: { departmentId: { not: null } } } } } }, select: { id: true } });
     const professional: WorkflowClosureParticipant | null = professionalActive && await canProcessWorkflowNode(tx, c.professionalUserId, c.organizationId, { assigneeUserId: c.professionalUserId })
       ? { userId: c.professionalUserId, assignmentId: null, positionId: null, departmentId: null, bindingId: null, scopeId: null, bindingVersion: null, scopeVersion: null } : null;
     const participant = (duty: 'SECTION_MANAGER' | 'MINISTER'): WorkflowClosureParticipant | null => {

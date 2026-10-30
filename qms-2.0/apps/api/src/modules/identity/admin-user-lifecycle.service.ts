@@ -136,9 +136,7 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       const missingOrganization = impact.kind === 'ORGANIZATION' && impact.organizationIds.includes(user.organizationId);
       const missingDepartment = impact.kind === 'DEPARTMENT' && (impact.unavailableUserIds !== undefined
         ? impact.unavailableUserIds.includes(user.id)
-        : ended.count > 0 && !await tx.userPosition.count({ where: { userId: user.id, ...effectivePositionAssignmentWhere(now),
-          position: { status: 'ACTIVE', deletedAt: null, configurationRequired: false,
-            department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } } } }));
+        : ended.count > 0 && !await tx.userPosition.count({ where: { userId: user.id, ...effectivePositionAssignmentWhere(now) } }));
       const pending = missingOrganization || missingDepartment;
       if (pending) pendingConfiguration++;
       await tx.user.update({ where: { id: user.id }, data: {

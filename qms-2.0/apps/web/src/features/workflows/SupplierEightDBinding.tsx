@@ -163,7 +163,7 @@ function BindingScope({ session, onDenied }: { session?: string; onDenied: () =>
         {selected && !candidate && <option value={selected} disabled>{t('当前绑定版本仅供查看')} · {selected}</option>}
         {candidates.map(flow => <option key={flow.version.id} value={flow.version.id}>{flow.name} · v{flow.version.version} · {flow.version.id}</option>)}
       </select></label>
-      {candidate && <Link to={`/app/workflow-designer/${candidate.id}/${candidate.version.id}`}>{t('查看供应商绑定候选流程')}</Link>}
+      {candidate && <Link to={`/console/workflows/${candidate.id}/${candidate.version.id}`}>{t('查看供应商绑定候选流程')}</Link>}
       <Space wrap><Button disabled={locked || !candidate} onClick={() => void write(false)}>{t('保存供应商8D绑定')}</Button>
         <Button disabled={locked || !binding || dirty || (!binding.enabled && !candidate)} onClick={() => void write(true)}>{t(binding?.enabled ? '停用供应商8D' : '启用供应商8D')}</Button></Space>
       {bindings.filter(row => row.controlledEightD !== true || row.replyMode !== 'SUPPLIER' || row.responseForm !== 'EIGHT_D').length > 0 && <details><summary>{t('历史绑定（只读）')}</summary><ul>{bindings.filter(row => row.controlledEightD !== true || row.replyMode !== 'SUPPLIER' || row.responseForm !== 'EIGHT_D').map(row => <li key={row.id} style={{ overflowWrap: 'anywhere' }}>{row.severity} · {row.responseForm} · {row.replyMode} · {row.workflowVersionId} · v{row.version} · {t(row.enabled ? '已启用' : '未启用')}</li>)}</ul></details>}

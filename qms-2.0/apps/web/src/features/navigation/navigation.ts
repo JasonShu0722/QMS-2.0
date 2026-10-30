@@ -1,9 +1,8 @@
-import { BarChart3, ClipboardCheck, FileText, Gauge, GitBranch, Inbox, ShieldAlert, Target, UserCircle, Users, Settings, MessageSquareWarning, ScanLine, Ruler, BadgeCheck, Megaphone, Repeat2, Scan } from 'lucide-react';
+import { BarChart3, ClipboardCheck, FileText, Gauge, Inbox, ShieldAlert, Target, UserCircle, Users, Settings, MessageSquareWarning, ScanLine, Ruler, BadgeCheck, Megaphone, Repeat2, Scan } from 'lucide-react';
 export type NavigationItem = { label: string; path: string; icon: typeof Inbox; context?: { label: string; path: string }[] };
 export const internalNavigation: NavigationItem[] = [
   { label: '问题管理面板', path: '/app/problem-center', icon: ShieldAlert, context: [{ label: '问题台账', path: '/app/problem-center' }] },
   { label: '我的待办', path: '/app/my-tasks', icon: ClipboardCheck, context: [{ label: '待处理', path: '/app/my-tasks' }] },
-  { label: '流程设计', path: '/app/workflow-designer', icon: GitBranch, context: [{ label: '流程草稿', path: '/app/workflow-designer' }] },
   { label: '供应商问题台账', path: '/app/supplier-quality', icon: Users },
   { label: '来料检验', path: '/app/supplier-incoming', icon: ScanLine, context: [{ label: '来料检验台账', path: '/app/supplier-incoming' }] },
   { label: '特采管理', path: '/app/supplier-concession', icon: BadgeCheck, context: [{ label: '特采申请', path: '/app/supplier-concession' }] },
@@ -31,7 +30,6 @@ export const internalNavigation: NavigationItem[] = [
   { label: '体系文件', path: '/app/documents', icon: FileText },
   { label: '风险看板', path: '/app/risk-dashboard', icon: Gauge },
   { label: '个人账号', path: '/app/account', icon: UserCircle, context: [{ label: '基本信息', path: '/app/account' }] },
-  { label: '平台管理', path: '/app/admin', icon: Settings },
 ];
 export const internalDomains = [
   { label: '问题中心', path: '/app/problem-center', icon: ShieldAlert, paths: ['/app/problem-center', '/app/my-tasks'] },
@@ -42,7 +40,7 @@ export const internalDomains = [
   { label: '审核管理', path: '/app/audits', icon: ClipboardCheck, paths: ['/app/audits', '/app/audit-standards'] },
   { label: '质量分析', path: '/app/quality-data', icon: Gauge, paths: ['/app/quality-data', '/app/task-statistics', '/app/risk-dashboard'] },
   { label: '检测管理', path: '/app/coordinate-inspection', icon: Ruler, paths: ['/app/coordinate-inspection'] },
-  { label: '系统服务', path: '/app/announcements', icon: Settings, paths: ['/app/announcements', '/app/account', '/app/workflow-designer', '/app/admin'] },
+  { label: '系统服务', path: '/app/announcements', icon: Settings, paths: ['/app/announcements', '/app/account'] },
 ].map(({ paths, ...domain }) => ({ ...domain, children: paths.map((path) => internalNavigation.find((entry) => entry.path === path)!) }));
 export const supplierNavigation: NavigationItem[] = [
   { label: '待办', path: '/supplier/inbox', icon: Inbox },

@@ -43,7 +43,7 @@ export function UserPositionsEditor({ organizationId, user, onClose, onSaved, on
       .then(([nextDirectory, nextAssignments, authorization]) => {
         if (!active) return;
         const now = Date.now();
-        const effective = [...new Set(nextAssignments.filter(assignment => new Date(assignment.startedAt).getTime() <= now && (!assignment.endedAt || new Date(assignment.endedAt).getTime() > now) && assignment.position.status === 'ACTIVE' && nextDirectory.departments.some(department => department.id === assignment.position.departmentId && department.status === 'ACTIVE')).map(assignment => assignment.positionId))];
+        const effective = [...new Set(nextAssignments.filter(assignment => new Date(assignment.startedAt).getTime() <= now && (!assignment.endedAt || new Date(assignment.endedAt).getTime() > now) && assignment.position.status === 'ACTIVE' && (assignment.position.departmentId === null || nextDirectory.departments.some(department => department.id === assignment.position.departmentId && department.status === 'ACTIVE'))).map(assignment => assignment.positionId))];
         setDirectory(nextDirectory); setAssignments(nextAssignments); setExpected(effective); setSelected(draft.current ?? effective); setCurrentPermissions(authorization.permissions ?? []); draft.current = undefined; setConflict(false);
       }).catch(cause => { if (active) setError(safeAccountError(cause)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };

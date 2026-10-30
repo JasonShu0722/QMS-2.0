@@ -173,9 +173,7 @@ export class OrganizationForceDeleteService {
       OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
     const users = await this.identity.lifecycleUsers(tx, organizationId, kind === 'DEPARTMENT' ? assignments.map(row => row.userId) : undefined);
     const survivingAssignments = kind === 'DEPARTMENT' && users.length ? await tx.userPosition.findMany({
-      where: { userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(), positionId: { notIn: ids(positions) },
-        position: { status: 'ACTIVE', deletedAt: null, configurationRequired: false,
-          department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } } },
+      where: { userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(), positionId: { notIn: ids(positions) } },
       select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' },
     }) : [];
     const survivingUsers = new Set(survivingAssignments.map(row => row.userId));

@@ -689,6 +689,46 @@ describe('process 8D real domain transactions', () => {
     expect(await service.binding(f.target.issuer.actor)).toEqual(binding);
   }, 120_000);
 
+  it('lists ordinary direct collaborators consistently with writes without widening section duties', async () => {
+    const f = await fixture(), id = await f.issue(), direct = await f.person(f.section.id);
+    await prisma.position.update({ where: { id: direct.position.id }, data: { departmentId: null } });
+    await prisma.userRole.deleteMany({ where: { userId: direct.user.id } });
+    const permissions = await prisma.permission.findMany({ where: { code: { in: ['process-quality:issues:read', 'process-quality:issues:work'] } } });
+    expect(permissions).toHaveLength(2);
+    const role = await prisma.role.create({ data: { organizationId: f.organization.id, code: randomUUID(), name: 'Ordinary direct collaborator', permissions: { create: permissions.map(({ id: permissionId }) => ({ permissionId })) } } });
+    await prisma.positionRole.create({ data: { organizationId: f.organization.id, positionId: direct.position.id, roleId: role.id, isCanonical: true } });
+    await service.collaborators(f.owner.actor, id, { expectedVersion: (await f.read(id)).version, userIds: [direct.user.id] }, randomUUID(), randomUUID());
+    expect((await f.read(id)).collaboratorUserIds).toEqual([direct.user.id]);
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const cookie = `qms_session=${await app.get(SessionService).create(f.owner.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true })}`;
+      const options = async (action = 'COLLABORATORS', extra: Record<string, string> = {}) => (await request(app.getHttpServer())
+        .get(`/api/v1/process-quality/eight-d/assignment-options?${new URLSearchParams({ action, ...(action === 'ISSUE' ? {} : { problemId: id }), search: direct.user.username, pageSize: '1', ...extra })}`)
+        .set('Cookie', cookie).expect(200)).body;
+      expect(await options()).toMatchObject({ users: [{ id: direct.user.id, username: direct.user.username, fullName: null }], userTotal: 1 });
+      expect(await options('COLLABORATORS', { page: '2' })).toMatchObject({ users: [], userTotal: 1 });
+      expect(await options('COLLABORATORS', { sectionDepartmentId: f.section.id })).toMatchObject({ users: [], userTotal: 0 });
+      for (const action of ['ISSUE', 'REASSIGN']) expect(await options(action)).toMatchObject({ users: [], userTotal: 0 });
+      await prisma.user.update({ where: { id: direct.user.id }, data: { status: 'DISABLED' } });
+      expect((await options()).userTotal).toBe(0);
+      await prisma.user.update({ where: { id: direct.user.id }, data: { status: 'ACTIVE' } });
+      await prisma.userPosition.update({ where: { id: direct.assignment.id }, data: { startedAt: new Date(Date.now() + 60_000) } });
+      expect((await options()).userTotal).toBe(0);
+      await prisma.userPosition.update({ where: { id: direct.assignment.id }, data: { startedAt: direct.assignment.startedAt, endedAt: new Date() } });
+      expect((await options()).userTotal).toBe(0);
+      await prisma.userPosition.update({ where: { id: direct.assignment.id }, data: { endedAt: null } });
+      await prisma.position.update({ where: { id: direct.position.id }, data: { status: 'DISABLED', configurationRequired: true } });
+      expect((await options()).userTotal).toBe(0);
+      await prisma.position.update({ where: { id: direct.position.id }, data: { status: 'ACTIVE', configurationRequired: false } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permission: { code: 'process-quality:issues:work' } } });
+      expect((await options()).userTotal).toBe(0);
+      await expect(service.collaborators(f.owner.actor, id, { expectedVersion: (await f.read(id)).version, userIds: [direct.user.id] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 400 });
+    } finally { await app.close(); }
+  }, 120_000);
+
   it('lists domain-authorized active assignment candidates without workflow/structure management grants', async () => {
     const f = await fixture(), other = await fixture();
     const workflowManage = await prisma.permission.findUniqueOrThrow({ where: { code: 'workflow:manage' } });

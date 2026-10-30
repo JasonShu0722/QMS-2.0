@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthenticatedRoute } from './AuthenticatedRoute';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 function mockJsonResponse(body: unknown, status = 200) {
   return Promise.resolve({
@@ -20,6 +21,7 @@ function LocationProbe() {
 describe('authenticated route', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    useWorkTabsStore.getState().reset();
   });
 
   it('redirects an unauthenticated request to login without rendering the application shell', async () => {

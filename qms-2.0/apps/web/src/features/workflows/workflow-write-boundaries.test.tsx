@@ -8,13 +8,16 @@ import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/Unsaved
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { WorkflowDesignerPage } from './WorkflowDesignerPage';
 import { WorkflowListPage } from './WorkflowListPage';
-import { createWorkflow } from './workflow-api';
+import { createWorkflow, workflowPath, type WorkflowDefinition } from './workflow-api';
 
 vi.mock('./WorkflowCanvas', () => ({ WorkflowCanvas: () => <div>Canvas</div> }));
 vi.mock('./ProcessEightDBinding', () => ({ ProcessEightDBinding: () => null }));
 const base = '/api/v1/workflows';
-const graph = { nodes: [{ id: 'start', type: 'ACTION', name: '调查', config: { isStart: true } }, { id: 'end', type: 'CLOSE', name: '关闭', config: { isEnd: true } }], transitions: [] };
-const definition = { id: 'definition', organizationId: 'org', name: '质量流程', code: 'QA', revision: 3, description: '', version: { id: 'version', status: 'DRAFT', version: 1, structureSnapshot: graph } };
+const graph: WorkflowDefinition['version']['structureSnapshot'] = { nodes: [{ id: 'start', type: 'ACTION', name: '调查', config: { isStart: true } }, { id: 'end', type: 'CLOSE', name: '关闭', config: { isEnd: true } }], transitions: [] };
+const definition: WorkflowDefinition = { id: 'definition', organizationId: 'org', name: '质量流程', code: 'QA', revision: 3, description: '', version: { id: 'version', workflowDefinitionId: 'definition', status: 'DRAFT', version: 1, publishedAt: null, publishedById: null, changeNote: null, structureSnapshot: graph } };
+it('keeps generated create and copy destinations in the independent console', () => {
+  expect(workflowPath(definition)).toBe('/console/workflows/definition/version');
+});
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const writes: { path: string; init: RequestInit }[] = [];
 let intercept: (path: string, init: RequestInit) => Promise<Response | undefined>;
@@ -41,10 +44,10 @@ afterEach(() => vi.unstubAllGlobals());
 function mount(list = false) {
   function Page() { useUnsavedChanges(true); return list ? <WorkflowListPage /> : <WorkflowDesignerPage definitionId="definition" versionId="version" />; }
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
-    { path: '/app/workflow-designer/definition/copied', element: <p>复制目的页</p> },
+    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows/definition/copied', element: <p>复制目的页</p> },
     { path: '/login', element: <p>登录目的页</p> },
-  ], { initialEntries: ['/app/workflow-designer'] });
+  ], { initialEntries: ['/console/workflows'] });
   render(<RouterProvider router={router} />); return router;
 }
 async function createInput() {
@@ -95,7 +98,7 @@ it.each(['validate', 'draft', 'publish', 'copy'])('freezes exact unknown stage %
   if (stage === 'copy') {
     // The parent is deliberately dirty: successful copy still uses the normal leave guard.
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
-    await waitFor(() => expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied'));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/console/workflows/definition/copied'));
   } else expect(await screen.findByText('已发布版本只读；如需修改，请复制为新草稿。')).toBeVisible();
   expect(writes.filter(item => item.path === path)).toHaveLength(3);
   expect(writes.filter(item => item.path === `${base}/definition/draft`)).toHaveLength(stage === 'draft' ? 3 : stage === 'copy' ? 0 : 1);
@@ -143,7 +146,7 @@ it.each(['validate', 'draft', 'publish', 'copy'])('keeps unknown designer %s fro
   if (stage === 'copy') {
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
     expect(await screen.findByText('复制目的页')).toBeVisible();
-    expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied');
+    expect(router.state.location.pathname).toBe('/console/workflows/definition/copied');
   } else expect(await screen.findByText('已发布版本只读；如需修改，请复制为新草稿。')).toBeVisible();
   expect(writes.filter(item => item.path === path)).toHaveLength(3);
   for (const request of writes.filter(item => item.path === path)) {
@@ -359,7 +362,7 @@ it.each(['network', '408', '425', '500', '503', 'CLIENT_REAUTHENTICATION_COMPLET
     fireEvent.click(retry);
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
     expect(await screen.findByText('复制目的页')).toBeVisible();
-    expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied');
+    expect(router.state.location.pathname).toBe('/console/workflows/definition/copied');
     expect(writes).toHaveLength(3);
     for (const request of writes) {
       expect(request.path).toBe(base); expect(request.init.method).toBe('POST');
@@ -408,7 +411,7 @@ it.each([{ stage: 'CSRF', status: 429 }, { stage: 'POST', status: 400 }, { stage
   fireEvent.click(screen.getByRole('button', { name: '重试原创建请求' }));
   fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
   expect(await screen.findByText('复制目的页')).toBeVisible();
-  expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied');
+  expect(router.state.location.pathname).toBe('/console/workflows/definition/copied');
   expect(writes).toHaveLength(stage === 'CSRF' ? 2 : 3); expect(csrfReads).toBe(3);
   for (const request of writes) {
     expect(request.path).toBe(base); expect(request.init.method).toBe('POST');

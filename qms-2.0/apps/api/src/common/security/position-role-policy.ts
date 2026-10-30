@@ -4,6 +4,7 @@ import { SUPPLIER_PORTAL_PERMISSIONS } from '../../modules/authorization/supplie
 import { ACTIVE_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
 
 export async function assertNoCanonicalRole(transaction: AdminTransaction, roleIds: string[]) {
+  if (roleIds.length && await transaction.role.count({ where: { id: { in: roleIds }, archivedAt: { not: null } } })) adminError('FEATURE_PERMISSION_DENIED', 403);
   if (roleIds.length && await transaction.positionRole.count({ where: { isCanonical: true, roleId: { in: roleIds } } })) {
     adminError('FEATURE_PERMISSION_DENIED', 403);
   }
@@ -22,7 +23,7 @@ export async function positionRoleDefinitions(transaction: AdminTransaction, org
     await transaction.$queryRaw(Prisma.sql`SELECT id FROM roles WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
   }
   const roles = await transaction.role.findMany({
-    where: { organizationId, id: { in: ids } },
+    where: { organizationId, id: { in: ids }, archivedAt: null },
     select: {
       id: true, organizationId: true, code: true, name: true, mfaRequired: true,
       permissions: { select: { permission: { select: { id: true, code: true, name: true } } }, orderBy: { permission: { code: 'asc' } } },

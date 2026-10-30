@@ -471,8 +471,10 @@ export class OrganizationService {
     return this.mutations.run({ actor, organizationId, key, action: 'POSITION_CREATED', payload: { organizationId, ...dto }, permission: 'organization:structure:manage', traceId, duplicateCode: 'STRUCTURE_DUPLICATE' }, async (transaction) => {
       await this.lockOrganization(transaction, organizationId);
       const organization = await this.activeOrganization(transaction, organizationId);
-      await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.departmentId}::uuid FOR SHARE`;
-      await this.activeDepartment(transaction, organizationId, dto.departmentId);
+      if (dto.departmentId !== null) {
+        await transaction.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${dto.departmentId}::uuid FOR SHARE`;
+        await this.activeDepartment(transaction, organizationId, dto.departmentId);
+      }
       if (dto.categoryId) await this.activeCategory(transaction, organizationId, dto.categoryId);
       const result = await transaction.position.create({ data: { ...dto, name: dto.name.trim(), organizationId }, select: positionSelect });
       if (organization.type === 'INTERNAL') await this.createCanonicalRole(transaction, organizationId, result);
@@ -491,19 +493,24 @@ export class OrganizationService {
     return this.mutations.run({ actor, organizationId, key, action: 'POSITION_UPDATED', payload: { organizationId, positionId, ...dto }, permission: 'organization:structure:manage', traceId }, async (transaction) => {
       await this.lockOrganization(transaction, organizationId);
       await this.activeOrganization(transaction, organizationId);
-      const beforeLock = await transaction.position.findFirst({ where: { organizationId, id: positionId }, include: { department: { select: { status: true } } } });
+      const beforeLock = await transaction.position.findFirst({ where: { organizationId, id: positionId }, include: { department: { select: { status: true, deletedAt: true, configurationRequired: true } } } });
       if (!beforeLock) adminError('STRUCTURE_NOT_FOUND', 404);
-      const departmentIds = [...new Set([beforeLock.departmentId, dto.departmentId ?? beforeLock.departmentId])].sort();
-      await transaction.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(departmentIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
+      const departmentIds = [...new Set([beforeLock.departmentId, dto.departmentId].filter((id): id is string => typeof id === 'string'))].sort();
+      if (departmentIds.length) await transaction.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(departmentIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
       await this.lockPositions(transaction, organizationId, [positionId]);
-      const current = await transaction.position.findFirst({ where: { organizationId, id: positionId }, include: { department: { select: { status: true } } } });
+      const current = await transaction.position.findFirst({ where: { organizationId, id: positionId }, include: { department: { select: { status: true, deletedAt: true, configurationRequired: true } } } });
       if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      if (current.deletedAt || current.configurationRequired) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      const departmentId = dto.departmentId === undefined ? current.departmentId : dto.departmentId;
+      if (dto.departmentId === null && current.departmentId !== null
+        && (!current.department || current.department.status !== 'ACTIVE' || current.department.deletedAt || current.department.configurationRequired)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       if (dto.categoryId) await transaction.$queryRaw`SELECT id FROM position_categories WHERE organization_id = ${organizationId}::uuid AND id = ${dto.categoryId}::uuid FOR SHARE`;
-      if (dto.departmentId || dto.status === 'ACTIVE') await this.activeDepartment(transaction, organizationId, dto.departmentId ?? current.departmentId);
+      if (departmentId !== null && (dto.departmentId !== undefined || dto.status === 'ACTIVE')) await this.activeDepartment(transaction, organizationId, departmentId);
       if (dto.categoryId) await this.activeCategory(transaction, organizationId, dto.categoryId);
       else if (dto.status === 'ACTIVE' && dto.categoryId !== null && current.categoryId) await this.activeCategory(transaction, organizationId, current.categoryId);
       const authorizationChanged = (dto.status !== undefined && dto.status !== current.status) || (dto.departmentId !== undefined && dto.departmentId !== current.departmentId);
-      const gainsAuthorization = (dto.status ?? current.status) === 'ACTIVE' && (current.status !== 'ACTIVE' || current.department.status !== 'ACTIVE');
+      const gainsAuthorization = (dto.status ?? current.status) === 'ACTIVE' && (current.status !== 'ACTIVE' || (current.departmentId !== null && current.department?.status !== 'ACTIVE'));
       const policy = await this.lockPositionRoles(transaction, organizationId, authorizationChanged ? [positionId] : [], gainsAuthorization ? [positionId] : []);
       await this.lockPositionAssignees(transaction, organizationId, policy.positionIds);
       const granted = await this.refreshPositionAccess(transaction, actor, organizationId, ['organization:structure:manage'], policy);
@@ -560,7 +567,7 @@ export class OrganizationService {
       if (JSON.stringify([...new Set(effective.map((entry) => entry.positionId))].sort()) !== JSON.stringify([...new Set(dto.expectedPositionIds)].sort())) adminError('CONCURRENCY_CONFLICT', 409);
       const removedAssignments = current.filter(({ positionId }) => !dto.positionIds.includes(positionId)).map(({ id }) => id);
       if (await ministerAssignmentReferences(transaction, organizationId, removedAssignments, now)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
-      const positions = await transaction.position.findMany({ where: { id: { in: dto.positionIds }, organizationId, status: 'ACTIVE', department: { status: 'ACTIVE' } } });
+      const positions = await transaction.position.findMany({ where: { id: { in: dto.positionIds }, organizationId, deletedAt: null, configurationRequired: false, status: 'ACTIVE', OR: [{ departmentId: null }, { department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } }] } });
       if (positions.length !== dto.positionIds.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
       const existing = new Set(current.map((entry) => entry.positionId));
       const addedIds = dto.positionIds.filter((id) => !existing.has(id));
@@ -676,15 +683,15 @@ export class OrganizationService {
 
   private async activeOrganization(transaction: Pick<AdminTransaction, 'organization'>, organizationId: string) {
     const organization = await transaction.organization.findUnique({ where: { id: organizationId } });
-    if (!organization) adminError('ORGANIZATION_NOT_FOUND', 404);
-    if (organization.status !== 'ACTIVE') adminError('ORGANIZATION_DISABLED', 403);
+    if (!organization || organization.deletedAt) adminError('ORGANIZATION_NOT_FOUND', 404);
+    if (organization.status !== 'ACTIVE' || organization.configurationRequired) adminError('ORGANIZATION_DISABLED', 403);
     return organization;
   }
 
   private async activeDepartment(transaction: AdminTransaction, organizationId: string, departmentId: string) {
     const department = await transaction.department.findFirst({ where: { organizationId, id: departmentId } });
     if (!department) adminError('STRUCTURE_NOT_FOUND', 404);
-    if (department.status !== 'ACTIVE') adminError('STRUCTURE_DISABLED', 409);
+    if (department.status !== 'ACTIVE' || department.deletedAt || department.configurationRequired) adminError('STRUCTURE_DISABLED', 409);
     return department;
   }
 

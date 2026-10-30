@@ -4,6 +4,13 @@ import ts from 'typescript';
 import { auditActionLabel } from '../../src/modules/audit-log/audit-event-read-model.js';
 
 describe('audit action label coverage (source contract, not PostgreSQL evidence)', () => {
+  it.each([
+    ['LEGACY_AUTHORIZATION_MIGRATED', '迁移兼容授权'],
+    ['LEGACY_AUTHORIZATION_REMOVED', '清理兼容授权'],
+  ])('explains legacy authorization action %s', (action, label) => {
+    expect(auditActionLabel(action)).toBe(label);
+  });
+
   it('explains literal actions emitted by audit writers and their local forwarding methods', () => {
     const root = resolve('src');
     const actions = new Set<string>();

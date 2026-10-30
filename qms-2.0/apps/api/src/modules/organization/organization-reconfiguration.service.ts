@@ -77,7 +77,6 @@ export class OrganizationReconfigurationService {
     return this.mutations.run({ actor, organizationId: actor.organizationId, permission, key, traceId,
       action: `${kind}_RECONFIGURED`, payload: { kind, id, expectedVersion: dto.expectedVersion, parentId: dto.parentId,
         targetOrganizationId: dto.targetOrganizationId, targetDepartmentId: dto.targetDepartmentId }, isolationLevel: 'ReadCommitted' }, async tx => {
-      this.validateCommand(kind, dto);
       if (kind === Kind.ORGANIZATION) {
         const target = await this.scope(tx, id, false);
         this.assertPending(target, dto.expectedVersion);
@@ -95,10 +94,10 @@ export class OrganizationReconfigurationService {
       this.assertPending(target, dto.expectedVersion);
       const scope = await this.scope(tx, target.organizationId, false);
       if (scope.deletedAt) {
-        if (!dto.targetOrganizationId || !dto.targetDepartmentId || dto.parentId !== undefined) adminError('STRUCTURE_REFERENCE_INVALID', 400);
+        if (!dto.targetOrganizationId || dto.targetDepartmentId === undefined || dto.parentId !== undefined) adminError('STRUCTURE_REFERENCE_INVALID', 400);
         const destination = await this.scope(tx, dto.targetOrganizationId, true);
-        await this.department(tx, dto.targetDepartmentId, destination.id);
-        let replacementId = dto.targetDepartmentId;
+        if (dto.targetDepartmentId !== null) await this.department(tx, dto.targetDepartmentId, destination.id);
+        let replacementId: string;
         if (kind === Kind.POSITION) {
           const id = randomUUID();
           const occupied = await tx.position.findUnique({ where: { organizationId_code: { organizationId: destination.id, code: target.code } }, select: { id: true } });
@@ -107,6 +106,9 @@ export class OrganizationReconfigurationService {
           const replacement = await tx.position.create({ data: { id, organizationId: destination.id, departmentId: dto.targetDepartmentId,
             code, name: target.name, status: 'DISABLED', configurationRequired: false } });
           replacementId = replacement.id;
+        } else {
+          if (dto.targetDepartmentId === null) adminError('STRUCTURE_REFERENCE_INVALID', 400);
+          replacementId = dto.targetDepartmentId;
         }
         await tx.$executeRaw`INSERT INTO administrative_configuration_links
           (kind, source_id, source_orgid, replacement_id, replacement_orgid, actor_id)
@@ -130,8 +132,8 @@ export class OrganizationReconfigurationService {
           data: { parentId: dto.parentId ?? null, configurationRequired: false, status: 'ACTIVE', version: { increment: 1 } } });
         if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       } else {
-        if (!dto.targetDepartmentId) adminError('STRUCTURE_REFERENCE_INVALID', 400);
-        await this.department(tx, dto.targetDepartmentId, scope.id);
+        if (dto.targetDepartmentId === undefined) adminError('STRUCTURE_REFERENCE_INVALID', 400);
+        if (dto.targetDepartmentId !== null) await this.department(tx, dto.targetDepartmentId, scope.id);
         const changed = await tx.position.updateMany({ where: { id, organizationId: scope.id, version: dto.expectedVersion, deletedAt: null, configurationRequired: true },
           data: { departmentId: dto.targetDepartmentId, configurationRequired: false, status: 'DISABLED', version: { increment: 1 } } });
         if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
@@ -150,6 +152,7 @@ export class OrganizationReconfigurationService {
         await this.scope(tx, target.organizationId, false);
       }
       await this.authorize(tx, actor, true);
+      this.validateCommand(kind, dto);
     });
   }
 
@@ -161,6 +164,7 @@ export class OrganizationReconfigurationService {
   private validateCommand(kind: StructureReconfigurationKind, dto: AdministrativeReconfigurationDto) {
     if (!Number.isInteger(dto.expectedVersion) || dto.expectedVersion < 1 || dto.expectedVersion > 2147483646
       || (kind === Kind.ORGANIZATION && (dto.targetOrganizationId !== undefined || dto.targetDepartmentId !== undefined))
+      || (kind !== Kind.POSITION && dto.targetDepartmentId === null)
       || (kind === Kind.POSITION && dto.parentId !== undefined)) adminError('STRUCTURE_REFERENCE_INVALID', 400);
   }
 

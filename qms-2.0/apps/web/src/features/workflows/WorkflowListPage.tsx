@@ -14,11 +14,11 @@ import './workflows.css';
 
 type CreateAttempt = { action: 'create'; path: '/api/v1/workflows'; method: 'POST'; rawBody: string; key: string };
 
-export function WorkflowListPage() {
+export function WorkflowListPage({ expectedOrganizationId }: { expectedOrganizationId?: string } = {}) {
   const session = useWorkTabsStore(state => state.sessionScope);
-  return <List key={session ?? ''} session={session} />;
+  return <List key={`${session ?? ''}:${expectedOrganizationId ?? ''}`} session={session} expectedOrganizationId={expectedOrganizationId} />;
 }
-function List({ session }: { session?: string }) {
+function List({ session, expectedOrganizationId }: { session?: string; expectedOrganizationId?: string }) {
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
   const [page, setPage] = useState<Awaited<ReturnType<typeof api.getWorkflows>>>();
@@ -80,7 +80,10 @@ function List({ session }: { session?: string }) {
     setLoading(true); setError(undefined);
     const timer = setTimeout(() => {
       api.getWorkflows(new URLSearchParams({ search, ...(status ? { status } : {}), offset: String(offset), pageSize: '25' }), controller.signal)
-        .then((result) => { if (current() && !controller.signal.aborted) { setPage(result); if (checkingCreateConflict) { setStale(false); setActionError(undefined); } } })
+        .then((result) => { if (current() && !controller.signal.aborted) {
+          if (expectedOrganizationId && result.items.some(item => item.organizationId !== expectedOrganizationId)) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+          setPage(result); if (checkingCreateConflict) { setStale(false); setActionError(undefined); }
+        } })
         .catch((cause) => { if (current() && !controller.signal.aborted) { setError(cause); setPage(undefined); report(cause); } })
         .finally(() => { if (current() && !controller.signal.aborted) setLoading(false); });
     }, 150);
@@ -93,11 +96,18 @@ function List({ session }: { session?: string }) {
     try {
       if (id) {
         const result = await api.getWorkflow(id, lifetime.current!.signal);
-        if (current()) setHistory(result);
+        if (current()) {
+          if (expectedOrganizationId && (result.organizationId !== expectedOrganizationId || result.id.toLowerCase() !== id.toLowerCase()
+            || result.versions.some(version => version.workflowDefinitionId.toLowerCase() !== id.toLowerCase()))) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+          setHistory(result);
+        }
       } else {
         attempt = retry ?? { action: 'create', path: '/api/v1/workflows', method: 'POST', rawBody: JSON.stringify({ code: code.trim(), name: name.trim(), ...api.initialGraph() }), key: crypto.randomUUID() };
         const result = await api.createWorkflow(attempt.rawBody, { signal: lifetime.current!.signal, key: attempt.key });
-        if (current()) { setUncertain(undefined); setCreating(false); setCode(''); setName(''); setCreatedPath(api.workflowPath(result)); }
+        if (current()) {
+          if (expectedOrganizationId && result.organizationId !== expectedOrganizationId) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+          setUncertain(undefined); setCreating(false); setCode(''); setName(''); setCreatedPath(api.workflowPath(result));
+        }
       }
     } catch (cause) {
       if (!current()) return;
@@ -117,7 +127,11 @@ function List({ session }: { session?: string }) {
         if (creating) requestLeave(() => { setCreating(false); setCode(''); setName(''); });
         else setCreating(true);
       }}>{t('新建流程')}</Button></Space></header>
-    {templateOpen && <WorkflowClosureTemplateDialog onClose={() => setTemplateOpen(false)} onBusyChange={setTemplateBusy} onCreated={result => { setTemplateOpen(false); setCreatedPath(api.workflowPath(result)); }} />}
+    {templateOpen && <WorkflowClosureTemplateDialog onClose={() => setTemplateOpen(false)} onBusyChange={setTemplateBusy} onCreated={result => {
+      if (!current()) return;
+      if (expectedOrganizationId && result.organizationId !== expectedOrganizationId) { const cause = new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403); setActionError(cause); report(cause); return; }
+      setTemplateOpen(false); setCreatedPath(api.workflowPath(result));
+    }} />}
     {!!displayedError && <Alert type="error" title={t(stale ? error ? '刷新流程列表失败，创建输入仍保留，请重试刷新核对。' : '创建结果需核对，输入已保留，请显式刷新流程列表。' : safeAccountError(displayedError))} description={displayedError instanceof ApiError && displayedError.traceId ? <code>{displayedError.traceId}</code> : undefined}
       action={error && !stale ? <Button disabled={createFrozen} aria-label={t('重试')} onClick={() => setRevision((value) => value + 1)}>{t('重试')}</Button> : undefined} />}
     {uncertain && <Alert type="warning" title={t('创建请求结果未确认，输入已冻结，只能重试原请求。')} action={<Button disabled={busy || denied} onClick={() => void act(undefined, uncertain)}>{t('重试原创建请求')}</Button>} />}
@@ -135,12 +149,12 @@ function List({ session }: { session?: string }) {
     {loading ? <Spin aria-label={t('加载中')} /> : page && !page.items.length ? <Empty description={t('暂无流程')} /> : page && <div className="workflow-list__table"><table>
       <thead><tr>{['代码', '名称', '状态', '版本', '操作'].map((label) => <th key={label} scope="col">{t(label)}</th>)}</tr></thead>
       <tbody>{page.items.map((item) => <tr key={item.id}><td><code>{item.code}</code></td><td>{item.name}</td><td><Tag>{t(workflowLabel(item.version.status))}</Tag></td><td>{item.version.version}</td><td><Space>
-        <Link to={`/app/workflow-designer/${item.id}/${item.version.id}`}>{t('打开流程')}</Link><Button disabled={createFrozen} aria-label={`${t('版本历史')} ${item.name}`} onClick={() => void act(item.id)}>{t('版本历史')}</Button>
+        <Link to={`/console/workflows/${item.id}/${item.version.id}`}>{t('打开流程')}</Link><Button disabled={createFrozen} aria-label={`${t('版本历史')} ${item.name}`} onClick={() => void act(item.id)}>{t('版本历史')}</Button>
       </Space></td></tr>)}</tbody></table></div>}
     {page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - 25))}>{t('上一页')}</Button>
       <Button disabled={createFrozen || loading || offset + 25 >= page.total || offset + 25 > 10000} onClick={() => setOffset((value) => value + 25)}>{t('下一页')}</Button></Space>}
     {history && <Card title={`${history.name} · ${t('版本历史')}`}><ul>{history.versions.map((version) => <li key={version.id}>
-      <Link to={`/app/workflow-designer/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
+      <Link to={`/console/workflows/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
     </li>)}</ul></Card>}
     <ProcessEightDBinding domain={bindingDomain} onDomainChange={setBindingDomain} />
     <SupplierEightDBinding />

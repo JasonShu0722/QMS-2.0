@@ -28,7 +28,7 @@ export async function organizationInitialization(transaction: AdminTransaction, 
     SELECT role_id AS "roleId", creator_user_id AS "creatorUserId", permission_codes AS "permissionCodes",
       grant_user_id AS "grantUserId", grant_role_id AS "grantRoleId", grant_organization_id AS "grantOrganizationId"
     FROM organization_initializations WHERE organization_id = ${organization.id}::uuid`;
-  const roles = await transaction.role.findMany({ where: { organizationId: organization.id }, include: { permissions: { include: { permission: true } }, userRoles: true, positions: true } });
+  const roles = await transaction.role.findMany({ where: { organizationId: organization.id, archivedAt: null }, include: { permissions: { include: { permission: true } }, userRoles: true, positions: true } });
   const grants = await transaction.userRole.findMany({ where: { organizationId: organization.id } });
   let provenance: Initialization | undefined = source;
   if (!source && roles.length) {

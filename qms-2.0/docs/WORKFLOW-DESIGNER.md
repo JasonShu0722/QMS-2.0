@@ -1,5 +1,13 @@
 # 流程设计器
 
+## REQ-0032 管理入口迁入候选（2026-10-30，未发布）
+
+CP-1 正式列表和精确版本入口为 `/console/workflows` 与 `/console/workflows/:definitionId/:versionId`；旧 `/app/workflow-designer` 深链接在业务布局挂载前严格兼容。列表、画布、关闭审核模板、复制/校验/发布、三内部域及供应商绑定复用同一实现，不创建控制台业务标签。
+
+流程模块固定 `SESSION_HOME / ORGANIZATION`。其他管理模块选择组织 B 不会将流程请求或 actor 伪换到 B；回执核对真实会话组织与定义/版本，合法复制接纳同定义的新版本。原 CAS、未知原 body/key、显式重试、401/403 清敏、未保存保护和发布冻结不变。业务待办、审批及签章仍在业务端；发布代码不等于启用生产绑定。
+
+证据与限制见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。下文旧路径是历史实现说明，不替代本段候选入口；当前未发布或完成人工验收。
+
 ## N2-B 关闭审核基础（2026-10-25，V0.0.30含fix3已部署）
 
 本节接续下方B1历史，实际证据见[N2计划第9节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)。新轮次、职责待办、通知、草稿模板及正式设计器入口已部署a32615c，完整CI与实际发布核验通过；正式页面人工验收及领域业务开通仍独立，不能据本节把完整8D当作已可用。

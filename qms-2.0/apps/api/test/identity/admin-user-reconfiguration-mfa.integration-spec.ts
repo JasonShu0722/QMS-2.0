@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
@@ -54,7 +55,10 @@ describe('REQ0031 actual user reconfiguration preserves enrolled MFA in real Pos
     resets = app.get(PasswordResetService);
     // Normal status update never invokes temporary-password or appointment onboarding collaborators.
     users = new AdminUserService(db, app.get(PasswordService), app.get(AuditLogService), app.get(AdminMutationService), resets, undefined!, undefined!);
-    expect(await db.$queryRaw`SELECT COUNT(*)::int AS count FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`).toEqual([{ count: 134 }]);
+    const migrations = (await readdir(new URL('../../prisma/migrations/', import.meta.url), { withFileTypes: true }))
+      .filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+    expect(await db.$queryRaw`SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`)
+      .toEqual(migrations.map(migration_name => ({ migration_name })));
   });
   afterAll(async () => { await app?.close(); });
 

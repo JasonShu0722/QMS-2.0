@@ -33,7 +33,7 @@ export class AdminRoleService {
   async list(actor: AdminUserActor) {
     const organizationId = this.scope(actor);
     await this.assertRead(actor);
-    const roles = await this.prisma.role.findMany({ where: { organizationId, positions: { none: { isCanonical: true } } }, include: ROLE_INCLUDE, orderBy: { code: 'asc' } });
+    const roles = await this.prisma.role.findMany({ where: { organizationId, archivedAt: null, positions: { none: { isCanonical: true } } }, include: ROLE_INCLUDE, orderBy: { code: 'asc' } });
     return roles.map((role) => this.serialize(role));
   }
 
@@ -135,7 +135,7 @@ export class AdminRoleService {
     return this.mutate(actor, { action: 'USER_ROLES_CHANGED', permission: 'account:roles:assign', payload: { userId, dto }, traceId, key }, async (transaction, granted) => {
       const user = await this.assertUser(transaction, userId, organizationId);
       const roleIds = [...new Set(dto.roleIds)];
-      const roles = roleIds.length ? await transaction.role.findMany({ where: { id: { in: roleIds }, organizationId }, include: ROLE_INCLUDE }) : [];
+      const roles = roleIds.length ? await transaction.role.findMany({ where: { id: { in: roleIds }, organizationId, archivedAt: null }, include: ROLE_INCLUDE }) : [];
       if (roles.length !== roleIds.length) this.fail('ADMIN_ROLE_NOT_FOUND', 404);
       await this.resolvePermissions(transaction, roles.flatMap((role) => role.permissions.map((entry) => entry.permission.code)), granted);
       const effective = await roleGrantSources(transaction, userId);
@@ -164,7 +164,7 @@ export class AdminRoleService {
   }
 
   private async role(transaction: Transaction, roleId: string, organizationId: string) {
-    const role = await transaction.role.findFirst({ where: { id: roleId, organizationId }, include: ROLE_INCLUDE });
+    const role = await transaction.role.findFirst({ where: { id: roleId, organizationId, archivedAt: null }, include: ROLE_INCLUDE });
     if (!role) this.fail('ADMIN_ROLE_NOT_FOUND', 404);
     return role;
   }

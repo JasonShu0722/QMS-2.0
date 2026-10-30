@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import * as client from './client';
+import { publishSessionSignal } from '../features/auth/session-invalidation';
 
 afterEach(() => vi.unstubAllGlobals());
 it.each([false, true])('preserves default replay and supports an explicit opt-out: replay=%s', async replay => {
@@ -104,4 +105,22 @@ it('protects management writes and reuses only the same failed payload key', asy
   expect(headers[1]['Idempotency-Key']).not.toBe(headers[2]['Idempotency-Key']);
   expect(headers[2]['Idempotency-Key']).toBe(headers[3]['Idempotency-Key']);
   expect(headers[3]['Idempotency-Key']).not.toBe(headers[4]['Idempotency-Key']);
+});
+
+it.each([[true, 'identity'], [false, 'identity'], [false, 'abort']] as const)('does not continue an A mutation after reauthentication crosses %s / %s', async (replay, change) => {
+  let finish!: () => void; let started!: () => void; let recent = false;
+  const waiting = new Promise<void>(resolve => { started = resolve; });
+  const unregister = client.registerReauthentication(() => { started(); return new Promise<void>(resolve => { finish = () => { recent = true; resolve(); }; }); });
+  const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path.endsWith('/csrf') ? { csrfToken: 'csrf' } : recent ? { saved: true } : { code: 'AUTH_REAUTHENTICATION_REQUIRED' }), { status: path.endsWith('/csrf') || recent ? 200 : 403, headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', fetcher);
+  try {
+    const controller = new AbortController();
+    const pending = client.createAdminMutation({ replayAfterReauthentication: replay })('/api/v1/admin/users/user', 'PATCH', { email: 'actor-a@example.test' }, change === 'abort' ? controller.signal : undefined);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await waiting;
+    if (change === 'identity') publishSessionSignal('invalidate'); else controller.abort();
+    finish(); await rejected;
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls.filter(([path]) => !path.endsWith('/csrf'))).toHaveLength(1);
+  } finally { unregister(); }
 });

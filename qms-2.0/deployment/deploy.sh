@@ -132,4 +132,8 @@ marker_tmp=$(mktemp /opt/qms2/.deployed-sha.XXXXXXXX)
 trap 'rm -f "$marker_tmp"' EXIT
 printf '%s\n' "$sha" > "$marker_tmp"
 mv -- "$marker_tmp" /opt/qms2/deployed-sha
+if ! docker builder prune --force; then
+  echo "Deployment healthy: $sha; builder cache cleanup failed; deployed SHA retained" >&2
+  exit 1
+fi
 echo "Deployment successful: $sha"

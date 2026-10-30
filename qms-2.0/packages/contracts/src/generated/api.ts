@@ -287,6 +287,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/console/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConsoleContextController_context"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{userId}": {
         parameters: {
             query?: never;
@@ -1107,6 +1123,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organizationId}/legacy-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LegacyAuthorizationMigrationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/legacy-authorizations/{roleId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LegacyAuthorizationMigrationController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/legacy-authorizations/{roleId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LegacyAuthorizationMigrationController_commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/legacy-authorizations/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LegacyAuthorizationReadController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/authorization-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LegacyAuthorizationReadController_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/e-signatures/mine/summary": {
         parameters: {
             query?: never;
@@ -1825,6 +1921,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["SupplierPortalNotificationController_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/console/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SystemManagementController_home"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7803,8 +7915,11 @@ export interface components {
             expectedVersion: number;
             /** Format: uuid */
             targetOrganizationId?: string;
-            /** Format: uuid */
-            targetDepartmentId?: string;
+            /**
+             * Format: uuid
+             * @description POSITION 必须显式选择归属：null 为组织直属，UUID 为有效部门；其他实体不接受 null。
+             */
+            targetDepartmentId?: string | null;
             /**
              * Format: uuid
              * @description DEPARTMENT 可显式选择 null 根部门；ORGANIZATION 必须选择有效内部父组织
@@ -8052,6 +8167,52 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        ConsoleOrganizationDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            type: "INTERNAL" | "SUPPLIER";
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
+            configurationRequired: boolean;
+        };
+        ConsoleActorDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            accountType: "INTERNAL";
+            homeOrganization: components["schemas"]["ConsoleOrganizationDto"];
+        };
+        ConsoleModuleDto: {
+            /** @enum {string} */
+            key: "users" | "organizations" | "master-data" | "configuration" | "workflows" | "audit" | "outbox" | "reconfiguration" | "problem-reconfiguration" | "supplier-accounts";
+            /**
+             * @description 导航范围，不替代各业务 API 的实时授权。
+             * @enum {string}
+             */
+            scope: "TARGET" | "SESSION_HOME";
+            /**
+             * @description 资源覆盖范围；平台级目录不表示所有资源属于会话组织。
+             * @enum {string}
+             */
+            coverage: "ORGANIZATION" | "PLATFORM";
+            /**
+             * Format: uuid
+             * @description 权限或查询范围的组织来源；不是平台级目录全部资源的归属组织。
+             */
+            organizationId: string;
+            permissions: string[];
+        };
+        ConsoleContextDto: {
+            actor: components["schemas"]["ConsoleActorDto"];
+            targetOrganization: components["schemas"]["ConsoleOrganizationDto"];
+            /** @description 仅包含具有真实可用控制台能力的管理目标。 */
+            organizations: components["schemas"]["ConsoleOrganizationDto"][];
+            hasPlatformAdministrator: boolean;
+            modules: components["schemas"]["ConsoleModuleDto"][];
+        };
         DeleteAdminUserDto: {
             expectedSecurityVersion: number;
         };
@@ -8137,7 +8298,7 @@ export interface components {
             id: string;
             code: string;
             name: string;
-            department: components["schemas"]["PositionAuthorizationDepartmentDto"];
+            department: components["schemas"]["PositionAuthorizationDepartmentDto"] | null;
         };
         AdminUserDto: {
             /** @description 删除操作的实时身份版本，不替代资料版本。 */
@@ -8443,7 +8604,7 @@ export interface components {
         PositionDto: {
             id: string;
             organizationId: string;
-            departmentId: string;
+            departmentId: string | null;
             categoryId: string | null;
             code: string;
             name: string;
@@ -8498,16 +8659,22 @@ export interface components {
         CreatePositionDto: {
             code: string;
             name: string;
-            /** Format: uuid */
-            departmentId: string;
+            /**
+             * Format: uuid
+             * @description null 表示组织直属；创建时必须明确提交。
+             */
+            departmentId: string | null;
             /** Format: uuid */
             categoryId?: string | null;
         };
         UpdatePositionDto: {
             expectedVersion: number;
             name?: string;
-            /** Format: uuid */
-            departmentId?: string;
+            /**
+             * Format: uuid
+             * @description null 改为组织直属；省略则保持原归属。
+             */
+            departmentId?: string | null;
             /** Format: uuid */
             categoryId?: string | null;
             /** @enum {string} */
@@ -8572,7 +8739,7 @@ export interface components {
             id: string;
             code: string;
             name: string;
-            department: components["schemas"]["PositionAuthorizationDepartmentDto"];
+            department: components["schemas"]["PositionAuthorizationDepartmentDto"] | null;
             version: number;
             roleVersion: number;
             permissionCodes: string[];
@@ -8800,6 +8967,211 @@ export interface components {
             deletedAt: string;
             effects: components["schemas"]["OrganizationForceDeleteEffectDto"][];
         };
+        LegacyAuthorizationRoleDto: {
+            id: string;
+            organizationId: string | null;
+            code: string;
+            name: string;
+            mfaRequired: boolean;
+            permissionCodes: string[];
+            platformMarker: boolean;
+        };
+        LegacyAuthorizationPreviewInputDto: {
+            /** @enum {string} */
+            operation: "MIGRATE" | "REMOVE";
+            directUserIds: string[];
+            sourcePositionIds: string[];
+            /** Format: uuid */
+            targetPositionId?: string;
+            newPosition?: components["schemas"]["CreatePositionDto"];
+            /** @description 保留稳定 roleCode 的显式兼容岗位映射；权限与资格来源在预览中分别展示。 */
+            preserveRoleCode?: boolean;
+        };
+        LegacyAuthorizationDirectSourceDto: {
+            userId: string;
+            organizationId: string;
+            roleId: string;
+            selected: boolean;
+            initialization: boolean;
+        };
+        LegacyAuthorizationAssignmentDto: {
+            id: string;
+            userId: string;
+            positionId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+            /** @enum {string} */
+            temporalState: "CURRENT" | "FUTURE" | "ENDED" | "UNAVAILABLE";
+        };
+        LegacyAuthorizationMappingDto: {
+            positionId: string;
+            organizationId: string;
+            roleId: string;
+            isCanonical: boolean;
+            selected: boolean;
+            assignments: components["schemas"]["LegacyAuthorizationAssignmentDto"][];
+        };
+        LegacyAuthorizationTargetDto: {
+            positionId: string | null;
+            canonicalRoleId: string;
+            roleCode: string;
+            departmentId: string | null;
+            code: string;
+            name: string;
+            originalCanonical: components["schemas"]["LegacyAuthorizationRoleDto"] | null;
+            /** @enum {string} */
+            strategy: "ADOPT" | "INDEPENDENT_CANONICAL" | "MERGE_WITH_QUALIFICATION" | "MERGE" | "REMOVE";
+            permissionCodes: string[];
+            mfaRequired: boolean;
+        };
+        LegacyAuthorizationWorkflowReferenceDto: {
+            organizationId: string;
+            versionId: string;
+            nodeId: string;
+            status: string;
+            roleCode: string;
+        };
+        LegacyAuthorizationUserImpactDto: {
+            userId: string;
+            organizationId: string;
+            securityVersion: number;
+            status: string;
+            accountType: string;
+            mfaEnabled: boolean;
+            beforePermissionCodes: string[];
+            afterPermissionCodes: string[];
+            beforeRoleCodes: string[];
+            afterRoleCodes: string[];
+            beforeMfaRequired: boolean;
+            afterMfaRequired: boolean;
+            beforePlatformAdministrator: boolean;
+            afterPlatformAdministrator: boolean;
+            appointments: components["schemas"]["LegacyAuthorizationAssignmentDto"][];
+        };
+        LegacyAuthorizationUserLabelDto: {
+            id: string;
+            organizationId: string;
+            username: string;
+            fullName: string | null;
+            status: string;
+            unavailable: boolean;
+        };
+        LegacyAuthorizationDepartmentLabelDto: {
+            id: string;
+            code: string;
+            name: string;
+        };
+        LegacyAuthorizationPositionLabelDto: {
+            id: string;
+            organizationId: string;
+            departmentId: string | null;
+            department: components["schemas"]["LegacyAuthorizationDepartmentLabelDto"] | null;
+            code: string;
+            name: string;
+            status: string;
+            version: number;
+            roleVersion: number;
+            unavailable: boolean;
+        };
+        LegacyAuthorizationOrganizationLabelDto: {
+            id: string;
+            code: string;
+            name: string;
+        };
+        LegacyAuthorizationLabelsDto: {
+            users: components["schemas"]["LegacyAuthorizationUserLabelDto"][];
+            positions: components["schemas"]["LegacyAuthorizationPositionLabelDto"][];
+            organizations: components["schemas"]["LegacyAuthorizationOrganizationLabelDto"][];
+        };
+        LegacyAuthorizationPreviewDto: {
+            authorizationBaseline: string;
+            role: components["schemas"]["LegacyAuthorizationRoleDto"];
+            directSources: components["schemas"]["LegacyAuthorizationDirectSourceDto"][];
+            mappedSources: components["schemas"]["LegacyAuthorizationMappingDto"][];
+            target: components["schemas"]["LegacyAuthorizationTargetDto"] | null;
+            workflowReferences: components["schemas"]["LegacyAuthorizationWorkflowReferenceDto"][];
+            affectedUsers: components["schemas"]["LegacyAuthorizationUserImpactDto"][];
+            impactUserIds: string[];
+            /** @description 仍未处置的来源数；资格兼容映射不冒称已清理。 */
+            retainedSourceCount: number;
+            /** @description 仅真实授权scope内的可读标签；随精确预览基线及历史事实固定。 */
+            labels: components["schemas"]["LegacyAuthorizationLabelsDto"];
+        };
+        LegacyAuthorizationCommitDto: {
+            /** @enum {string} */
+            operation: "MIGRATE" | "REMOVE";
+            directUserIds: string[];
+            sourcePositionIds: string[];
+            /** Format: uuid */
+            targetPositionId?: string;
+            newPosition?: components["schemas"]["CreatePositionDto"];
+            /** @description 保留稳定 roleCode 的显式兼容岗位映射；权限与资格来源在预览中分别展示。 */
+            preserveRoleCode?: boolean;
+            authorizationBaseline: string;
+            /** @description 必须精确确认预览列出的全部扩散用户，包含未来任职。 */
+            confirmedImpactUserIds: string[];
+        };
+        LegacyAuthorizationResultDto: {
+            roleId: string;
+            targetPositionId: string | null;
+            archived: boolean;
+            deleted: boolean;
+            selfSessionRevoked: boolean;
+        };
+        LegacyAuthorizationHistoryDto: {
+            archiveId: string;
+            organizationId: string;
+            roleId: string;
+            actorUserId: string;
+            operation: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            state: "HISTORICAL";
+            role: components["schemas"]["LegacyAuthorizationRoleDto"] | null;
+            directSources: components["schemas"]["LegacyAuthorizationDirectSourceDto"][];
+            mappedSources: components["schemas"]["LegacyAuthorizationMappingDto"][];
+            target: components["schemas"]["LegacyAuthorizationTargetDto"] | null;
+            retainedSourceCount: number | null;
+            /** @description 只含当时固定标签；旧事实没有标签时为null，不能以当前名称替代历史。 */
+            labels: components["schemas"]["LegacyAuthorizationLabelsDto"] | null;
+            labelsUnavailable: boolean;
+        };
+        LegacyAuthorizationHistoryPageDto: {
+            items: components["schemas"]["LegacyAuthorizationHistoryDto"][];
+            total: number;
+            pageSize: number;
+            offset: number;
+        };
+        LegacyAuthorizationSourceDto: {
+            organizationId: string;
+            userId: string | null;
+            positionId: string | null;
+            assignmentId: string | null;
+            /** Format: date-time */
+            startedAt: string | null;
+            /** Format: date-time */
+            endedAt: string | null;
+            /** @enum {string} */
+            temporalState: "CURRENT" | "FUTURE" | "ENDED" | "UNAVAILABLE";
+            /** @enum {string} */
+            kind: "POSITION_CANONICAL" | "LEGACY_MAPPING" | "LEGACY_DIRECT" | "SYSTEM_INITIALIZATION";
+            active: boolean;
+            role: components["schemas"]["LegacyAuthorizationRoleDto"];
+        };
+        LegacyAuthorizationSourcePageDto: {
+            items: components["schemas"]["LegacyAuthorizationSourceDto"][];
+            total: number;
+            pageSize: number;
+            offset: number;
+        };
+        LegacyAuthorizationSourcesDto: {
+            currentSources: components["schemas"]["LegacyAuthorizationSourcePageDto"];
+            history: components["schemas"]["LegacyAuthorizationHistoryPageDto"];
+            labels: components["schemas"]["LegacyAuthorizationLabelsDto"];
+        };
         ESignatureSummaryDto: {
             /** Format: uuid */
             id: string;
@@ -8964,7 +9336,7 @@ export interface components {
             /** Format: date-time */
             endedAt: string | null;
             position: components["schemas"]["AccountAssignmentNameDto"];
-            department: components["schemas"]["AccountAssignmentNameDto"];
+            department: components["schemas"]["AccountAssignmentNameDto"] | null;
         };
         AccountRoleSourceDto: {
             /** @enum {string} */
@@ -9517,6 +9889,45 @@ export interface components {
         SupplierPortalNotificationPageDto: {
             items: components["schemas"]["SupplierPortalNotificationDto"][];
             total: number;
+        };
+        ConsoleHomeSourceDto: {
+            /** @enum {string} */
+            key: "outbox" | "audit" | "reconfiguration-organizations" | "reconfiguration-departments" | "reconfiguration-positions" | "reconfiguration-users";
+            /** @enum {string} */
+            scope: "TARGET" | "SESSION_HOME";
+            /**
+             * @description 平台目录的 organizationId 是授权来源，不是全部资源归属。
+             * @enum {string}
+             */
+            coverage: "ORGANIZATION" | "PLATFORM";
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            status: "AVAILABLE" | "UNAVAILABLE";
+            /**
+             * Format: date-time
+             * @description 该来源本次查询结束时间，不表示各来源属于同一原子快照或实时观测。
+             */
+            completedAt: string;
+            /** @description 仅成功的事项来源提供拥有者统计总量；不可用或无权时不返回零值。 */
+            total?: number;
+            /** @description 仅成功的审计来源提供最近获授权事件，最多五条。 */
+            items?: components["schemas"]["AuditEventDto"][];
+            /**
+             * @description 授权变化需重新核验；不披露底层错误。
+             * @enum {string}
+             */
+            reasonCode?: "SOURCE_UNAVAILABLE" | "AUTHORIZATION_CHANGED";
+        };
+        ConsoleHomeDto: {
+            context: components["schemas"]["ConsoleContextDto"];
+            /**
+             * Format: date-time
+             * @description 服务器本次组合查询结束时间；不代表系统整体健康或实时状态。
+             */
+            asOf: string;
+            /** @description 仅包含当前有权且有公开汇总来源的事项；空数组不等于全部管理事项为零。 */
+            sources: components["schemas"]["ConsoleHomeSourceDto"][];
         };
         ProblemFieldDto: {
             key: string;
@@ -16501,6 +16912,35 @@ export interface operations {
             };
         };
     };
+    ConsoleContextController_context: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleContextDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     AdminUserController_detail: {
         parameters: {
             query?: {
@@ -18768,6 +19208,181 @@ export interface operations {
             };
         };
     };
+    LegacyAuthorizationMigrationController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyAuthorizationRoleDto"][];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    LegacyAuthorizationMigrationController_preview: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                organizationId: string;
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegacyAuthorizationPreviewInputDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyAuthorizationPreviewDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    LegacyAuthorizationMigrationController_commit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "x-csrf-token": string;
+            };
+            path: {
+                organizationId: string;
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegacyAuthorizationCommitDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyAuthorizationResultDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    LegacyAuthorizationReadController_history: {
+        parameters: {
+            query?: {
+                pageSize?: components["schemas"]["Object"];
+                offset?: components["schemas"]["Object"];
+                roleId?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyAuthorizationHistoryPageDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    LegacyAuthorizationReadController_sources: {
+        parameters: {
+            query?: {
+                pageSize?: components["schemas"]["Object"];
+                offset?: components["schemas"]["Object"];
+                /** @description 与 positionId 必须且只能指定一个。 */
+                userId?: string;
+                positionId?: string;
+            };
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegacyAuthorizationSourcesDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ESignatureController_summary: {
         parameters: {
             query?: never;
@@ -20615,6 +21230,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierPortalNotificationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SystemManagementController_home: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleHomeDto"];
                 };
             };
             default: {

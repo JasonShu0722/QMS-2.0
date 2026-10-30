@@ -1,5 +1,18 @@
 # 阶段四业务域策划入口
 
+## REQ-0032 管理能力迁入候选（2026-10-30）
+
+直属岗位与兼容授权专项已纳入[管理控制台总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)的 CP-1 / Issue82 / V0.0.36；[专项计划](../../docs/superpowers/plans/2026-10-29-qms-organization-direct-position-legacy-authorization.md)沿原 A→B→C 接续，不再以最初“只策划”状态重复开工。迁入不改变业务租户、签章、专业职责或已发布流程；生产来源转换与业务绑定启用未代办。当前本地候选尚未发布，已退出夜间且 heartbeat 已删除，正常推进仅至 CP-1 PR 检查点。
+
+## REQ-0031 运行发布确认（2026-10-29）
+
+[PR #81](https://github.com/JasonShu0722/QMS-2.0/pull/81) / V0.0.35含fix1～fix8已部署`7fc80d407a65be4b6a10b683360c36b440812227`。最终PR/main各16项CI成功、精确head代码审查无发现；deploy40837564917实际成功，迁移前加密快照→4份迁移/134总链→同SHA API/Worker/Web及公网新契约/index-DBeXnAmn.js/4匿名401机器核验PASS。详见[实施计划第15节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)。
+
+REQ-0031运行能力已交付，不是N6范围。当前下一步为负责人核对有效平台管理身份与页面业务验收，实际删除/补配逐次人工确认；不代配岗位/流程，不回填或关闭Issue/REQ。早期“组织强删仅方案/未部署”仅指当时历史。
+
+下方候选、失败、未提交或未部署记录保留其历史范围，当前运行事实以上述发布确认为准。
+
+
 ## REQ-0031 本地整合接续（2026-10-29，未发布）
 
 V0.0.35 / Issue #80在[实施计划](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)收口基础管理强删、补配及统一管理范围；不是N6或新业务范围。删除当前对象而不删除业务租户/原actor/签章，受影响在审资格取消但保留原意见；内部三域专业/owner和供应商SQE/内部答复人可由真实平台管理补配后，再由真实职责重新提交，不管理员代签、不重开已关闭版本。

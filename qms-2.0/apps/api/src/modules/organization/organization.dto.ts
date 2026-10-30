@@ -83,14 +83,14 @@ export class DeleteStructureResultDto {
 }
 
 export class CreatePositionDto extends CreateOrganizationDto {
-  @ApiProperty({ format: 'uuid' }) @IsUUID() departmentId!: string;
+  @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'null 表示组织直属；创建时必须明确提交。' }) @ValidateIf((_object, value) => value !== null) @IsUUID() departmentId!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' }) @IsOptional() @IsUUID() categoryId?: string | null;
 }
 
 export class UpdatePositionDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @Length(1, 200) @Matches(/\S/) name?: string;
-  @ApiPropertyOptional({ format: 'uuid' }) @ValidateIf((_object, value) => value !== undefined) @IsUUID() departmentId?: string;
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'null 改为组织直属；省略则保持原归属。' }) @IsOptional() @IsUUID() departmentId?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' }) @IsOptional() @IsUUID() categoryId?: string | null;
   @ApiPropertyOptional({ enum: ['ACTIVE', 'DISABLED'] }) @ValidateIf((_object, value) => value !== undefined) @IsIn(['ACTIVE', 'DISABLED']) status?: 'ACTIVE' | 'DISABLED';
 }
@@ -150,7 +150,7 @@ export class DepartmentDto {
 export class PositionDto {
   @ApiProperty() id!: string;
   @ApiProperty() organizationId!: string;
-  @ApiProperty() departmentId!: string;
+  @ApiProperty({ type: String, nullable: true }) departmentId!: string | null;
   @ApiProperty({ type: String, nullable: true }) categoryId!: string | null;
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;

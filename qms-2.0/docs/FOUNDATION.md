@@ -1,5 +1,14 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0031 运行发布确认（2026-10-29）
+
+[PR #81](https://github.com/JasonShu0722/QMS-2.0/pull/81) / V0.0.35含fix1～fix8已部署`7fc80d407a65be4b6a10b683360c36b440812227`。最终PR/main各16项CI成功、精确head代码审查无发现；deploy40837564917实际成功，迁移前加密快照→4份迁移/134总链→同SHA API/Worker/Web及公网新契约/index-DBeXnAmn.js/4匿名401机器核验PASS。详见[实施计划第15节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)。
+
+本节只确认代码发布及机器核验：快照标记为源码SHA，不是dump内容哈希；备份是本机加密dump往返和pg_restore列表校验，非异地灾备/恢复演练。Worker当前启动Ready为deploy.sh强制门禁，原stdout未直接复制到Actions，不冒称独立读取。完整原失败、最终源码/CI/部署证据保留；实际生产登录/角色/业务人工验收另办。
+
+下方候选、失败、未提交或未部署记录保留其历史范围，当前运行事实以上述发布确认为准。
+
+
 ## PR #81 fix8：用户补配MFA与候选提示时序（2026-10-29，未发布）
 
 b029dae / CI40826739866的Web1已成功，Web8一条候选提示立即可见性断言失败连带foundation，其余14项成功。新head审查另发现真实P1 4409212130：用户补配误调用永久删除的因子清理，即便正常旧密码仍在也会要求新MFA绑定。fix8将永久删除与存续补配的服务器清理目的明确分离；真实组织/部门pending→restore→普通enable→现有MFA链先RED后修复，不能凭旧结构删除测试证明补配安全。

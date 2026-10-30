@@ -5,7 +5,7 @@ import { AdminRoleService } from '../../src/modules/authorization/admin-role.ser
 describe('administrator role management', () => {
   const prisma = {
     userPosition: { findMany: jest.fn().mockResolvedValue([]) },
-    role: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    role: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     permission: { findMany: jest.fn() },
     positionRole: { count: jest.fn() },
     rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -29,6 +29,7 @@ describe('administrator role management', () => {
     jest.resetAllMocks();
     prisma.userPosition.findMany.mockResolvedValue([]);
     prisma.positionRole.count.mockResolvedValue(0);
+    prisma.role.count.mockResolvedValue(0);
     prisma.user.findMany.mockResolvedValue([]);
     prisma.session.findFirst.mockResolvedValue({ id: actor.sessionId, mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
     prisma.$transaction.mockImplementation(async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma));
@@ -62,6 +63,18 @@ describe('administrator role management', () => {
     expect(prisma.positionRole.count).toHaveBeenCalledWith({ where: { isCanonical: true, roleId: { in: [role.id] } } });
   });
 
+  it.each(['update', 'remove', 'copy', 'assign'] as const)('refuses archived role %s before an old successful receipt can replay', async operation => {
+    prisma.role.count.mockResolvedValue(1);
+    prisma.adminMutation.findUnique.mockResolvedValue({ action: 'OLD_SUCCESS', response: { value: { leaked: true } } });
+    const change = operation === 'update' ? service.update(actor, role.id, { name: 'Bypass' }, 'trace', 'archived-key')
+      : operation === 'remove' ? service.remove(actor, role.id, 'trace', 'archived-key')
+        : operation === 'copy' ? service.copy(actor, role.id, { code: 'COPY', name: 'Copy' }, 'trace', 'archived-key')
+          : service.assign(actor, 'target-user', { roleIds: [role.id] }, 'trace', 'archived-key');
+    await expect(change).rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(prisma.adminMutation.findUnique).not.toHaveBeenCalled();
+    expect(prisma.role.count).toHaveBeenCalledWith({ where: { id: { in: [role.id] }, archivedAt: { not: null } } });
+  });
+
   it('requires the read MFA baseline and rejects stale policy changes before mutation', async () => {
     await expect(service.update(actor, role.id, { mfaRequired: true }, 'trace', 'test-key-mfa')).rejects.toMatchObject({ status: 400 });
     await expect(service.update(actor, role.id, { mfaRequired: false, expectedMfaRequired: true }, 'trace', 'test-key-mfa')).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
@@ -87,8 +100,8 @@ describe('administrator role management', () => {
   it('lists and reads roles only inside the server-authorized organization', async () => {
     await service.list(actor);
     await service.detail(actor, 'role-a');
-    expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', positions: { none: { isCanonical: true } } } }));
-    expect(prisma.role.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'role-a', organizationId: 'org-a' } }));
+    expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', archivedAt: null, positions: { none: { isCanonical: true } } } }));
+    expect(prisma.role.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'role-a', organizationId: 'org-a', archivedAt: null } }));
   });
 
   it('rejects a supplier actor from accessing another organization', async () => {
@@ -197,7 +210,7 @@ describe('administrator role management', () => {
     prisma.userRole.findMany.mockResolvedValue([]);
     await expect(service.create({ ...actor, scopeOrganizationId: 'org-b' }, { organizationId: 'org-b', code: 'QUALITY', name: 'Quality', permissionCodes: [] }, 'trace', 'test-key-1'))
       .rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
-    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: actor.id, OR: expect.arrayContaining([{ organizationId: 'org-b' }]) } }));
+    expect(prisma.userRole.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: actor.id, role: { archivedAt: null }, OR: expect.arrayContaining([{ organizationId: 'org-b' }]) } }));
     expect(prisma.role.create).not.toHaveBeenCalled();
   });
 

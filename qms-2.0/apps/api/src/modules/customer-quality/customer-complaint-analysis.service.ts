@@ -55,7 +55,7 @@ export class CustomerComplaintAnalysisService {
     const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' }, select: { id: true, username: true } });
     const assignment = (await this.organizations.currentAssignments(userId, organizationId, new Date(), tx)).find(item => item.id === assignmentId);
     const permissions = user && assignment ? await adminPermissions(tx, userId, organizationId) : [];
-    if (!user || !assignment || [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, ANALYSIS_PERMISSIONS[section]].some(code => !permissions.includes(code))) analysisFail('CUSTOMER_ANALYSIS_CANDIDATE_INVALID', 403);
+    if (!user || !assignment?.department || [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, ANALYSIS_PERMISSIONS[section]].some(code => !permissions.includes(code))) analysisFail('CUSTOMER_ANALYSIS_CANDIDATE_INVALID', 403);
     return { userId, username: user.username, assignmentId, departmentId: assignment.department.id };
   }
 
@@ -71,7 +71,7 @@ export class CustomerComplaintAnalysisService {
     if (source.status !== 'FOLLOWING') analysisFail('CUSTOMER_ANALYSIS_SOURCE_CLOSED', 409);
     if (source.qualityEngineerId !== actor.id || !source.qualityEngineerAssignmentId) analysisFail('CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 403);
     const assignments = await this.organizations.currentAssignments(actor.id, source.organizationId, new Date(), tx);
-    if (!assignments.some(item => item.id === source.qualityEngineerAssignmentId)) analysisFail('CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 403);
+    if (!assignments.some(item => item.id === source.qualityEngineerAssignmentId && item.department !== null)) analysisFail('CUSTOMER_ANALYSIS_ENGINEER_REQUIRED', 403);
     await assertAdminAccess(tx, actor, source.organizationId, (source.responsibilityStage ?? source.stage) === 'NEW_PRODUCT'
       ? [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, LEDGER_PERMISSIONS.project] : [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write]);
   }
@@ -152,7 +152,7 @@ export class CustomerComplaintAnalysisService {
         const permissions = await adminPermissions(tx, user.id, organizationId);
         if ([LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, ANALYSIS_PERMISSIONS[section]].some(code => !permissions.includes(code))) continue;
         for (const assignment of await this.organizations.currentAssignments(user.id, organizationId, new Date(), tx)) {
-          if (departmentId && assignment.department.id !== departmentId) continue;
+          if (!assignment.department || departmentId && assignment.department.id !== departmentId) continue;
           result.push(await this.candidate(tx, organizationId, user.id, assignment.id, section));
         }
       }
@@ -171,7 +171,7 @@ export class CustomerComplaintAnalysisService {
         const { row, source } = await this.lock(tx, actor, entry.id, false);
         if (row.assigneeUserId !== actor.id || source.status !== 'FOLLOWING') continue;
         const appointments = await this.organizations.currentAssignments(actor.id, organizationId, new Date(), tx);
-        if (!appointments.some(item => item.id === row.assigneeAssignmentId && item.department.id === row.departmentId)) continue;
+        if (!appointments.some(item => item.id === row.assigneeAssignmentId && item.department?.id === row.departmentId)) continue;
         tasks.push({ kind: 'CUSTOMER_COMPLAINT_FAE' as const, analysis: await this.project(tx, actor, row) });
       }
       return tasks;

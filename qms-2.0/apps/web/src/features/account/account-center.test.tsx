@@ -9,6 +9,7 @@ import { clearAccountAvatar } from './account-avatar-state';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { AccountMenu } from './AccountMenu';
 import type { components } from '@qms/contracts';
+import { getConsoleContext } from '../../console/console-api';
 
 type HistoryItem = components['schemas']['AccountSessionHistoryItemDto'];
 type HistoryPage = components['schemas']['AccountSessionHistoryPageDto'];
@@ -30,6 +31,7 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('../../api/client', async (original) => ({ ...await original<typeof import('../../api/client')>(), ...api }));
+vi.mock('../../console/console-api', () => ({ getConsoleContext: vi.fn() }));
 
 async function openSettings() {
   const trigger = screen.getByRole('button', { name: '个人信息设置' });
@@ -45,6 +47,7 @@ describe('account center', () => {
     // rc-component's fixed test IDs collide between settings, security and password dialogs.
     vi.stubEnv('NODE_ENV', 'development');
     vi.resetAllMocks();
+    vi.mocked(getConsoleContext).mockRejectedValue(new ApiError({ code: 'FORBIDDEN', message: 'denied' }, 403));
     api.getAccountOverview.mockResolvedValue({ organizationId: 'o1', assignments: [], effectiveRoles: [], permissions: [] });
     api.getMySignatureSummary.mockResolvedValue([]);
     api.getAccountSessionHistory.mockResolvedValue(history([session()]));

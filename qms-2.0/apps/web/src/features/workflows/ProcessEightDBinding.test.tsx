@@ -92,9 +92,9 @@ it('completes binding 401 navigation past its busy guard and a parent dirty draf
   });
   function Page() { useUnsavedChanges(true); return <ProcessEightDBinding />; }
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
     { path: '/login', element: <p>8D配置登录目的页</p> },
-  ], { initialEntries: ['/app/workflow-designer'] });
+  ], { initialEntries: ['/console/workflows'] });
   render(<RouterProvider router={router} />);
   await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));

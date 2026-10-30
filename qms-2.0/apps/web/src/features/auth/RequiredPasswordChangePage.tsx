@@ -1,47 +1,62 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Space, Spin, Typography } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
+import { authRedirect } from './return-to';
 
 export function RequiredPasswordChangePage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm();
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [traceId, setTraceId] = useState<string>();
-  const alive = useRef(true);
+  const lifetime = useRef({ key: location.key, signal: new AbortController().signal });
   const pending = useRef(false);
+  useLayoutEffect(() => {
+    const scope = new AbortController();
+    lifetime.current = { key: location.key, signal: scope.signal };
+    pending.current = false;
+    setReady(false); setBusy(false); setError(undefined); setTraceId(undefined);
+    if (form.getFieldInstance('newPassword')) form.resetFields();
+    return () => scope.abort();
+  }, [location.key, form]);
   useEffect(() => {
-    alive.current = true;
-    void apiRequest<components['schemas']['LoginResponseDto']>('/api/v1/auth/password-change').then(() => { if (alive.current) setReady(true); }).catch((cause: unknown) => {
-      if (alive.current) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); }
+    const signal = lifetime.current.signal;
+    void apiRequest<components['schemas']['LoginResponseDto']>('/api/v1/auth/password-change').then(() => { if (!signal.aborted) setReady(true); }).catch((cause: unknown) => {
+      if (!signal.aborted) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); }
     });
-    return () => { alive.current = false; };
-  }, []);
+  }, [location.key]);
   async function submit(values: { newPassword: string }) {
     if (pending.current) return;
+    const signal = lifetime.current.signal;
+    if (signal.aborted || lifetime.current.key !== location.key) return;
     pending.current = true; setBusy(true); setError(undefined);
     try {
       const token = await csrfToken();
+      if (signal.aborted) return;
       const result = await apiRequest<components['schemas']['LoginResponseDto']>('/api/v1/auth/password-change/complete', { method: 'POST', headers: { 'x-csrf-token': token }, body: JSON.stringify({ newPassword: values.newPassword }) });
-      if (alive.current) { form.resetFields(); navigate(result.landingPath, { replace: true }); }
-    } catch (cause) { if (alive.current) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); } }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+      if (!signal.aborted) { form.resetFields(); const redirect = authRedirect(result, location.state); navigate(redirect.to, { replace: true, state: redirect.state }); }
+    } catch (cause) { if (!signal.aborted) { setError(safeAccountError(cause)); setTraceId(cause instanceof ApiError ? cause.traceId : undefined); } }
+    finally { if (!signal.aborted) { pending.current = false; setBusy(false); } }
   }
   async function exit() {
     if (pending.current) return;
+    const signal = lifetime.current.signal;
+    if (signal.aborted || lifetime.current.key !== location.key) return;
     pending.current = true; setBusy(true);
     try {
       const token = await csrfToken();
+      if (signal.aborted) return;
       await apiRequest<void>('/api/v1/auth/logout', { method: 'POST', headers: { 'x-csrf-token': token } });
-      if (alive.current) { form.resetFields(); navigate('/login', { replace: true }); }
+      if (!signal.aborted) { form.resetFields(); navigate('/login', { replace: true }); }
     }
-    catch (cause) { if (alive.current) setError(safeAccountError(cause)); }
-    finally { pending.current = false; if (alive.current) setBusy(false); }
+    catch (cause) { if (!signal.aborted) setError(safeAccountError(cause)); }
+    finally { if (!signal.aborted) { pending.current = false; setBusy(false); } }
   }
   return <main className="reset-page"><Card>
     <Typography.Title level={2}>{t('首次登录修改密码')}</Typography.Title>

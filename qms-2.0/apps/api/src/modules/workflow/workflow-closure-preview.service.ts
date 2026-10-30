@@ -25,7 +25,7 @@ export class WorkflowClosurePreviewService {
       const search = query.search?.trim(); const skip = (query.page - 1) * query.pageSize;
       const departments = await this.responsibilities.workflowDepartmentOptions(tx, actor.organizationId, search, query.pageSize, skip);
       const where: Prisma.UserWhereInput = { organizationId: actor.organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
-        positions: { some: { organizationId: actor.organizationId, ...effectivePositionAssignmentWhere() } },
+        positions: { some: { organizationId: actor.organizationId, ...effectivePositionAssignmentWhere(), AND: { position: { departmentId: { not: null } } } } },
         ...(search ? { OR: [{ username: { contains: search, mode: 'insensitive' } }, { fullName: { contains: search, mode: 'insensitive' } }] } : {}) };
       const [users, userTotal] = await Promise.all([tx.user.findMany({ where, select: { id: true, username: true, fullName: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], take: query.pageSize, skip }), tx.user.count({ where })]);
       await this.authorize(tx, actor);
@@ -93,7 +93,7 @@ export class WorkflowClosurePreviewService {
 
   private async person(tx: Prisma.TransactionClient, organizationId: string, userId: string, at: Date, requireWorkflowAct = false): Promise<WorkflowClosureParticipantDto | null> {
     const user = await tx.user.findFirst({ where: { id: userId, organizationId, status: 'ACTIVE', accountType: 'INTERNAL',
-      positions: { some: { organizationId, ...effectivePositionAssignmentWhere(at) } } }, select: { id: true, username: true, fullName: true } });
+      positions: { some: { organizationId, ...effectivePositionAssignmentWhere(at), AND: { position: { departmentId: { not: null } } } } } }, select: { id: true, username: true, fullName: true } });
     if (!user || requireWorkflowAct && !await canProcessWorkflowNode(tx, user.id, organizationId, { assigneeUserId: user.id })) return null;
     // Professional identity is the issuer, not an arbitrarily selected appointment when a user holds several positions.
     return { userId: user.id, username: user.username, fullName: user.fullName, assignmentId: null, positionId: null, departmentId: null,

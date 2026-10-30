@@ -278,7 +278,7 @@ model Department {
 model Position {
   id String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
-  departmentId String @map("department_id") @db.Uuid
+  departmentId String? @map("department_id") @db.Uuid
   categoryId String? @map("category_id") @db.Uuid
   code String @db.VarChar(64)
   name String @db.VarChar(200)
@@ -290,7 +290,7 @@ model Position {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  department Department @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  department Department? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
   category PositionCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
   users UserPosition[]
   roles PositionRole[]
@@ -335,6 +335,7 @@ model Role {
   code           String           @db.VarChar(100)
   name           String           @db.VarChar(150)
   mfaRequired Boolean @default(false) @map("mfa_required")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   permissions    RolePermission[]
@@ -345,6 +346,19 @@ model Role {
   @@unique([organizationId, code])
   @@index([organizationId])
   @@map("roles")
+}
+
+model LegacyAuthorizationArchive {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  operation      String   @db.VarChar(32)
+  snapshot       Json
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([organizationId, roleId, createdAt], map: "legacy_authorization_archive_scope_time_idx")
+  @@map("legacy_authorization_archives")
 }
 
 model PositionRole {

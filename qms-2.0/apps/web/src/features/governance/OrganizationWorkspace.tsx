@@ -3,13 +3,15 @@ import { Alert, Button, Empty, Spin, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import type { AdminOrganization } from '../admin/admin';
-import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { allStructurePages, organizationPath, type Department, type Organization } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
 import { OrganizationAdministration } from './OrganizationAdministration';
 import { StructureAdministration } from './StructureAdministration';
+import { RoleAdministration } from '../admin/RoleAdministration';
+import { canReadAuthorizationSources, useAuthorizationLanguage } from './AuthorizationSources';
+import { LegacyAuthorizationAdministration } from './LegacyAuthorizationAdministration';
 import './OrganizationWorkspace.css';
 
 type Props = { organization: AdminOrganization; organizations: AdminOrganization[]; onSelectOrganization: (id: string) => void; onChanged?: () => void; onDenied?: (error: ApiError) => void };
@@ -19,7 +21,7 @@ export function OrganizationWorkspace(props: Props) {
 }
 
 function WorkspaceScope({ organization, organizations, onSelectOrganization, onChanged, onDenied }: Props) {
-  const { t } = useLanguage();
+  const { t } = useAuthorizationLanguage();
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const navigate = useNavigate();
@@ -33,6 +35,8 @@ function WorkspaceScope({ organization, organizations, onSelectOrganization, onC
   const mounted = useRef(false);
   const readOrganizations = organization.permissions.includes('organization:read');
   const readStructure = organization.permissions.includes('organization:structure:read');
+  const readRoles = organization.permissions.includes('account:roles:read');
+  const readSources = canReadAuthorizationSources(organization);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     let active = true;
@@ -56,7 +60,7 @@ function WorkspaceScope({ organization, organizations, onSelectOrganization, onC
     return () => { active = false; controller.abort(); };
   }, [organization.id, readOrganizations, readStructure, revision, completeSessionNavigation, navigate]);
 
-  const visibleOrganizations = organizations.filter(entry => entry.permissions.some(code => ['organization:read', 'organization:structure:read'].includes(code)));
+  const visibleOrganizations = organizations.filter(entry => entry.permissions.some(code => ['organization:read', 'organization:structure:read', 'account:roles:read'].includes(code)));
   const visibleIds = new Set(visibleOrganizations.map(entry => entry.id));
   const parents = new Map(tree.filter(entry => visibleIds.has(entry.id)).map(entry => [entry.id, entry.parentId]));
   function departmentNodes(parentId: string | null, ancestors: string[] = []): ReactNode {
@@ -85,13 +89,17 @@ function WorkspaceScope({ organization, organizations, onSelectOrganization, onC
       {loading ? <Spin /> : <nav aria-label={t('可读组织与部门')}><ul>{organizationNodes(null)}</ul></nav>}
       {!readStructure && <Alert type="info" showIcon title={t('无部门岗位读取权限')} />}
     </aside>
-    <div className="organization-workspace-context" key={`${revision}:${selectedId ?? ''}`}>
-      {loading ? <Spin /> : <>
+    <div className="organization-workspace-context">
+      <div key={`${revision}:${selectedId ?? ''}`}>{loading ? <Spin /> : <>
         {!readStructure && organizationDetails}
         {readStructure && !structureError && <StructureAdministration organization={organization} onDenied={onDenied} workspace={{ departments, departmentId: selectedId, organizationDetails, onRefresh: refreshStructure, onChanged: refreshStructure }} />}
         {!!structureError && organizationDetails}
         {!!structureError && <Empty description={t('部门岗位加载失败，请重试')} />}
-      </>}
+      </>}</div>
+      {!selectedId && readRoles && (readSources ? <LegacyAuthorizationAdministration organization={organization} onDenied={onDenied} onChanged={refreshStructure} /> : <>
+        <Alert type="info" showIcon title={t('仅可读取角色定义与权限概览，缺少结构及完整来源读取权限。')} />
+        <RoleAdministration organization={organization} readOnly />
+      </>)}
     </div>
   </section>;
 }

@@ -1,50 +1,66 @@
 import type { LoginRequest } from '@qms/contracts';
 import { Alert, Button, Checkbox, Form, Input, Spin, Typography } from 'antd';
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import { ApiError, getSession, login, safeAccountError } from '../../api/client';
+import { authRedirect } from './return-to';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const pending = useRef(false);
+  const lifetime = useRef({ key: location.key, signal: new AbortController().signal });
 
   const [retryCount, setRetryCount] = useState(0);
   const [sessionState, setSessionState] = useState<'checking' | 'unauthenticated' | 'error'>('checking');
 
+  useLayoutEffect(() => {
+    const scope = new AbortController();
+    lifetime.current = { key: location.key, signal: scope.signal };
+    pending.current = false;
+    setLoading(false); setError(null);
+    return () => scope.abort();
+  }, [location.key]);
+
   useEffect(() => {
     let active = true;
+    const signal = lifetime.current.signal;
     setSessionState('checking');
     getSession().then((session) => {
-      if (active) navigate(session.landingPath, { replace: true });
+      if (active && !signal.aborted) { const redirect = authRedirect(session, location.state); navigate(redirect.to, { replace: true, state: redirect.state }); }
     }).catch((cause: unknown) => {
-      if (!active) return;
+      if (!active || signal.aborted) return;
       setSessionState(cause instanceof ApiError && (cause.status === 401 || ['HTTP_401', 'AUTH_SESSION_REQUIRED'].includes(cause.code))
         ? 'unauthenticated' : 'error');
     });
     return () => { active = false; };
-  }, [navigate, retryCount]);
+  }, [navigate, retryCount, location.state, location.key]);
 
   async function submit(values: LoginRequest) {
     if (sessionState !== 'unauthenticated' || pending.current) return;
+    const signal = lifetime.current.signal;
+    if (signal.aborted || lifetime.current.key !== location.key) return;
     pending.current = true;
     setLoading(true);
     setError(null);
     try {
       const result = await login({ ...values, rememberMe: values.rememberMe ?? false });
-      navigate(result.landingPath, { replace: true });
+      if (signal.aborted) return;
+      const redirect = authRedirect(result, location.state);
+      navigate(redirect.to, { replace: true, state: redirect.state });
     } catch (caught) {
+      if (signal.aborted) return;
       setError(
         caught instanceof ApiError
           ? caught
           : new ApiError({ code: 'CLIENT_ERROR', message: '登录请求失败' }),
       );
     } finally {
-      pending.current = false;
-      setLoading(false);
+      if (!signal.aborted) { pending.current = false; setLoading(false); }
     }
   }
 
@@ -98,7 +114,7 @@ export function LoginPage() {
                 }
               />
             ) : null}
-            <Form layout="vertical" onFinish={submit} initialValues={{ rememberMe: false }} className="login-form" disabled={loading}>
+            <Form key={location.key} layout="vertical" onFinish={submit} initialValues={{ rememberMe: false }} className="login-form" disabled={loading}>
               <Form.Item label={t('账号')} name="identifier" rules={[{ required: true, message: t('请输入账号') }]}>
                 <Input autoComplete="username" size="large" />
               </Form.Item>

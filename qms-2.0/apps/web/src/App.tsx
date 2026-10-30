@@ -12,6 +12,11 @@ import { ReauthenticationProvider } from './features/auth/ReauthenticationProvid
 import { PasswordRecoveryPage } from './features/auth/PasswordRecoveryPage';
 import { AuthToolbar } from './features/auth/AuthToolbar';
 import { RequiredPasswordChangePage } from './features/auth/RequiredPasswordChangePage';
+import { ConsoleLayout } from './console/ConsoleLayout';
+import { ConsoleManagementPage } from './console/ConsoleManagementPage';
+import { ConsoleWorkflowPage } from './console/ConsoleWorkflowPage';
+import { ConsoleHome } from './console/ConsoleHome';
+import { LegacyConsoleRedirect } from './features/navigation/LegacyConsoleRedirect';
 
 export function App() {
   const [router, setRouter] = useState<ReturnType<typeof createBrowserRouter>>();
@@ -33,6 +38,13 @@ function AppRoutes() {
         <Route path="/change-password" element={<RequiredPasswordChangePage />} />
         <Route path="/password-recovery" element={<PasswordRecoveryPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/app/admin/*" element={<AuthenticatedRoute accountType="INTERNAL"><LegacyConsoleRedirect /></AuthenticatedRoute>} />
+        <Route path="/app/workflow-designer/*" element={<AuthenticatedRoute accountType="INTERNAL"><LegacyConsoleRedirect /></AuthenticatedRoute>} />
+        <Route path="/console/*" element={<AuthenticatedRoute accountType="INTERNAL"><ConsoleLayout /></AuthenticatedRoute>}>
+          <Route index element={<ConsoleHome />} />
+          {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'configuration', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
+          <Route path="workflows/*" element={<ConsoleWorkflowPage />} />
+        </Route>
         <Route
           path="/app/*"
           element={

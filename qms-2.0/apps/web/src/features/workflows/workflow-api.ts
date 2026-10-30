@@ -37,7 +37,7 @@ export const saveWorkflow = (id: string, body: components['schemas']['UpdateWork
 export const publishWorkflow = (id: string, body: components['schemas']['PublishWorkflowDto'], options?: WriteOptions) => write<WorkflowDefinition>(`/${id}/publish`, body, 'POST', options);
 export const copyWorkflow = (id: string, body: components['schemas']['CopyWorkflowDto'], options?: WriteOptions) => write<WorkflowDefinition>(`/${id}/copy`, body, 'POST', options);
 export const validateWorkflow = (body: components['schemas']['WorkflowGraphDto'], options?: WriteOptions) => write<components['schemas']['WorkflowValidationResponseDto']>('/validate', body, 'POST', options);
-export const workflowPath = (definition: WorkflowDefinition) => `/app/workflow-designer/${definition.id}/${definition.version.id}`;
+export const workflowPath = (definition: WorkflowDefinition) => `/console/workflows/${definition.id}/${definition.version.id}`;
 
 export function initialGraph(): components['schemas']['WorkflowGraphDto'] {
   return { nodes: [{ id: crypto.randomUUID(), type: 'ACTION', name: '处理', config: { isStart: true, editorPosition: { x: 40, y: 80 } } },

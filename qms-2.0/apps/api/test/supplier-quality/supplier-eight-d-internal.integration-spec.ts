@@ -20,6 +20,14 @@ describe('controlled supplier 8D core before external disclosure', () => {
   }, 120_000);
   afterAll(async () => { await app?.close(); });
 
+  it('rejects a direct-only SQE appointment rather than treating its functional permissions as a responsible section', async () => {
+    const f = await supplierEightDFixture(app);
+    await f.db.position.update({ where: { id: f.f.owner.position.id }, data: { departmentId: null } });
+    await expect(f.db.$transaction(tx => app.get(SupplierEightDService).disclosureContext(tx, f.sqe.actor, f.draft.id)))
+      .rejects.toMatchObject({ response: { code: 'SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID' }, status: 403 });
+    expect((await f.db.supplierQualityProblem.findUniqueOrThrow({ where: { id: f.draft.id } })).releasedToSupplierAt).toBeNull();
+  }, 30_000);
+
   it('offers disclosure only through the actual assigned SQE and exports no document or internal assignment data', async () => {
     const f = await supplierEightDFixture(app);
     const core = app.get(SupplierEightDService);

@@ -74,6 +74,30 @@ const writes = (calls: Call[]) => calls.filter(call => call.init?.method === 'PO
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().bindSession(`INTERNAL:${org.id}:actor`); });
 afterEach(() => { vi.unstubAllGlobals(); act(() => useWorkTabsStore.getState().reset()); });
 
+it('requires explicit POSITION ownership and posts literal null only after organization-direct is selected', async () => {
+  const calls = server(pending('POSITION', ['targetDepartmentId'])); render(scene());
+  await select('对象类型', '岗位'); await edit();
+  await waitFor(() => expect(screen.getByLabelText('目标部门/科室')).toBeEnabled());
+  expect(editor().getByRole('button', { name: '确认补配' })).toBeDisabled();
+  expect(writes(calls)).toEqual([]);
+  await select('目标部门/科室', '组织直属');
+  await save();
+  await waitFor(() => expect(writes(calls)).toHaveLength(1));
+  expect(JSON.parse(String(writes(calls)[0].init?.body))).toEqual({ expectedVersion: 7, targetDepartmentId: null });
+  expect(screen.getByText(/保持停用|配置已更新/)).toBeInTheDocument();
+});
+
+it('never offers organization-direct ownership for a non-POSITION required department', async () => {
+  const calls = server(pending('DEPARTMENT', ['targetOrganizationId', 'targetDepartmentId'], 'deleted-org')); render(scene());
+  await select('对象类型', '部门/科室'); await edit();
+  await select('目标组织', '目标公司 · B');
+  await waitFor(() => expect(screen.getByLabelText('目标部门/科室')).toBeEnabled());
+  fireEvent.mouseDown(screen.getByLabelText('目标部门/科室'));
+  expect(screen.queryByText('组织直属')).not.toBeInTheDocument();
+  expect(editor().getByRole('button', { name: '确认补配' })).toBeDisabled();
+  expect(writes(calls)).toEqual([]);
+});
+
 it('reads the real paginated queue and directories and explains historical scope without a delete undo', async () => {
   const calls = server(); render(scene()); await edit();
   expect(calls.some(call => call.path === '/api/v1/admin/reconfiguration?kind=ORGANIZATION&pageSize=20&offset=0')).toBe(true);

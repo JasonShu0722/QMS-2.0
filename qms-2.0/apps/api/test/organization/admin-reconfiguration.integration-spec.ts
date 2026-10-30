@@ -165,6 +165,75 @@ describe('REQ0031 reconfiguration isolated HTTP and real PostgreSQL', () => {
     await restore(admin, 'USER', deleted.id, { expectedVersion: 1, targetOrganizationId: admin.home.id }).expect(404);
   });
 
+  it('restores a pending position as explicitly organization-direct but never defaults missing ownership or appoints a user', async () => {
+    const admin = await administrator();
+    const department = await db.department.create({ data: { organizationId: admin.home.id, code: randomUUID(), name: 'Unavailable department', status: 'DISABLED' } });
+    const position = await db.position.create({ data: { organizationId: admin.home.id, departmentId: department.id, code: randomUUID(), name: 'Pending direct conversion', status: 'DISABLED', configurationRequired: true } });
+    const mapping = await db.positionRole.create({ data: { organizationId: admin.home.id, positionId: position.id, roleId: admin.role.id } });
+    const appointment = await db.userPosition.create({ data: { organizationId: admin.home.id, userId: admin.user.id, positionId: position.id, endedAt: new Date() } });
+    await restore(admin, 'POSITION', position.id, { expectedVersion: 1 }).expect(400);
+    await restore(admin, 'POSITION', position.id, { expectedVersion: 9, targetDepartmentId: null }).expect(409);
+    const key = randomUUID();
+    const body = { expectedVersion: 1, targetDepartmentId: null };
+    const result = await restore(admin, 'POSITION', position.id, body, key).expect(201);
+    expect(result.body).toMatchObject({ id: position.id, version: 2, status: 'DISABLED', configurationRequired: false });
+    expect(await db.position.findUniqueOrThrow({ where: { id: position.id } })).toMatchObject({ organizationId: admin.home.id, departmentId: null, status: 'DISABLED', configurationRequired: false, version: 2 });
+    expect(await db.positionRole.findMany({ where: { positionId: position.id } })).toEqual([mapping]);
+    expect(await db.userPosition.findMany({ where: { positionId: position.id } })).toEqual([appointment]);
+    expect((await restore(admin, 'POSITION', position.id, body, key).expect(201)).body).toEqual(result.body);
+    expect(await db.auditEvent.count({ where: { resourceId: position.id, action: 'POSITION_RECONFIGURED' } })).toBe(1);
+  });
+
+  it('replaces a pending direct position from a deleted organization with an unprivileged disabled direct identity', async () => {
+    const admin = await administrator();
+    const old = await organization();
+    const source = await db.position.create({ data: { organizationId: old.id, departmentId: null, code: randomUUID(), name: 'Historical direct position', status: 'DISABLED', configurationRequired: true } });
+    const legacy = await db.role.create({ data: { organizationId: old.id, code: randomUUID(), name: 'Historical role' } });
+    const mapping = await db.positionRole.create({ data: { organizationId: old.id, positionId: source.id, roleId: legacy.id } });
+    const user = await db.user.create({ data: { organizationId: old.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    const appointment = await db.userPosition.create({ data: { organizationId: old.id, userId: user.id, positionId: source.id, endedAt: new Date() } });
+    await db.organization.update({ where: { id: old.id }, data: { status: 'DISABLED', deletedAt: new Date() } });
+    await restore(admin, 'POSITION', source.id, { expectedVersion: 1, targetOrganizationId: admin.home.id }).expect(400);
+    const supplier = await organization({ type: 'SUPPLIER' });
+    await restore(admin, 'POSITION', source.id, { expectedVersion: 1, targetOrganizationId: supplier.id, targetDepartmentId: null }).expect(400);
+    const key = randomUUID();
+    const body = { expectedVersion: 1, targetOrganizationId: admin.home.id, targetDepartmentId: null };
+    const result = await restore(admin, 'POSITION', source.id, body, key).expect(201);
+    const replacementId = result.body.replacementId as string;
+    expect(replacementId).not.toBe(source.id);
+    expect(await db.position.findUniqueOrThrow({ where: { id: replacementId } })).toMatchObject({ organizationId: admin.home.id, departmentId: null, status: 'DISABLED', configurationRequired: false });
+    expect(await db.positionRole.count({ where: { positionId: replacementId } })).toBe(0);
+    expect(await db.userPosition.count({ where: { positionId: replacementId } })).toBe(0);
+    expect(await db.position.findUniqueOrThrow({ where: { id: source.id } })).toEqual({ ...source, configurationRequired: false, version: 2, updatedAt: expect.any(Date) });
+    expect(await db.positionRole.findMany({ where: { positionId: source.id } })).toEqual([mapping]);
+    expect(await db.userPosition.findMany({ where: { positionId: source.id } })).toEqual([appointment]);
+    expect((await restore(admin, 'POSITION', source.id, body, key).expect(201)).body).toEqual(result.body);
+    expect(await db.auditEvent.count({ where: { resourceId: source.id, action: 'POSITION_RECONFIGURED' } })).toBe(1);
+  });
+
+  it.each(['ORGANIZATION', 'DEPARTMENT', 'USER'])('does not widen %s restoration fields when POSITION ownership accepts null', async kind => {
+    const admin = await administrator();
+    const target = kind === 'ORGANIZATION' ? await organization({ status: 'DISABLED', configurationRequired: true })
+      : kind === 'DEPARTMENT' ? await db.department.create({ data: { organizationId: admin.home.id, code: randomUUID(), name: 'Pending department', status: 'DISABLED', configurationRequired: true } })
+      : await db.user.create({ data: { organizationId: admin.home.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only', status: 'DISABLED', configurationRequired: true } });
+    const body = { expectedVersion: 1, ...(kind === 'ORGANIZATION' ? { parentId: admin.home.id } : kind === 'USER' ? { targetOrganizationId: admin.home.id } : { parentId: null }) };
+    await restore(admin, kind, target.id, { ...body, targetDepartmentId: null }).expect(400);
+    const key = randomUUID();
+    const success = await restore(admin, kind, target.id, body, key).expect(201);
+    await restore(admin, kind, target.id, { ...body, targetDepartmentId: null }, key).expect(400);
+    expect((await restore(admin, kind, target.id, body, key).expect(201)).body).toEqual(success.body);
+  });
+
+  it('retains platform authority and active internal target requirements for direct restoration', async () => {
+    const admin = await administrator();
+    const position = await db.position.create({ data: { organizationId: admin.home.id, departmentId: null, code: randomUUID(), name: 'Pending direct position', status: 'DISABLED', configurationRequired: true } });
+    const supplier = await organization({ type: 'SUPPLIER' });
+    await restore(admin, 'POSITION', position.id, { expectedVersion: 1, targetOrganizationId: supplier.id, targetDepartmentId: null }).expect(400);
+    await db.rolePermission.deleteMany({ where: { roleId: admin.role.id, permission: { code: 'platform:admin' } } });
+    await restore(admin, 'POSITION', position.id, { expectedVersion: 1, targetDepartmentId: null }).expect(403);
+    expect(await db.position.findUniqueOrThrow({ where: { id: position.id } })).toMatchObject({ version: 1, configurationRequired: true, status: 'DISABLED' });
+  });
+
   it('moves only a pending internal user through the 132 bridge while preserving historical tenant facts', async () => {
     expect(await db.$queryRaw`SELECT 1 FROM _prisma_migrations WHERE migration_name = '20261028231000_administrative_identity_history' AND finished_at IS NOT NULL`).toHaveLength(1);
     const admin = await administrator();
