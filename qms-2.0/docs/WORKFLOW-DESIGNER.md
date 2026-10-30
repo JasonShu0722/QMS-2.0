@@ -1,5 +1,12 @@
 # 流程设计器
 
+## REQ-0032 CP-1 运行发布确认（2026-10-30）
+
+[PR84](https://github.com/JasonShu0722/QMS-2.0/pull/84) / V0.0.36含fix1已部署 `a15b68d0b692f1f70372b3ce70e52ac4ec25c977`；精确PR/main各16项CI成功、PR同head审查无发现，deploy40998606131实际成功。迁移前加密快照→2份迁移/136链→同SHA API/Worker/Web与健康→公网六新契约/index-DoHWJMZd.js/四匿名401机器核验通过；部署后默认builder cache实际回收4.615GB。完整证据和人工角色/多窗/视觉清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
+
+这是CP-1机器发布，不是完整控制台或人工业务验收；CP-2观测/外部连接器未交付。生产来源转换、额外赋权删除、绑定启用、关闭REQ/Issue和飞书回填未代办。下方本地候选、旧失败及“只到PR”文字保留历史范围，当前以本节和总计划最新授权/运行事实为准。
+
+
 ## REQ-0032 管理入口迁入候选（2026-10-30，未发布）
 
 CP-1 正式列表和精确版本入口为 `/console/workflows` 与 `/console/workflows/:definitionId/:versionId`；旧 `/app/workflow-designer` 深链接在业务布局挂载前严格兼容。列表、画布、关闭审核模板、复制/校验/发布、三内部域及供应商绑定复用同一实现，不创建控制台业务标签。

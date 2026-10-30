@@ -12,15 +12,15 @@
 
 | 摘要项 | 当前事实 |
 | --- | --- |
-| 最后核对 | 2026-10-30，Asia/Taipei；CP-1草稿PR84 / 当前远端head146e933。首轮16检查13成功，Web7及integration1两具体旧验收清单/夹具失败、foundation随之失败；同head Codex审查完成无发现。正集中fix1，不合并/部署 |
-| 授权与跟踪 | 2026-10-30负责人最新明确“开发完了就推进PR部分”：立即提交推送并建立CP-1草稿PR，让精确head CI与审查在PR接续，未完成及失败门禁显式保留，不能标Ready或合并放行。REQ-0032 / reczz28TGUdtjO7t；CP-1 Issue82/V0.0.36；CP-2 Issue83/V0.0.37未启动。仍仅两个常规PR，不自动合并部署；生产来源转换/赋权删除/绑定启用/外发/人工验收/关闭飞书回填未授权 |
+| 最后核对 | 2026-10-30 11:50，Asia/Taipei；PR84已按负责人新授权合并，运行SHA a15b68d0b692f1f70372b3ce70e52ac4ec25c977 / V0.0.36含fix1。主分支16项CI、实际部署40998606131及公网机器核验通过；尚非人工业务验收 |
+| 授权与跟踪 | 负责人最新明确“继续推进合并部署”，覆盖CP-1 PR84集成发布；REQ-0032 / reczz28TGUdtjO7t，Issue82/V0.0.36。CP-2 Issue83/V0.0.37未启动，本次不恢复夜间/heartbeat，不自动扩展后续需求。生产来源转换/额外赋权删除/绑定启用/外发/人工验收/关闭飞书回填均未代办 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
-| 下一动作 | 首head146e933的13/16 CI成功；Web7旧legacy只读测试给了完整三读、但仅mock旧DTO；integration1真实PG约束清单漏新增历史归档表。两项最小测试兼容修复集中fix1，先真实RED/GREEN→独立SPEC→QUALITY→父验证/治理→推同一PR并复核新head全部CI/审查；不以首head无发现或13绿代替fix1。PR保持Draft，浏览器/完整阶段边界仍列明 |
-| 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，父三文件最终联合仍待后续。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
-| 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440或生产 |
-| heartbeat | 应用工具已按负责人明确要求删除qms，不再有20分钟唤醒；不自动重建。取消定时跟进不等于停止当前开发，最新授权仍为正常推进至CP-1 PR |
+| 下一动作 | 已完成本次获准CP-1合并发布；PR head db4039a及main a15b68d各16/16，精确PR代码审查无发现，快照→2迁移/136链→同SHA三服务/健康→公网新契约及index-DoHWJMZd.js/4匿名401→builder prune实际回收4.615GB。归档机器证据与下方人工清单，等待负责人角色/视觉/多窗验收；不自动CP-2或生产授权来源转换 |
+| 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，该历史局部轮未完成，后续父11完整264/264、fix1父Web19/PG126及PR/main全16项已补证，不再列当前待办。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
+| 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440；生产仅执行本次已授权发布，不转换业务来源 |
+| heartbeat | 已删除，不自动重建。最新单次授权允许CP-1合并部署，现已机器核验；不等于恢复夜间连续模式或CP-2授权 |
 ## 1. 交付分组、映射与检查点
 
 | 单元 | 覆盖任务 | 分组理由 | 跟踪与依赖 |
@@ -293,3 +293,39 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 - 父按资源租约顺序独立执行相同3完整PG126/126、3完整Web19/19，均exit0，5项测试/生产/schema hash起止无变；parent-pr84-fix1-green-meta.json封存。无生产、DTO、迁移、timeout或motion变更。
 - 负责人要求全部CI失败逐项查看：已枚举并核验run40990881788/attempt1精确head的全部16job，下载并阅读3个失败job原始日志及各失败/跳过step；完整记录pr84-head146e933-all-ci-audit.json。integration1后的Worker生命周期与Compose未执行，新head必须真实补跑，不能拿本地8/8替代。
 - 集中提交V0.0.36-fix1并推同一PR84；新head全部CI及Codex审查另验。PR仍Draft，正式浏览器/完整阶段未完成边界保留，不自动合并部署。
+
+## CP-1 合并发布与机器核验（2026-10-30）
+
+- [PR84](https://github.com/JasonShu0722/QMS-2.0/pull/84)于11:24按最新授权squash合并为 `a15b68d0b692f1f70372b3ce70e52ac4ec25c977`。PR head `db4039ae49ecd7d639da3404a72c3f5ad875e319` 的16项检查全部成功；Draft转Ready自动触发的同head审查也实际completed、无任何/未解决发现后才合并。
+- [main Foundation40997179680](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40997179680)同SHA完整16项成功；[deploy40998606131](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40998606131)的完整来源run attempt校验与pinned SSH发布step均实际success。没有手动绕过失败检查或修改workflow。
+- 发布日志先出现 `Pre-migration encrypted database snapshot verified: a15b68d0b692f1f70372b3ce70e52ac4ec25c977`，再应用直属岗位及兼容历史归档两份迁移（总136）；API/Worker使用同SHA API镜像，Web同SHA Web镜像。三服务wait健康完成；Worker当前启动READY为脚本强制检查，不冒称独立读stdout。快照是本机加密dump往返与pg_restore列表核验，非异地灾备或恢复演练。
+- 原锁内健康及deployed-sha记录后自动执行 `docker builder prune --force`，真实BuildKit输出 `Total: 4.615GB` 后才出现最终成功标记。初本地证据提取误假定输出必须是`Total reclaimed space`而失败；核读真实日志后按实际`Total:`格式重验通过，未重跑部署或修改生产脚本。回收量不等于宿主df剩余空间差值，也不代表回退镜像/卷被删除。
+- 公网 `/login`、`/console`、OpenAPI和实际新JS均200；新JS `index-DoHWJMZd.js`（SHA256 `2d80d70fc700bf788f7bb0348d29746bcb3a6ce4406ac486c01964d196209a45`）与本次部署构建日志一致；新context/Home/legacy列表、preview、commit、history六路径契约存在，四个匿名只读请求均401/AUTH_SESSION_REQUIRED。未登录生产角色、不转换来源、不启用绑定。
+- 直接本机SSH探测因域名未绑定known-host及随后使用已固定IP别名时公钥拒绝失败；没有关闭host-key检查或尝试读GitHub secrets。生产服务事实来源为实际成功的pinned-SSH Actions日志与独立公网请求，不假装直接宿主只读核验成功。
+- 本地main存在原有4个独有历史提交，无法ff；已保留原main不reset/rebase/混合。活动同一checkout切换到 `codex/console-cp1-release` 精确合并SHA，树与已审PR head完全相同；归档不重写旧分支。
+- Git外证据：`pr84-merged.json`、`pr84-fix1-final-audit.json`、`main-release-monitor-latest.json`、`production-deploy-40998606131.log`、`production-release-public-verification.json`；秘密/日志/备份不入Git。
+
+### 本地Docker评估（仅评估，未清理）
+
+- 四个本次console容器均disposable且无活跃测试客户端，合计约1.28GiB RAM，其中ClamAV约951MiB；PG/RustFS为tmpfs，停止即丢当前测试库与对象。发布后可精确清本task，但本次仅按新请求评估，尚未stop/rm。
+- 旧N3四容器已停止，标签task=qms-n3/issue70；PG匿名卷约2.408GB，RustFS卷约1.094MB，历史失败库曾要求保留，不把旧任务卷当本task删除。停止容器总写层约6.144MB，删容器主要不是磁盘收益。
+- 本地默认builder cache仅8.192KB；17镜像逻辑总6.716GB/报告可回收3.256GB，18卷含预览/旧上传；无引用buildx状态卷约1.741GB但归属未定，不全局prune。Docker逻辑大小不保证Windows VHD等量缩小。完整只读记录`local-docker-assessment.json`及`local-docker-disk-usage.txt`，未读secret/业务内容或连接55440。
+
+### 待负责人确认的人工清单（绑定运行SHA a15b68d）
+
+| 项目 | 角色/前置 | 操作与可观察预期 | 当前来源/状态 |
+| --- | --- | --- | --- |
+| 独立入口与业务保留 | 有管理权限内部用户，业务页有草稿 | 个人账号打开管理控制台新窗口/页签；业务页与草稿不变化，控制台独立导航主题 | 待人工 |
+| 专项与拒绝 | 流程专项、普通内部、供应商 | 流程专项可进入获准流程配置；普通/供应商不得获得管理能力 | 待人工 |
+| 深链接登录链 | 无会话、MFA/强改密账号 | 合法深链经登录/MFA后回原位置；非法定位拒绝，不跳其他对象 | 待人工 |
+| 多窗与未保存 | 两窗口同账号，非生产资料可编辑 | 切账号/退出/失权清敏；普通离开可取消并保稿，重验不丢正常编辑 | 待人工 |
+| 视觉与键盘 | 浅/深/系统，375/1024/1440 | 首页/组织用户/流程画布及浮层无溢出，键盘焦点可见与恢复 | 待人工 |
+| 组织/来源只读 | 获准管理身份，仅读取 | 直属岗位与部门节点分清；用户/岗位来源可读、受限身份仍只读；不执行生产迁移/解除 | 待人工 |
+| 流程配置迁入 | 流程管理身份 | 列表/定义/版本/画布可读定位，目标为真实会话组织；不发布或启用生产绑定 | 待人工 |
+| 真实首页与范围 | 平台/组织不同身份 | 事项/最近审计按真实授权范围；失败不可用不显示假零或健康全绿 | 待人工 |
+
+逐项反馈“通过/失败+角色/时间/页面/现象”，不以笼统确认覆盖未测项目。CI已通过不补造正式浏览器或人工验收，REQ/Issue仍开放，CP-2观测与外部接入未交付。
+
+### 证据归档同步
+
+发布后归档仅Markdown及来源/维护索引，governance与48项治理测试均通过、独立只读证据复核通过；归档提交推送到 `codex/console-cp1-release`，不向已合并PR推送，不额外新建功能PR。不直接推main以免仅记录导致全套业务CI/重复部署；运行main仍为a15b68d，归档分支与生产运行SHA分层。

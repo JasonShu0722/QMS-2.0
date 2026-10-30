@@ -1,5 +1,12 @@
 # 维护、发布与故障处理手册
 
+## REQ-0032 CP-1 运行发布确认（2026-10-30）
+
+[PR84](https://github.com/JasonShu0722/QMS-2.0/pull/84) / V0.0.36含fix1已部署 `a15b68d0b692f1f70372b3ce70e52ac4ec25c977`；精确PR/main各16项CI成功、PR同head审查无发现，deploy40998606131实际成功。迁移前加密快照→2份迁移/136链→同SHA API/Worker/Web与健康→公网六新契约/index-DoHWJMZd.js/四匿名401机器核验通过；部署后默认builder cache实际回收4.615GB。完整证据和人工角色/多窗/视觉清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
+
+这是CP-1机器发布，不是完整控制台或人工业务验收；CP-2观测/外部连接器未交付。生产来源转换、额外赋权删除、绑定启用、关闭REQ/Issue和飞书回填未代办。下方本地候选、旧失败及“只到PR”文字保留历史范围，当前以本节和总计划最新授权/运行事实为准。
+
+
 本页提供操作顺序和证据要求。具体参数以[数据保护](DATA-PROTECTION.md)、[平台交接](PLATFORM-HANDOFF.md)、[附件](ATTACHMENTS.md)、[邮件恢复](EMAIL-RECOVERY.md)为准。这里不声称已部署监控、已配置告警或已完成生产灾备演练。
 
 ## REQ-0032 CP-1 候选边界（2026-10-30，未发布）
