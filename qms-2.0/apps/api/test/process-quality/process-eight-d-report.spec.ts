@@ -13,7 +13,7 @@ const actor: ProcessEightDActor = { id: randomUUID(), organizationId, accountTyp
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=', 'base64');
 const hash = createHash('sha256').update(png).digest('hex');
 
-function setup(withFile = false, domain?: InternalEightDReportDescriptor) {
+function setup(withFile = false, domain?: InternalEightDReportDescriptor, operationReceipts?: unknown) {
   const document = emptyProcessEightDDocument();
   if (withFile) document.okFileIds = [fileId];
   const snapshot = { document, sources: [], problem: { id, organizationId, domainCode: domain?.domainCode ?? 'process-quality', reportNumber: '8D-TEST', closedAt: null }, instance: { version: 2 },
@@ -42,9 +42,19 @@ function setup(withFile = false, domain?: InternalEightDReportDescriptor) {
     calls.push('audit');
   }) };
   // These are unit boundary doubles, not PostgreSQL/object-store acceptance evidence.
-  const service = new ProcessEightDReportService(prisma as never, core, files as never, storage as never, audit as never, domain);
+  const service = Reflect.construct(ProcessEightDReportService, [prisma, core, files, storage, audit, domain, operationReceipts]) as ProcessEightDReportService;
   return { service, result, core, files, ref, storage, calls, tx, audit, permissions };
 }
+
+it('records the actual PDF thread render as bounded metadata without reporting a persistent PDF queue', async () => {
+  const receipts = { recordPdf: jest.fn<(...args: unknown[]) => Promise<boolean>>(async () => true) };
+  const s = setup(false, undefined, receipts);
+  const result = await s.service.pdf(actor, id, {}, 'receipt-trace');
+  expect(result.content.subarray(0, 4).toString()).toBe('%PDF');
+  expect(receipts.recordPdf).toHaveBeenNthCalledWith(1, organizationId, 'process-quality', expect.any(String), 'STARTED', expect.any(Date));
+  expect(receipts.recordPdf).toHaveBeenNthCalledWith(2, organizationId, 'process-quality', expect.any(String), 'SUCCEEDED', expect.any(Date));
+  expect(receipts.recordPdf.mock.calls.every(call => call.length === 5)).toBe(true);
+});
 
 it('defaults to explicit current snapshot and rechecks scope before returning JSON', async () => {
   const s = setup();

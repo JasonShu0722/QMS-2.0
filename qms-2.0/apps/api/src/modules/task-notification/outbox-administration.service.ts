@@ -82,6 +82,18 @@ const ownedEvents = (organizationId: string) => Prisma.sql`
 export class OutboxAdministrationService {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
 
+  async operationsSummary(actor: AdminActor, organizationId: string) {
+    if (actor.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
+    return this.prisma.$transaction(async transaction => {
+      await assertAdminAccess(transaction, actor, organizationId, 'console:services:read');
+      const [row] = await transaction.$queryRaw<Array<{ pending: bigint; processing: bigint; failed: bigint }>>(Prisma.sql`
+        SELECT count(*) FILTER (WHERE event.status = 'PENDING') AS pending,
+          count(*) FILTER (WHERE event.status = 'PROCESSING') AS processing,
+          count(*) FILTER (WHERE event.status = 'FAILED') AS failed ${ownedEvents(organizationId)}`);
+      return { pending: Number(row?.pending ?? 0), processing: Number(row?.processing ?? 0), failed: Number(row?.failed ?? 0) };
+    });
+  }
+
   async list(actor: AdminActor, query: OutboxFailureQueryDto): Promise<OutboxFailurePageDto> {
     const organizationId = query.organizationId ?? actor.organizationId;
     const pageSize = query.pageSize ?? 25;

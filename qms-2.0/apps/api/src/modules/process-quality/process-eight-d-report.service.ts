@@ -1,5 +1,5 @@
 import { HttpException, Inject, Injectable, Optional } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -18,6 +18,7 @@ import { INTERNAL_EIGHT_D_DOMAINS } from '../../common/eight-d/internal-eight-d-
 export type { InternalEightDReportCore, InternalEightDReportDescriptor } from '../../common/eight-d/internal-eight-d-report.js';
 import { ProcessEightDControlledReportDto, type ProcessEightDReportAttachmentDto, type ProcessEightDReportQueryDto, type ProcessEightDReportSnapshotDto } from './process-eight-d-report.dto.js';
 import { REPORT_IMAGE_MAX_BYTES, REPORT_TOTAL_IMAGE_BYTES, REPORT_TOTAL_IMAGE_PIXELS, renderProcessEightDPdf, reportImageSize } from './process-eight-d-pdf.js';
+import { ServiceOperationReceiptService } from '../task-notification/service-operation-receipt.service.js';
 
 type ReadResult = Awaited<ReturnType<InternalEightDReportCore['readReport']>>;
 type FileReference = FileEvidenceDto & { objectKey: string; objectVersionId: string };
@@ -38,7 +39,8 @@ export class ProcessEightDReportService {
   private readonly domain: InternalEightDReportDescriptor;
   constructor(private readonly prisma: PrismaService, @Inject(ProcessEightDService) private readonly core: InternalEightDReportCore, private readonly files: FileLifecycleService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage, private readonly audit: AuditLogService,
-    @Optional() @Inject(INTERNAL_EIGHT_D_REPORT_DOMAIN) domain?: InternalEightDReportDescriptor) {
+    @Optional() @Inject(INTERNAL_EIGHT_D_REPORT_DOMAIN) domain?: InternalEightDReportDescriptor,
+    @Optional() private readonly operationReceipts?: ServiceOperationReceiptService) {
     const requested = domain ?? INTERNAL_EIGHT_D_DOMAINS.PROCESS;
     const approved = Object.values(INTERNAL_EIGHT_D_DOMAINS).find(value => value.domainCode === requested.domainCode
       && value.resourceType === requested.resourceType && value.permissionPrefix === requested.permissionPrefix);
@@ -66,9 +68,16 @@ export class ProcessEightDReportService {
     const selected = await this.transaction(tx => this.select(tx, actor, problemId, query));
     // No storage/network access inside database transactions. References are server-owned and fixed first.
     const images = await this.images(selected);
+    const executionId = randomUUID(), startedAt = new Date();
+    const observe = async (status: 'STARTED' | 'SUCCEEDED' | 'FAILED') => {
+      try { await this.operationReceipts?.recordPdf(selected.result.record.problem.organizationId, this.domain.domainCode, executionId, status, startedAt); }
+      catch { /* Observation must not change a completed or rejected report operation. */ }
+    };
+    await observe('STARTED');
     let content: Buffer;
-    try { content = await renderProcessEightDPdf(selected.report, images, this.domain.domainCode); }
+    try { content = await renderProcessEightDPdf(selected.report, images, this.domain.domainCode); await observe('SUCCEEDED'); }
     catch (error) {
+      await observe('FAILED');
       if (error instanceof HttpException) throw error;
       if (error instanceof Error && ['PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT', 'PROCESS_EIGHT_D_REPORT_PDF_LIMIT'].includes(error.message)) this.fail(error.message, 413);
       this.fail('PROCESS_EIGHT_D_REPORT_RENDER_FAILED', 422);

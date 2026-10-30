@@ -55,7 +55,7 @@ export class DataExchangeAttemptDto {
   @ApiProperty({ type: DataExchangeStagesDto }) stages!: DataExchangeStagesDto;
   @ApiProperty({ format: 'date-time' }) startedAt!: string;
   @ApiProperty({ format: 'date-time' }) observedAt!: string;
-  @ApiPropertyOptional({ format: 'date-time', nullable: true, description: '仅全部四阶段都有终态时存在，传输成功不代表整个尝试完成。' }) finishedAt!: string | null;
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: '仅全部四阶段都有终态时存在，传输成功不代表整个尝试完成。' }) finishedAt!: string | null;
 }
 export class DataExchangeSummaryDto {
   @ApiProperty() batchAttempts!: number;

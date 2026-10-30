@@ -6,6 +6,7 @@
     "system-management -> organization",
     "system-management -> audit-log",
     "system-management -> task-notification",
+    "system-management -> file-management",
     "organization -> workflow",
     "audit-log -> authorization",
     "audit-log -> problem-index",

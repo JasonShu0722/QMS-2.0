@@ -12,12 +12,12 @@
 
 | 摘要项 | 当前事实 |
 | --- | --- |
-| 最后核对 | 2026-10-30，Asia/Taipei；Task7已d79c886；Task8A双审与父7完整128/128、API监控正式页双审与父6完整243/243通过，契约/APIbuild/Weblint+build/governance均exit0。140迁移仅一次性CP2库；运行生产仍a15b68d，未提交CP2 PR |
+| 最后核对 | 2026-10-30 17:52，Asia/Taipei；CP2运行事实/三面板/Home全部候选已分项SPEC→独立QUALITY及父验证。父最后9完整295/296唯一数据交换筛选case10s超时，最小test查询缓存后完整3文件61/61+Webtsc0，生产无变/独立窄审PASS；原FAIL保留。最终门禁→集中提交CP2草稿PR，尚未生产发布 |
 | 授权与跟踪 | 当前直接授权进入CP-2任务7～10本地开发、审查验证及PR检查点；复用Issue83/V0.0.37与原两个PR分组，不新建需求/检查点。CP-1用户验证反馈按人工来源记录，不补造逐角色/设备/自动PASS。最新CP-1合并发布授权不泛化为CP-2自动合并部署；不恢复夜间/heartbeat，不代办生产来源转换/赋权删除/绑定启用/外发/关闭回填 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
-| 下一动作 | 封存Task8A及API监控正式页面后继续8B拥有者服务事实/Worker与按请求PDF回执、交换及服务正式页、首页联合整合；最终一个CP2 PR。源标签/阶段/幂等/权限和真实技术Worker边界已验证，不把空来源标健康，不自动生产转换/外发/合并部署/heartbeat |
+| 下一动作 | 完成当前构建/契约/治理/归档隔离顺序门禁，提交推送CP2唯一草稿PR并核精确head16项全部CI及代码审查；不重复本地整套重负载替代CI。完整阶段入口前置FAIL/正式浏览器工具拒绝/CP2人工视觉仍待，不标Ready或合并部署，不外发或生产来源转换 |
 | 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，该历史局部轮未完成，后续父11完整264/264、fix1父Web19/PG126及PR/main全16项已补证，不再列当前待办。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
 | 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440；生产仅执行本次已授权发布，不转换业务来源 |
 | heartbeat | 已删除，不自动重建。最新单次授权允许CP-1合并部署，现已机器核验；不等于恢复夜间连续模式或CP-2授权 |
@@ -370,3 +370,43 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 - 8A独立SPEC→QUALITY均PASS；父7完整128/128exit0/40.151s，1013 API源起止无变。真实来源scope撤权、锁后owner撤权、levelsummary过滤均先RED后修。生产默认空sources/NOT_CONNECTED，四stage及真实HTTP/独立测试Worker链只证明技术观测，不是外部业务联调。140schema、FK/索引与注册匹配，Swagger生成/check成功。
 - API正式页三owned文件先RED后实现、分页window漂移真实RED后修，子19+Home23+Layout15完整57/57；双审均PASS。父菜单/App接线再真实RED2后最小加入明确newread导航和console子route，原认证链/returnTo不改；共享接缝再独立SPEC/QUALITY通过。父6完整243/243exit0/61.74s、510 Web源起止无变，不能把App mock注册测试当真实页面或视觉验收。
 - 当前APIbuild、契约check、Weblint/build与governance顺序exit0；保留既有largechunk警告未调阈值。这里只封存API/交换观测基础及API页面，Task8B与另两正式面板/Home最终整合仍待，不把局部完成当CP2整体完成。
+
+### Task8B 与交换正式页接续
+
+- Task8A/API正式页成果已本地提交a97a21f，工作区保留同一活动checkout，不推第三功能PR。8B新实现者负责各owner公开metadata读端、有限Worker周期与按请求PDF执行回执及服务只读聚合；SystemManagement不跨read私表、不GET写探活、配置不当healthy。父仍独占schema/迁移/模块注册/生成/Git。
+- 8B先真实schema/endpoint/receipt RED再追加schema；Worker最新回执全局只显式platform新读权可见，组织不可借globalcount侧信道；PDF是按请求线程非在线队列，实际执行之后只最小safe metadata，写回执失败不破坏既有成功业务。8A30天清理通过真实Worker维护公开端口接续，不在GET隐式写。
+- 数据交换正式页三文件基于已生成DTO单独TDD，先申请短WebRED窗口，之后页面只读写UI；与API/DB重负载租约串行。默认未接入、四stage/批次记录分开、固定窗口分页及延迟下钻清敏，不增加原文导出/补传/重放能力。
+
+### Task8B 真实RED与141链
+
+- 8B完整HTTP/PG真实RED2：services路由404而非401、service_operation_receipts表不存在。父据最新回执方案追加20261030050000_service_operation_receipts，generate/migrate已在CP2新库成功至141链；Worker按producer一行最新snapshot、PDF按org/domain一行最新snapshot，不每周期追加无限日志。表仅受限status/timestamp/count/reason，生产未应用。
+- Outbox安全汇总不复制原ownedEvents归属SQL，原拥有者只追加operationsSummary公开端口：新console:services:read再验后仅安全counts，原list/attempts/retry权限不变；system管理不跨读outbox/file/mail私表。File/Mail公开端用common授权再验避免Identity/File DI环，不返回配置secret/host。
+- Task9B短RED已实际exit1/2.76s缺模块，之后只写页面；8B测试租约回实现方，父无并发DB/生成。不因等待资源断言“仍在测试”，每轮绑定真实session/日志。
+
+### 16:28 恢复与资源/执行效率收口
+
+- 上轮外部turn_aborted后先核真实Git及无activeJest/Vitest/tsc，再沿原agents/file成果恢复，未重复派同实现。用户指出一下午效率低，承认串行测试窗口/局部fixture多轮协调过碎；后续优先8B主链和完整页面一次整合，不扩需求/检查点。
+- 宿主freeVirtual曾降至560～700MB，故只核精确taskID/labels/readonlymount/无client后暂stop本task ClamAV，未删容器镜像卷、不动PG/RustFS tmpfs；随后16:23真实start+PONG恢复，resource暂停/恢复日志在Git外。内存之后恢复到5～6GB不单归因scanner，不宣称固定释放951MiB。
+- 交换页修fixture后新页22/22、APIpage19/Home23通过，但原Layoutguard1失败令联合78/79exit1，已停止自动反复重跑并保原FAIL；三owned源hash稳定，wholeWebtsc尚待。不能将组合或视觉记PASS。
+- 8B新增serviceownerport/receipt/PDFcaller/compiledWorker等待真实RED再改；父141表及各owner模块注册完成，PDFinternal工厂注入等caller新signature再接。独立services-runtime仅Git外追加Mailpit50930/50931，基础runtime未改；ClamAV恢复后才可实际扫描验收。
+
+### Task8B 最新事实与独立父验证
+
+- 8B当前newdist真实compiledWorker与原Worker8、实际PDFthread/PGreceipt、四domain真实Nest注入、RustFSupload/ClamAVscan、Mailpitdelivery/sentAt均已覆盖。最后子8完整100/100exit0/103.171s+APItsc0，16owned起止hash一致；父8完整100/100exit0/92.703s、1024 API源起止hash无变（parent-services-eight-full-meta.json）。独立SPEC已PASS，QUALITY只读收尾。
+- 首轮业务assertions60绿但teardown上传receipt FK漏清导致exit1，按exacttaskfileIDs补fixture清理后通过。strict1000 once实际1001失败原日志保留，另轮未复现具体运行根因不宣已证明；服务/交换两purge改MATERIALIZED固定候选后仍严格1000不放宽，并由同完整回归覆盖。
+- 平台mixedtake100被100较新worker挤掉PDF的真实RED明确；读端按operation独立PDForgtake4/workerglobaltake1保有界，不再假NO_RECEIPT。lateSTARTED/oldexecution不覆盖最新终态，writebounded500ms statement/250mswait/1000mstx防采集拖业务。PDF状态是render事实非最终请求/审批成功；Workercount是最近cycle快照/duration自进程start，不造累计吞吐或实时在线。
+- 服务页最初RED实际test语法ERROR不是功能缺失，原log保留；修语法后准确missingmodule RED成立才写production。Agentthreadlimit阻新派，原ServicePage实施者受明确scope扩展同任务新增首页观测摘要3files，独立审查仍保留，不因此重复权限/请求框架。父拥有原App/nav/Home接线，最后一次联合整合，不扩外部接入。
+
+### Task9 最后页面与首页联合
+
+- ServiceOperationsPage18项、ConsoleObservationSummary8项及原Home父新增mount后24、API19、Exchange22、Layout15共6完整106/106exit0/136.82s，6owned源hash起止一致；wholeWebtsc接续。旧Layoutguard先前14/15本轮原样15/15，不改timeout/motion/guard生产，不宣称已证明原失败根因。
+- 父App/nav在真实完整4RED失败后加入exchange/services正式route及各自精确newread菜单，known无权返回forbidden；returnTo原先已支持、不扩query规则。原Home完整24中23p1f唯一新mount RED后最小import/hookSummary，旧事项卡不替换/BusinessWorkTabs不动。共享接缝与6新UI源一起独立SPEC再QUALITY，不把单mockroute当页面或实际视觉证据。
+- 首页新增三观察来源按newread各自真实ORG聚合请求；无read不请求，partialsourceerror不补0，401/403全清并重验。API统计实际窗口与unknown采集，交换未接入/批次记录独立，服务只最近事实不整体健康评分，PDFrender和worker周期边界明确。
+
+## CP-2 PR 冻结检查点（2026-10-30）
+
+- Task7、8A、8B及三正式页/Home（含父App/nav/Home共享接缝）均已按各自独立SPEC→QUALITY通过；工具threadlimit导致后续只读评审复用既有未参与实现的上下文，未由实现者自称独立。最后8B父100/100与真实依赖、Task7父136、8A父128分层覆盖，不机械相加声称一次全量。
+- 父最新9完整296项295通过，唯一DataExchange多Select筛选原10秒预算超时10588ms；没有宣称整包PASS。原实现者仅test缓存真实form内6Selectinput/batch/apply、真实Portal选择仍在，应用后取新next并等可用，原全部filter/window/page/total断言保留。修后DataExchange22+Home24+Layout15三个完整61/61、Webtsc0；该case5326ms，原生产tsx/csshash不变，独立窄审确认无弱化。不同负载耗时不作稳定性能保证；PR同head全CI继续验证整体。
+- 最后服务Page/HomeSummary的Swagger nullable与tuple编译缺口已最小修：父DTO显式typeString/Number、contracts重新生成，owned文案pair[0]/[1]不cast。新2完整26/26、Webtsc0及当前hash成立；原106完整与旧tsc失败分层不抹。
+- 阶段一/二入口本轮实际preflightFAIL：phase1缺QMS_SEED_INTERNAL_PASSWORD、phase2缺显式disposable acceptance configuration；未执行阶段项不是PASS。完整真实角色/多窗/窄屏浏览器仍未由工具取得，不绕过既有信任桥拒绝；CP1负责人“验证没问题”不扩写CP2人工验收。最终CI/候选与发布/人工验收分开，PR先Draft，保待验清单。
+- 飞书按reczz28TGUdtjO7t在PR前最小回读REQ0032/开发中及原方案/子任务/验收范围无撤回，未写台账。秘密/环境/日志/fixture/备份只Git外；工作区敏感路径/secretpattern扫描当前51paths无命中，git diff--check通过。

@@ -19,6 +19,8 @@ const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
   { path: '/console/audit-log', label: '管理审计', english: 'Management audit', group: 'security', module: 'audit' },
   { path: '/console/outbox', label: '失败队列', english: 'Failed events', group: 'security', module: 'outbox' },
   { path: '/console/api-monitoring', label: 'API 技术观测', english: 'API observations', group: 'security', module: 'api-monitoring', permissions: ['console:api:read'] },
+  { path: '/console/data-exchanges', label: '数据交换观测', english: 'Data exchange observations', group: 'security', module: 'data-exchanges', permissions: ['console:exchanges:read'] },
+  { path: '/console/services', label: '运行服务事实', english: 'Service operation facts', group: 'security', module: 'services', permissions: ['console:services:read'] },
 ];
 function permitted(item: typeof items[number], context: ConsoleContext) {
   return context.modules.find(module => module.key === item.module && (!item.permissions || item.permissions.some(permission => module.permissions.includes(permission))));

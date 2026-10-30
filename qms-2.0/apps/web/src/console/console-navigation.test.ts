@@ -21,6 +21,18 @@ it('allows an explicitly assigned API monitoring specialist without user adminis
   expect(consoleRoute('/console/users', value).status).toBe('forbidden');
   expect(consoleNavigation(context(module('api-monitoring')))).toEqual([]);
 });
+it('allows an explicitly assigned exchange specialist without widening other monitoring access', () => {
+  const value = context(module('data-exchanges', ['console:exchanges:read']));
+  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/data-exchanges']);
+  expect(consoleRoute('/console/data-exchanges', value).status).toBe('allowed');
+  expect(consoleRoute('/console/api-monitoring', value).status).toBe('forbidden');
+});
+it('allows an explicitly assigned service specialist without exposing queue management', () => {
+  const value = context(module('services', ['console:services:read']));
+  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/services']);
+  expect(consoleRoute('/console/services', value).status).toBe('allowed');
+  expect(consoleRoute('/console/outbox', value).status).toBe('forbidden');
+});
 it('filters every master-data child using its own concrete permission', () => {
   const value = context(module('master-data', ['material-master:write']));
   expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/master-data/materials']);
@@ -30,8 +42,8 @@ it('filters every master-data child using its own concrete permission', () => {
 it('maps all delivered modules but rejects unknown, malformed, and future routes', () => {
   const value = context(...(['users', 'organizations', 'configuration', 'workflows', 'audit', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'] as const).map(key => module(key)));
   expect(consoleNavigation(value).map(item => item.path)).toContain('/console/audit-log');
-  for (const path of ['/console/users/another', '/console/workflows/not-a-uuid/not-a-uuid', '/console/data-exchanges', '/console/services', '/console-evil']) expect(consoleRoute(path, value).status).toBe('not-found');
-  expect(consoleRoute('/console/api-monitoring', value).status).toBe('forbidden');
+  for (const path of ['/console/users/another', '/console/workflows/not-a-uuid/not-a-uuid', '/console-evil']) expect(consoleRoute(path, value).status).toBe('not-found');
+  for (const path of ['/console/api-monitoring', '/console/data-exchanges', '/console/services']) expect(consoleRoute(path, value).status).toBe('forbidden');
   expect(consoleRoute('/console', context()).status).toBe('forbidden');
 });
 it('does not treat an unknown capability as console access', () => {

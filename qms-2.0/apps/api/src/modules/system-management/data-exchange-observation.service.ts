@@ -131,7 +131,9 @@ export class DataExchangeObservationService {
   async purgeExpired(now = new Date()): Promise<number> {
     if (!Number.isFinite(now.getTime())) throw new BadRequestException('Invalid retention clock.');
     const cutoff = new Date(now.getTime() - DATA_EXCHANGE_RETENTION_MS);
-    return this.prisma.$executeRaw`DELETE FROM data_exchange_attempts WHERE id IN (SELECT id FROM data_exchange_attempts WHERE observed_at < ${cutoff} ORDER BY observed_at, id LIMIT 1000 FOR UPDATE SKIP LOCKED)`;
+    return this.prisma.$executeRaw`WITH expired AS MATERIALIZED (
+      SELECT id FROM data_exchange_attempts WHERE observed_at < ${cutoff} ORDER BY observed_at, id LIMIT 1000 FOR UPDATE SKIP LOCKED
+    ) DELETE FROM data_exchange_attempts attempt USING expired WHERE attempt.id = expired.id`;
   }
 
   private async access(actor: AuthorizedSessionUser, query: DataExchangeQueryDto) {

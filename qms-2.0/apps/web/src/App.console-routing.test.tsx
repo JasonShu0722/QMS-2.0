@@ -17,6 +17,8 @@ vi.mock('./features/auth/RequiredPasswordChangePage', () => ({ RequiredPasswordC
 vi.mock('./features/auth/PasswordRecoveryPage', () => ({ PasswordRecoveryPage: () => null }));
 vi.mock('./features/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }));
 vi.mock('./console/ApiMonitoringPage', () => ({ ApiMonitoringPage: () => <LocationProbe label="API monitoring page" /> }));
+vi.mock('./console/DataExchangePage', () => ({ DataExchangePage: () => <LocationProbe label="data exchange page" /> }));
+vi.mock('./console/ServiceOperationsPage', () => ({ ServiceOperationsPage: () => <LocationProbe label="service operations page" /> }));
 vi.mock('./layouts/InternalLayout', () => ({ InternalLayout: () => { mounts.internal(); return <UnsavedChangesProvider><LocationProbe label="business layout" /><WorkTabs /></UnsavedChangesProvider>; } }));
 vi.mock('./layouts/SupplierLayout', () => ({ SupplierLayout: () => <LocationProbe label="supplier layout" /> }));
 vi.mock('./console/ConsoleLayout', () => ({ useConsoleContext: () => ({ context: {
@@ -78,6 +80,16 @@ const managementPaths = [
 it('registers the API monitoring page outside the business layout', async () => {
   open(`/console/api-monitoring?organizationId=${targetId}`);
   expect(await screen.findByLabelText('API monitoring page')).toHaveTextContent('/console/api-monitoring');
+  assertBusinessUntouched();
+});
+it('registers the exchange observation page outside the business layout', async () => {
+  open(`/console/data-exchanges?organizationId=${targetId}`);
+  expect(await screen.findByLabelText('data exchange page')).toHaveTextContent('/console/data-exchanges');
+  assertBusinessUntouched();
+});
+it('registers service observations outside the business layout', async () => {
+  open(`/console/services?organizationId=${targetId}`);
+  expect(await screen.findByLabelText('service operations page')).toHaveTextContent('/console/services');
   assertBusinessUntouched();
 });
 it('registers the real management home index outside the business layout', async () => {

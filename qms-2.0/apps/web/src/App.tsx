@@ -17,6 +17,8 @@ import { ConsoleManagementPage } from './console/ConsoleManagementPage';
 import { ConsoleWorkflowPage } from './console/ConsoleWorkflowPage';
 import { ConsoleHome } from './console/ConsoleHome';
 import { ApiMonitoringPage } from './console/ApiMonitoringPage';
+import { DataExchangePage } from './console/DataExchangePage';
+import { ServiceOperationsPage } from './console/ServiceOperationsPage';
 import { LegacyConsoleRedirect } from './features/navigation/LegacyConsoleRedirect';
 
 export function App() {
@@ -44,6 +46,8 @@ function AppRoutes() {
         <Route path="/console/*" element={<AuthenticatedRoute accountType="INTERNAL"><ConsoleLayout /></AuthenticatedRoute>}>
           <Route index element={<ConsoleHome />} />
           <Route path="api-monitoring" element={<ApiMonitoringPage />} />
+          <Route path="data-exchanges" element={<DataExchangePage />} />
+          <Route path="services" element={<ServiceOperationsPage />} />
           {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'configuration', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
           <Route path="workflows/*" element={<ConsoleWorkflowPage />} />
         </Route>

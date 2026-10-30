@@ -15,6 +15,7 @@ import { ProcessEightDReminderService } from '../../modules/process-quality/proc
 import { ProcessEightDReportService } from '../../modules/process-quality/process-eight-d-report.service.js';
 import type { InternalEightDSourcePort } from '../../modules/process-quality/process-eight-d.types.js';
 import { OutboxService } from '../../modules/task-notification/outbox.service.js';
+import { ServiceOperationReceiptService } from '../../modules/task-notification/service-operation-receipt.service.js';
 import { WorkflowClosureRegistry } from '../../modules/workflow/workflow-closure-registry.js';
 import { WorkflowClosureRoundService } from '../../modules/workflow/workflow-closure-round.service.js';
 import { WorkflowDeadlineExtensionService } from '../../modules/workflow/workflow-deadline-extension.service.js';
@@ -29,12 +30,12 @@ export function createInternalEightDRuntime(domain: InternalEightDDomainDescript
   domainIssues: DomainSourceIssueService, links: DomainSourceLinkService, runtime: WorkflowRuntimeService, problems: ProblemIndexService,
   rounds: WorkflowClosureRoundService, responsibilities: OrganizationResponsibilityService, resources: FileResourceAccess, audit: AuditLogService,
   outbox: OutboxService, readRegistry: ProblemDomainRegistry, extensions: WorkflowDeadlineExtensionService, closureRegistry: WorkflowClosureRegistry,
-  files: FileLifecycleService, storage: ObjectStorage) {
+  files: FileLifecycleService, storage: ObjectStorage, receipts?: ServiceOperationReceiptService) {
   assertInternalEightDDomain(domain);
   const core = new ProcessEightDService(prisma, source, domainIssues, links, runtime, problems, rounds, responsibilities, resources, audit, outbox, readRegistry, extensions, domain);
   const reminders = new ProcessEightDReminderService(prisma, core, extensions, rounds, outbox, domain);
   const tasks = new ProcessEightDTaskService(prisma, core, extensions, rounds, reminders, domain);
-  const report = new ProcessEightDReportService(prisma, core, files, storage, audit, domain);
+  const report = new ProcessEightDReportService(prisma, core, files, storage, audit, domain, receipts);
   const closure = new InternalEightDClosureAdapter(closureRegistry, core, domain);
   const file = new InternalEightDFileAdapter(resources, core, domain);
   const read = new InternalEightDReadAdapter(readRegistry, core, domain);
@@ -46,6 +47,6 @@ export type InternalEightDRuntime = ReturnType<typeof createInternalEightDRuntim
 export function internalEightDRuntimeProvider(token: symbol, sourceToken: Type<InternalEightDSourcePort>, domain: InternalEightDDomainDescriptor): Provider {
   return { provide: token, inject: [PrismaService, sourceToken, DomainSourceIssueService, DomainSourceLinkService, WorkflowRuntimeService,
     ProblemIndexService, WorkflowClosureRoundService, OrganizationResponsibilityService, FileResourceAccess, AuditLogService, OutboxService,
-    ProblemDomainRegistry, WorkflowDeadlineExtensionService, WorkflowClosureRegistry, FileLifecycleService, OBJECT_STORAGE],
+    ProblemDomainRegistry, WorkflowDeadlineExtensionService, WorkflowClosureRegistry, FileLifecycleService, OBJECT_STORAGE, ServiceOperationReceiptService],
   useFactory: (...args: Parameters<typeof createInternalEightDRuntime> extends [unknown, ...infer Dependencies] ? Dependencies : never) => createInternalEightDRuntime(domain, ...args) };
 }

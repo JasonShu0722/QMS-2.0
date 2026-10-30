@@ -1,5 +1,20 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0032 CP-2 观测与面板候选（2026-10-30，尚未发布）
+
+[Issue83 / V0.0.37](https://github.com/JasonShu0722/QMS-2.0/issues/83)已按负责人验证反馈继续开发。当前候选包括真实HTTP分钟聚合与受控查询、内部数据交换四阶段metadata/幂等receipt、各拥有者服务安全汇总、实际Worker及按请求PDF执行回执，以及三个正式观测页面和首页摘要。分项审查、真实红绿、父独验及整合状态以[总计划当前摘要](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)为准；这不代表CP-2已发布或人工验收。当前运行仍是下方CP-1的a15b68d。
+
+新增 `console:api:read`、`console:exchanges:read`、`console:services:read` 只登记受控目录，不批量授予存量账号，也不从platform marker自动派生。默认精确组织，平台未归属HTTP/globalWorker事实须新读权、真实平台资格及显式PLATFORM。组织不返回globalproducer/drop/counter；权限变化、迟到请求及多窗会话沿原机制重验清敏。
+
+API只保存有界静态模板/分钟/耗时桶，不存原URL/query/body/cookie；未知/拒绝不从参数或home伪归组织，7天限批清理。固定批次与锁后回执处理未知COMMIT，停机有界排空/关闭gate；持续DB故障或进程丢失前未落盘窗口仍UNKNOWN，不承诺准确无损。交换只保最小metadata，transfer/validation/processing/reconciliation独立，批次与记录不混算，30天有界清理；正式sources仍空/未接入，真实测试Worker/loopback不注册生产，不代表IMS/MES业务联调。
+
+运行面板只组合Outbox/File/Identity/TaskNotification公开端口，不跨读领域私表或任意探活。配置不等于服务在线，RECENT_RESULT仅最近事实；PDF是每请求线程渲染事实，不代表最终请求/业务审批成功；Worker计数为最近周期快照，耗时自producer开始。最新回执7天限批清理，旧执行/迟到STARTED不覆盖最新，写入故障不破原业务。页面不提供原报文导出、外部补传/重放、重启或授权旁路。
+
+CP-2阶段入口本轮实际preflight失败：phase1缺QMS_SEED_INTERNAL_PASSWORD，phase2缺显式disposable acceptance configuration；未执行阶段项不算PASS。分项真实HTTP/PG/Worker/对象扫描/邮件/渲染回执及原失败见总计划，不能代替完整阶段或人工浏览器。
+
+单元/CI、生产发布与人工角色/多窗/视觉验收继续分层；无授权不自动合并部署、转换生产来源、启用绑定、发送外部系统数据或关闭/回填需求。heartbeat保持删除。下方“CP-2未交付”是当时运行版本范围，不与本地候选混记。
+
+
 ## REQ-0032 CP-1 运行发布确认（2026-10-30）
 
 [PR84](https://github.com/JasonShu0722/QMS-2.0/pull/84) / V0.0.36含fix1已部署 `a15b68d0b692f1f70372b3ce70e52ac4ec25c977`；精确PR/main各16项CI成功、PR同head审查无发现，deploy40998606131实际成功。迁移前加密快照→2份迁移/136链→同SHA API/Worker/Web与健康→公网六新契约/index-DoHWJMZd.js/四匿名401机器核验通过；部署后默认builder cache实际回收4.615GB。完整证据和人工角色/多窗/视觉清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。

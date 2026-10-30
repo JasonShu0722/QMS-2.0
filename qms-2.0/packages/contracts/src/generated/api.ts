@@ -1991,6 +1991,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/console/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ServiceOperationsController_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -10094,7 +10110,7 @@ export interface components {
              * Format: date-time
              * @description 仅全部四阶段都有终态时存在，传输成功不代表整个尝试完成。
              */
-            finishedAt?: Record<string, never> | null;
+            finishedAt?: string | null;
         };
         DataExchangeSummaryDto: {
             batchAttempts: number;
@@ -10134,6 +10150,67 @@ export interface components {
             asOf: string;
             summary: components["schemas"]["DataExchangeSummaryDto"];
             collection: components["schemas"]["DataExchangeCollectionDto"];
+        };
+        ServiceOperationsCountsDto: {
+            waiting?: number;
+            pending?: number;
+            processing?: number;
+            failed?: number;
+            succeeded?: number;
+            processed?: number;
+            retried?: number;
+        };
+        ServiceOperationsResultDto: {
+            /** @enum {string} */
+            status: "STARTED" | "SUCCEEDED" | "FAILED" | "STOPPED";
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            durationMs?: number | null;
+            /** @enum {string} */
+            domainCode?: "process-quality" | "customer-quality" | "new-product-quality" | "supplier-quality";
+            /** @enum {string} */
+            reasonCode?: "PDF_RENDER_FAILED" | "WORKER_EXECUTION_FAILED";
+            counts?: components["schemas"]["ServiceOperationsCountsDto"];
+        };
+        ServiceOperationsSourceDto: {
+            /** @enum {string} */
+            key: "worker" | "outbox" | "files" | "mail" | "pdf";
+            /** @enum {string} */
+            coverage: "ORGANIZATION" | "PLATFORM";
+            /**
+             * Format: uuid
+             * @description 授权来源及被查询的组织，不代表平台回执属于该组织。
+             */
+            organizationId: string;
+            /**
+             * @description 仅最后事实或采集状态，不表示实时在线或系统整体健康。
+             * @enum {string}
+             */
+            status: "UNKNOWN" | "STALE" | "UNAVAILABLE" | "RECENT_RESULT";
+            /** Format: date-time */
+            asOf: string;
+            /** @description 配置可用不等于实际服务在线。 */
+            configured?: boolean;
+            scannerConfigured?: boolean;
+            storageConfigured?: boolean;
+            counts?: components["schemas"]["ServiceOperationsCountsDto"];
+            /** @description 固定上限的最近执行回执，不是日志或报文。PDF 为每请求线程，不是常驻队列。 */
+            results?: components["schemas"]["ServiceOperationsResultDto"][];
+            /** @enum {string} */
+            reasonCode?: "NO_RECEIPT" | "GLOBAL_SCOPE_REQUIRED" | "NOT_CONFIGURED" | "SOURCE_UNAVAILABLE" | "RECEIPT_EXPIRED";
+        };
+        ServiceOperationsPageDto: {
+            /** @enum {string} */
+            scope: "ORGANIZATION" | "PLATFORM";
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: date-time */
+            asOf: string;
+            sources: components["schemas"]["ServiceOperationsSourceDto"][];
         };
         ProblemFieldDto: {
             key: string;
@@ -21587,6 +21664,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataExchangeAttemptDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ServiceOperationsController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                scope?: "ORGANIZATION" | "PLATFORM";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceOperationsPageDto"];
                 };
             };
             default: {

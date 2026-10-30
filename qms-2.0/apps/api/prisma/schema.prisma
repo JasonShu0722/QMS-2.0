@@ -1621,6 +1621,28 @@ model AuditNc {
   @@map("audit_ncs")
 }
 
+model ServiceOperationReceipt {
+  id           String    @id @default(uuid()) @db.Uuid
+  identityKey  String    @unique @map("identity_key") @db.VarChar(160)
+  scopeKey     String    @map("scope_key") @db.VarChar(40)
+  operation    String    @db.VarChar(20)
+  domainCode   String?   @map("domain_code") @db.VarChar(32)
+  producerId   String    @map("producer_id") @db.Uuid
+  status       String    @db.VarChar(16)
+  startedAt    DateTime  @map("started_at") @db.Timestamptz(3)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(3)
+  observedAt   DateTime  @map("observed_at") @db.Timestamptz(3)
+  durationMs   Int?      @map("duration_ms")
+  processed    Int?
+  retried      Int?
+  failed       Int?
+  reasonCode   String?   @map("reason_code") @db.VarChar(50)
+
+  @@index([scopeKey, operation, observedAt])
+  @@index([observedAt, id])
+  @@map("service_operation_receipts")
+}
+
 model DataExchangeAttempt {
   id                 String   @id @default(uuid()) @db.Uuid
   scopeKey           String   @map("scope_key") @db.VarChar(40)
