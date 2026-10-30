@@ -9,6 +9,13 @@ import { problemCenterTranslations } from '../features/problem-center/problem-ce
 import { administrativeTranslations } from '../features/admin/administrative-translations';
 
 const translations: Record<string, string> = {
+  '仅维护物料编码和物料名称；编码区分大小写，前导 0 原样保留。': 'Only material code and name are maintained. Codes are case-sensitive and preserve leading zeroes.',
+  '一张正式8D一行。': 'Each row represents one formal 8D.',
+  '不支持旧任务领取、转派或任意完成。关闭审核请使用关闭审核入口。': 'Legacy task claiming, reassignment and arbitrary completion are not supported. Use Closure review for closure approval.',
+  '按项目映射及发生/纳入依据选择过程事实，纳入后发起正式8D；不改写原事实，不以问题关闭替代阶段门。': 'Select process facts using project mappings and occurrence or inclusion evidence, then include them before issuing a formal 8D. Original facts remain unchanged; closing a problem does not replace a phase gate.',
+  '台账状态与 8D 独立；收件、解析和台账关闭均不自动发单或变更 8D。': 'Ledger status is independent of 8D. Receiving, analysis and ledger closure do not automatically issue or change an 8D.',
+  '历史台账：仅用于历史登记、严格导入与历史报告。新业务请返回正式台账。': 'Historical ledger: for historical entries, strict imports and historical reports only. Return to the current ledger for new business.',
+  '请先保存台账，再上传附件。': 'Save the ledger record before uploading attachments.',
   '组织与岗位': 'Organization and positions',
   '管理职责': 'Management responsibilities',
   '关闭审核': 'Closure review',

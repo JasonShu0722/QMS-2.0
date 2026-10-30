@@ -5,23 +5,21 @@ import './workbench.css';
 
 const metrics = ['个人待办', '待审批', '即将逾期', '高风险', '关键指标'] as const;
 const entries = [
-  { title: '我的待办', description: '查看任务与通知，进入关联问题继续处理。', path: '/app/my-tasks', icon: ClipboardCheck },
-  { title: '问题中心', description: '查找问题并查看处理进展、报告与追溯记录。', path: '/app/problem-center', icon: ShieldAlert },
-  { title: '个人账号', description: '管理个人资料、密码与登录会话。', path: '/app/account', icon: UserCircle },
+  { title: '我的待办', path: '/app/my-tasks', icon: ClipboardCheck },
+  { title: '问题中心', path: '/app/problem-center', icon: ShieldAlert },
+  { title: '个人账号', path: '/app/account', icon: UserCircle },
 ] as const;
 
 export function Workbench() {
   const { t } = useLanguage();
   return (
     <section className="qms-workbench" aria-label={t('综合工作台')}>
-      <header className="qms-workbench__heading">
-        <h1>{t('综合工作台')}</h1>
-      </header>
+      <h1 className="sr-only">{t('综合工作台')}</h1>
       <section className="qms-workbench__entries" aria-labelledby="workbench-entry-title">
         <h2 id="workbench-entry-title">{t('工作入口')}</h2>
-        <div>{entries.map(({ title, description, path, icon: Icon }) => (
-          <Link className="qms-workbench__entry qms-display-card" key={path} to={path} aria-label={t(description)}>
-            <Icon size={22} aria-hidden="true" /><span><strong>{t(title)}</strong><span>{t(description)}</span></span><ArrowRight size={16} aria-hidden="true" />
+        <div>{entries.map(({ title, path, icon: Icon }) => (
+          <Link className="qms-workbench__entry qms-display-card" key={path} to={path} aria-label={t(title)}>
+            <Icon size={22} aria-hidden="true" /><strong>{t(title)}</strong><ArrowRight size={16} aria-hidden="true" />
           </Link>
         ))}</div>
       </section>

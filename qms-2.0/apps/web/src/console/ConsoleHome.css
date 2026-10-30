@@ -1,6 +1,6 @@
 .qms-console-home { min-width: 0; }
-.qms-console-home-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-.qms-console-home h2 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 600; color: var(--qms-text); }
+.qms-console-home-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.qms-console-home h2 { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 600; color: var(--qms-text); }
 .qms-console-home-intro p, .qms-console-home-note { margin: 8px 0; font-size: 13px; color: var(--qms-muted); line-height: 1.65; overflow-wrap: anywhere; }
 .qms-console-home-intro > button { flex: none; }
 .qms-console-home-loading { margin: 16px 0; color: var(--qms-muted); }
@@ -10,7 +10,7 @@
 .qms-console-home-source { min-width: 0; padding: 20px; border: 1px solid var(--qms-border); border-radius: 7px; background: var(--qms-surface); }
 .qms-console-home-source header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .qms-console-home-source h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.6; color: var(--qms-text); }
-.qms-console-home-range { font-size: 11px; letter-spacing: .2px; color: var(--qms-muted); }
+.qms-console-home-range { font-size: 12px; letter-spacing: .2px; color: var(--qms-muted); }
 .qms-console-home-total { margin: 24px 0; font-size: 38px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -1px; line-height: 1.2; color: var(--qms-text); }
 .qms-console-home-source footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 14px; border-top: 1px solid var(--qms-border); font-size: 12px; color: var(--qms-muted); }
 .qms-console-home a { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; color: var(--qms-accent-text); overflow-wrap: anywhere; }

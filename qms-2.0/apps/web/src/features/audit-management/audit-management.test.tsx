@@ -59,12 +59,15 @@ it('protects an unfinished audit issue when navigating away', async () => {
 
 it('loads a plan after the user enters its identifier', async () => {
   vi.mocked(apiRequest).mockResolvedValue(plan);
-  render(<AuditManagementPage />);
+  const { container } = render(<AuditManagementPage />);
+  expect(screen.getByRole('heading', { level: 1, name: '审核计划' })).toHaveClass('sr-only');
+  expect(container.querySelector('.audit-management-page > header')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('审核计划 ID'), { target: { value: plan.id } });
   fireEvent.click(screen.getByRole('button', { name: '查看计划' }));
   expect(await screen.findByText('年度体系审核')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/audit-management/plans/${plan.id}`);
   expect(screen.getByText('已计划')).toBeVisible();
+  expect(container.querySelector('.audit-management-page > header')).toBeInTheDocument();
 });
 
 it('shows an explicit empty state after a successful lookup with no plan', async () => {

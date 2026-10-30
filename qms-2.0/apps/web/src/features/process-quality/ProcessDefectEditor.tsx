@@ -2,6 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Collapse, Drawer, Form, Input, InputNumber, Pagination, Select, Space, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client';
+import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, type Defect } from './process-ledger';
@@ -18,6 +19,7 @@ export function materialInputs(record?: Defect): Material[] {
   return (record?.materials ?? []).map(item => ({ id: item.id, materialCode: item.materialCode, materialName: item.materialName, supplierOrganizationId: item.supplierOrganizationId, supplierProfileId: item.supplierProfileId, materialBatch: item.materialBatch, sqeUserId: item.sqeUserId, notes: item.notes }));
 }
 export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSaved, onClose, onDenied }: { record?: Defect; suppliers: Supplier[]; canReadSuppliers: boolean; onSaved: (record: Defect) => void; onClose: () => void; onDenied: (cause?: unknown) => void }) {
+  const { t } = useLanguage();
   const [form] = Form.useForm<Update>();
   const [saved, setSaved] = useState(record);
   const [dirty, setDirty] = useState(false);
@@ -103,6 +105,6 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       </> }]} />
       <div className="qms-dialog-actions"><Button type="primary" htmlType="submit" loading={writer.busy} disabled={writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button></div>
     </Form>
-    {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : <Typography.Paragraph type="secondary">请先保存台账，再上传附件；附件沿用真实上传、扫描和授权预览。</Typography.Paragraph>}
+    {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : <Typography.Paragraph type="secondary">{t('请先保存台账，再上传附件。')}</Typography.Paragraph>}
   </Drawer>;
 }

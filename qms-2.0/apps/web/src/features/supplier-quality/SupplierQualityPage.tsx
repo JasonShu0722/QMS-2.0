@@ -224,7 +224,7 @@ export function SupplierQualityPage({ portal = false }: { portal?: boolean }) {
   if (direct) return <main className="supplier-quality-page">{directMatch
     ? <SupplierEightDWorkspace key={JSON.stringify([sessionScope, directMatch[1]])} supplierProblemId={directMatch[1]} portal={false} />
     : <Alert role="alert" type="error" showIcon title={t('无效的供应商8D问题标识')} />}</main>;
-  return <main className="supplier-quality-page"><div className="supplier-heading"><div><Typography.Title level={1}>{portal ? '问题与整改' : t('供应商问题台账')}</Typography.Title></div>
+  return <main className="supplier-quality-page"><div className="supplier-heading">{portal ? <div><Typography.Title level={1}>问题与整改</Typography.Title></div> : <h1 className="sr-only">{t('供应商问题台账')}</h1>}
     {!portal ? <Space wrap><Link to={base}>问题台账</Link><Link to={`${base}/profiles`}>供应商资料</Link></Space> : null}</div>
     {match ? <ProblemDetail key={JSON.stringify([sessionScope, portal, match[1]])} id={match[1]} portal={portal} /> : !portal && suffix === '/new' ? <><Link to={base}>返回台账</Link><ProblemForm saved={(value) => navigate(`${base}/problems/${value.id}`)} /></> : !portal && suffix === '/profiles' ? <SupplierProfilesPage /> : <ProblemLedger portal={portal} />}
   </main>;

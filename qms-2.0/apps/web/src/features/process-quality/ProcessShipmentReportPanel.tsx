@@ -54,7 +54,7 @@ export function ProcessShipmentReportPanel() {
   }, [selectedId, revision]);
 
   return <section className="process-quality-card" aria-label="出货报告台账">
-    <Space className="process-quality-toolbar" wrap><Typography.Title level={3}>出货报告</Typography.Title><Button onClick={selectedId ? refreshFromUser : refresh} loading={loading}>刷新报告</Button>{canWrite ? <CreateReportDrawer created={refresh} /> : null}</Space>
+    <Space className="process-quality-toolbar" wrap><Button onClick={selectedId ? refreshFromUser : refresh} loading={loading}>刷新报告</Button>{canWrite ? <CreateReportDrawer created={refresh} /> : null}</Space>
     {error ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={denied(error) ? '暂无出货报告访问权限' : message(error, '出货报告加载失败')} action={!denied(error) ? <Button onClick={refresh}>重试</Button> : undefined} /> : loading ? <Spin /> : <Table<Report> rowKey="id" dataSource={reports} pagination={{ pageSize: 10 }} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无出货报告" /> }} columns={[
       { title: '报告编号', dataIndex: 'reportNumber' }, { title: '产品', dataIndex: 'productCode', render: (value: string | null) => value ?? '全部' },
       { title: '批次数', dataIndex: 'batchCount' }, { title: '良率', dataIndex: 'yieldRate', render: (value: number | null) => value === null ? '—' : `${(value * 100).toFixed(1)}%` },

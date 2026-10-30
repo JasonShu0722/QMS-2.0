@@ -27,7 +27,7 @@ it('reports authorization failure instead of displaying an empty successful ledg
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }), { status: 403, headers: { 'content-type': 'application/json' } })));
   render(<MemoryRouter initialEntries={['/app/supplier-quality']}><SupplierQualityPage /></MemoryRouter>);
   expect(await screen.findByText('无权执行此操作')).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: '供应商问题台账' })).toBeVisible();
+  expect(screen.getByRole('heading', { level: 1, name: '供应商问题台账' })).toHaveClass('sr-only');
   expect(screen.queryByText('暂无问题草稿')).not.toBeInTheDocument();
 });
 

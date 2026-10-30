@@ -418,14 +418,14 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const disabledWrites = writeForbidden || mutating || viewsLoading;
   const visibleColumnLabels = processQuality ? { ...columnLabels, severity: '风险', responsibleParty: '责任科室', ownerId: '负责人', dueAt: '问题截止时间' } : columnLabels;
-  if (accessLost) return <main className="problem-center"><Typography.Title level={1}>{t(followupTitle)}</Typography.Title><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
+  if (accessLost) return <main className="problem-center"><h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
   return <main className="problem-center">
     <div className="problem-center__heading">
-      <div><Typography.Title level={1}>{t(processQuality ? followupTitle : '问题管理面板')}</Typography.Title><Typography.Paragraph type="secondary">{t(processQuality ? '固定领域及来源，一张正式8D一行；编号进入既有问题处理工作空间。' : '在授权组织内检索问题，并保存个人视图。')}</Typography.Paragraph></div>
+      <h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1>
       <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
     </div>
     <Feedback error={organizationError} t={t} />
-    {processQuality ? <><Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button><Alert type="info" title={t('支持编号、状态、风险、负责人及问题截止时间筛选；阶段期限仅供核对，暂不参与截止筛选。')} /></> : null}
+    {processQuality ? <><Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button><p>{t('一张正式8D一行。')}</p><Alert type="info" title={t('支持编号、状态、风险、负责人及问题截止时间筛选；阶段期限仅供核对，暂不参与截止筛选。')} /></> : null}
 
     <Card title={t('保存视图')} loading={!organizationId && !organizationError}>
       <div className="problem-center__view-row">

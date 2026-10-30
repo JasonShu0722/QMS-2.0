@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation, useNavigate } from 'react-router-dom';
 import { transferableAbortController } from 'node:util';
 import { readFileSync } from 'node:fs';
@@ -21,6 +21,59 @@ function context(target: string = a.id): ConsoleContext { return { actor: { id: 
 beforeEach(() => { getContext.mockReset(); useWorkTabsStore.getState().bindSession('INTERNAL:a:actor'); localStorage.clear(); });
 function Page({ dirty = false }: { dirty?: boolean }) { const location = useLocation(); useUnsavedChanges(dirty); return <div>受保护内容<output aria-label="path">{location.pathname}{location.search}</output></div>; }
 function renderLayout(path = '/console/users', dirty = false) { return render(<MemoryRouter initialEntries={[path]}><ConsoleLayout><Page dirty={dirty} /></ConsoleLayout></MemoryRouter>); }
+it('keeps one focused home heading and the target selector while disclosing identity and resource facts on demand', async () => {
+  getContext.mockResolvedValue(context());
+  renderLayout('/console');
+  await screen.findByText('受保护内容');
+  const main = screen.getByRole('main');
+  const heading = within(main).getByRole('heading', { level: 1, name: '管理首页' });
+  expect(heading).toHaveFocus();
+  expect(screen.queryByRole('navigation', { name: '面包屑' })).not.toBeInTheDocument();
+  expect(within(main).queryByText('QMS / 管理工作空间')).not.toBeInTheDocument();
+  const target = within(main).getByRole('combobox', { name: '管理目标组织' });
+  expect(target).toHaveValue('a');
+  const identity = screen.getByLabelText('当前身份');
+  const details = identity.closest('details');
+  expect(details).not.toBeNull();
+  expect(details).not.toHaveAttribute('open');
+  expect(identity).not.toBeVisible();
+  fireEvent.click(within(details!).getByText(/身份与资源范围/));
+  expect(identity).toBeVisible();
+  expect(identity).toHaveTextContent('actor');
+  expect(screen.getByLabelText('会话所属组织')).toHaveTextContent('组织A (A)');
+  expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('TARGET');
+  getContext.mockResolvedValue(context('b'));
+  fireEvent.change(target, { target: { value: 'b' } });
+  await waitFor(() => expect(screen.getByLabelText('path')).toHaveTextContent('organizationId=b'));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '管理首页' })).toHaveFocus());
+  expect(screen.getByRole('combobox', { name: '管理目标组织' })).toHaveValue('b');
+});
+it('retains a real return link and heading focus on a deep workflow route', async () => {
+  getContext.mockResolvedValue(context('b'));
+  renderLayout('/console/workflows/12345678-1234-4234-8234-123456789abc/87654321-4321-4321-8321-123456789abc?organizationId=b');
+  await screen.findByText('受保护内容');
+  const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
+  expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
+  expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus();
+  expect(screen.getByText('固定会话所属组织')).toBeVisible();
+});
+it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
+  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
+  getContext.mockResolvedValue({ ...context(), modules: (['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => ({ key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: 'a', permissions })) });
+  renderLayout('/console');
+  await screen.findByText('受保护内容');
+  const links = screen.getByRole('navigation', { name: '管理导航' }).querySelectorAll('a');
+  expect(links).toHaveLength(17);
+  links.forEach(link => {
+    const icon = link.querySelector('svg');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon).toHaveAttribute('width', '18');
+    if (link.getAttribute('href') === '/console/configuration') expect(icon).toHaveClass('lucide-settings');
+    else expect(icon).not.toHaveClass('lucide-settings');
+  });
+  expect(screen.getByRole('link', { name: '物料主数据' }).querySelector('svg')).toHaveClass('lucide-package');
+  expect(screen.getByRole('link', { name: '组件项目映射' }).querySelector('svg')).toHaveClass('lucide-link2');
+});
 it('verifies scope before rendering real children and navigates without writing business tabs', async () => {
   let resolve!: (value: ConsoleContext) => void;
   getContext.mockReturnValue(new Promise(done => { resolve = done; }));

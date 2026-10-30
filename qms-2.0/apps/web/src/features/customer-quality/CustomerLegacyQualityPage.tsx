@@ -93,7 +93,7 @@ export function CustomerLegacyQualityPage() {
   }, [items, search]);
 
   return <main className="customer-quality-page">
-    <header className="customer-quality-heading"><div><Typography.Text type="secondary">客户质量</Typography.Text><Typography.Title level={1}>客诉台账</Typography.Title><Typography.Paragraph type="secondary">记录客户来源、实物处置和解析状态，再进入正式问题分流。</Typography.Paragraph></div><Button onClick={() => void load()} loading={loading}>刷新</Button></header>
+    <header className="customer-quality-heading"><h1 className="sr-only">客诉台账</h1><Button onClick={() => void load()} loading={loading}>刷新</Button></header>
     {error ? <Alert type={error instanceof ApiError && error.status === 403 ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 403 ? '暂无客诉台账访问权限' : error instanceof ApiError ? safeAccountError(error) : '客诉台账加载失败，请重试。'} description={error instanceof ApiError ? error.traceId : undefined} action={error instanceof ApiError && error.status === 403 ? undefined : <Button onClick={() => void load()}>重试</Button>} /> : null}
     <section className="customer-quality-card"><Space className="customer-quality-toolbar" wrap><Input.Search aria-label="搜索客诉" placeholder="搜索编号、产品、VIN 或描述" allowClear onSearch={setSearch} onChange={(event) => setSearch(event.target.value)} /><Typography.Text type="secondary">共 {filtered.length} 条</Typography.Text></Space>
       {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? null : <Table<Complaint> rowKey="id" dataSource={filtered} scroll={{ x: 900 }} locale={{ emptyText: <Empty description={search ? '没有匹配的客诉' : '暂无客诉记录'} /> }} columns={[

@@ -35,6 +35,19 @@ function server(item: Internal | Supplier = internal, intercept?: (call: Call) =
 function scene(organization = org, callbacks = {}) {
   return <MemoryRouter><UnsavedChangesProvider><AdministrativeProblemReconfiguration organization={organization} {...callbacks} /></UnsavedChangesProvider></MemoryRouter>;
 }
+
+it('keeps the recovery section heading accessible while retaining the visible report heading and scope', async () => {
+  server();
+  render(scene());
+  await edit();
+  const heading = screen.getByRole('heading', { name: '问题责任恢复', level: 5 });
+  expect(heading).toHaveClass('sr-only');
+  expect(heading.parentElement).toBe(screen.getByRole('region', { name: '问题责任恢复' }));
+  expect(screen.getByRole('heading', { name: `恢复责任 · ${internal.reportNumber}`, level: 5 })).not.toHaveClass('sr-only');
+  expect(screen.getByText('仅恢复失效的当前责任，不代替业务人员审批；原业务归属和已批准历史保持不变。')).toBeVisible();
+  expect(screen.getByText('只选择当前失效职责的有效任职；仍有效的责任不覆盖，不授予额外业务权限。')).toBeVisible();
+});
+
 let editor: HTMLElement | undefined;
 async function choose(label: string, text: string, keyboard = false) {
   const field = label === '问题领域' || !editor?.isConnected ? document.body : within(editor).getByText(label, { selector: 'label' }).closest('.ant-form-item');

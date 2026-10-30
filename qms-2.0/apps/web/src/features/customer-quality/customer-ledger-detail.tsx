@@ -2,6 +2,7 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Descriptions, Input, Modal, Space, Table, Tag, Typography } from 'antd';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from '../../api/client';
+import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { ledgerFields, rawText } from './customer-ledger-import';
 import { CustomerLedgerEditor } from './customer-ledger-editor';
@@ -16,6 +17,7 @@ export function CustomerLedgerDetail({ record, candidates, customers = [], userI
   onDenied: (cause: unknown) => void; onSaved: (record: LedgerItem) => void; refreshDetail: () => Promise<LedgerDetail | undefined>;
   renderAnalysis?: (complaintId: string, onDenied: (cause: unknown) => void, sourceRecord: LedgerDetail) => ReactNode;
 }) {
+  const { t } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [action, setAction] = useState<'receiving' | 'close' | 'reopen'>();
   const [courier, setCourier] = useState(''); const [received, setReceived] = useState(''); const [note, setNote] = useState('');
@@ -103,7 +105,7 @@ export function CustomerLedgerDetail({ record, candidates, customers = [], userI
       { key: 'conclusion', label: '调查结论 / 关闭结果', children: record.closureNote ?? '未填写' },
     ]} />
     <details><summary>登记事实与原填写（含待补正值）</summary><dl className="customer-ledger-facts">{ledgerFields.map(([key, label]) => <div key={key}><dt>{label}</dt><dd><span>规范值：{rawText(record.normalized[key]) || '未填写 / 待补正'}</span><span className="customer-ledger-raw">原填写：{rawText(record.raw[key]) || '（空）'}</span></dd></div>)}</dl></details>
-    <Alert type="info" title="台账两态与 8D 独立；收件、解析和台账关闭均不自动发单或变更 8D。完整多来源 8D 在后续交付单元接入。" />
+    <Alert type="info" title={t('台账状态与 8D 独立；收件、解析和台账关闭均不自动发单或变更 8D。')} />
     <CustomerLedgerSourceAttachments recordId={record.id} organizationId={organizationId} readOnly={!canEdit} onDenied={onDenied} onPendingChange={sourceChanged} />
     {renderAnalysis?.(record.id, onDenied, record)}
     <details><summary>台账历史（{record.history.length}）</summary><Table<components['schemas']['CustomerLedgerEventDto']> rowKey="id" dataSource={record.history} size="small" pagination={{ pageSize: 10 }} scroll={{ x: 650 }} columns={[

@@ -106,7 +106,7 @@ export function AuditStandardsPage() {
 
   return <main className="audit-standards-page">
     <header className="audit-standards-heading">
-      <div><Typography.Text type="secondary">审核管理</Typography.Text><Typography.Title level={1}>审核标准库</Typography.Title><Typography.Paragraph type="secondary">发布后的检查项形成不可修改的版本，审核执行按选定版本留存记录。</Typography.Paragraph></div>
+      <div><h1 className="sr-only">审核标准库</h1><Typography.Paragraph type="secondary">发布后的检查项形成不可修改的版本，审核执行按选定版本留存记录。</Typography.Paragraph></div>
       <Button type="primary" onClick={() => setEditor('new')}>新建标准</Button>
     </header>
     <section className="audit-standards-card" aria-label="审核标准目录" role="region">

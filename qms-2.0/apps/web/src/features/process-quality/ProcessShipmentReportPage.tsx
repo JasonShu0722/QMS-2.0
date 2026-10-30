@@ -1,4 +1,3 @@
-import { Typography } from 'antd';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessShipmentReportPanel } from './ProcessShipmentReportPanel';
@@ -8,7 +7,7 @@ export function ProcessShipmentReportPage() {
   const { t } = useLanguage();
   const scope = useWorkTabsStore(state => state.sessionScope);
   return <main className="process-quality-page">
-    <header className="process-quality-heading"><div><Typography.Text type="secondary">{t('制程质量')}</Typography.Text><Typography.Title level={1}>{t('出货报告')}</Typography.Title></div></header>
+    <h1 className="sr-only">{t('出货报告')}</h1>
     <ProcessShipmentReportPanel key={scope ?? 'unbound'} />
   </main>;
 }

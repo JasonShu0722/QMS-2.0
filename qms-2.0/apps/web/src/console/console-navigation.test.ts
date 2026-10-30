@@ -1,10 +1,24 @@
 import { expect, it, vi } from 'vitest';
+import { Settings } from 'lucide-react';
 import { getConsoleContext } from './console-api';
 import { consoleNavigation, consoleRoute, type ConsoleContext, type ConsoleModule } from './console-navigation';
 
 const organization = { id: 'a', code: 'A', name: '组织A', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 const module = (key: ConsoleModule['key'], permissions: string[] = []): ConsoleModule => ({ key, permissions, scope: key === 'workflows' ? 'SESSION_HOME' : 'TARGET', coverage: 'ORGANIZATION', organizationId: 'a' });
 const context = (...modules: ConsoleModule[]): ConsoleContext => ({ actor: { id: 'actor', accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false, modules });
+
+it('provides explicit icons for all authorized paths with a gear only for configuration', () => {
+  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
+  const value = context(...(['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => module(key, permissions)));
+  const entries = consoleNavigation(value);
+  expect(entries).toHaveLength(17);
+  for (const entry of entries) {
+    expect(entry).toHaveProperty('icon');
+    if (entry.path === '/console/configuration') expect(entry.icon).toBe(Settings);
+    else expect(entry.icon).not.toBe(Settings);
+    expect(consoleRoute(entry.path, value).item).toBe(entry);
+  }
+});
 
 it('allows workflow-only home and design routes without user administration', () => {
   const value = context(module('workflows', ['workflow:manage']));

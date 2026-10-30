@@ -64,7 +64,7 @@ export function SupplierConcessionPage() {
   }, [page, status, revision]);
 
   return <main className="supplier-concession-page">
-    <header className="supplier-concession-heading"><div><Typography.Text type="secondary">供应商质量 · 特采</Typography.Text><Typography.Title level={1}>特采申请与批次放行</Typography.Title><Typography.Paragraph type="secondary">针对已完成的 NG 来料检验，审批限定数量和有效期，并保留批次放行授权及操作轨迹。实际 MES 收货或库存动作需另行联调。</Typography.Paragraph></div><Space><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>{canCreate ? <Button type="primary" onClick={() => setCreateOpen(true)}>发起特采申请</Button> : null}</Space></header>
+    <header className="supplier-concession-heading"><div><h1 className="sr-only">特采申请与批次放行</h1><Typography.Paragraph type="secondary">针对已完成的 NG 来料检验，审批限定数量和有效期，并保留批次放行授权及操作轨迹。实际 MES 收货或库存动作需另行联调。</Typography.Paragraph></div><Space><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>{canCreate ? <Button type="primary" onClick={() => setCreateOpen(true)}>发起特采申请</Button> : null}</Space></header>
     <section className="supplier-concession-card" aria-label="特采申请台账">
       <div className="supplier-concession-toolbar"><Select aria-label="按状态筛选" allowClear placeholder="全部状态" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={Object.entries(labels).map(([value, label]) => ({ value, label }))} /><Typography.Text type="secondary">共 {total} 条</Typography.Text></div>
       {error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}

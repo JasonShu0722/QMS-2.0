@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
@@ -47,6 +47,14 @@ it('reads only authorized organization summaries and separates requests, unconne
   expect(read).toHaveBeenCalledTimes(3); for (const [path] of read.mock.calls) { const query = new URL(path, 'http://localhost').searchParams; expect(query.get('organizationId')).toBe(org); expect(query.get('scope')).toBe('ORGANIZATION'); }
   expect(screen.getByRole('link', { name: '查看 API 观测' })).toHaveAttribute('href', `/console/api-monitoring?organizationId=${org}`);
   expect(document.querySelector(`time[datetime="${time}"]`)).toBeInTheDocument();
+  const notes = document.querySelector('.qms-observation-summary > header details');
+  expect(notes).not.toBeNull();
+  expect(notes).not.toHaveAttribute('open');
+  expect(notes!.querySelector('summary')).toHaveTextContent('当前目标组织');
+  const interpretation = within(notes as HTMLElement).getByText(/不是系统健康总分/);
+  expect(interpretation).not.toBeVisible();
+  fireEvent.click(notes!.querySelector('summary')!);
+  expect(interpretation).toBeVisible();
 });
 it('does not request or link modules outside the caller capability', async () => {
   mocks.context = { ...context(), modules: context().modules.slice(0, 1) }; view(); await screen.findByText('12');

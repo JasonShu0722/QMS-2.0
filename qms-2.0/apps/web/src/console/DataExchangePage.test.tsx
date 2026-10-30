@@ -75,6 +75,15 @@ it('reads the verified scope and keeps transfer, business processing and reconci
   const query = new URL(read.mock.calls[0]![0], 'http://localhost').searchParams;
   expect(query.get('scope')).toBe('ORGANIZATION'); expect(query.get('organizationId')).toBe(targetId);
   expect(screen.queryByRole('button', { name: /重放|补传|导出原文/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '数据交换观测' })).not.toBeInTheDocument();
+  const notes = document.querySelector('.qms-exchange-heading details');
+  expect(notes).not.toBeNull();
+  expect(notes).not.toHaveAttribute('open');
+  expect(notes!.querySelector('summary')).toHaveTextContent('传输成功不等于业务落地');
+  const stages = within(notes as HTMLElement).getByText(/传输、校验、业务处理与对账/);
+  expect(stages).not.toBeVisible();
+  fireEvent.click(notes!.querySelector('summary')!);
+  expect(stages).toBeVisible();
 });
 it('shows a genuine unconnected empty catalogue without claiming zero failures or healthy integration', async () => {
   read.mockResolvedValue(result('ORGANIZATION', { connectionStatus: 'NOT_CONNECTED', sources: [], items: [], total: 0, summary: { batchAttempts: 0, recordAttempts: 0, transferSucceededBatches: 0, processingFailedBatches: 0, reconciliationSucceededBatches: 0 } }));
@@ -203,5 +212,5 @@ it('does not expose rows or totals from a foreign list response', async () => {
 it('keeps StrictMode and English labels while retiring the discarded first read', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US'); const old = deferred<Page>(); read.mockReturnValueOnce(old.promise).mockImplementation(async () => result()); view(true);
   await screen.findByText('batch-001'); await act(async () => old.resolve(result('ORGANIZATION', { items: [attempt({ correlationId: 'OLD_PRIVATE' })] })));
-  expect(screen.queryByText('OLD_PRIVATE')).not.toBeInTheDocument(); expect(screen.getByRole('heading', { name: 'Data exchange observations' })).toBeVisible();
+  expect(screen.queryByText('OLD_PRIVATE')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh exchange observations' })).toBeVisible();
 });

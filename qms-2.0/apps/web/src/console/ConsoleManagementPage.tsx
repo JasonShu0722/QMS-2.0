@@ -139,7 +139,7 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
       const next = new URLSearchParams(location.search); next.set('organizationId', id); navigate({ pathname: location.pathname, search: next.toString(), hash: location.hash });
     }} />;
     case 'suppliers': return <SupplierProfilesPage organizationId={organization.id} organizationPermissions={organization.permissions} onDenied={denied} />;
-    case 'customers': return <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} />;
+    case 'customers': return <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} embedded />;
     case 'materials': return <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} />;
     case 'component-projects': return <ComponentProjectAdministration organization={organization} />;
     case 'configuration': return <ConfigurationAdministration organization={organization} />;

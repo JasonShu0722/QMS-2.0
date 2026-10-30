@@ -180,7 +180,7 @@ function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
 
   if (denied) return <Alert type="error" showIcon title={t('管理权限、会话或范围已变化，已清除问题责任内容')} />;
   return <section className="administrative-problem-reconfiguration" aria-label={t('问题责任恢复')}>
-    <Typography.Title level={5}>{t('问题责任恢复')}</Typography.Title>
+    <Typography.Title level={5} className="sr-only">{t('问题责任恢复')}</Typography.Title>
     <Alert type="info" showIcon title={t('仅恢复失效的当前责任，不代替业务人员审批；原业务归属和已批准历史保持不变。')} description={t('恢复后由真实责任人继续办理并重新提交，不自动批准、关闭或迁移历史业务。')} />
     <Space wrap>
       <Select aria-label={t('问题领域')} value={domain} disabled={locked} options={Object.entries(domains).map(([value, label]) => ({ value, label: t(label) }))}
