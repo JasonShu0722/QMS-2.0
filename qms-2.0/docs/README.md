@@ -6,8 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [独立管理控制台整体设计](../../docs/superpowers/specs/2026-10-29-qms-management-console-design.md) | REQ-0032同源新窗口、分权限管理、shadcn-admin视觉、完整存量迁入与真实API/交换观测；CP-1已合并发布a15b68d，CP-2未交付；heartbeat已删除 |
-| [完整管理控制台实施总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md) | 两个PR检查点：CP-1/V0.0.36已部署a15b68d，CP-2观测与完整验收未启动；人工清单及边界见最新摘要 |
+| [独立管理控制台整体设计](../../docs/superpowers/specs/2026-10-29-qms-management-console-design.md) | REQ-0032同源新窗口、分权限管理、shadcn-admin视觉、完整存量迁入与真实API/交换观测；CP-1/CP-2均已发布，最新89c2ddd/V0.0.37；人工验收/外部接入独立，heartbeat已删除 |
+| [完整管理控制台实施总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md) | 两个PR检查点PR84/85均已部署，当前89c2ddd；机器核验、人工清单及外部未接入边界见最新摘要 |
 | [组织直属岗位与兼容授权统一设计](../../docs/superpowers/specs/2026-10-29-qms-organization-direct-position-legacy-authorization-design.md) | 已确认组织直属管理员岗、旧角色迁入/解除清理及去历史授权顶层页；仅设计归档，未执行生产迁移 |
 | [组织直属岗位与兼容授权实施计划](../../docs/superpowers/plans/2026-10-29-qms-organization-direct-position-legacy-authorization.md) | 直属基础、受控来源转换与正式入口A/B/C已形成本地候选并纳入CP-1；未执行生产来源转换 |
 | [组织/用户强制删除与跨组织管理统一方案](../../docs/superpowers/specs/2026-10-28-qms-admin-force-delete-and-scope-design.md) | 已确认设计与需求登记历史；组织、部门/科室、用户强删和补配，全管理视角权限边界；当前实施以接续计划为准 |

@@ -1,5 +1,12 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0032 CP-2 运行发布确认（2026-10-30）
+
+[PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
+
+两个管理控制台功能检查点均已实际发布；下方候选/“尚未发布”段保留历史范围。当前只确认机器发布，不是完整阶段或人工角色、多窗、视觉验收；外部连接器仍未接入。新观测读取权限不自动授给存量账号或platform marker，本次未生产赋权/来源转换/绑定启用/外发/关闭REQ和Issue/飞书回填；heartbeat保持删除。
+
+
 ## REQ-0032 CP-2 观测与面板候选（2026-10-30，尚未发布）
 
 [Issue83 / V0.0.37](https://github.com/JasonShu0722/QMS-2.0/issues/83)已按负责人验证反馈继续开发。当前候选包括真实HTTP分钟聚合与受控查询、内部数据交换四阶段metadata/幂等receipt、各拥有者服务安全汇总、实际Worker及按请求PDF执行回执，以及三个正式观测页面和首页摘要。分项审查、真实红绿、父独验及整合状态以[总计划当前摘要](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)为准；这不代表CP-2已发布或人工验收。当前运行仍是下方CP-1的a15b68d。
