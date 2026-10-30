@@ -20,7 +20,7 @@ export function ProblemWorkspacePage({ problemId }: { problemId?: string }) {
   const { t } = useLanguage();
   const [params] = useSearchParams();
   const session = useWorkTabsStore(state => state.sessionScope);
-  if (!problemId) return <main className="problem-workspace"><h1>{t('问题处理工作空间')}</h1><p>{t('请从问题中心选择一个问题。')}</p><Link to="/app/problem-center">{t('问题中心')}</Link></main>;
+  if (!problemId) return <main className="problem-workspace"><h1 className="sr-only">{t('问题处理工作空间')}</h1><p>{t('请从问题中心选择一个问题。')}</p><Link to="/app/problem-center">{t('问题中心')}</Link></main>;
   const organizationId = params.get('organizationId') || undefined;
   const instanceId = params.get('instanceId') || undefined;
   return <Workspace key={`${session}:${problemId}:${organizationId}:${instanceId}`} problemId={problemId} organizationId={organizationId} instanceId={instanceId} />;
@@ -61,7 +61,7 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
     finally { writing.current = false; setPending(false); state.refresh(); }
   }
   const choose = (value?: string) => setParams(problemScope(workspace?.problem.organizationId ?? organizationId, value));
-  return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><div className="problem-workspace__heading"><h1>{t('问题处理工作空间')}</h1><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
+  return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
     {denied && <Alert role="alert" type="error" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} />}
     <Button disabled={denied || state.loading || pending} onClick={() => { setError(undefined); requestLeave(() => { setUpgrading(false); state.refresh(); }); }}>{t('刷新工作空间')}</Button>
     {state.loading && !workspace ? <Spin aria-label={t('正在加载')} /> : workspace ? <>

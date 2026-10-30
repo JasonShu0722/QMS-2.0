@@ -25,7 +25,7 @@ it('scans a published rule with a stable retry key and clears the code after suc
   });
   render(<SiteScanningPage />);
   fireEvent.change(await screen.findByLabelText('条码'), { target: { value: 'MAT00001' } });
-  expect(screen.getByRole('heading', { name: '关键件条码校验' })).toBeVisible();
+  expect(screen.getByRole('heading', { level: 1, name: '关键件条码校验' })).toHaveClass('sr-only');
   fireEvent.click(screen.getByRole('button', { name: '确认扫码' }));
   expect(await screen.findByText('offline')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '重试扫码' }));

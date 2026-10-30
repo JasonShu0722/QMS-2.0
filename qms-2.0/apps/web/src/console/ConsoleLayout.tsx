@@ -1,5 +1,5 @@
 import { Alert, Button, Drawer, Dropdown, Skeleton } from 'antd';
-import { Building2, ChevronDown, GitBranch, LayoutDashboard, Menu, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, Users } from 'lucide-react';
+import { ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -103,7 +103,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
       {groups.map(([group, zh, en]) => {
         const items = entries.filter(item => item.group === group);
         return items.length ? <section key={group}><p className="qms-console-nav-label">{text(zh!, en!)}</p>{items.map(item => {
-          const Icon = item.module === 'workflows' ? GitBranch : item.module === 'users' ? Users : item.module === 'organizations' ? Building2 : item.module ? Settings : LayoutDashboard;
+          const Icon = item.icon;
           return <Link key={item.path} to={href(item.path)} aria-label={label(item)} title={label(item)} aria-current={route?.item?.path === item.path ? 'page' : undefined}><Icon size={18} aria-hidden="true" /><span className="qms-console-nav-label">{label(item)}</span></Link>;
         })}</section> : null;
       })}
@@ -123,7 +123,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
         <div className="qms-console-topbar-leading">
           <Button className="qms-console-desktop-toggle" type="text" aria-label={text(collapsed ? '展开导航' : '折叠导航', collapsed ? 'Expand navigation' : 'Collapse navigation')} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)} icon={collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />} />
           <Button className="qms-console-mobile-toggle" type="text" aria-label={text('打开管理导航', 'Open management navigation')} aria-expanded={mobileOpen} aria-controls="qms-console-mobile-navigation" onClick={() => setMobileOpen(true)} icon={<Menu size={20} />} />
-          <nav className="qms-console-breadcrumb" aria-label={text('面包屑', 'Breadcrumb')}><Link to={href('/console')}>{text('管理控制台', 'Console')}</Link><span aria-hidden="true">/</span><strong>{route?.item ? label(route.item) : text('访问验证', 'Access verification')}</strong></nav>
+          {location.pathname !== '/console' && location.pathname !== '/console/' && <nav className="qms-console-breadcrumb" aria-label={text('面包屑', 'Breadcrumb')}><Link to={href('/console')}>{text('管理控制台', 'Console')}</Link><span aria-hidden="true">/</span><strong>{route?.item ? label(route.item) : text('访问验证', 'Access verification')}</strong></nav>}
         </div>
         <div className="qms-console-topbar-actions"><TopbarLanguageSwitcher /><Dropdown trigger={['click']} menu={{ selectable: true, selectedKeys: [mode], items: [{ key: 'light', label: text('浅色', 'Light') }, { key: 'dark', label: text('深色', 'Dark') }, { key: 'system', label: text('跟随系统', 'System') }], onClick: ({ key: next }) => { if (next === 'light' || next === 'dark' || next === 'system') setMode(next); } }}>
           <Button aria-label={text('管理外观', 'Console appearance')}>{text('外观', 'Appearance')}<ChevronDown size={14} aria-hidden="true" /></Button>
@@ -133,18 +133,18 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
         {!sessionScope || value?.error && !context ? <div className="qms-console-state"><Alert type="error" showIcon title={!sessionScope || value?.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
           : !context ? <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>
             : <>
-              <div className="qms-console-page-heading"><div><p>QMS / {text('管理工作空间', 'Management workspace')}</p><h1 ref={heading} tabIndex={-1}>{route?.item ? label(route.item) : text('管理页面', 'Management page')}</h1></div>
+              <div className="qms-console-page-heading"><h1 ref={heading} tabIndex={-1}>{route?.item ? label(route.item) : text('管理页面', 'Management page')}</h1>
                 {fixedHome ? <div className="qms-console-fixed-scope"><strong>{text('固定会话所属组织', 'Fixed to session home')}</strong><span>{resourceOrganization?.name} ({resourceOrganization?.code})</span></div>
                   : <label className="qms-console-target">{text('管理目标组织', 'Management target organization')}<select aria-label={text('管理目标组织', 'Management target organization')} value={context.targetOrganization.id} onChange={event => {
                     const next = event.target.value;
                     requestLeave(() => { const search = new URLSearchParams(location.search); search.set('organizationId', next); navigate({ pathname: location.pathname, search: search.toString(), hash: location.hash }); });
                   }}>{context.organizations.map(organization => <option key={organization.id} value={organization.id}>{organization.name} ({organization.code})</option>)}</select></label>}
               </div>
-              <dl className="qms-console-scope">
+              <details className="qms-console-scope-details"><summary>{text('身份与资源范围', 'Identity & resource scope')} · {resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录', 'Platform directory') : text('组织范围', 'Organization scope')}</summary><dl className="qms-console-scope">
                 <div><dt>{text('当前身份', 'Current actor')}</dt><dd aria-label={text('当前身份', 'Current actor')}>{context.actor.id}</dd></div>
                 <div><dt>{text('会话所属组织', 'Session home organization')}</dt><dd aria-label={text('会话所属组织', 'Session home organization')}>{context.actor.homeOrganization.name} ({context.actor.homeOrganization.code})</dd></div>
                 <div><dt>{text('模块资源范围', 'Module resource scope')}</dt><dd aria-label={text('模块资源范围', 'Module resource scope')}>{resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录，以上组织为授权来源', 'Platform directory; organization is the authorization source') : text('组织范围', 'Organization scope')} · {fixedHome ? 'SESSION_HOME' : 'TARGET'}</dd></div>
-              </dl>
+              </dl></details>
               {route?.status === 'allowed' ? <Context.Provider key={capabilityKey} value={{ context, refresh, invalidate }}>{children ?? <Outlet />}</Context.Provider>
                 : <Alert type="warning" showIcon title={route?.status === 'not-found' ? text('管理页面不存在', 'Management page not found') : text('无权访问此管理模块', 'You cannot access this management module')} />}
             </>}

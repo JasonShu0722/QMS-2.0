@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [前端文案、标题与导航专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md) | REQ-0033：文案纪律、关联排版、单列两级折叠菜单、管理分类图标与标题去重；各自主题及业务边界保持 |
+| [REQ-0033实施与启动接续](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md) | P1正式开发、Issue86/V0.0.38；分项双审、真实验证、原失败、PR/部署和人工验收分别记录；20分钟静默守护 |
 | [独立管理控制台整体设计](../../docs/superpowers/specs/2026-10-29-qms-management-console-design.md) | REQ-0032同源新窗口、分权限管理、shadcn-admin视觉、完整存量迁入与真实API/交换观测；CP-1/CP-2均已发布，最新89c2ddd/V0.0.37；人工验收/外部接入独立，heartbeat已删除 |
 | [完整管理控制台实施总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md) | 两个PR检查点PR84/85均已部署，当前89c2ddd；机器核验、人工清单及外部未接入边界见最新摘要 |
 | [组织直属岗位与兼容授权统一设计](../../docs/superpowers/specs/2026-10-29-qms-organization-direct-position-legacy-authorization-design.md) | 已确认组织直属管理员岗、旧角色迁入/解除清理及去历史授权顶层页；仅设计归档，未执行生产迁移 |

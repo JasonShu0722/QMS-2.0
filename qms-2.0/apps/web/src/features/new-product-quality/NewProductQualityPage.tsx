@@ -268,10 +268,8 @@ export function NewProductQualityPage({ projectId: initialProjectId }: { project
   }
 
   return <main className="new-product-quality-page">
-    <header className="new-product-quality-heading">
-      <div><Typography.Text type="secondary">新产品质量</Typography.Text><Typography.Title level={1}>项目质量台账</Typography.Title><Typography.Paragraph type="secondary">查看项目阶段、经验教训和试制批次，所有数据均来自受权限保护的项目接口。</Typography.Paragraph></div>
-      {project ? <Space><Button aria-label="刷新" onClick={() => lookup()} loading={loading}>刷新</Button><Button disabled={writing} onClick={() => requestLeave(() => setEightDOpen(value => !value))}>新品同源8D</Button>{project.status === 'ACTIVE' ? <Button type="primary" disabled={writing} onClick={() => setHandoverOpen(true)}>量产移交</Button> : null}</Space> : null}
-    </header>
+    <h1 className="sr-only">项目质量台账</h1>
+    {project ? <header className="new-product-quality-heading"><Space><Button aria-label="刷新" onClick={() => lookup()} loading={loading}>刷新</Button><Button disabled={writing} onClick={() => requestLeave(() => setEightDOpen(value => !value))}>新品同源8D</Button>{project.status === 'ACTIVE' ? <Button type="primary" disabled={writing} onClick={() => setHandoverOpen(true)}>量产移交</Button> : null}</Space></header> : null}
     <section className="new-product-quality-card">
       <Space.Compact className="new-product-quality-lookup">
         <Input aria-label="新产品项目 ID" placeholder="输入新产品项目 ID" value={input} onChange={(event) => setInput(event.target.value)} onPressEnter={() => lookup(input)} />

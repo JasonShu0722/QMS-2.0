@@ -31,6 +31,16 @@ beforeEach(() => {
 });
 const upload = () => { if (!screen.queryByLabelText('物料清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入物料' })); fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } }); };
 
+it('keeps the material section heading accessible without a duplicate visible title', async () => {
+  render(<MaterialMasterPage organizationPermissions={permissions} />);
+  await screen.findByText('原物料');
+  const heading = screen.getByRole('heading', { name: '物料主数据', level: 3 });
+  expect(heading).toHaveClass('sr-only');
+  expect(heading.parentElement).toBe(screen.getByRole('region', { name: '物料主数据' }));
+  expect(screen.getByText(/编码区分大小写/)).toHaveTextContent('仅维护物料编码和物料名称；编码区分大小写，前导 0 原样保留。');
+  expect(screen.getByText(/编码区分大小写/)).not.toHaveTextContent('一期');
+});
+
 it('shows two fields only and creates string codes through the generated contract', async () => {
   render(<MaterialMasterPage organizationPermissions={permissions} />);
   await screen.findByText('原物料');

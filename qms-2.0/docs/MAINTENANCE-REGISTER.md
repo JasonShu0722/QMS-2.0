@@ -6,6 +6,8 @@
 
 2026-10-30 CP-1来源复核：账号新增独立控制台入口及直属任职展示不消除全站组件弃用；部署后builder cache清理不等于生产监控告警。MAINT-001/003保留开放状态及2026-11-23原期限，不因本轮候选或局部测试关闭事项。
 
+2026-10-31 REQ-0033来源复核：账号仅重排设置入口与标题，审核标准/新品页面仅精简固定标题和介绍；Card/Descriptions/Space与List/Space旧用法仍保留。相关回归仍观察到Ant Design弃用提示，本轮未做全站兼容迁移。MAINT-001保持open及2026-11-23原期限，局部文案和导航验证不能用来关闭维护项；本次执行与限制见[实施计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)。
+
 从 `qms-2.0/` 执行：
 
 ```powershell

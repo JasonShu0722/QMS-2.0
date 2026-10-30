@@ -132,8 +132,8 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
   }
 
   return <section className="customer-quality-card" aria-label={t('物料主数据')}>
-    {contextHolder}<Typography.Title level={3}>{t('物料主数据')}</Typography.Title>
-    <Typography.Paragraph>{t('一期仅维护物料编码和物料名称；编码区分大小写，前导 0 原样保留。')}</Typography.Paragraph>
+    {contextHolder}<Typography.Title level={3} className="sr-only">{t('物料主数据')}</Typography.Title>
+    <Typography.Paragraph>{t('仅维护物料编码和物料名称；编码区分大小写，前导 0 原样保留。')}</Typography.Paragraph>
     {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} action={canRead ? <Button onClick={() => void refresh(true)}>{t('重试')}</Button> : undefined} /> : null}
     {canRead ? <Space wrap><Button onClick={() => void refresh(true)} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
     <Space wrap>{canWrite ? <Button onClick={() => setCreating(true)}>{t('新增物料')}</Button> : null}{canImport ? <MaterialMasterImport organizationId={organizationId} onImported={canRead ? () => refresh(false, true) : () => undefined} /> : null}</Space>

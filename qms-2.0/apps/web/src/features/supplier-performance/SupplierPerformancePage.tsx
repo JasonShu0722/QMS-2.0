@@ -137,7 +137,7 @@ export function SupplierPerformancePage() {
   }
 
   return <main className="supplier-performance-page">
-    <header className="supplier-performance-heading"><div><Typography.Text type="secondary">供应商质量 · 绩效</Typography.Text><Typography.Title level={1}>月度绩效卡</Typography.Title><Typography.Paragraph type="secondary">根据当月已完成的 IQC 检验结论计算来料合格率，记录人工配合度和来源检验版本。评分权重由建卡人填写并保存在绩效卡中。</Typography.Paragraph></div><Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button></header>
+    <header className="supplier-performance-heading"><div><h1 className="sr-only">月度绩效卡</h1><Typography.Paragraph type="secondary">根据当月已完成的 IQC 检验结论计算来料合格率，记录人工配合度和来源检验版本。评分权重由建卡人填写并保存在绩效卡中。</Typography.Paragraph></div><Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button></header>
     {notice ? <Alert type="success" showIcon title={notice} /> : null}
     {publishError ? <Alert type="error" showIcon title={publishError} /> : null}
     <section className="supplier-performance-card" aria-label="月度绩效卡台账">

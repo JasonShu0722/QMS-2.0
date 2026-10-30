@@ -122,7 +122,7 @@ function HomeScope({ context, identity, session, refresh, invalidate }: {
 
   return <div className="qms-console-home" aria-busy={loading}>
     <div className="qms-console-home-intro">
-      <div><h2>{text('当前管理事项', 'Current management items')}</h2><p>{text('仅展示当前有权读取的公开来源；没有汇总不代表事项为零。', 'Only authorized public sources are shown. Missing summaries do not mean zero items.')}</p></div>
+      <div><h2>{text('当前管理事项', 'Current management items')}</h2><details className="qms-console-reading-notes"><summary>{text('来源可能不完整 · 非实时', 'Sources may be incomplete · Not live')}</summary><p>{text('仅展示当前有权读取的公开来源；没有汇总不代表事项为零。', 'Only authorized public sources are shown. Missing summaries do not mean zero items.')}</p><p>{text('各来源独立查询，不是同一原子快照或实时运行状态。', 'Sources are queried independently, not an atomic snapshot or live operational status.')}</p></details></div>
       {!denied && <Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={() => restart()} aria-label={error === 'network' ? text('重试读取', 'Retry reading') : text('刷新管理事项', 'Refresh management items')}>
         {error === 'network' ? text('重试读取', 'Retry reading') : text('刷新', 'Refresh')}
       </Button>}
@@ -133,7 +133,6 @@ function HomeScope({ context, identity, session, refresh, invalidate }: {
         {loading && <div role="status" aria-label={text('读取管理事项中', 'Reading management items')} className="qms-console-home-loading">{data ? text('正在重新读取，以下为上次查询结果。', 'Refreshing; the previous query results remain below.') : <Skeleton active paragraph={{ rows: 3 }} />}</div>}
         {data && <>
           <p className="qms-console-home-time"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span></p>
-          <p className="qms-console-home-note">{text('各来源独立查询，不是同一原子快照或实时运行状态。', 'Sources are queried independently, not an atomic snapshot or live operational status.')}</p>
           {!data.sources.length && <div className="qms-console-home-empty"><h3>{text('当前无可汇总事项', 'No summarized management items available')}</h3><p>{text('可从下方常用入口进入已授权功能。', 'Use the authorized common entries below.')}</p></div>}
           <div className="qms-console-home-sources">{data.sources.map(source => {
             const label = text(...labels[source.key]);
@@ -141,9 +140,9 @@ function HomeScope({ context, identity, session, refresh, invalidate }: {
             const path = audit ? '/console/audit-log' : source.key === 'outbox' ? '/console/outbox' : '/console/reconfiguration';
             const unavailable = source.status !== 'AVAILABLE' || (audit ? !Array.isArray(source.items) : !Number.isSafeInteger(source.total) || source.total! < 0);
             return <section key={source.key} aria-label={label} className={`qms-console-home-source${audit ? ' qms-console-home-audit' : ''}`}>
-              <header><h3>{label}</h3><span className="qms-console-home-range">{source.scope} · {source.coverage === 'PLATFORM' ? text('平台级目录', 'Platform directory') : text('组织范围', 'Organization scope')}</span></header>
-              <p className="qms-console-home-note">{source.coverage === 'PLATFORM' ? text(`授权来源：${context.actor.homeOrganization.name} (${context.actor.homeOrganization.code})，不是全部资源的归属组织。`, `Authorization source: ${context.actor.homeOrganization.name} (${context.actor.homeOrganization.code}), not the owner of every resource.`)
-                : `${context.targetOrganization.name} (${context.targetOrganization.code})`}</p>
+              <header><h3>{label}</h3></header>
+              <details className="qms-console-reading-notes"><summary>{text('范围与来源', 'Scope & source')}</summary><span className="qms-console-home-range">{source.scope} · {source.coverage === 'PLATFORM' ? text('平台级目录', 'Platform directory') : text('组织范围', 'Organization scope')}</span><p className="qms-console-home-note">{source.coverage === 'PLATFORM' ? text(`授权来源：${context.actor.homeOrganization.name} (${context.actor.homeOrganization.code})，不是全部资源的归属组织。`, `Authorization source: ${context.actor.homeOrganization.name} (${context.actor.homeOrganization.code}), not the owner of every resource.`)
+                : `${context.targetOrganization.name} (${context.targetOrganization.code})`}</p></details>
               {unavailable ? <div className="qms-console-home-source-error" role="status"><p>{source.reasonCode === 'AUTHORIZATION_CHANGED' ? text('来源权限已变化，请重新核验。', 'Source authorization changed. Verify access again.') : text('来源暂不可用', 'Source unavailable')}</p>
                 {source.reasonCode === 'AUTHORIZATION_CHANGED' && <Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button>}</div>
                 : audit ? source.items!.length ? <ul className="qms-console-home-events">{source.items!.slice(0, 5).filter(event => event.organizationId === source.organizationId).map(event => <li key={event.id}>

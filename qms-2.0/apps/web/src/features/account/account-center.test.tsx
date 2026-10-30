@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
+import { readFileSync } from 'node:fs';
 import { ApiError } from '../../api/client';
 import { AccountCenterPage } from './AccountCenterPage';
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
@@ -10,6 +11,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { AccountMenu } from './AccountMenu';
 import type { components } from '@qms/contracts';
 import { getConsoleContext } from '../../console/console-api';
+import { SupplierLayout } from '../../layouts/SupplierLayout';
 
 type HistoryItem = components['schemas']['AccountSessionHistoryItemDto'];
 type HistoryPage = components['schemas']['AccountSessionHistoryPageDto'];
@@ -76,13 +78,49 @@ describe('account center', () => {
   it('combines identity and security in two display regions without permanent editors', async () => {
     render(<MemoryRouter><AccountCenterPage /></MemoryRouter>);
     await screen.findByText('alice');
-    const overview = within(screen.getByText('账号概览').closest('.ant-card') as HTMLElement);
+    const overview = within(screen.getByRole('region', { name: '身份资料' }).closest('.ant-card') as HTMLElement);
     expect(overview.getByRole('region', { name: '身份资料' })).toBeVisible();
     expect(overview.getByRole('region', { name: '账号与授权' })).toBeVisible();
     expect(overview.queryByLabelText('选择头像')).not.toBeInTheDocument();
     expect(overview.queryByRole('textbox')).not.toBeInTheDocument();
     expect(overview.getByText('验证器未绑定')).toBeVisible();
     expect(overview.getByRole('button', { name: '个人信息设置' })).toBeVisible();
+  });
+
+  it('keeps an accessible h1 without visible duplicate titles or a card header and places settings in identity information', async () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/features/account/account.css', 'utf8');
+    document.head.append(style);
+    try {
+      render(<MemoryRouter initialEntries={['/app/account']}><AccountCenterPage /></MemoryRouter>);
+      await screen.findByText('alice');
+      const heading = screen.getByRole('heading', { level: 1, name: '个人账号' });
+      expect(heading).toHaveStyle({ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clipPath: 'inset(50%)' });
+      expect(screen.queryByText('账号概览')).not.toBeInTheDocument();
+      const identity = screen.getByRole('region', { name: '身份资料' });
+      expect(within(identity).getByRole('button', { name: '个人信息设置' })).toBeVisible();
+      expect(identity.closest('.ant-card')?.querySelector('.ant-card-head')).toBeNull();
+      expect(screen.getAllByRole('region', { name: '登录会话' })).toHaveLength(1);
+    } finally { style.remove(); }
+  });
+
+  it('retains the visible page title in the actual single-page supplier host before account data is available', async () => {
+    api.getAccountProfile.mockReturnValue(new Promise(() => {}));
+    const previousTabs = useWorkTabsStore.getState();
+    useWorkTabsStore.getState().bindSession('SUPPLIER:o1:u1');
+    const view = render(<MemoryRouter initialEntries={['/supplier/account']}><SupplierLayout /></MemoryRouter>);
+    try {
+      await waitFor(() => expect(useWorkTabsStore.getState().tabs).toHaveLength(1));
+      expect(useWorkTabsStore.getState().tabs[0]?.path).toBe('/supplier/account');
+      expect(useWorkTabsStore.getState().shouldShowStrip).toBe(false);
+      expect(screen.queryByRole('navigation', { name: '工作标签' })).not.toBeInTheDocument();
+      const headerWork = screen.getByRole('banner').querySelector('.qms-topbar-work') as HTMLElement;
+      expect(within(headerWork).queryByText('个人账号')).not.toBeInTheDocument();
+      const heading = within(screen.getByRole('main')).getByRole('heading', { level: 2, name: '个人账号' });
+      expect(heading).toBeVisible();
+      expect(heading).toHaveClass('ant-typography');
+      expect(heading).not.toHaveClass('qms-account-sr-only');
+    } finally { view.unmount(); useWorkTabsStore.setState(previousTabs); }
   });
 
   it('shows only one session region and only active non-current rows can be revoked', async () => {

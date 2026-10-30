@@ -52,6 +52,15 @@ const reads = (fetcher: ReturnType<typeof server>) => fetcher.mock.calls.filter(
 beforeEach(() => { useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession(principal); });
 afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); });
 
+it('keeps the platform account heading accessible without a duplicate visible title', async () => {
+  server();
+  render(scene());
+  await screen.findByText(account.username);
+  const heading = screen.getByRole('heading', { name: '供应商账号（全平台）', level: 4 });
+  expect(heading).toHaveClass('sr-only');
+  expect(heading.parentElement).toBe(screen.getByRole('region', { name: '供应商账号（全平台）' }));
+});
+
 it('reads the dedicated global directory, displays actual company data, and deletes using the real version and supplier UUID before reloading', async () => {
   let deleted = false;
   const fetcher = server((path, init) => {

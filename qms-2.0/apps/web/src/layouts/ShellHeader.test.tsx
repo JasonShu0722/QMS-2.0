@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,8 +15,8 @@ function CurrentPage({ dirty }: { dirty: boolean }) {
   return <output aria-label="current path">{useLocation().pathname}</output>;
 }
 
-function mount(supplier = false, dirty = false) {
-  const path = useWorkTabsStore.getState().tabs.at(-1)?.path ?? (supplier ? '/supplier/inbox' : '/app/workbench');
+function mount(supplier = false, dirty = false, initialPath?: string) {
+  const path = initialPath ?? useWorkTabsStore.getState().tabs.at(-1)?.path ?? (supplier ? '/supplier/inbox' : '/app/workbench');
   return render(<MemoryRouter initialEntries={[path]}><LanguageProvider><UnsavedChangesProvider>
     <ShellHeader supplier={supplier} onOpenNavigation={() => {}} /><CurrentPage dirty={dirty} />
   </UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
@@ -25,6 +25,80 @@ function mount(supplier = false, dirty = false) {
 beforeEach(() => {
   localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().reset();
   vi.mocked(apiRequest).mockReset().mockResolvedValue({ unreadMustReadCount: 2 });
+});
+
+describe('internal current page identity', () => {
+  it('shows a single active page title and translates it with the header language', async () => {
+    useWorkTabsStore.getState().openTab({ id: 'account', title: '个人账号', path: '/app/account' });
+    mount();
+    const header = within(screen.getByRole('banner'));
+    const work = within(screen.getByRole('banner').querySelector('.qms-topbar-work') as HTMLElement);
+    expect(work.getByText('个人账号')).toBeVisible();
+    expect(work.queryByRole('link', { name: '个人账号' })).not.toBeInTheDocument();
+    expect(work.queryByRole('button', { name: '个人账号' })).not.toBeInTheDocument();
+    header.getByRole('radio', { name: 'CN' }).focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(work.getByText('My account')).toBeVisible();
+    expect(work.queryByText('个人账号')).not.toBeInTheDocument();
+  });
+
+  it('does not repeat the active title when the working strip is shown', () => {
+    const store = useWorkTabsStore.getState();
+    store.openTab({ id: 'a', title: '记录 A', path: '/app/a' });
+    store.openTab({ id: 'b', title: '记录 B', path: '/app/b' });
+    mount();
+    const header = within(screen.getByRole('banner'));
+    expect(header.getAllByText('记录 B')).toHaveLength(1);
+    expect(within(header.getByRole('navigation', { name: '工作标签' })).getByRole('link', { name: '记录 B' })).toBeVisible();
+  });
+
+  it.each(['/app', '/app/workbench'])('shows the workbench identity at %s with retained inactive tabs', (path) => {
+    const store = useWorkTabsStore.getState();
+    store.openTab({ id: 'a', title: '记录 A', path: '/app/a' });
+    store.deactivate();
+    mount(false, false, path);
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByText('综合工作台')).toBeVisible();
+    expect(header.getAllByText('综合工作台')).toHaveLength(1);
+    expect(header.getByText('综合工作台')).toHaveClass('qms-home-label');
+    expect(header.queryByText('记录 A')).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: '全部标签' })).toBeVisible();
+    expect(screen.getByLabelText('current path')).toHaveTextContent(path);
+    expect(useWorkTabsStore.getState().activeTabId).toBeUndefined();
+    expect(useWorkTabsStore.getState().tabs).toHaveLength(1);
+  });
+
+  it('does not label another business route as the workbench while its tab is inactive', () => {
+    useWorkTabsStore.getState().openTab({ id: 'a', title: '记录 A', path: '/app/a' });
+    mount();
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByText('记录 A')).toBeVisible();
+    act(() => useWorkTabsStore.getState().deactivate());
+    expect(useWorkTabsStore.getState().activeTabId).toBeUndefined();
+    expect(useWorkTabsStore.getState().tabs).toHaveLength(1);
+    expect(header.queryByText('记录 A')).not.toBeInTheDocument();
+    expect(header.queryByText('综合工作台')).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: '全部标签' })).toBeVisible();
+  });
+
+  it.each(['/supplier/inbox', '/app', '/app/workbench'])('does not add a workbench identity to the supplier header at %s with inactive tabs', (path) => {
+    const store = useWorkTabsStore.getState();
+    store.openTab({ id: 'a', title: '记录 A', path: '/supplier/a' });
+    store.deactivate();
+    mount(true, false, path);
+    const header = within(screen.getByRole('banner'));
+    expect(header.queryByText('综合工作台')).not.toBeInTheDocument();
+    expect(header.queryByText('供应商门户')).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: '全部标签' })).toBeVisible();
+  });
+
+  it('does not add a single page title to the supplier header', () => {
+    useWorkTabsStore.getState().openTab({ id: 'a', title: '记录 A', path: '/supplier/a' });
+    mount(true);
+    const header = within(screen.getByRole('banner'));
+    expect(header.queryByText('记录 A')).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: '全部标签' })).toBeVisible();
+  });
 });
 
 describe.each([false, true])('shared compact header supplier=%s', (supplier) => {

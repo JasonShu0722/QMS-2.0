@@ -33,6 +33,20 @@ beforeEach(() => {
   vi.mocked(apiRequest).mockImplementation((path) => Promise.resolve(path.endsWith('/my-permissions') ? { permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] } : path.endsWith('/customers') ? [customer] : []));
 });
 
+it('keeps the embedded customer heading accessible without a duplicate visible title', async () => {
+  render(<CustomerMasterSection embedded organizationPermissions={['customer-quality:complaints:read']} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).toBeEnabled());
+  const heading = screen.getByRole('heading', { name: '客户主数据', level: 3 });
+  expect(heading).toHaveClass('sr-only');
+  expect(heading.parentElement).toBe(screen.getByRole('region', { name: '客户主数据' }));
+});
+
+it('retains the visible customer section heading for callers without a containing page title', async () => {
+  render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:read']} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).toBeEnabled());
+  expect(screen.getByRole('heading', { name: '客户主数据', level: 3 })).not.toHaveClass('sr-only');
+});
+
 it('disables export before loading and after an authorized list refresh fails, rather than exporting stale or empty data', async () => {
   const first = deferred<unknown[]>();
   vi.mocked(apiRequest).mockReturnValueOnce(first.promise).mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([]);

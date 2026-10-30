@@ -1,7 +1,6 @@
-import { Button, Drawer, Typography } from 'antd';
+import { Drawer, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { activeInternalDomain, internalDomains } from '../features/navigation/navigation';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
@@ -34,11 +33,12 @@ import { SupplierAsnPage } from '../features/supplier-asn/SupplierAsnPage';
 import { useLanguage } from '../i18n/Language';
 import { ShellHeader } from './ShellHeader';
 import { UnsavedChangesProvider } from './UnsavedChanges';
+import { InternalNavigation } from './InternalNavigation';
 import './shell.css';
 
 function EmptyDomain({ title }: { title: string }) {
   const { t } = useLanguage();
-  return <section className="empty-domain"><Typography.Title level={2}>{title}</Typography.Title><Typography.Paragraph type="secondary">{t('基础入口已就绪，业务功能将在后续阶段接入。')}</Typography.Paragraph></section>;
+  return <section className="empty-domain"><h1 className="sr-only">{title}</h1><Typography.Paragraph type="secondary">{t('待接入')}</Typography.Paragraph></section>;
 }
 export function InternalLayout() {
   const sessionScope = useWorkTabsStore((state) => state.sessionScope);
@@ -52,15 +52,18 @@ function InternalShell() {
   const active = activeInternalDomain(location.pathname);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const visibleDomains = internalDomains;
-  const activeDomain = visibleDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
+  const activeDomain = internalDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
+  const [expandedDomains, setExpandedDomains] = useState<string[]>(() => activeDomain ? [activeDomain.path] : []);
   const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const processPath = location.pathname.replace(/\/$/, '');
   const implemented = ['/app/problem-center', '/app/my-tasks', '/app/problem-workspace', '/app/account', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
   useEffect(() => {
+    if (activeDomain) setExpandedDomains(current => current.includes(activeDomain.path) ? current : [...current, activeDomain.path]);
+  }, [location, activeDomain]);
+  useEffect(() => {
     setMobileOpen(false);
     const store = useWorkTabsStore.getState();
-    if (isWorkbench) { setMenuCollapsed(false); store.deactivate(); return; }
+    if (isWorkbench) { store.deactivate(); return; }
     if (!active) return;
     const path = `${location.pathname}${location.search}`;
     const id = problemRoute ? `problem:${problemRoute[1]}` : location.pathname;
@@ -68,31 +71,18 @@ function InternalShell() {
     const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : active.label;
     openTab({ id, path, title });
   }, [location.pathname, location.search, isWorkbench, active, openTab, t]);
-  const navigation = (mobile = false) => <>
-    <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span>{(isWorkbench || mobile) && <span>QMS <small>2.0</small></span>}</Link>
-    <nav className="qms-domain-nav" aria-label={t(isWorkbench || mobile ? '内部领域导航' : '内部领域图标导航')}>
-      <Link className={`qms-nav-item${isWorkbench ? ' active' : ''}`} to="/app/workbench" title={t('综合工作台')} aria-current={isWorkbench ? 'page' : undefined}><House size={19} /><span className={!isWorkbench && !mobile ? 'sr-only' : ''}>{t('综合工作台')}</span></Link>
-      {visibleDomains.map((item) => {
-        const Icon = item.icon;
-        const selected = item === activeDomain;
-        return mobile && item.children.length > 1 ? <details className="qms-mobile-domain" key={item.path} open={selected}>
-          <summary className={`qms-nav-item${selected ? ' active' : ''}`}><Icon size={19} /><span>{t(item.label)}</span><ChevronDown className="qms-domain-chevron" size={16} /></summary>
-          <div className="qms-mobile-domain-entries">{item.children.map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={entry.path === active?.path ? 'page' : undefined}>{t(entry.label)}</Link>)}</div>
-        </details> : <Link className={`qms-nav-item${selected ? ' active' : ''}`} key={item.path} to={item.path} title={t(item.label)} aria-current={selected ? 'page' : undefined}><Icon size={19} /><span className={!isWorkbench && !mobile ? 'sr-only' : ''}>{t(item.label)}</span></Link>;
-      })}
-    </nav>
-  </>;
-  return <div className={`qms-shell${!isWorkbench ? ' in-domain' : ''}${menuCollapsed ? ' menu-collapsed' : ''}`}>
+  const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleCollapsed={mobile ? undefined : () => setMenuCollapsed(current => !current)} onToggleDomain={path => {
+    setExpandedDomains(current => {
+      if (!current.includes(path)) return [...current, path];
+      if (!mobile && menuCollapsed) return current;
+      return current.filter(entry => entry !== path);
+    });
+    if (!mobile) setMenuCollapsed(false);
+  }} />;
+  return <div className={`qms-shell internal-shell${menuCollapsed ? ' menu-collapsed' : ''}`}>
     <a className="skip-link" href="#main-content">{t('跳到正文')}</a>
     <aside className="qms-navigation">
-      <div className="qms-primary-navigation">{navigation()}{!isWorkbench && menuCollapsed && <Button className="qms-expand-menu" type="text" icon={<PanelLeftOpen size={19} />} aria-label={t('展开业务菜单')} title={t('展开业务菜单')} onClick={() => setMenuCollapsed(false)} />}</div>
-      {!isWorkbench && !menuCollapsed && activeDomain && <aside className="qms-domain-context">
-        <div className="qms-context-heading"><strong>{t(activeDomain.label)}</strong><Button type="text" icon={<PanelLeftClose size={17} />} aria-label={t('收起业务菜单')} onClick={() => setMenuCollapsed(true)} /></div>
-        <nav aria-label={`${t(activeDomain.label)} ${t('上下文菜单')}`}>
-          {activeDomain.children.map((entry) => <Link className="qms-context-link" key={entry.path} to={entry.path} aria-current={entry.path === active?.path ? 'page' : undefined}>{t(entry.label)}</Link>)}
-          {problemRoute && <span className="qms-context-current">{t('问题处理')}</span>}
-        </nav>
-      </aside>}
+      <div className="qms-primary-navigation">{navigation()}</div>
     </aside>
     <div className="qms-main">
       <ShellHeader onOpenNavigation={() => setMobileOpen(true)} />

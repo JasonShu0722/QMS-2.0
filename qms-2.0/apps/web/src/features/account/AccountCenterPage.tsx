@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd';
 import { getAccountOverview, getAccountProfile } from '../../api/client';
 import { GovernanceFeedback } from '../governance/GovernanceFeedback';
@@ -22,6 +23,7 @@ export function AccountCenterPage() {
 }
 function AccountCenterContent() {
   const { t } = useLanguage();
+  const supplierHost = useLocation().pathname.startsWith('/supplier/');
   const [profile, setProfile] = useState<AccountProfile>();
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState<unknown>();
@@ -78,14 +80,14 @@ function AccountCenterContent() {
     if (current()) setProfile(previous => previous ? { ...previous, avatarFileId: next.avatarFileId, avatarVersion: next.avatarVersion } : previous);
   }
   return <section className="account-center">
-    <Typography.Title level={2}>{t('个人账号')}</Typography.Title>
+    {supplierHost ? <Typography.Title level={2}>{t('个人账号')}</Typography.Title> : <h1 className="qms-account-sr-only">{t('个人账号')}</h1>}
     <SecurityDialog open={securityOpen} onClose={() => { setSecurityOpen(false); void refreshSecurity(); }} afterClose={() => securityTrigger.current?.focus()} />
     {profile && settingsOpen && <AccountSettingsDialog profile={profile} overview={overview} onProfile={acceptProfile} onAvatar={acceptAvatar} onClose={() => setSettingsOpen(false)} afterClose={() => settingsTrigger.current?.focus()} />}
     <GovernanceFeedback error={error} retry={error ? () => void (profile ? refreshSecurity() : load()) : undefined} />
-    <Card title={t('账号概览')} loading={!profile && !error} extra={<Button ref={settingsTrigger} disabled={!profile} onClick={() => setSettingsOpen(true)}>{t('个人信息设置')}</Button>}>
+    <Card loading={!profile && !error}>
       {profile && <div className="qms-account-overview">
         <section className="qms-account-identity" aria-label={t('身份资料')}>
-          <div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={76} /><div><Typography.Text strong>{profile.fullName || profile.username}</Typography.Text>{profile.fullName && <p>{profile.username}</p>}<p>{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</p></div></div>
+          <div className="qms-account-identity-header"><div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={76} /><div><Typography.Text strong>{profile.fullName || profile.username}</Typography.Text>{profile.fullName && <p>{profile.username}</p>}<p>{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</p></div></div><Button ref={settingsTrigger} onClick={() => setSettingsOpen(true)}>{t('个人信息设置')}</Button></div>
           <Descriptions size="small" column={1} items={[{ key: 'name', label: t('姓名'), children: profile.fullName || t('未填写') }, { key: 'phone', label: t('电话'), children: profile.phone || t('未填写') }]} />
           {overview ? overview.assignments.length ? <details open={overview.assignments.length <= 2}><summary>{t('当前任职')}</summary>{overview.assignments.map(item => <p key={item.id}>{item.department?.name ?? t('组织直属')} · {item.position.name}</p>)}</details> : <p>{t('暂无当前任职')}</p> : overviewError ? <Alert type="error" title={t('任职与授权加载失败')} action={<Button onClick={() => void loadOverview()}>{t('重试')}</Button>} /> : <p role="status">{t('正在加载任职与授权')}</p>}
         </section>

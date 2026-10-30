@@ -162,7 +162,7 @@ export function QualityDataPage() {
 
   return <section className="quality-data-page">
     <header className="quality-data-heading">
-      <div><Typography.Text type="secondary">质量数据</Typography.Text><Typography.Title level={1}>质量指标趋势</Typography.Title><Typography.Paragraph type="secondary">查看指标来源、统计期间和已配置阈值的预警结果。未配置阈值的指标不判定红绿灯。</Typography.Paragraph></div>
+      <div><h1 className="sr-only">质量指标趋势</h1><Typography.Paragraph type="secondary">查看指标来源、统计期间和已配置阈值的预警结果。未配置阈值的指标不判定红绿灯。</Typography.Paragraph></div>
       <Button onClick={() => setRevision((value) => value + 1)} loading={loadingMetrics || loadingFacts}>刷新</Button>
     </header>
     {metricError ? <Alert type={isDenied(metricError) ? 'warning' : 'error'} showIcon title={isDenied(metricError) ? '暂无质量指标访问权限' : metricError instanceof ApiError ? safeAccountError(metricError) : '指标定义加载失败，请重试。'} description={metricError instanceof ApiError ? metricError.traceId : undefined} action={isDenied(metricError) ? undefined : <Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}

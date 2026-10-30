@@ -62,6 +62,15 @@ it('reads the verified target and renders actual request totals, latency buckets
   expect(screen.getByText('目标组织 (TARGET)')).toBeVisible();
   expect(screen.getByText(/采集完整性未知/)).toBeVisible();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
+  expect(screen.queryByRole('heading', { name: 'API 技术观测' })).not.toBeInTheDocument();
+  const notes = document.querySelector('.qms-api-heading details');
+  expect(notes).not.toBeNull();
+  expect(notes).not.toHaveAttribute('open');
+  expect(notes!.querySelector('summary')).toHaveTextContent('技术成功不等于业务落地');
+  const scopeNote = within(notes as HTMLElement).getByText(/未归属请求仅平台范围可见/);
+  expect(scopeNote).not.toBeVisible();
+  fireEvent.click(notes!.querySelector('summary')!);
+  expect(scopeNote).toBeVisible();
 });
 it('shows an accessible loading state and never fills unknown metrics with fake zeros', () => {
   read.mockReturnValue(deferred<Page>().promise); view();
@@ -182,5 +191,5 @@ it('rejects a foreign organization result rather than displaying its rows', asyn
 it('ignores discarded StrictMode reads and uses English labels without changing data', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US'); const old = deferred<Page>(); read.mockReturnValueOnce(old.promise).mockResolvedValue(result()); view(true);
   await screen.findByText('/api/v1/tasks/:id'); await act(async () => old.resolve(result('ORGANIZATION', { items: [{ ...result().items[0]!, route: '/api/v1/OLD_PRIVATE' }] })));
-  expect(screen.queryByText('/api/v1/OLD_PRIVATE')).not.toBeInTheDocument(); expect(screen.getByRole('heading', { name: 'API observations' })).toBeVisible();
+  expect(screen.queryByText('/api/v1/OLD_PRIVATE')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh API observations' })).toBeVisible();
 });

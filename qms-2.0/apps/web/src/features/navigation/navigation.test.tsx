@@ -38,7 +38,7 @@ describe('portal navigation', () => {
 
     const navigation = within(screen.getByRole('navigation', { name: '内部领域导航' }));
     for (const label of ['问题中心', '供应商质量', '制程质量', '客户质量', '新品质量', '审核管理', '质量分析', '检测管理', '系统服务']) {
-      expect(navigation.getByRole('link', { name: label })).toBeInTheDocument();
+      expect(navigation.getByRole('button', { name: label })).toHaveAttribute('aria-expanded', 'false');
     }
     for (const label of ['问题与改进', '流程设计', '供应商 PPAP', '供应商 ASN', '审计管理', '体系文件', '知识与公告', '知识与文件', '个人账号', '风险看板']) {
       expect(navigation.queryByRole('link', { name: label })).not.toBeInTheDocument();
@@ -54,25 +54,26 @@ describe('portal navigation', () => {
     expect(screen.queryByText('98.6%')).not.toBeInTheDocument();
   });
 
-  it('collapses to an icon rail and exposes the active domain context menu', () => {
+  it('expands the active domain inline and exposes its context menu', () => {
     render(
       <MemoryRouter initialEntries={['/app/problem-center']}>
         <InternalLayout />
       </MemoryRouter>,
     );
 
-    expect(screen.getByLabelText('内部领域图标导航')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '问题中心' })).toHaveAttribute('aria-expanded', 'true');
     const context = within(screen.getByRole('navigation', { name: '问题中心 上下文菜单' }));
     expect(context.getByRole('link', { name: '问题管理面板' })).toHaveAttribute('href', '/app/problem-center');
     expect(context.getByRole('link', { name: '我的待办' })).toHaveAttribute('href', '/app/my-tasks');
     expect(context.queryByRole('link', { name: '流程设计' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '问题管理面板' })).toBeVisible();
+    expect(context.getByRole('link', { name: '问题管理面板' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '问题管理面板' })).toBeInTheDocument();
   });
 
   it('retains the hidden documents deep link and its unimplemented state', () => {
     render(<MemoryRouter initialEntries={['/app/documents']}><InternalLayout /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: '体系文件' })).toBeVisible();
-    expect(screen.getByText('基础入口已就绪，业务功能将在后续阶段接入。')).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: '体系文件' })).toBeInTheDocument();
+    expect(screen.getByText('待接入')).toBeVisible();
     expect(screen.queryByRole('link', { name: '体系文件' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '知识与文件' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '知识与公告' })).not.toBeInTheDocument();
@@ -96,7 +97,7 @@ describe('portal navigation', () => {
     expect(menu.queryByRole('link', { name: '关键件条码校验' })).not.toBeInTheDocument();
     expect(document.querySelector('.qms-topbar-location')).not.toBeInTheDocument();
     expect(document.querySelector('.qms-topbar .qms-work-tab-manager')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '不良品台账' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '不良品台账' })).toBeInTheDocument();
     expect(useWorkTabsStore.getState().tabs.find(tab => tab.id === '/app/process-quality')).toMatchObject({ title: '不良品台账' });
   });
 
@@ -107,9 +108,9 @@ describe('portal navigation', () => {
       </MemoryRouter>,
     );
 
-    const navigation = within(screen.getByRole('navigation', { name: '内部领域图标导航' }));
-    expect(navigation.getByRole('link', { name: '供应商质量' })).toHaveAttribute('aria-current', 'page');
-    expect(navigation.queryByRole('link', { name: 'PCN 变更' })).not.toBeInTheDocument();
+    const navigation = within(screen.getByRole('navigation', { name: '内部领域导航' }));
+    expect(navigation.getByRole('button', { name: '供应商质量' })).toHaveAttribute('aria-expanded', 'true');
+    expect(navigation.getByRole('link', { name: 'PCN 变更' })).toHaveAttribute('aria-current', 'page');
     const context = within(screen.getByRole('navigation', { name: '供应商质量 上下文菜单' }));
     expect(context.getByRole('link', { name: 'PCN 变更' })).toHaveAttribute('aria-current', 'page');
     expect(context.getByRole('link', { name: '供应商 PPAP' })).toHaveAttribute('href', '/app/supplier-ppap');
@@ -128,9 +129,9 @@ describe('portal navigation', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '打开导航' }));
     const drawer = within(screen.getByRole('dialog'));
-    const supplier = drawer.getByText('供应商质量', { selector: 'summary span' });
+    const supplier = drawer.getByRole('button', { name: '供应商质量' });
     await user.click(supplier);
-    expect(supplier.closest('details')).toHaveAttribute('open');
+    expect(supplier).toHaveAttribute('aria-expanded', 'true');
     expect(drawer.getByRole('link', { name: '供应商 PPAP' })).toHaveAttribute('href', '/app/supplier-ppap');
     expect(drawer.getByRole('link', { name: '供应商问题台账' })).toHaveAttribute('href', '/app/supplier-quality');
     expect(drawer.getByRole('link', { name: '关键件条码校验' })).toHaveAttribute('href', '/app/site-scanning');
@@ -163,7 +164,7 @@ describe('portal navigation', () => {
     );
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('link', { name: '问题中心' }));
+    await user.click(screen.getByRole('button', { name: '问题中心' }));
     await user.click(within(screen.getByRole('navigation', { name: '问题中心 上下文菜单' })).getByRole('link', { name: '问题管理面板' }));
 
     const state = useWorkTabsStore.getState();

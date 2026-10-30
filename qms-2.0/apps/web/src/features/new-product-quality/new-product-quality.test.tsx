@@ -62,7 +62,9 @@ it('shows an explicit empty state after a successful lookup with no project', as
 });
 
 it('keeps the empty state explicit before a project is selected', () => {
-  render(<NewProductQualityPage />);
+  const { container } = render(<NewProductQualityPage />);
+  expect(screen.getByRole('heading', { level: 1, name: '项目质量台账' })).toHaveClass('sr-only');
+  expect(container.querySelector('.new-product-quality-page > header')).not.toBeInTheDocument();
   expect(screen.getByText('输入新产品项目 ID 后查看详情')).toBeVisible();
 });
 

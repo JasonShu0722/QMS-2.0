@@ -114,7 +114,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
   const count = (value: number) => value.toLocaleString(locale);
   if (denied) return <section className="qms-observation-summary"><Alert role="alert" showIcon type="error" title={text('观测摘要访问已失效，请重新核验权限。', 'Observation summary access expired. Verify authorization again.')} /><Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button></section>;
   return <section className="qms-observation-summary" aria-label={text('管理观测摘要', 'Management observation summaries')}>
-    <header><div><h2>{text('观测与运行事实', 'Observation & operation facts')}</h2><p>{text('当前目标组织的最近可取得事实，不是系统健康总分。', 'The latest available facts for the target organization, not an overall system health score.')}</p></div><Button onClick={restart}>{text('刷新观测摘要', 'Refresh observation summaries')}</Button></header>
+    <header><div><h2>{text('观测与运行事实', 'Observation & operation facts')}</h2><details className="qms-console-reading-notes"><summary>{text('当前目标组织 · 非实时', 'Current target organization · Not live')}</summary><p>{text('当前目标组织的最近可取得事实，不是系统健康总分。', 'The latest available facts for the target organization, not an overall system health score.')}</p></details></div><Button onClick={restart}>{text('刷新观测摘要', 'Refresh observation summaries')}</Button></header>
     <div className="qms-observation-cards">{enabled.map(source => {
       const data = source.key === 'api' ? api : source.key === 'exchanges' ? exchanges : services;
       return <section key={source.key} aria-label={text(source.title[0], source.title[1])} className="qms-observation-card"><h3>{text(source.title[0], source.title[1])}</h3>

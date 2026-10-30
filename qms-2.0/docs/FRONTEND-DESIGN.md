@@ -1,5 +1,9 @@
 # 前端设计实施与参考代码
 
+## REQ-0033 前端文案、标题与导航优化（2026-10-31，开发中）
+
+负责人已正式启动[REQ-0033](https://larkcommunity.feishu.cn/record/MjtHrS3UkeoKx0cCIWAcutIinKg)，user回读P1／开发中（rev335），并授权PR检查、合并和部署。[Issue86](https://github.com/JasonShu0722/QMS-2.0/issues/86)统一交付解释性文案及关联排版治理、菜单层级与语义图标、两类宿主标题去重和业务单列两级折叠菜单。详见[专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md)与[实施接续计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)当前摘要；正式规范已补充新方向，实现/审查/业务与人工验收分别记账，不由规则文本推断通过或发布。业务品牌色与控制台中性色各自保持；20分钟heartbeat只在无活动执行且停滞时接续，不抢占主会话或运行任务。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
@@ -137,9 +141,9 @@ REQ-0030 / V0.0.31-fix2已随28cc304部署，将制程台账、制程问题跟�
 
 批量四列模板按精确岗位代码匹配；空／重复／过量／错码／停用／单行授予上限错误保原行号，由后台逐行产生结果。本地预检标识不冒充服务端回执；身份／组织级错误停止整批，未知写入结果保留原body与幂等键。模板结构、公式及额外列仍整体拒绝。历史兼容权限单列只读，不能用勾选自有权限假装已经撤清旧来源。实际验证、残余范围及推送前等待边界见[专项计划](../../docs/superpowers/plans/2026-10-22-qms-position-as-role.md)，原日期段落保留其历史时点含义。
 
-## 1. 当前基线
+## 1. 历史基线与演进
 
-当前已上线基线为 V0.0.29（PR #67，70fdbab），N2-A配置页机器发布核验见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)，真实岗位首次配权 / 正式页面人工验收仍待执行；N1 组织与岗位治理发布历史见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
+本节V0.0.29（PR #67，70fdbab）为历史上线基线，当前运行版本见本文顶部最新发布核验段。N2-A配置页机器发布核验见[N2计划第8节](../../docs/superpowers/plans/2026-10-24-qms-n2-configuration-and-workflow-foundations.md)，真实岗位首次配权 / 正式页面人工验收仍待执行；N1 组织与岗位治理发布历史见[前置计划](../../docs/superpowers/plans/2026-10-24-qms-basic-management-prerequisite.md)。历史 V0.0.21 人工反馈返修的完整 CI、部署及只读资源核验已完成，真实业务人工验收仍待执行，证据与清单以[返修计划](../../docs/superpowers/plans/2026-10-19-qms-account-overview-density.md)接续；以下日期段落保留当时的范围与限制。
 
 2026-10-18 REQ-0017～0021 正在功能分支实施：共享密度、个人账号与改密弹窗、主数据弹窗/连续导入、审计可读性。密度由 `theme/theme.css`、`ThemeProvider` 的 Card/Table 配置和共享外壳维护，业务页去除重复外边距。账号/导入/审计沿各自既有授权、失败恢复和秘密清理机制；不因紧凑化删除必要提示或压缩点击目标。四项 Issue、文件边界、验证与部署状态以[实施计划](../../docs/superpowers/plans/2026-10-18-qms-compact-account-master-audit.md)为准；规范数值不是浏览器实测通过证据。 本轮账号定位历史返修复用既有 React Router 的 data router 与原生 blocker，保留路由地址、认证及门户边界；共享未保存保护在导航前处理确认，避免事后覆盖历史。新增本地回归不替代登录后的业务浏览器验收。
 
@@ -149,7 +153,7 @@ REQ-0030 / V0.0.31-fix2已随28cc304部署，将制程台账、制程问题跟�
 
 2026-10-09 会话确认的[导航、登录工具栏与需求反馈专项设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md)覆盖 REQ-0006～0010：系统服务整合、暂时移除知识与文件入口、保留待办卡片、登录页语言与外观、双门户反馈按钮。Issue #12～#15 已建立，本地独立部分并行、共享文件统一整合；本地实现、规格 / 质量审查及现有环境门禁已完成，四个 PR 的目标仍独立。实际证据、用户手动验收来源及闭环结果见[本轮执行计划](../../docs/superpowers/plans/2026-10-09-qms-navigation-repair.md)。PR #16～#19 已依次合入 main 并逐单元核验自动部署，最终 SHA 为 `acc4c152943fa2bec4df163c91d1b6a0a904fe18`；真实 URL、部分线上回归和链接回填见执行计划。负责人已按手动清单确认最终验收；四个 Issue 已关闭，五条飞书已结束并回填实际完成时间。代理独立验证与用户手动确认分别记账，具体浏览器版本及设备型号未单独提供。
 
-用户已认可 UI V2 的总体设计：浅蓝默认、深浅/跟随系统、独立品牌主色、工作台完整导航、领域图标轨与上下文菜单、内部工作标签、专注处理。外观入口统一在顶栏。
+用户曾认可 UI V2 的总体设计：浅蓝默认、深浅/跟随系统、独立品牌主色、工作台完整导航、领域图标轨与上下文菜单、内部工作标签、专注处理。内部业务的图标轨加上下文双栏由REQ-0033及统一规范1.4第3节的单列两级折叠菜单替代；其余主题、标签、专注及唯一外观入口保持。历史验证不据新规则追改。
 
 **现有正式页面已完成首轮视觉迁移，样板继续作为设计参考。** 正式 Web 沿用 React + TypeScript + Ant Design 以及现有业务路由、请求和权限。未来领域表单、质量统计与完整草稿生命周期仍按各业务阶段交付。
 

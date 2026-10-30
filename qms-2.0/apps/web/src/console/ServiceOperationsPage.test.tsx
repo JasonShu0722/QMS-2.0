@@ -64,6 +64,15 @@ it('renders owner facts and server timestamps without turning configuration or r
   const query = new URL(read.mock.calls[0]![0], 'http://localhost').searchParams;
   expect(query.get('organizationId')).toBe(targetId); expect(query.get('scope')).toBe('ORGANIZATION');
   expect(screen.queryByText('系统健康')).not.toBeInTheDocument(); expect(useWorkTabsStore.getState().tabs).toEqual([]);
+  expect(screen.queryByRole('heading', { name: '运行服务事实' })).not.toBeInTheDocument();
+  const notes = document.querySelector('.qms-services-heading details');
+  expect(notes).not.toBeNull();
+  expect(notes).not.toHaveAttribute('open');
+  expect(notes!.querySelector('summary')).toHaveTextContent('非实时');
+  const interpretation = within(notes as HTMLElement).getByText(/配置、执行结果和采集状态/);
+  expect(interpretation).not.toBeVisible();
+  fireEvent.click(notes!.querySelector('summary')!);
+  expect(interpretation).toBeVisible();
 });
 it('keeps unavailable source counts absent while retaining safe facts from the other owners', async () => {
   view(); const mail = await screen.findByRole('region', { name: '邮件投递' });
@@ -157,5 +166,5 @@ it('clears source facts on invalidation and preserves explicit verification acti
 it('ignores discarded StrictMode reads and renders English labels without changing supplied facts', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US'); const old = deferred<Page>(); read.mockReturnValueOnce(old.promise).mockImplementation(async () => result()); view(true);
   await screen.findByRole('region', { name: 'Files & scanning' }); const data = result(); data.sources[1] = { ...data.sources[1]!, counts: { failed: 23456 } };
-  await act(async () => old.resolve(data)); expect(screen.queryByText('23456')).not.toBeInTheDocument(); expect(screen.getByRole('heading', { name: 'Service operation facts' })).toBeVisible();
+  await act(async () => old.resolve(data)); expect(screen.queryByText('23456')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Refresh service operation facts' })).toBeVisible();
 });

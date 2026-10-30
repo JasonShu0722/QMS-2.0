@@ -285,10 +285,8 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
   }
 
   return <main className="audit-management-page">
-    <header className="audit-management-heading">
-      <div><Typography.Text type="secondary">审核管理</Typography.Text><Typography.Title level={1}>审核计划</Typography.Title><Typography.Paragraph type="secondary">按计划 ID 查看受权限保护的审核计划状态和时间范围。</Typography.Paragraph></div>
-      {plan ? <Button onClick={() => void load()} loading={loading}>刷新</Button> : null}
-    </header>
+    <h1 className="sr-only">审核计划</h1>
+    {plan ? <header className="audit-management-heading"><Button onClick={() => void load()} loading={loading}>刷新</Button></header> : null}
     <section className="audit-management-card">
       <Space.Compact className="audit-management-lookup">
         <Input aria-label="审核计划 ID" placeholder="输入审核计划 ID" value={input} onChange={(event) => setInput(event.target.value)} onPressEnter={() => void load(input)} />

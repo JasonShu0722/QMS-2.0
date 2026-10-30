@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Empty, Input, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Input, Select, Space, Spin, Tag } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { components } from '@qms/contracts';
 import { useLanguage } from '../../i18n/Language';
@@ -52,7 +52,7 @@ export function SiteScanningPage() {
 
   if (loading) return <main className="site-scanning-page"><Spin /> </main>;
   if (error && denied(error)) return <main className="site-scanning-page"><Alert type="warning" showIcon title="暂无现场扫码权限" /></main>;
-  return <main className="site-scanning-page"><Typography.Title level={1}>{t('关键件条码校验')}</Typography.Title>
+  return <main className="site-scanning-page"><h1 className="sr-only">{t('关键件条码校验')}</h1>
     {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button disabled={busy} onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}
     <Card><Space orientation="vertical" style={{ width: '100%' }} size={6}>
       {!available.length ? <Empty description="暂无已发布条码规则" /> : <><Select aria-label="条码规则" disabled={busy} value={selected} onChange={setSelected} options={available.map((rule) => ({ value: rule.id, label: `${rule.title} · ${rule.materialCode}` }))} />

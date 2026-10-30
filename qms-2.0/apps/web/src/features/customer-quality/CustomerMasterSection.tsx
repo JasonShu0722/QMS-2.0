@@ -18,11 +18,11 @@ export function relationPayload(values: CreateRelation): CreateRelation {
     : { relationType: values.relationType, relatedCode: values.relatedCode, relatedName: values.relatedName };
 }
 
-export function CustomerMasterSection({ organizationId, organizationPermissions }: { organizationId?: string; organizationPermissions?: string[] } = {}) {
-  return <CustomerMasterContent key={organizationId ?? 'current'} organizationId={organizationId} organizationPermissions={organizationPermissions} />;
+export function CustomerMasterSection({ organizationId, organizationPermissions, embedded }: { organizationId?: string; organizationPermissions?: string[]; embedded?: boolean } = {}) {
+  return <CustomerMasterContent key={organizationId ?? 'current'} organizationId={organizationId} organizationPermissions={organizationPermissions} embedded={embedded} />;
 }
 
-function CustomerMasterContent({ organizationId, organizationPermissions }: { organizationId?: string; organizationPermissions?: string[] }) {
+function CustomerMasterContent({ organizationId, organizationPermissions, embedded }: { organizationId?: string; organizationPermissions?: string[]; embedded?: boolean }) {
   const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<string>();
@@ -174,7 +174,7 @@ function CustomerMasterContent({ organizationId, organizationPermissions }: { or
   }
 
   return <section className="customer-quality-card" aria-label="客户主数据">
-    <Typography.Title level={3}>客户主数据</Typography.Title>
+    <Typography.Title level={3} className={embedded ? 'sr-only' : undefined}>客户主数据</Typography.Title>
     {exportError ? <Alert showIcon type="error" title={t('客户清单导出失败，请重试')} /> : null}
     {error ? <Alert showIcon type="error" title={safeAccountError(error)} action={<Button onClick={refreshFromUser}>重试</Button>} /> : null}
     {canRead ? <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} disabled={busy && !relationSubmitting.current} onChange={changeCustomer} /><Button disabled={busy} onClick={refreshFromUser}>刷新客户</Button>{canRead ? <Button onClick={() => void exportCustomers()} loading={exporting} disabled={!customersLoaded || !customers.length || exporting}>{t('导出当前客户清单')}</Button> : null}{selected && canWrite ? <Button onClick={() => requestLeave(() => { const customer = customers.find((item) => item.id === selected); if (customer) { setEditDirty(false); setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); } })} disabled={busy}>编辑客户</Button> : null}</Space> : null}

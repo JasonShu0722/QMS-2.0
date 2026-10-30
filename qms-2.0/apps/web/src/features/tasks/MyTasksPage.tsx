@@ -75,7 +75,7 @@ export function MyTasksPage() {
   }
   const pagination = (offset: number, total: number, change: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger={false} onChange={(page) => change((page - 1) * pageSize)} showTotal={() => `${t('总数')}：${total}`} />;
   return <main className="task-inbox">
-    <Typography.Title level={2}>{t('我的待办')}</Typography.Title>
+    <h1 className="sr-only">{t('我的待办')}</h1>
     <InboxError cause={mutationError} />
     <Tabs activeKey={activeTab} onChange={key => { if (!writing.current) requestLeave(() => setActiveTab(key)); }} items={[
       { key: 'customer-fae', label: t('客诉FAE解析'), children: activeTab === 'customer-fae' ? <CustomerFaeTaskInbox /> : null },

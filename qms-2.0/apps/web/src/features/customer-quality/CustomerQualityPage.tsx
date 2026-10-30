@@ -3,6 +3,7 @@ import { Alert, Button, Checkbox, Empty, Input, Space, Spin, Table, Tag, Typogra
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, type SessionView } from '../../api/client';
+import { useLanguage } from '../../i18n/Language';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { CustomerMasterSection } from './CustomerMasterSection';
@@ -31,6 +32,7 @@ export function CustomerQualityPage({ renderAnalysis }: Props = {}) {
 }
 
 function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnalysis }: Props & { organizationId?: string; initialComplaintId?: string }) {
+  const { t } = useLanguage();
   const scope = useWorkTabsStore(state => state.sessionScope);
   const [session, setSession] = useState<SessionView>(); const [permissions, setPermissions] = useState<string[]>([]);
   const [authorized, setAuthorized] = useState(false); const [accessLost, setAccessLost] = useState(false);
@@ -157,9 +159,9 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
     { title: '台账状态', width: 100, render: (_, row) => <Tag>{row.status === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
   ];
   if (accessLost) return <main className="customer-quality-page"><Alert type="warning" showIcon title="访问已失效，当前列表、详情和草稿已清除。请重新登录或确认目标组织权限后重新进入。" /><LedgerError cause={error} /></main>;
-  if (legacy) return <><div className="customer-ledger-legacy-banner"><Alert type="info" title="历史台账：旧契约登记 / 严格导入与历史报告，不代表 N4 正式登记。新业务请返回正式台账。" /><Button onClick={() => requestLeave(() => setLegacy(false))}>返回正式台账</Button></div><CustomerLegacyQualityPage /></>;
+  if (legacy) return <><div className="customer-ledger-legacy-banner"><Alert type="info" title={t('历史台账：仅用于历史登记、严格导入与历史报告。新业务请返回正式台账。')} /><Button onClick={() => requestLeave(() => setLegacy(false))}>返回正式台账</Button></div><CustomerLegacyQualityPage /></>;
   return <main className="customer-quality-page">
-    <header className="customer-quality-heading"><div><Typography.Text type="secondary">客户质量 · 正式台账</Typography.Text><Typography.Title level={1}>客诉台账</Typography.Title><Typography.Paragraph type="secondary">同一事实的全部、零公里和售后视图。登记数量唯一归口，台账状态与解析、8D 分开。</Typography.Paragraph></div><Space wrap><Button onClick={refresh} loading={loading}>刷新</Button><Button onClick={() => requestLeave(() => { detailController.current?.abort(); setDetail(undefined); setLegacy(true); })}>历史台账</Button></Space></header>
+    <header className="customer-quality-heading"><div><h1 className="sr-only">客诉台账</h1><Typography.Paragraph type="secondary">同一事实的全部、零公里和售后视图。登记数量唯一归口，台账状态与解析、8D 分开。</Typography.Paragraph></div><Space wrap><Button onClick={refresh} loading={loading}>刷新</Button><Button onClick={() => requestLeave(() => { detailController.current?.abort(); setDetail(undefined); setLegacy(true); })}>历史台账</Button></Space></header>
     <LedgerError cause={permissionError} /><LedgerError cause={error} />
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${encodeURIComponent(issued.problem.id)}`}>查看问题</Link>} /> : null}
     <LedgerError cause={auxiliaryError} />{auxiliaryError || auxiliaryLoading ? <Button loading={auxiliaryLoading} disabled={auxiliaryLoading} onClick={() => { if (life.current) void loadAuxiliary(life.current, true); }}>重试候选人员与客户</Button> : null}
@@ -187,7 +189,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       {detailLoading && !detail ? <Spin /> : null}<LedgerError cause={detailError} />
       {detailError && selectedId.current ? <Button onClick={() => { void openDetail(selectedId.current!).catch(() => undefined); }}>重试详情读取</Button> : null}
       {detail ? <CustomerLedgerDetail key={detail.id} record={detail} candidates={candidates} customers={customers} userId={session?.userId} permissions={permissions} organizationId={organizationId} onDenied={revoke} onSaved={saved} refreshDetail={() => openDetail(detail.id, true)} renderAnalysis={renderAnalysis} /> : null}
-      <section className="customer-quality-card"><details><summary>客户主数据</summary><CustomerMasterSection organizationId={organizationId} organizationPermissions={permissions} /></details></section>
+      <section className="customer-quality-card"><details><summary>客户主数据</summary><CustomerMasterSection organizationId={organizationId} organizationPermissions={permissions} embedded /></details></section>
       {editorOpen ? <CustomerLedgerEditor organizationId={organizationId} candidates={candidates} customers={customers} onDenied={revoke} onClose={() => setEditorOpen(false)} onSaved={saved} refreshDetail={async () => undefined} /> : null}
       {importOpen ? <CustomerLedgerImportPanel organizationId={organizationId} existing={result?.items ?? []} customers={customers} candidates={candidates} onDenied={revoke} onClose={() => setImportOpen(false)} onCommitted={() => setRevision(current => current + 1)} /> : null}
       {issueOpen ? <InternalEightDIssueDrawer domain="customer-quality" organizationId={organizationId} sources={selectedSources.map(row => ({ id: row.id, version: row.version, organizationId: row.organizationId, description: `${row.complaintNumber} · ${row.normalized.defectDescription ?? '待补正'}` }))} onClose={() => setIssueOpen(false)} onDenied={revoke} onIssued={value => { setIssued(value); setIssueOpen(false); setSelectedSources([]); setRevision(current => current + 1); }} /> : null}
