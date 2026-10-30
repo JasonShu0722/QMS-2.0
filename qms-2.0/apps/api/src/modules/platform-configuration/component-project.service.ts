@@ -49,10 +49,11 @@ function engineerIdentity(assignment: EngineerProjection | null, assignmentId: s
   if (assignment.startedAt > now) issues.push('ASSIGNMENT_NOT_STARTED');
   if (assignment.endedAt && assignment.endedAt <= now) issues.push('ASSIGNMENT_ENDED');
   if (assignment.position.status !== 'ACTIVE') issues.push('POSITION_DISABLED');
-  if (assignment.position.department.status !== 'ACTIVE') issues.push('DEPARTMENT_DISABLED');
+  if (!assignment.position.department) issues.push('DEPARTMENT_REQUIRED');
+  else if (assignment.position.department.status !== 'ACTIVE') issues.push('DEPARTMENT_DISABLED');
   return { assignmentId: assignment.id, userId: assignment.user.id, username: assignment.user.username, fullName: assignment.user.fullName,
-    positionId: assignment.position.id, positionName: assignment.position.name, departmentId: assignment.position.department.id,
-    departmentName: assignment.position.department.name, valid: issues.length === 0, issues };
+    positionId: assignment.position.id, positionName: assignment.position.name, departmentId: assignment.position.department?.id ?? null,
+    departmentName: assignment.position.department?.name ?? null, valid: issues.length === 0, issues };
 }
 
 export async function readComponentEngineerAssignment(transaction: AdminTransaction, organizationId: string, assignmentId: string | null, now: Date) {
@@ -62,7 +63,7 @@ export async function readComponentEngineerAssignment(transaction: AdminTransact
 
 export async function listComponentEngineerAssignments(transaction: AdminTransaction, organizationId: string, query: ComponentEngineerAssignmentsQueryDto, now: Date) {
   const where: Prisma.UserPositionWhereInput = {
-    organizationId, ...effectivePositionAssignmentWhere(now),
+    organizationId, ...effectivePositionAssignmentWhere(now), AND: { position: { departmentId: { not: null } } },
     user: { organizationId, accountType: 'INTERNAL', status: 'ACTIVE', ...(query.search ? { OR: [{ username: { contains: query.search, mode: 'insensitive' } }, { fullName: { contains: query.search, mode: 'insensitive' } }] } : {}) },
   };
   const assignments = await transaction.userPosition.findMany({ where, select: engineerSelect, orderBy: [{ userId: 'asc' }, { positionId: 'asc' }, { id: 'asc' }], take: query.pageSize, skip: (query.page - 1) * query.pageSize });

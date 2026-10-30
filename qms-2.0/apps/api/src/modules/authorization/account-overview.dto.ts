@@ -13,7 +13,7 @@ export class AccountAssignmentDto {
   @ApiProperty({ format: 'date-time' }) startedAt!: string;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) endedAt!: string | null;
   @ApiProperty({ type: AccountAssignmentNameDto }) position!: AccountAssignmentNameDto;
-  @ApiProperty({ type: AccountAssignmentNameDto }) department!: AccountAssignmentNameDto;
+  @ApiProperty({ type: AccountAssignmentNameDto, nullable: true }) department!: AccountAssignmentNameDto | null;
 }
 export class AccountRoleSourceDto {
   @ApiProperty({ enum: ['DIRECT', 'POSITION'] }) kind!: 'DIRECT' | 'POSITION';

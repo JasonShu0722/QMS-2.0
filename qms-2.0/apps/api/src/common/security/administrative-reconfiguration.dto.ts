@@ -42,10 +42,10 @@ export class AdministrativeReconfigurationDto {
   @IsUUID()
   targetOrganizationId?: string;
 
-  @ApiPropertyOptional({ format: 'uuid' })
-  @ValidateIf((_object, value) => value !== undefined)
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'POSITION 必须显式选择归属：null 为组织直属，UUID 为有效部门；其他实体不接受 null。' })
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsUUID()
-  targetDepartmentId?: string;
+  targetDepartmentId?: string | null;
 
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'DEPARTMENT 可显式选择 null 根部门；ORGANIZATION 必须选择有效内部父组织' })
   @ValidateIf((_object, value) => value !== undefined && value !== null)

@@ -22,13 +22,13 @@ const definition = { id: 'definition', organizationId: 'organization', code: 'QA
   version: { id: 'version', workflowDefinitionId: 'definition', version: 1, status: 'DRAFT', structureSnapshot: graph } };
 const response = (value: unknown) => value as Awaited<ReturnType<typeof api.getWorkflowVersion>>;
 const writeOptions = expect.objectContaining({ signal: expect.anything(), key: expect.any(String) });
-function mount() { return render(<MemoryRouter initialEntries={['/app/workflow-designer/definition/version']}><LanguageProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></LanguageProvider></MemoryRouter>); }
+function mount() { return render(<MemoryRouter initialEntries={['/console/workflows/definition/version']}><LanguageProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></LanguageProvider></MemoryRouter>); }
 function mountGuarded() {
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer/definition/version', element: <LanguageProvider><UnsavedChangesProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></UnsavedChangesProvider></LanguageProvider> },
-    { path: '/app/workflow-designer', element: <p>Workflow list destination</p> },
-    { path: '/app/workflow-designer/definition/copied-version', element: <p>Copied workflow destination</p> },
-  ], { initialEntries: ['/app/workflow-designer/definition/version'] });
+    { path: '/console/workflows/definition/version', element: <LanguageProvider><UnsavedChangesProvider><WorkflowDesignerPage definitionId="definition" versionId="version" /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows', element: <p>Workflow list destination</p> },
+    { path: '/console/workflows/definition/copied-version', element: <p>Copied workflow destination</p> },
+  ], { initialEntries: ['/console/workflows/definition/version'] });
   return { ...render(<RouterProvider router={router} />), router };
 }
 
@@ -43,12 +43,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it.each([['DRAFT', '草稿编辑', '编辑'], ['PUBLISHED', '已发布查看', '查看'], ['RETIRED', '已停用版本查看', '查看']])('uses loaded object and %s version for hierarchy and work tab', async (status, action, tabAction) => {
+it.each([['DRAFT', '草稿编辑'], ['PUBLISHED', '已发布查看'], ['RETIRED', '已停用版本查看']])('uses loaded object and %s version for console hierarchy without business tabs', async (status, action) => {
   vi.mocked(api.getWorkflowVersion).mockResolvedValue(response({ ...definition, version: { ...definition.version, status, version: 7 } }));
   mount();
   expect(await screen.findByRole('heading', { name: '质量流程' })).toBeVisible();
-  expect(screen.getByRole('navigation', { name: '流程对象层级' })).toHaveTextContent(`系统服务/流程设计/质量流程/${action} · 版本 7`);
-  expect(useWorkTabsStore.getState().tabs.find(tab => tab.path === '/app/workflow-designer/definition/version')).toMatchObject({ title: `质量流程 · ${tabAction}` });
+  expect(screen.getByRole('navigation', { name: '流程对象层级' })).toHaveTextContent(`管理控制台/流程设计/质量流程/${action} · 版本 7`);
+  expect(screen.getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console');
+  expect(screen.getByRole('link', { name: '受控流程列表' })).toHaveAttribute('href', '/console/workflows');
+  expect(useWorkTabsStore.getState().tabs).toEqual([]);
   expect(api.getWorkflowVersion).toHaveBeenCalledTimes(1);
 });
 
@@ -159,7 +161,7 @@ it('publishes a note without saving an unchanged graph and becomes clean only af
   expect(screen.queryByText('未保存', { exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: '受控流程列表' }));
   expect(await screen.findByText('Workflow list destination')).toBeVisible();
-  expect(router.state.location.pathname).toBe('/app/workflow-designer');
+  expect(router.state.location.pathname).toBe('/console/workflows');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
@@ -183,7 +185,7 @@ it('treats a publication note as unsaved input when leaving the designer', async
   fireEvent.change(await screen.findByLabelText('发布说明'), { target: { value: '待发布修订说明' } });
   fireEvent.click(screen.getByRole('link', { name: '受控流程列表' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('当前草稿尚未保存');
-  expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/version');
+  expect(router.state.location.pathname).toBe('/console/workflows/definition/version');
   fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   expect(screen.getByLabelText('发布说明')).toHaveValue('待发布修订说明');
 });
@@ -196,7 +198,7 @@ it('holds navigation while a clean draft is being validated and resumes after co
   fireEvent.click(screen.getByRole('button', { name: '校验流程' }));
   await waitFor(() => expect(api.validateWorkflow).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByRole('link', { name: '受控流程列表' }));
-  expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/version');
+  expect(router.state.location.pathname).toBe('/console/workflows/definition/version');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '重新加载流程' })).toBeDisabled();
   await act(async () => { finish({ valid: true, errors: [] }); });
@@ -206,11 +208,11 @@ it('holds navigation while a clean draft is being validated and resumes after co
 it('opens the copied draft after copying a published workflow finishes', async () => {
   vi.mocked(api.getWorkflowVersion).mockResolvedValue(response({ ...definition, version: { ...definition.version, status: 'PUBLISHED' } }));
   vi.mocked(api.copyWorkflow).mockResolvedValue(response({ ...definition, version: { ...definition.version, id: 'copied-version' } }));
-  vi.mocked(api.workflowPath).mockReturnValue('/app/workflow-designer/definition/copied-version');
+  vi.mocked(api.workflowPath).mockReturnValue('/console/workflows/definition/copied-version');
   const { router } = mountGuarded();
   fireEvent.click(await screen.findByRole('button', { name: '复制为新草稿' }));
   expect(await screen.findByText('Copied workflow destination')).toBeVisible();
-  expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/copied-version');
+  expect(router.state.location.pathname).toBe('/console/workflows/definition/copied-version');
   expect(api.copyWorkflow).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

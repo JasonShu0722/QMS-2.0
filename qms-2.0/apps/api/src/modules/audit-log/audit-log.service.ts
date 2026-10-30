@@ -80,6 +80,11 @@ const SAFE_METADATA_KEYS = new Set([
 export class AuditLogService {
   constructor(@Inject(PrismaService) private readonly prisma: AuditEventWriter) {}
 
+  // Authorized owner transactions ask only whether stable resource history must be retained.
+  async hasResourceHistory(transaction: Prisma.TransactionClient, resourceType: string, resourceId: string): Promise<boolean> {
+    return !!await transaction.auditEvent.findFirst({ where: { resourceType, resourceId }, select: { id: true } });
+  }
+
   async record(input: RecordAuditEventInput, transaction?: AuditEventWriter): Promise<unknown> {
     const writer = transaction ?? this.prisma;
     return writer.auditEvent.create({

@@ -1,0 +1,12 @@
+.qms-session-verification {
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 1px solid var(--qms-border, #dfe2e7);
+  border-radius: 8px;
+  background: var(--qms-surface, #fff);
+  color: var(--qms-text, #181b22);
+}
+.qms-session-verification::backdrop { background: var(--qms-background, #f3f6fa); opacity: 1; }
+@media (pointer: coarse) {
+  .qms-session-verification button { min-height: 44px; min-width: 44px; }
+}

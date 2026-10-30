@@ -13,7 +13,7 @@ describe('granular administration permissions', () => {
     user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     organization: { findUnique: jest.fn() },
     userRole: { findMany: jest.fn(), count: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
-    role: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    role: { count: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
     permission: { findMany: jest.fn() },
     positionRole: { count: jest.fn() },
     rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -38,6 +38,7 @@ describe('granular administration permissions', () => {
     jest.resetAllMocks();
     prisma.userPosition.findMany.mockResolvedValue([]);
     prisma.positionRole.count.mockResolvedValue(0);
+    prisma.role.count.mockResolvedValue(0);
     prisma.user.findMany.mockResolvedValue([]);
     prisma.session.findFirst.mockResolvedValue({ id: actor.sessionId, mfaVerifiedAt: new Date(), reauthenticatedAt: new Date() });
     granted = [];
@@ -89,6 +90,21 @@ describe('granular administration permissions', () => {
     await expect(roleActions[operation]()).resolves.not.toBeUndefined();
     for (const other of Object.keys(roleActions) as (keyof typeof roleActions)[]) {
       if (other !== operation) await expect(roleActions[other]()).rejects.toMatchObject({ status: 403 });
+    }
+  });
+  it.each(['update', 'delete', 'copy', 'assign'] as const)('rejects archived role %s before mutation or an old receipt lookup', async (operation) => {
+    granted = [`account:roles:${operation === 'copy' ? 'create' : operation}`];
+    prisma.role.count.mockResolvedValue(1);
+    prisma.adminMutation.findUnique.mockResolvedValue({ action: 'OLD_SUCCESS', response: { value: { id: role.id } } });
+    const change = operation === 'copy' ? roles.copy(actor, role.id, { code: 'COPY', name: 'Copy' }, 'trace', 'matrix-key')
+      : operation === 'assign' ? roles.assign(actor, 'target', { roleIds: [role.id] }, 'trace', 'matrix-key')
+        : roleActions[operation]();
+    await expect(change).rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(prisma.role.count).toHaveBeenCalledWith({ where: { id: { in: [role.id] }, archivedAt: { not: null } } });
+    expect(prisma.adminMutation.findUnique).not.toHaveBeenCalled();
+    expect(prisma.adminMutation.create).not.toHaveBeenCalled();
+    for (const mutation of [prisma.role.create, prisma.role.update, prisma.role.delete, prisma.userRole.deleteMany, prisma.userRole.createMany]) {
+      expect(mutation).not.toHaveBeenCalled();
     }
   });
   it('requires every mixed PATCH permission before mutation and replay', async () => {

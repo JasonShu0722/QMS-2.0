@@ -3,7 +3,6 @@ import { Alert, Button, Drawer, Modal, Skeleton, Space, Switch, Table, Typograph
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
-import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { scopePath, type AdminOrganization, type AdminRole, type PermissionCatalogGroup } from '../admin/admin';
@@ -11,11 +10,12 @@ import { GroupedPermissionSelector } from '../admin/GroupedPermissionSelector';
 import { permissionSummary, RolePermissionDetails } from '../admin/RolePermissionDetails';
 import { organizationPath, type Position } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
+import { AuthorizationSources, canReadAuthorizationSources, useAuthorizationLanguage } from './AuthorizationSources';
 
-export function PositionRolesDrawer({ organization, position, canWrite, onClose, afterClose }: {
-  organization: AdminOrganization; position: Position; canWrite: boolean; onClose: () => void; afterClose: () => void;
+export function PositionRolesDrawer({ organization, position, canWrite, onClose, afterClose, onDenied }: {
+  organization: AdminOrganization; position: Position; canWrite: boolean; onClose: () => void; afterClose: () => void; onDenied?: (error: ApiError) => void;
 }) {
-  const { t, locale } = useLanguage();
+  const { t, locale } = useAuthorizationLanguage();
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const [open, setOpen] = useState(true);
@@ -30,6 +30,7 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
   const [conflict, setConflict] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const alive = useRef(false);
   const generation = useRef(0);
   const reading = useRef<AbortController | undefined>(undefined);
@@ -113,6 +114,10 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
       <Space orientation="vertical" style={{ width: '100%' }}>
         {conflict ? <Alert type="warning" showIcon title={t('内容已被其他人修改。已保留当前填写内容，请重新加载后再保存。')} /> : <GovernanceFeedback error={error} />}
         <Alert type="info" showIcon title={t('岗位权限保存后，当前有效任职会自动生效。')} />
+        {canReadAuthorizationSources(organization) && <Button disabled={busy || loading} onClick={() => setSourcesOpen(value => !value)}>{t(sourcesOpen ? '收起授权来源' : '查看授权来源')}</Button>}
+        {sourcesOpen && open && <AuthorizationSources organization={organization} positionId={position.id} onDenied={cause => {
+          completed.current = true; generation.current++; reading.current?.abort(); setSourcesOpen(false); setOpen(false); setDiscard(false); setConfiguration(undefined); setCatalog([]); setSelected([]); setDetails(undefined); setBusy(false); onDenied?.(cause);
+        }} />}
         {loading ? <Skeleton active paragraph={{ rows: 3 }} /> : configuration && <>
           <span>{t('角色版本')}：{configuration.roleVersion}</span>
           <span>{t('当前有效任职人数')}：{configuration.effectiveAssigneeCount}</span>

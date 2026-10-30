@@ -104,7 +104,7 @@ export class CustomerComplaintLedgerService {
       SELECT id, assignee_assignment_id AS "assignmentId", department_id AS "departmentId", content->>'progress' AS progress, content->>'result' AS result
       FROM customer_complaint_analyses WHERE organization_id = ${organizationId}::uuid AND complaint_id = ${sourceId}::uuid
         AND section = 'SUPPLIER' AND assignee_user_id = ${actualActor.id}::uuid ORDER BY id`;
-    return rows.filter(row => assignments.some(a => a.id === row.assignmentId && a.department.id === row.departmentId)).map(row => ({
+    return rows.filter(row => assignments.some(a => a.id === row.assignmentId && a.department?.id === row.departmentId)).map(row => ({
       sourceKind: 'CUSTOMER_LEDGER', sourceId, canonicalFactKey: `CUSTOMER_LEDGER:${sourceId}`, materialItemId: row.id,
       verification: null, progress: row.progress, result: row.result }));
   }

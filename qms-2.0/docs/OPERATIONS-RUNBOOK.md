@@ -2,6 +2,14 @@
 
 本页提供操作顺序和证据要求。具体参数以[数据保护](DATA-PROTECTION.md)、[平台交接](PLATFORM-HANDOFF.md)、[附件](ATTACHMENTS.md)、[邮件恢复](EMAIL-RECOVERY.md)为准。这里不声称已部署监控、已配置告警或已完成生产灾备演练。
 
+## REQ-0032 CP-1 候选边界（2026-10-30，未发布）
+
+候选入口为个人账号新窗口按钮及 `/console`，共用原登录。首页组合公开失败队列、四类待配置与最近审计，不是实时健康监控；不可用、授权变化和无汇总分别呈现，不能以零值或局部成功宣告系统全绿。API/数据交换/运行服务面板属于未交付的 CP-2。
+
+本轮追加迁移仅扩充直属岗位及兼容归档存储，不批量转换生产角色/任职。生产来源操作仍须精确预览与单独批次授权。136 份迁移的一次性资源证据与生产恢复分开；旧累计隔离库失败保留，不能用新净库通过宣称大体量生产性能验收。
+
+负责人已退出夜间模式、heartbeat 已删除，当前只到 CP-1 PR 检查点，不自动合并/部署或启动 CP-2。既有快照先行、精确来源 SHA、API/Worker/Web 同 SHA 及公网契约/资源核验顺序保留，不能以本地构建或旧 CI 替代。接续见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
+
 试点前的隔离数据库观测和真实备份恢复演练入口见[运行观测与演练准备](OPERABILITY-READINESS.md)；该入口只证明一次性环境中的采样或恢复结果。
 
 ## 环境与定位入口
@@ -39,6 +47,12 @@ corepack pnpm check:governance
 4. 在一次性资源验证迁移、历史数据、真实主链及恢复后的一致性；记录实测恢复耗时和恢复点。RPO/RTO 由目标环境明确，不在此假定已达标。
 5. 按授权执行目标环境发布，验证登录、权限拒绝、Worker 与附件关键链；失败根据预定条件回退镜像或进入隔离恢复。不可逆迁移不能只靠旧镜像恢复。
 6. 记录最终环境、结果与未覆盖项，清理本任务一次性资源；失败恢复目标不切入业务流量。
+
+### 成功部署后的构建缓存回收（CP-1 候选，未发布）
+
+`deployment/deploy.sh` 在 Worker READY、公网检查及 deployed SHA 记录成功后，持有原部署锁执行一次 `docker builder prune --force`，再输出最终部署成功。仅回收默认 builder 的 dangling cache；它不是按 Compose 项目隔离的缓存，后续构建可能需要重建缓存。不加 `--all`，不执行 system/image/container/volume prune，不删除运行镜像、回退镜像、数据卷、上传或加密快照。失败或被更新提交取代的部署不会到达该成功后回收步骤。
+
+清理输出保留 Docker 回收量；清理失败时 stderr 明确“Deployment healthy / builder cache cleanup failed / deployed SHA retained”，脚本非零退出，服务健康及 deployed-sha 不回滚。此时应先核实实际服务 SHA 与磁盘分类，不把 CD 失败自动解释成生产服务回滚。默认 dangling cache 回收不能保证所有磁盘占用下降；本次只交付脚本、控制流测试和文档，未执行生产清理或测量云端回收量。
 
 ## 维护触发条件
 

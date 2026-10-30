@@ -19,7 +19,7 @@ beforeEach(() => {
 afterEach(() => localStorage.clear());
 
 describe('authentication toolbar', () => {
-  it.each(['/app/workbench', '/supplier/inbox'])('leaves %s appearance entries to the authenticated shell', path => {
+  it.each(['/app/workbench', '/supplier/inbox', '/console', '/console/users', '/console/workflows/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222'])('leaves %s appearance entries to the authenticated shell', path => {
     renderToolbar(path);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });

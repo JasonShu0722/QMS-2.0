@@ -11,7 +11,7 @@ import { OrganizationModule } from '../../src/modules/organization/organization.
 import { PlatformConfigurationModule } from '../../src/modules/platform-configuration/platform-configuration.module.js';
 import { FileManagementModule } from '../../src/modules/file-management/file-management.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
-import { type AdminActor } from '../../src/common/security/admin-mutation.service.js';
+import { adminPermissions, type AdminActor } from '../../src/common/security/admin-mutation.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { CustomerComplaintAnalysisService } from '../../src/modules/customer-quality/customer-complaint-analysis.service.js';
 import { CustomerComplaintLedgerService } from '../../src/modules/customer-quality/customer-complaint-ledger.service.js';
@@ -104,6 +104,56 @@ describe('PR75 analysis assignment recovery and accepted responsibility on real 
   }
   const recover = (id: string, who = crossDepartment, expectedVersion = 1, key = randomUUID(), actor = qe.actor) =>
     service.assign(actor, id, 'FAE', { ...target(who, expectedVersion), recoverStale: true }, randomUUID(), key);
+
+  it.each(['FAE_CANDIDATES', 'FAE_CREATE', 'FAE_RECOVERY_CANDIDATES', 'FAE_RECOVERY', 'SUPPLIER_CANDIDATES',
+    'SUPPLIER_CREATE', 'SUPPLIER_REASSIGN', 'REPLAY_FAE', 'REPLAY_RECOVERY', 'REPLAY_SUPPLIER'] as const)(
+    'rejects %s after the accepted engineer legally moves to a direct position without losing functional permissions', async mode => {
+      const engineer = await person([read, write, 'customer-quality:complaints:reassign']);
+      const configurer = await person(['organization:structure:manage', 'account:roles:read', 'account:roles:assign', read, write, 'customer-quality:complaints:reassign']);
+      await prisma.session.update({ where: { id: configurer.actor.sessionId }, data: { mfaVerifiedAt: new Date() } });
+      const row = await ledger.create(engineer.actor, { fields: { complaintType: 'AFTER_SALES' }, qualityEngineerAssignmentId: engineer.assignmentId }, randomUUID(), randomUUID());
+      expect((await ledger.detail(engineer.actor, row.id)).warnings.some(warning => warning.code === 'ENGINEER_NO_LONGER_ELIGIBLE')).toBe(false);
+      const recovery = mode.includes('RECOVERY'), replay = mode.startsWith('REPLAY');
+      const section = mode.includes('SUPPLIER') ? 'SUPPLIER' : 'FAE';
+      const old = recovery ? await person([read, write, faePermission]) : undefined;
+      const initialSection = recovery || replay || mode === 'SUPPLIER_REASSIGN' ? section : section === 'FAE' ? 'SUPPLIER' : 'FAE';
+      const initialAssignee = old ?? (initialSection === 'FAE' ? fae : sqe);
+      const initialInput = target(initialAssignee), initialKey = randomUUID();
+      let prior = await service.assign(engineer.actor, row.id, initialSection, initialInput, randomUUID(), initialKey);
+      prior = await service.save(initialAssignee.actor, prior.id, { expectedVersion: prior.version,
+        ...(initialSection === 'FAE' ? { text: 'Retained original analysis findings' } : { progress: 'Retained original analysis findings', result: 'Saved result' }) }, randomUUID(), randomUUID());
+      expect(await service.summary(engineer.actor, row.id)).toMatchObject({ canDispatch: true });
+      if (old) await end(old);
+      const input = recovery ? { ...target(crossDepartment, prior.version), recoverStale: true }
+        : replay ? initialInput : target(section === 'FAE' ? fae : sqe, mode === 'SUPPLIER_REASSIGN' ? prior.version : 0);
+      const key = recovery && replay ? randomUUID() : replay ? initialKey : randomUUID();
+      if (recovery && replay) prior = await service.assign(engineer.actor, row.id, section, input, randomUUID(), key);
+      const appointment = await prisma.userPosition.findUniqueOrThrow({ where: { id: engineer.assignmentId } });
+      const position = await prisma.position.findUniqueOrThrow({ where: { id: appointment.positionId } });
+      if (mode === 'FAE_CREATE') {
+        const secondary = await prisma.position.create({ data: { organizationId, departmentId, code: randomUUID(), name: 'Another real business appointment' } });
+        await prisma.userPosition.create({ data: { organizationId, userId: engineer.actor.id, positionId: secondary.id } });
+      }
+      await module.get(OrganizationService).updatePosition(configurer.actor, organizationId, position.id,
+        { expectedVersion: position.version, departmentId: null }, randomUUID(), randomUUID());
+      expect(await module.get(OrganizationService).currentAssignments(engineer.actor.id, organizationId)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: engineer.assignmentId, department: null }),
+      ]));
+      expect(await adminPermissions(prisma, engineer.actor.id, organizationId)).toEqual(expect.arrayContaining([read, write]));
+      expect((await ledger.detail(engineer.actor, row.id)).warnings).toContainEqual(expect.objectContaining({ code: 'ENGINEER_NO_LONGER_ELIGIBLE' }));
+      const stored = () => prisma.$queryRaw`SELECT * FROM customer_complaint_analyses WHERE complaint_id = ${row.id}::uuid ORDER BY id`;
+      const history = () => prisma.$queryRaw`SELECT h.* FROM customer_complaint_analysis_history h JOIN customer_complaint_analyses a ON a.id = h.analysis_id WHERE a.complaint_id = ${row.id}::uuid ORDER BY h.id`;
+      const receipts = () => prisma.adminMutation.findMany({ where: { actorUserId: engineer.actor.id }, orderBy: { id: 'asc' } });
+      const before = { stored: await stored(), history: await history(), receipts: await receipts(), readable: await service.history(reader.actor, prior.id) };
+      const operation = mode.endsWith('CANDIDATES') ? service.candidates(engineer.actor, row.id, section, recovery || undefined)
+        : service.assign(engineer.actor, row.id, section, input, randomUUID(), key);
+      await expect(operation).rejects.toMatchObject({ status: 403, response: { code: 'CUSTOMER_ANALYSIS_ENGINEER_REQUIRED' } });
+      expect(await service.summary(engineer.actor, row.id)).toMatchObject({ canDispatch: false, canRecoverAssignment: false });
+      expect(await stored()).toEqual(before.stored);
+      expect(await history()).toEqual(before.history);
+      expect(await receipts()).toEqual(before.receipts);
+      expect(await service.history(reader.actor, prior.id)).toEqual(before.readable);
+    });
 
   it('recovers an ended FAE appointment through explicit QE assignment without dropping findings', async () => {
     const old = await person([read, write, faePermission]);

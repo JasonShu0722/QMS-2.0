@@ -26,10 +26,10 @@ function mount(parentDirty = false) {
     return <><Link to="/elsewhere">Leave list</Link>{open && <WorkflowClosureTemplateDialog onCreated={created} onClose={() => { closed(); setOpen(false); }} />}</>;
   }
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
     { path: '/elsewhere', element: <p>Elsewhere</p> },
     { path: '/login', element: <p>Login destination</p> },
-  ], { initialEntries: ['/app/workflow-designer'] });
+  ], { initialEntries: ['/console/workflows'] });
   return { ...render(<ConfigProvider theme={{ token: { motion: false } }}><RouterProvider router={router} /></ConfigProvider>), created, closed, router };
 }
 async function fill() {
@@ -211,7 +211,7 @@ it('synchronously prevents duplicate submits and holds navigation while CSRF is 
   expect(csrfToken).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: '取消' })).toBeDisabled();
   fireEvent.click(screen.getByRole('link', { name: 'Leave list' }));
-  expect(view.router.state.location.pathname).toBe('/app/workflow-designer');
+  expect(view.router.state.location.pathname).toBe('/console/workflows');
   await act(async () => csrf.resolve('csrf-token'));
   await waitFor(() => expect(writes()).toHaveLength(1));
 });
@@ -273,7 +273,7 @@ it('ignores a late 401 from an old session instead of logging the new session ou
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:organization:two'));
   await act(async () => write.reject(failure(401)));
   expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:organization:two');
-  expect(view.router.state.location.pathname).toBe('/app/workflow-designer');
+  expect(view.router.state.location.pathname).toBe('/console/workflows');
   expect(view.created).not.toHaveBeenCalled();
 });
 
@@ -285,7 +285,7 @@ it('ignores a late candidate GET 401 after the session is replaced', async () =>
   await screen.findByRole('option', { name: '供应商关闭审核' });
   await act(async () => read.reject(failure(401)));
   expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:organization:two');
-  expect(view.router.state.location.pathname).toBe('/app/workflow-designer');
+  expect(view.router.state.location.pathname).toBe('/console/workflows');
   expect(screen.queryByText('Login destination')).not.toBeInTheDocument();
   expect(writes()).toHaveLength(0);
 });

@@ -1,4 +1,6 @@
 export const administrativeTranslations: Record<string, string> = {
+  '组织直属': 'Organization-direct',
+  '仅调整当前范围的任职，其他任职保持不变；预览和保存使用完整任职。': 'Only appointments in the current scope can be changed here. Other appointments are retained; preview and save include the full set.',
   '待配置': 'Pending configuration',
   '核实管理身份': 'Verifying administrative identity',
   '平台管理员：全部内部组织': 'Platform administrator: all internal organizations',

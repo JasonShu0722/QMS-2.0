@@ -1,0 +1,10 @@
+.legacy-authorization { min-width: 0; overflow-wrap: anywhere; }
+.legacy-authorization .authorization-record { display: grid; gap: 8px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); padding: var(--qms-card-padding); margin-block: 10px; min-width: 0; }
+.legacy-authorization .authorization-label, .legacy-authorization .authorization-facts { display: inline-flex; flex-direction: column; gap: 3px; margin-inline-end: 10px; vertical-align: top; }
+.legacy-authorization small { color: var(--qms-muted); overflow-wrap: anywhere; }
+.legacy-authorization .authorization-intent { display: grid; gap: 12px; margin-block: 12px; }
+.legacy-authorization .authorization-intent label { display: grid; gap: 6px; }
+.legacy-authorization .authorization-intent input, .legacy-authorization .authorization-intent select { max-width: 100%; width: 100%; min-width: 0; border: 1px solid var(--qms-border); border-radius: 6px; padding: 7px; background: var(--qms-surface); color: var(--qms-text); }
+.legacy-authorization button:focus-visible, .legacy-authorization input:focus-visible, .legacy-authorization select:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
+@media (pointer: coarse) { .legacy-authorization button, .legacy-authorization input, .legacy-authorization select, .legacy-authorization .ant-checkbox-wrapper { min-height: 44px; } }
+@media (max-width: 480px) { .legacy-authorization .ant-space { max-width: 100%; flex-wrap: wrap; } .legacy-authorization .ant-btn { height: auto; min-height: 36px; white-space: normal; } }

@@ -16,9 +16,9 @@ afterEach(() => vi.unstubAllGlobals());
 const renderList = () => render(<MemoryRouter><LanguageProvider><WorkflowListPage /></LanguageProvider></MemoryRouter>);
 const renderGuardedList = () => {
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer', element: <LanguageProvider><UnsavedChangesProvider><WorkflowListPage /></UnsavedChangesProvider></LanguageProvider> },
-    { path: '/app/workflow-designer/:definitionId/:versionId', element: <p>Workflow designer</p> },
-  ], { initialEntries: ['/app/workflow-designer'] });
+    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><WorkflowListPage /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows/:definitionId/:versionId', element: <p>Workflow designer</p> },
+  ], { initialEntries: ['/console/workflows'] });
   return { ...render(<RouterProvider router={router} />), router };
 };
 it('shows a read failure instead of an empty successful list and retries explicitly', async () => {
@@ -36,8 +36,8 @@ it('lists exact historical versions without replacing their version IDs with the
   vi.mocked(api.getWorkflow).mockResolvedValue({ ...head, versions: [version, { ...version, id: 'old', version: 1, status: 'PUBLISHED' }] });
   renderList();
   fireEvent.click(await screen.findByRole('button', { name: '版本历史 质量流程' }));
-  expect(await screen.findByRole('link', { name: /版本 1/ })).toHaveAttribute('href', '/app/workflow-designer/definition/old');
-  expect(screen.getByRole('link', { name: /版本 2/ })).toHaveAttribute('href', '/app/workflow-designer/definition/new');
+  expect(await screen.findByRole('link', { name: /版本 1/ })).toHaveAttribute('href', '/console/workflows/definition/old');
+  expect(screen.getByRole('link', { name: /版本 2/ })).toHaveAttribute('href', '/console/workflows/definition/new');
 });
 
 it('guards a new workflow code and name when leaving the list and preserves them after cancel', async () => {
@@ -59,7 +59,7 @@ it('creates a workflow once and opens its designer without an unsaved warning af
   vi.mocked(api.getWorkflows).mockResolvedValue({ items: [], total: 0 });
   let finish!: (result: Awaited<ReturnType<typeof api.createWorkflow>>) => void;
   vi.mocked(api.createWorkflow).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-  vi.mocked(api.workflowPath).mockReturnValue('/app/workflow-designer/definition/version');
+  vi.mocked(api.workflowPath).mockReturnValue('/console/workflows/definition/version');
   const { router } = renderGuardedList();
   fireEvent.click(await screen.findByRole('button', { name: '新建流程' }));
   fireEvent.change(screen.getByLabelText('流程代码'), { target: { value: 'NEW-FLOW' } });
@@ -69,11 +69,11 @@ it('creates a workflow once and opens its designer without an unsaved warning af
   expect(create).toBeDisabled();
   expect(screen.getByLabelText('流程代码')).toBeDisabled();
   expect(api.createWorkflow).toHaveBeenCalledTimes(1);
-  expect(router.state.location.pathname).toBe('/app/workflow-designer');
+  expect(router.state.location.pathname).toBe('/console/workflows');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   await act(async () => { finish({ id: 'definition', version: { id: 'version' } } as Awaited<ReturnType<typeof api.createWorkflow>>); });
   expect(await screen.findByText('Workflow designer')).toBeVisible();
-  expect(router.state.location.pathname).toBe('/app/workflow-designer/definition/version');
+  expect(router.state.location.pathname).toBe('/console/workflows/definition/version');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
@@ -95,7 +95,7 @@ it('initializes a candidate as a draft and navigates only after clearing its uns
   vi.mocked(api.getWorkflows).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(api.getWorkflowClosureTemplates).mockResolvedValue({ items: [{ policy: 'INTERNAL', name: '内部关闭审核' }, { policy: 'SUPPLIER', name: '供应商关闭审核' }] });
   vi.mocked(api.createWorkflowClosureTemplate).mockResolvedValue({ id: 'definition', version: { id: 'version', status: 'DRAFT' } } as api.WorkflowDefinition);
-  vi.mocked(api.workflowPath).mockReturnValue('/app/workflow-designer/definition/version');
+  vi.mocked(api.workflowPath).mockReturnValue('/console/workflows/definition/version');
   renderGuardedList();
   fireEvent.click(await screen.findByRole('button', { name: '初始化关闭审核模板' }));
   fireEvent.change(await screen.findByLabelText('模板领域代码'), { target: { value: 'INTERNAL_QUALITY' } });

@@ -4,6 +4,7 @@ import type {
 import type { components } from '@qms/contracts';
 import type { GovernanceBody } from '../features/governance/governance';
 import { clearAccountAvatar } from '../features/account/account-avatar-state';
+import { publishSessionSignal, sessionSignalVersion } from '../features/auth/session-invalidation';
 
 export type { AccountType, LoginResponse } from '@qms/contracts';
 
@@ -44,6 +45,7 @@ export function registerReauthentication(handler: () => Promise<void>) {
 
 async function request<T>(path: string, init: RequestInit = {}, options: { replayAfterReauthentication?: boolean } = {}, canReauthenticate = true): Promise<T> {
   init.signal?.throwIfAborted();
+  const version = sessionSignalVersion();
   const response = await fetch(path, {
     ...init,
     credentials: 'include',
@@ -52,15 +54,39 @@ async function request<T>(path: string, init: RequestInit = {}, options: { repla
       ...(init.headers ?? {}),
     },
   });
-  const payload = await parseJson<T | ApiErrorPayload>(response);
+  let responseVersion = version;
+  // Cookies and successful writes already took effect, even if their caller or body is obsolete.
+  if (response.ok && init.method && init.method !== 'GET') {
+    if (['/api/v1/auth/login', '/api/v1/auth/logout', '/api/v1/auth/mfa/verify', '/api/v1/auth/password-change/complete'].includes(path)) {
+      responseVersion++; publishSessionSignal('invalidate');
+    } else if (path.startsWith('/api/v1/admin/') || path.startsWith('/api/v1/organizations/') || ['/api/v1/me/password', '/api/v1/me/mfa/enrollment/confirm', '/api/v1/me/mfa/recovery-codes', '/api/v1/auth/password-reset/complete', '/api/v1/auth/password-recovery/complete'].includes(path) || path.startsWith('/api/v1/me/sessions/')) publishSessionSignal('revalidate');
+  }
+  init.signal?.throwIfAborted();
+  if (responseVersion !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
+  let payload: T | ApiErrorPayload | undefined;
+  try { payload = await parseJson<T | ApiErrorPayload>(response); } catch (error) { if (response.ok) throw error; }
+  init.signal?.throwIfAborted();
+  if (responseVersion !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
   if (!response.ok) {
-    if (canReauthenticate && reauthenticate && (payload as Partial<ApiErrorPayload>)?.code === 'AUTH_REAUTHENTICATION_REQUIRED') {
+    const code = (payload as Partial<ApiErrorPayload>)?.code;
+    if (canReauthenticate && reauthenticate && code === 'AUTH_REAUTHENTICATION_REQUIRED') {
       await reauthenticate();
+      init.signal?.throwIfAborted();
+      if (responseVersion !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
       if (options.replayAfterReauthentication === false) {
         throw new ApiError({ code: 'CLIENT_REAUTHENTICATION_COMPLETED', message: '身份验证已完成，请重新提交操作' });
       }
       const token = await csrfToken(init.signal ?? undefined);
+      init.signal?.throwIfAborted();
+      if (responseVersion !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
       return request<T>(path, { ...init, headers: { ...init.headers, 'x-csrf-token': token } }, options, false);
+    }
+    // Auth probes and the console guard handle their own refusal without notification loops.
+    if (!path.startsWith('/api/v1/auth/') && !path.startsWith('/api/v1/admin/console/context') && code !== 'AUTH_REAUTHENTICATION_REQUIRED') {
+      const inputRejected = path === '/api/v1/me/password' && code === 'AUTH_CURRENT_PASSWORD_INVALID'
+        || ['/api/v1/me/reauthenticate', '/api/v1/me/mfa/enrollment/confirm'].includes(path) && code === 'AUTH_MFA_CODE_INVALID';
+      if (response.status === 401) publishSessionSignal(inputRejected ? 'revalidate' : 'invalidate');
+      else if (response.status === 403) publishSessionSignal('revalidate');
     }
     const fallback: ApiErrorPayload = {
       code: `HTTP_${response.status}`,
@@ -82,6 +108,7 @@ export function getAdminUser(organizationId: string, userId: string): Promise<co
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
   components['schemas']['DeleteAdminUserDto'] | components['schemas']['OrganizationForceDeleteDto'] |
   components['schemas']['AdministrativeReconfigurationDto'] |
+  components['schemas']['LegacyAuthorizationPreviewInputDto'] | components['schemas']['LegacyAuthorizationCommitDto'] |
   components['schemas']['AdministrativeProblemReconfigureDto'] |
   components['schemas']['CreateAdminUserBatchDto'] | components['schemas']['ResetTemporaryPasswordDto'] |
   components['schemas']['ResetAdminUserPasswordDto'] | components['schemas']['CreateAdminRoleDto'] |
@@ -91,10 +118,13 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
 export function createAdminMutation(options: { replayAfterReauthentication?: boolean } = {}) {
   let pending: { signature: string; key: string } | undefined;
   return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody, signal?: AbortSignal): Promise<T> {
+    const version = sessionSignalVersion();
     const signature = JSON.stringify([path, method, body]);
     if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
     const attempt = pending;
     const token = await csrfToken(signal);
+    signal?.throwIfAborted();
+    if (version !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
     const result = await request<T>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) }, options);
     if (pending === attempt) pending = undefined;
     return result;
@@ -198,8 +228,8 @@ export async function logout(): Promise<void> {
   clearAccountAvatar();
 }
 
-export async function getSession(): Promise<SessionView> {
-  const response = await request<SessionResponse>('/api/v1/auth/session');
+export async function getSession(signal?: AbortSignal): Promise<SessionView> {
+  const response = await request<SessionResponse>('/api/v1/auth/session', { signal });
   const accountType = response.user.accountType;
   if (!['/app/workbench', '/supplier/inbox'].includes(response.landingPath) || response.securityState !== 'AUTHENTICATED') {
     throw new ApiError({ code: 'CLIENT_INVALID_RESPONSE', message: '登录状态响应无效' });

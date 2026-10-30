@@ -943,9 +943,9 @@ export class SupplierEightDService {
 
   private async sqeAssignment(tx: Prisma.TransactionClient, organizationId: string, id: string) {
     const assignment = await tx.userPosition.findFirst({ where: { id, organizationId, ...effectivePositionAssignmentWhere(), user: { organizationId, accountType: 'INTERNAL', status: 'ACTIVE' } }, include: { position: true } });
-    if (!assignment || !await this.feature(tx, organizationId, assignment.userId, 'supplier-quality:issues:read') || !await this.feature(tx, organizationId, assignment.userId, 'supplier-quality:issues:work')
+    if (!assignment?.position.departmentId || !await this.feature(tx, organizationId, assignment.userId, 'supplier-quality:issues:read') || !await this.feature(tx, organizationId, assignment.userId, 'supplier-quality:issues:work')
       || !await this.feature(tx, organizationId, assignment.userId, 'workflow:act')) fail('SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID', 403);
-    return assignment;
+    return { ...assignment, position: { ...assignment.position, departmentId: assignment.position.departmentId } };
   }
 
   private async internalResponder(tx: Prisma.TransactionClient, organizationId: string, id: string | null) {

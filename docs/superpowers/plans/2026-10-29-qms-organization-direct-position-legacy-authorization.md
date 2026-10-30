@@ -10,14 +10,16 @@
 
 ## 当前摘要
 
+2026-10-30正常推进接续：本专项A/B/C已纳入[完整管理控制台总计划](2026-10-29-qms-management-console.md)的CP-1 / Issue82 / V0.0.36，统一REQ-0032，领域规则及安全矩阵不变，不另拆第三PR。A、B命令、来源/历史读模型及C正式页面均已完成分项SPEC→独立QUALITY及父完整文件验证；详细失败及证据沿总计划接续。负责人已退出夜间、删除heartbeat，当前仅到CP-1 PR，不自动合并部署或启动CP-2。生产来源转换/额外赋权删除、业务启用及关闭回填未授权。
+
 | 项目 | 当前事实 |
 | --- | --- |
 | 设计 | [已确认设计](../specs/2026-10-29-qms-organization-direct-position-legacy-authorization-design.md)，负责人回复“方案没问题” |
-| 本次工作 | 文档固化及执行拆解，不开始运行代码/迁移开发，不替用户操作生产角色 |
+| 本次工作 | A直属、B命令及来源/历史读模型、C1直属和C2兼容正式界面均已形成本地候选并两审PASS；父当前11完整Web联合264/264通过，分项真实PG及原失败保留，不证明大体量性能。整包、Worker、浏览器和PR门禁见总计划，不冒生产转换或人工验收 |
 | 源码 | 运行7fc80d4 / V0.0.35，保留本地发布归档cb182b4；规划分支codex/org-direct-admin-planning |
-| 跟踪 | 新功能范围不以REQ-0031已部署代替；正式启动时先回读需求/查重关联Issue并按实际已预留版本登记，不在纯文档阶段虚报ID/版本 |
+| 跟踪 | REQ-0032 / reczz28TGUdtjO7t；纳入Issue82 / CP-1 / V0.0.36，不以REQ-0031已部署代替，不另建重复需求或PR |
 | 顺序 | A直属岗位基础→B受控迁移/清理→C正式UI；共享验证/发布检查点串行，不把仅前端取消必填或只复制权限视作完成 |
-| 停止 | 书面设计/计划验证归档后交负责人审阅；开始运行代码、合并部署与生产迁移分别按有效授权推进 |
+| 接续边界 | 正常推进至CP-1提交推送/PR及精确head审查/CI检查点；不自动合并部署，不重启heartbeat；生产来源转换/额外赋权删除、业务启用及关闭回填另核授权 |
 
 ## 1. 写集与复用接缝
 
@@ -32,11 +34,11 @@
 
 ## 2. A：直属岗位与有效任职
 
-- [ ] 先新增真实`test/organization/organization-direct-position.integration-spec.ts`：departmentId=null创建/更新/赋权/任职可用；非本组织部门拒绝；待配置部门不能借null静默复活；删除业务部门不影响直属岗；修改岗位归属须版本确认。
-- [ ] 对有效授权ORM和SQL分别添加同一fixture的允许/拒绝：组织/岗位停用、用户停用、任职未来/到期、直属平台marker及普通同名岗位、供应商拒绝，先真实RED后实现。
-- [ ] 最小追加迁移仅允许新模型，不批量改旧岗位部门；保同组织复合外键。DTO明确null/undefined语义并同步序列化，不引入与departmentId重复的scope字段。
-- [ ] 修改有效任职、授予预览、岗位目录和公共结构投影的空部门分支；业务工作流责任候选仍要求实际科室/管理绑定/部长分管。
-- [ ] 跑直属新文件、`position-permissions.integration-spec.ts`、`position-onboarding.integration-spec.ts`、`workflow-effective-role-sql.integration-spec.ts`与责任恢复相关完整文件；冻结后SPEC、独立QUALITY，父复核真实结果。
+- [x] 先新增真实`test/organization/organization-direct-position.integration-spec.ts`：departmentId=null创建/更新/赋权/任职可用；非本组织部门拒绝；待配置部门不能借null静默复活；删除业务部门不影响直属岗；修改岗位归属须版本确认。
+- [x] 对有效授权ORM和SQL分别添加同一fixture的允许/拒绝：组织/岗位停用、用户停用、任职未来/到期、直属平台marker及普通同名岗位、供应商拒绝，先真实RED后实现。
+- [x] 最小追加迁移仅允许新模型，不批量改旧岗位部门；保同组织复合外键。DTO明确null/undefined语义并同步序列化，不引入与departmentId重复的scope字段。
+- [x] 修改有效任职、授予预览、岗位目录和公共结构投影的空部门分支；业务工作流责任候选仍要求实际科室/管理绑定/部长分管。
+- [x] 跑直属新文件、`position-permissions.integration-spec.ts`、`position-onboarding.integration-spec.ts`、`workflow-effective-role-sql.integration-spec.ts`与责任恢复相关完整文件；冻结后SPEC、独立QUALITY，父复核真实结果。
 
 ## 3. B：角色受控迁入与清理
 
@@ -82,4 +84,4 @@ git diff --check
 | 生产转换 | 按精确来源生成迁移预览，负责人确认指定批次后执行，重新登录并回读授权来源 | 不按角色名批量赋权/删授权，不静默代办其他账号 |
 | 关闭归档 | 逐需求/联合回归验收、获授权才关闭回填并回读；记录无新增规则或沉淀防复发 | 代码合并不是整包业务闭环 |
 
-本次文档固化到此停止，不创建假Issue/REQ、不修改飞书状态、不恢复heartbeat。后续开工使用本计划直接接续，不重新盘问已确认方案。
+历史策划的停止口径已由总计划顶部的夜间持续授权取代：沿A→B→C与CP-1门禁接续，不主动停工等待heartbeat；不创建重复Issue/REQ，不擅自回填飞书或执行生产来源转换。

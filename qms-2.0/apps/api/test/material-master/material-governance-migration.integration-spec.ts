@@ -60,6 +60,7 @@ describe('global material governance forward migration with real PostgreSQL', ()
     for (const table of ['organizations', 'departments', 'positions', 'users']) {
       await client.query(`ALTER TABLE ${table} ADD COLUMN deleted_at timestamptz(3), ADD COLUMN configuration_required boolean NOT NULL DEFAULT false`);
     }
+    await client.query('ALTER TABLE roles ADD COLUMN archived_at timestamptz(3)');
     prisma = new PrismaService(url.toString());
     await prisma.organization.createMany({ data: [
       { id: internal, code: 'MATERIAL_INTERNAL', name: 'Internal', type: 'INTERNAL' },

@@ -35,6 +35,13 @@ describe('workflow closure rounds real PostgreSQL', () => {
   const fixture = (policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL', severity: WorkflowClosureContext['severity'] = 'LOW', dual = false) =>
     createWorkflowClosureFixture(prisma, service, policy, severity, dual);
 
+  it('does not create a professional review duty from an organization-direct appointment', async () => {
+    const f = await fixture();
+    await prisma.position.update({ where: { id: f.professional.position.id }, data: { departmentId: null } });
+    await expect(f.start()).rejects.toMatchObject({ response: { code: 'STRUCTURE_REFERENCE_INVALID' }, status: 409 });
+    expect(await prisma.$queryRaw`SELECT id FROM workflow_closure_rounds WHERE problem_id = ${f.problem.id}::uuid`).toEqual([]);
+  });
+
   it('passes the engine-verified actor into terminal domain hooks', async () => {
     const complete = jest.spyOn(adapter, 'complete');
     const returned = jest.spyOn(adapter, 'returnForChanges');

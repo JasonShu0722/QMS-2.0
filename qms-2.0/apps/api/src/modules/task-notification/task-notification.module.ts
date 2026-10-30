@@ -17,6 +17,6 @@ import { TaskTransferService } from './task-transfer.service.js';
   imports: [AuditLogModule, AdminMutationModule],
   controllers: [OutboxAdministrationController, TaskInboxController, NotificationInboxController, SupplierPortalNotificationController],
   providers: [OutboxService, OutboxWorkerService, TaskService, TaskTransferService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, { provide: OUTBOX_HANDLER, useExisting: WorkflowEventHandler }],
-  exports: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler],
+  exports: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService],
 })
 export class TaskNotificationModule {}

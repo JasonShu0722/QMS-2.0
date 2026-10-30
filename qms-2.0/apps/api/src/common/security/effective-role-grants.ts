@@ -17,8 +17,11 @@ const compare = (first: string, second: string) => first < second ? -1 : first >
 export function effectivePositionAssignmentWhere(now = new Date()): Prisma.UserPositionWhereInput {
   return {
     startedAt: { lte: now }, OR: [{ endedAt: null }, { endedAt: { gt: now } }],
-    organization: { status: 'ACTIVE' },
-    position: { status: 'ACTIVE', department: { status: 'ACTIVE' } },
+    organization: { status: 'ACTIVE', deletedAt: null, configurationRequired: false },
+    position: {
+      status: 'ACTIVE', deletedAt: null, configurationRequired: false,
+      OR: [{ departmentId: null }, { department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } }],
+    },
   };
 }
 
@@ -27,9 +30,10 @@ async function readRoleGrants(
   userId: string,
   organizationId?: string,
   now = new Date(),
+  includeInactiveSubject = false,
 ) {
   const direct = await transaction.userRole.findMany({
-    where: { userId, ...(organizationId === undefined ? {} : { OR: [{ organizationId }, { role: { permissions: { some: { permission: { code: PLATFORM_ADMINISTRATOR_PERMISSION } } } } }] }) },
+    where: { userId, role: { archivedAt: null }, ...(organizationId === undefined ? {} : { OR: [{ organizationId }, { role: { archivedAt: null, permissions: { some: { permission: { code: PLATFORM_ADMINISTRATOR_PERMISSION } } } } }] }) },
     select: { organizationId: true, role: { select: roleSelect } },
   });
   const user = await transaction.user.findUnique({ where: { id: userId }, select: { organizationId: true, status: true, accountType: true, organization: { select: { status: true, type: true } } } });
@@ -39,11 +43,12 @@ async function readRoleGrants(
       where: {
         userId, organizationId: user.organizationId,
         ...effectivePositionAssignmentWhere(now),
-        ...(crossScope ? { position: { status: 'ACTIVE' as const, department: { status: 'ACTIVE' as const }, roles: { some: { role: { permissions: { some: { permission: { code: PLATFORM_ADMINISTRATOR_PERMISSION } } } } } } } } : {}),
+        ...(includeInactiveSubject ? {} : { user: { status: 'ACTIVE' as const, deletedAt: null, configurationRequired: false } }),
+        ...(crossScope ? { AND: { position: { roles: { some: { role: { archivedAt: null, permissions: { some: { permission: { code: PLATFORM_ADMINISTRATOR_PERMISSION } } } } } } } } } : {}),
       },
       select: {
         id: true, organizationId: true, positionId: true,
-        position: { select: { roles: { select: { role: { select: roleSelect } } } } },
+        position: { select: { roles: { where: { role: { archivedAt: null } }, select: { role: { select: roleSelect } } } } },
       },
     }) : [];
 
@@ -86,7 +91,7 @@ function markerSources(grants: EffectiveRoleGrant[]) {
 
 // Governance needs real memberships, including markers suppressed for a disabled runtime subject.
 export async function roleGrantSources(transaction: EffectiveRoleGrantClient, userId: string, now = new Date()): Promise<EffectiveRoleGrant[]> {
-  const { grants } = await readRoleGrants(transaction, userId, undefined, now);
+  const { grants } = await readRoleGrants(transaction, userId, undefined, now, true);
   return grants.sort((a, b) => compare(a.organizationId, b.organizationId) || compare(a.role.id, b.role.id));
 }
 

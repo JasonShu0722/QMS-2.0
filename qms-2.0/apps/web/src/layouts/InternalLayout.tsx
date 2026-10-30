@@ -1,5 +1,4 @@
-import { Alert, Button, Drawer, Typography } from 'antd';
-import type { components } from '@qms/contracts';
+import { Button, Drawer, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { ChevronDown, House, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -9,11 +8,8 @@ import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { Workbench } from '../workbench/Workbench';
 import { ProblemCenterPage } from '../features/problem-center/ProblemCenterPage';
 import { MyTasksPage } from '../features/tasks/MyTasksPage';
-import { WorkflowDesignerPage } from '../features/workflows/WorkflowDesignerPage';
-import { WorkflowListPage } from '../features/workflows/WorkflowListPage';
 import { ProblemWorkspacePage } from '../features/problem-workspace/ProblemWorkspacePage';
 import { AccountCenterPage } from '../features/account/AccountCenterPage';
-import { AdminPage } from '../features/admin/AdminPage';
 import { SupplierQualityPage } from '../features/supplier-quality/SupplierQualityPage';
 import { CustomerQualityPage } from '../features/customer-quality/CustomerQualityPage';
 import { AuditManagementPage } from '../features/audit-management/AuditManagementPage';
@@ -35,8 +31,6 @@ import { SupplierAuditPage } from '../features/supplier-audit/SupplierAuditPage'
 import { SupplierQualityTargetsPage } from '../features/supplier-quality-targets/SupplierQualityTargetsPage';
 import { SupplierPpapPage } from '../features/supplier-ppap/SupplierPpapPage';
 import { SupplierAsnPage } from '../features/supplier-asn/SupplierAsnPage';
-import { getAdminOrganizations, type AdminOrganization } from '../features/admin/admin';
-import { ApiError, apiRequest, safeAccountError } from '../api/client';
 import { useLanguage } from '../i18n/Language';
 import { ShellHeader } from './ShellHeader';
 import { UnsavedChangesProvider } from './UnsavedChanges';
@@ -58,47 +52,22 @@ function InternalShell() {
   const active = activeInternalDomain(location.pathname);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [organizations, setOrganizations] = useState<AdminOrganization[] | null>(null);
-  const [permissions, setPermissions] = useState<components['schemas']['PermissionsResponseDto']>();
-  const [permissionError, setPermissionError] = useState<unknown>();
-  const visibleDomains = internalDomains.flatMap((domain) => {
-    const children = domain.children.filter((entry) => entry.path === '/app/admin' ? !!organizations?.length : entry.path === '/app/workflow-designer' ? !!permissions?.permissions?.includes('workflow:manage') : true);
-    return children.length ? [{ ...domain, path: children[0]!.path, children }] : [];
-  });
+  const visibleDomains = internalDomains;
   const activeDomain = visibleDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
-  const [adminError, setAdminError] = useState<string>();
-  const [adminTraceId, setAdminTraceId] = useState<string>();
-  const [directoryRevision, setDirectoryRevision] = useState(0);
-  const isAdmin = location.pathname.startsWith('/app/admin');
-  const workflowRoute = /^\/app\/workflow-designer\/([0-9a-f-]{36})\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const processPath = location.pathname.replace(/\/$/, '');
-  const implemented = ['/app/problem-center', '/app/my-tasks', '/app/workflow-designer', '/app/problem-workspace', '/app/account', '/app/admin', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
-  useEffect(() => {
-    let current = true;
-    setOrganizations(null); setAdminError(undefined); setAdminTraceId(undefined);
-    void getAdminOrganizations().then((result) => { if (current) { setOrganizations(result); setAdminError(undefined); setAdminTraceId(undefined); } }).catch((cause) => { if (current) { setAdminError(safeAccountError(cause)); setAdminTraceId(cause instanceof ApiError ? cause.traceId : undefined); } });
-    return () => { current = false; };
-  }, [directoryRevision]);
-  useEffect(() => {
-    const controller = new AbortController();
-    setPermissions(undefined); setPermissionError(undefined);
-    void apiRequest<components['schemas']['PermissionsResponseDto']>('/api/v1/system/my-permissions', { signal: controller.signal })
-      .then((result) => { if (!controller.signal.aborted) setPermissions(result); })
-      .catch((cause) => { if (!controller.signal.aborted) setPermissionError(cause); });
-    return () => controller.abort();
-  }, [directoryRevision]);
+  const implemented = ['/app/problem-center', '/app/my-tasks', '/app/problem-workspace', '/app/account', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
   useEffect(() => {
     setMobileOpen(false);
     const store = useWorkTabsStore.getState();
     if (isWorkbench) { setMenuCollapsed(false); store.deactivate(); return; }
-    if (!active || isAdmin && !organizations?.length) return;
+    if (!active) return;
     const path = `${location.pathname}${location.search}`;
     const id = problemRoute ? `problem:${problemRoute[1]}` : location.pathname;
     const existing = store.tabs.find((tab) => tab.id === id);
-    const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : workflowRoute ? existing?.title ?? active.label : active.label;
+    const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : active.label;
     openTab({ id, path, title });
-  }, [location.pathname, location.search, isWorkbench, active, isAdmin, organizations, openTab, t]);
+  }, [location.pathname, location.search, isWorkbench, active, openTab, t]);
   const navigation = (mobile = false) => <>
     <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span>{(isWorkbench || mobile) && <span>QMS <small>2.0</small></span>}</Link>
     <nav className="qms-domain-nav" aria-label={t(isWorkbench || mobile ? '内部领域导航' : '内部领域图标导航')}>
@@ -128,13 +97,10 @@ function InternalShell() {
     <div className="qms-main">
       <ShellHeader onOpenNavigation={() => setMobileOpen(true)} />
       <main className="qms-content" id="main-content" tabIndex={-1}>
-        {adminError && !isAdmin ? <Alert type="error" role="alert" title={`${t('管理权限加载失败')}: ${t(adminError)}`} description={adminTraceId ? <code>{adminTraceId}</code> : undefined} /> : null}
-        {!!permissionError && <Alert type="error" role="alert" title={`${t('流程权限加载失败')}: ${t(safeAccountError(permissionError))}`} description={permissionError instanceof ApiError && permissionError.traceId ? <code>{permissionError.traceId}</code> : undefined} />}
         {isWorkbench ? <Workbench /> : null}
         {!isWorkbench && active && !implemented ? <EmptyDomain title={t(active.label)} /> : null}
         {location.pathname.startsWith('/app/problem-center') ? <ProblemCenterPage /> : null}
         {location.pathname.startsWith('/app/my-tasks') ? <MyTasksPage /> : null}
-        {location.pathname.startsWith('/app/workflow-designer') ? workflowRoute ? <WorkflowDesignerPage definitionId={workflowRoute[1]!} versionId={workflowRoute[2]!} /> : <WorkflowListPage /> : null}
         {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage key={problemRoute?.[1]} problemId={problemRoute?.[1]} /> : null}
         {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
         {location.pathname === '/app/supplier-quality' || location.pathname.startsWith('/app/supplier-quality/') ? <SupplierQualityPage /> : null}
@@ -161,7 +127,6 @@ function InternalShell() {
         {location.pathname.startsWith('/app/announcements') ? <AnnouncementsPage /> : null}
         {location.pathname.startsWith('/app/coordinate-inspection') ? <CoordinateInspectionPage /> : null}
         {location.pathname.startsWith('/app/site-scanning') ? <SiteScanningPage /> : null}
-        {isAdmin ? <AdminPage organizations={organizations} error={adminError} traceId={adminTraceId} onDirectoryChange={() => setDirectoryRevision((value) => value + 1)} /> : null}
       </main>
     </div>
     <Drawer title={t('业务导航')} open={mobileOpen} placement="left" size={280} onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation">{navigation(true)}</div></Drawer>

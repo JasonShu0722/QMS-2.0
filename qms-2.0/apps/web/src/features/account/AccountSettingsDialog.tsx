@@ -83,7 +83,7 @@ export function AccountSettingsDialog({ profile, overview, onProfile, onAvatar, 
     <Typography.Title level={5}>{t('头像')}</Typography.Title>
     <AvatarEditor profile={profile} onChange={onAvatar} disabled={saving || signatureState.busy} onStateChange={setAvatarState} />
     <Typography.Title level={5}>{t('当前任职（只读）')}</Typography.Title>
-    {overview ? overview.assignments.length ? overview.assignments.map(item => <p key={item.id}>{item.department.name} · {item.position.name}<br /><Typography.Text type="secondary">{item.startedAt} · {item.endedAt ?? t('至今')}</Typography.Text></p>) : <p>{t('暂无当前任职')}</p> : <p>{t('任职资料不可用')}</p>}
+    {overview ? overview.assignments.length ? overview.assignments.map(item => <p key={item.id}>{item.department?.name ?? t('组织直属')} · {item.position.name}<br /><Typography.Text type="secondary">{item.startedAt} · {item.endedAt ?? t('至今')}</Typography.Text></p>) : <p>{t('暂无当前任职')}</p> : <p>{t('任职资料不可用')}</p>}
     {open && <SignatureSettings accountType={profile.accountType} permissions={overview?.permissions} disabled={saving || avatarState.busy} onStateChange={setSignatureState} />}
   </Modal>;
 }

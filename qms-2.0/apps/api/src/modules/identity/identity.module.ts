@@ -34,11 +34,14 @@ import { ESignatureModule } from '../e-signature/e-signature.module.js';
 import { AdminUserReconfigurationService } from './admin-user-reconfiguration.service.js';
 import { AdminSupplierAccountsController } from './admin-supplier-accounts.controller.js';
 import { AdminSupplierAccountsService } from './admin-supplier-accounts.service.js';
+import { ConsoleContextController } from './console-context.controller.js';
+import { ConsoleContextService } from './console-context.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule, FileManagementModule, OrganizationModule, AdministrativeLifecycleModule, ESignatureModule],
-  controllers: [AuthController, AccountController, AdminUserLifecycleController, AdminSupplierAccountsController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
+  controllers: [AuthController, AccountController, ConsoleContextController, AdminUserLifecycleController, AdminSupplierAccountsController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
+    ConsoleContextService,
     AdminUserReconfigurationService,
     AdminSupplierAccountsService,
     PasswordHasherService,
@@ -61,6 +64,6 @@ import { AdminSupplierAccountsService } from './admin-supplier-accounts.service.
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService, AdminUserReconfigurationService, AdminUserLifecycleService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService, AdminUserReconfigurationService, AdminUserLifecycleService, ConsoleContextService],
 })
 export class IdentityModule {}

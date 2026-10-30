@@ -331,13 +331,17 @@ export class ProcessEightDService {
       const [page] = await tx.$queryRaw<{ users: ProcessEightDAssignmentOptionsDto['users']; userTotal: number }[]>(Prisma.sql`
         WITH eligible AS MATERIALIZED (SELECT u.id, u.username, u.full_name AS "fullName" FROM users u
           WHERE u.organization_id = ${actor.organizationId}::uuid AND u.account_type = 'INTERNAL' AND u.status = 'ACTIVE'
+            AND u.deleted_at IS NULL AND NOT u.configuration_required
             AND ${work} AND ${read} ${search ? Prisma.sql`AND (u.username ILIKE ${pattern} OR u.full_name ILIKE ${pattern})` : Prisma.empty}
             ${query.action === 'COLLABORATORS' ? Prisma.sql`AND u.id <> ${record!.problem.ownerId}::uuid` : Prisma.empty}
             AND EXISTS (SELECT 1 FROM user_positions a JOIN positions pos ON pos.id = a.position_id
-              JOIN departments dept ON dept.id = pos.department_id JOIN organizations org ON org.id = a.organization_id
+              LEFT JOIN departments dept ON dept.id = pos.department_id JOIN organizations org ON org.id = a.organization_id
               WHERE a.user_id = u.id AND a.organization_id = u.organization_id AND a.started_at <= CURRENT_TIMESTAMP AND (a.ended_at IS NULL OR a.ended_at > CURRENT_TIMESTAMP)
-                AND pos.organization_id = u.organization_id AND pos.status = 'ACTIVE' AND dept.organization_id = u.organization_id AND dept.status = 'ACTIVE'
-                AND org.status = 'ACTIVE' AND org.type = 'INTERNAL' ${sectionId ? Prisma.sql`AND pos.department_id = ${sectionId}::uuid` : Prisma.empty}))
+                AND pos.organization_id = u.organization_id AND pos.status = 'ACTIVE' AND pos.deleted_at IS NULL AND NOT pos.configuration_required
+                AND (${query.action === 'COLLABORATORS' ? Prisma.sql`pos.department_id IS NULL OR` : Prisma.empty}
+                  (dept.organization_id = u.organization_id AND dept.status = 'ACTIVE' AND dept.deleted_at IS NULL AND NOT dept.configuration_required))
+                AND org.status = 'ACTIVE' AND org.type = 'INTERNAL' AND org.deleted_at IS NULL AND NOT org.configuration_required
+                ${sectionId ? Prisma.sql`AND pos.department_id = ${sectionId}::uuid` : Prisma.empty}))
         SELECT (SELECT count(*)::int FROM eligible) AS "userTotal",
           COALESCE((SELECT jsonb_agg(selected ORDER BY username, id) FROM (SELECT * FROM eligible ORDER BY username, id LIMIT ${query.pageSize} OFFSET ${skip}) selected), '[]'::jsonb) AS users`);
       await authorize();

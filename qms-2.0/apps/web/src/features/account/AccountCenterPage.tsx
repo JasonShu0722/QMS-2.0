@@ -11,6 +11,7 @@ import { AccountAvatar } from './AccountAvatar';
 import { AccountSettingsDialog } from './AccountSettingsDialog';
 import { accountAvatarEpoch, publishAccountAvatar, useAccountAvatar } from './account-avatar-state';
 import { AccountSessionHistory } from './AccountSessionHistory';
+import { ConsoleEntry } from '../../console/ConsoleEntry';
 import './account.css';
 
 type Overview = components['schemas']['AccountOverviewDto'];
@@ -86,7 +87,7 @@ function AccountCenterContent() {
         <section className="qms-account-identity" aria-label={t('身份资料')}>
           <div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={76} /><div><Typography.Text strong>{profile.fullName || profile.username}</Typography.Text>{profile.fullName && <p>{profile.username}</p>}<p>{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</p></div></div>
           <Descriptions size="small" column={1} items={[{ key: 'name', label: t('姓名'), children: profile.fullName || t('未填写') }, { key: 'phone', label: t('电话'), children: profile.phone || t('未填写') }]} />
-          {overview ? overview.assignments.length ? <details open={overview.assignments.length <= 2}><summary>{t('当前任职')}</summary>{overview.assignments.map(item => <p key={item.id}>{item.department.name} · {item.position.name}</p>)}</details> : <p>{t('暂无当前任职')}</p> : overviewError ? <Alert type="error" title={t('任职与授权加载失败')} action={<Button onClick={() => void loadOverview()}>{t('重试')}</Button>} /> : <p role="status">{t('正在加载任职与授权')}</p>}
+          {overview ? overview.assignments.length ? <details open={overview.assignments.length <= 2}><summary>{t('当前任职')}</summary>{overview.assignments.map(item => <p key={item.id}>{item.department?.name ?? t('组织直属')} · {item.position.name}</p>)}</details> : <p>{t('暂无当前任职')}</p> : overviewError ? <Alert type="error" title={t('任职与授权加载失败')} action={<Button onClick={() => void loadOverview()}>{t('重试')}</Button>} /> : <p role="status">{t('正在加载任职与授权')}</p>}
         </section>
         <section className="qms-account-security-summary" aria-label={t('账号与授权')}>
           <Descriptions size="small" column={1} items={[
@@ -97,6 +98,7 @@ function AccountCenterContent() {
           {overview && <><p>{t('有效角色')} · {overview.effectiveRoles.length} / {t('有效权限')} · {new Set(overview.permissions).size}</p><details><summary>{t('角色与权限来源')}</summary>{overview.effectiveRoles.map(role => <div key={role.id}><Typography.Text strong>{role.name}</Typography.Text>{role.sources.map((source, index) => <p key={index}>{source.kind === 'DIRECT' ? t('直接分配') : `${t('岗位继承')} · ${source.positionName || source.positionId || t('未知岗位')}`}</p>)}</div>)}{!overview.effectiveRoles.length && <p>{t('暂无有效角色')}</p>}{[...new Set(overview.permissions)].map(code => <Tag key={code}>{code}</Tag>)}</details></>}
           {!overview && <Typography.Text type="secondary">{t('授权摘要不可用')}</Typography.Text>}
           <Space wrap><Button ref={securityTrigger} icon={<ShieldCheck size={16} />} onClick={() => setSecurityOpen(true)}>{t('账号安全')}</Button></Space>
+          <ConsoleEntry profile={profile} />
         </section>
       </div>}
       {!profile && !!error && <Alert type="info" title={t('账号资料不可用')} />}

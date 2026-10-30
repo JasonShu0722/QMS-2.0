@@ -417,7 +417,7 @@ export class OrganizationResponsibilityService {
     if (!await this.isDescendant(tx, organizationId, departmentId, sectionDepartmentId)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     const bindings = await this.bindings(tx, organizationId, Prisma.sql`department_id = ${departmentId}::uuid AND responsibility = 'MINISTER' AND status = 'ACTIVE'`);
     if (bindings.length !== 1 || bindings[0]!.positionId !== assignment.positionId || assignment.position.departmentId !== departmentId
-      || assignment.position.organizationId !== organizationId || assignment.position.status !== 'ACTIVE' || assignment.position.department.status !== 'ACTIVE') adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      || assignment.position.organizationId !== organizationId || assignment.position.status !== 'ACTIVE' || assignment.position.department?.status !== 'ACTIVE') adminError('STRUCTURE_REFERENCE_INVALID', 409);
     if (!(await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT id FROM (${this.identity.workflowEligibleUsers(organizationId)}) identity_users
       WHERE id = ${assignment.userId}::uuid`))[0]) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     return bindings[0]!;
@@ -459,6 +459,7 @@ export class OrganizationResponsibilityService {
   }
 
   private assignmentResult(row: Assignment): ResponsibilityAssignmentDto {
+    if (row.position.departmentId === null) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     return { assignmentId: row.id, userId: row.userId, username: row.user.username, fullName: row.user.fullName,
       positionId: row.positionId, positionName: row.position.name, positionVersion: row.position.version,
       departmentId: row.position.departmentId, startedAt: row.startedAt, endedAt: row.endedAt,

@@ -9,6 +9,7 @@ export function effectiveRoleMembershipSql(
 ): Prisma.Sql {
   return Prisma.sql`
     SELECT effective_direct.role_id FROM user_roles effective_direct
+    JOIN roles effective_direct_role ON effective_direct_role.id = effective_direct.role_id AND effective_direct_role.archived_at IS NULL
     WHERE effective_direct.user_id = ${userId} AND effective_direct.organization_id = ${organizationId}
     UNION
     SELECT effective_binding.role_id FROM user_positions effective_assignment
@@ -17,13 +18,18 @@ export function effectiveRoleMembershipSql(
     JOIN organizations effective_home ON effective_home.id = effective_assignment.organization_id
     JOIN positions effective_position ON effective_position.id = effective_assignment.position_id
       AND effective_position.organization_id = effective_assignment.organization_id
-    JOIN departments effective_department ON effective_department.id = effective_position.department_id
+    LEFT JOIN departments effective_department ON effective_department.id = effective_position.department_id
       AND effective_department.organization_id = effective_position.organization_id
     JOIN position_roles effective_binding ON effective_binding.position_id = effective_position.id
       AND effective_binding.organization_id = effective_position.organization_id
+    JOIN roles effective_position_role ON effective_position_role.id = effective_binding.role_id AND effective_position_role.archived_at IS NULL
     WHERE effective_assignment.user_id = ${userId} AND effective_assignment.organization_id = ${organizationId}
       AND effective_assignment.started_at <= ${now}
       AND (effective_assignment.ended_at IS NULL OR effective_assignment.ended_at > ${now})
-      AND effective_home.status = 'ACTIVE' AND effective_position.status = 'ACTIVE' AND effective_department.status = 'ACTIVE'
+      AND effective_actor.status = 'ACTIVE' AND effective_actor.deleted_at IS NULL AND NOT effective_actor.configuration_required
+      AND effective_home.status = 'ACTIVE' AND effective_home.deleted_at IS NULL AND NOT effective_home.configuration_required
+      AND effective_position.status = 'ACTIVE' AND effective_position.deleted_at IS NULL AND NOT effective_position.configuration_required
+      AND (effective_position.department_id IS NULL OR (effective_department.status = 'ACTIVE'
+        AND effective_department.deleted_at IS NULL AND NOT effective_department.configuration_required))
   `;
 }

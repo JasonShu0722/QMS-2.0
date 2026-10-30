@@ -32,14 +32,14 @@ export class UserPositionSummaryDto {
   @ApiProperty() id!: string;
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ type: PositionAuthorizationDepartmentDto }) department!: PositionAuthorizationDepartmentDto;
+  @ApiProperty({ type: PositionAuthorizationDepartmentDto, nullable: true }) department!: PositionAuthorizationDepartmentDto | null;
 }
 
 export class PositionAuthorizationItemDto {
   @ApiProperty() id!: string;
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ type: PositionAuthorizationDepartmentDto }) department!: PositionAuthorizationDepartmentDto;
+  @ApiProperty({ type: PositionAuthorizationDepartmentDto, nullable: true }) department!: PositionAuthorizationDepartmentDto | null;
   @ApiProperty() version!: number;
   @ApiProperty() roleVersion!: number;
   @ApiProperty({ type: [String] }) permissionCodes!: string[];

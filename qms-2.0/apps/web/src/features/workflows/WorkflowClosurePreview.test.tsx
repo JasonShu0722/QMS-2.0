@@ -39,8 +39,8 @@ function deferred<T>() {
 const posts = () => vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'POST');
 const reads = () => vi.mocked(apiRequest).mock.calls.filter(([path]) => path.startsWith('/api/v1/workflows/closure-options'));
 function mount(policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL', disabled = false) {
-  const tree = (next: 'INTERNAL' | 'SUPPLIER', off = false) => <MemoryRouter initialEntries={['/app/workflow-designer']}><LanguageProvider><UnsavedChangesProvider><Routes>
-    <Route path="/app/workflow-designer" element={<WorkflowClosurePreview policy={next} disabled={off} />} />
+  const tree = (next: 'INTERNAL' | 'SUPPLIER', off = false) => <MemoryRouter initialEntries={['/console/workflows']}><LanguageProvider><UnsavedChangesProvider><Routes>
+    <Route path="/console/workflows" element={<WorkflowClosurePreview policy={next} disabled={off} />} />
     <Route path="/login" element={<p>登录目的页</p>} />
   </Routes></UnsavedChangesProvider></LanguageProvider></MemoryRouter>;
   const view = render(tree(policy, disabled));
@@ -317,9 +317,9 @@ it.each([false, true])('completes 401 navigation with the data-router busy block
   vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
   function ParentEditor() { useUnsavedChanges(dirty); return <WorkflowClosurePreview policy="INTERNAL" />; }
   const router = createMemoryRouter([
-    { path: '/app/workflow-designer', element: <LanguageProvider><UnsavedChangesProvider><ParentEditor /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><ParentEditor /></UnsavedChangesProvider></LanguageProvider> },
     { path: '/login', element: <p>登录目的页</p> },
-  ], { initialEntries: ['/app/workflow-designer'] });
+  ], { initialEntries: ['/console/workflows'] });
   render(<RouterProvider router={router} />);
   await configure();
   vi.mocked(apiRequest).mockRejectedValueOnce(new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: 'expired' }, 401));

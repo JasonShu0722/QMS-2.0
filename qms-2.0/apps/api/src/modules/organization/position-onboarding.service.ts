@@ -74,19 +74,22 @@ export class PositionOnboardingService {
     let positions = await this.positions(tx, organizationId, ids);
     if (positions.length !== ids.length) adminError('STRUCTURE_NOT_FOUND', 404);
     if (lock && ids.length) {
-      const departmentIds = [...new Set(positions.map(({ departmentId }) => departmentId))].sort();
-      await tx.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(departmentIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
+      const ownership = new Map(positions.map(({ id, departmentId }) => [id, departmentId]));
+      const departmentIds = [...new Set(positions.map(({ departmentId }) => departmentId).filter((id): id is string => id !== null))].sort();
+      if (departmentIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(departmentIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
       await tx.$queryRaw(Prisma.sql`SELECT id FROM positions WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
       positions = await this.positions(tx, organizationId, ids);
-      if (positions.length !== ids.length || positions.some(({ departmentId }) => !departmentIds.includes(departmentId))) adminError('CONCURRENCY_CONFLICT', 409);
+      if (positions.length !== ids.length || positions.some(({ id, departmentId }) => ownership.get(id) !== departmentId)) adminError('CONCURRENCY_CONFLICT', 409);
     }
     const roleIds = positions.flatMap(({ roles }) => roles.map(({ roleId }) => roleId));
     const roles = await positionRoleDefinitions(tx, organizationId, roleIds, lock);
     if (lock) await assertRecentAuthentication(tx, actor);
     const granted = await assertAdminAccess(tx, actor, organizationId, ['organization:structure:read', 'organization:positions:assign', ...(roles.length ? ['account:roles:read', 'account:roles:assign'] : [])]);
-    const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { id: true, status: true, version: true, type: true } });
+    const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { id: true, status: true, version: true, type: true, deletedAt: true, configurationRequired: true } });
     if (organization.type !== 'INTERNAL') adminError('ORGANIZATION_TYPE_MISMATCH', 409);
-    if (positions.some((position) => position.status !== 'ACTIVE' || position.department.status !== 'ACTIVE')) adminError('STRUCTURE_DISABLED', 409);
+    if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired
+      || positions.some((position) => position.status !== 'ACTIVE' || position.deletedAt || position.configurationRequired
+        || (position.departmentId !== null && (!position.department || position.department.status !== 'ACTIVE' || position.department.deletedAt || position.department.configurationRequired)))) adminError('STRUCTURE_DISABLED', 409);
     assertPositionRolesGrantable(roles);
     try {
       assertPositionRoleCeiling(roles, granted, organization.type);
@@ -100,7 +103,7 @@ export class PositionOnboardingService {
     const items = positions.map((position) => {
       const own = position.roles.find(({ isCanonical }) => isCanonical);
       const role = own ? roleMap.get(own.roleId)! : undefined;
-      return { id: position.id, code: position.code, name: position.name, department: { id: position.department.id, code: position.department.code, name: position.department.name }, version: position.version, roleVersion: position.roleVersion, permissionCodes: role?.permissions.map(({ code }) => code).sort() ?? [], mfaRequired: role?.mfaRequired ?? false, historicalSources: position.roles.filter(({ isCanonical }) => !isCanonical).map(({ roleId }) => source(roleMap.get(roleId)!)) };
+      return { id: position.id, code: position.code, name: position.name, department: position.department ? { id: position.department.id, code: position.department.code, name: position.department.name } : null, version: position.version, roleVersion: position.roleVersion, permissionCodes: role?.permissions.map(({ code }) => code).sort() ?? [], mfaRequired: role?.mfaRequired ?? false, historicalSources: position.roles.filter(({ isCanonical }) => !isCanonical).map(({ roleId }) => source(roleMap.get(roleId)!)) };
     });
     let targetContext: unknown = null;
     let retainedGrants: EffectiveRoleGrant[] = [];
@@ -129,6 +132,6 @@ export class PositionOnboardingService {
   }
 
   private positions(tx: AdminTransaction, organizationId: string, ids: string[]) {
-    return tx.position.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true, departmentId: true, code: true, name: true, status: true, version: true, roleVersion: true, department: { select: { id: true, code: true, name: true, status: true, version: true } }, roles: { select: { roleId: true, isCanonical: true }, orderBy: { roleId: 'asc' } } }, orderBy: { id: 'asc' } });
+    return tx.position.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true, departmentId: true, code: true, name: true, status: true, deletedAt: true, configurationRequired: true, version: true, roleVersion: true, department: { select: { id: true, code: true, name: true, status: true, deletedAt: true, configurationRequired: true, version: true } }, roles: { select: { roleId: true, isCanonical: true }, orderBy: { roleId: 'asc' } } }, orderBy: { id: 'asc' } });
   }
 }

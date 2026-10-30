@@ -103,7 +103,7 @@ it('uses an actual published history version even when the list head is a new dr
   await ready();
   expect(api.getWorkflowVersion).toHaveBeenCalledWith('definition', 'published', expect.any(AbortSignal));
   expect(vi.mocked(api.getWorkflowVersion).mock.calls.some(([, id]) => id === 'draft')).toBe(false);
-  expect(screen.getByRole('link', { name: '查看供应商绑定候选流程' })).toHaveAttribute('href', '/app/workflow-designer/definition/published');
+  expect(screen.getByRole('link', { name: '查看供应商绑定候选流程' })).toHaveAttribute('href', '/console/workflows/definition/published');
   expect(writes()).toHaveLength(0);
 });
 it.each(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)('creates a disabled independent %s binding without activating it', async severity => {

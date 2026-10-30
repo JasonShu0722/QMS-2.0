@@ -1,6 +1,11 @@
 {
   "version": 1,
   "allowedModuleDependencies": [
+    "system-management -> authorization",
+    "system-management -> identity",
+    "system-management -> organization",
+    "system-management -> audit-log",
+    "system-management -> task-notification",
     "organization -> workflow",
     "audit-log -> authorization",
     "audit-log -> problem-index",

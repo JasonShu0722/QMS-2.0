@@ -94,7 +94,7 @@ function BatchForm({ organizationId, canReadPasswords, canAuthorize, busyChanged
         next.push(preparedRow);
         continue;
       }
-      const matches = row.positionCodes.map(code => directory.positions.filter(position => position.code === code && position.status === 'ACTIVE' && directory.departments.some(department => department.id === position.departmentId && department.status === 'ACTIVE')));
+      const matches = row.positionCodes.map(code => directory.positions.filter(position => position.code === code && position.status === 'ACTIVE' && (position.departmentId === null || directory.departments.some(department => department.id === position.departmentId && department.status === 'ACTIVE'))));
       const invalid = matches.findIndex(positions => positions.length !== 1);
       const positionIds = invalid >= 0 ? [] : matches.map(positions => positions[0]!.id).sort();
       preparedRow.positionIds = positionIds;
@@ -202,7 +202,7 @@ function BatchForm({ organizationId, canReadPasswords, canAuthorize, busyChanged
     <Space wrap><Button disabled={busy} onClick={() => void template()}>{t('下载账号模板')}</Button><input aria-label={t('账号清单文件')} type="file" accept=".xlsx" disabled={busy || !canAuthorize || !!pending.current} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void readFile(file); }} /><Button type="primary" loading={busy} disabled={!prepared.length || busy || Boolean(result) || !canAuthorize} onClick={() => void submit()}>{t('创建账号')}</Button>{rows.length > 0 && !prepared.length && !result && <Button disabled={busy || !canAuthorize} onClick={() => void refreshPreview()}>{t('重新预览授权')}</Button>}{result && <><Button disabled={busy} onClick={() => void download(false)}>{t('下载账号清单')}</Button>{canReadPasswords && <Button disabled={busy} onClick={() => void download(true)}>{t('下载有效临时密码')}</Button>}</>}</Space>
     {error && <Alert showIcon type="error" title={t(error)} />}
     {previews.length > 0 && !result && <section aria-label={t('权限预览')}>{previews.map(preview => <div key={preview.authorizationBaseline}>
-      <Typography.Text strong>{preview.positions.map(position => `${position.department.name} · ${position.name} (${position.code})`).join('; ')}</Typography.Text>
+      <Typography.Text strong>{preview.positions.map(position => `${position.department?.name ?? t('组织直属')} · ${position.name} (${position.code})`).join('; ')}</Typography.Text>
       <Typography.Paragraph>{t('有效权限')}：{preview.effectivePermissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>
       <Typography.Paragraph>{t('MFA 要求')}：{t(preview.effectiveMfaRequired ? '需要 MFA' : '不要求 MFA')}</Typography.Paragraph>
       {preview.positions.flatMap(position => position.historicalSources.map(source => <Typography.Paragraph key={`${position.id}:${source.roleId}`}>{t('历史兼容授权')} · {source.name} · {source.permissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>))}

@@ -41,7 +41,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
   const [selected, setSelected] = useState<Item>();
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const [targetOrganizationId, setTargetOrganizationId] = useState<string>();
-  const [targetDepartmentId, setTargetDepartmentId] = useState<string>();
+  const [targetDepartmentId, setTargetDepartmentId] = useState<string | null>();
   const [parentId, setParentId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -157,7 +157,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
   const organizationCandidates = organizations.filter(entry => !selected || selected.kind !== 'ORGANIZATION' || canParent(entry.id, organizations));
   const departmentCandidates = departments.filter(entry => !selected || selected.kind !== 'DEPARTMENT' || !needsParent || canParent(entry.id, departments));
   const organizationValid = !needsOrganization || organizationCandidates.some(entry => entry.id === targetOrganizationId);
-  const departmentValid = !needsDepartment || departmentCandidates.some(entry => entry.id === targetDepartmentId);
+  const departmentValid = !needsDepartment || (selected?.kind === 'POSITION' && targetDepartmentId === null) || departmentCandidates.some(entry => entry.id === targetDepartmentId);
   const parentValid = !needsParent || (selected?.kind === 'DEPARTMENT' && parentId === null) ||
     (selected?.kind === 'ORGANIZATION' ? organizationCandidates : departmentCandidates).some(entry => entry.id === parentId);
   const locked = busy || unknown;
@@ -264,8 +264,8 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
             onChange={value => { setParentId(value === '__root__' ? null : value); setDirty(true); }} />
         </Form.Item>}
         {needsDepartment && <Form.Item label={t('目标部门/科室')} htmlFor="reconfiguration-department" required>
-          <Select id="reconfiguration-department" value={targetDepartmentId} disabled={locked || loading || departmentsLoading || !departmentOrganizationId || !!directoryError} loading={departmentsLoading} showSearch optionFilterProp="label"
-            options={departmentCandidates.map(entry => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} onChange={value => { setTargetDepartmentId(value); setDirty(true); }} />
+          <Select id="reconfiguration-department" value={targetDepartmentId === null ? '__organization_direct__' : targetDepartmentId} disabled={locked || loading || departmentsLoading || !departmentOrganizationId || !!directoryError} loading={departmentsLoading} showSearch optionFilterProp="label"
+            options={[...(selected.kind === 'POSITION' ? [{ value: '__organization_direct__', label: t('组织直属') }] : []), ...departmentCandidates.map(entry => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))]} onChange={value => { setTargetDepartmentId(value === '__organization_direct__' ? null : value); setDirty(true); }} />
         </Form.Item>}
         {conflict && <Alert type="warning" showIcon title={t(conflict === 'receipt' ? '补配响应无法核对，草稿已保留；请显式刷新并核对当前配置，不自动重放。' : '版本已变化，草稿已保留；请显式刷新版本后重新确认。')} />}
         {unknown && <Alert type="warning" showIcon title={t('补配结果尚未确认，原请求及幂等键已冻结；仅可显式重试，不自动执行新配置。')} />}

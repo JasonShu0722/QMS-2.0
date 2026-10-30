@@ -14,11 +14,18 @@ import { OrganizationForceDeleteService } from './organization-force-delete.serv
 import { OrganizationForceDeleteController } from './organization-force-delete.controller.js';
 import { OrganizationReconfigurationService } from './organization-reconfiguration.service.js';
 import { AdministrativeIdentityReadModule } from '../identity/administrative-identity-read-model.js';
+import { LegacyAuthorizationOwnerModule } from '../authorization/legacy-authorization-owner.service.js';
+import { LegacyAuthorizationIdentityModule } from '../identity/legacy-authorization-identity.service.js';
+import { LegacyRoleReferenceModule } from '../workflow/legacy-role-reference.read-model.js';
+import { LegacyAuthorizationMigrationService } from './legacy-authorization-migration.service.js';
+import { LegacyAuthorizationMigrationController } from './legacy-authorization-migration.controller.js';
+import { LegacyAuthorizationReadController } from './legacy-authorization-read.controller.js';
+import { LegacyAuthorizationReadService } from './legacy-authorization-read.service.js';
 
 @Module({
-  imports: [AdminMutationModule, AuditLogModule, AdministrativeLifecycleModule, AdministrativeIdentityReadModule],
-  controllers: [OrganizationController, OrganizationGovernanceController, PositionOnboardingController, OrganizationResponsibilityController, OrganizationForceDeleteController],
-  providers: [OrganizationScopeService, OrganizationService, PositionOnboardingService, OrganizationResponsibilityService, OrganizationForceDeleteService, OrganizationReconfigurationService],
+  imports: [AdminMutationModule, AuditLogModule, AdministrativeLifecycleModule, AdministrativeIdentityReadModule, LegacyAuthorizationOwnerModule, LegacyAuthorizationIdentityModule, LegacyRoleReferenceModule],
+  controllers: [OrganizationController, OrganizationGovernanceController, PositionOnboardingController, OrganizationResponsibilityController, OrganizationForceDeleteController, LegacyAuthorizationMigrationController, LegacyAuthorizationReadController],
+  providers: [OrganizationScopeService, OrganizationService, PositionOnboardingService, OrganizationResponsibilityService, OrganizationForceDeleteService, OrganizationReconfigurationService, LegacyAuthorizationMigrationService, LegacyAuthorizationReadService],
   exports: [OrganizationScopeService, OrganizationService, PositionOnboardingService, OrganizationResponsibilityService, OrganizationReconfigurationService],
 })
 export class OrganizationModule {}

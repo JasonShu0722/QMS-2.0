@@ -12,6 +12,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { accountAvatarEpoch } from '../account/account-avatar-state';
 import { PositionSelector } from './PositionSelector';
 import { UserPositionsEditor } from './UserPositionsEditor';
+import { AuthorizationSources, canReadAuthorizationSources } from '../governance/AuthorizationSources';
 import { UserForceDelete } from './UserForceDelete';
 import { canPreviewPositions, type AuthorizationPreview } from './position-authorization';
 
@@ -37,6 +38,7 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const [lifecycleDenied, setLifecycleDenied] = useState(false);
   const [editing, setEditing] = useState<AdminUser | 'new'>();
   const [assignment, setAssignment] = useState<{ user: AdminUser; authorization: UserRoles }>();
+  const [sourceUser, setSourceUser] = useState<AdminUser>();
   const [positionUser, setPositionUser] = useState<AdminUser>();
   const [createPositions, setCreatePositions] = useState<string[]>([]);
   const [createPreview, setCreatePreview] = useState<AuthorizationPreview>();
@@ -77,6 +79,9 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const canReset = allows(organization, 'users:reset');
   const canDelete = allows(organization, 'users:delete');
   const canReadRoles = canRead && allows(organization, 'roles:read');
+  const canReadSources = canReadRoles && canReadAuthorizationSources(organization);
+  const sourceScopeKey = JSON.stringify([sessionScope, organization.id, [...organization.permissions].sort()]);
+  useEffect(() => { setSourceUser(undefined); }, [sourceScopeKey]);
   const canAssignPositions = canRead && canPreviewPositions(organization);
   useEffect(() => { scopeGeneration.current += 1; setLifecycleDenied(false); setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, form]);
 
@@ -159,6 +164,14 @@ export function UserAdministration({ organization, organizations, targetUserId, 
 
   async function openRoles(user: AdminUser) {
     if (!canReadRoles || busy || actionLock.current) return;
+    if (user.accountType === 'INTERNAL' && canReadSources) {
+      const generation = scopeGeneration.current;
+      requestLeave(() => {
+        if (!alive.current || generation !== scopeGeneration.current) return;
+        setEditing(undefined); setDirty(false); form.resetFields(); setSourceUser(user);
+      });
+      return;
+    }
     actionLock.current = true;
     const organizationId = organization.id;
     const operationGeneration = scopeGeneration.current;
@@ -216,7 +229,7 @@ export function UserAdministration({ organization, organizations, targetUserId, 
       { title: t('用户名'), dataIndex: 'username' }, { title: t('姓名'), render: (_, user) => user.fullName || t('未填写') }, { title: t('电话'), render: (_, user) => user.phone || t('未填写') }, { title: t('邮箱'), dataIndex: 'email' },
       { title: t('账号类型'), render: (_, user) => user.accountType === 'INTERNAL' ? t('内部') : t('供应商') },
       { title: t('主组织'), render: (_, user) => user.organization.name },
-      { title: t('任职摘要'), render: (_, user) => user.positions?.length ? <>{user.positions.map(position => <div key={position.id}>{position.department.name} · {position.name}</div>)}{(user.totalPositions ?? 0) > user.positions.length && <Typography.Text type="secondary">{t('更多任职请查看详情')}</Typography.Text>}</> : '—' },
+      { title: t('任职摘要'), render: (_, user) => user.positions?.length ? <>{user.positions.map(position => <div key={position.id}>{position.department?.name ?? t('组织直属')} · {position.name}</div>)}{(user.totalPositions ?? 0) > user.positions.length && <Typography.Text type="secondary">{t('更多任职请查看详情')}</Typography.Text>}</> : '—' },
       { title: t('状态'), render: (_, user) => <Tag color={user.status === 'ACTIVE' ? 'green' : 'default'}>{user.status === 'ACTIVE' ? t('启用') : t('停用')}</Tag> },
       { title: t('操作'), render: (_, user) => <Space wrap>
         <Button size="small" disabled={busy} onClick={() => setMfa({ user, organizationId: organization.id })}>{t('MFA 设置')}</Button>
@@ -256,6 +269,12 @@ export function UserAdministration({ organization, organizations, targetUserId, 
         {editing !== 'new' && canStatus && <Form.Item name="status" label={t('状态')}><Select options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></Form.Item>}
         <div className="qms-dialog-actions" role="group" aria-label={editing === 'new' ? t('创建用户') : t('编辑用户')}><Button htmlType="submit" type="primary" disabled={profileConflict || (editing === 'new' && createAccountType === 'INTERNAL' && (!canAuthorizeCreation || !createPositions.length || !createPreview))} loading={busy}>{t('保存用户')}</Button></div>
       </Form>
+    </Modal>
+    <Modal title={sourceUser ? `${sourceUser.username} · ${t('授权来源')}` : t('授权来源')} open={!!sourceUser && canReadSources && sourceUser.accountType === 'INTERNAL' && sourceUser.organizationId === organization.id} onCancel={() => setSourceUser(undefined)} footer={null} destroyOnHidden>
+      {sourceUser && canReadSources && sourceUser.accountType === 'INTERNAL' && sourceUser.organizationId === organization.id && <AuthorizationSources organization={organization} userId={sourceUser.id} onDenied={cause => {
+        if (cause.status === 401) sessionEnding.current = true;
+        setSourceUser(undefined); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setTarget(undefined); setUsers([]); setLifecycleDenied(true); setFailure(cause); onDenied?.(cause);
+      }} />}
     </Modal>
     <Modal title={assignment ? `${assignment.user.username} · ${t('授权来源')}` : t('授权来源')} open={!!assignment} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} onCancel={() => { if (actionLock.current) return; setAssignment(undefined); }} footer={null} destroyOnHidden>
       {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}

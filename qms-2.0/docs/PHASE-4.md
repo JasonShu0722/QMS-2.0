@@ -1,5 +1,9 @@
 # 阶段四业务域策划入口
 
+## REQ-0032 管理能力迁入候选（2026-10-30）
+
+直属岗位与兼容授权专项已纳入[管理控制台总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)的 CP-1 / Issue82 / V0.0.36；[专项计划](../../docs/superpowers/plans/2026-10-29-qms-organization-direct-position-legacy-authorization.md)沿原 A→B→C 接续，不再以最初“只策划”状态重复开工。迁入不改变业务租户、签章、专业职责或已发布流程；生产来源转换与业务绑定启用未代办。当前本地候选尚未发布，已退出夜间且 heartbeat 已删除，正常推进仅至 CP-1 PR 检查点。
+
 ## REQ-0031 运行发布确认（2026-10-29）
 
 [PR #81](https://github.com/JasonShu0722/QMS-2.0/pull/81) / V0.0.35含fix1～fix8已部署`7fc80d407a65be4b6a10b683360c36b440812227`。最终PR/main各16项CI成功、精确head代码审查无发现；deploy40837564917实际成功，迁移前加密快照→4份迁移/134总链→同SHA API/Worker/Web及公网新契约/index-DBeXnAmn.js/4匿名401机器核验PASS。详见[实施计划第15节](../../docs/superpowers/plans/2026-10-28-qms-req0031-admin-lifecycle.md)。

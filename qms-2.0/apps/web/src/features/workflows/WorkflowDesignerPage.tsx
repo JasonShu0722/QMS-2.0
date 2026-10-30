@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { Alert, Breadcrumb, Button, Card, Space, Spin, Tag, Typography } from 'antd';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -13,7 +13,7 @@ import { WorkflowClosurePreview } from './WorkflowClosurePreview';
 import './workflows.css';
 
 const WorkflowCanvas = lazy(() => import('./WorkflowCanvas').then((module) => ({ default: module.WorkflowCanvas })));
-interface Props { definitionId: string; versionId: string }
+interface Props { definitionId: string; versionId: string; expectedOrganizationId?: string }
 type Action = 'save' | 'validate' | 'publish' | 'copy';
 type Attempt = { key: string } & (
   { stage: 'validate'; body: Parameters<typeof api.validateWorkflow>[0] } |
@@ -24,16 +24,14 @@ type Attempt = { key: string } & (
 type Operation = { action: Action; graph: api.WorkflowGraph; description: string; changeNote: string; needsSave: boolean };
 export function WorkflowDesignerPage(props: Props) {
   const session = useWorkTabsStore(state => state.sessionScope);
-  return <Designer key={`${session}:${props.definitionId}:${props.versionId}`} {...props} session={session} />;
+  return <Designer key={`${session}:${props.definitionId}:${props.versionId}:${props.expectedOrganizationId ?? ''}`} {...props} session={session} />;
 }
 
-function Designer({ definitionId, versionId, session }: Props & { session?: string }) {
+function Designer({ definitionId, versionId, session, expectedOrganizationId }: Props & { session?: string }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const location = useLocation();
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
-  const openTab = useWorkTabsStore((state) => state.openTab);
   const [baseline, setBaseline] = useState<api.WorkflowDefinition>();
   const [graph, setGraph] = useState<api.WorkflowGraph>({ nodes: [], transitions: [] });
   const [description, setDescription] = useState('');
@@ -68,6 +66,10 @@ function Designer({ definitionId, versionId, session }: Props & { session?: stri
     }
   }
   function accept(result: api.WorkflowDefinition) {
+    if (expectedOrganizationId && (result.organizationId !== expectedOrganizationId || result.id.toLowerCase() !== definitionId.toLowerCase()
+      || result.version.id.toLowerCase() !== versionId.toLowerCase() || result.version.workflowDefinitionId.toLowerCase() !== definitionId.toLowerCase())) {
+      throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+    }
     setBaseline(result); setGraph(result.version.structureSnapshot); setDescription(result.description ?? '');
   }
   useEffect(() => {
@@ -97,9 +99,6 @@ function Designer({ definitionId, versionId, session }: Props & { session?: stri
   }, [unauthorized, session, completeSessionNavigation, navigate]);
   const frozen = baseline?.version.status !== 'DRAFT';
   const readOnly = frozen || denied || busy || !!uncertain || stale;
-  useEffect(() => {
-    if (baseline) openTab({ id: location.pathname, path: `${location.pathname}${location.search}`, title: `${baseline.name} · ${t(baseline.version.status === 'DRAFT' ? '编辑' : '查看')}` });
-  }, [baseline, location.pathname, location.search, openTab, t]);
   useEffect(() => {
     if (!dirty) return;
     const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -139,6 +138,8 @@ function Designer({ definitionId, versionId, session }: Props & { session?: stri
         attempt = retry?.attempt.stage === 'copy' ? retry.attempt : { stage: 'copy', body: { sourceVersionId: saved.version.id, expectedRevision: saved.revision, description: operation.description }, key: crypto.randomUUID() };
         const copied = await api.copyWorkflow(definitionId, attempt.body, options(attempt.key));
         if (!current()) return;
+        if (expectedOrganizationId && (copied.organizationId !== expectedOrganizationId || copied.id.toLowerCase() !== definitionId.toLowerCase()
+          || copied.version.workflowDefinitionId.toLowerCase() !== definitionId.toLowerCase())) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
         navigate(api.workflowPath(copied));
       }
       setUncertain(undefined);
@@ -168,12 +169,12 @@ function Designer({ definitionId, versionId, session }: Props & { session?: stri
   const selectedClosure = graph.nodes.find(node => node.id === selected && node.type === 'APPROVAL' && node.config?.closureReview);
   return <section className="workflow-editor">
     {baseline && <nav aria-label={t('流程对象层级')}><Breadcrumb items={[
-      { title: <Link to="/app/announcements">{t('系统服务')}</Link> },
-      { title: <Link to="/app/workflow-designer">{t('流程设计')}</Link> },
+      { title: <Link to="/console">{t('管理控制台')}</Link> },
+      { title: <Link to="/console/workflows">{t('流程设计')}</Link> },
       { title: baseline.name },
       { title: `${t(baseline.version.status === 'DRAFT' ? '草稿编辑' : baseline.version.status === 'PUBLISHED' ? '已发布查看' : '已停用版本查看')} · ${t('版本')} ${baseline.version.version}` },
     ]} /></nav>}
-    <Link to="/app/workflow-designer">{t('受控流程列表')}</Link>
+    <Link to="/console/workflows">{t('受控流程列表')}</Link>
     <header className="workflow-heading"><div><Typography.Title level={2}>{baseline?.name ?? t('流程设计器')}</Typography.Title>
       {baseline && <Space><code>{baseline.code}</code><Tag>{t(workflowLabel(baseline.version.status))}</Tag><span>{t('版本')} {baseline.version.version}</span><span>{t('编辑修订')} {baseline.revision}</span>{dirty && <Tag color="orange">{t('未保存')}</Tag>}</Space>}
     </div><Space wrap>

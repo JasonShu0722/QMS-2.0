@@ -18,6 +18,31 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 beforeEach(() => { useWorkTabsStore.getState().reset(); localStorage.clear(); document.documentElement.lang = 'zh-CN'; vi.stubEnv('NODE_ENV', 'development'); });
 afterEach(() => { useWorkTabsStore.getState().reset(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+it('displays direct appointment summaries and retains both direct and departmental positions in a transfer', async () => {
+  const direct = { ...position, id: 'direct', code: 'ADMIN', name: '组织管理员', departmentId: null };
+  const assignments = [direct, position].map(item => ({ id: `a-${item.id}`, organizationId: 'org', userId: user.id, positionId: item.id, position: item, startedAt: '2020-01-01T00:00:00Z', endedAt: null }));
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.includes('/departments?')) return json([department]);
+    if (path.includes('/organizations/org/positions?')) return json([direct, position]);
+    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'direct-transfer', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false });
+    if (path.includes('/users/u1/positions')) { if (init?.method === 'PUT') writes.push(JSON.parse(String(init.body))); return json(assignments); }
+    if (path.includes('/users/u1/roles')) return json({ userId: user.id, organizationId: 'org', roles: [], effectiveRoles: [], permissions: [] });
+    return json([{ ...user, positions: [{ id: direct.id, code: direct.code, name: direct.name, department: null }] }]);
+  }));
+  render(<MemoryRouter><UserAdministration organization={organization} organizations={[organization]} /></MemoryRouter>);
+  expect(await screen.findByText('组织直属 · 组织管理员')).toBeVisible();
+  fireEvent.click(within(screen.getByText('alice').closest('tr')!).getByRole('button', { name: /^调\s*岗$/ }));
+  const dialog = within(await screen.findByRole('dialog', { name: 'alice · 用户任职' }));
+  await waitFor(() => expect(dialog.getByRole('button', { name: '预览授权' })).toBeEnabled());
+  fireEvent.click(dialog.getByRole('button', { name: '预览授权' }));
+  await waitFor(() => expect(dialog.getByRole('button', { name: '保存任职' })).toBeEnabled());
+  fireEvent.click(dialog.getByRole('button', { name: '保存任职' }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0]).toEqual({ positionIds: ['direct', 'p1'], expectedPositionIds: ['direct', 'p1'], authorizationBaseline: 'direct-transfer' });
+});
+
 it('requires an authorization preview and atomically sends positions with the new internal account', async () => {
   const writes: { path: string; body: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
@@ -66,7 +91,8 @@ it('keeps legacy and effective role sources read-only even for a role assignment
     if (path.includes('/users/u1/roles')) return json({ userId: 'u1', organizationId: 'org', roles: [], effectiveRoles: [{ id: 'r1', name: 'Legacy', sources: [{ kind: 'DIRECT' }] }], permissions: [] });
     return json(path.includes('/admin/roles') ? [] : [user]);
   }));
-  render(<UserAdministration organization={organization} organizations={[organization]} />);
+    const limited = { ...organization, permissions: organization.permissions.filter(code => code !== 'organization:structure:read') };
+    render(<UserAdministration organization={limited} organizations={[limited]} />);
   expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
   await userEvent.click(await screen.findByRole('button', { name: '查看授权来源' }));
   const dialog = within(await screen.findByRole('dialog'));

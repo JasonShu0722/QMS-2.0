@@ -40,8 +40,6 @@ export class AdminUserReconfigurationService {
   restore(actor: AdminActor, id: string, dto: AdministrativeReconfigurationDto, traceId: string, key?: string): Promise<AdministrativeReconfigurationResultDto> {
     return this.mutations.run({ actor, organizationId: actor.organizationId, permission: 'organization:reconfigure', key, traceId,
       action: 'USER_RECONFIGURED', payload: { id, expectedVersion: dto.expectedVersion, targetOrganizationId: dto.targetOrganizationId }, isolationLevel: 'ReadCommitted' }, async tx => {
-      if (!Number.isInteger(dto.expectedVersion) || dto.expectedVersion < 1 || dto.expectedVersion > 2147483646
-        || dto.parentId !== undefined || dto.targetDepartmentId !== undefined) adminError('STRUCTURE_REFERENCE_INVALID', 400);
       const target = await tx.user.findUnique({ where: { id } });
       if (!target || target.deletedAt) adminError('ADMIN_USER_NOT_FOUND', 404);
       if (!target.configurationRequired || target.securityVersion !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
@@ -66,6 +64,8 @@ export class AdminUserReconfigurationService {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
       await this.organizations.authorize(tx, actor, true);
+      if (!Number.isInteger(dto.expectedVersion) || dto.expectedVersion < 1 || dto.expectedVersion > 2147483646
+        || dto.parentId !== undefined || dto.targetDepartmentId !== undefined) adminError('STRUCTURE_REFERENCE_INVALID', 400);
       const target = await tx.user.findUnique({ where: { id } });
       if (!target || target.deletedAt) adminError('ADMIN_USER_NOT_FOUND', 404);
       if (target.accountType !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);

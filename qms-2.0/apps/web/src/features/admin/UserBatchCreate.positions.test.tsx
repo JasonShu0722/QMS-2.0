@@ -8,6 +8,25 @@ vi.mock('../imports/read-xlsx', () => ({ readXlsxFile: vi.fn() }));
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
+it('resolves an exact direct-position code and displays its nullable department in the batch preview', async () => {
+  vi.mocked(readXlsxFile).mockResolvedValue([['用户名', '邮箱', '账号类型', '岗位代码'], ['alice', '', 'INTERNAL', 'ADMIN']]);
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.includes('/positions?')) return json([{ id: 'direct', code: 'ADMIN', name: '组织管理员', status: 'ACTIVE', departmentId: null }]);
+    if (path.includes('/departments?')) return json([]);
+    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'direct-baseline', positions: [{ id: 'direct', name: '组织管理员', code: 'ADMIN', department: null, historicalSources: [] }], effectivePermissionCodes: [], effectiveMfaRequired: false });
+    if (path === '/api/v1/admin/users/batch') { writes.push(JSON.parse(String(init?.body))); return json({ batchId: 'b', rows: [] }); }
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+  render(<UserBatchCreate organizationId="org" />);
+  fireEvent.change(screen.getByLabelText('账号清单文件'), { target: { files: [new File(['xlsx'], 'direct.xlsx')] } });
+  expect(await screen.findByText('组织直属 · 组织管理员 (ADMIN)')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '创建账号' }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0]).toMatchObject({ rows: [{ positionIds: ['direct'], authorizationBaseline: 'direct-baseline' }] });
+});
+
 it('requires the new four-column position-code template instead of silently accepting old unassigned accounts', () => {
   expect(() => parseUserBatchRows([['用户名', '邮箱', '账号类型'], ['alice', '', 'INTERNAL']])).toThrow('请使用包含岗位代码的新版模板');
 });
