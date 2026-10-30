@@ -1621,6 +1621,42 @@ model AuditNc {
   @@map("audit_ncs")
 }
 
+model ApiObservationBucket {
+  id            String   @id @default(uuid()) @db.Uuid
+  minute        DateTime @db.Timestamptz(3)
+  scopeKey      String   @map("scope_key") @db.VarChar(40)
+  method        String   @db.VarChar(8)
+  route         String   @db.VarChar(200)
+  statusClass   Int      @map("status_class")
+  count         Int      @default(0)
+  durationTotal Float    @default(0) @map("duration_total")
+  durationMax   Float    @default(0) @map("duration_max")
+  le50          Int      @default(0)
+  le200         Int      @default(0)
+  le1000        Int      @default(0)
+  le5000        Int      @default(0)
+  gt5000        Int      @default(0)
+
+  @@unique([minute, scopeKey, method, route, statusClass], map: "api_observation_bucket_dimensions_key")
+  @@index([scopeKey, minute])
+  @@index([minute])
+  @@map("api_observation_buckets")
+}
+
+model ApiObservationCollector {
+  producerId    String    @id @map("producer_id") @db.Uuid
+  startedAt     DateTime  @map("started_at") @db.Timestamptz(3)
+  lastFlushedAt DateTime? @map("last_flushed_at") @db.Timestamptz(3)
+  lastFailureAt DateTime? @map("last_failure_at") @db.Timestamptz(3)
+  dropped       Int       @default(0)
+  failures      Int       @default(0)
+  committedBatch Int      @default(0) @map("committed_batch")
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([updatedAt])
+  @@map("api_observation_collectors")
+}
+
 model AuditImportRow {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid

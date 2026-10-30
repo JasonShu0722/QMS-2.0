@@ -12,12 +12,12 @@
 
 | 摘要项 | 当前事实 |
 | --- | --- |
-| 最后核对 | 2026-10-30 11:50，Asia/Taipei；PR84已按负责人新授权合并，运行SHA a15b68d0b692f1f70372b3ce70e52ac4ec25c977 / V0.0.36含fix1。主分支16项CI、实际部署40998606131及公网机器核验通过；尚非人工业务验收 |
-| 授权与跟踪 | 负责人最新明确“继续推进合并部署”，覆盖CP-1 PR84集成发布；REQ-0032 / reczz28TGUdtjO7t，Issue82/V0.0.36。CP-2 Issue83/V0.0.37未启动，本次不恢复夜间/heartbeat，不自动扩展后续需求。生产来源转换/额外赋权删除/绑定启用/外发/人工验收/关闭飞书回填均未代办 |
+| 最后核对 | 2026-10-30，Asia/Taipei；CP-2 Task7已独立SPEC→QUALITY通过，父最终8完整136/136exit0、1004源hash无变；139迁移/契约generate+check/API lint+build已通过。尚非CP-2整体完成，运行仍CP-1 a15b68d |
+| 授权与跟踪 | 当前直接授权进入CP-2任务7～10本地开发、审查验证及PR检查点；复用Issue83/V0.0.37与原两个PR分组，不新建需求/检查点。CP-1用户验证反馈按人工来源记录，不补造逐角色/设备/自动PASS。最新CP-1合并发布授权不泛化为CP-2自动合并部署；不恢复夜间/heartbeat，不代办生产来源转换/赋权删除/绑定启用/外发/关闭回填 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
-| 下一动作 | 已完成本次获准CP-1合并发布；PR head db4039a及main a15b68d各16/16，精确PR代码审查无发现，快照→2迁移/136链→同SHA三服务/健康→公网新契约及index-DoHWJMZd.js/4匿名401→builder prune实际回收4.615GB。归档机器证据与下方人工清单，等待负责人角色/视觉/多窗验收；不自动CP-2或生产授权来源转换 |
+| 下一动作 | Task7真实API链已双审与父封存，接任务8A内部交换注册/四阶段metadata/30天有界保留及幂等，8B拥有者服务回执，再任务9Web/Home联合整合，最终一个CP-2 PR。不生产转换/外发/自动合并部署/重建heartbeat |
 | 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，该历史局部轮未完成，后续父11完整264/264、fix1父Web19/PG126及PR/main全16项已补证，不再列当前待办。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
 | 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440；生产仅执行本次已授权发布，不转换业务来源 |
 | heartbeat | 已删除，不自动重建。最新单次授权允许CP-1合并部署，现已机器核验；不等于恢复夜间连续模式或CP-2授权 |
@@ -158,7 +158,7 @@
 ### 任务10：PR-2、发布、验收与关闭
 
 - [ ] 第6节全部适用门禁通过、阻断审查项清零后，主动提交推送PR-2；两个单元的实际Issue/REQ、版本、分支、前置PR和证据明确关联，不使用自动关闭业务Issue的关键词。
-- [ ] PR-2主动报告检查点；按本次夜间持续授权，精确head审查及全部CI通过后合并部署，逐项核对main CI、迁移前加密快照、追加迁移、同SHA API/Worker/Web、健康、公网新契约/静态资源及管理入口行为。失败或部署不一致不得记为完成。
+- [ ] PR-2主动报告检查点，核验精确head审查与全部CI；当前不沿已撤销夜间授权自动合并部署，负责人另授发布后再核main CI、快照、迁移、同SHA服务及公网资源。失败或部署不一致不得记为完成。
 - [ ] 执行第5节最终矩阵，单列人工视觉及业务验收；负责人实际账号的生产岗位转换仍按指定批次另授权，不把隔离库测试转写为生产已迁移。
 - [ ] 逐需求确认关闭/台账写入授权，先写证据再关闭/最小回填并回读；外部未接入系统保留真实缺口，不把整座面板完成写成全部外部联调完成。
 - [ ] 同步FRONTEND-DESIGN、WORKFLOW-DESIGNER、SECURITY、OPERATIONS-RUNBOOK、CAPABILITY-STATUS及治理来源索引，依据实际差异沉淀规则；无新增规则记录理由。
@@ -329,3 +329,26 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 ### 证据归档同步
 
 发布后归档仅Markdown及来源/维护索引，governance与48项治理测试均通过、独立只读证据复核通过；归档提交推送到 `codex/console-cp1-release`，不向已合并PR推送，不额外新建功能PR。不直接推main以免仅记录导致全套业务CI/重复部署；运行main仍为a15b68d，归档分支与生产运行SHA分层。
+
+## CP-2 开工接续（2026-10-30）
+
+- 负责人在CP-1运行a15b68d及已交人工清单上下文反馈“验证没问题，继续推进CP-2”。记录为负责人验证反馈与明确CP-2开工授权，不改写机器日志、不补具体角色/设备范围、不自动关闭Issue82或REQ。REQ0032回读实际仍开发中，方案/子任务仍覆盖真实API/交换/运行观测；Issue83实际open，V0.0.37未更换。
+- 活动同一checkout新分支codex/management-console-cp2以归档3e838e1接续；运行代码与main a15b68d同树，带入发布证据不丢失归档，不重写有独有提交的local main。38项context/grants基线通过。
+- 独立开工SPEC结论可直接推进：middleware在body parser前安装，finish/close只计一次、中断不假200；RequireAccess全部scope授权后才写独立可信Symbol，RequireAuthenticated-only/拒绝/未知不拿home冒target，不读query/body归组织。
+- 最小表为API分钟桶（scopeKey UUID或UNSCOPED、静态route/method/statusClass/count/duration sum/max/五桶延迟）及producer运行回执；无原请求/响应表。7天清理每轮最多1000；pending最多1000+inflight100，单写泵不每请求Promise。增量与成功回执同事务；失败保留有界重试，恢复写累计gap，崩溃未落盘窗口只报UNKNOWN/过期，不承诺精确不丢。
+- 新读取权限`console:api:read`、`console:exchanges:read`、`console:services:read`受控目录/context；不改ADMIN_PERMISSIONS、不批量grant存量账号。新读取权限不从platform marker自动派生：平台全局仍须真实新读权+marker+显式PLATFORM，默认组织过滤。组织返回保守UNKNOWN采集状态，不泄全局producer/drop/failure计数。
+- 数据交换30天观测是内部注册端口，无外部连接器时正式目录空/未接入；任务8各owner补最小只读metadata及有限Worker/PDF执行回执，PDF是每请求线程不是常驻队列，配置存在不等于健康。
+- 父独占schema/追加迁移/注册/目录/context/生成/Git，逐任务子实现TDD、SPEC后独立QUALITY；重负载Web/API/DB串行，复用本task4容器但单独CP2新库不reset旧数据。证据Git外management-console-cp2-20261030，不启动heartbeat。
+
+### CP-2 Task7 首轮实现断点
+
+- 基线136迁移的新CP2库先真实HTTP/PG RED：新查询路由404而非401，两观测表不存在；红灯2项均成立。新增20261030030000_api_observations后137链成功，Prisma客户端父统一生成。仅API分钟桶与producer回执，无原报文/业务表修改。
+- 新三权限目录unit3项RED与context新模块3项RED后实现；原context/effectiveGrant及新权限3完整45/45通过，平台自动派生列表明确排除新读权，旧ADMIN_PERMISSIONS不变。真实无seed权限目录也先RED（3code全空），追加独立20261030031000_console_observation_permissions仅INSERT目录、不写角色授予；138链成功、真实PG目录1/1绿。已应用迁移不回改。
+- 父已接真实main/bodyparser前install、SystemManagementModule注册及RequireAccess成功后scope Symbol；实现子代理cp2_api_observation持有唯一HTTP/PG测试租约，持续补齐完整任务7允许/拒绝/限界/恢复与采集故障测试。最终SPEC/QUALITY/父独验及Swagger生成尚待，不因首轮迁移绿宣称Task7完成。
+
+### CP-2 Task7 封存与任务8接续
+
+- 新采集/查询unit及真实HTTP完成、未知提交、停机与迟到finish整单元已按独立SPEC→QUALITY返修闭环。最终子4完整90/90，父8完整136/136、exit0、26.563s，1004源起止无变；parent-task7-final-eight-meta.json为当前源码证据。原schema/route、stale/counter、未知COMMIT/正常关闭/迟到finish全部RED保留，不用前轮89或135替代最终。
+- 未知COMMIT同producer锁后回执+固定批次序号保证不双计；139为独立追加字段迁移。停止时总10秒/最多12轮、null停止回执，关闭后不可复活或接受新桶，迟到只计有界drop；持续DB故障/进程崩溃未持久窗口仍UNKNOWN不承诺无损。
+- Swagger生成/check、API lint/build及governance均已有exit0，最终collector内部gate返修后再次build成功；前端监控三页/Home整合尚待任务9，不把API完成写成完整面板交付。三项新读取权限不自动授给存量账号。
+- 任务8按8A内部data exchange→8B各owner metadata/Worker/PDF回执推进，不造外部连接器：四阶段transfer/validation/processing/reconciliation独立，默认NOT_REPORTED，terminal不可倒退；幂等receipt摘要避免未知提交重复/覆盖。生产sources[]为空显示未接入，测试TECHNICAL_TEST只能在测试模块。只读查询先验scope、数据metadata保留30天且有界清理，不改审计/业务事实。

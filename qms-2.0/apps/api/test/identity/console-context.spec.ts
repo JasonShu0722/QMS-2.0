@@ -28,6 +28,22 @@ function fixture(codes: string[] = [], accountType: 'INTERNAL' | 'SUPPLIER' = 'I
 }
 
 describe('console context management capability projection', () => {
+  it.each([
+    ['console:api:read', 'api-monitoring'],
+    ['console:exchanges:read', 'data-exchanges'],
+    ['console:services:read', 'services'],
+  ])('exposes only the explicitly assigned observation capability %s', async (permission, key) => {
+    const f = fixture([permission]);
+    expect((await f.service.context(f.actor)).modules).toEqual([
+      { key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: 'home', permissions: [permission] },
+    ]);
+    await expect(f.service.context(f.actor, 'target')).rejects.toMatchObject({ status: 403 });
+  });
+  it('does not derive observation reads from a platform marker alone', async () => {
+    const f = fixture(['platform:admin']);
+    const context = await f.service.context(f.actor);
+    expect(context.modules.map(item => item.key)).not.toEqual(expect.arrayContaining(['api-monitoring', 'data-exchanges', 'services']));
+  });
   it('allows only workflow management without leaking the user module or unrelated directory', async () => {
     const f = fixture(['workflow:manage', 'workflow:act', 'account:users:read-unknown']);
     const context = await f.service.context(f.actor);

@@ -1943,6 +1943,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/console/api-observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ApiObservationController_query"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -8187,7 +8203,7 @@ export interface components {
         };
         ConsoleModuleDto: {
             /** @enum {string} */
-            key: "users" | "organizations" | "master-data" | "configuration" | "workflows" | "audit" | "outbox" | "reconfiguration" | "problem-reconfiguration" | "supplier-accounts";
+            key: "users" | "organizations" | "master-data" | "configuration" | "workflows" | "audit" | "outbox" | "reconfiguration" | "problem-reconfiguration" | "supplier-accounts" | "api-monitoring" | "data-exchanges" | "services";
             /**
              * @description 导航范围，不替代各业务 API 的实时授权。
              * @enum {string}
@@ -9928,6 +9944,78 @@ export interface components {
             asOf: string;
             /** @description 仅包含当前有权且有公开汇总来源的事项；空数组不等于全部管理事项为零。 */
             sources: components["schemas"]["ConsoleHomeSourceDto"][];
+        };
+        ApiObservationBucketDto: {
+            /** Format: date-time */
+            minute: string;
+            /** @description 可信组织 UUID，或平台未归属桶 UNSCOPED。 */
+            scopeKey: string;
+            /** @enum {string} */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "OTHER";
+            route: string;
+            statusClass: number;
+            count: number;
+            durationTotal: number;
+            durationMax: number;
+            le50: number;
+            le200: number;
+            le1000: number;
+            le5000: number;
+            gt5000: number;
+        };
+        ApiObservationSummaryDto: {
+            requests: number;
+            errors: number;
+            /** @description 各请求耗时之和，毫秒。 */
+            durationTotal: number;
+            durationMax: number;
+            le50: number;
+            le200: number;
+            le1000: number;
+            le5000: number;
+            gt5000: number;
+        };
+        ApiObservationProducerDto: {
+            /** Format: uuid */
+            producerId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            lastFlushedAt?: Record<string, never> | null;
+            /** Format: date-time */
+            lastFailureAt?: Record<string, never> | null;
+            dropped: number;
+            failures: number;
+        };
+        ApiObservationCollectorDto: {
+            /**
+             * @description 仅表示采集回执，不代表业务或全系统健康。组织视图保守返回 UNKNOWN。
+             * @enum {string}
+             */
+            status: "UNKNOWN" | "CURRENT" | "PARTIAL" | "STALE";
+            /** @description 仅真实平台权限且显式 PLATFORM 时返回。 */
+            producers?: components["schemas"]["ApiObservationProducerDto"][];
+            /** @description 仅平台返回当前进程尚未持久化的累计丢弃数。 */
+            liveDropped?: number;
+            liveFailures?: number;
+        };
+        ApiObservationPageDto: {
+            /** @enum {string} */
+            scope: "ORGANIZATION" | "PLATFORM";
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /** Format: date-time */
+            asOf: string;
+            page: number;
+            limit: number;
+            total: number;
+            items: components["schemas"]["ApiObservationBucketDto"][];
+            summary: components["schemas"]["ApiObservationSummaryDto"];
+            collector: components["schemas"]["ApiObservationCollectorDto"];
         };
         ProblemFieldDto: {
             key: string;
@@ -21259,6 +21347,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsoleHomeDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ApiObservationController_query: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                scope?: "ORGANIZATION" | "PLATFORM";
+                from?: string;
+                to?: string;
+                page?: number;
+                limit?: number;
+                method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "OTHER";
+                statusClass?: number;
+                /** @description 精确注册路由模板或 UNKNOWN，不接收原请求 URL。 */
+                route?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiObservationPageDto"];
                 };
             };
             default: {

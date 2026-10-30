@@ -6,9 +6,11 @@ import { GlobalExceptionFilter } from './common/contracts/global-exception.filte
 import { setupOpenApi } from './openapi.js';
 import { configureHttpProxy } from './http-proxy.js';
 import { configureHttpBodyParser } from './http-body-parser.js';
+import { installApiObservation } from './modules/system-management/api-observation.middleware.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  installApiObservation(app);
   configureHttpBodyParser(app);
   configureHttpProxy(app);
   app.enableShutdownHooks();

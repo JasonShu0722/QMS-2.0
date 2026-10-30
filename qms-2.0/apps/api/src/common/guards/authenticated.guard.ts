@@ -12,11 +12,13 @@ import { AuthorizationService, type AuthorizedSession } from '../../modules/auth
 import { OrganizationScopeService } from '../../modules/organization/organization-scope.service.js';
 import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
 import { requestTraceId } from '../contracts/request-trace.js';
+import { OBSERVATION_ORGANIZATION } from '../observability/http-observation-scope.js';
 
 export const AUTHENTICATED_SESSION = Symbol('AUTHENTICATED_SESSION');
 
 export type AuthorizedRequest = Request & {
   [AUTHENTICATED_SESSION]?: AuthorizedSession;
+  [OBSERVATION_ORGANIZATION]?: string;
   authorizedOrganizationId?: string;
 };
 
@@ -107,6 +109,7 @@ export class AuthenticatedGuard implements CanActivate {
     }
     request[AUTHENTICATED_SESSION] = session;
     request.authorizedOrganizationId = organizationId;
+    request[OBSERVATION_ORGANIZATION] = organizationId;
     return true;
   }
 
