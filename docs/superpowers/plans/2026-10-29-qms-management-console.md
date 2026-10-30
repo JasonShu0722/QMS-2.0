@@ -13,7 +13,7 @@
 | 摘要项 | 当前事实 |
 | --- | --- |
 | 最后核对 | 2026-10-30 18:51，Asia/Taipei；PR85已合并发布89c2ddde71b97683805487729f230b357aef63f6 / V0.0.37。精确PR/main各16CI成功、Ready后审查无发现；deploy41042556792实际成功，5迁移/141链、同SHA三服务/健康/公网新契约资源及6匿名401通过，自动prune1.515GB |
-| 授权与跟踪 | 最新直接授权覆盖CP-2 PR85合并发布及逐SHA机器核验。REQ0032 / Issue83 / V0.0.37；仍不恢复夜间/heartbeat，不代办生产权限来源转换/额外赋权删除/绑定启用/外发/人工验收/关闭飞书回填。CP-1验证反馈不冒CP-2人工PASS |
+| 授权与跟踪 | CP-1/CP-2已分别获准发布；2026-10-31负责人明确允许回填对应需求清单，限REQ0032交付元数据/发布事实，不扩人工验收或关闭Issue授权。五字段已回读成功，进度状态READONLY仍开发中，待负责人网页改已上线；不绕只读，不生产赋权/绑定/外发 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
@@ -461,3 +461,11 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 ### 最终发布证据归档
 
 PR/Issue发布证据已回写并回读Issue83仍open；本地发布归档只Markdown和对应索引/维护事实，check:governance与治理测试通过，独立只读核验后提交推送codex/management-console-release，不向已合并功能PR继续push、不额外建第三功能PR、不直接mainpush重复部署。运行main与生产仍89c2ddd，归档分支提交另记，不混SHA。
+
+## 需求清单回填（2026-10-31）
+
+- 负责人明确“可以回填对应的需求清单了”，仅更新Base B12bbPj4Ta9Usos1Y4xcbTiFnue / tbl4mISZxWdE2bG7 / REQ-0032 / reczz28TGUdtjO7t。写前按record_id回读rev328，字段类型/状态现有选项已核，写前再次确认没有同字段并发变化。
+- 最小更新五字段并在rev329逐项回读一致：Issue链接指向CP2 #83、PR链接指向最终#85；方案要点/子任务清单/验收标准保留原文并追加2026-10-31交付段，同时记CP1 #82/#84及CP2 #83/#85、发布SHA/CI/deploy证据与未验边界。URL的Markdown包装按目标地址核验。
+- 同请求尝试进度状态=已上线，响应ok但ignored_fields明确该阶段字段READONLY；实际回读仍开发中。没有重试该字段、换裸API/身份或改权限，需负责人在Base网页改已上线后再读确认，不能宣称本次状态已推进。
+- 负责人/优先级/原业务背景/提出人等13个非目标字段与写前一致；完成时间仍null，未将未完成人工验收/外部接入写成上线验收完成或已结束，Issue82/83未关闭，heartbeat不恢复。
+- Git外原快照/字段/patch/result/readback/audit均为management-console-cp2-20261030/backfill-*-20261031.json；本次回填成功5字段、状态同步未完成分别报告，不以整体ok掩盖READONLY。
