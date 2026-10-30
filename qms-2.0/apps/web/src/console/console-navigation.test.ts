@@ -14,6 +14,13 @@ it('allows workflow-only home and design routes without user administration', ()
   const route = consoleRoute('/console/workflows/12345678-1234-4234-8234-123456789abc/87654321-4321-4321-8321-123456789abc', value);
   expect(route.module?.scope).toBe('SESSION_HOME');
 });
+it('allows an explicitly assigned API monitoring specialist without user administration', () => {
+  const value = context(module('api-monitoring', ['console:api:read']));
+  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/api-monitoring']);
+  expect(consoleRoute('/console/api-monitoring', value)).toMatchObject({ status: 'allowed', module: value.modules[0] });
+  expect(consoleRoute('/console/users', value).status).toBe('forbidden');
+  expect(consoleNavigation(context(module('api-monitoring')))).toEqual([]);
+});
 it('filters every master-data child using its own concrete permission', () => {
   const value = context(module('master-data', ['material-master:write']));
   expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/master-data/materials']);
@@ -23,7 +30,8 @@ it('filters every master-data child using its own concrete permission', () => {
 it('maps all delivered modules but rejects unknown, malformed, and future routes', () => {
   const value = context(...(['users', 'organizations', 'configuration', 'workflows', 'audit', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'] as const).map(key => module(key)));
   expect(consoleNavigation(value).map(item => item.path)).toContain('/console/audit-log');
-  for (const path of ['/console/users/another', '/console/workflows/not-a-uuid/not-a-uuid', '/console/api-monitoring', '/console/data-exchanges', '/console/services', '/console-evil']) expect(consoleRoute(path, value).status).toBe('not-found');
+  for (const path of ['/console/users/another', '/console/workflows/not-a-uuid/not-a-uuid', '/console/data-exchanges', '/console/services', '/console-evil']) expect(consoleRoute(path, value).status).toBe('not-found');
+  expect(consoleRoute('/console/api-monitoring', value).status).toBe('forbidden');
   expect(consoleRoute('/console', context()).status).toBe('forbidden');
 });
 it('does not treat an unknown capability as console access', () => {

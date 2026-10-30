@@ -16,6 +16,7 @@ vi.mock('./features/auth/SecurityPage', () => ({ SecurityPage: () => <LocationPr
 vi.mock('./features/auth/RequiredPasswordChangePage', () => ({ RequiredPasswordChangePage: () => <LocationProbe label="password destination" /> }));
 vi.mock('./features/auth/PasswordRecoveryPage', () => ({ PasswordRecoveryPage: () => null }));
 vi.mock('./features/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }));
+vi.mock('./console/ApiMonitoringPage', () => ({ ApiMonitoringPage: () => <LocationProbe label="API monitoring page" /> }));
 vi.mock('./layouts/InternalLayout', () => ({ InternalLayout: () => { mounts.internal(); return <UnsavedChangesProvider><LocationProbe label="business layout" /><WorkTabs /></UnsavedChangesProvider>; } }));
 vi.mock('./layouts/SupplierLayout', () => ({ SupplierLayout: () => <LocationProbe label="supplier layout" /> }));
 vi.mock('./console/ConsoleLayout', () => ({ useConsoleContext: () => ({ context: {
@@ -74,6 +75,11 @@ const managementPaths = [
   '/console/master-data/materials', '/console/master-data/component-projects', '/console/configuration', '/console/audit-log',
   '/console/outbox', '/console/reconfiguration', '/console/problem-reconfiguration', '/console/supplier-accounts',
 ];
+it('registers the API monitoring page outside the business layout', async () => {
+  open(`/console/api-monitoring?organizationId=${targetId}`);
+  expect(await screen.findByLabelText('API monitoring page')).toHaveTextContent('/console/api-monitoring');
+  assertBusinessUntouched();
+});
 it('registers the real management home index outside the business layout', async () => {
   open('/console');
   expect(await screen.findByLabelText('management home')).toHaveTextContent('/console');

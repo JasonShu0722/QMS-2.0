@@ -1959,6 +1959,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/console/data-exchanges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DataExchangeObservationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/console/data-exchanges/attempts/{attemptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DataExchangeObservationController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -10016,6 +10048,92 @@ export interface components {
             items: components["schemas"]["ApiObservationBucketDto"][];
             summary: components["schemas"]["ApiObservationSummaryDto"];
             collector: components["schemas"]["ApiObservationCollectorDto"];
+        };
+        DataExchangeSourceDto: {
+            key: string;
+            label: string;
+            directions: ("INBOUND" | "OUTBOUND")[];
+            objectTypes: string[];
+        };
+        DataExchangeStageDto: {
+            /** @enum {string} */
+            outcome: "NOT_REPORTED" | "PENDING" | "UNKNOWN" | "SUCCEEDED" | "FAILED";
+            observedCount?: number;
+            /** @enum {string} */
+            errorCode?: "TRANSFER_FAILED" | "VALIDATION_REJECTED" | "PROCESSING_FAILED" | "RECONCILIATION_FAILED" | "UNKNOWN_FAILURE";
+            /** Format: date-time */
+            observedAt?: string;
+        };
+        DataExchangeStagesDto: {
+            transfer: components["schemas"]["DataExchangeStageDto"];
+            validation: components["schemas"]["DataExchangeStageDto"];
+            processing: components["schemas"]["DataExchangeStageDto"];
+            reconciliation: components["schemas"]["DataExchangeStageDto"];
+        };
+        DataExchangeAttemptDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            sourceKey: string;
+            /** @enum {string} */
+            direction: "INBOUND" | "OUTBOUND";
+            objectType: string;
+            /** @enum {string} */
+            level: "BATCH" | "RECORD";
+            correlationId: string;
+            batchId?: string;
+            recordId?: string;
+            attemptNumber: number;
+            stages: components["schemas"]["DataExchangeStagesDto"];
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            observedAt: string;
+            /**
+             * Format: date-time
+             * @description 仅全部四阶段都有终态时存在，传输成功不代表整个尝试完成。
+             */
+            finishedAt?: Record<string, never> | null;
+        };
+        DataExchangeSummaryDto: {
+            batchAttempts: number;
+            recordAttempts: number;
+            /** @description 仅批次尝试，不与记录层级相加。 */
+            transferSucceededBatches: number;
+            processingFailedBatches: number;
+            reconciliationSucceededBatches: number;
+        };
+        DataExchangeCollectionDto: {
+            /**
+             * @description 观测状态不等于外部连接或业务健康；进程丢失前未持久窗口保持未知。
+             * @enum {string}
+             */
+            status: "UNKNOWN" | "UNAVAILABLE";
+        };
+        DataExchangePageDto: {
+            /** @enum {string} */
+            scope: "ORGANIZATION" | "PLATFORM";
+            /** Format: uuid */
+            organizationId: string;
+            /**
+             * @description 仅内部来源注册状态，不证明真实业务联调或在线。
+             * @enum {string}
+             */
+            connectionStatus: "NOT_CONNECTED" | "REGISTERED";
+            sources: components["schemas"]["DataExchangeSourceDto"][];
+            items: components["schemas"]["DataExchangeAttemptDto"][];
+            total: number;
+            page: number;
+            limit: number;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /** Format: date-time */
+            asOf: string;
+            summary: components["schemas"]["DataExchangeSummaryDto"];
+            collection: components["schemas"]["DataExchangeCollectionDto"];
         };
         ProblemFieldDto: {
             key: string;
@@ -21385,6 +21503,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiObservationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    DataExchangeObservationController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                scope?: "ORGANIZATION" | "PLATFORM";
+                from?: string;
+                to?: string;
+                page?: number;
+                limit?: number;
+                sourceKey?: string;
+                direction?: "INBOUND" | "OUTBOUND";
+                objectType?: string;
+                level?: "BATCH" | "RECORD";
+                batchId?: string;
+                stage?: "transfer" | "validation" | "processing" | "reconciliation";
+                outcome?: "NOT_REPORTED" | "PENDING" | "UNKNOWN" | "SUCCEEDED" | "FAILED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExchangePageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    DataExchangeObservationController_detail: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                scope?: "ORGANIZATION" | "PLATFORM";
+                from?: string;
+                to?: string;
+                page?: number;
+                limit?: number;
+                sourceKey?: string;
+                direction?: "INBOUND" | "OUTBOUND";
+                objectType?: string;
+                level?: "BATCH" | "RECORD";
+                batchId?: string;
+                stage?: "transfer" | "validation" | "processing" | "reconciliation";
+                outcome?: "NOT_REPORTED" | "PENDING" | "UNKNOWN" | "SUCCEEDED" | "FAILED";
+            };
+            header?: never;
+            path: {
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExchangeAttemptDto"];
                 };
             };
             default: {

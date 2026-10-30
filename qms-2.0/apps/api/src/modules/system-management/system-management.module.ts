@@ -8,11 +8,14 @@ import { SystemManagementService } from './system-management.service.js';
 import { ApiObservationCollectorService } from './api-observation-collector.service.js';
 import { ApiObservationService } from './api-observation.service.js';
 import { ApiObservationController } from './api-observation.controller.js';
+import { DataExchangeRegistryService } from './data-exchange-registry.service.js';
+import { DataExchangeObservationService } from './data-exchange-observation.service.js';
+import { DataExchangeObservationController } from './data-exchange-observation.controller.js';
 
 @Module({
   imports: [IdentityModule, OrganizationModule, AuditQueryModule, TaskNotificationModule],
-  controllers: [SystemManagementController, ApiObservationController],
-  providers: [SystemManagementService, ApiObservationCollectorService, ApiObservationService],
-  exports: [ApiObservationCollectorService],
+  controllers: [SystemManagementController, ApiObservationController, DataExchangeObservationController],
+  providers: [SystemManagementService, ApiObservationCollectorService, ApiObservationService, DataExchangeRegistryService, DataExchangeObservationService],
+  exports: [ApiObservationCollectorService, DataExchangeRegistryService, DataExchangeObservationService],
 })
 export class SystemManagementModule {}

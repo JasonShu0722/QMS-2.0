@@ -12,12 +12,12 @@
 
 | 摘要项 | 当前事实 |
 | --- | --- |
-| 最后核对 | 2026-10-30，Asia/Taipei；CP-2 Task7已独立SPEC→QUALITY通过，父最终8完整136/136exit0、1004源hash无变；139迁移/契约generate+check/API lint+build已通过。尚非CP-2整体完成，运行仍CP-1 a15b68d |
+| 最后核对 | 2026-10-30，Asia/Taipei；Task7已d79c886；Task8A双审与父7完整128/128、API监控正式页双审与父6完整243/243通过，契约/APIbuild/Weblint+build/governance均exit0。140迁移仅一次性CP2库；运行生产仍a15b68d，未提交CP2 PR |
 | 授权与跟踪 | 当前直接授权进入CP-2任务7～10本地开发、审查验证及PR检查点；复用Issue83/V0.0.37与原两个PR分组，不新建需求/检查点。CP-1用户验证反馈按人工来源记录，不补造逐角色/设备/自动PASS。最新CP-1合并发布授权不泛化为CP-2自动合并部署；不恢复夜间/heartbeat，不代办生产来源转换/赋权删除/绑定启用/外发/关闭回填 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
-| 下一动作 | Task7真实API链已双审与父封存，接任务8A内部交换注册/四阶段metadata/30天有界保留及幂等，8B拥有者服务回执，再任务9Web/Home联合整合，最终一个CP-2 PR。不生产转换/外发/自动合并部署/重建heartbeat |
+| 下一动作 | 封存Task8A及API监控正式页面后继续8B拥有者服务事实/Worker与按请求PDF回执、交换及服务正式页、首页联合整合；最终一个CP2 PR。源标签/阶段/幂等/权限和真实技术Worker边界已验证，不把空来源标健康，不自动生产转换/外发/合并部署/heartbeat |
 | 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，该历史局部轮未完成，后续父11完整264/264、fix1父Web19/PG126及PR/main全16项已补证，不再列当前待办。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
 | 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440；生产仅执行本次已授权发布，不转换业务来源 |
 | heartbeat | 已删除，不自动重建。最新单次授权允许CP-1合并部署，现已机器核验；不等于恢复夜间连续模式或CP-2授权 |
@@ -352,3 +352,21 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 - 未知COMMIT同producer锁后回执+固定批次序号保证不双计；139为独立追加字段迁移。停止时总10秒/最多12轮、null停止回执，关闭后不可复活或接受新桶，迟到只计有界drop；持续DB故障/进程崩溃未持久窗口仍UNKNOWN不承诺无损。
 - Swagger生成/check、API lint/build及governance均已有exit0，最终collector内部gate返修后再次build成功；前端监控三页/Home整合尚待任务9，不把API完成写成完整面板交付。三项新读取权限不自动授给存量账号。
 - 任务8按8A内部data exchange→8B各owner metadata/Worker/PDF回执推进，不造外部连接器：四阶段transfer/validation/processing/reconciliation独立，默认NOT_REPORTED，terminal不可倒退；幂等receipt摘要避免未知提交重复/覆盖。生产sources[]为空显示未接入，测试TECHNICAL_TEST只能在测试模块。只读查询先验scope、数据metadata保留30天且有界清理，不改审计/业务事实。
+
+### Task8A 真实RED与独立页面准备
+
+- 8A新完整真实HTTP/PG测试2项RED：路由实际404、attempt/receipt表不存在。父据此追加20261030040000_data_exchange_observations至140链并generate/migrate均exit0；仅metadata attempt+幂等receipt，含scope/time/batch及全局保留索引，receipt随attempt级联删除。未改已应用139或Task7采集逻辑。
+- 新registry/四阶段DTO及事务端口由独立cp2_exchange_observation实现者持有；父独占schema/注册/生成，真实scope通过后台handle/授权端口而非任意UUID。真实TECHNICAL_TEST仅tests模块+loopback HTTP/独立Worker，不生产注册。
+- 依赖已封存Task7契约的ApiMonitoringPage独立三文件启动TDD准备，父保持App/导航/Home公共接缝所有权；Web/API重负载测试窗口由父协调，不并发争用宿主提交内存，不interrupt正常任务。此页面准备不增加PR检查点，也不把Unit当视觉验收。
+
+### Task8A 首完整链与页面测试窗口
+
+- 新registry/metadata/http三完整首次32/32通过，真实loopback发送/接收transfer成功后独立Node测试Worker通过真实PG回写processing失败，四phase分离不全绿；production module未导入技术来源/worker。
+- 父读源可见性发现目录scope撤权后rows/total/detail仍可见缺口，真实RED后用visible source集合约束各查询；真实锁后owner撤权RED再修锁后重验。最新3完整35/35exit0/14.217s，unknownCOMMIT已提交应答丢及原事务未提交时pg_stat_activity Lock等待两链均不重记，原FAIL保留。8A独立SPEC先读当前源，最终freeze/QUALITY/父验证仍待。
+- Task9A API监控正式页先完整RED缺模块，然后三owned文件实现；当前20case已备，8A短暂释放测试租约给Web GREEN/必要修/邻近/tsc，API暂停启动新重负载但可只读整理，不interrupt正常test。
+
+### Task8A 与 API监控正式页封存
+
+- 8A独立SPEC→QUALITY均PASS；父7完整128/128exit0/40.151s，1013 API源起止无变。真实来源scope撤权、锁后owner撤权、levelsummary过滤均先RED后修。生产默认空sources/NOT_CONNECTED，四stage及真实HTTP/独立测试Worker链只证明技术观测，不是外部业务联调。140schema、FK/索引与注册匹配，Swagger生成/check成功。
+- API正式页三owned文件先RED后实现、分页window漂移真实RED后修，子19+Home23+Layout15完整57/57；双审均PASS。父菜单/App接线再真实RED2后最小加入明确newread导航和console子route，原认证链/returnTo不改；共享接缝再独立SPEC/QUALITY通过。父6完整243/243exit0/61.74s、510 Web源起止无变，不能把App mock注册测试当真实页面或视觉验收。
+- 当前APIbuild、契约check、Weblint/build与governance顺序exit0；保留既有largechunk警告未调阈值。这里只封存API/交换观测基础及API页面，Task8B与另两正式面板/Home最终整合仍待，不把局部完成当CP2整体完成。
