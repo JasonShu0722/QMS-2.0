@@ -12,12 +12,12 @@
 
 | 摘要项 | 当前事实 |
 | --- | --- |
-| 最后核对 | 2026-10-30 10:12，Asia/Taipei；HEAD af9f7a4，仍无CP-1提交/PR/部署。heartbeat已删除，不是停工；Web第3片exec94589及真实vitest进程可靠活跃 |
+| 最后核对 | 2026-10-30，Asia/Taipei；CP-1草稿PR84 / 当前远端head146e933。首轮16检查13成功，Web7及integration1两具体旧验收清单/夹具失败、foundation随之失败；同head Codex审查完成无发现。正集中fix1，不合并/部署 |
 | 授权与跟踪 | 2026-10-30负责人最新明确“开发完了就推进PR部分”：立即提交推送并建立CP-1草稿PR，让精确head CI与审查在PR接续，未完成及失败门禁显式保留，不能标Ready或合并放行。REQ-0032 / reczz28TGUdtjO7t；CP-1 Issue82/V0.0.36；CP-2 Issue83/V0.0.37未启动。仍仅两个常规PR，不自动合并部署；生产来源转换/赋权删除/绑定启用/外发/人工验收/关闭飞书回填未授权 |
 | 已封存模块 | 多窗口：两审及父14完整271通过；直属A：两审/父核心144、delta81、HTTP3/lint通过；B命令：两审/fresh父3完整82通过，先前回放ceiling及目标marker缺口均真实RED修复；管理分发器：两审/父3完整85通过；流程迁入：两审/父4完整116通过。均有 Git 外 gate-closure 与源码 hash，不将重叠测试数字相加 |
 | 当前整合 | App/legacy/导航两审PASS，最新11完整271；共享context/rootcanonical两生产行两审PASS，最终API48/Web294。父整合五文件146PASS/1FAIL原blocker未复现/原因未知保留，test仅加强真实dirty/blocked语义等待（两审PASS），原五文件完整147/147通过；父最新独立shell/guard/Gate三完整38/38/39.19s通过，生产未保存机制未改，parent-registration-canonical-gate-closure.json封存，不称已证明旧失败根因 |
 | 读模型与首页 | legacy读/B命令/HomeAPI均两审与父定向真实PG通过；contracts generate/check exec99500exit0。HomeWeb最终无timer23绿+shell共38绿、两审PASS；父实际indexRED后App两行接真实Home，再App83+Home23完整106/106/25.73s、6hash一致，限定接线双审PASS。整包lint/build/契约已通过；真browser及人工验收未完成，不造CP2指标 |
-| 下一动作 | API全unit157/2315、五步lint/build/contracts、父11完整Web264/264、部署含备份11/11、workspace82、governance156均通过。Worker原样恢复后子8/8及父8/8通过，无代码改动，原失败未证实根因。全Web第1片28文件347通过，第2片481/485有4失败；3失败完整文件原样重验144/144通过，不将原2片改为PASS。当前3..8串行exec94589，第3片真实进行。全API第1片因实测内存危险受控中断，后3片未执行，待Web释放后串行续验；浏览器工具信任拒绝、完整阶段未验。继续门禁→CP-1 PR，禁止提前放行 |
+| 下一动作 | 首head146e933的13/16 CI成功；Web7旧legacy只读测试给了完整三读、但仅mock旧DTO；integration1真实PG约束清单漏新增历史归档表。两项最小测试兼容修复集中fix1，先真实RED/GREEN→独立SPEC→QUALITY→父验证/治理→推同一PR并复核新head全部CI/审查；不以首head无发现或13绿代替fix1。PR保持Draft，浏览器/完整阶段边界仍列明 |
 | 全量门禁补齐 | API4源微修两审+父157/157 suites、2315/2315/204.717s全绿/source未变，归档gate。Web3testtype微修两审PASS，父三完整146PASS1FAIL根因是C1root规则下旧testfixturedepartment岗隐藏；独立仅fixture改null后完整66/22.15s绿、限定两审PASS，父三文件最终联合仍待后续。全tree该轮另C2非导入新test变如实sourceUnchangedfalse，覆盖生产稳，不冒全树freeze。C2DOMtype已修，最终父入口后API/Web lint/build及契约均exit0；治理来源已实际复核并通过，新增公开认证decorator依赖登记独立SPEC/QUALITY通过 |
 | 资源与证据 | Git外 D:/WorkSpace/QMS-2.0-local/management-console-20261029。task PG55582/RustFS55583/ClamAV55585已恢复healthy；重启前tmpfs数据库/对象数据已丢失，原失败日志/hash保留。fresh库同名重建136迁移，无seed；全API片1独立库qms_console_cp1_integration_20261030_s1已136迁移+seed，其余片未建。task Mailpit实际SMTP50930/HTTP50931；固定端口拒绝证据保留。未触碰55440或生产 |
 | heartbeat | 应用工具已按负责人明确要求删除qms，不再有20分钟唤醒；不自动重建。取消定时跟进不等于停止当前开发，最新授权仍为正常推进至CP-1 PR |
@@ -272,3 +272,24 @@ contracts:generate只在DTO变化后由父执行，提交生成api.ts；仅文�
 ### 提前进入草稿PR审查（2026-10-30）
 
 负责人再次明确开发完成即推进PR。本轮立即冻结已审实现、提交推送创建CP-1草稿PR，将未完成全量集成/全Web和正式浏览器/阶段门禁列为阻断Ready/合并的检查项，而非继续仅本地等待。此动作不降低门禁、不把已有FAIL改PASS，不中断绑定exec94589的正常Web执行，不自动合并部署。分支同时保留既有V0.0.35两份文档归档/方案提交历史，不重写或强推。
+
+### CP-1 草稿PR已建立（2026-10-30 10:18）
+
+- 功能提交146e9339aebc568f23e09bd693703f1e0da6ed90，V0.0.36；提交前治理/阶段五与diff check均exit0，秘密/敏感路径模式扫描无命中，未上传Git外runtime/日志/备份。
+- [PR84](https://github.com/JasonShu0722/QMS-2.0/pull/84)已实际创建为draft，base7fc80d4、head146e933；[精确head CI](https://github.com/JasonShu0722/QMS-2.0/actions/runs/40990881788)运行中；[独立审查请求](https://github.com/JasonShu0722/QMS-2.0/pull/84#issuecomment-6513349890)已发送，不等于审查通过。
+- 当前本地全API因资源危险受控中断，待CI同SHA四片真实结果，不立即重复启动大门禁；本地Web3..8串行仍保留，不因建立PR而打断。PR正文列明全量、原失败、浏览器/阶段前置及不可合并项，不降低验收，不触发部署或关闭Issue82。
+- 本次创建后链接归档暂留本地，避免仅写PR号反复push取消同head CI；如有真实返修随下一提交一并归档，不强推历史。
+
+### 首轮精确head CI与fix1范围
+
+- head146e933的Foundation40990881788已结束：16检查中13成功，Web7失败1/254（旧legacy只读夹具错误进入完整来源面板），integration1失败1/793（无FK历史归档表的精确清单遗漏），foundation汇总随两失败退出；其余7个Web片、3个集成片、API单测、checks与scope均成功。原失败日志在Git外，不能重写为整包PASS。
+- 同head Codex Review已completed且has_any_findings=false/has_unresolved_findings=false，[审查回执](https://github.com/JasonShu0722/QMS-2.0/pull/84#issuecomment-6513424069)明确Reviewed commit146e933；该结论不自动覆盖fix1。
+- 本地Web第3片28文件305通过；第4片在首轮CI抓到确定性失败后，为避免重复跑已知失败及保持源码冻结，核验驱动PID/命令后受控停止专属驱动，原日志保留。第4片记中断，不算PASS/FAIL，也不是heartbeat停工；后续以同SHA真实CI完整覆盖为门禁，不降预算。
+- fix1只修两处旧测试兼容：legacy用例使用局部limited组织并保原全部只读/无写断言；PG保护清单仅精确登记既有历史UUID归档表，不泛化过滤、不加错误FK、不改运行代码/迁移。两项独立红绿/双审和父证据另记。
+
+### fix1 提交前闭环（2026-10-30）
+
+- 两项真实RED均已复现CI原错误：Web完整4项3绿1红，PG完整62项61绿1红；最小测试兼容修正后实现方分别3完整19/19及3完整126/126通过，独立SPEC→QUALITY均PASS。
+- 父按资源租约顺序独立执行相同3完整PG126/126、3完整Web19/19，均exit0，5项测试/生产/schema hash起止无变；parent-pr84-fix1-green-meta.json封存。无生产、DTO、迁移、timeout或motion变更。
+- 负责人要求全部CI失败逐项查看：已枚举并核验run40990881788/attempt1精确head的全部16job，下载并阅读3个失败job原始日志及各失败/跳过step；完整记录pr84-head146e933-all-ci-audit.json。integration1后的Worker生命周期与Compose未执行，新head必须真实补跑，不能拿本地8/8替代。
+- 集中提交V0.0.36-fix1并推同一PR84；新head全部CI及Codex审查另验。PR仍Draft，正式浏览器/完整阶段未完成边界保留，不自动合并部署。

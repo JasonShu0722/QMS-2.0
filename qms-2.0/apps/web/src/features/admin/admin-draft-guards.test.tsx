@@ -50,12 +50,13 @@ it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled clo
 it('opens legacy user authorization as read-only and closes without a draft or write', async () => {
   const user = baseUserEvent.setup();
   const writes: RequestInit[] = [];
+  const limitedOrganization = { ...organization, permissions: organization.permissions.filter(code => code !== 'organization:structure:read') };
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (init.method && init.method !== 'GET') writes.push(init);
     if (path.includes('/users/user-a/roles?')) return json({ roles: [role], effectiveRoles: [{ ...role, sources: [{ kind: 'DIRECT' }] }], permissions: [] });
     return json([account]);
   }));
-  render(<MemoryRouter><UnsavedChangesProvider><UserAdministration organization={organization} organizations={[organization]} /></UnsavedChangesProvider></MemoryRouter>);
+  render(<MemoryRouter><UnsavedChangesProvider><UserAdministration organization={limitedOrganization} organizations={[limitedOrganization]} /></UnsavedChangesProvider></MemoryRouter>);
   await user.click(await screen.findByRole('button', { name: '查看授权来源' }));
   const editor = await screen.findByRole('dialog', { name: 'alice · 授权来源' });
   await waitFor(() => expect(within(editor).getByText(role.name)).toBeVisible());
