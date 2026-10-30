@@ -1,0 +1,43 @@
+.qms-api-monitoring { display: grid; gap: 20px; min-width: 0; }
+.qms-api-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.qms-api-heading h2 { margin: 0 0 8px; font-size: 23px; letter-spacing: -.5px; }
+.qms-api-heading p, .qms-api-note { margin: 0; color: var(--qms-muted); line-height: 1.7; }
+.qms-api-heading > .ant-btn { flex: none; }
+.qms-api-scope { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; }
+.qms-api-scope > span { color: var(--qms-muted); font-size: 13px; }
+.qms-api-filters { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 16px; padding: 20px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); align-items: end; }
+.qms-api-filters > label { display: grid; gap: 8px; min-width: 0; }
+.qms-api-filters > label > span { font-size: 13px; font-weight: 600; }
+.qms-api-filters .ant-select { width: 100%; }
+.qms-api-filter-route { grid-column: span 2; }
+.qms-api-times { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--qms-muted); font-size: 12px; line-height: 1.8; }
+.qms-api-times > svg { flex: none; }
+.qms-api-metrics dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border-block: 1px solid var(--qms-border); }
+.qms-api-metrics dl > div { padding: 22px 18px; min-width: 0; }
+.qms-api-metrics dl > div + div { border-left: 1px solid var(--qms-border); }
+.qms-api-metrics dt { color: var(--qms-muted); font-size: 13px; line-height: 1.6; }
+.qms-api-metrics dd { margin: 12px 0 0; font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.qms-api-latency h3, .qms-api-details h3 { margin: 0 0 10px; font-size: 16px; }
+.qms-api-latency > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+.qms-api-latency dl { margin: 0; min-width: 0; }
+.qms-api-latency dt { font-size: 12px; color: var(--qms-muted); }
+.qms-api-latency dd { margin: 8px 0 12px; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.qms-api-meter { height: 5px; border-radius: 4px; overflow: hidden; background: var(--qms-surface-tint); }
+.qms-api-meter > span { display: block; height: 100%; background: var(--qms-accent-action); }
+.qms-api-route { white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+.qms-api-empty { padding: 32px 20px; border: 1px dashed var(--qms-border); background: var(--qms-surface); text-align: center; }
+.qms-api-empty p { margin: 10px 0 0; color: var(--qms-muted); }
+.qms-api-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; font-size: 12px; color: var(--qms-muted); }
+.qms-api-pagination > div { display: flex; gap: 8px; }
+@media (max-width: 1024px) { .qms-api-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .qms-api-heading { flex-direction: column; gap: 12px; }
+  .qms-api-filters { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .qms-api-filter-route { grid-column: auto; }
+  .qms-api-metrics dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qms-api-metrics dl > div { padding: 18px 12px; }
+  .qms-api-metrics dl > div:nth-child(3) { border-left: 0; }
+  .qms-api-metrics dl > div:nth-child(n+3) { border-top: 1px solid var(--qms-border); }
+  .qms-api-metrics dd { font-size: 22px; }
+  .qms-api-latency > div { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+}

@@ -14,6 +14,9 @@ const modulePermissions: Partial<Record<ConsoleModuleDto['key'], string[]>> = {
   configuration: ['configuration:read', 'configuration:manage'],
   audit: ['audit:read', 'audit:export'],
   outbox: ['outbox:read', 'outbox:retry'],
+  'api-monitoring': ['console:api:read'],
+  'data-exchanges': ['console:exchanges:read'],
+  services: ['console:services:read'],
 };
 
 const organizationSelect = { id: true, code: true, name: true, type: true, status: true, configurationRequired: true } as const;

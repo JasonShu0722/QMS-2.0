@@ -9,6 +9,7 @@ import { FileController } from './file.controller.js';
 import { FileScannerService } from './file-scanner.service.js';
 import { FileVerificationService } from './file-verification.service.js';
 import { FileScanWorkerService } from './file-scan-worker.service.js';
+import { FileOperationsReadService } from './file-operations-read.service.js';
 
 @Module({
   imports: [DatabaseModule, AuditLogModule],
@@ -20,12 +21,13 @@ import { FileScanWorkerService } from './file-scan-worker.service.js';
     FileScannerService,
     FileVerificationService,
     FileScanWorkerService,
+    FileOperationsReadService,
     { provide: FILE_RESOURCE_ADAPTERS, useValue: [] },
     {
       provide: OBJECT_STORAGE,
       useFactory: createObjectStorage,
     },
   ],
-  exports: [FilePolicyService, FileLifecycleService, FileResourceAccess, FileScanWorkerService, OBJECT_STORAGE],
+  exports: [FilePolicyService, FileLifecycleService, FileResourceAccess, FileScanWorkerService, FileOperationsReadService, OBJECT_STORAGE],
 })
 export class FileManagementModule {}

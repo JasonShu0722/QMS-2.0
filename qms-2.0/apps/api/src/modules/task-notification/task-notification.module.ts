@@ -12,11 +12,12 @@ import { SupplierPortalNotificationController } from './supplier-portal-notifica
 import { SupplierPortalNotificationService } from './supplier-portal-notification.service.js';
 import { AdminMutationModule } from '../../common/security/admin-mutation.service.js';
 import { TaskTransferService } from './task-transfer.service.js';
+import { ServiceOperationReceiptService } from './service-operation-receipt.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule],
   controllers: [OutboxAdministrationController, TaskInboxController, NotificationInboxController, SupplierPortalNotificationController],
-  providers: [OutboxService, OutboxWorkerService, TaskService, TaskTransferService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, { provide: OUTBOX_HANDLER, useExisting: WorkflowEventHandler }],
-  exports: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService],
+  providers: [OutboxService, OutboxWorkerService, TaskService, TaskTransferService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, ServiceOperationReceiptService, { provide: OUTBOX_HANDLER, useExisting: WorkflowEventHandler }],
+  exports: [OutboxService, OutboxWorkerService, TaskService, NotificationService, SupplierPortalNotificationService, WorkflowEventHandler, OutboxAdministrationService, ServiceOperationReceiptService],
 })
 export class TaskNotificationModule {}

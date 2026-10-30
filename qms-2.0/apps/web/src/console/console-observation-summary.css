@@ -1,0 +1,19 @@
+.qms-observation-summary { display: grid; gap: 16px; min-width: 0; }
+.qms-observation-summary > header { display: flex; gap: 18px; align-items: flex-start; justify-content: space-between; }
+.qms-observation-summary h2 { margin: 0 0 8px; font-size: 18px; }
+.qms-observation-summary > header p, .qms-observation-note { color: var(--qms-muted); font-size: 12px; line-height: 1.8; margin: 0; overflow-wrap: anywhere; }
+.qms-observation-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.qms-observation-card { border: 1px solid var(--qms-border); border-radius: 8px; padding: 18px; background: var(--qms-surface); display: grid; align-content: start; gap: 12px; min-width: 0; }
+.qms-observation-card h3 { margin: 0; font-size: 15px; }
+.qms-observation-card > a { justify-self: start; font-size: 13px; }
+.qms-observation-time { font-size: 11px; color: var(--qms-muted); line-height: 1.7; margin: 0; }
+.qms-observation-warning { font-size: 13px; color: var(--qms-warning); margin: 0; }
+.qms-observation-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; }
+.qms-observation-metrics dt { color: var(--qms-muted); font-size: 12px; line-height: 1.6; }
+.qms-observation-metrics dd { margin: 8px 0 0; font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.qms-observation-service-list { padding: 0; margin: 0; list-style: none; display: grid; gap: 10px; }
+.qms-observation-service-list > li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.qms-observation-service-list > li > strong { font-size: 12px; font-weight: 500; }
+.qms-observation-service-list > li > span:last-child { color: var(--qms-muted); }
+@media (max-width: 1100px) { .qms-observation-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .qms-observation-summary > header { flex-direction: column; gap: 10px; } .qms-observation-card { padding: 16px; } }

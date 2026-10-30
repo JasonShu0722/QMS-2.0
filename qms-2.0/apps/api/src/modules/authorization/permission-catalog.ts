@@ -1,4 +1,5 @@
 export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
+export const CONSOLE_OBSERVATION_READ_PERMISSIONS = ['console:api:read', 'console:exchanges:read', 'console:services:read'];
 export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
   'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
 ];
@@ -136,6 +137,7 @@ export const PERMISSION_CATALOG: Group[] = [
     ] },
   ] },
   { key: 'system', name: '系统管理', status: 'active', modules: [
+    { key: 'console-observation', name: '控制台观测', status: 'active', operations: [operation('console:api:read', '查看 API 技术观测'), operation('console:exchanges:read', '查看数据交换观测'), operation('console:services:read', '查看运行服务事实')] },
     { key: 'platform-administrator', name: '平台管理员', status: 'active', operations: [operation(PLATFORM_ADMINISTRATOR_PERMISSION, '平台管理员（全部活跃内部组织的适用权限，须显式授予）')] },
     { key: 'organization', name: '组织目录', status: 'active', operations: [operation('organization:read', '查看组织'), operation('organization:manage', '维护组织树和启停'), operation('organization:structure:read', '查看部门岗位'), operation('organization:structure:manage', '维护部门岗位'), operation('organization:positions:assign', '分配用户任职')] },
     { key: 'administrative-lifecycle', name: '删除与待配置管理', status: 'active', operations: [
@@ -171,7 +173,8 @@ const SUPPLIER_ONLY_PERMISSION_CODES = new Set([
 export const INTERNAL_PLATFORM_PERMISSION_CODES = PERMISSION_CATALOG
   .filter(group => group.status === 'active')
   .flatMap(group => group.modules.filter(module => module.status === 'active')
-    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code)).map(entry => entry.code)));
+    // Observation reads require an explicit grant, including for existing platform marker holders.
+    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code) && !CONSOLE_OBSERVATION_READ_PERMISSIONS.includes(entry.code)).map(entry => entry.code)));
 
 export function userUpdatePermissions(fields: object): string[] {
   const submitted = fields as Record<string, unknown>;

@@ -1,0 +1,35 @@
+.qms-service-operations { display: grid; gap: 20px; min-width: 0; }
+.qms-services-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.qms-services-heading h2 { margin: 0 0 8px; font-size: 23px; letter-spacing: -.5px; }
+.qms-services-heading p, .qms-services-note { margin: 0; color: var(--qms-muted); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.qms-services-heading > .ant-btn { flex: none; }
+.qms-services-scope { display: flex; gap: 12px 18px; flex-wrap: wrap; align-items: center; }
+.qms-services-scope > span { color: var(--qms-muted); font-size: 13px; }
+.qms-services-scope label { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.qms-services-scope .ant-select { min-width: 210px; }
+.qms-services-time { display: flex; align-items: center; gap: 8px; color: var(--qms-muted); font-size: 12px; }
+.qms-services-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.qms-services-source { min-width: 0; border: 1px solid var(--qms-border); background: var(--qms-surface); border-radius: 8px; padding: 20px; display: grid; align-content: start; gap: 12px; }
+.qms-services-source > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.qms-services-source h3 { margin: 0; font-size: 16px; line-height: 1.6; }
+.qms-services-source .ant-tag { flex: none; margin: 0; }
+.qms-services-config { margin: 0; font-size: 13px; font-weight: 600; }
+.qms-services-config > span { color: var(--qms-muted); font-weight: 400; }
+.qms-services-reason { margin: 0; font-size: 13px; color: var(--qms-warning); line-height: 1.7; }
+.qms-services-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; padding-block: 12px; border-block: 1px solid var(--qms-border); }
+.qms-services-counts dt { color: var(--qms-muted); font-size: 12px; line-height: 1.5; }
+.qms-services-counts dd { margin: 8px 0 0; font-size: 23px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.qms-services-results { display: grid; gap: 14px; list-style: none; padding: 0; margin: 0; }
+.qms-services-results > li { border-top: 1px solid var(--qms-border); padding-top: 14px; display: grid; gap: 8px; }
+.qms-services-results > li > div { display: flex; gap: 10px 16px; flex-wrap: wrap; font-size: 13px; }
+.qms-services-results > li > div > span { color: var(--qms-muted); }
+.qms-services-empty { padding: 30px 20px; text-align: center; border: 1px dashed var(--qms-border); background: var(--qms-surface); }
+.qms-services-empty p { color: var(--qms-muted); line-height: 1.7; }
+@media (max-width: 760px) {
+  .qms-services-grid { grid-template-columns: minmax(0, 1fr); }
+  .qms-services-heading { flex-direction: column; gap: 12px; }
+  .qms-services-scope { align-items: flex-start; }
+  .qms-services-scope label { margin-left: 0; display: grid; gap: 8px; width: 100%; }
+  .qms-services-source { padding: 16px; }
+  .qms-services-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

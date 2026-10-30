@@ -109,7 +109,7 @@
 
 API 领域模块通过公开服务和模块导出协作。新增跨模块依赖必须同时更新 `governance/module-boundaries.json` 和本文件的领域边界说明；直接导入其他模块 Controller 属于禁止行为。
 
-REQ-0032 CP-1 的 `system-management` 只组合 Identity 的真实控制台 context、Organization 的待配置、Audit 的公开审计查询及 TaskNotification 的失败队列读取；认证入口复用 Authorization 的公开 `RequireAuthenticated` 装饰器，由全局守卫校验真实会话。它不持有 Prisma/SQL，不绕过拥有者的数据范围与权限；Organization 到 Workflow 只使用公开的旧角色引用读取模型，保留稳定历史资格，不跨读流程私有表。
+REQ-0032 CP-1 的 `system-management` 只组合 Identity 的真实控制台 context、Organization 的待配置、Audit 的公开审计查询及 TaskNotification 的失败队列读取；认证入口复用 Authorization 的公开 `RequireAuthenticated` 装饰器，由全局守卫校验真实会话。CP-2 的运行服务聚合还通过 FileManagement 的公开安全汇总读取扫描/存储事实，邮件及投递由 Identity、失败事件归属及有限 Worker/PDF 回执由 TaskNotification 各自拥有；SystemManagement 不直接查询这些领域私表。API/交换观测模块只操作自身追加观测表，不绕过拥有者的数据范围与权限；Organization 到 Workflow 只使用公开的旧角色引用读取模型，保留稳定历史资格，不跨读流程私有表。
 
 当前允许的依赖对以机器可读清单为准，运行以下命令检查：
 

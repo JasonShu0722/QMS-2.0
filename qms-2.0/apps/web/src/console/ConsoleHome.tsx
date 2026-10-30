@@ -10,6 +10,7 @@ import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { useConsoleContext } from './ConsoleLayout';
 import { consoleNavigation, type ConsoleContext } from './console-navigation';
 import './ConsoleHome.css';
+import { ConsoleObservationSummary } from './ConsoleObservationSummary';
 
 type Home = components['schemas']['ConsoleHomeDto'];
 type Source = components['schemas']['ConsoleHomeSourceDto'];
@@ -42,7 +43,7 @@ export function ConsoleHome() {
   const { context, refresh, invalidate } = useConsoleContext();
   const session = useWorkTabsStore(state => state.sessionScope);
   const identity = capabilityKey(context);
-  return <HomeScope key={JSON.stringify([session, identity])} context={context} identity={identity} session={session} refresh={refresh} invalidate={invalidate} />;
+  return <><HomeScope key={JSON.stringify([session, identity])} context={context} identity={identity} session={session} refresh={refresh} invalidate={invalidate} /><ConsoleObservationSummary /></>;
 }
 
 function HomeScope({ context, identity, session, refresh, invalidate }: {

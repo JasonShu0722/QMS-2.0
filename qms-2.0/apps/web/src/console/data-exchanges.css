@@ -1,0 +1,49 @@
+.qms-exchange-page { display: grid; gap: 20px; min-width: 0; }
+.qms-exchange-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.qms-exchange-heading h2 { margin: 0 0 8px; font-size: 23px; letter-spacing: -.5px; }
+.qms-exchange-heading p, .qms-exchange-metrics p, .qms-exchange-detail > p { margin: 0; color: var(--qms-muted); line-height: 1.7; }
+.qms-exchange-heading > .ant-btn { flex: none; }
+.qms-exchange-scope { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+.qms-exchange-scope > span { color: var(--qms-muted); font-size: 13px; }
+.qms-exchange-filters { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 16px; padding: 20px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); align-items: end; }
+.qms-exchange-filters > label { display: grid; gap: 8px; min-width: 0; }
+.qms-exchange-filters > label > span { font-size: 13px; font-weight: 600; }
+.qms-exchange-filters .ant-select { width: 100%; }
+.qms-exchange-batch-filter { grid-column: span 2; }
+.qms-exchange-times { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--qms-muted); font-size: 12px; line-height: 1.8; }
+.qms-exchange-times > svg { flex: none; }
+.qms-exchange-metrics dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0 0 12px; border-block: 1px solid var(--qms-border); }
+.qms-exchange-metrics dl > div { padding: 20px 16px; min-width: 0; }
+.qms-exchange-metrics dl > div + div { border-left: 1px solid var(--qms-border); }
+.qms-exchange-metrics dt { color: var(--qms-muted); font-size: 13px; line-height: 1.6; }
+.qms-exchange-metrics dd { margin: 12px 0 0; font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.qms-exchange-records { min-width: 0; }
+.qms-exchange-records h3 { margin: 0 0 12px; font-size: 16px; }
+.qms-exchange-records small { display: block; color: var(--qms-muted); margin-top: 4px; }
+.qms-exchange-records code { display: block; font-size: 12px; margin-top: 4px; white-space: normal; overflow-wrap: anywhere; }
+.qms-exchange-records strong { overflow-wrap: anywhere; }
+.qms-exchange-empty { padding: 28px 16px; border: 1px dashed var(--qms-border); background: var(--qms-surface); text-align: center; }
+.qms-exchange-empty p { margin: 8px 0 0; color: var(--qms-muted); }
+.qms-exchange-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.qms-exchange-pagination > span { color: var(--qms-muted); font-size: 13px; }
+.qms-exchange-pagination > div { display: flex; gap: 8px; }
+.qms-exchange-detail { display: grid; gap: 20px; }
+.qms-exchange-detail dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; margin: 0; }
+.qms-exchange-detail dt { color: var(--qms-muted); font-size: 12px; }
+.qms-exchange-detail dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.qms-exchange-stage-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.qms-exchange-stage-list > section { padding: 14px; border: 1px solid var(--qms-border); border-radius: 6px; }
+.qms-exchange-stage-list h4 { margin: 0 0 10px; font-size: 14px; }
+.qms-exchange-stage-list code, .qms-exchange-stage-list time { display: block; margin-top: 8px; font-size: 12px; color: var(--qms-muted); overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .qms-exchange-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .qms-exchange-heading { flex-direction: column; gap: 12px; }
+  .qms-exchange-filters { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .qms-exchange-batch-filter { grid-column: auto; }
+  .qms-exchange-metrics dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qms-exchange-metrics dl > div { padding: 16px 12px; }
+  .qms-exchange-metrics dl > div:nth-child(odd) { border-left: 0; }
+  .qms-exchange-metrics dl > div:nth-child(n+3) { border-top: 1px solid var(--qms-border); }
+  .qms-exchange-metrics dd { font-size: 22px; }
+  .qms-exchange-detail dl, .qms-exchange-stage-list { grid-template-columns: minmax(0, 1fr); }
+}

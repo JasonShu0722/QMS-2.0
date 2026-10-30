@@ -1621,6 +1621,105 @@ model AuditNc {
   @@map("audit_ncs")
 }
 
+model ServiceOperationReceipt {
+  id           String    @id @default(uuid()) @db.Uuid
+  identityKey  String    @unique @map("identity_key") @db.VarChar(160)
+  scopeKey     String    @map("scope_key") @db.VarChar(40)
+  operation    String    @db.VarChar(20)
+  domainCode   String?   @map("domain_code") @db.VarChar(32)
+  producerId   String    @map("producer_id") @db.Uuid
+  status       String    @db.VarChar(16)
+  startedAt    DateTime  @map("started_at") @db.Timestamptz(3)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(3)
+  observedAt   DateTime  @map("observed_at") @db.Timestamptz(3)
+  durationMs   Int?      @map("duration_ms")
+  processed    Int?
+  retried      Int?
+  failed       Int?
+  reasonCode   String?   @map("reason_code") @db.VarChar(50)
+
+  @@index([scopeKey, operation, observedAt])
+  @@index([observedAt, id])
+  @@map("service_operation_receipts")
+}
+
+model DataExchangeAttempt {
+  id                 String   @id @default(uuid()) @db.Uuid
+  scopeKey           String   @map("scope_key") @db.VarChar(40)
+  sourceKey          String   @map("source_key") @db.VarChar(64)
+  attemptKey         String   @map("attempt_key") @db.VarChar(64)
+  direction          String   @db.VarChar(8)
+  objectType         String   @map("object_type") @db.VarChar(48)
+  level              String   @db.VarChar(8)
+  correlationId      String   @map("correlation_id") @db.VarChar(80)
+  batchId            String?  @map("batch_id") @db.VarChar(80)
+  recordId           String?  @map("record_id") @db.VarChar(80)
+  attemptNumber      Int      @map("attempt_number")
+  idempotencyKeyHash String   @map("idempotency_key_hash") @db.VarChar(64)
+  stages             Json
+  startedAt          DateTime @map("started_at") @db.Timestamptz(3)
+  observedAt         DateTime @map("observed_at") @db.Timestamptz(3)
+  finishedAt         DateTime? @map("finished_at") @db.Timestamptz(3)
+  receipts           DataExchangeReceipt[]
+
+  @@unique([sourceKey, scopeKey, attemptKey], map: "data_exchange_attempt_identity_key")
+  @@index([scopeKey, observedAt, id])
+  @@index([observedAt, id])
+  @@index([scopeKey, sourceKey, batchId, observedAt], map: "data_exchange_attempt_batch_idx")
+  @@map("data_exchange_attempts")
+}
+
+model DataExchangeReceipt {
+  id           String   @id @default(uuid()) @db.Uuid
+  scopeKey     String   @map("scope_key") @db.VarChar(40)
+  sourceKey    String   @map("source_key") @db.VarChar(64)
+  eventKeyHash String   @map("event_key_hash") @db.VarChar(64)
+  inputHash    String   @map("input_hash") @db.VarChar(64)
+  attemptId    String   @map("attempt_id") @db.Uuid
+  recordedAt   DateTime @map("recorded_at") @db.Timestamptz(3)
+  attempt      DataExchangeAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceKey, scopeKey, eventKeyHash], map: "data_exchange_receipt_identity_key")
+  @@index([attemptId])
+  @@map("data_exchange_receipts")
+}
+
+model ApiObservationBucket {
+  id            String   @id @default(uuid()) @db.Uuid
+  minute        DateTime @db.Timestamptz(3)
+  scopeKey      String   @map("scope_key") @db.VarChar(40)
+  method        String   @db.VarChar(8)
+  route         String   @db.VarChar(200)
+  statusClass   Int      @map("status_class")
+  count         Int      @default(0)
+  durationTotal Float    @default(0) @map("duration_total")
+  durationMax   Float    @default(0) @map("duration_max")
+  le50          Int      @default(0)
+  le200         Int      @default(0)
+  le1000        Int      @default(0)
+  le5000        Int      @default(0)
+  gt5000        Int      @default(0)
+
+  @@unique([minute, scopeKey, method, route, statusClass], map: "api_observation_bucket_dimensions_key")
+  @@index([scopeKey, minute])
+  @@index([minute])
+  @@map("api_observation_buckets")
+}
+
+model ApiObservationCollector {
+  producerId    String    @id @map("producer_id") @db.Uuid
+  startedAt     DateTime  @map("started_at") @db.Timestamptz(3)
+  lastFlushedAt DateTime? @map("last_flushed_at") @db.Timestamptz(3)
+  lastFailureAt DateTime? @map("last_failure_at") @db.Timestamptz(3)
+  dropped       Int       @default(0)
+  failures      Int       @default(0)
+  committedBatch Int      @default(0) @map("committed_batch")
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([updatedAt])
+  @@map("api_observation_collectors")
+}
+
 model AuditImportRow {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid

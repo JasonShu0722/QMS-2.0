@@ -15,6 +15,7 @@ type Home = components['schemas']['ConsoleHomeDto'];
 type Source = components['schemas']['ConsoleHomeSourceDto'];
 const mocks = vi.hoisted(() => ({ context: {} as ConsoleContext, refresh: vi.fn(), invalidate: vi.fn() }));
 vi.mock('./ConsoleLayout', () => ({ useConsoleContext: () => mocks }));
+vi.mock('./ConsoleObservationSummary', () => ({ ConsoleObservationSummary: () => <output aria-label="observation summary mount" /> }));
 vi.mock('../api/client', async original => ({ ...await original<typeof import('../api/client')>(), apiRequest: vi.fn() }));
 const read = vi.mocked(apiRequest);
 const realClient = await vi.importActual<typeof import('../api/client')>('../api/client');
@@ -53,6 +54,11 @@ beforeEach(() => {
   read.mockResolvedValue(result());
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it('mounts the independently permission-filtered observation summary on the formal home', async () => {
+  view();
+  expect(await screen.findByLabelText('observation summary mount')).toBeInTheDocument();
+});
 
 it('reads the verified target and shows only server totals with a real source link and server query times', async () => {
   view();

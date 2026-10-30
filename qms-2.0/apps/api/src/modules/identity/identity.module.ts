@@ -36,12 +36,14 @@ import { AdminSupplierAccountsController } from './admin-supplier-accounts.contr
 import { AdminSupplierAccountsService } from './admin-supplier-accounts.service.js';
 import { ConsoleContextController } from './console-context.controller.js';
 import { ConsoleContextService } from './console-context.service.js';
+import { MailOperationsReadService } from './mail-operations-read.service.js';
 
 @Module({
   imports: [AuditLogModule, AdminMutationModule, FileManagementModule, OrganizationModule, AdministrativeLifecycleModule, ESignatureModule],
   controllers: [AuthController, AccountController, ConsoleContextController, AdminUserLifecycleController, AdminSupplierAccountsController, AdminUserController, AdminOrganizationController, MfaController, EmailRecoveryController],
   providers: [
     ConsoleContextService,
+    MailOperationsReadService,
     AdminUserReconfigurationService,
     AdminSupplierAccountsService,
     PasswordHasherService,
@@ -64,6 +66,6 @@ import { ConsoleContextService } from './console-context.service.js';
     RateLimitGuard,
     { provide: APP_GUARD, useClass: CsrfGuard },
   ],
-  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService, AdminUserReconfigurationService, AdminUserLifecycleService, ConsoleContextService],
+  exports: [IdentityService, SessionService, PasswordService, RecoveryMailService, TemporaryPasswordService, SupplierAccountIdentityService, AdminUserReconfigurationService, AdminUserLifecycleService, ConsoleContextService, MailOperationsReadService],
 })
 export class IdentityModule {}

@@ -1,5 +1,5 @@
-import { HttpException, Inject, Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { HttpException, Inject, Injectable, Optional } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -15,6 +15,7 @@ import { SupplierEightDService } from './supplier-eight-d.service.js';
 import { supplierEightDReportModel, supplierReportFail as fail, supplierReportObject, type SupplierEightDReportCore, type SupplierEightDReportRead } from './supplier-eight-d-report.model.js';
 import type { SupplierEightDActor } from './supplier-eight-d.types.js';
 import type { SupplierEightDControlledReportDto, SupplierEightDReportQueryDto } from './supplier-eight-d-report.dto.js';
+import { ServiceOperationReceiptService } from '../task-notification/service-operation-receipt.service.js';
 
 type Reference = FileEvidenceDto & { objectKey: string; objectVersionId: string };
 type Selection = { result: SupplierEightDReportRead; report: SupplierEightDControlledReportDto; refs: Reference[]; fingerprint: string };
@@ -22,7 +23,8 @@ type Selection = { result: SupplierEightDReportRead; report: SupplierEightDContr
 @Injectable()
 export class SupplierEightDReportService {
   constructor(private readonly prisma: PrismaService, @Inject(SupplierEightDService) private readonly core: SupplierEightDReportCore,
-    private readonly files: FileLifecycleService, @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage, private readonly audit: AuditLogService) {}
+    private readonly files: FileLifecycleService, @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage, private readonly audit: AuditLogService,
+    @Optional() private readonly operationReceipts?: ServiceOperationReceiptService) {}
 
   async read(actor: SupplierEightDActor, id: string, query: SupplierEightDReportQueryDto, traceId: string): Promise<SupplierEightDControlledReportDto> {
     this.validate(actor, id, query);
@@ -35,9 +37,16 @@ export class SupplierEightDReportService {
     this.validate(actor, id, query);
     const selected = await this.transaction(tx => this.select(tx, actor, id, query));
     const images = await this.images(selected);
+    const executionId = randomUUID(), startedAt = new Date();
+    const observe = async (status: 'STARTED' | 'SUCCEEDED' | 'FAILED') => {
+      try { await this.operationReceipts?.recordPdf(selected.result.record.control.organizationId, 'supplier-quality', executionId, status, startedAt); }
+      catch { /* Observation failures never change the business report result. */ }
+    };
+    await observe('STARTED');
     let content: Buffer;
-    try { content = await renderProcessEightDPdf(selected.report, images, 'supplier-quality'); }
+    try { content = await renderProcessEightDPdf(selected.report, images, 'supplier-quality'); await observe('SUCCEEDED'); }
     catch (error) {
+      await observe('FAILED');
       if (error instanceof Error && ['PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT', 'PROCESS_EIGHT_D_REPORT_PDF_LIMIT'].includes(error.message)) fail(error.message.replace('PROCESS_EIGHT_D_REPORT_', ''), 413);
       fail('RENDER_FAILED', 422);
     }
