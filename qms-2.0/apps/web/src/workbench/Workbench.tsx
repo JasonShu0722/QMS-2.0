@@ -25,7 +25,7 @@ export function Workbench() {
       </section>
       <section className="qms-workbench__overview qms-display-card" aria-labelledby="workbench-overview-title">
         <h2 id="workbench-overview-title">{t('质量概览')}</h2>
-        <p>{t('统计尚未接入，当前不展示汇总数值。请从待办或问题中心查看实际记录。')}</p>
+
         <dl>{metrics.map((label) => <div key={label}><dt>{t(label)}</dt><dd>{t('待接入')}</dd></div>)}</dl>
       </section>
     </section>

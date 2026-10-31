@@ -98,11 +98,12 @@ it('never offers organization-direct ownership for a non-POSITION required depar
   expect(writes(calls)).toEqual([]);
 });
 
-it('reads the real paginated queue and directories and explains historical scope without a delete undo', async () => {
+it('reads the real paginated queue and requires an explicit parent with the original version', async () => {
   const calls = server(); render(scene()); await edit();
   expect(calls.some(call => call.path === '/api/v1/admin/reconfiguration?kind=ORGANIZATION&pageSize=20&offset=0')).toBe(true);
-  expect(screen.getByText(/原归属仅为历史范围，不迁移历史业务/)).toBeVisible();
-  expect(screen.getByText(/删除不可撤销/)).toBeVisible();
+  expect(editor().getByText('原归属（历史范围）')).toBeVisible();
+  expect(editor().getByText('7')).toBeVisible();
+  expect(writes(calls)).toHaveLength(0);
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(editor().getByRole('button', { name: '确认补配' })).toBeDisabled();
   await select('父组织', '目标公司 · B'); await save();
@@ -128,7 +129,7 @@ it.each([
     await select('目标部门/科室', '质量科 · QA');
   }
   if (kind === 'POSITION' || kind === 'USER') expect(screen.getByText(/保持停用/)).toBeVisible();
-  if (kind === 'POSITION' && source === 'deleted-org') expect(screen.getByText(/新 UUID.*不继承/)).toBeVisible();
+  if (kind === 'POSITION' && source === 'deleted-org') expect(screen.getByText('将新建替代岗位，需重新配置岗位权限。')).toBeVisible();
   await waitFor(() => expect(editor().getByRole('button', { name: '确认补配' })).toBeEnabled()); await save();
   await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(writes(calls)[0].path).toBe(`/api/v1/admin/reconfiguration/${kind}/${pendingId}`);
@@ -387,7 +388,8 @@ it('restores a USER only through required organization fields, with no departmen
   const calls = server(pending('USER', ['targetOrganizationId'], 'deleted-org')); render(scene()); await select('对象类型', '用户'); await edit();
   await select('目标组织', '目标公司 · B');
   expect(screen.queryByLabelText(/目标部门\/科室/)).not.toBeInTheDocument();
-  expect(screen.getByText(/补配后请另在用户或岗位管理中显式配置任职并启用/)).toBeVisible();
+  expect(screen.getByText('补配后保持停用，需另行完成任职、授权与启用。')).toBeVisible();
+  expect(writes(calls)).toHaveLength(0);
   await waitFor(() => expect(editor().getByRole('button', { name: '确认补配' })).toBeEnabled());
   await save(); await screen.findByText(/补配成功/);
   expect(JSON.parse(writes(calls)[0].init!.body as string)).toEqual({ expectedVersion: 7, targetOrganizationId: targetId });

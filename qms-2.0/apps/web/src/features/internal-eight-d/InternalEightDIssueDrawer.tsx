@@ -205,7 +205,7 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
     finally { submitting.current = false; if (isCurrent()) setPreviewLoading(false); }
   }
   return <Drawer open title="发起正式内部8D" size="min(760px, 100vw)" onClose={() => { if (!busy) requestLeave(onClose, true); }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
-    <Typography.Paragraph>已选择 {sources.length} 条来源（跨页保留，上限100条）。受控流程及版本由服务端解析，实际发单人为专业审核人。</Typography.Paragraph>
+    <Typography.Paragraph>已选择 {sources.length}/100 条来源</Typography.Paragraph>
     <ProcessError cause={error} fallback={error instanceof Error ? error.message : '发单失败，请重试。'} />
     {writer.uncertain ? <Alert type="warning" title="发单结果未知；请勿更改请求，重试将使用原请求及同一幂等键。" /> : null}
     <Button disabled={invalidated || busy || writer.uncertain} loading={sourceLoading} onClick={() => void refreshSources()}>重新读取来源版本</Button>
@@ -218,7 +218,7 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
     {previewLoading ? <Spin aria-label="加载来源预览" /> : !previews ? <Button disabled={invalidated} onClick={() => void loadPreviews()}>重试来源预览</Button> : <section aria-label="发单来源预览" className="process-quality-source-preview">{previews.map(item => <section key={item.sourceId} className="process-quality-card">
       <Typography.Text strong>{baseline.find(record => record.id === item.sourceId)?.description}</Typography.Text>
       {item.relatedProblems.map(problem => <div key={problem.problemId}><Link to={`/app/problem-workspace/${problem.problemId}`}>{problem.reportNumber}</Link> · <span>{problem.title}</span> <span>{problem.status}</span></div>)}
-      {item.hasHiddenRelations ? <Alert type="warning" title="存在无权查看的关联，仅显示获权问题；确认令牌将在发单事务中精确复验。" /> : null}
+      {item.hasHiddenRelations ? <Alert type="warning" title="另有无权查看的关联，请核对复发结论。" /> : null}
       {!item.relatedProblems.length && !item.hasHiddenRelations ? <Typography.Paragraph type="secondary">未发现其他关联，不需要复发判定。</Typography.Paragraph> : <>
       <Radio.Group aria-label={`来源复发判定 ${item.sourceId}`} disabled={busy || writer.uncertain || !!proposal} value={confirmations[item.sourceId]} onChange={event => { setDirty(true); setConfirmations(current => ({ ...current, [item.sourceId]: event.target.value })); }}><Radio value="RECURRENCE">复发</Radio><Radio value="NOT_RECURRENCE">非复发</Radio></Radio.Group><Input aria-label={`判定说明 ${item.sourceId}`} placeholder="判定说明（非复发必填）" maxLength={2000} disabled={busy || writer.uncertain || !!proposal} value={reasons[item.sourceId] ?? ''} onChange={event => { setDirty(true); setReasons(current => ({ ...current, [item.sourceId]: event.target.value })); }} />
       </>}
@@ -232,7 +232,7 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
       {userTotal > 100 ? <Pagination aria-label="负责人候选分页" disabled={busy || writer.uncertain} current={userPage} pageSize={100} total={userTotal} showSizeChanger={false} onChange={setUserPage} /> : null}
       {optionsError ? <Button onClick={() => setOptionRevision(value => value + 1)}>重试责任候选</Button> : null}
       <div className="process-quality-form-grid"><Form.Item name="analysisDueAt" label="分析/对策期限"><Input type="date" /></Form.Item><Form.Item name="closureDueAt" label="关闭计划"><Input type="date" /></Form.Item></div>
-      <Typography.Paragraph type="secondary">期限需显式选择日期；留空表示尚未设定，不填默认天数。</Typography.Paragraph>
+
       <Space><Button type="primary" htmlType="submit" loading={writer.busy || previewLoading} disabled={!previews || busy || !!proposal || sourceConflict || !!optionsError || optionsLoading}>{writer.uncertain ? '同请求重试发起8D' : '确认发起8D'}</Button></Space>
     </Form>
   </Drawer>;

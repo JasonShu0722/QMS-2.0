@@ -106,7 +106,7 @@ export function AuditStandardsPage() {
 
   return <main className="audit-standards-page">
     <header className="audit-standards-heading">
-      <div><h1 className="sr-only">审核标准库</h1><Typography.Paragraph type="secondary">发布后的检查项形成不可修改的版本，审核执行按选定版本留存记录。</Typography.Paragraph></div>
+      <h1 className="sr-only">审核标准库</h1>
       <Button type="primary" onClick={() => setEditor('new')}>新建标准</Button>
     </header>
     <section className="audit-standards-card" aria-label="审核标准目录" role="region">
@@ -125,7 +125,7 @@ export function AuditStandardsPage() {
       {Boolean(actionError) && <Alert type="error" showIcon title={safeAccountError(actionError)} />}
       {detail && !detailLoading && <Space orientation="vertical" size={6} className="audit-standards-column">
         <Space wrap><Tag>{auditTypes.find((item) => item.value === detail.auditType)?.label}</Tag><Tag color={detail.status === 'PUBLISHED' ? 'green' : 'orange'}>{detail.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag><Typography.Text type="secondary">最新生效 v{detail.latestVersion}</Typography.Text></Space>
-        <Space>{detail.status === 'DRAFT' ? <><Button onClick={() => setEditor('draft')}>编辑草稿</Button><Button type="primary" loading={busy} onClick={() => void publish()}>发布生效</Button></> : <Button onClick={() => setEditor('revision')}>创建修订</Button>}</Space>
+        <Space>{detail.status === 'DRAFT' ? <><Button onClick={() => setEditor('draft')}>编辑草稿</Button><Button type="primary" loading={busy} onClick={() => void publish()}>发布生效</Button><Typography.Text type="secondary">发布后本版检查项不可修改。</Typography.Text></> : <Button onClick={() => setEditor('revision')}>创建修订</Button>}</Space>
         {detail.status === 'DRAFT' && <Card size="small" title="待发布检查项"><ChecklistItems definition={detail.draftDefinition} /></Card>}
         <Typography.Title level={4}>已生效版本</Typography.Title>
         <List dataSource={detail.versions} locale={{ emptyText: <Empty description="尚未发布版本" /> }} renderItem={(version) => <List.Item key={version.id}><Card className="audit-standards-version" size="small" title={`v${version.version}`} extra={<Typography.Text type="secondary">{new Date(version.publishedAt).toLocaleString('zh-CN')}</Typography.Text>}><ChecklistItems definition={version.definition} /><Typography.Text type="secondary" copyable>{version.id}</Typography.Text></Card></List.Item>} />

@@ -28,6 +28,8 @@ function editor(initial: typeof record | 'new' = record) {
 }
 it('starts a new registration with one optional material row and preserves appended partial facts while collapsed', async () => {
   const saved = editor('new');
+  expect(screen.queryByRole('heading', { name: '附件与扫描' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/附件资源 process-defect:/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
   expect(await screen.findByLabelText('物料编码 1')).toHaveValue('');
   expect(screen.queryByLabelText('物料编码 2')).not.toBeInTheDocument();
@@ -38,6 +40,8 @@ it('starts a new registration with one optional material row and preserves appen
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(screen.getByRole('heading', { name: '附件与扫描' })).toBeVisible();
+  expect(screen.getByText('附件资源 process-defect:defect')).toBeVisible();
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
   expect(JSON.parse(String(call?.[1]?.body)).materials).toEqual([{ materialCode: null, materialName: null, materialBatch: null, notes: '仅补充物料线索', sqeUserId: null, supplierProfileId: null, supplierOrganizationId: null }]);
 });

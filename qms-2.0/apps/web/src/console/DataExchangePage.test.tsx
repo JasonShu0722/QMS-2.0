@@ -67,8 +67,10 @@ it('reads the verified scope and keeps transfer, business processing and reconci
   view(); const metrics = await screen.findByRole('region', { name: '交换摘要' });
   expect(within(metrics).getByText('批次尝试')).toBeVisible(); expect(within(metrics).getByText('7')).toBeVisible();
   expect(within(metrics).getByText('记录尝试')).toBeVisible(); expect(within(metrics).getByText('12')).toBeVisible();
-  expect(screen.getByText('批次与记录分别统计，不相加计算总传输量。')).toBeVisible();
-  expect(screen.getByText('已注册来源不等于在线或业务联调完成。')).toBeVisible();
+  expect(within(metrics).getByText('传输成功批次')).toBeVisible();
+  expect(within(metrics).getByText('5')).toBeVisible();
+  expect(within(metrics).getByText('处理失败批次')).toBeVisible();
+  expect(within(metrics).getByText('2')).toBeVisible();
   const table = screen.getByRole('region', { name: '交换尝试记录' });
   expect(table).toHaveTextContent('传输'); expect(table).toHaveTextContent('处理'); expect(table).toHaveTextContent('失败'); expect(table).toHaveTextContent('未报告');
   expect(document.querySelector(`time[datetime="${time}"]`)).toBeInTheDocument();
@@ -76,20 +78,14 @@ it('reads the verified scope and keeps transfer, business processing and reconci
   expect(query.get('scope')).toBe('ORGANIZATION'); expect(query.get('organizationId')).toBe(targetId);
   expect(screen.queryByRole('button', { name: /重放|补传|导出原文/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: '数据交换观测' })).not.toBeInTheDocument();
-  const notes = document.querySelector('.qms-exchange-heading details');
-  expect(notes).not.toBeNull();
-  expect(notes).not.toHaveAttribute('open');
-  expect(notes!.querySelector('summary')).toHaveTextContent('传输成功不等于业务落地');
-  const stages = within(notes as HTMLElement).getByText(/传输、校验、业务处理与对账/);
-  expect(stages).not.toBeVisible();
-  fireEvent.click(notes!.querySelector('summary')!);
-  expect(stages).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新交换观测' })).toBeEnabled();
 });
 it('shows a genuine unconnected empty catalogue without claiming zero failures or healthy integration', async () => {
   read.mockResolvedValue(result('ORGANIZATION', { connectionStatus: 'NOT_CONNECTED', sources: [], items: [], total: 0, summary: { batchAttempts: 0, recordAttempts: 0, transferSucceededBatches: 0, processingFailedBatches: 0, reconciliationSucceededBatches: 0 } }));
   view(); expect(await screen.findByText('尚未接入数据交换来源')).toBeVisible();
   expect(screen.getByText('当前范围没有交换观测记录')).toBeVisible();
-  expect(screen.getByText('没有记录不代表交换成功或外部系统正常。')).toBeVisible();
+  expect(screen.getByText(/采集完整性未知/)).toBeVisible();
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(screen.queryByText('系统健康')).not.toBeInTheDocument(); expect(screen.queryByText('技术验证来源')).not.toBeInTheDocument();
 });
 it('keeps loading distinct from unknown or empty metadata', () => {
@@ -199,7 +195,7 @@ it('rejects late session ABA results and rereads pending successes after revalid
 it('separates network failure, retry and collection unavailability without leaking error details', async () => {
   read.mockRejectedValueOnce(new Error('PRIVATE_STACK')).mockResolvedValueOnce(result('ORGANIZATION', { collection: { status: 'UNAVAILABLE' } })); view();
   expect(await screen.findByRole('alert')).toHaveTextContent('交换观测读取失败'); expect(screen.queryByText('PRIVATE_STACK')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '重试读取' })); expect(await screen.findByText('当前来源采集不可用，已有记录可能不完整。')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '重试读取' })); expect(await screen.findByText('观测采集不可用')).toBeVisible();
 });
 it('rejects foreign or forged list and detail scope instead of displaying the metadata', async () => {
   read.mockImplementation(async path => path.includes('/attempts/') ? attempt({ organizationId: homeId, correlationId: 'FOREIGN_PRIVATE' }) : result()); view(); fireEvent.click(await screen.findByRole('button', { name: '查看批次 batch-001 第 1 次尝试' }));

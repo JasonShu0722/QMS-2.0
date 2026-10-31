@@ -104,8 +104,8 @@ function TemplateScope({ onClose, onCreated, onBusyChange }: Props) {
   const displayed = error ?? readError;
   const valid = !!options?.items.some(item => item.policy === values.policy) && !!values.domainCode.trim() && !!values.code.trim() && !!values.name.trim();
   return <Modal open title={t('初始化关闭审核模板')} onCancel={close} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null}>
-    <p>{t('仅初始化草稿，不自动发布或绑定；不写入具体人员或岗位 UUID。')}</p>
-    <Alert type="warning" showIcon title={t('发布时校验对应领域是否已接入；创建候选草稿不会自动发布、绑定或启用。')} />
+
+
     {!!displayed && <Alert type="error" title={t(displayed instanceof ApiError && displayed.status === 403 ? '无权执行此操作' : safeAccountError(displayed))} description={displayed instanceof ApiError && displayed.traceId ? <code>{displayed.traceId}</code> : undefined} />}
     {loading && <Spin aria-label={t('加载中')} />}
     {!!readError && <Button disabled={loading || denied || busy} onClick={() => { setError(undefined); setRevision(value => value + 1); }}>{t('重试加载模板')}</Button>}

@@ -37,7 +37,6 @@ export function SupplierDisclosure({ report, base, blocked, command, onDirty }: 
       {preview.warnings.map(warning => <Alert key={warning} type="warning" title={warning} />)}
       <Space wrap><Checkbox checked={confirmed} disabled={blocked || pending} onChange={event => setConfirmed(event.target.checked)}>{text('我已核对外发事实、目标供应商与所选附件', 'I checked the facts, supplier and selected files')}</Checkbox>
         {report.allowedActions.includes('release') && <Button type="primary" disabled={blocked || pending || !confirmed || !validSelection || Date.parse(preview.expiresAt) <= Date.now()} onClick={() => void command(`${base}/release`, 'POST', { expectedRowVersion: preview.rowVersion, selectedFileIds: preview.selectedFileIds, previewToken: preview.previewToken, confirmed: true })}>{text('确认释放给供应商', 'Confirm release to supplier')}</Button>}</Space>
-      <p>{text('释放成功只表示授权和通知排队，不表示供应商已收到或签收。', 'Successful release means authorized and queued for notification, not delivered or acknowledged.')}</p>
     </>}
   </>;
 }

@@ -306,7 +306,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     {showNcClosure ? <AuditNcClosurePanel /> : null}
     <section className="audit-management-card audit-import-card" aria-label="审核导入行">
       <div className="audit-import-heading">
-        <div><Typography.Title level={3}>外部审核导入</Typography.Title><Typography.Text type="secondary">逐行复核客户和第二方审核数据，复核动作按版本号提交。</Typography.Text></div>
+        <div><Typography.Title level={3}>外部审核导入</Typography.Title></div>
         <Button onClick={refreshImports} loading={importLoading}>刷新导入</Button>
       </div>
       <Space wrap className="audit-import-filters">
@@ -323,7 +323,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     </section>
     <Drawer title="审核导入行发单" open={Boolean(issueRow)} onClose={closeIssue} closable={!issueBusy} keyboard={!issueBusy} mask={{ closable: !issueBusy }} width="min(620px, 100vw)" destroyOnHidden={false}>
       {issueRow ? <>
-        <Typography.Paragraph>来源：{sourceLabels[issueRow.source_system]} · {issueRow.external_key} · 版本 v{issueRow.version}。请选择已发布且适用于审核问题的流程定义和版本。</Typography.Paragraph>
+        <Typography.Paragraph>来源：{sourceLabels[issueRow.source_system]} · {issueRow.external_key} · 版本 v{issueRow.version}</Typography.Paragraph>
         {issueError ? <Alert className="audit-import-issue-error" type={permissionDenied(issueError) ? 'warning' : 'error'} showIcon title={permissionDenied(issueError) ? '暂无发单权限' : issueError instanceof ApiError && issueError.status === 409 ? '来源版本已变化；请关闭并刷新导入行后重新选择。' : issueError instanceof ApiError ? safeAccountError(issueError) : '发单失败，请重试。'} description={issueError instanceof ApiError && issueError.traceId ? `追踪标识：${issueError.traceId}` : undefined} action={issueConflict ? <Button onClick={closeIssue}>关闭并刷新导入行</Button> : undefined} /> : null}
         <Form<IssueFields> form={issueForm} layout="vertical" disabled={issueBusy} onValuesChange={() => setIssueDirty(true)} initialValues={{ responseForm: 'BRIEF' }} onFinish={(values) => void issueImport(values)}>
           <Form.Item name="problemType" label="问题类型" rules={[{ required: true, whitespace: true, message: '请输入问题类型' }, { max: 100, message: '最多 100 个字符' }]}><Input maxLength={100} /></Form.Item>

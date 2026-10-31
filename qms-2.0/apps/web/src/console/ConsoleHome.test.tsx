@@ -60,20 +60,11 @@ it('mounts the independently permission-filtered observation summary on the form
   expect(await screen.findByLabelText('observation summary mount')).toBeInTheDocument();
 });
 
-it('keeps incomplete and non-live status visible while disclosing query and source scope details on demand', async () => {
+it('keeps the data scope and source link visible beside the server count', async () => {
   view();
   const card = await screen.findByRole('region', { name: '失败队列' });
-  const notes = screen.getByText(/来源可能不完整.*非实时/);
-  expect(notes).toBeVisible();
-  const explanation = screen.getByText('各来源独立查询，不是同一原子快照或实时运行状态。');
-  expect(explanation).not.toBeVisible();
-  fireEvent.click(notes);
-  expect(explanation).toBeVisible();
-  expect(screen.getByText(/没有汇总不代表事项为零/)).toBeVisible();
-  const scope = within(card).getByText('TARGET · 组织范围');
-  expect(scope).not.toBeVisible();
-  fireEvent.click(within(card).getByText('范围与来源'));
-  expect(scope).toBeVisible();
+  expect(within(card).getByText('17')).toBeVisible();
+  expect(within(card).getByText('组织范围')).toBeVisible();
   expect(within(card).getByText('目标组织 (TARGET)')).toBeVisible();
   expect(within(card).getByRole('link', { name: '查看失败队列' })).toBeVisible();
 });
@@ -85,10 +76,9 @@ it('reads the verified target and shows only server totals with a real source li
   expect(within(card).getByRole('link', { name: '查看失败队列' })).toHaveAttribute('href', `/console/outbox?organizationId=${targetId}`);
   expect(read).toHaveBeenCalledWith(`/api/v1/admin/console/home?organizationId=${targetId}`, { signal: expect.any(AbortSignal) });
   expect(document.querySelector(`time[datetime="${time}"]`)).toBeInTheDocument();
-  expect(within(card).getByText('TARGET · 组织范围')).toBeInTheDocument();
+  expect(within(card).getByText('组织范围')).toBeVisible();
   expect(within(card).getByText('目标组织 (TARGET)')).toBeInTheDocument();
   expect(within(card).getByText((_, node) => node?.tagName === 'TIME' && node.getAttribute('datetime') === sourceTime)).toBeInTheDocument();
-  expect(screen.getByText('各来源独立查询，不是同一原子快照或实时运行状态。')).toBeInTheDocument();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
 });
 
@@ -116,8 +106,8 @@ it('distinguishes platform pending authorization home from organization resource
   read.mockResolvedValue(result([item('reconfiguration-organizations', 6), item('reconfiguration-departments', 3), item('reconfiguration-positions', 2), item('reconfiguration-users', 9)]));
   view();
   const card = await screen.findByRole('region', { name: '待配置组织' });
-  expect(within(card).getByText('SESSION_HOME · 平台级目录')).toBeInTheDocument();
-  expect(within(card).getByText('授权来源：会话组织 (HOME)，不是全部资源的归属组织。')).toBeInTheDocument();
+  expect(within(card).getByText('平台级目录')).toBeVisible();
+  expect(within(card).getByText('授权组织：会话组织 (HOME)')).toBeVisible();
   const links = screen.getAllByRole('link', { name: /查看待配置/ });
   expect(links).toHaveLength(4);
   for (const link of links) expect(link).toHaveAttribute('href', `/console/reconfiguration?organizationId=${targetId}`);
@@ -276,11 +266,7 @@ it('keeps keyboard-usable refresh and source links without autofocus or a busine
   view(); await screen.findByText('17');
   expect(document.activeElement).toBe(document.body);
   await user.tab();
-  expect(screen.getByText(/来源可能不完整.*非实时/)).toHaveFocus();
-  await user.tab();
   expect(screen.getByRole('button', { name: '刷新管理事项' })).toHaveFocus();
-  await user.tab();
-  expect(screen.getByText('范围与来源')).toHaveFocus();
   await user.tab();
   expect(screen.getByRole('link', { name: '查看失败队列' })).toHaveFocus();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);

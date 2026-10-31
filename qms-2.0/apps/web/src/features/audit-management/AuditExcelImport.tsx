@@ -99,8 +99,8 @@ export function AuditExcelImport({ organizationId, onImported, onDenied }: {
 
   return <section className="audit-excel-import" aria-label="审核 Excel 导入">
     <Typography.Title level={4}>Excel 逐行导入</Typography.Title>
-    <Typography.Paragraph type="secondary">支持 .xlsx，最多 2 MB、100 行。必填列：sourceSystem、externalKey、finding。客户或二方来源键保存在 customerKey，供复核追溯。错误行保留反馈，成功行不重复提交。</Typography.Paragraph>
-    <Typography.Paragraph type="secondary">可用列：{auditImportFields.join('、')}。来源使用 CUSTOMER 或 SECOND_PARTY；日期时间带时区。</Typography.Paragraph>
+
+    <Typography.Paragraph type="secondary">必填列：sourceSystem、externalKey、finding；可用列：{auditImportFields.join('、')}。来源：CUSTOMER / SECOND_PARTY；时间带时区；≤2 MB、100 行。</Typography.Paragraph>
     <Space wrap>
       <input ref={input} type="file" aria-label="审核 Excel 文件" accept=".xlsx" disabled={busy || loading || blocked || rows.length > 0} onChange={(event) => void selectFile(event.target.files?.[0])} />
       {rows.length > 0 ? <Popconfirm title={dirty ? '清除预览将丢失未成功行的重试记录。确定清除？' : '确定清除预览？'} onConfirm={clear} disabled={busy}><Button disabled={busy}>清除预览</Button></Popconfirm> : null}

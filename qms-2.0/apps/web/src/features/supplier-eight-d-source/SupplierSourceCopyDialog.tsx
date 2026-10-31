@@ -97,7 +97,7 @@ function CopyContent({ organizationId, sources, onClose, onDenied }: Props) {
       <Alert type="success" showIcon title="供应商草稿已创建，尚未正式发单或释放资料。" />
       <div className="qms-dialog-actions"><Button onClick={close}>关闭</Button><Link to={`/app/supplier-quality/problems/${encodeURIComponent(receipt.id)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`}>打开供应商草稿</Link></div>
     </> : <>
-      <Typography.Paragraph>已选择 {sources.length}/100 条来源。仅以服务器受控预览为依据；单据独立，不强制关闭来源。</Typography.Paragraph>
+      <Typography.Paragraph>已选择 {sources.length}/100 条来源</Typography.Paragraph>
       <label htmlFor="supplier-copy-profile">目标供应商档案</label>
       <SupplierReferenceSelect id="supplier-copy-profile" path={optionsPath} value={profileId} disabled={frozen} placeholder="选择目标供应商档案" onDenied={onDenied} onChange={value => {
         if (value === profileId) return;
@@ -110,12 +110,12 @@ function CopyContent({ organizationId, sources, onClose, onDenied }: Props) {
       {preview && <>
         <section aria-label="服务器受控来源预览">
           <Typography.Title level={5}>目标供应商最小事实预览</Typography.Title>
-          <Typography.Paragraph type="secondary">预览有效至 {new Date(preview.expiresAt).toLocaleString()}。下列数量为各事实原值，不自动求和。</Typography.Paragraph>
+          <Typography.Paragraph type="secondary">预览有效至 {new Date(preview.expiresAt).toLocaleString()}</Typography.Paragraph>
           {!preview.facts.length && <Alert type="warning" title="没有可复制事实，请返回台账重新选择。" />}
           {preview.facts.map(fact => <div key={fact.factKey}>
             <Typography.Paragraph>{fact.defectDescription}</Typography.Paragraph>
-            <Typography.Paragraph>该事实数量：{fact.defectQuantity ?? '未知'}；不自动填入草稿数量。</Typography.Paragraph>
-            {fact.materials.length ? fact.materials.map(material => <Typography.Paragraph key={material.id}>不良物料：{material.materialCode ?? '未知，请人工完善'}；名称：{material.materialName ?? '未知'}；批次：{material.materialBatch ?? '未知'}</Typography.Paragraph>) : <Typography.Paragraph>不良物料未知，请人工完善；不以成品组件代替。</Typography.Paragraph>}
+            <Typography.Paragraph>事实原数量：{fact.defectQuantity ?? '未知'}</Typography.Paragraph>
+            {fact.materials.length ? fact.materials.map(material => <Typography.Paragraph key={material.id}>不良物料：{material.materialCode ?? '未知，请人工完善'}；名称：{material.materialName ?? '未知'}；批次：{material.materialBatch ?? '未知'}</Typography.Paragraph>) : <Typography.Paragraph>不良物料未知，请人工完善。</Typography.Paragraph>}
           </div>)}
         </section>
         <Alert type="info" showIcon title="不自动复制客户、VIN、内部资料或来源附件。自由文本不保证自动脱敏，必须人工审核；正式披露请在供应商8D工作区另行上传并完成扫描。" />

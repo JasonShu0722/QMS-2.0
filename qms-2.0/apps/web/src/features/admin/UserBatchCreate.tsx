@@ -195,8 +195,7 @@ function BatchForm({ organizationId, canReadPasswords, canAuthorize, busyChanged
   }
   const precheckNote = (rowNumber: number) => prechecks.has(rowNumber) ? <Typography.Text type="warning">{t('本地预检')}：{prechecks.get(rowNumber)}</Typography.Text> : null;
   return <section aria-label={t('批量创建账号')}>
-    <Typography.Paragraph>{t('上传首表，按行创建内部账号。有效临时密码仅在当前受保护页面显示，不写入浏览器存储。')}</Typography.Paragraph>
-    <Typography.Paragraph>{t('岗位代码必须精确匹配当前组织；多个岗位使用英文分号分隔。旧三列模板不能继续使用。')}</Typography.Paragraph>
+    <Typography.Paragraph>{t('读取首个工作表；岗位代码须匹配当前组织，多个岗位用英文分号分隔。')}</Typography.Paragraph>
     <Typography.Paragraph>{t('临时密码有效期为 7 天；改密或到期后不可再查询。已下载到本机的文件无法撤回，请安全保管。')}</Typography.Paragraph>
     {!canAuthorize && <Alert showIcon type="warning" title={t('缺少岗位授权所需权限，无法创建内部账号')} />}
     <Space wrap><Button disabled={busy} onClick={() => void template()}>{t('下载账号模板')}</Button><input aria-label={t('账号清单文件')} type="file" accept=".xlsx" disabled={busy || !canAuthorize || !!pending.current} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void readFile(file); }} /><Button type="primary" loading={busy} disabled={!prepared.length || busy || Boolean(result) || !canAuthorize} onClick={() => void submit()}>{t('创建账号')}</Button>{rows.length > 0 && !prepared.length && !result && <Button disabled={busy || !canAuthorize} onClick={() => void refreshPreview()}>{t('重新预览授权')}</Button>}{result && <><Button disabled={busy} onClick={() => void download(false)}>{t('下载账号清单')}</Button>{canReadPasswords && <Button disabled={busy} onClick={() => void download(true)}>{t('下载有效临时密码')}</Button>}</>}</Space>

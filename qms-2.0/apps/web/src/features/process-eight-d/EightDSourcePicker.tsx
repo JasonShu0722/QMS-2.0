@@ -58,7 +58,7 @@ export function EightDSourcePicker({ report, read, disabled, onChange }: { repor
     finally { if (version === generation.current) setChecking(false); }
   }
   return <div className={styles.modal}>
-    <p>{text('从真实台账选择来源；跨页选择保留。重复关联与复发须逐项确认，取消不变更。', 'Select real ledger records; selections persist across pages. Confirm related problems and recurrence individually. Cancel makes no change.')}</p>
+
     {closed ? <Alert type="info" title={text('关闭后仅补充来源，批准版不随关闭后来源补充改变。', 'Only sources may be supplemented after closure. The approved report stays unchanged.')} /> : null}
     <EightDField label={text('搜索来源台账', 'Search source ledger')}><input disabled={disabled || checking} value={search} maxLength={100} onChange={event => { setSearch(event.target.value); setPage(1); }} /></EightDField>
     {error ? <Alert type="error" title={error} /> : null}
@@ -71,7 +71,7 @@ export function EightDSourcePicker({ report, read, disabled, onChange }: { repor
     <Button disabled={disabled || checking || !remaining.length && !selected.length} loading={checking} onClick={() => void check()}>{text('预览并核对来源关联', 'Preview source relationships')}</Button>
     {preview?.map(item => <div key={item.defectId} className={styles.row}><p>{text('来源关联核对', 'Source relationship check')} · {selected.find(source => source.id === item.defectId)?.description}</p>
       {item.relatedProblems.map(related => <p key={related.problemId}>{related.reportNumber} · {related.title} · {related.status}</p>)}
-      {item.hasHiddenRelations && <Alert type="warning" title={text('另有不可见关联，仅按服务端指纹确认，不披露其标识。', 'Additional restricted relationships exist. Confirm the server fingerprint without exposing their IDs.')} />}
+      {item.hasHiddenRelations && <Alert type="warning" title={text('另有不可见关联，请核对复发结论。', 'Additional restricted relationships exist. Review the recurrence decision.')} />}
       {(item.relatedProblems.length > 0 || item.hasHiddenRelations) ? <><EightDField label={text('复发关联结论', 'Recurrence conclusion')}><select disabled={disabled} value={confirmations[item.defectId]?.recurrence ?? ''} onChange={event => {
         const recurrence = event.target.value as Confirmation['recurrence'];
         setConfirmations(previous => { const next = { ...previous }; if (!recurrence) delete next[item.defectId]; else next[item.defectId] = { defectId: item.defectId, relatedProblemIds: item.relatedProblems.map(related => related.problemId), relatedSetToken: item.relatedSetToken, recurrence, reason: previous[item.defectId]?.reason ?? '' }; return next; });

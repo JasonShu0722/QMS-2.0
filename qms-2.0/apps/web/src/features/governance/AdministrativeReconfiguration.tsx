@@ -215,16 +215,14 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
 
   if (denied) return <Alert type="error" showIcon title={t('管理权限或会话已失效，已清除待配置内容')} />;
   return <section className="administrative-reconfiguration" aria-label={t('待配置管理')}>
-    <Alert type="info" showIcon title={t('删除不可撤销；此处仅补充存续对象的当前配置，不恢复已删除对象。')} />
     <Space wrap className="administrative-reconfiguration-toolbar">
-      <Typography.Text strong>{t('待配置管理')}</Typography.Text>
       <Select aria-label={t('对象类型')} value={kind} disabled={locked} options={Object.entries(names).map(([value, label]) => ({ value, label: t(label) }))}
         onChange={value => requestLeave(() => { closeEditor(); setKind(value); setOffset(0); setSuccess(undefined); })} />
       <Button disabled={locked || loading} onClick={() => requestLeave(refreshCurrentKind)}>{t('刷新待配置')}</Button>
     </Space>
     <GovernanceFeedback error={error} />
     {!!error && !selected && !loading && <Button onClick={() => setRevision(value => value + 1)}>{t('重试读取')}</Button>}
-    {success && <Alert type="success" showIcon title={t('补配成功，仅更新当前配置；历史归属保持不变。')} description={<Space wrap>
+    {success && <Alert type="success" showIcon title={t('补配成功')} description={<Space wrap>
       <span>{t('状态')}：{t(success.status === 'DISABLED' ? '保持停用' : '启用')}</span>
       {success.replacementId && <span>{t('替代对象')}：<code>{success.replacementId}</code></span>}
     </Space>} />}
@@ -245,11 +243,8 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
         { key: 'scope', label: t('原归属（历史范围）'), children: organizations.find(entry => entry.id === selected.originalOrganizationId)?.name ?? selected.originalOrganizationId },
         { key: 'version', label: t('当前版本'), children: selected.version },
       ]} />
-      <p>{t('原归属仅为历史范围，不迁移历史业务。补配不继承旧角色、任职或审批资格，也不自动授予权限。')}</p>
       {(selected.kind === 'POSITION' || selected.kind === 'USER') && <Alert type="warning" showIcon title={t('补配后保持停用，需另行完成任职、授权与启用。')} />}
-      {selected.kind === 'USER' && <p>{t('补配后请另在用户或岗位管理中显式配置任职并启用；本次仅补当前主组织，不配置部门或默认授予权限。')}</p>}
-      {selected.kind === 'POSITION' && needsOrganization && <p>{t('原组织已删除：创建新 UUID 的替代岗位，不继承旧岗位角色或授权；原岗位和历史归属保留。')}</p>}
-      {selected.kind === 'DEPARTMENT' && needsOrganization && <p>{t('原组织已删除：选择替代组织与部门建立当前替代关联，原部门历史不搬迁。')}</p>}
+      {selected.kind === 'POSITION' && needsOrganization && <p>{t('将新建替代岗位，需重新配置岗位权限。')}</p>}
       {!supported && <Alert type="warning" showIcon title={t('配置要求暂不支持，请刷新或联系管理员核对服务端版本。')} />}
       <GovernanceFeedback error={directoryError} />
       {!!directoryError && <Button disabled={locked} onClick={() => setDirectoryRevision(value => value + 1)}>{t('重试部门目录')}</Button>}

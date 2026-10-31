@@ -13,7 +13,7 @@ it('requires confirmation before revoking the target sessions with a direct temp
   vi.stubGlobal('fetch', fetcher);
   render(<UserTemporaryPassword user={user} organizationId="org" />);
   await userEvent.click(screen.getByRole('button', { name: '直接重置临时密码' }));
-  expect(await screen.findByText('旧密码和目标账号的现有会话将立即失效。')).toBeInTheDocument();
+  expect(await screen.findByText('旧密码和目标账号的现有会话将立即失效，首次登录需改密。')).toBeInTheDocument();
   expect(fetcher).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole('button', { name: '确认重置' }));
   expect(await screen.findByText('new-temporary-password')).toBeInTheDocument();

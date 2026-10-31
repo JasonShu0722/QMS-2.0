@@ -62,7 +62,6 @@ it('shows project and component clues separately from mapping eligibility, with 
   expect(screen.getByLabelText('候选项目代码')).toHaveValue('NP-042');
   expect(screen.getByLabelText('候选组件号')).toHaveValue('');
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'https://qms.invalid').searchParams.get('projectCode') === 'NP-042')).toBe(true));
-  expect(screen.getByText(/台账字段筛选.*不代表.*映射/)).toBeVisible();
   fireEvent.change(screen.getByLabelText('候选组件号'), { target: { value: 'COMP-042' } });
   fireEvent.click(screen.getByText('筛选候选', { selector: 'button span' }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'https://qms.invalid').searchParams.get('productCode') === 'COMP-042')).toBe(true));

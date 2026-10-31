@@ -158,7 +158,7 @@ it('sends null only for explicitly unbounded scope end', async () => {
 it('warns about a stale selected appointment without silently selecting a different minister', async () => {
   stub({ scopes: [scope], assignments: [second] }); render(scene()); await loaded();
   await userEvent.click(screen.getByRole('button', { name: '编辑部长分管 · 质量科' }));
-  expect(await screen.findByText('已选任职失效，请重新选择；不会自动更换人员。')).toBeInTheDocument();
+  expect(await screen.findByText('已选任职失效，请重新选择。')).toBeInTheDocument();
   expect(within(screen.getByRole('dialog')).getByRole('button', { name: /^保\s*存$/ })).toBeDisabled();
 });
 

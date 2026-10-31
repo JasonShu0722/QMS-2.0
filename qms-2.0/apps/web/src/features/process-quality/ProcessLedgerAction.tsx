@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Form, Input, Modal, Select, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { ProcessError, useProcessWrite, verificationLabels, type Defect } from './process-ledger';
@@ -31,7 +31,6 @@ export function ProcessLedgerAction({ mode, record, materialId, onClose, onSaved
     finally { submitting.current = false; }
   }
   return <Modal open title={title} onCancel={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }} footer={null}>
-    <Typography.Paragraph>{mode === 'close' ? '仅关闭人工台账，不伪造8D关闭或产生任务。' : mode === 'reopen' ? '请说明恢复原因；恢复台账不会重开已关闭8D。' : '记录此物料的复核事实，不自动修改责任类别或生成SQE待办。'}</Typography.Paragraph>
     <ProcessError cause={error} fallback="操作失败，草稿已保留，请重试。" />
     {writer.uncertain ? <Alert type="warning" title="操作结果未知，仅能使用原请求重试。" /> : null}
     <Form form={form} layout="vertical" disabled={writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={values => void submit(values)}>

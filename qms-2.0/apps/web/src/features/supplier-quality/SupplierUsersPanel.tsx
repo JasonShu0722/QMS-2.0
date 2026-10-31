@@ -119,7 +119,7 @@ function UsersContent({ profile, organizationId, organizationPermissions, onBoun
     finally { pending.current = false; if (alive.current) setBusy(false); }
   }
   return <Modal open width={900} title={`${t('供应商用户账号')} · ${profile.displayName}`} footer={null} onCancel={close} keyboard={!locked} closable={!locked} mask={{ closable: false }}>
-    <Typography.Paragraph>{t('仅管理员创建供应商人员账号，不提供注册或邀请。同一供应商的多个账号共用专属协作边界。')}</Typography.Paragraph>
+
     <Typography.Paragraph>{t(bound ? '已开通协作' : '未开通协作')}{bound ? ` · ${bound}` : ''}</Typography.Paragraph>
     {error ? <Alert type="error" title={t(supplierError(error))} description={error instanceof ApiError && error.status === 409 ? t('当前填写内容已保留，请显式刷新账号后重试。') : undefined} /> : null}
     <Button disabled={locked || invalidated} loading={loading} onClick={() => void refresh()}>{t('刷新供应商账号')}</Button>
@@ -132,7 +132,7 @@ function UsersContent({ profile, organizationId, organizationPermissions, onBoun
     {canCreate ? <Form form={form} name={`supplier-account-${profile.id}`} layout="vertical" disabled={locked || loading} onValuesChange={() => setDirty(true)} onFinish={(values: Create) => void create(values)}>
       <Form.Item name="username" label={t('用户名')} rules={[{ required: true, whitespace: true }, { pattern: /^[a-zA-Z0-9._-]+$/, message: t('用户名只能包含英文字母、数字、点、下划线和连字符') }]}><Input maxLength={100} autoComplete="off" /></Form.Item>
       <Form.Item name="email" label={t('邮箱')} rules={[{ type: 'email', message: t('请输入有效邮箱') }]}><Input maxLength={254} /></Form.Item>
-      {!bound ? <Form.Item name="supplierOrganizationId" label={t('已有受控供应商企业 UUID（选填）')} help={t('留空将显式创建专属协作边界。填入已有企业时，必须已有该 SUPPLIER 企业的账号治理权限；服务端复验，不从全局企业目录推定授权。')} rules={[{ pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, message: t('请输入有效的企业 UUID') }]}><Input maxLength={36} /></Form.Item> : null}
+      {!bound ? <Form.Item name="supplierOrganizationId" label={t('已有受控供应商企业 UUID（选填）')} help={t('留空新建企业；填写已有企业需有其账号管理权限。')} rules={[{ pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, message: t('请输入有效的企业 UUID') }]}><Input maxLength={36} /></Form.Item> : null}
       <Form.Item shouldUpdate>{() => <Button type="primary" loading={busy} disabled={locked || loading} htmlType="submit">{t(bound ? '新增供应商账号' : form.getFieldValue('supplierOrganizationId') ? '绑定受控企业并建账号' : '创建专属协作边界并建账号')}</Button>}</Form.Item>
     </Form> : null}
     {selected ? <SupplierPassword key={`${organizationId}:${profile.id}:${selected.id}:${passwordRevision}`} account={selected} organizationId={organizationId} base={base} signal={controller.current.signal} initialValue={temporary} allowed={canReset && selected.status === 'ACTIVE'} busyChanged={setPasswordBusy} resetMutation={passwordMutation.current} onDenied={failed} /> : null}

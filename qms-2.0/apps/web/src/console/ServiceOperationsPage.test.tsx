@@ -58,21 +58,15 @@ it('renders owner facts and server timestamps without turning configuration or r
   expect(within(files).getByText('近期执行事实')).toBeVisible();
   const pdf = screen.getByRole('region', { name: 'PDF 按请求渲染' });
   expect(within(pdf).getByText('执行失败')).toBeVisible(); expect(within(pdf).getByText('回执已过期')).toBeVisible();
-  expect(within(pdf).getByText('120 ms')).toBeVisible(); expect(screen.getByText(/不是常驻队列/)).toBeVisible();
-  expect(within(pdf).getByText(/不代表最终业务请求成功/)).toBeVisible();
+  expect(within(pdf).getByText('120 ms')).toBeVisible();
+  expect(within(pdf).getByText('渲染未成功')).toBeVisible();
+  expect(within(pdf).getByText('客户质量')).toBeVisible();
   expect(screen.getByText('目标组织 (TARGET)')).toBeVisible(); expect(document.querySelector(`time[datetime="${time}"]`)).toBeInTheDocument();
   const query = new URL(read.mock.calls[0]![0], 'http://localhost').searchParams;
   expect(query.get('organizationId')).toBe(targetId); expect(query.get('scope')).toBe('ORGANIZATION');
   expect(screen.queryByText('系统健康')).not.toBeInTheDocument(); expect(useWorkTabsStore.getState().tabs).toEqual([]);
   expect(screen.queryByRole('heading', { name: '运行服务事实' })).not.toBeInTheDocument();
-  const notes = document.querySelector('.qms-services-heading details');
-  expect(notes).not.toBeNull();
-  expect(notes).not.toHaveAttribute('open');
-  expect(notes!.querySelector('summary')).toHaveTextContent('非实时');
-  const interpretation = within(notes as HTMLElement).getByText(/配置、执行结果和采集状态/);
-  expect(interpretation).not.toBeVisible();
-  fireEvent.click(notes!.querySelector('summary')!);
-  expect(interpretation).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新运行服务事实' })).toBeEnabled();
 });
 it('keeps unavailable source counts absent while retaining safe facts from the other owners', async () => {
   view(); const mail = await screen.findByRole('region', { name: '邮件投递' });
@@ -124,7 +118,9 @@ it('distinguishes successful empty results from a failed read and supports a saf
   read.mockRejectedValueOnce(new Error('PRIVATE_BACKEND_HOST')).mockResolvedValueOnce(result('ORGANIZATION', { sources: [] })); view();
   expect(await screen.findByRole('alert')).toHaveTextContent('运行服务事实读取失败'); expect(screen.queryByText('PRIVATE_BACKEND_HOST')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '重试读取' })); expect(await screen.findByText('当前没有可展示的服务事实')).toBeVisible();
-  expect(screen.getByText('没有事实不代表没有任务或服务正常。')).toBeVisible();
+  expect(screen.queryByRole('region', { name: '文件与扫描' })).not.toBeInTheDocument();
+  expect(screen.queryByText('0')).not.toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 it.each([401, 403])('clears source facts and invalidates once after the current read returns %s', async status => {
   read.mockResolvedValueOnce(result()).mockRejectedValueOnce(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'PRIVATE' }, status)); view();

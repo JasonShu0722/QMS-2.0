@@ -115,22 +115,21 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
     <LedgerConflicts conflicts={conflicts} confirmed={confirmed} onConfirm={setConfirmed} disabled={writer.busy || writer.uncertain || refreshing} />
     {record && version === undefined ? <Button onClick={() => void refreshVersion()} loading={refreshing}>重试读取最新版本</Button> : null}
     {writer.uncertain ? <Alert type="warning" showIcon title="上次保存结果未知，原请求已锁定；重试会使用同一幂等键及原文，不会另建一条。" /> : null}
-    <p>客户、件数和日期可待补。不自动填客户、数量、服务方式、风险或日期；一行多件不以单车派生值代表整批。</p>
     <fieldset disabled={writer.busy || writer.uncertain || refreshing} className="customer-ledger-form">
-      <label><span>关联客户主数据（可选，不改来源原文）</span><select aria-label="关联客户主数据" value={customerId === undefined ? baseline?.customerId ?? '' : customerId ?? ''} onChange={event => { setCustomerId(event.target.value || null); setConfirmed(false); setDirty(true); }}>
-        <option value="">不关联 / 待匹配，可直接登记</option>{baseline?.customerId && !customers.some(customer => customer.id === baseline.customerId && customer.active) ? <option value={baseline.customerId}>保留原关联（当前主数据不可用）</option> : null}{customers.filter(customer => customer.active).map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}
+      <label><span>关联客户主数据（可选）</span><select aria-label="关联客户主数据" value={customerId === undefined ? baseline?.customerId ?? '' : customerId ?? ''} onChange={event => { setCustomerId(event.target.value || null); setConfirmed(false); setDirty(true); }}>
+        <option value="">未关联</option>{baseline?.customerId && !customers.some(customer => customer.id === baseline.customerId && customer.active) ? <option value={baseline.customerId}>保留原关联（当前主数据不可用）</option> : null}{customers.filter(customer => customer.active).map(customer => <option key={customer.id} value={customer.id}>{customer.code} · {customer.name}</option>)}
       </select></label>
       {ledgerFields.map(([key, label]) => {
         const options = choices[key]; const value = rawText(fields[key]);
         return <label key={key} className={key === 'defectDescription' ? 'customer-ledger-form-wide' : undefined}><span>{label}</span>
           {options ? <select aria-label={label} value={value} onChange={event => { setFields(current => ({ ...current, [key]: event.target.value })); setConfirmed(false); setDirty(true); }}>
             <option value="">请选择 / 留空</option>{value && !options.some(([option]) => option === value) ? <option value={value}>原填写：{value}（待补正）</option> : null}{options.map(([option, text]) => <option key={option} value={option}>{text}</option>)}
-          </select> : key === 'defectDescription' ? <Input.TextArea aria-label={label} rows={4} value={value} onChange={event => { setFields(current => ({ ...current, [key]: event.target.value })); setConfirmed(false); setDirty(true); }} /> : <Input aria-label={label} value={value} placeholder={key.endsWith('On') ? 'YYYY-MM-DD；异常原文可保留待补正' : undefined} onChange={event => { setFields(current => ({ ...current, [key]: event.target.value })); setConfirmed(false); setDirty(true); }} />}
+          </select> : key === 'defectDescription' ? <Input.TextArea aria-label={label} rows={4} value={value} onChange={event => { setFields(current => ({ ...current, [key]: event.target.value })); setConfirmed(false); setDirty(true); }} /> : <Input aria-label={label} value={value} placeholder={key.endsWith('On') ? 'YYYY-MM-DD' : undefined} onChange={event => { setFields(current => ({ ...current, [key]: event.target.value })); setConfirmed(false); setDirty(true); }} />}
         </label>;
       })}
       {record && canInvestigate ? <label className="customer-ledger-form-wide"><span>调查情况</span><Input.TextArea aria-label="调查情况" rows={4} value={rawText(fields.investigation)} onChange={event => { setFields(current => ({ ...current, investigation: event.target.value })); setConfirmed(false); setDirty(true); }} /></label> : null}
       <label><span>实际跟进质量工程师</span><select aria-label="实际跟进质量工程师" value={assignment ?? '__KEEP__'} onChange={event => { setAssignment(event.target.value === '__KEEP__' ? undefined : event.target.value); setConfirmed(false); setDirty(true); }}>
-        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '由映射带出；无可用映射可待分配'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定；跟进中仍按映射带出，无可用人选则待分配' : '未指定，仍按映射带出；无可用人选则待分配'}</option>{assignmentInvalid ? <option value={assignment} disabled>草稿选择（不在当前候选，请重新选择）</option> : null}{availableCandidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
+        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '按映射分配（无匹配时待分配）'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定，按映射分配' : '未指定（按映射分配）'}</option>{assignmentInvalid ? <option value={assignment} disabled>草稿选择（不在当前候选，请重新选择）</option> : null}{availableCandidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
       </select></label>
     </fieldset>
   </Modal>;

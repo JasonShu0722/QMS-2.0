@@ -44,7 +44,7 @@ it('blocks close during a server write and confirms before discarding recovery c
   mount(); const dialog = await open();
   await userEvent.click(await dialog.findByRole('button', { name: '重新生成恢复码' }));
   await waitFor(() => expect(dialog.getByRole('button', { name: '关闭账号安全' })).toBeDisabled());
-  fireEvent.keyDown(dialog.getByText('管理登录验证与账号恢复方式'), { key: 'Escape', keyCode: 27 });
+  fireEvent.keyDown(screen.getByRole('dialog', { name: '账号安全' }), { key: 'Escape', keyCode: 27 });
   expect(screen.getByRole('dialog', { name: '账号安全' })).toBeVisible();
   await act(async () => complete(json({ recoveryCodes: ['test-recovery-secret'] })));
   expect(await dialog.findByText('test-recovery-secret')).toBeVisible();

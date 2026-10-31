@@ -133,12 +133,12 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
 
   return <section className="customer-quality-card" aria-label={t('物料主数据')}>
     {contextHolder}<Typography.Title level={3} className="sr-only">{t('物料主数据')}</Typography.Title>
-    <Typography.Paragraph>{t('仅维护物料编码和物料名称；编码区分大小写，前导 0 原样保留。')}</Typography.Paragraph>
+
     {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} action={canRead ? <Button onClick={() => void refresh(true)}>{t('重试')}</Button> : undefined} /> : null}
     {canRead ? <Space wrap><Button onClick={() => void refresh(true)} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
     <Space wrap>{canWrite ? <Button onClick={() => setCreating(true)}>{t('新增物料')}</Button> : null}{canImport ? <MaterialMasterImport organizationId={organizationId} onImported={canRead ? () => refresh(false, true) : () => undefined} /> : null}</Space>
     {canWrite ? <Modal title={t('新增物料')} open={creating} footer={null} onCancel={cancelCreate} closable={!busy} keyboard={!busy} mask={{ closable: false }}><Form form={form} layout="vertical" onValuesChange={() => setDirty(true)} onFinish={(values: Create) => void save(values)}>
-      <Form.Item name="materialCode" rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料编码')} placeholder={t('物料编码')} maxLength={100} disabled={busy} /></Form.Item>
+      <Form.Item name="materialCode" extra={t('区分大小写，保留前导 0')} rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料编码')} placeholder={t('物料编码')} maxLength={100} disabled={busy} /></Form.Item>
       <Form.Item name="materialName" rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料名称')} placeholder={t('物料名称')} maxLength={200} disabled={busy} /></Form.Item>
       {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} /> : null}
       <div className="qms-dialog-actions" role="group" aria-label={t('新增物料')}><Button htmlType="submit" loading={busy}>{t('保存')}</Button></div>

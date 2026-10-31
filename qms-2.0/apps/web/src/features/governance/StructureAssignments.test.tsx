@@ -43,6 +43,22 @@ function stub(entries: components['schemas']['UserPositionDto'][] = [], position
 async function openAssignments() { await userEvent.click(await screen.findByRole('tab', { name: '用户任职' })); }
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); });
 
+it.each([false, true])('shows retained scope appointments only when other scopes have active appointments: %s', async (hasOtherScope) => {
+  const outsideDepartment = { ...department, id: 'dept-outside', name: '其他部门' };
+  const outsidePosition = { ...position, id: 'position-outside', departmentId: outsideDepartment.id, name: '其他范围岗位' };
+  stub([assignment('inside', position), ...(hasOtherScope ? [assignment('outside', outsidePosition)] : [])], [position, outsidePosition], [department, outsideDepartment]);
+  render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><StructureAdministration organization={org} workspace={{ departments: [department, outsideDepartment], departmentId: department.id, onRefresh: vi.fn(), onChanged: vi.fn() }} /></LanguageProvider></ConfigProvider>);
+  await openAssignments();
+  fireEvent.change(screen.getByLabelText('用户 ID'), { target: { value: user.id } });
+  await userEvent.click(screen.getByRole('button', { name: '查看任职' }));
+  await screen.findByRole('combobox', { name: '任职岗位' });
+  const note = screen.queryByText('其他范围任职（保留）');
+  if (hasOtherScope) {
+    expect(note).toBeInTheDocument();
+    expect(within(note!.closest('.ant-alert') as HTMLElement).getByText(outsidePosition.name)).toBeInTheDocument();
+  } else expect(note).not.toBeInTheDocument();
+});
+
 it('does not queue a tab change with the old appointment baseline while a save is pending', async () => {
   const api = stub([assignment('active', position)]);
   const original = api.fetchMock.getMockImplementation()!;

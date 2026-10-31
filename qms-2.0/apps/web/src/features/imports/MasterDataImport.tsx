@@ -43,6 +43,7 @@ function ImportForm<Row extends MasterRow>({ organizationId, onImported, onUnaut
   const next = useRef(0);
   const stopDecision = useRef<{ promise: Promise<boolean>; resolve: (stop: boolean) => void } | undefined>(undefined);
   const unfinished = reading || busy || (rows.length > processed);
+  const leaveNotice = busy || unknown ? leaveMessage : rows.length > processed ? '尚有未导入行；离开页面将停止后续批次。' : undefined;
   useUnsavedChanges(unfinished);
   useEffect(() => {
     alive.current = true;
@@ -123,11 +124,11 @@ function ImportForm<Row extends MasterRow>({ organizationId, onImported, onUnaut
 
   return <>
     {holder}<Button onClick={() => setOpen(true)}>{t(`批量导入${domain}`)}</Button>
-    {unfinished && !open ? <Alert type="warning" title={t(leaveMessage)} /> : null}
+    {leaveNotice && !open ? <Alert type="warning" title={t(leaveNotice)} /> : null}
     <Modal title={t(`${domain}批量新增`)} open={open} footer={null} onCancel={() => { if (!busy && !reading) setOpen(false); }} closable={!busy && !reading} keyboard={!busy && !reading} mask={{ closable: false }} width={900}>
       <section aria-label={t(`${domain}批量新增`)}>
         <Typography.Paragraph>{t(rule)}</Typography.Paragraph>
-        <Typography.Paragraph>{t(leaveMessage)}</Typography.Paragraph>
+        {leaveNotice && <Typography.Paragraph>{t(leaveNotice)}</Typography.Paragraph>}
         <Space wrap><Button onClick={() => void downloadTemplate()}>{t(`下载${domain}模板`)}</Button><input aria-label={t(`${domain}清单文件`)} type="file" accept=".xlsx" disabled={busy || reading || unknown} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void readFile(file); }} /><Button onClick={() => void submit()} loading={busy} disabled={busy || reading || !rows.length || next.current >= batches.current.length}>{t(`导入${domain}`)}</Button>{busy ? <Button danger onClick={confirmStop}>{t('终止导入')}</Button> : <Button onClick={() => setOpen(false)}>{t('关闭')}</Button>}</Space>
         {error ? <Alert showIcon type="error" title={t(error)} /> : null}
         {unknown ? <Alert type="warning" title={t('当前批次结果未知，请使用原批次重试；已确认结果保留。')} /> : null}

@@ -141,9 +141,9 @@ function BindingScope({ session, domain, onDomainChange }: Props & { session?: s
       const next = domains.find(item => item.value === event.target.value);
       if (next && next.value !== domain) leave(() => onDomainChange(next.value));
     }}>{domains.map(item => <option key={item.value} value={item.value}>{t(`${item.label}质量`)}</option>)}</select></label>}
-    <p>{t('候选草稿→校验发布→保存绑定→显式启用，四步独立。绑定自动关闭启用；服务端校验流程合法性。')}</p>
-    <p role="note">{t('客户与新品复用设计器的“过程8D负责人处理”策略（processEightD）；关闭审核须为内部问题并匹配所选领域。管理授权不自动授予业务职责、保存绑定或启用8D。')}</p>
-    {!!error && <Alert type="error" showIcon title={t(stale ? '绑定版本已变化，选择已保留，请刷新基线后重试。' : readFailed && !denied ? '无法加载8D绑定配置，请重试；不会使用默认流程ID。' : safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
+
+
+    {!!error && <Alert type="error" showIcon title={t(stale ? '绑定版本已变化，选择已保留，请刷新基线后重试。' : readFailed && !denied ? '无法加载8D绑定配置，请重试。' : safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
     {loading && <Spin aria-label={t('正在加载8D配置')} />}
     {!denied && permissions && !permissions.permissions.includes('configuration:read') && <Alert type="warning" title={t('当前会话无配置读取权限')} />}
     {!denied && permissions?.permissions.includes('configuration:read') && <Space orientation="vertical" style={{ width: '100%' }}>

@@ -484,8 +484,6 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const required = [{ required: true, whitespace: true, message: t('请填写必填内容') }];
   const frozen = busy || !!uncertain;
   return <section className="governance-panel" aria-label={t('组件项目映射')} style={{ minWidth: 0 }}>
-    <Typography.Text type="secondary">{t('阶段与两类工程师在项目资料中集中维护，同项目组件共用。')}</Typography.Text>
-    <Typography.Text type="secondary">{t('仅维护映射资料，不自动转派、取消审批或改写历史问题。')}</Typography.Text>
     {notice && <Typography.Paragraph role="status">{t('已更新 {mappings} 条组件资料、{projects} 个项目；影响 {affected} 条组件。').replace('{mappings}', String(notice.updatedMappingCount)).replace('{projects}', String(notice.updatedProjectCount)).replace('{affected}', String(notice.affectedComponentCount))}</Typography.Paragraph>}
     {!editor && <GovernanceFeedback error={error} retry={loading || busy ? undefined : refresh} />}
     <div className="governance-toolbar">
@@ -550,6 +548,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
           <Form.Item name="productSubcategory" label={t('产品细分')}><Input maxLength={100} /></Form.Item>
         </>}
         {editor.kind !== 'projects' && !projectLoading && <Form.Item name="status" label={t('状态')} rules={[{ required: true }]}><Select virtual={false} options={statusOptions} /></Form.Item>}
+        {editor.kind === 'project' && editor.record && manage && !projectLoading && <Typography.Paragraph>{t('修改将影响同项目的全部组件。')}</Typography.Paragraph>}
         <div className="qms-dialog-actions">
           <Button aria-label={t('关闭编辑器')} disabled={busy} onClick={() => leave(() => {}, true)}>{t('关闭')}</Button>
           {editor.kind !== 'projects' && !projectLoading && <Button type="primary" htmlType="submit" loading={saving} disabled={!manage || frozen || (editor.kind === 'project' ? !customerReady || !engineerReady : !editor.record && !projectReady)}>{t('保存')}</Button>}

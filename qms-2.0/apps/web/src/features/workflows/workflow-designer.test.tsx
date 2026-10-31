@@ -231,7 +231,6 @@ function mountProperties(config: NonNullable<api.WorkflowNode['config']> = {}, r
 it('replaces static assignment and escalation with explicit controlled closure rules without inventing UUIDs', () => {
   const changed = mountProperties({ assignment: { roleCode: 'QA', assigneeUserId: 'person' }, escalation: { roleCode: 'QA' }, slaMinutes: 60, editorPosition: { x: 10, y: 20 } });
   fireEvent.click(screen.getByLabelText('受控关闭审核'));
-  expect(screen.getByText(/专业审核与管理审核/)).toBeVisible();
   expect(screen.queryByLabelText('处理范围 角色')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('超时通知负责人 角色')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('关闭审核策略'), { target: { value: 'SUPPLIER' } });
@@ -245,7 +244,7 @@ it('replaces static assignment and escalation with explicit controlled closure r
   fireEvent.click(screen.getByLabelText('受控关闭审核'));
   expect(screen.getByLabelText('处理范围 角色')).toHaveValue('');
   expect(screen.getByLabelText('处理范围 处理人')).toHaveValue('');
-  expect(screen.getByText(/关闭后须手动配置普通处理范围/)).toBeVisible();
+  expect(screen.getByText('停用后需重新配置普通处理范围。')).toBeVisible();
 });
 
 it.each(['ACTION', 'VERIFICATION', 'CC', 'CLOSE'] as const)('clears closure metadata when switching an approval to %s', type => {

@@ -95,7 +95,9 @@ it('selects across pages, customers and complaint types for the actual issuer in
   fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-2'));
   fireEvent.click(screen.getByText('发起客户8D', { selector: 'button span' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/eight-d/sources/preview', expect.objectContaining({ body: JSON.stringify({ sources: [{ sourceId: id, expectedVersion: 1 }, { sourceId: second.id, expectedVersion: 1 }] }) })));
-  expect(screen.getByText(/实际发单人为专业审核人/)).toBeVisible();
+  const preview = await screen.findByRole('region', { name: '发单来源预览' });
+  expect(preview).toHaveTextContent(item.complaintNumber);
+  expect(preview).toHaveTextContent(second.complaintNumber);
 });
 
 it('mounts the authorized stale-engineer handoff in the formal ledger detail', async () => {

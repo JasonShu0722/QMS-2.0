@@ -43,6 +43,7 @@ it('uses generated duties and source-case links, preserves two duties on one pro
   const tasks = within(manager.closest('section')!);
   expect(manager).toBeVisible();
   expect(tasks.getByText('部长')).toBeVisible();
+  expect(tasks.queryByText(/同一问题的多份职责/)).not.toBeInTheDocument();
   expect(tasks.getAllByRole('link', { name: '审核关闭' })).toHaveLength(2);
   for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href')).toBe('/app/supplier-quality/eight-d/source-case');
   expect(screen.getByText('当前已加载任务：2')).toBeVisible();
@@ -57,6 +58,7 @@ it('portal uses only portal endpoints and omits an internal organization query',
   expect(await screen.findByRole('link', { name: '查看关联8D' })).toHaveAttribute('href', '/supplier/corrections/problems/source-case');
   expect(requests).toHaveLength(2);
   expect(requests.every(({ path }) => path.startsWith('/api/v1/supplier-portal/eight-d/') && !path.includes('organizationId'))).toBe(true);
+  expect(screen.getByText(/同一问题的多份职责/)).toBeVisible();
 });
 
 it.each([undefined, 'SUPPLIER:vendor:user'])('does not request internal data without a matching real principal (%s)', async scope => {

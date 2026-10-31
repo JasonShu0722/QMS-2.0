@@ -110,7 +110,7 @@ export function CustomerLegacyQualityPage() {
     {permissions?.permissions.includes('customer-quality:complaints:write') ? <section className="customer-quality-card"><CustomerComplaintEntry onCreated={async (id) => { await load(); requestLeave(() => { setSelected(undefined); void openDetail(id); }); }} /></section> : null}
     {permissions?.permissions.includes('customer-quality:complaints:write') && !(error instanceof ApiError && error.status === 403) ? <section className="customer-quality-card customer-quality-import" aria-live="polite">
       <Typography.Title level={3}>Excel 批量导入</Typography.Title>
-      <Typography.Paragraph type="secondary">选择 .xlsx 文件的首个工作表。首行为英文契约列名：{importFields.slice(0, 9).join('、')}。每次最多 100 条；文件只在本地解析，提交时发送 JSON。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">选择 .xlsx 文件的首个工作表。首行列名：{importFields.slice(0, 9).join('、')}。每次最多 100 条。</Typography.Paragraph>
       <label className="customer-quality-import__picker">选择客诉 Excel 文件 <input aria-label="选择客诉 Excel 文件" type="file" accept=".xlsx" disabled={importBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void selectImport(file); }} /></label>
       {importBusy && !importRows.length ? <Spin /> : null}
       {importName ? <Typography.Paragraph>当前文件：{importName}；数据行：{importRows.length}</Typography.Paragraph> : null}

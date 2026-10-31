@@ -85,7 +85,7 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
           <div className="problem-workspace__main">
             {current && supplierEightD ? <SupplierEightDWorkspace supplierProblemId={workspace.problem.sourceId} portal={false} onDenied={revoke} /> : current && eightDDomain ? <ProcessEightDWorkspace problemId={problemId} domain={eightDDomain} renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onAccessDenied={revoke} /> : <>
               <ProblemSections sections={workspace.domain?.sections ?? []} />
-              {current && DomainUi ? <DomainUi workspace={workspace} refresh={state.refresh} /> : current ? <p>{t('该领域处理表单尚未接入。')}</p> : null}
+              {current && DomainUi ? <DomainUi workspace={workspace} refresh={state.refresh} /> : current ? <p>{t('当前记录暂无可用处理表单，请联系维护人员。')}</p> : null}
             </>}
           </div>
           <aside className="problem-workspace__context">

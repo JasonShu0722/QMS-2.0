@@ -151,7 +151,7 @@ export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, o
       {busy && <Spin aria-label={text('正在加载预览', 'Loading preview')} />}
       {error && <Alert type="error" title={text('附件预览或下载失败，请重新授权下载。', 'Preview or download failed. Request a new download authorization.')} />}
       {preview?.url && <>
-        <p>{text('无法显示时可使用授权下载；每次下载重新校验权限。', 'If the viewer is unavailable, use authorized download. Access is checked each time.')}</p>
+
         {preview.file.contentType === 'application/pdf'
           ? <iframe title={preview.file.originalName} src={preview.url} sandbox="" referrerPolicy="no-referrer" style={{ width: '100%', height: '65vh', border: 0 }} />
           : <><Space><Button aria-label={text('缩小图片', 'Zoom out')} disabled={zoom <= 100} onClick={() => setZoom(value => value - 25)}>-</Button><span>{zoom}%</span><Button aria-label={text('放大图片', 'Zoom in')} disabled={zoom >= 400} onClick={() => setZoom(value => value + 25)}>+</Button></Space><div style={{ maxHeight: '65vh', overflow: 'auto' }}><img src={preview.url} alt={preview.file.originalName} referrerPolicy="no-referrer" style={{ width: `${zoom}%`, maxWidth: 'none' }} /></div></>}

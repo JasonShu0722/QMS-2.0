@@ -181,7 +181,6 @@ function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
   if (denied) return <Alert type="error" showIcon title={t('管理权限、会话或范围已变化，已清除问题责任内容')} />;
   return <section className="administrative-problem-reconfiguration" aria-label={t('问题责任恢复')}>
     <Typography.Title level={5} className="sr-only">{t('问题责任恢复')}</Typography.Title>
-    <Alert type="info" showIcon title={t('仅恢复失效的当前责任，不代替业务人员审批；原业务归属和已批准历史保持不变。')} description={t('恢复后由真实责任人继续办理并重新提交，不自动批准、关闭或迁移历史业务。')} />
     <Space wrap>
       <Select aria-label={t('问题领域')} value={domain} disabled={locked} options={Object.entries(domains).map(([value, label]) => ({ value, label: t(label) }))}
         onChange={value => requestLeave(() => { if (!current()) return; closeEditor(); setDomain(value); setOffsets([0]); setSuccess(false); })} />
@@ -189,7 +188,7 @@ function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
     </Space>
     <GovernanceFeedback error={error} />
     {!!error && !selected && <Button disabled={locked || loading} onClick={reload}>{t('重试问题读取')}</Button>}
-    {success && <Alert type="success" showIcon title={t('责任恢复成功；仅更新当前责任，历史归属与已批准历史保持不变。')} />}
+    {success && <Alert type="success" showIcon title={t('责任恢复成功')} />}
     {loading ? <div role="status" aria-label={t('读取问题责任')}><Spin /></div> : page && <>
       {!page.items.length ? <Empty description={t('当前扫描窗口无待配置问题')} /> : <Table<Item> rowKey={itemId} size="small" dataSource={page.items} pagination={false} scroll={{ x: 620 }} columns={[
         { key: 'report', title: t('原报告编号'), width: 190, render: (_, item) => item.reportNumber },
@@ -209,7 +208,6 @@ function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
         { key: 'scope', label: t('原归属（历史范围）'), children: selected.originalOrganizationId },
         { key: 'version', label: t('当前版本'), children: selected.version },
       ]} />
-      <p>{t('只选择当前失效职责的有效任职；仍有效的责任不覆盖，不授予额外业务权限。')}</p>
       {!supported && <Alert type="warning" showIcon title={t('配置要求暂不支持，请刷新并核对服务端版本。')} />}
       <Form layout="vertical" onFinish={() => void submit()}>
         {requiredFields.map(entry => <AssignmentPicker key={`${domain}:${itemId(selected)}:${entry.field}`} domain={domain} organizationId={selected.originalOrganizationId} duty={entry.duty} label={entry.label} disabled={locked || !!conflict} signal={lifetime.current?.signal} isCurrent={current} onDenied={fail}
@@ -260,7 +258,7 @@ function AssignmentPicker({ domain, organizationId, duty, label, disabled, signa
   }, [domain, organizationId, duty, search, offset, revision, signal]);
   const options = [...(selected ? [selected] : []), ...(page?.items.filter(item => item.assignmentId !== selected?.assignmentId) ?? [])];
   return <Form.Item label={t(label)} htmlFor={id} required>
-    <Select id={id} value={selected?.assignmentId} disabled={disabled} loading={loading} showSearch filterOption={false} searchValue={search}
+    <Select id={id} value={selected?.assignmentId} placeholder={t('选择有效任职')} disabled={disabled} loading={loading} showSearch filterOption={false} searchValue={search}
       notFoundContent={loading ? <Spin size="small" /> : t(error ? '候选读取失败，请重试' : '无有效候选任职')}
       options={options.map(item => ({ value: item.assignmentId, label: `${item.fullName ?? item.username} · ${item.departmentName} · ${item.positionName} · ${item.username}` }))}
       onSearch={value => { setSearch(value); setOffset(0); }}

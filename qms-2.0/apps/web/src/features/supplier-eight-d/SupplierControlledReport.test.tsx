@@ -73,6 +73,15 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetcher);
 });
 
+it.each([false, true])('keeps saved-version guidance in the portal only (portal=%s)', async portal => {
+  if (portal) values.CURRENT = values.APPROVED;
+  mount(portal);
+  await screen.findByDisplayValue(portal ? 'APPROVED版正文' : 'CURRENT版正文');
+  expect(screen.queryByText(/报告只含服务端已保存内容/) !== null).toBe(portal);
+  expect(screen.getByRole('region', { name: '所选版本基础事实' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '授权下载 PDF' })).toBeEnabled();
+});
+
 it('binds CURRENT, APPROVED and historical facts, dates and closure duties to the selected snapshot, never the outer current report', async () => {
   mount();
   for (const selection of ['CURRENT', 'APPROVED', 'revision-HISTORICAL']) {

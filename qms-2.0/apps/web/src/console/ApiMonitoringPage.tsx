@@ -120,10 +120,10 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
   const count = (value: number) => value.toLocaleString(locale);
   const duration = (value: number) => `${Number(value.toFixed(2)).toLocaleString(locale)} ms`;
   const receipts = {
-    UNKNOWN: text('采集完整性未知；当前数据不能证明零丢失。', 'Collection completeness is unknown; these results do not prove zero loss.'),
-    CURRENT: text('采集回执近期更新；不代表系统或业务健康。', 'Collection receipts were updated recently; this is not system or business health.'),
-    PARTIAL: text('采集存在缺口；丢弃、失败或过期生产者可能导致统计不完整。', 'Collection has gaps; drops, failures or stale producers may leave incomplete statistics.'),
-    STALE: text('采集回执已过期；不能据当前统计判断实时状态。', 'Collection receipts are stale; these statistics cannot establish live status.'),
+    UNKNOWN: text('采集完整性未知', 'Collection completeness unknown'),
+    CURRENT: text('采集回执近期更新', 'Collection receipts updated recently'),
+    PARTIAL: text('采集存在缺口', 'Collection has gaps'),
+    STALE: text('采集回执已过期', 'Collection receipts stale'),
   };
   const columns = [
     { title: text('分钟', 'Minute'), key: 'minute', width: 185, render: (_: unknown, row: Bucket) => clock(row.minute) },
@@ -140,7 +140,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
     { label: '200–1000 ms', value: data.summary.le1000 }, { label: '1000–5000 ms', value: data.summary.le5000 }, { label: '> 5000 ms', value: data.summary.gt5000 },
   ] : [];
   return <div className="qms-api-monitoring" aria-busy={loading}>
-    <header className="qms-api-heading"><details className="qms-console-reading-notes"><summary>{text('HTTP 完成统计 · 技术成功不等于业务落地', 'HTTP completions · Technical success is not business completion')}</summary><p>{text('真实 HTTP 完成统计。技术成功不等于业务落地，未归属请求仅平台范围可见。', 'Actual HTTP completion statistics. Technical success is not business completion; unscoped requests are platform-only.')}</p></details>
+    <header className="qms-api-heading">
       {!denied && <Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={restart} aria-label={error === 'network' ? text('重试读取', 'Retry reading') : text('刷新 API 观测', 'Refresh API observations')}>{error === 'network' ? text('重试读取', 'Retry reading') : text('刷新', 'Refresh')}</Button>}</header>
     {denied ? <div className="qms-console-state"><Alert role="alert" showIcon type="error" title={text('API 观测访问已失效或无权限，请重新核验。', 'API observation access expired or denied. Verify authorization again.')} /><Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button></div> : <>
       <div className="qms-api-scope"><strong>{context.targetOrganization.name} ({context.targetOrganization.code})</strong><span>{filters.scope === 'PLATFORM' ? text('平台观测（含未归属请求）', 'Platform observations including unscoped requests') : text('当前目标组织', 'Current target organization')}</span></div>
@@ -166,14 +166,14 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
       {data && <>
         <div className="qms-api-times"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span><span>{text('实际统计窗口：', 'Actual observed window: ')}{clock(data.from)} — {clock(data.to)}</span></div>
         <Alert type={data.collector.status === 'CURRENT' ? 'info' : 'warning'} showIcon title={receipts[data.collector.status]} />
-        {data.scope === 'PLATFORM' && <p className="qms-api-note">{text('当前进程丢弃：', 'Current process drops: ')}{data.collector.liveDropped === undefined ? text('未知', 'Unknown') : count(data.collector.liveDropped)} · {text('当前进程采集失败：', 'Current process collection failures: ')}{data.collector.liveFailures === undefined ? text('未知', 'Unknown') : count(data.collector.liveFailures)}{text('；只反映可取得的回执，不保证崩溃前尚未落盘的增量完整。', '; available receipts cannot guarantee increments not persisted before a crash.')}</p>}
+        {data.scope === 'PLATFORM' && <p className="qms-api-note">{text('当前进程丢弃：', 'Current process drops: ')}{data.collector.liveDropped === undefined ? text('未知', 'Unknown') : count(data.collector.liveDropped)} · {text('当前进程采集失败：', 'Current process collection failures: ')}{data.collector.liveFailures === undefined ? text('未知', 'Unknown') : count(data.collector.liveFailures)}</p>}
         <section className="qms-api-metrics" aria-label={text('请求摘要', 'Request summary')}><dl>
           <div><dt>{text('请求次数', 'Requests')}</dt><dd>{count(data.summary.requests)}</dd></div><div><dt>{text('错误次数（4xx / 5xx）', 'Errors (4xx / 5xx)')}</dt><dd>{count(data.summary.errors)}</dd></div>
           <div><dt>{text('平均耗时', 'Mean latency')}</dt><dd>{data.summary.requests ? duration(data.summary.durationTotal / data.summary.requests) : '—'}</dd></div><div><dt>{text('最大耗时', 'Maximum latency')}</dt><dd>{data.summary.requests ? duration(data.summary.durationMax) : '—'}</dd></div>
         </dl></section>
-        <section className="qms-api-latency" aria-label={text('耗时分布', 'Latency distribution')}><h3>{text('耗时分布', 'Latency distribution')}</h3><p className="qms-api-note">{text('互斥区间的实际请求次数，不推算百分位或实时在线。', 'Actual counts in exclusive latency bands, not estimated percentiles or live availability.')}</p><div>{latency.map(bucket => <dl key={bucket.label}><dt>{bucket.label}</dt><dd>{count(bucket.value)}</dd><div className="qms-api-meter" aria-hidden="true"><span style={{ width: `${data.summary.requests ? Math.min(100, bucket.value / data.summary.requests * 100) : 0}%` }} /></div></dl>)}</div></section>
+        <section className="qms-api-latency" aria-label={text('耗时分布', 'Latency distribution')}><h3>{text('耗时分布', 'Latency distribution')}</h3><div>{latency.map(bucket => <dl key={bucket.label}><dt>{bucket.label}</dt><dd>{count(bucket.value)}</dd><div className="qms-api-meter" aria-hidden="true"><span style={{ width: `${data.summary.requests ? Math.min(100, bucket.value / data.summary.requests * 100) : 0}%` }} /></div></dl>)}</div></section>
         <section aria-label={text('分钟聚合明细', 'Minute aggregate details')} className="qms-api-details"><h3>{text('分钟聚合明细', 'Minute aggregate details')}</h3>
-          {!data.items.length ? <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong><p>{text('没有记录不代表没有请求或系统正常。', 'No records do not mean no requests or a healthy system.')}</p></div> : <Table<Bucket> size="small" columns={columns} dataSource={data.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data.scope === 'PLATFORM' ? 1170 : 950 }} />}
+          {!data.items.length ? <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div> : <Table<Bucket> size="small" columns={columns} dataSource={data.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data.scope === 'PLATFORM' ? 1170 : 950 }} />}
           <div className="qms-api-pagination"><span>{text(`共 ${count(data.total)} 个聚合桶 · 第 ${data.page} 页`, `${count(data.total)} aggregate buckets · Page ${data.page}`)}</span><div><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>
         </section>
       </>}

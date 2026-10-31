@@ -1,5 +1,11 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0033 Web外壳与文案发布核验（2026-10-31）
+
+V0.0.38 / [PR87](https://github.com/JasonShu0722/QMS-2.0/pull/87)已发布`e37504eeaa2394b1a6e5eb2159587c1a240bf3c4`。本地归档隔离、契约、Web类型/构建、API162文件2356项、一次性真实PG54项、根工具71项和三Compose配置均通过；本地Web按完整文件组合保留原失败/中断，最终准确PR/main各16CI、各225文件3153项Web通过，云端四真实资源分片及Worker生命周期门禁成功。未运行完整acceptance:phase-1/2，不把这些证据冒称完整阶段或人工验收。
+
+[部署41117896707](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41117896707)实际success，迁移前加密快照验证先于141链无待执行，API/Worker/Web同SHA与健康/READY、公网新JS/CSS与六匿名401分别核实；默认builder回收1.517GB。本轮无新增API/迁移/权限/业务数据操作，临时PG容器/匿名卷已清理。原日志、来源和6.2人工视觉/角色/尺寸/对比度清单见[实施记录](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)，未确认项继续待验。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。

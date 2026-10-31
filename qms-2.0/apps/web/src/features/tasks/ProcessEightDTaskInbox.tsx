@@ -147,7 +147,7 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
     {!!error && <Alert type="error" showIcon title={t(safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
     {!denied && <>
       <section aria-label={t(`${domainLabel}正式待办`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}正式待办`)}</Typography.Title><Button disabled={tasksLoading || !!selected} onClick={() => setTaskRevision(value => value + 1)}>{t('刷新8D待办')}</Button></Space>
-        <p>{t('不支持旧任务领取、转派或任意完成。关闭审核请使用关闭审核入口。')}</p>
+
         {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <Table<Task> rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
           { title: t('问题编号'), dataIndex: 'reportNumber' },
           { title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },

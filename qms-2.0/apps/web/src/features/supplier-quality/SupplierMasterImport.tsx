@@ -24,5 +24,5 @@ export function parseSupplierMasterRows(sheet: readonly (readonly unknown[])[], 
 }
 
 export function SupplierMasterImport(props: Props) {
-  return <MasterDataImport {...props} domain="供应商" endpoint="/api/v1/supplier-quality/profiles/import" headers={headers} fields={['businessCode', 'displayName', 'contactName', 'contactEmail']} parse={parseSupplierMasterRows} rule="只新增供应商档案，不创建企业或账号；重复编码跳过，不覆盖名称或联系人。编码请使用文本保留前导 0。" />;
+  return <MasterDataImport {...props} domain="供应商" endpoint="/api/v1/supplier-quality/profiles/import" headers={headers} fields={['businessCode', 'displayName', 'contactName', 'contactEmail']} parse={parseSupplierMasterRows} rule="重复编码跳过；编码用文本保留前导 0。" />;
 }

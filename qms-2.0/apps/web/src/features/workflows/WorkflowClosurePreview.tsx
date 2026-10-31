@@ -30,8 +30,8 @@ const english: Record<string, string> = {
   '关闭职责配置测试': 'Closure configuration test',
   '重试配置预览': 'Retry configuration preview', '重试目录': 'Retry directory', '暂无匹配选项': 'No matching options',
   '请先选择责任科室、专业人员及内部负责人（仅内部策略需要）。': 'Choose a section, professional and internal owner (internal policy only).',
-  '配置缺项，请维护后重新预览；本页不提供审批。': 'Configuration is incomplete. Maintain it and preview again; this page does not approve.',
-  '配置解析完成，不代表执行授权或审批结果。': 'Configuration resolved, not execution authorization or an approval result.',
+  '配置缺项，请维护后重新预览。': 'Configuration is incomplete. Update it and preview again.',
+  '配置解析完成': 'Configuration resolved.',
   '专业人员': 'Professional', '科室经理': 'Section manager', '部长': 'Minister', '负责人': 'Owner',
   '待审': 'Pending', '尚未启动': 'Not started', '同人跳过': 'Skipped: same person',
   '职责': 'Duty', '状态': 'Status', '人员': 'Person', '尚未解析': 'Unresolved',
@@ -39,7 +39,7 @@ const english: Record<string, string> = {
   '执行顺序': 'Execution order', '并行审核': 'Parallel review', '专业先审，再启动管理审核': 'Professional first, then management review',
   '用户 ID': 'User ID', '任职 ID': 'Assignment ID', '岗位 ID': 'Position ID', '部门 ID': 'Department ID',
   '职责绑定 ID': 'Binding ID', '分管 ID': 'Scope ID', '职责绑定版本': 'Binding version', '分管版本': 'Scope version', '未提供': 'Not provided',
-  '同人职责说明': 'Same-person duties', '一次确认两项管理职责；正式办理时需明确两项职责并原子记录，本页不执行确认。': 'Confirm both management duties once, explicitly and atomically during actual processing. No confirmation is performed here.',
+  '同人职责说明': 'Same-person duties', '同一人员承担以下两项管理职责。': 'The same person holds the following two management duties.',
   '人员当前不符合资格': 'Person is not currently eligible', '组织或科室已失效': 'Organization or section is inactive',
   '缺少职责绑定': 'Missing responsibility binding', '存在多个职责绑定': 'Ambiguous responsibility binding',
   '缺少有效任职': 'Missing active assignment', '存在多个有效任职': 'Ambiguous active assignment',
@@ -153,14 +153,14 @@ function ClosureScope({ policy, disabled, session }: Props & { session?: string 
   }
   function person(value: Preview['duties'][number]['participant']) { return value ? value.fullName ? `${value.fullName} (${value.username})` : value.username : t('尚未解析'); }
   return <Space orientation="vertical" style={{ width: '100%', minWidth: 0 }}>
-    <Collapse size="small" items={[{ key: 'about', label: t('预览说明'), children: t('只读配置测试，不会发单或审批；目录仅供选择配置测试身份，不代表执行授权。') }]} />
+
     <Button disabled={disabled || denied} onClick={() => setOpen(true)}>{t('打开关闭职责预览')}</Button>
     <Modal title={t('关闭职责预览')} open={open} width={800} destroyOnHidden onCancel={close} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}
       footer={<Space wrap><Button disabled={busy} onClick={close}>{t('关闭预览')}</Button><Button aria-label={t('运行配置预览')} type="primary" htmlType="submit" form={`${id}-form`} loading={busy}
         disabled={frozen || !section || !professional || (policy === 'INTERNAL' && !owner)}>{t('运行配置预览')}</Button></Space>}
       styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}>
       <Space orientation="vertical" style={{ width: '100%', minWidth: 0 }}>
-        <Alert type="info" title={t('只读配置测试，不会发单或审批；目录仅供选择配置测试身份，不代表执行授权。')} />
+
         {directoryError ? feedback(directoryError, true) : null}
         <form id={`${id}-form`} aria-label={t('关闭职责配置测试')} onSubmit={event => { event.preventDefault(); void run(); }}>
           <Space orientation="vertical" style={{ width: '100%' }}>
@@ -176,12 +176,12 @@ function ClosureScope({ policy, disabled, session }: Props & { session?: string 
             <div><label htmlFor={`${id}-severity`}>{t('严重度')}</label><Select id={`${id}-severity`} aria-label={t('严重度')} style={{ width: '100%' }} value={severity} disabled={frozen}
               options={(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((value, index) => ({ value, label: t(['低', '中', '高', '严重'][index]!) }))}
               onChange={value => { setSeverity(value); invalidate(); }} /></div>
-            <Typography.Text type="secondary">{t('请先选择责任科室、专业人员及内部负责人（仅内部策略需要）。')}</Typography.Text>
+
           </Space>
         </form>
         {error ? feedback(error) : null}
         {result ? <>
-          <Alert type={result.configurationReady ? 'info' : 'warning'} title={t(result.configurationReady ? '配置解析完成，不代表执行授权或审批结果。' : '配置缺项，请维护后重新预览；本页不提供审批。')} />
+          <Alert type={result.configurationReady ? 'info' : 'warning'} title={t(result.configurationReady ? '配置解析完成' : '配置缺项，请维护后重新预览。')} />
           <Descriptions size="small" column={1} items={[
             { key: 'section', label: t('责任科室'), children: section?.label },
             { key: 'at', label: t('解析时间'), children: result.at },
@@ -198,7 +198,7 @@ function ClosureScope({ policy, disabled, session }: Props & { session?: string 
             ['职责绑定版本', duty.participant.bindingVersion], ['分管版本', duty.participant.scopeVersion],
           ].map(([label, value]) => ({ key: String(label), label: t(String(label)), children: <span style={{ overflowWrap: 'anywhere' }}>{value ?? t('未提供')}</span> }))} /> : null }} />
           {result.samePersonGroups.map(group => <Alert key={group.userId} type="info" title={t('同人职责说明')}
-            description={<>{person(result.duties.find(duty => duty.participant?.userId === group.userId)?.participant ?? null)} · {group.duties.map(duty => t(duties[duty])).join(' / ')}：{t('一次确认两项管理职责；正式办理时需明确两项职责并原子记录，本页不执行确认。')}</>} />)}
+            description={<>{person(result.duties.find(duty => duty.participant?.userId === group.userId)?.participant ?? null)} · {group.duties.map(duty => t(duties[duty])).join(' / ')}：{t('同一人员承担以下两项管理职责。')}</>} />)}
           <Collapse size="small" items={[{ key: 'sources', label: t('展开来源明细'), children: <Descriptions column={1} size="small" items={[
             { key: 'org', label: t('组织 ID'), children: result.organizationId },
             { key: 'section', label: t('科室 ID'), children: result.sectionDepartmentId },

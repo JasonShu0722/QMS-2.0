@@ -37,7 +37,9 @@ it.each(['workflows', 'users', 'organizations', 'audit', 'outbox'] as const)('of
   expect(entry).toHaveAttribute('target', '_blank');
   expect(entry).toHaveAttribute('rel', 'noopener noreferrer');
   expect(entry).toHaveStyle({ minHeight: '44px', minWidth: '44px' });
-  expect(screen.getByText('在新窗口打开（浏览器可能使用页签）')).toBeVisible();
+  expect(entry).toHaveAccessibleDescription('在新窗口打开');
+  expect(entry).toHaveAttribute('title', '在新窗口打开');
+  expect(entry.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   expect(getContext).toHaveBeenCalledWith(undefined, expect.any(AbortSignal));
 });
 
@@ -153,7 +155,7 @@ it('uses the current language without persisting authorization context', async (
   getContext.mockResolvedValue(context());
   render(<LanguageProvider><ConsoleEntry profile={profile} /></LanguageProvider>);
   expect(await screen.findByRole('link', { name: 'Management console' })).toBeVisible();
-  expect(screen.getByText('Opens in a new window (your browser may use a tab)')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Management console' })).toHaveAccessibleDescription('Opens in a new window');
   expect(Object.keys(localStorage)).toEqual(['qms:locale:v1']);
 });
 

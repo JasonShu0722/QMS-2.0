@@ -73,7 +73,7 @@ function IssueScope({ id, version, disabled, onIssued, onDenied, onLockChange, s
   if (!allowed) return error ? <Alert type="error" title={error} /> : null;
   const options = [...new Map([...(selected ? [selected] : []), ...(result?.items ?? [])].map(item => [item.assignmentId, item])).values()];
   return <section className="supplier-issue"><h3>完整8D发单</h3>
-    <p>按科室、岗位和实际任职选择本单SQE。发单不自动释放给供应商；阶段期限由本单SQE另行设定。</p>
+
     {error && <Alert type="error" title={error} />}
     {writer.uncertain && <Alert type="warning" title="发单结果未知，请勿修改请求；重试使用原请求和同一幂等键。" />}
     <fieldset disabled={locked}><Input.Search aria-label="搜索SQE任职" maxLength={100} disabled={locked} onSearch={value => { setSearch(value); setPage(1); }} />

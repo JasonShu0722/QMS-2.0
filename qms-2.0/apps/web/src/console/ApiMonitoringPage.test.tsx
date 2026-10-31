@@ -63,14 +63,8 @@ it('reads the verified target and renders actual request totals, latency buckets
   expect(screen.getByText(/采集完整性未知/)).toBeVisible();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
   expect(screen.queryByRole('heading', { name: 'API 技术观测' })).not.toBeInTheDocument();
-  const notes = document.querySelector('.qms-api-heading details');
-  expect(notes).not.toBeNull();
-  expect(notes).not.toHaveAttribute('open');
-  expect(notes!.querySelector('summary')).toHaveTextContent('技术成功不等于业务落地');
-  const scopeNote = within(notes as HTMLElement).getByText(/未归属请求仅平台范围可见/);
-  expect(scopeNote).not.toBeVisible();
-  fireEvent.click(notes!.querySelector('summary')!);
-  expect(scopeNote).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新 API 观测' })).toBeEnabled();
+  expect(screen.getByRole('region', { name: '分钟聚合明细' })).toHaveTextContent('2xx');
 });
 it('shows an accessible loading state and never fills unknown metrics with fake zeros', () => {
   read.mockReturnValue(deferred<Page>().promise); view();
@@ -128,7 +122,9 @@ it('distinguishes an empty successful query from unavailable data and supports a
   expect(screen.queryByText('PRIVATE_DATABASE_STACK')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '重试读取' }));
   expect(await screen.findByText('当前查询范围没有观测记录')).toBeVisible();
-  expect(screen.getByText('没有记录不代表没有请求或系统正常。')).toBeVisible();
+  expect(screen.getByText(/采集完整性未知/)).toBeVisible();
+  expect(screen.getByRole('region', { name: '请求摘要' })).toHaveTextContent('—');
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
 });
 it.each([401, 403])('clears sensitive results and invalidates on a current %s without retry loops', async status => {
   read.mockResolvedValueOnce(result()).mockRejectedValueOnce(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'PRIVATE' }, status));

@@ -44,8 +44,9 @@ it('keeps the recovery section heading accessible while retaining the visible re
   expect(heading).toHaveClass('sr-only');
   expect(heading.parentElement).toBe(screen.getByRole('region', { name: '问题责任恢复' }));
   expect(screen.getByRole('heading', { name: `恢复责任 · ${internal.reportNumber}`, level: 5 })).not.toHaveClass('sr-only');
-  expect(screen.getByText('仅恢复失效的当前责任，不代替业务人员审批；原业务归属和已批准历史保持不变。')).toBeVisible();
-  expect(screen.getByText('只选择当前失效职责的有效任职；仍有效的责任不覆盖，不授予额外业务权限。')).toBeVisible();
+  expect(within(editor!).getByText('原归属（历史范围）')).toBeVisible();
+  expect(within(editor!).getByText(internal.originalOrganizationId)).toBeVisible();
+  expect(button('确认恢复责任')).toBeDisabled();
 });
 
 let editor: HTMLElement | undefined;
@@ -99,7 +100,9 @@ afterEach(() => { vi.unstubAllGlobals(); act(() => useWorkTabsStore.getState().r
 it.each([['PROCESS', 'process-quality'], ['CUSTOMER', 'customer-quality'], ['NEW_PRODUCT', 'new-product-quality']])('submits generated internal assignment projection for %s, not user IDs', async (domain, domainCode) => {
   const calls = server({ ...internal, domainCode }); const onChanged = vi.fn(); render(scene(org, { onChanged }));
   if (domain !== 'PROCESS') await choose('问题领域', domain === 'CUSTOMER' ? '客户质量' : '新产品质量');
-  await edit(); expect(screen.getByText(/不代替业务人员审批/)).toBeVisible(); expect(screen.getByText(/已批准历史保持不变/)).toBeVisible();
+  await edit(); expect(button('确认恢复责任')).toBeDisabled(); expect(posts(calls)).toHaveLength(0);
+  expect(within(editor!).getByLabelText('专业责任任职', { selector: 'input' })).toBeEnabled();
+  expect(within(editor!).getByLabelText('负责人任职', { selector: 'input' })).toBeEnabled();
   expect(screen.getAllByText('original').length).toBeGreaterThan(0);
   await fillInternal(); await save(); await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   expect(screen.getByText(/责任恢复成功/)).toBeVisible(); expect(screen.queryByText(/响应无法核对/)).not.toBeInTheDocument();

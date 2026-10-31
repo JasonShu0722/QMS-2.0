@@ -115,6 +115,7 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [evidenceFileIds, setEvidenceFileIds] = useState<string[]>([]);
+  const [localEvidencePending, setLocalEvidencePending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [dirty, setDirty] = useState(false);
   useUnsavedChanges(record.canEditResponse && (dirty || evidenceFileIds.length > 0));
@@ -148,15 +149,15 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
     <Alert type={submitted ? 'success' : 'info'} showIcon title={submitted ? '回复已提交，当前节点不可再编辑' : '当前节点不可编辑回复'} description={record.problemStatus ? `问题进度：${statusLabels[record.problemStatus]}` : undefined} />
   </section>;
   return <section className="supplier-card"><Typography.Title level={3}>{record.responseForm === 'BRIEF' ? '简报' : '8D'}回复草稿</Typography.Title>
-    <Typography.Paragraph type="secondary">可分次保存草稿；正式提交后当前修订不可编辑。仅扫描通过的附件可作为证据。</Typography.Paragraph>
+    {portal && <Typography.Paragraph type="secondary">可分次保存草稿；正式提交后当前修订不可编辑。仅扫描通过的附件可作为证据。</Typography.Paragraph>}
     {error ? <Alert type="error" showIcon title={error} /> : null}
     <Form form={form} layout="vertical" initialValues={{ ...record.responseDraft, completionTime: localCompletion }} onValuesChange={() => setDirty(true)} onFinish={submit} disabled={busy}>
       {fields.map((field) => <Form.Item key={field.key} name={field.key} label={field.label} rules={record.responseForm === 'EIGHT_D' || ['rootCause', 'correctiveAction'].includes(field.key) ? required : undefined}><Input.TextArea rows={3} maxLength={10000} showCount /></Form.Item>)}
       <Form.Item name="completionTime" label="完成时间" extra="按当前设备所在时区填写" rules={record.responseForm === 'BRIEF' ? required : undefined}><Input type="datetime-local" step={1} /></Form.Item>
-      <Space wrap><Button onClick={() => void saveDraft()} loading={busy}>保存回复草稿</Button>{record.availableActions?.includes('SUBMIT') ? <Button type="primary" htmlType="submit" loading={busy}>正式提交回复</Button> : null}</Space>
+      <Space wrap><Button onClick={() => void saveDraft()} loading={busy}>保存回复草稿</Button>{record.availableActions?.includes('SUBMIT') ? <Button type="primary" htmlType="submit" loading={busy}>正式提交回复</Button> : null}{!portal && record.availableActions?.includes('SUBMIT') ? <Typography.Text type="secondary">正式提交后当前修订不可编辑。</Typography.Text> : null}</Space>
     </Form>
-    {record.stage === 'ISSUED' ? <div className="supplier-evidence"><AttachmentPanel resource={{ resourceType: 'supplier-quality', resourceId: record.id }} fileIds={evidenceFileIds} readOnly={busy} onReady={(file) => setEvidenceFileIds((current) => current.includes(file.id) ? current : [...current, file.id])} onRemoved={(id) => setEvidenceFileIds((current) => current.filter((fileId) => fileId !== id))} />
-      <Typography.Paragraph type="secondary">已选 {evidenceFileIds.length} 个可提交证据；等待扫描或扫描未通过的附件不会加入本次提交。未提交附件在离开或刷新页面后不能自动恢复，请保持当前页面直到扫描完成。</Typography.Paragraph>
+    {record.stage === 'ISSUED' ? <div className="supplier-evidence"><AttachmentPanel resource={{ resourceType: 'supplier-quality', resourceId: record.id }} fileIds={evidenceFileIds} readOnly={busy} onLocalPendingChange={portal ? undefined : setLocalEvidencePending} onReady={(file) => setEvidenceFileIds((current) => current.includes(file.id) ? current : [...current, file.id])} onRemoved={(id) => setEvidenceFileIds((current) => current.filter((fileId) => fileId !== id))} />
+      {portal ? <Typography.Paragraph type="secondary">已选 {evidenceFileIds.length} 个可提交证据；等待扫描或扫描未通过的附件不会加入本次提交。未提交附件在离开或刷新页面后不能自动恢复，请保持当前页面直到扫描完成。</Typography.Paragraph> : <><Typography.Paragraph type="secondary">已选 {evidenceFileIds.length} 个可提交证据</Typography.Paragraph>{(localEvidencePending || evidenceFileIds.length > 0) && <Typography.Paragraph type="secondary">未提交附件在离开或刷新页面后不能自动恢复。</Typography.Paragraph>}</>}
     </div> : null}
   </section>;
 }

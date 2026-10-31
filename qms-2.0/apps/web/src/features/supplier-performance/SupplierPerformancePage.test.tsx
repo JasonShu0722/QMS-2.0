@@ -36,7 +36,8 @@ it('shows a source-backed monthly card and its scoring policy', async () => {
   expect(within(ledger).getByText('供应商甲')).toBeVisible();
   expect(within(ledger).getByText('4 / 3')).toBeVisible();
   expect(within(ledger).getByText('81')).toBeVisible();
-  expect(screen.getByText(/评分权重由建卡人填写/)).toBeVisible();
+  expect(screen.getByRole('spinbutton', { name: '来料权重（%）' })).toHaveValue('60');
+  expect(screen.getByRole('spinbutton', { name: '配合度权重（%）' })).toHaveValue('40');
 });
 
 it('distinguishes no cards from loading failure', async () => {

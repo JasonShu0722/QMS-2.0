@@ -2,7 +2,6 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Collapse, Drawer, Form, Input, InputNumber, Pagination, Select, Space, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client';
-import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, type Defect } from './process-ledger';
@@ -19,7 +18,6 @@ export function materialInputs(record?: Defect): Material[] {
   return (record?.materials ?? []).map(item => ({ id: item.id, materialCode: item.materialCode, materialName: item.materialName, supplierOrganizationId: item.supplierOrganizationId, supplierProfileId: item.supplierProfileId, materialBatch: item.materialBatch, sqeUserId: item.sqeUserId, notes: item.notes }));
 }
 export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSaved, onClose, onDenied }: { record?: Defect; suppliers: Supplier[]; canReadSuppliers: boolean; onSaved: (record: Defect) => void; onClose: () => void; onDenied: (cause?: unknown) => void }) {
-  const { t } = useLanguage();
   const [form] = Form.useForm<Update>();
   const [saved, setSaved] = useState(record);
   const [dirty, setDirty] = useState(false);
@@ -75,7 +73,6 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
   }
   const initialValues: Partial<Update> = record ? { ...record, materials: materialInputs(record), occurredAt: record.occurredAt ? new Date(new Date(record.occurredAt).getTime() - new Date(record.occurredAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : null } : { materials: [{}] };
   return <Drawer open title={record ? '维护人工台账' : '登记不良'} size="min(920px, 100vw)" onClose={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
-    <Typography.Paragraph type="secondary">班长/PQC可维护事实；未知资料可空。台账保存不创建SQE待办，关闭/恢复需要独立权限。</Typography.Paragraph>
     <ProcessError cause={error} fallback="保存失败，请重试。" />
     {writer.uncertain ? <Alert type="warning" title="保存结果未知；已锁定原请求，请使用同请求重试，避免重复登记。" /> : null}
     {saved ? <Alert type="success" title={<>已保存 · 版本 {saved.version} <MappingHint record={saved} /></>} /> : null}
@@ -88,8 +85,7 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
           <Form.Item name="defectTypeCode" label="失效类型"><Select allowClear options={types.filter(type => type.active || type.code === record?.defectTypeCode).map(type => ({ value: type.code, label: `${type.name} (${type.code})` }))} /></Form.Item>
         </div><ProcessError cause={typesError} fallback="失效类型加载失败，未知可空，原值保留。" />{typesError ? <Button onClick={() => setOptionRevision(value => value + 1)}>重试失效类型</Button> : null}
       </> }, { key: 'materials', label: '多物料、供应商与SQE', children: <>
-        {!canReadSuppliers ? <Alert type="info" title="当前无供应商资料读取权限：保留已有供应商，不要求手填UUID或管理权限。" /> : null}
-        <Typography.Paragraph type="secondary">SQE需人工从有效候选中选择；供应商变化不会自动映射SQE。</Typography.Paragraph>
+        {!canReadSuppliers ? <Alert type="info" title="无供应商资料读取权限，已有供应商保留。" /> : null}
         <ProcessError cause={sqeError} fallback="有效SQE候选加载失败，请重试。" />
         {sqeError ? <Button onClick={() => setOptionRevision(value => value + 1)}>重试SQE候选</Button> : null}
         <Form.List name="materials">{(fields, { add, remove }) => <>{fields.map(field => <section className="process-quality-card" key={field.key} aria-label={`物料明细 ${field.name + 1}`}>
@@ -105,6 +101,6 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       </> }]} />
       <div className="qms-dialog-actions"><Button type="primary" htmlType="submit" loading={writer.busy} disabled={writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button></div>
     </Form>
-    {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : <Typography.Paragraph type="secondary">{t('请先保存台账，再上传附件。')}</Typography.Paragraph>}
+    {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : null}
   </Drawer>;
 }

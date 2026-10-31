@@ -20,6 +20,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+it.each([false, true])('keeps header guidance scoped to the portal (portal=%s)', async portal => {
+  const view = render(<SupplierPcnPage portal={portal} />);
+  await screen.findByText('暂无 PCN 变更');
+  expect(view.container.querySelector('header > div.ant-typography-secondary') !== null).toBe(portal);
+  expect(screen.getByRole('button', { name: /刷\s*新/ })).toBeEnabled();
+  expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining(portal ? '/supplier-portal/' : '/supplier-pcn/'));
+});
+
 it('keeps the selected PCN evidence when closing the draft is declined', async () => {
   const file = { id: 'f1', originalName: '变更验证.pdf', status: 'AVAILABLE', scanStatus: 'CLEAN' } as Parameters<NonNullable<Parameters<typeof AttachmentPanel>[0]['onReady']>>[0];
   vi.mocked(AttachmentPanel).mockImplementation(({ onReady }) => <button onClick={() => onReady?.(file)}>选择已扫描 PCN 证据</button>);

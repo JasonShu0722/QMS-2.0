@@ -279,7 +279,6 @@ export function UserAdministration({ organization, organizations, targetUserId, 
     <Modal title={assignment ? `${assignment.user.username} · ${t('授权来源')}` : t('授权来源')} open={!!assignment} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} onCancel={() => { if (actionLock.current) return; setAssignment(undefined); }} footer={null} destroyOnHidden>
       {error && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
       {assignment && canReadRoles && <Space orientation="vertical" className="admin-form-stack">
-        <Typography.Text type="secondary">{t('历史授权仅供查看，内部用户请通过调岗管理权限。')}</Typography.Text>
         {assignment.authorization.effectiveRoles?.map(role => <div key={role.id}><Typography.Text strong>{role.name}</Typography.Text>{role.sources.map((source, index) => <p key={index}>{source.kind === 'DIRECT' ? t('历史直接分配（只读）') : `${t('岗位继承')} · ${source.positionId ?? t('未知岗位')}`}</p>)}</div>)}
         {assignment.authorization.roles.filter(role => role.organizationId === null).map(role => <Tag key={role.id}>{role.name} · {t('全局只读')}</Tag>)}
         <Typography.Paragraph>{t('有效权限')}：{assignment.authorization.permissions?.map(code => <Tag key={code}>{code}</Tag>)}</Typography.Paragraph>

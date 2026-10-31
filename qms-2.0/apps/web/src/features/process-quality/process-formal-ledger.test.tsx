@@ -226,7 +226,7 @@ async function fillIssue() {
 it('previews visible and hidden relations without defaulting recurrence; posts server-bound 8D with exact token', async () => {
   const onIssued = await openIssue();
   expect(screen.getByText('已有问题')).toBeVisible();
-  expect(screen.getByText(/存在无权查看的关联/)).toBeVisible();
+  expect(screen.getByText('部分关联问题无权查看。')).toBeVisible();
   expect(screen.queryByLabelText('流程定义 ID')).not.toBeInTheDocument();
   expect(screen.getByRole('radio', { name: '非复发' })).not.toBeChecked();
   fireEvent.click(screen.getByRole('radio', { name: '非复发' }));

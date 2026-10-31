@@ -265,7 +265,7 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
   function closeAssignment() { if (!busy && !uncertain) guard(() => { dialogGeneration.current++; setAssignment(undefined); setDialogError(undefined); }, true); }
 
   return <section className="customer-analysis" aria-label={t('客诉解析协作')}>
-    <header className="customer-analysis__heading"><div><Typography.Title level={4}>{t('解析协作')}</Typography.Title><Typography.Text type="secondary">{t('FAE 与 SQE 独立维护，不增加审批或发单关卡。')}</Typography.Text></div>
+    <header className="customer-analysis__heading"><Typography.Title level={4}>{t('解析协作')}</Typography.Title>
       {!lost && <Button disabled={locked} onClick={() => guard(() => { setAssignment(undefined); setHistory(undefined); dialogGeneration.current++; void load(); })}>{t('刷新解析')}</Button>}</header>
     {error ? <Alert showIcon type={lost ? 'warning' : 'error'} title={t(errorMessage(error))} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
     {!lost && capabilityError ? <Alert showIcon type="error" title={t(errorMessage(capabilityError))} action={<Button disabled={capabilityLoading} onClick={() => void refreshCapabilities()}>{t('重试同步解析权限')}</Button>} /> : null}
@@ -320,7 +320,6 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
       {dialogError && assignment ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button disabled={busy || uncertain || !assignmentAllowed} onClick={() => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale)}>{t('重试加载候选人')}</Button>} /> : null}
       {error && assignment ? <Alert type="error" showIcon title={t(errorMessage(error))} /> : null}
       {assignment?.candidates ? <Form layout="vertical"><Form.Item label={t('解析人及有效任职')}><Select aria-label={t('解析人及有效任职')} placeholder={t('选择解析人及任职')} disabled={busy || uncertain || !assignmentAllowed} value={assignment.selected} options={assignment.candidates.map(candidate => ({ value: `${candidate.userId}:${candidate.assignmentId}`, label: `${candidate.username} · ${t('任职')} ${candidate.assignmentId}` }))} onChange={selected => setAssignment({ ...assignment, selected })} /></Form.Item>{!assignment.candidates.length && <Empty description={t('当前没有具备权限和有效任职的候选人')} />}</Form> : assignment && !dialogError ? <Spin aria-label={t('正在加载候选人')} /> : null}
-      <Typography.Paragraph type="secondary">{t(assignment?.recoverStale ? '仅恢复已失效的 FAE 任职，需独立交接权限；原解析及附件保留，服务端重新校验资格和版本。' : assignment?.transfer ? '仅当前 FAE 可在同部门内转派；服务端会重新校验任职、权限和版本。' : '由当前质量工程师指定；指定成功后才可上传解析附件。')}</Typography.Paragraph>
     </Modal>}
     {!lost && <Modal open={!!history} title={t(history?.section === 'FAE' ? 'FAE 解析历史' : '供应商分析历史')} footer={null} onCancel={() => { dialogGeneration.current++; setHistory(undefined); setDialogError(undefined); }}>
       {dialogError && history ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button onClick={() => void openHistory(history.section)}>{t('重试加载解析历史')}</Button>} /> : null}

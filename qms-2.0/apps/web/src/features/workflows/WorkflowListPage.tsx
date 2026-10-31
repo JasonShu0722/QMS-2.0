@@ -143,7 +143,7 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
     {creating && <Card title={t('新建流程')}><form onSubmit={(event) => { event.preventDefault(); void act(); }}>
       <label>{t('流程代码')}<input aria-label={t('流程代码')} required maxLength={100} value={code} disabled={createFrozen} onChange={(event) => setCode(event.target.value)} /></label>
       <label>{t('流程名称')}<input aria-label={t('流程名称')} required maxLength={200} value={name} disabled={createFrozen} onChange={(event) => setName(event.target.value)} /></label>
-      <p>{t('新草稿需要配置处理范围及连线，校验通过后才能发布。')}</p>
+
       <Button htmlType="submit" disabled={createFrozen || !code.trim() || !name.trim()}>{t('创建草稿')}</Button>
     </form></Card>}
     {loading ? <Spin aria-label={t('加载中')} /> : page && !page.items.length ? <Empty description={t('暂无流程')} /> : page && <div className="workflow-list__table"><table>

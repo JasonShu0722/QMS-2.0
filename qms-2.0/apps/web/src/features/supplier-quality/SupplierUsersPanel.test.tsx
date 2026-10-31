@@ -28,7 +28,7 @@ it('renders English supplier password query and reset confirmation through the r
     expect(password.getByRole('button', { name: 'Download valid temporary password' })).toBeEnabled();
     fireEvent.click(password.getByRole('button', { name: 'Reset temporary password' }));
     expect(await screen.findByText('Reset the password and revoke sessions?')).toBeInTheDocument();
-    expect(screen.getByText('The old password and all current sessions of this account will become invalid immediately.')).toBeInTheDocument();
+    expect(screen.getByText('The old password and all current sessions will become invalid immediately. The user must change the password at first sign-in.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm reset' })).toBeInTheDocument();
     expect(screen.queryByText('查询临时密码')).not.toBeInTheDocument();
   } finally { localStorage.removeItem('qms:locale:v1'); }

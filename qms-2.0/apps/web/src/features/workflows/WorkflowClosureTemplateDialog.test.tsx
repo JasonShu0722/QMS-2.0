@@ -51,10 +51,6 @@ afterEach(() => vi.unstubAllGlobals());
 
 it('loads server candidates and sends an explicit draft-only body with CSRF and idempotency', async () => {
   const view = mount(); await fill();
-  await waitFor(() => expect(screen.getByText(/不自动发布或绑定/)).toBeVisible());
-  const integrationNotice = screen.getByText(/发布时校验对应领域是否已接入/);
-  expect(integrationNotice).toBeVisible();
-  expect(integrationNotice).toHaveTextContent('创建候选草稿不会自动发布、绑定或启用。');
   fireEvent.click(screen.getByRole('button', { name: '创建模板草稿' }));
   await waitFor(() => expect(view.created).toHaveBeenCalledWith(draft));
   const [path, init, options] = writes()[0]!;
@@ -358,5 +354,4 @@ it('localizes the candidate dialog without changing shared translations', async 
   await waitFor(() => expect(screen.getByLabelText('Template domain code')).toBeVisible());
   expect(await screen.findByRole('option', { name: 'Supplier problem closure review' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create template draft' })).toBeDisabled();
-  expect(screen.getByText('Publishing checks whether the domain is integrated. Creating a candidate draft does not publish, bind or enable it.')).toBeVisible();
 });
