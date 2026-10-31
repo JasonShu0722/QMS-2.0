@@ -1,5 +1,11 @@
 # 维护、发布与故障处理手册
 
+## REQ-0034 统一业务页面发布（2026-11-01）
+
+V0.0.39含fix3已发布`588089438d1eb2017a938e7844b747faddfb883f`，[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)及main各24CI/各231文件3261项Web通过，[部署41245832801](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41245832801)前置加密快照→141链无待执行→同SHA API/Worker/Web健康→成功出口与公网新JS/CSS已分别核实，builder回收1.502GB。Worker READY及deployed-sha由同版脚本强制成功出口支持，未另取SSH marker/原Worker stdout；不是异地灾备或人工业务验收。
+
+完整证据、原失败和负责人待验清单见[计划7.6](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)及Git外`machine-release-verification.json`。生产赋权/删除、关闭Issue、Base回填未执行；最终发布记录与来源索引仅本地归档提交待同步，运行/规范已远端同步，不为了归档无运行变化重复部署。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。

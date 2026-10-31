@@ -9,12 +9,12 @@
 | 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
 | 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
 | 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)已合并6041d80 → [PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91) / `codex/req0034-ci-fix2`；已推fix2/1ec394d，当前同PR预留fix3 |
-| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；初轮478c325→候选9b29ce7与squash6041d80整树相同，旧功能分支保留；现从main6041d80新建fix2隔离分支。旧`06b5fff`关闭归档保留，不混入 |
+| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90) / 6041d80 → [PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91) / V0.0.39-fix3 / 5880894，均已合并；Issue/需求未关闭回填 |
+| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；候选1772480与合并5880894整树相同；运行/规范已远端同步。从origin/main5880894新建`codex/req0034-release-record`只做最终本地归档，旧功能分支和diverged本地main保留不重写，旧归档不混入 |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | PR91首轮41236645520实际FAIL保留，未合并部署。fix3四完整Web文件108项组合、逐组独立双审、容量完整root19项/真实16片并集及父类型全部通过；源hash与审查快照一致。Closure补足隐藏祖先过滤后重跑最终58，原快照保留；当前最终治理后集中推PR91，不预判真实24-job CI或收益 |
+| 状态 | 机器发布已核：精确PR1772480及main5880894各24CI成功，各16JSON231文件3261项全PASS无漏重异常；自动部署41245832801成功，前置快照→141链无待执行→同SHA健康/Worker→公网新JS/CSS分别核实。历史FAIL及完整phase前置FAIL保留，不代真实角色/设备/人工验收 |
 | 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | fix3完成任职与实际热点查询返修，保持全局安全否定及原预算/motion/覆盖；按7.5有界容量修订将原生Web分片8→16，严格完整门禁16→24，不放宽20/30分钟。各单元TDD/完整验证及SPEC后独立QUALITY、父治理后集中更新未合并PR91，再核精确PR/main新布局和部署 |
+| 下一动作 | 本地最终归档/来源复核/治理后单独提交但不推，避免索引JSON触发full CI和无运行变化重复部署；明确远端运行/规范已同步、最终发布事实归档待同步。保存人工清单及Git外交接，删除本需求heartbeat；Issue关闭/Base回填/真实角色与物理设备验收需负责人另行确认 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -96,10 +96,10 @@
 
 - [x] 按record_id回查范围未撤回，核对远端main/相关事项版本与分支差异，排除旧线程归档及秘密；同范围V0.0.39复用，不重复消费版本。
 - [x] 验证/双审通过后提交、推送并创建关联Issue89的PR90，不用自动关闭关键字；正文列范围/例外/实际命令/回滚/限制，首轮失败继续原PR。
-- [ ] 等精确head的全部CI与审查；合并/发布另核授权，未获准不推main。获准后逐版本核对迁移前快照、同SHA镜像/启动/健康/HTTP/目标变化。
+- [x] 精确PR及main各24CI/16JSON和独立审查已核，按本需求夜间授权合并；自动发布核前置快照、同SHA镜像/健康/Worker/公网产物，见7.6。
 - [ ] 最终部署版逐需求及联合验收，用户认可样式不代替正式业务/拖拽验收；获准后先记录证据，再关闭Issue/最小回填Base并回读。
-- [ ] 按负责人追加要求逐条核对规范同步：统一规范7.3、专项设计/计划、FRONTEND-DESIGN、CAPABILITY-STATUS、README和来源索引与最终实现一致；未交付项保留真实状态，不能只改样例或仅刷新来源摘要。
-- [ ] 回收本任务一次性容器/服务/浏览器，不删共享或保留预览资源；归档实际Git/外部完成状态，不建定时接单。
+- [x] 统一规范1.5/7.3及实施来源已进远端main，实际git show复核；发布状态/指南/能力/验收及来源索引最终本地归档保持人工待验边界，不把本地commit写成远端同步。
+- [x] 任务PG资源、Vite/浏览器模拟及测试进程已清理/恢复，不删共享或保留预览资源；机器发布完成后保存交接、删除本需求heartbeat，不建定时接单。
 
 ## 4. 回滚与完成边界
 
@@ -223,3 +223,14 @@
 - 已先实际评论回Issue89登记有界策略及未知成本，read-only核仓库仍public，不改可见性/计费。新实现代理`fix3_ci_capacity`仅3文件，准确纯布局RED3FAIL→GREEN3PASS，另纯安全/接线6PASS，独立SPEC后QUALITY静态通过；24新布局可接受、旧16及所有来源/缺失/重复/混合失败严格拒绝、docs6不部署。当前接过释放窗口跑完整`ci-validation-scope.test.mjs`含真实Vitest16片/Jest4片覆盖，结果完成前不计完整PASS。
 - 容量完整`node --test test/ci-validation-scope.test.mjs`实际19/19 PASS、exit0/16.58秒，无skip/cancel，包含真实temp Git/HTTP来源分页与严格24/doc6、Jest4及官方Vitest16片覆盖；231文件前15片各15、最后6，非空无漏/重，逐源规范化SHA见`fix3-capacity-web-manifest.json`。实际源blob与静态独立双审一致，容量作者释放窗口；不把本地19项当真实新24-job云端通过。
 - root最后核四Web JSON108项及容量3source hash、Web typecheck/lint退出0（`fix3-parent-lint.log`），fetch main仍6041d80，user需求回读同record rev348，fix3序号无冲突。生产Web/API/契约/迁移/依赖/部署脚本未变，复用对应构建/浏览器/API/PG，CI仅原生布局及严格集合改变；最终逐来源复核及治理/diff输出`fix3-parent-governance.log`后集中推同PR91，不重启已过完整文件或本地全量。
+
+### 7.6 最终机器发布与归档边界（2026-11-01）
+
+- PR91最终17724805072f51691907871fbf93470384afd0bb运行41242774079 attempt1，实际24个同源job全部success；root下载16份artifact逐项核官方16片manifest，231文件/3261项全PASS，无漏/重/skip/pending/runtimeErrors。独立release gate通过后squash588089438d1eb2017a938e7844b747faddfb883f，整树64ce3400e85800f289c720910829e88cccb72543与已审候选完全一致。旧FAIL不抹去，PR最长Web约12.23分钟是本次实测不代表费用下降。
+- main运行41244879460 attempt1也实际24同源success，16份JSON再次231文件/3261项全PASS，`main-5880894-coverage-verified.json`。不是复用PR结果冒充main，不拿旧8片代16片。自动部署41245832801的来源完整attempt校验和SSH步骤均success，没有手动重复部署或跳过门禁。
+- 完整部署job124668943410日志：第648行前置加密数据库snapshot verified早于654行141 migrations及657行no pending，696/700/701行API/Web/Worker镜像标签均5880894，689–694行服务健康，711行`Deployment successful`，builder清理Total1.502GB。Worker READY及原子deployed-sha由同版deploy.sh在成功出口前强制检查/写入支持；没有另取原始Worker stdout或SSH marker读回，不补称独立读取。此快照不是对象存储/异地灾备或恢复演练。
+- 独立公网HTTP：`/login`、`/api/v1/openapi.json`及问题台账/console SPA入口200；管理用户、console context、关闭职责、制程缺陷四真实契约路径匿名401。新`index-KJw082o1.js`与`index-CBVgIpis.css`均200，区别旧baseline；实取生产bundle核qms-ledger、页长、settings视口64px与移动分页样式，fixture标识排除。`production-public-verification.json`及`machine-release-verification.json`分层记录；匿名SPA200不证明真实角色流程或保存成功。
+- 权威规范1.5第7.3节、专项设计、实际共享实现、ENGINEERING的16Web/严格24及索引均已随5880894进远端main，root实际`git show origin/main:...`复核。最终发布事实更新计划/指南/能力/Foundation/索引后本地单独提交不推：当前纯文档分流仅`.md`，来源索引JSON仍走full并触发无运行变化重复部署，不能伪称该归档已远端同步。后续适合的治理同步检查点接续，而非削弱分流规则。
+- 本地main有既存历史分歧，尝试ff-only失败未改历史/源码；返回原功能分支后从已验证origin/main5880894新建`codex/req0034-release-record`归档，未reset/rebase/混入旧提交。运行发布与规范远端状态不受该历史分歧影响。秘密/日志/快照仍Git外，未连接55440，无本任务测试/Vite存活；旧PG任务容器及模拟资源已清理。
+- 负责人待验清单：真实内部/供应商/控制台角色与资源组织、服务器命名视图、生产草稿/冲突/未知结果、真实分页接口与业务选择、键盘/触控及物理手机/多窗/六配色对比度；现有组件夹具和CI仅按实际覆盖支持，不代这些人工验收。完整phase1/2原前置FAIL继续保留；Issue89开放、Base本轮未写关闭/PR/完成字段，机器发布核验后删除本REQ heartbeat，不自动接其他需求。
+- 最终本地归档治理先因运维手册新增事实触发MAINT-003来源变化而实际FAIL（`final-release-governance.log`），再因维护说明索引的连带来源变化FAIL（`final-release-governance-verified.log`）；均保留。已实际复核本次快照/健康/builder非持续告警闭环，维护说明与对应事实接续，保持open/原reviewDue2026-11-23。最终`final-release-governance-frozen.log`实际PASS：37文档/467链接/20复核、open3/closed0、157依赖与阶段1项；本条文字收口仅重新计算计划摘要再门禁，不重跑业务测试。

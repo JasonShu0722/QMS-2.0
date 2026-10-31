@@ -1,12 +1,12 @@
 # QMS 2.0 能力状态总账
 
-## REQ-0034 统一业务页面体验（2026-11-01，发布门禁返修）
+## REQ-0034 统一业务页面体验（2026-11-01，已发布待人工验收）
 
 本聊天直接授权的四类模式统一已提交为[REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，user九字段回读rev344、Issue89链接回读rev345；首次Base待评估，恢复实时user回读rev348已为开发中，范围保持。这是源码直接授权与外部状态分别记录，本轮未改表状态。
 
-[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / V0.0.39实施共享列操作/配置及分页偏好、正式台账接入、表单明细检查清单呈现。详细范围、逐调用方例外及实际证据依[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功并经独立release gate后合并6041d80；main单例失败使部署正确skipped。独立[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的fix2已修组件项目，但41236645520又有任职保护单例和第8片step超时，现同PR fix3按实测热点收窄查询，不增加预算/分片或削弱覆盖。未发布或最终业务验收，独立样例认可/合并不代表全站已上线。
+[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / V0.0.39-fix3已部署`588089438d1eb2017a938e7844b747faddfb883f`，交付共享列宽/列序/显隐/固定/本地偏好、默认20与10/20/50/100真实分页及四类业务页面呈现。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)与[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的原FAIL/修复、领域例外和覆盖依[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)第7.6节；最终精确PR/main各24CI、各16JSON231文件3261项全PASS，[部署41245832801](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41245832801)快照/迁移/同SHA服务/公网新JS CSS机器核验成立。不改业务模型、权限或保存粒度，不称完整阶段或负责人业务验收通过。
 
-负责人下班前暂停后，本轮恢复并另明确夜间连续开发、PR检查通过后继续合并部署及20分钟heartbeat；第7节维护实际分片/失败/修复及授权。不重新建需求或自行改Base状态，不扩大为生产赋权、业务删除/外发、关闭回填或人工验收；PR已通过并合并，main门禁未齐，尚未部署。
+负责人已授权本需求夜间连续开发/合并部署，发布核验后停止该heartbeat；Issue89保持开放，Base本轮未写关闭/完成/PR字段，不扩为生产赋权、业务删除/外发、关闭回填或人工验收。规范与运行实现已远端同步；最终发布事实及来源索引归档本地提交待后续合适治理同步，避免无运行变化重复部署，不假报远端归档完成。
 
 本地串行八片全量已因效率问题中断，不恢复旧队列；完整231文件交既有PR八独立VM CI。原FAIL/中断、早期本地Closure仅2代表与原型仅1代表的filtered边界、完整阶段前置FAIL继续保留；后续全量CI覆盖按各精确HEAD实际结果另列，不混成同次运行。六配色/中英/system与320/390/1024/1440的真实组件夹具证据不等于生产角色或物理设备验收。
 

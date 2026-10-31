@@ -1,14 +1,14 @@
 # 底座与阶段二平台验收记录
 
-## REQ-0034 统一业务页面验证检查点（2026-11-01，未发布）
+## REQ-0034 统一业务页面发布核验（2026-11-01，待人工验收）
 
-[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录本聊天直接授权、REQ-0034 / Issue89 / V0.0.39及逐项证据。本轮没有API/DTO、迁移或权限变更；[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功后合并6041d80，但main单例失败、部署正确skipped。独立[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的fix2后又观察任职保护与第8片关键路径失败，现依第7.4节同PR fix3，尚未发布。历史本地/PR分项不代main及生产核验，不把样例认可或合并称为工程/业务验收完成。
+[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录REQ-0034 / Issue89、有效夜间授权及逐项证据。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)/[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)最终5880894已机器发布：精确PR/main各24门禁与16JSON231文件3261项全部成功，[部署41245832801](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41245832801)前置快照/迁移/同SHA服务/公网变化分别核验。本轮无API/DTO/迁移/权限业务变更，历史FAIL及phase1/2前置FAIL保留，不据发布代真实角色/设备/人工验收或关闭回填。后文各历史检查点与最终7.6分层，发布事实归档本地提交待同步。
 
 本轮分项证据：共享32项、剩余列表新增14项与范围/英文返修6项、T4呈现冻结快照6完整文件35项、控制台范围20项均有各自日志；API162完整文件2356项通过。后续审核目录分页不能沿用T4快照替代原业务再回归。全workspace构建及契约检查退出0，生产产物未发现模拟夹具标识，归档隔离及foundation+scanning Compose配置检查通过；构建仍有大chunk警告。正式组件夹具已在真实浏览器核对1440/1024/390、指针拖宽/列序、键盘、缓存/目标组织与触控模拟，并补齐窄屏内置/独立分页入口。夹具不等于真实角色/API/物理触屏、六主题/英文或业务验收。
 
 后续真实PG证据：本任务新建PG18、loopback55491、tmpfs且无宿主挂载/卷，141链迁移和独立seed成功。8完整集成文件首批115/116通过，未改task-inbox的真实110事件backlog用例触原5000ms；保持原源码/预算，以独立Node完整运行该40项文件40/40通过，其余7完整文件76项与之形成116项组合证据，不声称首次全绿。任务容器按标签/无挂载核对后已stop+rm，未使用55440。主代理共享/剩余新增4完整文件52项独验、核心4完整文件114项组合、治理48项也已通过；原失败仍保留。
 
-完整阶段入口实际失败：`acceptance:phase-1`因缺`DATABASE_URL`退出1，`acceptance:phase-2`因缺显式一次性验收配置退出1，未用Mock或Skip替代真实资源。分项PG没有补齐网关、扫描、对象存储、Worker及真实认证浏览器的完整阶段前置；PR真实资源分项也不得自动改写成完整阶段PASS。最新结果以计划和Git外`unified-business-pages-20261031-01`目录实际日志为准，PR90已合并，未发布或关闭需求。
+完整阶段入口实际失败：`acceptance:phase-1`因缺`DATABASE_URL`退出1，`acceptance:phase-2`因缺显式一次性验收配置退出1，未用Mock或Skip替代真实资源。分项PG没有补齐网关、扫描、对象存储、Worker及真实认证浏览器的完整阶段前置；PR真实资源分项也不得自动改写成完整阶段PASS。最新结果以计划和Git外`unified-business-pages-20261031-01`目录日志为准，最终机器发布如下，需求未关闭回填。
 
 本地全量首片374/381、第二片488/499、第三片316/316；第4片中断无完整结果，后4片未跑，不称全量PASS。改为受影响本地门禁后，管理完整两文件32项、DataExchange23项、Process任务25项分别通过；Closure中英2代表通过/56 filtered，原型同一case在HEAD旧主题20.474秒和候选20.800秒各通过/17 filtered，不补称整文件或证明主题因果。供应商14完整文件120项、Problem返修及相邻46项、相邻81项均是独立完整文件组合，原FAIL全部保留；全231文件由现有八独立VM CI严格判定。
 
@@ -29,6 +29,12 @@ PR91/1ec394d的`41236645520` attempt1实际FAIL：组件项目完整42项已通�
 fix3查询返修最终四独立完整文件15+58+27+8共108项PASS，源blob与逐组SPEC后独立QUALITY一致，`fix3-parent-web-evidence.json`。Closure第一次审查发现trigger缺原隐藏祖先过滤，补一条原语义断言后在e5源重新完整58，旧c7不代新结果；该最终文件263.35秒，不能宣称加速比。任职真实本地31.01秒RED后目标完整14.312秒；其他性能组原代表PASS不是功能RED，累计阶段含事件/更新不充纯query。
 
 计划7.5已依据两次整片20分钟取消有界修订原“不改分片”策略，并先同步Issue：使用官方Web16分片、严格完整24-job门禁，所有case/step20/job30预算、单worker、四真实PG/Worker/SSH/权限/全覆盖保持，docs仍6且不部署，旧16/缺项/重复/混合/旧来源拒绝。仅workflow矩阵/分母、精确门禁集合及root单测3功能文件；准确布局3FAIL→3PASS、纯安全6PASS、独立双审及完整root19/19项退出0，真实Vitest16片231文件无漏重/逐片非空，Jest4片覆盖保持，父类型检查通过。实际新24-job PR/main CI仍待，不把增加并发当作已证明墙钟/成本收益，不改账单/额度/可见性。
+
+最终PR91/1772480运行41242774079与main588089438d1eb2017a938e7844b747faddfb883f运行41244879460各attempt1、各24同源job成功；root分别下载16artifact核231文件3261项全PASS，无漏/重/skip/pending/runtimeErrors，独立release gate通过，候选与合并整树相同。main成功后自动deploy41245832801完整来源校验及SSH success，无跳过/重跑刷绿。
+
+部署job124668943410原日志第648行加密snapshot verified先于654行141链及657行无待执行；696/700/701行API/Web/Worker同5880894镜像，689–694行健康，711行成功，builder Total1.502GB。Worker READY与原子deployed-sha由同版脚本成功出口前的强制步骤支持，没有另行SSH marker读回或Worker stdout，不当异地备份/恢复演练证明。独立公网login/openapi/问题台账与console SPA200，四契约路径匿名401，新index-KJw082o1.js/index-CBVgIpis.css及Ledger/settings64px/移动页长标识和fixture排除实际核到；证据`machine-release-verification.json`/`production-public-verification.json`，不代真实角色写入或业务验收。
+
+运行及统一规范1.5/7.3已远端main实际回读；最终发布事实和索引本地归档单独提交不推，避免当前索引JSON触发无运行变化重复full CI/部署，不能称远端归档已同步。Issue89保持开放，Base本轮未写关闭/完成/PR字段，负责人真实角色/物理设备/保存视图/草稿及冲突联合验收待确认；机器发布完成后删除本需求heartbeat。
 
 ## REQ-0033 Web外壳与文案发布核验（2026-10-31）
 
