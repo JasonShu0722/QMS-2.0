@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 const shaPattern = /^[0-9a-f]{40}$/;
 const businessJobs = [
-  ...Array.from({ length: 8 }, (_, index) => `web-tests (${index + 1})`),
+  ...Array.from({ length: 16 }, (_, index) => `web-tests (${index + 1})`),
   'api-unit',
   ...Array.from({ length: 4 }, (_, index) => `integration (${index + 1})`),
 ];

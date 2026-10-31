@@ -9,12 +9,12 @@
 | 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
 | 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
 | 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)已合并V0.0.39/6041d80（正文保fix1）→ `codex/req0034-ci-fix2` / V0.0.39-fix2，待新修复PR |
+| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)已合并6041d80 → [PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91) / `codex/req0034-ci-fix2`；已推fix2/1ec394d，当前同PR预留fix3 |
 | 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；初轮478c325→候选9b29ce7与squash6041d80整树相同，旧功能分支保留；现从main6041d80新建fix2隔离分支。旧`06b5fff`关闭归档保留，不混入 |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | PR90精确9b29ce7全16CI/231文件3261项成功后合并6041d80，main唯一组件项目例超原30秒、部署正确skipped，未发布。fix2已最小限定实际toolbar/dialog，原例7.420秒、完整42项exit0（该例7.354秒），独立SPEC后QUALITY及父类型通过；收尾治理并提新修复PR，原FAIL/阶段前置FAIL保留 |
+| 状态 | PR91首轮41236645520实际FAIL保留，未合并部署。fix3四完整Web文件108项组合、逐组独立双审、容量完整root19项/真实16片并集及父类型全部通过；源hash与审查快照一致。Closure补足隐藏祖先过滤后重跑最终58，原快照保留；当前最终治理后集中推PR91，不预判真实24-job CI或收益 |
 | 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | 最终来源/治理/diff门禁后提交V0.0.39-fix2，关联Issue89建立新修复PR；不向已合并PR90推送充交付，不重复42项或未变运行构建/API/PG，不恢复本地全量或放宽预算/motion/断言。精确新PR及main全门禁成功后继续自动部署核验 |
+| 下一动作 | fix3完成任职与实际热点查询返修，保持全局安全否定及原预算/motion/覆盖；按7.5有界容量修订将原生Web分片8→16，严格完整门禁16→24，不放宽20/30分钟。各单元TDD/完整验证及SPEC后独立QUALITY、父治理后集中更新未合并PR91，再核精确PR/main新布局和部署 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -202,3 +202,24 @@
 - fix2原例本地未改27.286秒PASS/41 filtered，诊断26.54秒PASS/41 filtered，均不是本地红灯，准确红来自main CI。自身累计入口7.826秒、刷新12.190秒、继续16.619秒、再次刷新21.116秒、放弃25.647秒、完成26.522秒，阶段包含查询/点击/更新，不充单次纯query或网络/机器归因。只限定实际组件toolbar、项目dialog及确认标题所属dialog内原role/name/visible，保末尾global dialog/tab/table及全文件原业务/安全断言。
 - 修后同原代表7.420秒PASS/41 filtered；随后完整42/42 PASS、exit0，总390.61秒，目标例7.354秒，`fix2-component-full.log/json`及`fix2-component-author-evidence.json`。原30000ms/async5000ms、development及motion保持，无生产变化，临时trace清零；没有同机未改完整文件基线，不宣称整文件加速比例。作者释放窗口，blob`fda8d5baaad4e30c0f0231f766f6fa0356647dfb`与completion独立SPEC后console独立QUALITY快照一致。
 - 父核冻结hash后运行Web lint/typecheck退出0（`fix2-parent-lint.log`），fetch main仍6041d80，fix2未被其他提交占用，user回读REQ仍rev348同实际record。最后来源逐项复核/治理和diff门禁输出保存`fix2-parent-governance.log`；运行源码/依赖/CI未变据指纹复用已过构建，不重复本地全量。
+
+### 7.4 PR91首轮断言与关键路径闭环（2026-11-01）
+
+- fix2父类型、治理37文档/466链接/20复核/157依赖及diff实际通过后提交1ec394d510412becbdc343ab236b89a67e2788a2，建立独立PR91并实际评论回Issue89。生产/API/依赖/CI不变指纹见`fix2-runtime-unchanged.json`；未向已合并PR90推送。
+- PR91运行41236645520 attempt1精确1ec实际FAIL：scope/checks/API及四真实资源分片、Web2/3/4/5/6/7成功；Web1仅`StructureAssignments.test.tsx`内部tab继续/丢弃基线保护例31.409秒超原30秒，Web8在20分钟step timeout前22完整文件记录、无观察断言失败、6文件未完成，无完整JSON。全部三失败job日志/八artifact及`pr91-failure-inventory.json`已取证，不遗漏取消前失败，不把22局部记录冒称整片通过。
+- Web8真实关键路径：Closure58项261.371秒、Structure27项209.979秒、ConfigGuard8项128.422秒；这三文件原断言全部通过，但消耗大部分step预算。以自身阶段证据最小收窄正向真实控件查询，而非增加step/job timeout、分片数/并发或跳过后6文件；全局权限/敏感否定断言保持。
+- 三个新实现代理独占写集：`fix3_assignment_guard`仅StructureAssignments15例，当前唯一Web窗口；`fix3_closure_queries`仅Closure58例；`fix3_admin_hotqueries`仅Structure27/ConfigGuard8例。后两仅只读定位，取得明确交接才测试/编辑，按此顺序各独立完整文件验证；无功能红的性能组不得伪称功能RED，准确失败是整片超时，各组最终SPEC后独立QUALITY、root集中Git/文档。
+- A任职例本地准确RED1FAIL/14 filtered、31.01秒，诊断23.329秒PASS不是红；最终仅该例真实任职tabpanel/admin-form-stack内原role，末尾重新从当前body取active panel后查combobox仍等于原selector，避免旧panel自证不重挂。完整15项PASS/199.97秒，目标14.312秒；B独立SPEC后C独立QUALITY通过，原globaltab/权限预览消失/beforeunload/零写及budget保持，`fix3-assignment-author-evidence.json`。
+- B Closure原2代表4.032/9.714秒PASS非红，累计stage含查询/事件/等待不充纯query；第一次c7快照完整58PASS后独立SPEC发现native trigger缺原hidden:false的aria-hidden祖先排除，仅补既有waitFor中closest-null，SPEC复核后独立QUALITY通过。最终e5快照重新完整58PASS/263.35秒，测试251.13秒；旧c7/226.21秒结果保留不代最终，不宣称整文件加速比。所有58业务和32条global否定逐行保留，最终证据`fix3-closure-full-verified.log/json`及更新作者证据。
+- C自身stage证实全页dialog阶段仅约0.2秒，放弃无证据的批量helper替换；只量化MFA/transport实际Drawer、英文岗位行、Config通知行/类别Card/settings form/error Alert和已验证按钮范围，原global安全/dirty/CAS/body/晚到隔离/读次数/预算/motion/fixture保持。完整27+8共35项PASS，各独立Node191.27/92.93秒；代表transport21.491→6.851、Config15.790→13.361是不同次分项，完整Config代表17.528秒不抹去，不能称CI收益。A独立SPEC后completion独立QUALITY通过，`fix3-admin-author-evidence.json`。
+- root核四最终JSON及源blob与独立审查一致，108项是15/58/27/8四独立完整文件组合，零failed/pending，`fix3-parent-web-evidence.json`；未减少case或改变预算/motion。Web窗口已交容量代理完整root suite及官方枚举，不重跑本地Web全量。
+
+### 7.5 验证容量策略修订（2026-11-01）
+
+- 前一检查点选择只优化查询、不改八片；后续完整记录已证明Web8两次触及20分钟step边界，另Web5约17分钟。既有单片曾11.43分钟通过并不证明当前容量余量足够。只读代理`ci_capacity_assessment`逐源码确认现有官方分片扩容是原生能力，继续追逐所有未失败测试热点未必是最小完整解；本次在已获夜间连续排障交付授权内修订工程实现策略，先同步计划及Issue，不冒称负责人另逐条批准了16片。
+- 保留正在闭环的单例/可访问性修复；并采用有界16个Web VM、每片仍单worker、step仍20分钟/job仍30分钟、原case预算/motion/全部覆盖不变。四套真实PG及Worker/构建/清理不变。完整放行由严格16个job升为严格24个同run/attempt/SHA成功job，旧16、缺项、重复、旧SHA/attempt、非完成、失败或混合布局全部拒绝；纯文档仍严格6-job布局，不借此部署。
+- 最小功能面仅`.github/workflows/qms-2-foundation.yml`矩阵/分母、`scripts/ci-validation-scope.mjs`精确job集合及其root单测，deploy SSH/密钥/权限/资源隔离不改。先真实TDD验证24布局/拒绝旧16，再实现并用官方Vitest sequencer证明16片无重叠且并集全量。新精确PR/main必须实际24门禁及16份JSON核验，不能拿旧8份或旧16job成功代替。
+- 峰值scope后并发14→22，额外8次安装/启动/artifact可能增加runner分钟和队列等待；未取得账户并发/计费实证，不承诺免费、总分钟减少或墙钟减半，不改仓库可见性/账单/额度。更新`ENGINEERING-TOOLS`和来源索引，历史16-job记录保留原事实。独立实现代理只拥有上述3文件，纯布局定向Node单测可独立轻量执行；官方Vitest清单/完整root工具套件等到现有Web窗口释放后，避免争用。
+- 已先实际评论回Issue89登记有界策略及未知成本，read-only核仓库仍public，不改可见性/计费。新实现代理`fix3_ci_capacity`仅3文件，准确纯布局RED3FAIL→GREEN3PASS，另纯安全/接线6PASS，独立SPEC后QUALITY静态通过；24新布局可接受、旧16及所有来源/缺失/重复/混合失败严格拒绝、docs6不部署。当前接过释放窗口跑完整`ci-validation-scope.test.mjs`含真实Vitest16片/Jest4片覆盖，结果完成前不计完整PASS。
+- 容量完整`node --test test/ci-validation-scope.test.mjs`实际19/19 PASS、exit0/16.58秒，无skip/cancel，包含真实temp Git/HTTP来源分页与严格24/doc6、Jest4及官方Vitest16片覆盖；231文件前15片各15、最后6，非空无漏/重，逐源规范化SHA见`fix3-capacity-web-manifest.json`。实际源blob与静态独立双审一致，容量作者释放窗口；不把本地19项当真实新24-job云端通过。
+- root最后核四Web JSON108项及容量3source hash、Web typecheck/lint退出0（`fix3-parent-lint.log`），fetch main仍6041d80，user需求回读同record rev348，fix3序号无冲突。生产Web/API/契约/迁移/依赖/部署脚本未变，复用对应构建/浏览器/API/PG，CI仅原生布局及严格集合改变；最终逐来源复核及治理/diff输出`fix3-parent-governance.log`后集中推同PR91，不重启已过完整文件或本地全量。

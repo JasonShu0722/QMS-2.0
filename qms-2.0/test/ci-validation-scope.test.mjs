@@ -16,7 +16,7 @@ const policy = JSON.parse(await readFile(join(root, 'governance/validation-impac
 const ci = existsSync(script) ? await import(pathToFileURL(script).href) : {};
 const sha = 'a'.repeat(40);
 const source = { headSha: sha, runId: '123', runAttempt: '2' };
-const webShards = [1, 2, 3, 4, 5, 6, 7, 8];
+const webShards = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 const integrationShards = [1, 2, 3, 4];
 const businessNames = [...webShards.map((shard) => `web-tests (${shard})`), 'api-unit', ...integrationShards.map((shard) => `integration (${shard})`)];
 const jobsFor = (conclusion = 'success', names = conclusion === 'skipped' ? ['web-tests', 'api-unit', 'integration'] : businessNames) => ['scope', 'checks', 'foundation', ...names].map((name, index) => ({
@@ -134,8 +134,8 @@ test('foundation gate only accepts full success or explicitly planned documentat
   }
 });
 
-test('deploy gate accepts only the exact 16-job full layout or unchanged six-job documentation layout', () => {
-  assert.equal(jobsFor().length, 16);
+test('deploy gate accepts only the exact 24-job full layout or unchanged six-job documentation layout', () => {
+  assert.equal(jobsFor().length, 24);
   assert.equal(jobsFor('skipped').length, 6);
   assert.equal(ci.evaluateDeployJobs(jobsFor(), source), 'full');
   assert.equal(ci.evaluateDeployJobs(jobsFor('skipped'), source), 'documentation');
@@ -144,6 +144,7 @@ test('deploy gate accepts only the exact 16-job full layout or unchanged six-job
 test('deploy gate rejects legacy and mixed matrix layouts instead of accepting partial full validation', () => {
   const legacy = ['web-tests (1)', 'web-tests (2)', 'web-tests (3)', 'web-tests (4)', 'api-unit', 'integration'];
   for (const names of [legacy,
+    [...webShards.slice(0, 8).map((shard) => `web-tests (${shard})`), 'api-unit', ...integrationShards.map((shard) => `integration (${shard})`)],
     [...webShards.map((shard) => `web-tests (${shard})`), 'api-unit', 'integration'],
     [...legacy.filter((name) => name !== 'integration'), ...integrationShards.map((shard) => `integration (${shard})`)],
     [...businessNames, 'integration'], [...businessNames, 'web-tests'],
@@ -239,8 +240,8 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   const web = jobBlock(foundation, 'web-tests');
   // Early-skipped matrix job names keep expressions unevaluated; use the default job name.
   assert.doesNotMatch(web, /^    name:/m);
-  assert.match(web, /shard: \[1, 2, 3, 4, 5, 6, 7, 8\]/);
-  assert.match(web, /--shard=\$\{\{ matrix.shard \}\}\/8 --maxWorkers=1/);
+  assert.match(web, /shard: \[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16\]/);
+  assert.match(web, /--shard=\$\{\{ matrix.shard \}\}\/16 --maxWorkers=1/);
   assert.doesNotMatch(web, /continue-on-error:/);
   assert.match(checks, /name: CI scope and result gate tests\r?\n\s+if: needs.scope.outputs.scope == 'documentation'\r?\n\s+run: node --test test\/ci-validation-scope.test.mjs/);
   const integration = jobBlock(foundation, 'integration');
@@ -343,7 +344,7 @@ test('parallel integration VM shards cover every configured Jest file exactly on
   assert.deepEqual(shards.sort(), all.sort());
 });
 
-test('official Vitest BaseSequencer covers the actual configured Web files exactly once across eight shards without running tests', async (context) => {
+test('official Vitest BaseSequencer covers the actual configured Web files exactly once across sixteen shards without running tests', async (context) => {
   const { createVitest, BaseSequencer } = await import(pathToFileURL(join(root, 'apps/web/node_modules/vitest/dist/node.js')).href);
   const cacheDir = await mkdtemp(join(tmpdir(), 'qms-ci-web-discovery-'));
   context.after(() => rm(cacheDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));

@@ -50,12 +50,19 @@ async function confirmationButton(name: string | RegExp) {
   return button;
 }
 
+async function entryAction(kind: 'rule' | 'category') {
+  const scope = kind === 'rule'
+    ? (await screen.findByText('任务分配', { selector: 'td' })).closest('tr')!
+    : screen.getByText('岗位类别', { selector: '.ant-card-head-title' }).closest<HTMLElement>('.ant-card')!;
+  return within(scope).getByRole('button', { name: kind === 'rule' ? /^编\s*辑$/ : /^新\s*建$/ });
+}
+
 it.each(['rule', 'category'] as const)('configuration %s refresh handler discards editor state only after confirmation and rereads server versions', async (kind) => {
   const user = userEvent.setup();
   const { writes, reads, server } = mountConfiguration();
   const refresh = screen.getByRole('button', { name: /^刷\s*新$/ });
   await waitFor(() => expect(refresh).toBeEnabled());
-  await user.click(screen.getByRole('button', { name: kind === 'rule' ? /^编\s*辑$/ : /^新\s*建$/ }));
+  await user.click(await entryAction(kind));
   const title = kind === 'rule' ? '通知规则' : '岗位类别';
   const label = kind === 'rule' ? '通知标题' : '名称';
   const editor = await screen.findByRole('dialog', { name: title });
@@ -113,7 +120,7 @@ it('configuration category draft cancel retains changes until discard without sa
   const user = userEvent.setup();
   const { writes } = mountConfiguration();
   await waitFor(() => expect(screen.getByRole('button', { name: /^刷\s*新$/ })).toBeEnabled());
-  await user.click(screen.getByRole('button', { name: /^新\s*建$/ }));
+  await user.click(await entryAction('category'));
   const editor = await screen.findByRole('dialog', { name: '岗位类别' });
   await waitFor(() => expect(within(editor).getByLabelText('名称')).toBeVisible());
   fireEvent.change(within(editor).getByLabelText('名称'), { target: { value: '未保存类别' } });
@@ -125,7 +132,7 @@ it('configuration category draft cancel retains changes until discard without sa
   await user.click(within(editor).getByRole('button', { name: /^取\s*消$/ }));
   await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await user.click(screen.getByRole('button', { name: /^新\s*建$/ }));
+  await user.click(await entryAction('category'));
   expect(within(await screen.findByRole('dialog', { name: '岗位类别' })).getByLabelText('名称')).toHaveValue('');
   expect(writes).toEqual([]);
 }, 30000);
@@ -135,12 +142,13 @@ it.each(['refresh', 'navigate'] as const)('configuration settings draft requires
   const { writes, reads } = mountConfiguration();
   const retention = await screen.findByLabelText('导出保留时间（分钟）');
   await waitFor(() => expect(retention).toHaveValue('60'));
-  await waitFor(() => expect(screen.getByRole('button', { name: /^刷\s*新$/ })).toBeEnabled());
+  const refresh = screen.getByRole('button', { name: /^刷\s*新$/ });
+  await waitFor(() => expect(refresh).toBeEnabled());
   fireEvent.change(retention, { target: { value: '120' } });
   expect(retention).toHaveValue('120');
   const initialReads = reads.filter(path => path.includes('/settings?')).length;
   const leave = () => action === 'refresh'
-    ? user.click(screen.getByRole('button', { name: /^刷\s*新$/ }))
+    ? user.click(refresh)
     : user.click(screen.getByRole('link', { name: '离开配置' }));
   await leave();
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
@@ -161,7 +169,7 @@ it.each(['refresh', 'navigate'] as const)('configuration settings draft requires
 it('configuration notification draft close requires confirmation and switching remains local until save', async () => {
   const user = userEvent.setup();
   const { writes } = mountConfiguration();
-  await user.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
+  await user.click(await entryAction('rule'));
   const editor = await screen.findByRole('dialog', { name: '通知规则' });
   const enabled = within(editor).getByRole('switch', { name: '发送站内通知' });
   await waitFor(() => expect(enabled).toBeVisible());
@@ -177,7 +185,7 @@ it('configuration notification draft close requires confirmation and switching r
   await user.click(within(editor).getByRole('button', { name: '关闭' }));
   await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await user.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
+  await user.click(await entryAction('rule'));
   const reopened = await screen.findByRole('dialog', { name: '通知规则' });
   expect(within(reopened).getByRole('switch', { name: '发送站内通知' })).toBeChecked();
   expect(writes).toEqual([]);
@@ -189,14 +197,15 @@ it.each([409, 500])('configuration error retry after a %s save failure protects 
   const retention = await screen.findByLabelText('导出保留时间（分钟）');
   await waitFor(() => expect(retention).toHaveValue('60'));
   fireEvent.change(retention, { target: { value: '120' } });
-  await user.click(screen.getByRole('button', { name: /^保\s*存$/ }));
-  await screen.findByText('configuration-save-failed');
+  await user.click(within(retention.closest('form')!).getByRole('button', { name: /^保\s*存$/ }));
+  const errorTrace = await screen.findByText('configuration-save-failed');
+  const failure = within(errorTrace.closest<HTMLElement>('.ant-alert')!);
   expect(writes).toHaveLength(1);
   expect(JSON.parse(String(writes[0].body))).toMatchObject({ exportRetentionMinutes: 120, expectedVersion: settings.version });
   expect(retention).toHaveValue('120');
   const initialReads = reads.filter(path => path.includes('/settings?')).length;
 
-  await user.click(screen.getByRole('button', { name: /^重\s*试$/ }));
+  await user.click(failure.getByRole('button', { name: /^重\s*试$/ }));
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
   expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads);
   await user.click(await confirmationButton('继续编辑'));
@@ -204,7 +213,7 @@ it.each([409, 500])('configuration error retry after a %s save failure protects 
   expect(retention).toHaveValue('120');
   expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads);
 
-  await user.click(screen.getByRole('button', { name: /^重\s*试$/ }));
+  await user.click(failure.getByRole('button', { name: /^重\s*试$/ }));
   await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads + 1));
   await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));

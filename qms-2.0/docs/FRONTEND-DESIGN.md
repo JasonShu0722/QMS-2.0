@@ -1,10 +1,10 @@
 # 前端设计实施与参考代码
 
-## REQ-0034 表单、台账与清单统一（2026-11-01，已合并待发布门禁）
+## REQ-0034 表单、台账与清单统一（2026-11-01，发布门禁返修）
 
 负责人已认可本聊天独立台账样式、列宽/列序/显隐/固定/本地记忆及默认20、10/20/50/100分页方向，并明确全面启动正式策划实施。[REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)九字段user回读rev344一致，Issue89链接回读rev345；首次状态待评估，恢复实时user回读rev348已为开发中且范围保持，本轮未代设状态。[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / V0.0.39 / `codex/unified-business-pages`从主线478c325隔离开发，旧线程关闭归档保留原分支。
 
-[统一设计](../../docs/superpowers/specs/2026-10-31-qms-business-pages-design.md)与[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)覆盖四类模式和正式调用方；共享实现位于`apps/web/src/ui/ledger/`，继续使用Ant Design、现有语言/主题和业务拥有者，不复制HTML样例，不引入新运行依赖。控制台按经验证的资源组织隔离偏好，命名保存视图显隐/顺序优先，cursor/扫描及专业明细例外保留。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后9b29ce7全16CI/231文件3261项成功，独立release gate通过后按授权合并6041d80；main仅组件项目一个刷新保护测试超原30秒，自动部署正确skipped，尚未发布。现从6041d80隔离fix2，仅定位该测试查询热点，不降低预算或覆盖；接续依计划7.3。下方旧条目保留历史时点，不替代本摘要。
+[统一设计](../../docs/superpowers/specs/2026-10-31-qms-business-pages-design.md)与[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)覆盖四类模式和正式调用方；共享实现位于`apps/web/src/ui/ledger/`，继续使用Ant Design、现有语言/主题和业务拥有者，不复制HTML样例，不引入新运行依赖。控制台按经验证的资源组织隔离偏好，命名保存视图显隐/顺序优先，cursor/扫描及专业明细例外保留。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功后合并6041d80，但main单例失败阻止自动部署。独立[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的fix2已修组件项目；其新CI又暴露任职保护单例与第8片关键路径超时，现同PR fix3精确收窄实际控件查询，保预算/覆盖和全局安全断言。尚未发布，接续依计划7.4。下方旧条目保留历史时点，不替代本摘要。
 
 复用约定：主台账使用`LedgerTable`与稳定列key；普通分页默认20、选项10/20/50/100，使用`useLedgerPageSize`并把值带入真实请求，切换页长经原草稿/忙态保护后回起点。服务器命名视图控制列序/显隐，本地只补宽度/固定等允许配置，按真实用户、实际资源组织、门户、台账隔离，列配置进一步按视图隔离；组织来源与请求一致，home请求不因纯URL参数改用target偏好键。详情小表、编辑矩阵和cursor/scan沿现有语义，不伪造总量；新增或改版调用方必须在同一交付中补真实请求与保护回归。粗指针只扩大实际按钮/标签等触控目标，不扩大组件内部绝对定位的透明input。公共行为、状态边界和例外以统一规范7.3及专项设计为准。
 

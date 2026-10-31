@@ -2,7 +2,7 @@
 
 ## REQ-0034 统一业务页面验证检查点（2026-11-01，未发布）
 
-[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录本聊天直接授权、REQ-0034 / Issue89 / V0.0.39及逐项证据。本轮没有API/DTO、迁移或权限变更；[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后9b29ce7全16CI/231文件3261项成功并独立复核后合并6041d80，但main仅组件项目单例超原30秒，部署正确skipped，现依第7.3节隔离fix2。历史本地/PR分项不代main及生产核验，不把样例认可或合并称为工程/业务验收完成。
+[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录本聊天直接授权、REQ-0034 / Issue89 / V0.0.39及逐项证据。本轮没有API/DTO、迁移或权限变更；[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功后合并6041d80，但main单例失败、部署正确skipped。独立[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的fix2后又观察任职保护与第8片关键路径失败，现依第7.4节同PR fix3，尚未发布。历史本地/PR分项不代main及生产核验，不把样例认可或合并称为工程/业务验收完成。
 
 本轮分项证据：共享32项、剩余列表新增14项与范围/英文返修6项、T4呈现冻结快照6完整文件35项、控制台范围20项均有各自日志；API162完整文件2356项通过。后续审核目录分页不能沿用T4快照替代原业务再回归。全workspace构建及契约检查退出0，生产产物未发现模拟夹具标识，归档隔离及foundation+scanning Compose配置检查通过；构建仍有大chunk警告。正式组件夹具已在真实浏览器核对1440/1024/390、指针拖宽/列序、键盘、缓存/目标组织与触控模拟，并补齐窄屏内置/独立分页入口。夹具不等于真实角色/API/物理触屏、六主题/英文或业务验收。
 
@@ -23,6 +23,12 @@ PR90首轮`41224780227` attempt1 / HEAD7e34a92：16jobs中scope/checks/API、四
 PR90修后`41230729259` attempt1精确9b29ce7已全16jobs成功，八JSON与官方冻结清单逐项比对231文件/3261项全PASS，无漏/重/pending/runtimeErrors；独立release gate通过，合并6041d80整树与审查候选相同。main `41233552342` attempt1为3260PASS/1FAIL：组件项目原30秒例30452ms，之前PR29552ms仅边缘通过；其余全部成功。自动部署`41235023043`正确skipped，尚无生产发布，全部main日志/八artifact/失败库存保留。fix2仅在新隔离分支诊断该文件并准备独立修复PR，不向已合并PR90继续推送充交付，也不加宽预算或直接重跑刷绿。
 
 fix2原例本地27.286秒PASS、累计阶段诊断26.54秒PASS均非红，准确红来自main；限定实际toolbar/项目dialog/确认dialog内原角色后代表7.420秒，完整42项退出0、目标例7.354秒。累计到达时间包含查询/事件/更新，不充纯query或环境归因；无同机未改完整文件基线，不宣称整文件提升比例。仅一测试文件及状态文档变化，原预算/fixture/motion和全部业务/全局安全断言保持；独立SPEC后QUALITY、父类型检查通过，新修复PR精确CI及最终发布仍待。
+
+PR91/1ec394d的`41236645520` attempt1实际FAIL：组件项目完整42项已通过，Web1只任职内部tab草稿保护例31.409秒超原30秒；Web8在20分钟step timeout前22完整文件记录、无观察断言失败，6文件未完成、无最终JSON，不能改写为全量通过。其余Web及API/四真实资源/scope/checks成功，全部失败job日志/八artifact/库存`pr91-failure-inventory.json`保留。Closure58/Structure27/ConfigGuard8分别261.371/209.979/128.422秒为实际关键路径，fix3按自身阶段证据改善正向真实控件查询，保全局隐私/权限否定、原预算/motion/覆盖与CI配置；无功能红的性能组不伪称功能RED。
+
+fix3查询返修最终四独立完整文件15+58+27+8共108项PASS，源blob与逐组SPEC后独立QUALITY一致，`fix3-parent-web-evidence.json`。Closure第一次审查发现trigger缺原隐藏祖先过滤，补一条原语义断言后在e5源重新完整58，旧c7不代新结果；该最终文件263.35秒，不能宣称加速比。任职真实本地31.01秒RED后目标完整14.312秒；其他性能组原代表PASS不是功能RED，累计阶段含事件/更新不充纯query。
+
+计划7.5已依据两次整片20分钟取消有界修订原“不改分片”策略，并先同步Issue：使用官方Web16分片、严格完整24-job门禁，所有case/step20/job30预算、单worker、四真实PG/Worker/SSH/权限/全覆盖保持，docs仍6且不部署，旧16/缺项/重复/混合/旧来源拒绝。仅workflow矩阵/分母、精确门禁集合及root单测3功能文件；准确布局3FAIL→3PASS、纯安全6PASS、独立双审及完整root19/19项退出0，真实Vitest16片231文件无漏重/逐片非空，Jest4片覆盖保持，父类型检查通过。实际新24-job PR/main CI仍待，不把增加并发当作已证明墙钟/成本收益，不改账单/额度/可见性。
 
 ## REQ-0033 Web外壳与文案发布核验（2026-10-31）
 

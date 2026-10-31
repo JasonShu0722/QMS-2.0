@@ -380,8 +380,9 @@ it('includes MFA changes and the original MFA baseline in the permissions CAS', 
   const { requests } = stubStructureApi();
   render(<LanguageProvider><StructureAdministration organization={organization(writable)} /></LanguageProvider>);
   await userEvent.click(await positionAction());
-  await userEvent.click(await screen.findByRole('switch', { name: '要求 MFA' }));
-  await userEvent.click(screen.getByRole('button', { name: '保存' }));
+  const drawer = await screen.findByRole('dialog');
+  await userEvent.click(await within(drawer).findByRole('switch', { name: '要求 MFA' }));
+  await userEvent.click(within(drawer).getByRole('button', { name: '保存' }));
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(true));
   expect(JSON.parse(requests.find(([, init]) => init?.method === 'PUT')![1]!.body as string)).toMatchObject({ mfaRequired: true, expectedMfaRequired: false, expectedPermissionCodes: ['workbench:read'] });
 });
@@ -420,10 +421,11 @@ it('retries a failed transport with the same idempotency key and retains the dra
   });
   render(<LanguageProvider><StructureAdministration organization={organization(writable)} /></LanguageProvider>);
   await userEvent.click(await positionAction());
-  await userEvent.click(await screen.findByRole('button', { name: '保存' }));
-  await screen.findByRole('button', { name: '重新加载岗位权限' });
+  const drawer = await screen.findByRole('dialog');
+  await userEvent.click(await within(drawer).findByRole('button', { name: '保存' }));
+  await within(drawer).findByRole('button', { name: '重新加载岗位权限' });
   expect(writes).toBe(1);
-  await userEvent.click(screen.getByRole('button', { name: '保存' }));
+  await userEvent.click(within(drawer).getByRole('button', { name: '保存' }));
   expect(await screen.findByText('角色版本：5')).toBeInTheDocument();
   const puts = requests.filter(([, init]) => init?.method === 'PUT');
   expect(puts[1][1]!.body).toBe(puts[0][1]!.body);
@@ -438,7 +440,8 @@ it('uses the shared English position permission labels and keeps conflict recove
     ? Promise.resolve(json({ code: 'CONCURRENCY_CONFLICT' }, 409)) : original(input, init));
   render(<LanguageProvider><StructureAdministration organization={organization(writable)} /></LanguageProvider>);
   await userEvent.click(await screen.findByRole('tab', { name: 'Position' }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Position permissions' }));
+  const positionCell = await screen.findByText(position.name, { selector: 'td' });
+  await userEvent.click(within(positionCell.closest('tr')!).getByRole('button', { name: 'Position permissions' }));
   const drawer = await screen.findByRole('dialog');
   expect(await within(drawer).findByText('Role version：4')).toBeInTheDocument();
   expect(within(drawer).getByText('Current assignees：3')).toBeInTheDocument();

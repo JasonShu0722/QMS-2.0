@@ -1,10 +1,10 @@
 # QMS 2.0 能力状态总账
 
-## REQ-0034 统一业务页面体验（2026-11-01，已合并待发布门禁）
+## REQ-0034 统一业务页面体验（2026-11-01，发布门禁返修）
 
 本聊天直接授权的四类模式统一已提交为[REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，user九字段回读rev344、Issue89链接回读rev345；首次Base待评估，恢复实时user回读rev348已为开发中，范围保持。这是源码直接授权与外部状态分别记录，本轮未改表状态。
 
-[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / V0.0.39实施共享列操作/配置及分页偏好、正式台账接入、表单明细检查清单呈现。详细范围、逐调用方例外及实际证据依[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功并经独立release gate后合并6041d80；main全量3260PASS/1FAIL，组件项目单例超原30秒使部署正确skipped。现隔离V0.0.39-fix2做精确测试诊断，未发布或最终业务验收，独立样例认可/合并不代表全站已上线。
+[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / V0.0.39实施共享列操作/配置及分页偏好、正式台账接入、表单明细检查清单呈现。详细范围、逐调用方例外及实际证据依[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)修后全16CI/231文件3261项成功并经独立release gate后合并6041d80；main单例失败使部署正确skipped。独立[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)的fix2已修组件项目，但41236645520又有任职保护单例和第8片step超时，现同PR fix3按实测热点收窄查询，不增加预算/分片或削弱覆盖。未发布或最终业务验收，独立样例认可/合并不代表全站已上线。
 
 负责人下班前暂停后，本轮恢复并另明确夜间连续开发、PR检查通过后继续合并部署及20分钟heartbeat；第7节维护实际分片/失败/修复及授权。不重新建需求或自行改Base状态，不扩大为生产赋权、业务删除/外发、关闭回填或人工验收；PR已通过并合并，main门禁未齐，尚未部署。
 
