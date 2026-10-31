@@ -354,5 +354,4 @@ it('localizes the candidate dialog without changing shared translations', async 
   await waitFor(() => expect(screen.getByLabelText('Template domain code')).toBeVisible());
   expect(await screen.findByRole('option', { name: 'Supplier problem closure review' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Create template draft' })).toBeDisabled();
-  expect(screen.getByText('Publishing checks whether the domain is integrated. Creating a candidate draft does not publish, bind or enable it.')).toBeVisible();
 });

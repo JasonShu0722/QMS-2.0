@@ -636,7 +636,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
-            "sha256": "7ece273d94786077231432da34d2a8b0725760d541583af9ff59a7d97cf31421"
+            "sha256": "32f76a960dd66cf9110adc6ba05f58330f790f13639738c5e49c5ce4788101f3"
           },
           {
             "path": "apps/web/src/features/customer-quality/CustomerQualityPage.tsx",
@@ -680,7 +680,7 @@
           },
           {
             "path": "../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md",
-            "sha256": "1b20777365876cfcbd54ccfd3651dbc21a50294003695f30fa186c3c9c0140de"
+            "sha256": "621b2b91ebcd316765069ab7a31bdcfb1ed9a690656735274a727d756464c5fc"
           }
         ]
       }
