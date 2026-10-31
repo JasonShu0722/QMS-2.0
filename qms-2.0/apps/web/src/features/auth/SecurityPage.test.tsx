@@ -17,7 +17,6 @@ it.each([true, false])('shows effective policy without self-service policy or un
   const fetcher = vi.fn(async () => json({ ...status, isAdministrator, canUnbindMfa: true })); vi.stubGlobal('fetch', fetcher); mount();
   expect(await screen.findByText('验证器已绑定')).toBeVisible();
   expect(screen.getByText('登录时要求 MFA')).toBeVisible();
-  expect(screen.getByText('MFA 策略由管理员在用户管理中统一设置。')).toBeVisible();
   expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '停用 MFA 并退出' })).not.toBeInTheDocument();
   expect(fetcher).toHaveBeenCalledTimes(1);
@@ -70,7 +69,7 @@ it('localizes policy, binding and recovery sections', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US');
   vi.stubGlobal('fetch', vi.fn(async () => json(status))); mount();
   expect(await screen.findByText('Authenticator bound')).toBeVisible();
-  expect(screen.getByText('Administrators manage MFA policy in user management.')).toBeVisible();
+  expect(screen.getByText('MFA required at sign-in')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Regenerate recovery codes' })).toBeVisible();
 });
 
@@ -88,11 +87,10 @@ it('confirms email with CSRF and clears the submitted credential', async () => {
   expect(fetcher).toHaveBeenCalledWith('/api/v1/auth/email-verification/complete', expect.objectContaining({ body: JSON.stringify({ token: 's'.repeat(43) }), headers: expect.objectContaining({ 'x-csrf-token': 'test' }) }));
 });
 
-it('shows email purpose and an explicit unconfirmed state with the existing actions', async () => {
+it('shows an explicit unconfirmed email state with the existing actions', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => json({ ...status, emailVerifiedAt: null })));
   mount();
   expect(await screen.findByText('邮箱未确认')).toBeVisible();
-  expect(screen.getByText('用于自助密码找回。')).toBeVisible();
   expect(screen.getByRole('button', { name: '发送确认邮件' })).toBeVisible();
   expect(screen.getByLabelText('邮件凭证')).toBeVisible();
 });

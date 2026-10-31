@@ -245,7 +245,7 @@ it('replaces static assignment and escalation with explicit controlled closure r
   fireEvent.click(screen.getByLabelText('受控关闭审核'));
   expect(screen.getByLabelText('处理范围 角色')).toHaveValue('');
   expect(screen.getByLabelText('处理范围 处理人')).toHaveValue('');
-  expect(screen.getByText(/关闭后须手动配置普通处理范围/)).toBeVisible();
+  expect(screen.getByText('停用后需重新配置普通处理范围。')).toBeVisible();
 });
 
 it.each(['ACTION', 'VERIFICATION', 'CC', 'CLOSE'] as const)('clears closure metadata when switching an approval to %s', type => {

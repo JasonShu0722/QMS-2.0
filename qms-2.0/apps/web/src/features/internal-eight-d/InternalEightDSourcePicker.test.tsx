@@ -15,7 +15,7 @@ beforeEach(() => {
 it.each(['customer', 'new-product'] as const)('builds %s source changes with source identities and explicit hidden-relationship confirmation', async domain => {
   const onChange = vi.fn();
   render(<LanguageProvider><InternalEightDSourcePicker domain={domain} report={report} read={read} disabled={false} onChange={onChange} /></LanguageProvider>);
-  if (domain === 'new-product') expect(screen.getByText(/仅展示本报告已关联项目.*不代表允许跨项目合单/)).toBeVisible();
+  if (domain === 'new-product') expect(screen.getByRole('combobox', { name: '新品来源项目' })).toHaveValue('project');
   fireEvent.click(await screen.findByRole('checkbox', { name: /新来源/ }));
   fireEvent.click(screen.getByRole('button', { name: '预览并核对来源关联' }));
   await screen.findByText(/另有不可见关联/);

@@ -33,9 +33,9 @@ const english: Record<string, string> = {
   '职责来源': 'Responsibility sources', '职责绑定版本': 'Binding version', '任职有效期': 'Appointment validity', '分管有效期': 'Scope validity',
   '未配置职责绑定': 'Responsibility binding is missing', '存在多个职责绑定': 'Multiple responsibility bindings', '未配置有效任职': 'Effective appointment is missing',
   '存在多个有效任职候选': 'Multiple effective appointment candidates', '未配置部长分管': 'Minister scope is missing', '存在多个有效分管': 'Multiple effective minister scopes', '组织或部门已失效': 'Organization or department is inactive',
-  '已选任职失效，请重新选择；不会自动更换人员。': 'The selected appointment is invalid. Choose another; no automatic substitution.',
+  '已选任职失效，请重新选择。': 'The selected appointment is invalid. Choose another.',
   '请先维护有效下级科室，再新增部长分管。': 'Maintain active descendant sections before adding minister scopes.',
-  '分管维护请选择部长所属部门节点；当前节点仍可预览职责及缺项。': 'Maintain scopes on the minister department. This node can still preview responsibilities and issues.',
+  '在部长所属部门维护分管。': 'Maintain scopes in the minister department.',
   '仅维护职责与分管，不修改岗位权限或用户任职。': 'Maintains responsibilities and scopes only, not permissions or appointments.',
   '分管时间重叠或配置版本冲突，输入已保留，请核对后重试。': 'Scope overlap or version conflict. Inputs are retained; check and retry.',
   '保存结果尚未确认，请使用原请求重试。': 'Save result is unknown. Retry the original request.', '重试原请求': 'Retry original request', '放弃并刷新': 'Discard and refresh',
@@ -43,6 +43,7 @@ const english: Record<string, string> = {
   '以下缺项仅为配置提示，不阻断本页维护；不代表审批结果。': 'These configuration issues do not block maintenance and are not approval results.',
   '请检查有效期及任职范围，输入已保留。': 'Check validity bounds and appointment scope. Inputs are retained.',
   '任职已失效或不可见': 'Appointment is inactive or unavailable',
+  '配置缺项': 'Missing configuration',
 };
 function localDate(value?: string | null) {
   if (!value) return '';
@@ -271,7 +272,6 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
   const frozen = saving || !!unknownAttempt;
   const invalidSelection = editor?.kind === 'scope' && status !== 'DISABLED' && (candidatesLoading || !!candidatesError || invalidAppointment);
   return <section className="governance-panel" aria-label={t('管理职责')}>
-    <Typography.Text type="secondary">{t('仅维护职责与分管，不修改岗位权限或用户任职。')}</Typography.Text>
     {!editor && <GovernanceFeedback error={error} retry={() => { if (!pending.current) closeEditor(true); }} />}
     {saved && <Alert type="success" showIcon title={t('已保存')} />}
     <Space wrap>
@@ -288,7 +288,7 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
       { title: t('操作'), render: (_value, record) => manage ? <Button aria-label={`${t('编辑职责绑定')} · ${role(record.responsibility)}`} disabled={saving || loading || !!error} onClick={() => edit({ kind: 'binding', record })}>{t('编辑')}</Button> : t('只读') },
     ]} />
     <Typography.Title level={5}>{t('部长分管')}</Typography.Title>
-    <Typography.Text type="secondary">{t('分管维护请选择部长所属部门节点；当前节点仍可预览职责及缺项。')}</Typography.Text>
+    <Typography.Text type="secondary">{t('在部长所属部门维护分管。')}</Typography.Text>
     {manage && <><Button disabled={saving || loading || !!error || !active || !descendants.length || ministerBindings.length !== 1} onClick={() => edit({ kind: 'scope' })}>{t('新增部长分管')}</Button>
       {!descendants.length && <Typography.Text type="secondary">{t('请先维护有效下级科室，再新增部长分管。')}</Typography.Text>}
       {ministerBindings.length !== 1 && <Typography.Text type="warning">{t(ministerBindings.length ? '存在多个职责绑定' : '未配置职责绑定')} · {t('部长')}</Typography.Text>}</>}
@@ -303,7 +303,7 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
     <GovernanceFeedback error={previewError} retry={() => void loadPreview()} />
     {preview && <section className="governance-panel" aria-label={t('职责预览结果')}>
       <Typography.Text>{preview.at}</Typography.Text>
-      {!!preview.issues.length && <Alert type="info" showIcon title={t('以下缺项仅为配置提示，不阻断本页维护；不代表审批结果。')} description={<ul>{preview.issues.map((item, index) => <li key={`${item.responsibility}:${item.code}:${index}`}>{role(item.responsibility)}：{t(issueText[item.code])}</li>)}</ul>} />}
+      {!!preview.issues.length && <Alert type="info" showIcon title={t('配置缺项')} description={<ul>{preview.issues.map((item, index) => <li key={`${item.responsibility}:${item.code}:${index}`}>{role(item.responsibility)}：{t(issueText[item.code])}</li>)}</ul>} />}
       <Table<Preview['responsibilities'][number]> rowKey={item => `${item.responsibility}:${item.assignmentId}:${item.bindingId}:${item.scopeId}`} pagination={false} scroll={{ x: 660 }} dataSource={preview.responsibilities} columns={[
         { title: t('管理职责'), dataIndex: 'responsibility', render: role }, { title: t('姓名'), render: (_value, item) => item.fullName || item.username },
         { title: t('岗位'), dataIndex: 'positionName' }, { title: t('部门'), dataIndex: 'departmentId', render: labelDepartment },
@@ -340,7 +340,7 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
             ...candidates.map(item => ({ value: item.assignmentId, label: assignmentLabel(item) })),
             ...(selectedAppointment && !candidates.some(item => item.assignmentId === selectedAppointment) ? [{ value: selectedAppointment, label: `${selectedAppointment} · ${t('停用')}`, disabled: true }] : []),
           ]} /></Form.Item>
-          {invalidAppointment && <Alert type="warning" showIcon title={t('已选任职失效，请重新选择；不会自动更换人员。')} />}
+          {invalidAppointment && <Alert type="warning" showIcon title={t('已选任职失效，请重新选择。')} />}
           <Form.Item name="validFrom" label={t('开始时间')} rules={[{ required: !!editor.record }, { validator: (_rule, value: string | undefined) => !value || Number.isFinite(new Date(value).getTime()) ? Promise.resolve() : Promise.reject(new Error(t('请检查填写内容'))) }]}><Input type="datetime-local" step="1" placeholder={t('服务器当前时间')} /></Form.Item>
           <Form.Item name="endMode" label={t('结束方式')}><Select aria-label={t('结束方式')} virtual={false} options={[
             ...(!editor.record ? [{ value: 'DEFAULT', label: t('默认任职结束时间') }] : []), { value: 'DATE', label: t('指定结束时间') }, { value: 'UNBOUNDED', label: t('无结束时间') },

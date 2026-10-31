@@ -108,7 +108,6 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
         })}</section> : null;
       })}
     </nav>
-    <div className="qms-console-sidebar-note qms-console-nav-label">{text('管理操作以实时服务端授权为准', 'Actions require current server authorization')}</div>
   </>;
 
   const verification = value?.error ? <div className="qms-console-state"><Alert type="error" showIcon title={value.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
@@ -134,7 +133,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
           : !context ? <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>
             : <>
               <div className="qms-console-page-heading"><h1 ref={heading} tabIndex={-1}>{route?.item ? label(route.item) : text('管理页面', 'Management page')}</h1>
-                {fixedHome ? <div className="qms-console-fixed-scope"><strong>{text('固定会话所属组织', 'Fixed to session home')}</strong><span>{resourceOrganization?.name} ({resourceOrganization?.code})</span></div>
+                {fixedHome ? <div className="qms-console-fixed-scope"><strong>{text('所属组织', 'Organization')}</strong><span>{resourceOrganization?.name} ({resourceOrganization?.code})</span></div>
                   : <label className="qms-console-target">{text('管理目标组织', 'Management target organization')}<select aria-label={text('管理目标组织', 'Management target organization')} value={context.targetOrganization.id} onChange={event => {
                     const next = event.target.value;
                     requestLeave(() => { const search = new URLSearchParams(location.search); search.set('organizationId', next); navigate({ pathname: location.pathname, search: search.toString(), hash: location.hash }); });
@@ -143,7 +142,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
               <details className="qms-console-scope-details"><summary>{text('身份与资源范围', 'Identity & resource scope')} · {resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录', 'Platform directory') : text('组织范围', 'Organization scope')}</summary><dl className="qms-console-scope">
                 <div><dt>{text('当前身份', 'Current actor')}</dt><dd aria-label={text('当前身份', 'Current actor')}>{context.actor.id}</dd></div>
                 <div><dt>{text('会话所属组织', 'Session home organization')}</dt><dd aria-label={text('会话所属组织', 'Session home organization')}>{context.actor.homeOrganization.name} ({context.actor.homeOrganization.code})</dd></div>
-                <div><dt>{text('模块资源范围', 'Module resource scope')}</dt><dd aria-label={text('模块资源范围', 'Module resource scope')}>{resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录，以上组织为授权来源', 'Platform directory; organization is the authorization source') : text('组织范围', 'Organization scope')} · {fixedHome ? 'SESSION_HOME' : 'TARGET'}</dd></div>
+                <div><dt>{text('模块资源范围', 'Module resource scope')}</dt><dd aria-label={text('模块资源范围', 'Module resource scope')}>{resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录，以上组织为授权来源', 'Platform directory; organization is the authorization source') : text('组织范围', 'Organization scope')}</dd></div>
               </dl></details>
               {route?.status === 'allowed' ? <Context.Provider key={capabilityKey} value={{ context, refresh, invalidate }}>{children ?? <Outlet />}</Context.Provider>
                 : <Alert type="warning" showIcon title={route?.status === 'not-found' ? text('管理页面不存在', 'Management page not found') : text('无权访问此管理模块', 'You cannot access this management module')} />}

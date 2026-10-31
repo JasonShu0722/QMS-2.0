@@ -53,6 +53,55 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetcher);
 });
 
+it.each([false, true])('C SPEC review copy preserves actual lock round and duties (portal=%s)', async portal => {
+  current.status = 'IN_REVIEW'; current.allowedActions = ['read'];
+  current.closure = { id: 'round-1', problemId: 'problem-1', instanceId: 'instance-1', workflowVersionId: 'flow-1', contentVersion: 6, roundNumber: 3, version: 1, status: 'PENDING', createdAt: '', updatedAt: '', duties: [{ id: 'duty-1', duty: 'PROFESSIONAL', userId: 'sqe-1', status: 'PENDING', version: 1, decidedBy: null, comment: '当前对象的审核意见', decidedAt: null }] };
+  mount(portal); await screen.findByDisplayValue('供应商实际问题');
+  expect(screen.getByDisplayValue('供应商实际问题')).toBeDisabled();
+  expect(screen.getByRole('heading', { name: '当前关闭轮次 3' })).toBeVisible();
+  expect(screen.getByText('固定内容版本 6 · PENDING')).toBeVisible();
+  if (portal) {
+    expect(screen.getByText(/在审锁版：SQE先审/)).toBeVisible();
+    expect(screen.getByText(/先SQE后管理，高/)).toBeVisible();
+    expect(screen.queryByText(/当前对象的审核意见/)).not.toBeInTheDocument();
+  } else {
+    expect(screen.getByText('在审锁版')).toBeVisible();
+    expect(screen.queryByText(/在审锁版：SQE先审/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/先SQE后管理，高/)).not.toBeInTheDocument();
+    expect(screen.getByText(/当前对象的审核意见/)).toBeVisible();
+  }
+  expect(writes).toHaveLength(0);
+});
+
+it.each([false, true])('C SPEC idle extension copy excludes internal process introductions (portal=%s)', async portal => {
+  current.allowedActions = ['read', 'deadline-extensions'];
+  mount(portal); await screen.findByDisplayValue('供应商实际问题');
+  fireEvent.click(screen.getByRole('button', { name: '期限与延期' }));
+  await screen.findByText('暂无延期申请');
+  expect(screen.queryByText(/低 \/ 中风险由SQE审核/) !== null).toBe(portal);
+  expect(screen.queryByText('批准前原期限继续有效。')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '提交延期申请' })).not.toBeInTheDocument();
+  expect(writes).toHaveLength(0);
+});
+
+it.each(['request', 'review'] as const)('C SPEC extension deadline advice accompanies actual %s actions', async kind => {
+  current.allowedActions = kind === 'request' ? ['read', 'request-extension'] : ['read', 'deadline-extensions'];
+  if (kind === 'review') {
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => path.endsWith('/deadline-extensions') && !init.method
+      ? json([{ id: 'extension-1', stage: 'CLOSURE', status: 'QUALITY_PENDING', originalDueAt: '2026-10-27T00:00:00Z', requestedDueAt: '2026-11-10T00:00:00Z', reason: '当前对象的延期申请', version: 3, allowedActions: ['approve-sqe', 'return-sqe'] }])
+      : original(path, init));
+  }
+  mount(); await screen.findByDisplayValue('供应商实际问题');
+  fireEvent.click(screen.getByRole('button', { name: '期限与延期' }));
+  const button = await screen.findByRole('button', { name: kind === 'request' ? '提交延期申请' : 'SQE · 同意延期' });
+  const context = button.closest(kind === 'request' ? 'fieldset' : 'article')!;
+  expect(within(context).getByText('批准前原期限继续有效。')).toBeVisible();
+  expect(screen.queryByText(/低 \/ 中风险由SQE审核/)).not.toBeInTheDocument();
+  if (kind === 'review') expect(within(context).getByText(/2026-10-27.*2026-11-10/)).toBeVisible();
+  expect(writes).toHaveLength(0);
+});
+
 it.each([[false, null], [false, '2026-10-28T00:00:00Z'], [true, null]] as const)('does not mount portal disclosure for portal=%s released=%s', async (portal, released) => {
   current.releasedToSupplierAt = released;
   mount(portal); await screen.findByDisplayValue('供应商实际问题');
@@ -186,6 +235,7 @@ it('requires disclosure preview then explicit confirmation, releasing the origin
   expect(screen.queryByRole('button', { name: '确认释放给供应商' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '生成披露预览' }));
   expect(await screen.findByText('待外发事实')).toBeVisible();
+  expect(screen.queryByText(/通知排队/)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '确认释放给供应商' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: '我已核对外发事实、目标供应商与所选附件' }));
   fireEvent.click(screen.getByRole('button', { name: '确认释放给供应商' }));

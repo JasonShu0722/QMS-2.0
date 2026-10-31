@@ -103,7 +103,7 @@ export function InternalEightDSourceFacts({ domain, sources }: {
   return <section aria-label={text('来源基础信息', 'Source facts')} className={styles.section}
     style={{ ...style, minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
     <h3>{text('来源基础信息', 'Source facts')}</h3>
-    <p>{text('仅展示本报告版本保存且获准可见的来源事实；缺失项为未记录，不补查实时台账。', 'Only authorized source facts saved with this report version are shown. Missing facts are unrecorded; live ledgers are not queried.')}</p>
+
     {!sources.length && <p>{text('未记录来源', 'No sources recorded')}</p>}
     {sources.map((source, index) => {
       const id = 'sourceId' in source ? source.sourceId : source.defectId;

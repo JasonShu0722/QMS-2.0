@@ -88,7 +88,10 @@ function submit(dialog: HTMLElement) { fireEvent.submit(dialog.querySelector('fo
 
 it('requires an explicit project stage and creates a project with nullable engineers using the platform mutation', async () => {
   const { writes } = server({ projects: [] }); mount();
+  await screen.findByText('驱动总成');
+  expect(screen.queryByText('修改将影响同项目的全部组件。')).not.toBeInTheDocument();
   const dialog = await openProject();
+  expect(within(dialog).queryByText('修改将影响同项目的全部组件。')).not.toBeInTheDocument();
   fireEvent.change(within(dialog).getByLabelText('项目编码'), { target: { value: 'P002' } });
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '新项目' } });
   submit(dialog);
@@ -107,6 +110,7 @@ it('edits stage only in the shared project and sends its expected version', asyn
   const { writes } = server(); mount();
   fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
   const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  expect(await within(dialog).findByText('修改将影响同项目的全部组件。')).toBeInTheDocument();
   await choose('项目阶段', '量产'); submit(dialog);
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].init.method).toBe('PATCH');

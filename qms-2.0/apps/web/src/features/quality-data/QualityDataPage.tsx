@@ -51,7 +51,7 @@ function TrendChart({ facts }: { facts: Fact[] }) {
       <text x="24" y="205">{new Date(points[0]!.periodStart).toLocaleDateString('zh-CN')}</text>
       <text x="576" y="205" textAnchor="end">{new Date(points.at(-1)!.periodStart).toLocaleDateString('zh-CN')}</text>
     </svg>
-    <figcaption>趋势展示原始分子 / 分母比值；单位换算规则尚未配置。下方表格提供相同数据。</figcaption>
+    <figcaption>原始比值（分子 / 分母）</figcaption>
   </figure>;
 }
 
@@ -162,7 +162,7 @@ export function QualityDataPage() {
 
   return <section className="quality-data-page">
     <header className="quality-data-heading">
-      <div><h1 className="sr-only">质量指标趋势</h1><Typography.Paragraph type="secondary">查看指标来源、统计期间和已配置阈值的预警结果。未配置阈值的指标不判定红绿灯。</Typography.Paragraph></div>
+      <h1 className="sr-only">质量指标趋势</h1>
       <Button onClick={() => setRevision((value) => value + 1)} loading={loadingMetrics || loadingFacts}>刷新</Button>
     </header>
     {metricError ? <Alert type={isDenied(metricError) ? 'warning' : 'error'} showIcon title={isDenied(metricError) ? '暂无质量指标访问权限' : metricError instanceof ApiError ? safeAccountError(metricError) : '指标定义加载失败，请重试。'} description={metricError instanceof ApiError ? metricError.traceId : undefined} action={isDenied(metricError) ? undefined : <Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}
@@ -173,7 +173,7 @@ export function QualityDataPage() {
       {selected ? <dl className="quality-data-definition"><div><dt>指标代码</dt><dd>{selected.code}</dd></div><div><dt>定义单位</dt><dd>{selected.unit?.trim() || '未配置单位'}</dd></div><div><dt>计算口径</dt><dd>{selected.numeratorLabel} / {selected.denominatorLabel}</dd></div><div><dt>口径版本</dt><dd>{selected.formulaVersion}</dd></div><div><dt>阈值方向</dt><dd>{selected.resolvedThresholdDirection === 'LTE' ? '越低越好' : '越高越好'}</dd></div><div><dt>达标 / 预警阈值</dt><dd>{selected.resolvedGreenThreshold == null || selected.resolvedYellowThreshold == null ? '未配置' : `${formatMetric(selected.resolvedGreenThreshold, selected.unit)} / ${formatMetric(selected.resolvedYellowThreshold, selected.unit)}`}</dd></div></dl> : null}
     </section>
     <section className="quality-data-card qms-display-card" aria-label="四域综合看板">
-      <div className="quality-data-section-heading"><div><Typography.Title level={2}>四域综合看板</Typography.Title><Typography.Text type="secondary">跨供应商、制程、客户和新品指标；未核实来源只显示状态，不参与数值汇总。</Typography.Text></div><div className="qms-dialog-actions" role="group" aria-label="四域综合看板"><Button loading={exporting === 'xlsx'} onClick={() => void exportReport('xlsx')}>下载 Excel</Button><Button loading={exporting === 'pdf'} onClick={() => void exportReport('pdf')}>下载 PDF</Button></div></div>
+      <div className="quality-data-section-heading"><div><Typography.Title level={2}>四域综合看板</Typography.Title></div><div className="qms-dialog-actions" role="group" aria-label="四域综合看板"><Button loading={exporting === 'xlsx'} onClick={() => void exportReport('xlsx')}>下载 Excel</Button><Button loading={exporting === 'pdf'} onClick={() => void exportReport('pdf')}>下载 PDF</Button></div></div>
       {dashboardError ? <Alert type="error" showIcon title="综合看板加载失败，请重试。" action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : dashboardLoading ? <div className="quality-data-loading"><Spin /></div> : dashboard ? <>
         <div className="quality-data-domain-grid">{dashboard.domains.map((domain) => <div className="quality-data-domain" key={domain.domain}><Typography.Text type="secondary">{domain.label}</Typography.Text><strong>{domain.factCount} / {domain.metricCount}</strong><span>有事实 / 指标</span></div>)}</div>
         {dashboard.cards.length ? <Table rowKey={(card) => `${card.domain}-${card.metricCode}`} dataSource={dashboard.cards} pagination={false} scroll={{ x: 1000 }} columns={[{ title: '领域', dataIndex: 'domain' }, { title: '指标', dataIndex: 'metricName', render: (value, card) => `${value} (${card.metricCode})` }, { title: '来源状态', dataIndex: 'status' }, { title: '阈值状态', key: 'signal', render: (_, card) => <Tag color={card.signal === 'RED' ? 'error' : card.signal === 'YELLOW' ? 'warning' : card.signal === 'GREEN' ? 'success' : 'default'}>{signalLabels[card.signal ?? 'NO_DATA']}</Tag> }, { title: '最新值', dataIndex: 'latestValue', render: (value, card) => formatMetric(value, card.unit) }, { title: '异常期间', key: 'abnormal', render: (_, card) => card.consecutiveRedPeriods ? `连续红灯 ${card.consecutiveRedPeriods} 期` : card.abnormalPeriods ? `${card.abnormalPeriods} 期异常` : '—' }, { title: '来源', dataIndex: 'sourceSystem', render: (value) => value ?? '—' }, { title: '统计期间', render: (_, card) => card.periodStart ? `${new Date(String(card.periodStart)).toLocaleDateString('zh-CN')} – ${new Date(String(card.periodEnd)).toLocaleDateString('zh-CN')}` : '—' }]} /> : <Empty description="暂无看板指标" />}
@@ -196,7 +196,7 @@ export function QualityDataPage() {
       </> : null}
     </section> : null}
     {selected && !metricError ? <section className="quality-data-card qms-display-card" aria-label="辅助分析">
-      <div className="quality-data-section-heading"><div><Typography.Title level={2}>辅助分析</Typography.Title><Typography.Text type="secondary">仅基于已核实手工事实生成规则分析，不自动改变业务状态。</Typography.Text></div></div>
+      <div className="quality-data-section-heading"><div><Typography.Title level={2}>辅助分析</Typography.Title></div></div>
       {insightsError ? <Alert type="error" showIcon title="辅助分析加载失败" /> : insights.length ? <div className="quality-data-insight-list">{insights.map((insight) => <div className="quality-data-insight" key={insight.metricDefinitionId}><Typography.Text strong>{insight.metricName} ({insight.metricCode})</Typography.Text><Tag>{insight.signal}</Tag><p>{insight.summary}</p><Typography.Text type="secondary">{insight.evidence.join(' · ')}</Typography.Text></div>)}</div> : <Empty description="暂无辅助分析" />}
     </section> : null}
     <Drawer title="指标事实明细" open={Boolean(drillFact)} onClose={() => setDrillFact(undefined)}>

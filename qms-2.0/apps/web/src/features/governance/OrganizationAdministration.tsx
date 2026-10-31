@@ -89,8 +89,7 @@ export function StructureLifecycleActions({ path, record, onChanged, auditOrgani
     <Modal title={`${t(label)} · ${record.name} · ${record.code}`} open={!!action} onCancel={close} onOk={() => void confirm()} okText={t(`确认${label}`)} cancelText={t('取消')} confirmLoading={busy} okButtonProps={{ danger: action !== 'enable', disabled: checking || !check || !!error || blockers.length > 0 || busy || unknownDelete }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
       <GovernanceFeedback error={error} />
       {checking ? <Spin /> : <>
-        <Alert type={blockers.length ? 'warning' : 'info'} showIcon title={t(blockers.length ? '请先处理以下依赖' : '确认时服务端将重新检查依赖及版本，不会级联删除业务数据。')} />
-        {action === 'delete' && <p>{t('管理日志与技术回执不单独阻止空组织删除；审计按存续组织授权范围保留，真实关系和业务历史仍受保护。')}</p>}
+        <Alert type={blockers.length ? 'warning' : 'info'} showIcon title={t(blockers.length ? '请先处理以下依赖' : '当前无阻断依赖；不连带删除业务数据。')} />
         <ul>{blockers.map((blocker, index) => <li key={index}>{blocker}</li>)}</ul>
         {!!details?.length && <ul>{details.map(detail => <li key={detail.code}>{detail.message} · {detail.count}</li>)}</ul>}
         {check && auditOrganizationId && <Space wrap>

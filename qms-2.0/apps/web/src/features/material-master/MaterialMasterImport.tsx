@@ -22,5 +22,5 @@ export function parseMaterialMasterRows(sheet: readonly (readonly unknown[])[], 
 }
 
 export function MaterialMasterImport(props: Props) {
-  return <MasterDataImport {...props} domain="物料" endpoint="/api/v1/material-masters/import" headers={headers} fields={['materialCode', 'materialName']} parse={parseMaterialMasterRows} rule="只新增物料编码和名称；重复编码跳过，不覆盖已有名称。编码请使用文本保留前导 0。" />;
+  return <MasterDataImport {...props} domain="物料" endpoint="/api/v1/material-masters/import" headers={headers} fields={['materialCode', 'materialName']} parse={parseMaterialMasterRows} rule="重复编码跳过；编码用文本保留前导 0。" />;
 }

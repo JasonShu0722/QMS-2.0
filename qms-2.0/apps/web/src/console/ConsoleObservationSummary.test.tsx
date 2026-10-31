@@ -42,19 +42,14 @@ it('reads only authorized organization summaries and separates requests, unconne
   view(); const card = await screen.findByRole('region', { name: 'API 观测摘要' });
   await waitFor(() => expect(within(card).getByText('12')).toBeVisible());
   expect(within(card).getByText('2')).toBeVisible(); expect(within(card).getByText(/采集完整性未知/)).toBeVisible();
-  expect(await screen.findByText('尚未接入外部数据来源')).toBeVisible(); expect(screen.getByText(/渲染或执行事实不等于最终业务成功/)).toBeVisible();
+  expect(await screen.findByText('尚未接入外部数据来源')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: '数据交换摘要' })).queryByText('0')).not.toBeInTheDocument();
   const facts = screen.getByRole('region', { name: '运行服务摘要' }); expect(within(facts).getByText('近期执行事实')).toBeVisible(); expect(within(facts).getByText('执行失败')).toBeVisible();
   expect(read).toHaveBeenCalledTimes(3); for (const [path] of read.mock.calls) { const query = new URL(path, 'http://localhost').searchParams; expect(query.get('organizationId')).toBe(org); expect(query.get('scope')).toBe('ORGANIZATION'); }
   expect(screen.getByRole('link', { name: '查看 API 观测' })).toHaveAttribute('href', `/console/api-monitoring?organizationId=${org}`);
   expect(document.querySelector(`time[datetime="${time}"]`)).toBeInTheDocument();
-  const notes = document.querySelector('.qms-observation-summary > header details');
-  expect(notes).not.toBeNull();
-  expect(notes).not.toHaveAttribute('open');
-  expect(notes!.querySelector('summary')).toHaveTextContent('当前目标组织');
-  const interpretation = within(notes as HTMLElement).getByText(/不是系统健康总分/);
-  expect(interpretation).not.toBeVisible();
-  fireEvent.click(notes!.querySelector('summary')!);
-  expect(interpretation).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新观测摘要' })).toBeEnabled();
+  expect(within(card).getByRole('link', { name: '查看 API 观测' })).toBeVisible();
 });
 it('does not request or link modules outside the caller capability', async () => {
   mocks.context = { ...context(), modules: context().modules.slice(0, 1) }; view(); await screen.findByText('12');

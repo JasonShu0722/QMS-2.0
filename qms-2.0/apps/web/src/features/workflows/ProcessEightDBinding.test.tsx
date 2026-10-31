@@ -50,7 +50,7 @@ it('shows a configuration load failure without inventing workflow IDs or enablin
     if (path.includes('my-permissions')) return { organizationId: 'org', permissions: ['workflow:manage', 'configuration:read', 'configuration:manage'] };
     throw new Error('unsafe');
   });
-  mount(); expect(await screen.findByText('无法加载8D绑定配置，请重试；不会使用默认流程ID。')).toBeVisible();
+  mount(); expect(await screen.findByText('无法加载8D绑定配置，请重试。')).toBeVisible();
   expect(screen.getByRole('button', { name: '保存8D绑定' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '启用过程8D' })).toBeDisabled();
 });

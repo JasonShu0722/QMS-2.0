@@ -277,10 +277,10 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         {selectedCount ? <Button disabled={locked} onClick={() => requestLeave(() => setSelected({}))}>清空选择</Button> : null}
         {canWrite ? <><Select aria-label="批量责任分类" placeholder="批量分类" value={classification} options={categoryOptions} disabled={locked} onChange={setClassification} /><Button disabled={locked || !selectedCount || !classification || !!staleSelected.length} onClick={() => requestLeave(() => void classify())}>应用分类</Button></> : null}
       </Space>
-      {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新；不会静默覆盖所选版本。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
+      {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
       <ProcessError cause={actionError} fallback="批量分类失败，保留选择，请重试。" />
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
-      <ProcessError cause={supplierError} fallback="供应商名称加载失败；不会伪造名称。" />
+      <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
       {!listError ? <Table<Defect> rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize: 20, total: result?.total ?? 0, showSizeChanger: false, onChange: setPage }} /> : null}
     </section>
@@ -317,7 +317,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} suppliers={suppliers} canReadSuppliers={canReadSuppliers} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} /> : null}
     {action ? <ProcessLedgerAction {...action} onClose={() => setAction(undefined)} onSaved={record => { saved(record); setAction(undefined); }} onDenied={revoke} /> : null}
     <Drawer title="发起制程问题" open={issueOpen} onClose={closeIssue} closable={!issuing} keyboard={!issuing} mask={{ closable: !issuing }} size="min(620px, 100vw)" destroyOnHidden={false}>
-      <Typography.Paragraph>已选择 {Object.keys(selected).length} 条来源。此为旧版BRIEF兼容入口；正式内部8D请使用台账“发起内部8D”。旧简报仍需已发布的 PROCESS_BRIEF 流程定义和版本。</Typography.Paragraph>
+      <Typography.Paragraph>已选择 {Object.keys(selected).length} 条来源。</Typography.Paragraph>
       {issueError ? <Alert className="process-quality-issue-error" type={isDenied(issueError) ? 'warning' : 'error'} showIcon title={isDenied(issueError) ? '暂无发单权限' : errorText(issueError, '发单失败，请重试。')} /> : null}
       {legacyWriter.uncertain ? <Alert type="warning" title="简报发单结果未知，重试仅复用原请求和同一幂等键。" /> : null}
       <Form<IssueValues> form={form} layout="vertical" disabled={issuing || legacyWriter.uncertain} onValuesChange={() => setIssueDirty(true)} initialValues={{ severity: 'MEDIUM' }} onFinish={(values) => void issue(values)}>

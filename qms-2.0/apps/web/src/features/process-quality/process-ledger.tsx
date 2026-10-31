@@ -65,18 +65,18 @@ export function useProcessWrite(onDenied: (cause?: unknown) => void) {
 }
 
 const hintLabels: Record<string, string> = {
-  SAME_OPERATION_TRACE_DUPLICATE: '同工序同条码已有记录，仅提示，不阻止登记。',
-  MANUAL_PROJECT_DIFFERS: '人工项目与映射建议不同，保留人工项目，不自动覆盖。',
+  SAME_OPERATION_TRACE_DUPLICATE: '同工序同条码已有记录。',
+  MANUAL_PROJECT_DIFFERS: '人工项目与映射建议不同。',
   COMPONENT_PROJECT_UNMAPPED: '零部件尚未映射项目，请核对人工资料。',
-  DESCRIPTION_EMPTY: '失效现象尚未填写，可后续补充。',
-  DEFECT_TYPE_UNKNOWN: '失效类型未知，可后续补充。',
-  DEFECT_QUANTITY_UNKNOWN: '不良数量未知，不使用默认数量。',
-  OCCURRED_AT_UNKNOWN: '发生时间未知，不使用登记时间冒充。',
+  DESCRIPTION_EMPTY: '失效现象未填写。',
+  DEFECT_TYPE_UNKNOWN: '失效类型未知。',
+  DEFECT_QUANTITY_UNKNOWN: '不良数量未知。',
+  OCCURRED_AT_UNKNOWN: '发生时间未知。',
   MAPPING_NOT_FOUND: '零部件尚未建立项目映射。',
-  PROJECT_NOT_CONFIGURED: '映射尚未配置项目，保留人工资料。',
+  PROJECT_NOT_CONFIGURED: '映射尚未配置项目。',
   PRODUCT_CATEGORY_NOT_CONFIGURED: '映射尚未配置产品分类。',
   MAPPING_OR_PROJECT_DISABLED: '映射或项目已停用，请核对。',
-  MANUAL_ENGINEER_DIFFERS: '人工工程师与建议不同，不自动覆盖。',
+  MANUAL_ENGINEER_DIFFERS: '人工工程师与映射建议不同。',
 };
 export function MappingHint({ record }: { record: Defect }) {
   const hints = [...(record.issues ?? []), ...(record.componentProject?.issues ?? [])];

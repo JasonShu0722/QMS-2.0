@@ -9,6 +9,15 @@ vi.mock('../../api/client', async () => { const actual = await vi.importActual<t
 
 beforeEach(() => vi.mocked(apiRequest).mockReset());
 
+it.each([false, true])('keeps header guidance scoped to the portal (portal=%s)', async portal => {
+  vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 0 } as never);
+  const view = render(<SupplierAdmissionPage portal={portal} />);
+  await screen.findByText('暂无质量资料');
+  expect(view.container.querySelector('header > div.ant-typography-secondary') !== null).toBe(portal);
+  expect(screen.getByRole('heading', { name: portal ? '质量资料提交' : '供应商质量资料审核' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /刷\s*新/ })).toBeEnabled();
+});
+
 it.each([
   { field: '资料标题', value: '尚未保存的质量资料' },
   { field: '质量手册附件 ID', value: 'pending-evidence-id' },

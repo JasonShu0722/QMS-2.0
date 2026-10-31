@@ -31,7 +31,7 @@ const english: Record<string, string> = {
   '审核结果尚未确认，意见、决定与幂等请求已冻结；只能重试原请求。': 'The review result is unknown. Comment, decision and idempotent request are frozen. Retry only the original request.',
   '身份验证已完成，意见、决定与幂等请求已冻结；请显式重试原请求。': 'Identity verification is complete. Comment, decision and idempotent request are frozen. Explicitly retry the original request.',
   '先前审核结果仍待核对；权限失效不代表请求已撤销，请联系有权限人员核对。': 'The previous review result still needs verification. Losing permission does not cancel the request. Contact an authorized reviewer to check the result.',
-  '本页仅加载轮次摘要与职责历史，未加载完整 8D 或原始内容快照；请到问题工作空间核对内容与风险。': 'Only round summaries and duty history are loaded, not the full 8D or original snapshot. Check content and risk in the problem workspace.',
+  '提交审核前，请打开问题工作空间核对完整内容。': 'Open the problem workspace and review the full content before deciding.',
   '核对问题工作空间': 'Check problem workspace', '轮次与职责历史': 'Round and duty history', '无权审核关闭职责': 'You cannot review closure duties',
   '加载失败，请重试': 'Loading failed. Retry.', '审核失败，意见已保留。': 'Review failed. Your comment is retained.',
   '审核回执': 'Review receipt', '本轮已取消，请恢复修改后重新提交；本次不算审核通过。': 'This round was cancelled. Restore editing and resubmit; this is not an approval.',
@@ -203,7 +203,7 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
   const summary = (result: Round) => result.status === 'CANCELLED' ? '本轮已取消，请恢复修改后重新提交；本次不算审核通过。' : result.status === 'RETURNED' ? '本轮已退回，请修改后重新提交。' : result.status === 'PENDING' ? '本次职责已记录；本轮待处理。' : '本轮已通过。';
   const deniedOutcome = denied && outcomeNeedsCheck && <Alert type="warning" showIcon title={text('先前审核结果仍待核对；权限失效不代表请求已撤销，请联系有权限人员核对。')} />;
   return <div style={{ display: 'grid', gap: 'var(--qms-section-gap)', minWidth: 0 }}>
-    <Typography.Text>{text('职责由后台分派，不支持申领或转派审批人员。')}</Typography.Text>
+
     {!denied && receipt && <Alert showIcon type={receipt.status === 'CANCELLED' || receipt.status === 'RETURNED' ? 'warning' : 'success'} title={`${text('审核回执')}：${receipt.id} · ${roundLabel(receipt.roundNumber)} · ${text(statusNames[receipt.status])} · v${receipt.version}`} description={text(summary(receipt))} />}
     {denied ? <Alert type="error" showIcon title={text('无权审核关闭职责')} description={denied.traceId ? <code>{denied.traceId}</code> : undefined} /> : <>
       <section aria-label={text('关闭职责待办')} style={{ minWidth: 0 }}>
@@ -240,7 +240,7 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
         {deniedOutcome}
         {checking && <Spin aria-label={text('正在核对审核基线')} />}
         {!denied && <>
-          <Alert type="info" showIcon title={text('本页仅加载轮次摘要与职责历史，未加载完整 8D 或原始内容快照；请到问题工作空间核对内容与风险。')} />
+          <Alert type="info" showIcon title={text('提交审核前，请打开问题工作空间核对完整内容。')} />
           {selected && <Link to={workspace(selected.problemId, baseline?.round.instanceId)} target="_blank" rel="noopener noreferrer">{text('核对问题工作空间')}</Link>}
           {baseline && <><Typography.Text strong>{roundLabel(baseline.round.roundNumber)}</Typography.Text><Typography.Text>{`${text('固定内容版本')}：${baseline.round.contentVersion}`}</Typography.Text><Typography.Text>{baseline.duties.map(name => text(dutyNames[name])).join(' / ')}</Typography.Text></>}
           {baseline?.duties.length === 2 && <Alert type="warning" showIcon title={text('本次一次确认科室经理与部长两份职责，不包含专业审核。')} description={<Checkbox checked={jointConfirmed} disabled={locked} onChange={event => setJointConfirmed(event.target.checked)}>{text('我确认同时审核科室经理与部长两份职责')}</Checkbox>} />}

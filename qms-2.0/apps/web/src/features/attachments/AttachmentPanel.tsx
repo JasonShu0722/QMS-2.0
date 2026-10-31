@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Empty, Popconfirm, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Popconfirm, Space, Spin, Tag } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { attachmentDownload, createUploadAttempt, deleteAttachment, readAttachment, retryScanAttachment, type Attachment, type FileResource } from './attachments';
@@ -148,7 +148,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
             : file.scanStatus === 'ERROR' ? '扫描暂不可用，附件仍隔离' : '扫描未通过，附件已隔离';
   return <Card className="attachment-panel" title={t('附件证据')}>
     <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-      <Typography.Paragraph>{t('附件上传后先隔离，通过安全扫描后才可下载和提交为证据。')}</Typography.Paragraph>
+
       {error ? <Alert type="error" title={t(errorText)} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} showIcon /> : null}
       <Space wrap>
         {!readOnly && <label className="attachment-panel__picker">{t('选择附件')} <input aria-label={t('选择附件')} type="file" disabled={busy || retryAvailable} accept=".pdf,.png,.jpg,.jpeg,.txt,.docx,.xlsx" onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = ''; if (selected) void upload(selected); }} /></label>}

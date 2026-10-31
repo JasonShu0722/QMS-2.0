@@ -113,7 +113,7 @@ it('removes only the visible direct appointment and previews the retained depart
   fireEvent.click(button('查看任职'));
   const selector = await screen.findByLabelText('任职岗位');
   await waitFor(() => expect(selector).toBeEnabled());
-  const note = screen.getByText('仅调整当前范围的任职，其他任职保持不变；预览和保存使用完整任职。').closest('.ant-alert') as HTMLElement;
+  const note = screen.getByText('其他范围任职（保留）').closest('.ant-alert') as HTMLElement;
   expect(note).toBeVisible();
   expect(within(note).getByText(departmental.name)).toBeVisible();
   const selection = within(selector.closest('.ant-select') as HTMLElement);

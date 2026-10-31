@@ -3,7 +3,6 @@ import { Alert, Button, Checkbox, Input, Modal, Pagination, Space, Spin, Table }
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, safeAccountError } from '../../api/client';
-import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerDenied, useCustomerLedgerWrite } from '../customer-quality/customer-ledger-write';
@@ -19,7 +18,6 @@ export function NewProductEightDPanel(props: Props) {
   return <SourcePanel key={`${scope}:${props.organizationId}:${props.projectId}`} {...props} />;
 }
 function SourcePanel({ projectId, organizationId, projectContext, active, onDenied }: Props) {
-  const { t } = useLanguage();
   const scope = useWorkTabsStore(state => state.sessionScope);
   const base = `/api/v1/new-product-quality/projects/${encodeURIComponent(projectId)}/defect-selections`;
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -99,7 +97,7 @@ function SourcePanel({ projectId, organizationId, projectContext, active, onDeni
         {canCopy && <Button disabled={!selected.length || writer.busy || loading || !!error} onClick={() => leave(() => setCopyOpen(true))}>复制为供应商草稿</Button>}
         {(canIssue || canCopy) && <span>已选择 {selected.length}/100 条</span>}
       </Space>
-      <p>{t('按项目映射及发生/纳入依据选择过程事实，纳入后发起正式8D；不改写原事实，不以问题关闭替代阶段门。')}</p>
+
       {issued && <Alert type="success" title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${encodeURIComponent(issued.problem.id)}`}>查看问题</Link>} />}
       {loading ? <Spin aria-label="正在加载新品来源" /> : !selections.length ? <p>暂无已纳入来源</p> : selections.slice((selectionPage - 1) * 20, selectionPage * 20).map(row => <div key={row.id}>
         {(canIssue || canCopy) && <Checkbox aria-label={`选择新品来源 ${row.id}`} checked={selected.includes(row.id)} disabled={writer.busy || selected.length >= 100 && !selected.includes(row.id)} onChange={event => setSelected(previous => event.target.checked ? [...previous, row.id] : previous.filter(id => id !== row.id))} />}
@@ -110,9 +108,9 @@ function SourcePanel({ projectId, organizationId, projectContext, active, onDeni
       {canCopy && copyOpen && <SupplierSourceCopyDialog organizationId={organizationId} sources={selections.filter(row => selected.includes(row.id)).map(row => ({ kind: 'NEW_PRODUCT_SELECTION', sourceId: row.id, sourceVersion: row.source_version }))} onDenied={revoke} onClose={() => setCopyOpen(false)} />}
       {including && <Modal open title="纳入过程事实" footer={null} onCancel={() => { if (!writer.busy) leave(() => { writer.discard(); setIncluding(false); setReason(''); }, true); }} closable={!writer.busy} mask={{ closable: !writer.busy }} keyboard={!writer.busy}>
         {!!error && <Alert role="alert" type="error" showIcon title={safeAccountError(error)} />}
-        <p>仅提交明确选择的事实。服务器复验项目映射和当前新品资格；历史量产/已归档项目只保留既有记录。</p>
+
         <p>当前项目：{projectContext?.code ?? projectId}；当前组件线索：{projectContext?.product_code || '未提供'}。</p>
-        <p>以下仅为台账字段筛选，不代表有效项目映射或纳入资格；筛选无结果时可显式调整条件，纳入仍由服务器复验。</p>
+
         <Space wrap>
           <label>候选项目代码<Input aria-label="候选项目代码" value={projectCode} maxLength={100} disabled={writer.busy || writer.uncertain} onChange={event => setProjectCode(event.target.value)} /></label>
           <label>候选组件号<Input aria-label="候选组件号" value={productCode} placeholder={projectContext?.product_code || undefined} maxLength={100} disabled={writer.busy || writer.uncertain} onChange={event => setProductCode(event.target.value)} /></label>

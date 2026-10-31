@@ -65,9 +65,9 @@ export function InternalEightDSourcePicker({ domain, report, read, disabled, onC
   }
   const locked = disabled || checking;
   return <section aria-label="调整内部8D来源">
-    <p>从真实台账选择来源，跨页保留，上限100条。复发及非复发按实际关联逐项确认；取消不改原事实。</p>
+
     {closed && <Alert type="info" title="关闭后仅补充来源，批准版和原主来源保持不变。" />}
-    {domain === 'new-product' && <><p>此处仅展示本报告已关联项目的已纳入来源；这是本次选择器范围，不代表允许跨项目合单。</p><label>新品来源项目<select aria-label="新品来源项目" disabled={locked} value={projectId} onChange={event => { setProjectId(event.target.value); setPage(1); }}>{projects.map(id => <option key={id} value={id}>{id}</option>)}</select></label></>}
+    {domain === 'new-product' && <><label>新品来源项目<select aria-label="新品来源项目" disabled={locked} value={projectId} onChange={event => { setProjectId(event.target.value); setPage(1); }}>{projects.map(id => <option key={id} value={id}>{id}</option>)}</select></label></>}
     <label>搜索来源台账<Input aria-label="搜索来源台账" value={search} disabled={locked} maxLength={100} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>
     {error ? <Alert type="error" title={error} action={<Button disabled={locked} onClick={() => setRevision(value => value + 1)}>重试来源读取</Button>} /> : !available ? <Spin /> : available.filter(row => !report.sources.some(source => source.sourceId === row.sourceId)).map(row => <div key={row.sourceId}><Checkbox disabled={locked || remaining.length + selected.length >= 100 && !selected.some(item => item.sourceId === row.sourceId)} checked={selected.some(item => item.sourceId === row.sourceId)} onChange={event => { invalidate(); setSelected(previous => event.target.checked ? [...previous, row] : previous.filter(item => item.sourceId !== row.sourceId)); }}>{row.description}</Checkbox></div>)}
     {available && !available.length && <p>无匹配来源</p>}
@@ -77,7 +77,7 @@ export function InternalEightDSourcePicker({ domain, report, read, disabled, onC
     {selected.map(row => <Space wrap key={row.sourceId}><span>{row.description}</span><Button disabled={locked} onClick={() => { invalidate(); setSelected(previous => previous.filter(item => item.sourceId !== row.sourceId)); }}>移除待补来源</Button><Radio aria-label={`主来源 ${row.sourceId}`} disabled={locked || closed} checked={primary === row.sourceId} onChange={() => { invalidate(); setPrimary(row.sourceId); }}>主来源</Radio></Space>)}
     <div><Button disabled={locked || !remaining.length && !selected.length} loading={checking} onClick={() => void check()}>预览并核对来源关联</Button></div>
     {preview?.map(row => <section key={row.sourceId}><h4>{selected.find(item => item.sourceId === row.sourceId)?.description}</h4>{row.relatedProblems.map(problem => <p key={problem.problemId}>{problem.reportNumber} · {problem.title} · {problem.status}</p>)}
-      {row.hasHiddenRelations && <Alert type="warning" title="另有不可见关联，仅按服务端指纹确认，不披露其标识。" />}
+      {row.hasHiddenRelations && <Alert type="warning" title="另有不可见关联，请核对复发结论。" />}
       {row.relatedProblems.length || row.hasHiddenRelations ? <><label>复发关联结论<select aria-label={`复发关联结论 ${row.sourceId}`} disabled={locked} value={confirmations[row.sourceId]?.recurrence ?? ''} onChange={event => { const recurrence = event.target.value as Confirmation['recurrence']; setConfirmations(previous => { const next = { ...previous }; if (!recurrence) delete next[row.sourceId]; else next[row.sourceId] = { sourceId: row.sourceId, recurrence, relatedSetToken: row.relatedSetToken, relatedProblemIds: row.relatedProblems.map(problem => problem.problemId), ...(previous[row.sourceId]?.reason ? { reason: previous[row.sourceId].reason } : {}) }; return next; }); }}><option value="">请明确选择</option><option value="RECURRENCE">复发</option><option value="NOT_RECURRENCE">非复发继续关联</option></select></label>
         {confirmations[row.sourceId] && <label>关联说明（非复发必填）<Input.TextArea aria-label={`关联说明 ${row.sourceId}`} disabled={locked} maxLength={2000} value={confirmations[row.sourceId].reason ?? ''} onChange={event => setConfirmations(previous => ({ ...previous, [row.sourceId]: { ...previous[row.sourceId], reason: event.target.value } }))} /></label>}</> : <p>未发现其他关联</p>}
     </section>)}

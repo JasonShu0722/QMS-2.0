@@ -74,7 +74,8 @@ it('loads all bound source FileDto IDs through the public ledger list without co
   expect(fetchMock.mock.calls.some(([url]) => url === path)).toBe(true);
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET')).toHaveLength(0);
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/analysis') || String(url).includes('/complaints/'))).toBe(false);
-  expect(screen.getByText(/附件不自动拆行或计算件数/)).toBeVisible();
+  expect(screen.getByRole('region', { name: '客诉来源附件' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新来源附件' })).toBeEnabled();
 });
 
 function uploadNetwork(oldPending = false, metadata = other) {

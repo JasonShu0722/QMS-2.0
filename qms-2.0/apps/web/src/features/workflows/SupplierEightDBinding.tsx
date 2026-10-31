@@ -144,8 +144,8 @@ function BindingScope({ session, onDenied }: { session?: string; onDenied: () =>
     } finally { lock.current = false; }
   }
   return <Card><Typography.Title level={3}>{t('供应商8D流程绑定与启用')}</Typography.Title>
-    <p>{t('仅建设供应商完整门户8D：初始化草稿→设计器校验发布→保存独立禁用绑定→显式启用。这里不会自动发布、迁移或启用。')}</p>
-    <p role="note">{t('使用列表顶部“初始化关闭审核模板”，选择 SUPPLIER，领域代码 supplier-quality。草稿不代表生产授权。')}</p>
+
+
     {loading && <Spin aria-label={t('正在读取供应商配置')} />}
     {!!error && <Alert type="error" title={t(conflict ? '供应商绑定版本冲突，输入已保留，请重读基线。' : readFailed ? '供应商配置读取失败，请重试。' : safeAccountError(error))} />}
     {permissions && !permissions.permissions.includes('configuration:read') && <Alert type="warning" title={t('当前会话无供应商配置读取权限')} />}
@@ -156,7 +156,7 @@ function BindingScope({ session, onDenied }: { session?: string; onDenied: () =>
         if (next) leave(() => { setSeverity(next); setSelected(bindings.find(row => fullSelector(row, next))?.workflowVersionId ?? ''); });
       }}>{severities.map(item => <option key={item.value} value={item.value}>{t(item.label)}</option>)}</select></label>
       {binding ? <p style={{ overflowWrap: 'anywhere' }}>{t(binding.enabled ? '供应商8D已启用' : '供应商8D未启用')} · {t('配置版本')} {binding.version} · <code>{binding.workflowVersionId}</code></p> : <Alert type="info" title={t('当前风险尚无供应商完整门户8D绑定。')} />}
-      {legacy && <Alert type="warning" title={t('旧绑定仅供只读，不自动迁移或启停；请由负责人另行确认迁移。')} />}
+      {legacy && <Alert type="warning" title={t('旧绑定仅供只读；迁移请联系维护人员。')} />}
       {!loading && !readFailed && canManage && !candidates.length && <Alert type="warning" title={t('没有可选的供应商完整8D已发布流程，请先初始化模板并在设计器校验发布。')} />}
       <label style={{ display: 'grid', minWidth: 0 }}>{t('供应商8D已发布流程版本')}<select style={{ width: '100%', minWidth: 0 }} aria-label={t('供应商8D已发布流程版本')} disabled={locked} value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">{t('请选择供应商完整8D已发布版本')}</option>

@@ -93,7 +93,7 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
     {!portal && <SupplierSourceCollaborationInbox {...collaboration} />}
     <section aria-label={t('供应商8D正式待办')}>
       <Space wrap><Typography.Title level={3}>{t('供应商8D正式待办')}</Typography.Title><Button disabled={tasks.loading} onClick={tasks.refresh}>{t('刷新8D待办')}</Button></Space>
-      <p>{t('同一问题的多份职责分别列出，不代表多个问题；处理、关闭审核和专用延期均在完整工作空间执行。')}</p>
+      {portal && <p>{t('同一问题的多份职责分别列出，不代表多个问题；处理、关闭审核和专用延期均在完整工作空间执行。')}</p>}
       {tasks.error ? error(tasks.error, '8D待办', tasks.retry) : null}
       {tasks.loading && <Spin aria-label={t('正在加载8D待办')} />}
       {tasks.data && <>

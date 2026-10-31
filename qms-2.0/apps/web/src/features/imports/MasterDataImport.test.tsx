@@ -21,6 +21,33 @@ beforeEach(() => {
   vi.mocked(readXlsxFile).mockReset().mockResolvedValue([['客户编码', '客户名称'], ...Array.from({ length: 250 }, (_, i) => [`00${i + 2}`, `客户${i}`])]);
 });
 
+it('C SPEC import warning follows initial pending unknown and settled states', async () => {
+  const pending = deferred();
+  vi.mocked(readXlsxFile).mockResolvedValue([['物料编码', '物料名称'], ['0002', '物料']]);
+  vi.mocked(apiRequest).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(receipt(2, 1));
+  render(<MaterialMasterImport onImported={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
+  const importer = within(await screen.findByRole('region', { name: '物料批量新增' }));
+  expect(importer.queryByText(/当前请求可能已提交/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'material.xlsx')] } });
+  await waitFor(() => expect(importer.getByRole('button', { name: '导入物料' })).toBeEnabled());
+  expect(importer.queryByText(/当前请求可能已提交/)).not.toBeInTheDocument();
+  await waitFor(() => expect(importer.getByText('尚有未导入行；离开页面将停止后续批次。')).toBeVisible());
+  fireEvent.click(importer.getByRole('button', { name: '导入物料' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledOnce());
+  expect(importer.getByText(/当前请求可能已提交/)).toBeVisible();
+  await act(async () => pending.reject(new TypeError('offline')));
+  await importer.findByText('当前批次结果未知，请使用原批次重试；已确认结果保留。');
+  expect(importer.getByText(/当前请求可能已提交/)).toBeVisible();
+  fireEvent.click(importer.getByRole('button', { name: '导入物料' }));
+  await importer.findByText('已确认 1 / 1，未处理 0');
+  await waitFor(() => expect(importer.queryByText(/当前请求可能已提交/)).not.toBeInTheDocument());
+  const calls = vi.mocked(apiRequest).mock.calls;
+  expect(calls).toHaveLength(2);
+  expect(calls[1]![1]!.body).toBe(calls[0]![1]!.body);
+  expect(calls[1]![1]!.headers).toEqual(calls[0]![1]!.headers);
+});
+
 it('opens only on demand and strictly serializes 250 rows with cumulative acknowledged progress', async () => {
   const first = deferred(); const second = deferred();
   vi.mocked(apiRequest).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockResolvedValueOnce(receipt(202, 50));

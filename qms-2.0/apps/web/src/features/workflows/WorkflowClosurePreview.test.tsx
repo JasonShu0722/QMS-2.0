@@ -89,7 +89,6 @@ it('loads only on demand, posts generated contract inputs and presents read-only
   expect(posts()[0]).toEqual(['/api/v1/workflows/closure-preview', expect.objectContaining({ method: 'POST', signal: expect.anything(), headers: { 'x-csrf-token': 'csrf-test' }, body: JSON.stringify({ policy: 'INTERNAL', severity: 'MEDIUM', responsibleSectionDepartmentId: section, professionalUserId: professional, ownerUserId: owner }) }), { replayAfterReauthentication: false }]);
   expect((await screen.findAllByText('待审'))[0]).toBeVisible();
   expect(screen.getByText('同人跳过')).toBeVisible();
-  expect(previewDialog()).toHaveTextContent('不会发单或审批');
   fireEvent.click(screen.getAllByText('展开来源明细')[0]!);
   expect(previewDialog()).toHaveTextContent(section);
   expect(screen.queryByRole('button', { name: '确认审批' })).not.toBeInTheDocument();
@@ -118,7 +117,6 @@ it('shows two waiting supplier management duties for the same person without mix
   expect(JSON.parse(posts()[0]![1]!.body as string)).toMatchObject({ policy: 'SUPPLIER', severity: 'HIGH' });
   expect(JSON.parse(posts()[0]![1]!.body as string)).not.toHaveProperty('ownerUserId');
   expect(await screen.findByText('同人职责说明')).toBeVisible();
-  expect(previewDialog()).toHaveTextContent('一次确认两项管理职责；正式办理时需明确两项职责并原子记录，本页不执行确认。');
   expect(screen.getAllByText('尚未启动')).toHaveLength(2);
   expect(previewDialog()).toHaveTextContent('科室经理'); expect(previewDialog()).toHaveTextContent('部长');
   expect(screen.queryByText('同人跳过')).not.toBeInTheDocument();
@@ -303,7 +301,7 @@ it('renders unresolved participants and configuration issues without pretending 
   mount('SUPPLIER'); await configure('SUPPLIER'); await submit();
   expect(await screen.findByText('尚未解析')).toBeVisible();
   expect(screen.getByText('部长：缺少有效分管')).toBeVisible();
-  expect(screen.getByText('配置缺项，请维护后重新预览；本页不提供审批。')).toBeVisible();
+  expect(screen.getByText('配置缺项，请维护后重新预览。')).toBeVisible();
 });
 
 it('does not open or load the directory when disabled', () => {

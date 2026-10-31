@@ -7,7 +7,7 @@ import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/dom
 import { useEightDText, type EightDDocument, type EightDRead } from './eight-d';
 import styles from './eight-d.module.css';
 
-type Props = { problemId: string; domain?: InternalEightDDomain; resource?: FileResource; anchorId?: string; document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; onChange: (change: (current: EightDDocument) => EightDDocument) => void };
+type Props = { problemId: string; portal?: boolean; domain?: InternalEightDDomain; resource?: FileResource; anchorId?: string; document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; onChange: (change: (current: EightDDocument) => EightDDocument) => void };
 const containmentPositions = [
   ['PCBA', '在制品'], ['PCBA', '智新库存'],
   ['成品', '客户端'], ['成品', '运输中'], ['成品', '智新库存'], ['成品', '在制品'], ['成品', 'VMI 仓'],
@@ -17,7 +17,7 @@ export function EightDField({ label, children }: { label: string; children: Reac
   return <label className={styles.field}><span>{label}</span>{children}</label>;
 }
 
-export function EightDDocumentEditor({ problemId, domain = 'process', resource, anchorId = problemId, document: doc, disabled, removalBlocked = false, read, onChange }: Props) {
+export function EightDDocumentEditor({ problemId, domain = 'process', portal = false, resource, anchorId = problemId, document: doc, disabled, removalBlocked = false, read, onChange }: Props) {
   const text = useEightDText();
   const savedDocumentNames = useRef(new Set(doc.standardization.map(row => row.id)));
   const update = <K extends keyof EightDDocument>(key: K, value: EightDDocument[K] | ((current: EightDDocument[K]) => EightDDocument[K])) => { if (!disabled) onChange(current => ({ ...current, [key]: typeof value === 'function' ? value(current[key]) : value })); };
@@ -58,7 +58,8 @@ export function EightDDocumentEditor({ problemId, domain = 'process', resource, 
       <div className={styles.fields}>{area(text('发生因', 'Occurrence cause'), doc.occurrenceCause, value => update('occurrenceCause', value))}{area(text('流出因', 'Escape cause'), doc.escapeCause, value => update('escapeCause', value))}{area(text('系统因（可选）', 'System cause (optional)'), doc.systemCause, value => update('systemCause', value))}</div>
     </>)}
     {section('D5-D6', text('永久措施、实施与有效性验证', 'Corrective actions, implementation and effectiveness'), <>
-      <p>{text('D5 与 D6 使用同一措施；有效性由人工明确判断，附件或日期不代表有效。后续批数或时长选填其一。', 'D5 and D6 use the same action. Effectiveness requires an explicit human decision, not a file or date. Supply follow-up batches or duration.')}</p>
+      {portal && <p>{text('D5 与 D6 使用同一措施；有效性由人工明确判断，附件或日期不代表有效。后续批数或时长选填其一。', 'D5 and D6 use the same action. Effectiveness requires an explicit human decision, not a file or date. Supply follow-up batches or duration.')}</p>}
+
       {doc.correctiveActions.map((row, index) => {
         type Row = components['schemas']['ProcessEightDCorrectiveActionDto'];
         const change = (patch: Partial<Row> | ((current: Row) => Partial<Row>)) => update('correctiveActions', rows => rows.map(item => item.id === row.id ? { ...item, ...(typeof patch === 'function' ? patch(item) : patch) } : item));

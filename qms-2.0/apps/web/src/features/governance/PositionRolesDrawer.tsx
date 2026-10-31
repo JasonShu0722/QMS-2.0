@@ -113,7 +113,6 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
       afterOpenChange={(visible) => { if (!visible) { onClose(); afterClose(); } }} destroyOnHidden>
       <Space orientation="vertical" style={{ width: '100%' }}>
         {conflict ? <Alert type="warning" showIcon title={t('内容已被其他人修改。已保留当前填写内容，请重新加载后再保存。')} /> : <GovernanceFeedback error={error} />}
-        <Alert type="info" showIcon title={t('岗位权限保存后，当前有效任职会自动生效。')} />
         {canReadAuthorizationSources(organization) && <Button disabled={busy || loading} onClick={() => setSourcesOpen(value => !value)}>{t(sourcesOpen ? '收起授权来源' : '查看授权来源')}</Button>}
         {sourcesOpen && open && <AuthorizationSources organization={organization} positionId={position.id} onDenied={cause => {
           completed.current = true; generation.current++; reading.current?.abort(); setSourcesOpen(false); setOpen(false); setDiscard(false); setConfiguration(undefined); setCatalog([]); setSelected([]); setDetails(undefined); setBusy(false); onDenied?.(cause);
@@ -127,7 +126,7 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
           <GroupedPermissionSelector catalog={catalog} value={selected} onChange={setSelected} disabled={!canWrite || busy || conflict} />
           <Space><span>{t('要求 MFA')}</span><Switch aria-label={t('要求 MFA')} checked={mfaRequired} onChange={setMfaRequired} disabled={!canWrite || busy || conflict} /></Space>
           <Typography.Title level={4}>{t('历史兼容授权')}</Typography.Title>
-          <Alert type="info" showIcon title={t('历史兼容授权仍然生效，取消岗位自有权限不会撤销历史来源。')} />
+          {configuration.legacyRoles.length > 0 && <Alert type="info" showIcon title={t('历史兼容授权仍然生效，取消岗位自有权限不会撤销历史来源。')} />}
           <Table<AdminRole> rowKey="id" size="small" pagination={false} dataSource={configuration.legacyRoles} columns={[
             { title: t('名称'), dataIndex: 'name' },
             { title: t('权限'), render: (_, role) => { const summary = permissionSummary(role.permissions, catalog, locale); return <Space wrap><span>{t('权限')} {summary.count} {t('项')}{summary.modules.length ? ` · ${summary.modules.join(' · ')}` : ''}</span><Button type="link" size="small" aria-label={`${role.name} · ${t('详情')}`} onClick={(event) => { detailsTrigger.current = event.currentTarget as HTMLButtonElement; setDetails(role); }}>{t('详情')}</Button></Space>; } },

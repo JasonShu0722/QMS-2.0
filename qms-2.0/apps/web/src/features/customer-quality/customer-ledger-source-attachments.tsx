@@ -106,7 +106,6 @@ function SourceAttachments({ recordId, organizationId, readOnly, onDenied, onPen
   }, [recordId, organizationId, scope, revision]);
   if (denied) return null;
   return <section aria-label="客诉来源附件">
-    <p>批次或客户清单可作为来源附件；附件不自动拆行或计算件数，登记件数仍由录入人填写。</p>
     {pending ? <Alert type="info" title="本次附件正在上传或等待安全扫描；完成前不能保存台账编辑、关闭或恢复跟进。" /> : null}
     {loading ? <Spin aria-label="正在读取来源附件" /> : null}
     {error ? <Alert type="error" showIcon title={safeAccountError(error)} description={error instanceof ApiError ? error.traceId : undefined} /> : null}

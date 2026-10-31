@@ -422,11 +422,12 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   return <main className="problem-center">
     <div className="problem-center__heading">
       <h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1>
-      <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
+      <Space wrap>
+        <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
+        {processQuality ? <Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button> : null}
+      </Space>
     </div>
     <Feedback error={organizationError} t={t} />
-    {processQuality ? <><Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button><p>{t('一张正式8D一行。')}</p><Alert type="info" title={t('支持编号、状态、风险、负责人及问题截止时间筛选；阶段期限仅供核对，暂不参与截止筛选。')} /></> : null}
-
     <Card title={t('保存视图')} loading={!organizationId && !organizationError}>
       <div className="problem-center__view-row">
         <label>{t('保存视图')}<select aria-label={t('保存视图')} value={selectedViewId} onChange={(event) => {
@@ -467,8 +468,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
         <label>{t('状态')}<select aria-label={t('状态筛选')} value={filters.status ?? ''} onChange={(event) => setFilters((current) => ({ ...current, status: (event.target.value || undefined) as ProblemStatus | undefined }))}><option value="">{t('全部状态')}</option>{statuses.map((status) => <option key={status} value={status}>{t(statusLabels[status])}</option>)}</select></label>
         <label>{t('严重度')}<Input aria-label={t('严重度筛选')} value={filters.severity ?? ''} onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value || undefined }))} /></label>
         <label>{t('负责人 ID')}<Input aria-label={t('负责人 ID')} value={filters.ownerId ?? ''} onChange={(event) => setFilters((current) => ({ ...current, ownerId: event.target.value || undefined }))} /></label>
-        <label>{t('截止起始')}<input aria-label={t('截止起始')} type="datetime-local" value={localDateTime(filters.dueFrom)} onChange={(event) => setFilters((current) => ({ ...current, dueFrom: isoDateTime(event.target.value) }))} /></label>
-        <label>{t('截止结束')}<input aria-label={t('截止结束')} type="datetime-local" value={localDateTime(filters.dueTo)} onChange={(event) => setFilters((current) => ({ ...current, dueTo: isoDateTime(event.target.value) }))} /></label>
+        <label>{t(processQuality ? '问题截止起始' : '截止起始')}<input aria-label={t(processQuality ? '问题截止起始' : '截止起始')} type="datetime-local" value={localDateTime(filters.dueFrom)} onChange={(event) => setFilters((current) => ({ ...current, dueFrom: isoDateTime(event.target.value) }))} /></label>
+        <label>{t(processQuality ? '问题截止结束' : '截止结束')}<input aria-label={t(processQuality ? '问题截止结束' : '截止结束')} type="datetime-local" value={localDateTime(filters.dueTo)} onChange={(event) => setFilters((current) => ({ ...current, dueTo: isoDateTime(event.target.value) }))} /></label>
         <label>{t('排序字段')}<Select aria-label={t('排序字段')} value={sort.sortBy} options={sortFields.map((value) => ({ value, label: t(processQuality && value === 'dueAt' ? '问题截止时间' : sortLabels[value]) }))} onChange={(sortBy) => { setSort((current) => ({ ...current, sortBy })); setPage(1); }} /></label>
         <label>{t('排序方向')}<Select aria-label={t('排序方向')} value={sort.sortDirection} options={[{ value: 'desc', label: t('降序') }, { value: 'asc', label: t('升序') }]} onChange={(sortDirection) => { setSort((current) => ({ ...current, sortDirection })); setPage(1); }} /></label>
       </div>

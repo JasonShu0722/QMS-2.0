@@ -1,5 +1,9 @@
 # 前端设计实施与参考代码
 
+## REQ-0033-fix1 人工验收失败返修（2026-10-31）
+
+负责人六张实际截图证明V0.0.38的解释性文案治理未满足需求，已明确要求全面排查整改。此前机器验证及发布事实有效，但不能据此称产品文案完成或无遗留项。复用Issue86／REQ0033，按[计划第7节](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)递归检查弹窗、抽屉、子面板、导入器和页面各状态；删除常态实现边界解释，必要信息就近到字段/动作/异常，不搬成另一块帮助墙。业务、权限、主题和操作保护保持，heartbeat已删除不恢复。下方原“已发布待人工验收”是初版事实，本轮状态为人工验收FAIL／返修中。
+
 ## REQ-0033 前端文案、标题与导航优化（2026-10-31，已发布待人工验收）
 
 负责人已正式启动[REQ-0033](https://larkcommunity.feishu.cn/record/MjtHrS3UkeoKx0cCIWAcutIinKg)，user回读P1／开发中（rev335），并授权PR检查、合并和部署。[Issue86](https://github.com/JasonShu0722/QMS-2.0/issues/86)统一交付解释性文案及关联排版治理、菜单层级与语义图标、两类宿主标题去重和业务单列两级折叠菜单。详见[专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md)与[实施接续计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)当前摘要；正式规范已补充新方向，实现/审查/业务与人工验收分别记账，不由规则文本推断通过或发布。业务品牌色与控制台中性色各自保持；20分钟heartbeat只在无活动执行且停滞时接续，不抢占主会话或运行任务。

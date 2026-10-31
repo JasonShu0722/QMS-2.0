@@ -3,7 +3,6 @@ import { Alert, Button, Checkbox, Empty, Input, Space, Spin, Table, Tag, Typogra
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, type SessionView } from '../../api/client';
-import { useLanguage } from '../../i18n/Language';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { CustomerMasterSection } from './CustomerMasterSection';
@@ -32,7 +31,6 @@ export function CustomerQualityPage({ renderAnalysis }: Props = {}) {
 }
 
 function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnalysis }: Props & { organizationId?: string; initialComplaintId?: string }) {
-  const { t } = useLanguage();
   const scope = useWorkTabsStore(state => state.sessionScope);
   const [session, setSession] = useState<SessionView>(); const [permissions, setPermissions] = useState<string[]>([]);
   const [authorized, setAuthorized] = useState(false); const [accessLost, setAccessLost] = useState(false);
@@ -159,9 +157,10 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
     { title: '台账状态', width: 100, render: (_, row) => <Tag>{row.status === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
   ];
   if (accessLost) return <main className="customer-quality-page"><Alert type="warning" showIcon title="访问已失效，当前列表、详情和草稿已清除。请重新登录或确认目标组织权限后重新进入。" /><LedgerError cause={error} /></main>;
-  if (legacy) return <><div className="customer-ledger-legacy-banner"><Alert type="info" title={t('历史台账：仅用于历史登记、严格导入与历史报告。新业务请返回正式台账。')} /><Button onClick={() => requestLeave(() => setLegacy(false))}>返回正式台账</Button></div><CustomerLegacyQualityPage /></>;
+  if (legacy) return <><div className="customer-ledger-legacy-banner"><Button onClick={() => requestLeave(() => setLegacy(false))}>返回正式台账</Button></div><CustomerLegacyQualityPage /></>;
   return <main className="customer-quality-page">
-    <header className="customer-quality-heading"><div><h1 className="sr-only">客诉台账</h1><Typography.Paragraph type="secondary">同一事实的全部、零公里和售后视图。登记数量唯一归口，台账状态与解析、8D 分开。</Typography.Paragraph></div><Space wrap><Button onClick={refresh} loading={loading}>刷新</Button><Button onClick={() => requestLeave(() => { detailController.current?.abort(); setDetail(undefined); setLegacy(true); })}>历史台账</Button></Space></header>
+    <h1 className="sr-only">客诉台账</h1>
+    <Space wrap className="customer-quality-toolbar"><Button onClick={refresh} loading={loading}>刷新</Button><Button onClick={() => requestLeave(() => { detailController.current?.abort(); setDetail(undefined); setLegacy(true); })}>历史台账</Button></Space>
     <LedgerError cause={permissionError} /><LedgerError cause={error} />
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${encodeURIComponent(issued.problem.id)}`}>查看问题</Link>} /> : null}
     <LedgerError cause={auxiliaryError} />{auxiliaryError || auxiliaryLoading ? <Button loading={auxiliaryLoading} disabled={auxiliaryLoading} onClick={() => { if (life.current) void loadAuxiliary(life.current, true); }}>重试候选人员与客户</Button> : null}

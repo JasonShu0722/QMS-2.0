@@ -81,7 +81,7 @@ export function SupplierControlledReport({ report, base, portal, read }: { repor
     {historyError && <Alert type="error" title={text('历史版本加载失败，已加载记录保留。', 'History loading failed. Previously loaded revisions are retained.')} action={<Button disabled={busy || historyLoading} onClick={() => setHistoryRetry(value => value + 1)}>{text('重试历史版本', 'Retry historical revisions')}</Button>} />}
     {!historyError && nextBefore !== null && <Button disabled={busy || historyLoading} onClick={() => setCursor({ scope: historyScope, before: nextBefore })}>{text('加载更多历史版本', 'Load more historical revisions')}</Button>}
     <Button disabled={busy} onClick={() => setRevision(n => n + 1)}>{text('刷新报告', 'Refresh report')}</Button><Button disabled={!controlled || busy} loading={busy} onClick={() => void download()}>{text('授权下载 PDF', 'Download authorized PDF')}</Button>
-    <p>{text('报告只含服务端已保存内容。原批准依据保持固定，当前内部补充不向供应商公开。', 'Reports contain server-saved content only. The approved basis is immutable; current internal supplements are not public to suppliers.')}</p>
+    {portal && <p>{text('报告只含服务端已保存内容。原批准依据保持固定，当前内部补充不向供应商公开。', 'Reports contain server-saved content only. The approved basis is immutable; current internal supplements are not public to suppliers.')}</p>}
     {error ? <Alert type="error" title={text('报告读取或下载失败，请检查版本与权限后刷新。', 'Report read or download failed. Check the version and permissions.')} /> : !controlled ? <Spin /> : <>
       <h4>{controlled.reportNumber} · <Tag>{controlled.label}</Tag></h4><p>{controlled.generatedAt} · v{controlled.contentVersion}</p>
       <section aria-label={text('所选版本基础事实', 'Selected version facts')}>
@@ -134,7 +134,7 @@ export function SupplierControlledReport({ report, base, portal, read }: { repor
         <p>{text('关闭后内部补充，非原批准版，不对供应商公开。', 'Post-closure internal supplement, not the original approved version and not public to suppliers.')}</p>
         <dl style={{ overflowWrap: 'anywhere' }}><dt>{text('补充更新时间', 'Supplement updated at')}</dt><dd>{show(problem.supplementUpdatedAt)}</dd></dl>
       </section>}
-      <EightDDocumentEditor problemId={report.supplierProblemId} anchorId={`${report.supplierProblemId}-report`} resource={{ resourceType: !portal && controlled.status === 'CLOSED_SUPPLEMENT' ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: report.supplierProblemId }} document={controlled.snapshot.document} disabled read={read} onChange={() => {}} />
+      <EightDDocumentEditor problemId={report.supplierProblemId} portal={portal} anchorId={`${report.supplierProblemId}-report`} resource={{ resourceType: !portal && controlled.status === 'CLOSED_SUPPLEMENT' ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: report.supplierProblemId }} document={controlled.snapshot.document} disabled read={read} onChange={() => {}} />
       <ul>{controlled.attachments.map(file => <li key={file.id}>{file.originalName} · {file.rendering} · {file.note} · {file.uses.join(', ')}</li>)}</ul>
       <AttachmentPanel resource={{ resourceType: !portal && controlled.status === 'CLOSED_SUPPLEMENT' ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: report.supplierProblemId }} fileIds={controlled.attachments.map(file => file.id)} readOnly onAccessDenied={scope.onAccessDenied} onPendingChange={scope.onPendingChange} />
     </>}

@@ -97,7 +97,7 @@ export function AuditMobileExecution({ initialExecutionId }: { initialExecutionI
   useEffect(() => { if (initialExecutionId) void load(initialExecutionId); }, [initialExecutionId]);
 
   return <section className="audit-mobile-execution" aria-label="移动审核执行">
-    <div className="audit-mobile-heading"><div><Typography.Title level={2}>移动审核执行</Typography.Title><Typography.Text type="secondary">现场逐条记录；弱网时保存在本机，恢复联网后可继续同步。</Typography.Text></div><Tag color={online ? 'green' : 'orange'}>{online ? '在线' : '离线草稿'}</Tag></div>
+    <div className="audit-mobile-heading"><div><Typography.Title level={2}>移动审核执行</Typography.Title></div><Tag color={online ? 'green' : 'orange'}>{online ? '在线' : '离线草稿'}</Tag></div>
     <div className="audit-mobile-lookup"><Input aria-label="审核执行 ID" value={input} onChange={(event) => setInput(event.target.value)} placeholder="输入审核执行 ID" disabled={busy} /><Button type="primary" onClick={() => void load(input)} loading={loading} disabled={busy}>打开执行</Button></div>
     {error ? <Alert type="error" showIcon title={error instanceof ApiError ? safeAccountError(error) : '审核执行加载失败，请重试。'} action={<Button onClick={() => void load()}>重试</Button>} /> : null}
     {conflict ? <Alert type="warning" showIcon title="审核已在其他会话中更新" description="本机草稿仍保留。请刷新最新执行后检查差异，再重新同步。" action={<Button onClick={() => void load()}>刷新最新执行</Button>} /> : null}

@@ -112,15 +112,15 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
     finally { submitting.current = false; if (alive.current) setPreviewLoading(false); }
   }
   return <Drawer open title="发起正式内部8D" size="min(760px, 100vw)" onClose={() => { if (!writer.busy && !previewLoading) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
-    <Typography.Paragraph>已选择 {sources.length} 条来源（跨页保留，上限100条）。受控流程及版本由服务端解析，实际发单人为专业审核人。</Typography.Paragraph>
+    <Typography.Paragraph>已选择 {sources.length} 条来源。</Typography.Paragraph>
     <ProcessError cause={error} fallback={error instanceof Error ? error.message : '发单失败，请重试。'} />
     {writer.uncertain ? <Alert type="warning" title="发单结果未知；请勿更改请求，重试将使用原请求及同一幂等键。" /> : null}
     {changedRelations ? <Alert type="warning" title="关联集合已变化，请按最新预览重新逐条确认；已保留发单草稿。" /> : null}
     {previewLoading ? <Spin aria-label="加载来源预览" /> : !previews ? <Button onClick={() => void loadPreviews()}>重试来源预览</Button> : <section aria-label="发单来源预览" className="process-quality-source-preview">{previews.map(item => <section key={item.defectId} className="process-quality-card">
       <Typography.Text strong>{sources.find(record => record.id === item.defectId)?.description}</Typography.Text>
       {item.relatedProblems.map(problem => <div key={problem.problemId}><Link to={`/app/problem-workspace/${problem.problemId}`}>{problem.reportNumber}</Link> · <span>{problem.title}</span> <span>{problem.status}</span></div>)}
-      {item.hasHiddenRelations ? <Alert type="warning" title="存在无权查看的关联，仅显示获权问题；确认令牌将在发单事务中精确复验。" /> : null}
-      {!item.relatedProblems.length && !item.hasHiddenRelations ? <Typography.Paragraph type="secondary">尚无已关联问题，仍需明确判定，不预设复发。</Typography.Paragraph> : null}
+      {item.hasHiddenRelations ? <Alert type="warning" title="部分关联问题无权查看。" /> : null}
+      {!item.relatedProblems.length && !item.hasHiddenRelations ? <Typography.Paragraph type="secondary">尚无已关联问题</Typography.Paragraph> : null}
       <Radio.Group aria-label={`来源复发判定 ${item.defectId}`} disabled={writer.busy || writer.uncertain || previewLoading} value={confirmations[item.defectId]} onChange={event => { setDirty(true); setConfirmations(current => ({ ...current, [item.defectId]: event.target.value })); }}><Radio value="RECURRENCE">复发</Radio><Radio value="NOT_RECURRENCE">非复发</Radio></Radio.Group><Input aria-label={`判定说明 ${item.defectId}`} placeholder="判定说明（可空）" maxLength={2000} disabled={writer.busy || writer.uncertain || previewLoading} value={reasons[item.defectId] ?? ''} onChange={event => { setDirty(true); setReasons(current => ({ ...current, [item.defectId]: event.target.value })); }} />
     </section>)}</section>}
     <ProcessError cause={optionsError} fallback="责任候选加载失败，请重试。" />
@@ -132,7 +132,6 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
       {userTotal > 100 ? <Pagination aria-label="负责人候选分页" disabled={writer.busy || writer.uncertain || previewLoading} current={userPage} pageSize={100} total={userTotal} showSizeChanger={false} onChange={setUserPage} /> : null}
       {optionsError ? <Button onClick={() => setOptionRevision(value => value + 1)}>重试责任候选</Button> : null}
       <div className="process-quality-form-grid"><Form.Item name="analysisDueAt" label="分析/对策期限"><Input type="date" /></Form.Item><Form.Item name="closureDueAt" label="关闭计划"><Input type="date" /></Form.Item></div>
-      <Typography.Paragraph type="secondary">期限需显式选择日期；留空表示尚未设定，不填默认天数。</Typography.Paragraph>
       <Space><Button type="primary" htmlType="submit" loading={writer.busy || previewLoading} disabled={!previews || writer.busy || previewLoading || !!optionsError || optionsLoading}>{writer.uncertain ? '同请求重试发起8D' : '确认发起8D'}</Button></Space>
     </Form>
   </Drawer>;

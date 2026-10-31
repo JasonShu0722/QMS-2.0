@@ -87,7 +87,7 @@ function SecurityContentScope({ embedded = false, onCloseStateChange }: Security
     </section> : status ? <>
       <section className="qms-security-policy" aria-label={t('登录验证')}>
         <span className="qms-security-icon"><ShieldCheck size={22} aria-hidden="true" /></span>
-        <div><h3>{t('登录验证')}</h3><Typography.Text strong>{t(status.mfaRequired ? '登录时要求 MFA' : '登录时不要求 MFA')}</Typography.Text><p>{t('MFA 策略由管理员在用户管理中统一设置。')}</p></div>
+        <div><h3>{t('登录验证')}</h3><Typography.Text strong>{t(status.mfaRequired ? '登录时要求 MFA' : '登录时不要求 MFA')}</Typography.Text></div>
       </section>
       <section className="qms-security-section" aria-label={t('验证器')}>
         <div className="qms-security-section-heading"><Smartphone size={18} aria-hidden="true" /><h3>{t('验证器')}</h3><Typography.Text type="secondary">{t(status.mfaEnabled ? '验证器已绑定' : '验证器未绑定')}</Typography.Text></div>
@@ -102,7 +102,6 @@ function SecurityContentScope({ embedded = false, onCloseStateChange }: Security
       </section> : null}
       {status.securityState === 'AUTHENTICATED' ? <section className="qms-security-section" aria-label={t('邮箱确认')}>
         <div className="qms-security-section-heading"><Mail size={18} aria-hidden="true" /><h3>{t('邮箱确认')}</h3><Typography.Text type="secondary">{t(status.emailVerifiedAt ? '邮箱已确认' : '邮箱未确认')}</Typography.Text></div>
-        <p>{t('用于自助密码找回。')}</p>
         {emailMessage ? <Alert type="success" role="status" title={t(emailMessage)} /> : null}
         {!status.emailVerifiedAt ? <><Button loading={busy} onClick={() => void perform(() => securityPost('me/email-verification'), () => setEmailMessage('确认邮件已申请，请查看邮箱。'))}>{t('发送确认邮件')}</Button><Form form={emailForm} layout="vertical" disabled={busy} className="qms-security-form" onFinish={(values: components['schemas']['CompleteEmailVerificationDto']) => void perform(() => securityPost('auth/email-verification/complete', values), () => { emailForm.resetFields(); setEmailMessage('邮箱已确认'); setRevision((value) => value + 1); })}><Form.Item name="token" label={t('邮件凭证')} rules={[{ required: true }, { len: 43 }]}><Input.Password autoComplete="off" maxLength={43} /></Form.Item><Button htmlType="submit" loading={busy}>{t('确认邮箱')}</Button></Form></> : null}
       </section> : null}

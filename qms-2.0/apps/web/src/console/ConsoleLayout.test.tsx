@@ -41,7 +41,7 @@ it('keeps one focused home heading and the target selector while disclosing iden
   expect(identity).toBeVisible();
   expect(identity).toHaveTextContent('actor');
   expect(screen.getByLabelText('会话所属组织')).toHaveTextContent('组织A (A)');
-  expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('TARGET');
+  expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('组织A · 组织范围');
   getContext.mockResolvedValue(context('b'));
   fireEvent.change(target, { target: { value: 'b' } });
   await waitFor(() => expect(screen.getByLabelText('path')).toHaveTextContent('organizationId=b'));
@@ -55,7 +55,7 @@ it('retains a real return link and heading focus on a deep workflow route', asyn
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
   expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus();
-  expect(screen.getByText('固定会话所属组织')).toBeVisible();
+  expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
   const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
@@ -122,7 +122,7 @@ it('fixes session-home pages to their true organization, not the selected target
   await screen.findByText('受保护内容');
   expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('组织A');
   expect(screen.queryByRole('combobox', { name: '管理目标组织' })).not.toBeInTheDocument();
-  expect(screen.getByText('固定会话所属组织')).toBeInTheDocument();
+  expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
   expect(getContext).toHaveBeenCalledWith('b', expect.any(AbortSignal));
 });
 it('clears sensitive context on explicit target 403, and retries a network failure without home fallback', async () => {

@@ -35,7 +35,7 @@ export function EightDControlledReport({ report, read, download, domain = 'proce
         void download(`${eightDPath(report.problemId, domain)}/report/pdf?${query}`).catch(cause => { if (!aborted(cause)) setError(true); }).finally(() => setDownloading(false));
       }}>{text('授权下载 PDF', 'Download authorized PDF')}</Button>
     </Space>
-    <Alert type="info" title={text('报告来自服务端保存版本，不包含未保存草稿；批准版不随关闭后来源补充改变。', 'Reports use server-saved versions, not unsaved drafts. Source supplements after closure do not change the approved version.')} />
+
     {error ? <Alert type="error" title={text('报告读取或下载失败，请检查权限与版本后刷新。', 'Report reading or download failed. Check access and version, then refresh.')} /> : !controlled ? <Spin /> : <>
       <header><h2>{controlled.reportNumber}</h2><Tag>{controlled.label}</Tag><p>{controlled.view} · {text('内容版本', 'Content version')} {controlled.contentVersion} · {text('记录版本', 'Row version')} {controlled.rowVersion} · {controlled.generatedAt}</p></header>
       <EightDDocumentEditor problemId={report.problemId} domain={domain} anchorId={`${report.problemId}-report`} document={controlled.snapshot.document} disabled read={read} onChange={() => {}} />

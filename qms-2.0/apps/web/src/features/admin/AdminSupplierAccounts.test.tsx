@@ -70,8 +70,8 @@ it('reads the dedicated global directory, displays actual company data, and dele
   render(scene());
   expect(await screen.findByText(account.username)).toBeVisible();
   expect(screen.getByRole('region', { name: '供应商账号（全平台）' })).toBeVisible();
-  expect(screen.getByText('全平台账号生命周期管理；不授予供应商业务访问权。')).toBeVisible();
-  expect(screen.getByText('支持清理未关联档案或原管理组织已失效的供应商账号；不删除供应商企业及历史业务。')).toBeVisible();
+  expect(screen.getByRole('button', { name: '永久删除用户' })).toBeEnabled();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   expect(screen.getByText(account.email!)).toBeVisible();
   expect(screen.getByText(account.organization.name)).toBeVisible();
   expect(screen.getByText(account.organization.code)).toBeVisible();

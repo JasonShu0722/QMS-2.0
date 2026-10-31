@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Input, Popconfirm, Space, Typography } from 'antd';
+import { Alert, Button, Input, Popconfirm, Space } from 'antd';
 import type { components } from '@qms/contracts';
 import { apiRequest, createAdminMutation, csrfToken, safeAccountError } from '../../api/client';
 import { scopePath, type AdminUser } from './admin';
@@ -62,14 +62,13 @@ function PasswordContent({ user, organizationId, domain, canRead = true, canRese
     const link = document.createElement('a'); link.href = url; link.download = `${t('有效临时密码')}.xlsx`; link.click(); URL.revokeObjectURL(url);
   }
   return <Space orientation="vertical" className="admin-form-stack">
-    <Typography.Paragraph>{t('仅有效临时密码可查询；长期密码不可读取。直接重置会立即撤销目标账号会话并要求首次改密。')}</Typography.Paragraph>
     {error && <Alert type="error" showIcon title={t(error)} />}
     {canRead && value && <Alert type={value.status === 'AVAILABLE' ? 'success' : 'info'} title={value.status === 'AVAILABLE' ? <code>{value.temporaryPassword}</code> : t(value.status === 'EXPIRED' ? '已过期' : '不可用')} />}
     {canRead ? <><Space wrap><Button disabled={busy} onClick={() => void perform(async (epoch) => { await read(epoch); })}>{t('查询临时密码')}</Button>
       <Button disabled={busy || value?.status !== 'AVAILABLE'} onClick={() => void perform(async (epoch) => { const current = await read(epoch); if (current && permitted(epoch, 'canRead') && current.status === 'AVAILABLE' && current.temporaryPassword) await navigator.clipboard.writeText(current.temporaryPassword); })}>{t('复制临时密码')}</Button></Space>
     <Button disabled={busy || value?.status !== 'AVAILABLE'} onClick={() => void perform(download)}>{t('下载有效临时密码')}</Button></> : null}
     {canReset ? <>{!domain ? <Input.Password aria-label={t('管理员设定临时密码')} placeholder={t('留空则自动生成')} autoComplete="new-password" value={supplied} onChange={(event) => setSupplied(event.target.value)} /> : null}
-    <Popconfirm title={t('确认重置并撤销会话？')} description={t('旧密码和目标账号的现有会话将立即失效。')} okText={t('确认重置')} cancelText={t('取消')} onConfirm={() => perform(async (epoch) => {
+    <Popconfirm title={t('确认重置并撤销会话？')} description={t('旧密码和目标账号的现有会话将立即失效，首次登录需改密。')} okText={t('确认重置')} cancelText={t('取消')} onConfirm={() => perform(async (epoch) => {
       const result = domain ? await domain.reset() : await mutate.current<TemporaryPassword>(scopePath(`users/${user.id}/temporary-password/reset`, organizationId), 'POST', supplied ? { temporaryPassword: supplied } : {});
       if (permitted(epoch, 'canReset')) { setSupplied(''); if (access.current.canRead) setValue(result); }
     }, 'canReset')}><Button danger disabled={busy || Boolean(supplied && (supplied.length < 12 || supplied.length > 256))}>{t('直接重置临时密码')}</Button></Popconfirm></> : null}

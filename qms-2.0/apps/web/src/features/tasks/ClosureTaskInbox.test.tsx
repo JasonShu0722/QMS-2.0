@@ -80,7 +80,7 @@ it('rechecks round history, shows fixed version and a real workspace link withou
   const requests = stub(); render(scene()); const dialog = await fillReview();
   expect(requests.filter(item => item.path.endsWith('/rounds'))).toHaveLength(1);
   expect(within(dialog).getByText('固定内容版本：3')).toBeInTheDocument();
-  expect(within(dialog).getByText(/未加载完整 8D/)).toBeInTheDocument();
+  expect(within(dialog).getByText(/提交审核前.*核对完整内容/)).toBeInTheDocument();
   expect(within(dialog).getByRole('link', { name: '核对问题工作空间' })).toHaveAttribute('href', '/app/problem-workspace/problem-1?instanceId=instance-1');
   for (const label of ['提交审核', '关闭审核', '刷新审核基线']) {
     expect(within(dialog).getByRole('button', { name: label })).toBe(visibleButton(dialog, label));

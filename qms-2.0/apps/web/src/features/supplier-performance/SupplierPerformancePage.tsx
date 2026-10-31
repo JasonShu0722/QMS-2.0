@@ -137,7 +137,7 @@ export function SupplierPerformancePage() {
   }
 
   return <main className="supplier-performance-page">
-    <header className="supplier-performance-heading"><div><h1 className="sr-only">月度绩效卡</h1><Typography.Paragraph type="secondary">根据当月已完成的 IQC 检验结论计算来料合格率，记录人工配合度和来源检验版本。评分权重由建卡人填写并保存在绩效卡中。</Typography.Paragraph></div><Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button></header>
+    <header className="supplier-performance-heading"><h1 className="sr-only">月度绩效卡</h1><Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button></header>
     {notice ? <Alert type="success" showIcon title={notice} /> : null}
     {publishError ? <Alert type="error" showIcon title={publishError} /> : null}
     <section className="supplier-performance-card" aria-label="月度绩效卡台账">
@@ -163,14 +163,14 @@ export function SupplierPerformancePage() {
     </section>
     <section className="supplier-performance-card" aria-label="新建月度绩效卡">
       <Typography.Title level={2}>记录本月绩效</Typography.Title>
-      <Typography.Paragraph type="secondary">每家供应商每月只可记录一张卡；没有已完成的 IQC 样本时不能评分。历史卡保留生成时的来源快照。</Typography.Paragraph>
+
       {profileError ? <Alert type="warning" showIcon title={profileError} /> : null}
       {saveError ? <Alert type="error" showIcon title={saveError} /> : null}
       {profiles.length === 0 && !profileLoading && !profileError ? <Empty description="暂无可选供应商资料" /> : null}
       <Form form={form} layout="vertical" disabled={saving || profileLoading || !!profileError || profiles.length === 0} initialValues={{ month: new Date().toISOString().slice(0, 7), incomingWeight: 60, cooperationWeight: 40 }} onValuesChange={() => setDirty(true)} onFinish={(values) => void create(values)}>
         <div className="supplier-performance-form-grid">
           <Form.Item name="profileId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}><Select showSearch optionFilterProp="label" options={profiles.map((profile) => ({ value: profile.id, label: `${profile.businessCode} · ${profile.displayName}` }))} /></Form.Item>
-          <Form.Item name="month" label="评分月份" rules={[{ required: true, message: '请选择月份' }]}><Input type="month" /></Form.Item>
+          <Form.Item name="month" label="评分月份" extra="每家供应商每月一张卡；需有已完成的 IQC 检验。" rules={[{ required: true, message: '请选择月份' }]}><Input type="month" /></Form.Item>
           <Form.Item name="cooperationScore" label="人工配合度（0–100）" rules={[{ required: true, message: '请填写配合度' }]}><InputNumber min={0} max={100} precision={0} /></Form.Item>
           <Form.Item name="incomingWeight" label="来料权重（%）" rules={[{ required: true, message: '请填写权重' }]}><InputNumber min={0} max={100} precision={0} /></Form.Item>
           <Form.Item name="cooperationWeight" label="配合度权重（%）" rules={[{ required: true, message: '请填写权重' }]}><InputNumber min={0} max={100} precision={0} /></Form.Item>

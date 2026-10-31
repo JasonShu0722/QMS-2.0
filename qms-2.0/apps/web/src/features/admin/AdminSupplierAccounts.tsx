@@ -76,8 +76,6 @@ function SupplierAccountsScope({ principal, onDenied }: Props & { principal: str
   }
   return <section aria-label={t('供应商账号（全平台）')}>
     <Typography.Title level={4} className="sr-only">{t('供应商账号（全平台）')}</Typography.Title>
-    <Typography.Paragraph>{t('全平台账号生命周期管理；不授予供应商业务访问权。')}</Typography.Paragraph>
-    <Typography.Paragraph>{t('支持清理未关联档案或原管理组织已失效的供应商账号；不删除供应商企业及历史业务。')}</Typography.Paragraph>
     {!!error && <Alert type="error" showIcon title={t(safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
     <Space wrap>
       <Input.Search aria-label={t('搜索供应商账号或企业')} placeholder={t('搜索供应商账号或企业')} maxLength={100} disabled={invalidated} onSearch={value => guarded(() => { setSearch(value.trim()); setOffset(0); reload(); })} />

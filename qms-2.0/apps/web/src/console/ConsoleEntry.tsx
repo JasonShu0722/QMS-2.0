@@ -1,5 +1,5 @@
 import type { AccountProfile } from '@qms/contracts';
-import { Alert, Button, Space, Typography } from 'antd';
+import { Alert, Button, Typography } from 'antd';
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
@@ -55,8 +55,5 @@ export function ConsoleEntry({ profile }: { profile: AccountProfile }) {
   if (!eligible || status === 'denied') return null;
   if (!status) return <Typography.Text type="secondary" role="status">{text('正在验证管理入口', 'Verifying management access')}</Typography.Text>;
   if (status === 'network') return <Alert type="error" showIcon title={text('无法验证管理入口，请重试', 'Unable to verify management access. Retry.')} action={<Button ref={retry} aria-label={text('重试', 'Retry')} style={{ minHeight: 44, minWidth: 44 }} onClick={() => { restoreFocus.current = true; setRevision(value => value + 1); }}>{text('重试', 'Retry')}</Button>} />;
-  return <Space orientation="vertical" size={4}>
-    <Button ref={entry} href="/console" target="_blank" rel="noopener noreferrer" icon={<ExternalLink size={16} aria-hidden="true" />} style={{ minHeight: 44, minWidth: 44 }}>{text('管理控制台', 'Management console')}</Button>
-    <Typography.Text type="secondary">{text('在新窗口打开（浏览器可能使用页签）', 'Opens in a new window (your browser may use a tab)')}</Typography.Text>
-  </Space>;
+  return <Button ref={entry} href="/console" target="_blank" rel="noopener noreferrer" title={text('在新窗口打开', 'Opens in a new window')} aria-description={text('在新窗口打开', 'Opens in a new window')} icon={<ExternalLink size={16} aria-hidden="true" />} style={{ minHeight: 44, minWidth: 44 }}>{text('管理控制台', 'Management console')}</Button>;
 }

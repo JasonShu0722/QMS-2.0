@@ -80,7 +80,7 @@ it('only exposes the position-permission entry when both read permissions are pr
   expect(screen.queryByRole('button', { name: '岗位权限' })).not.toBeInTheDocument();
 });
 
-it('loads the scoped permission catalog and shows the current version, effective assignees, and automatic activation note', async () => {
+it('loads the scoped permission catalog and shows read-only permission data without allowing writes', async () => {
   const { requests } = stubStructureApi();
   render(<LanguageProvider><StructureAdministration organization={organization(['organization:structure:read', 'account:roles:read'])} /></LanguageProvider>);
   await userEvent.click(await positionAction());
@@ -89,12 +89,25 @@ it('loads the scoped permission catalog and shows the current version, effective
   expect(within(dialog).getByText('质量角色')).toBeInTheDocument();
   expect(within(dialog).getByText('角色版本：4')).toBeInTheDocument();
   expect(within(dialog).getByText('当前有效任职人数：3')).toBeInTheDocument();
-  expect(within(dialog).getByText('岗位权限保存后，当前有效任职会自动生效。')).toBeInTheDocument();
+  expect(within(dialog).getByRole('checkbox', { name: '岗位测试权限 · 查看工作台' })).toBeChecked();
+  expect(within(dialog).getByRole('checkbox', { name: '岗位测试权限 · 查看工作台' })).toBeDisabled();
+  expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
   expect(within(dialog).getByText('历史兼容授权')).toBeInTheDocument();
   expect(within(dialog).getByText('历史兼容授权仍然生效，取消岗位自有权限不会撤销历史来源。')).toBeInTheDocument();
   expect(within(dialog).queryByRole('combobox', { name: '岗位角色' })).not.toBeInTheDocument();
   expect(requests.some(([path]) => path === '/api/v1/organizations/org-a/positions/position-a/permissions')).toBe(true);
   expect(requests.some(([path]) => path === '/api/v1/admin/permission-catalog?organizationId=org-a')).toBe(true);
+  expect(requests.some(([, init]) => init?.method === 'PUT')).toBe(false);
+});
+
+it.each([false, true])('shows the historical-source impact only when legacy roles exist: %s', async (hasLegacyRoles) => {
+  view(['organization:structure:read', 'account:roles:read'], roleDetails(hasLegacyRoles ? [roleA] : []));
+  await userEvent.click(await positionAction());
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByText('角色版本：4');
+  const impact = within(dialog).queryByText('历史兼容授权仍然生效，取消岗位自有权限不会撤销历史来源。');
+  if (hasLegacyRoles) expect(impact).toBeInTheDocument();
+  else expect(impact).not.toBeInTheDocument();
 });
 
 it('edits position-owned permissions and sends the CAS PUT with CSRF and idempotency', async () => {
@@ -420,7 +433,6 @@ it('uses the shared English position permission labels and keeps conflict recove
   const drawer = await screen.findByRole('dialog');
   expect(await within(drawer).findByText('Role version：4')).toBeInTheDocument();
   expect(within(drawer).getByText('Current assignees：3')).toBeInTheDocument();
-  expect(within(drawer).getByText('Saved position permissions apply automatically to current assignments.')).toBeInTheDocument();
   expect(within(drawer).getByRole('switch', { name: 'Require MFA' })).toBeEnabled();
   await userEvent.click(within(drawer).getByRole('button', { name: 'Save' }));
   expect(await within(drawer).findByText('Another user changed this configuration. Your draft is preserved. Reload before saving.')).toBeInTheDocument();
