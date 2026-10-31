@@ -75,10 +75,22 @@ function workspace(org: AdminOrganization) {
   </Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>;
 }
 function mount(org = organization) { return render(workspace(org)); }
+function componentToolbar() {
+  const panel = screen.getByRole('region', { name: '组件项目映射' });
+  return within(panel.querySelector<HTMLElement>('.governance-toolbar')!);
+}
 async function openProject() {
-  fireEvent.click(await screen.findByRole('button', { name: '项目资料' }));
-  fireEvent.click(await screen.findByRole('button', { name: '新增项目' }));
+  fireEvent.click(await componentToolbar().findByRole('button', { name: '项目资料' }));
+  const projects = await screen.findByRole('dialog', { name: '项目资料' });
+  fireEvent.click(await within(projects).findByRole('button', { name: '新增项目' }));
   return screen.findByRole('dialog', { name: '项目资料' });
+}
+async function confirmationButton(name: string) {
+  const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
+  const dialog = title.closest<HTMLElement>('[role="dialog"]')!;
+  const button = within(dialog).getByRole('button', { name });
+  await waitFor(() => expect(button).toBeVisible());
+  return button;
 }
 async function choose(label: string, text: string) {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: label }));
@@ -190,11 +202,11 @@ it('protects cancel until explicit discard', async () => {
 it('protects a refresh and completes only the confirmed discard in the single-table workspace', async () => {
   server(); mount(); const dialog = await openProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '未保存' } });
-  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
-  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  fireEvent.click(componentToolbar().getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(await confirmationButton('继续编辑'));
   expect(within(dialog).getByLabelText('项目名称')).toHaveValue('未保存');
-  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
-  fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  fireEvent.click(componentToolbar().getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(await confirmationButton('放弃修改'));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   expect(screen.getAllByRole('table')).toHaveLength(1);

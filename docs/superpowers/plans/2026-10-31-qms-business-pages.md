@@ -9,12 +9,12 @@
 | 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
 | 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
 | 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → `codex/unified-business-pages` → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)；V0.0.39，已推送7e34a92 |
-| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；从origin/main `478c325`新建隔离分支。旧`06b5fff`关闭归档保留原分支，不混入本PR |
+| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)已合并V0.0.39/6041d80（正文保fix1）→ `codex/req0034-ci-fix2` / V0.0.39-fix2，待新修复PR |
+| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；初轮478c325→候选9b29ce7与squash6041d80整树相同，旧功能分支保留；现从main6041d80新建fix2隔离分支。旧`06b5fff`关闭归档保留，不混入 |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | 已提交PR90，精确7e34a92首轮CI41224780227实际FAIL保留；四组新实现代理返修的13个独立完整测试文件202项组合通过，各组SPEC后独立QUALITY通过，运行源码未变；父最终类型检查exit0。当前最终治理并集中推同PR fix1，不能称新HEAD CI已通过；未合并部署，本地原FAIL/中断/phase前置FAIL保留 |
+| 状态 | PR90精确9b29ce7全16CI/231文件3261项成功后合并6041d80，main唯一组件项目例超原30秒、部署正确skipped，未发布。fix2已最小限定实际toolbar/dialog，原例7.420秒、完整42项exit0（该例7.354秒），独立SPEC后QUALITY及父类型通过；收尾治理并提新修复PR，原FAIL/阶段前置FAIL保留 |
 | 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | 不恢复本地全量、不重跑已成功未变门禁。最终类型/来源复核/治理/差异检查后提交推送V0.0.39-fix1更新原PR，核精确新HEAD全量16门禁和审查，成功才按授权合并部署；任何新失败继续完整取证、精准修复，不加超时/skip/motion/删断言 |
+| 下一动作 | 最终来源/治理/diff门禁后提交V0.0.39-fix2，关联Issue89建立新修复PR；不向已合并PR90推送充交付，不重复42项或未变运行构建/API/PG，不恢复本地全量或放宽预算/motion/断言。精确新PR及main全门禁成功后继续自动部署核验 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -191,3 +191,14 @@
 - 返修运行源码不变：`ci1-runtime-unchanged.json`实际核相对7e34a92只改测试/文档，无未跟踪源码，API/DTO/迁移/依赖/CI/部署与生产Web源码均无变化；复用既有构建/浏览器/API/PG，不启动无关业务资源。最后Configuration完整/类型及治理完成后集中推一个fix1，不重跑本地八片或通过项。
 - Configuration最后完整8PASS/133.86秒，测试124.39秒；与Audit7/Binding35/Structure27组成四独立完整文件77项，作者释放唯一Web窗口，四source hash与静态独立SPEC/QUALITY快照一致。规则代表诊断23.812秒与修后完整中的16.061秒是同机不同次分项对比，不冒称CI加速实测。四组总13个不同完整文件202项组合通过，未改变测试数量/预算/环境/motion或生产逻辑；最新精确云端全量仍须另验。
 - root实际核对最终四source blob与独立双审快照一致，核读完整Configuration8项日志后接过唯一窗口；`corepack pnpm --filter @qms/web lint`退出0，`ci1-parent-lint.log`。不重复202项或未变生产build/API/PG；最终治理输出统一保存`ci1-parent-governance.log`，提交前以其实际退出码及diff检查为门禁，不能据本段预判成功。
+
+### 7.3 PR90通过与main单例返修（2026-11-01）
+
+- fix1已提交9b29ce7并更新原PR90，父类型、最终治理37文档/466链接/20复核/157依赖和diff均实际通过。PR CI41230729259 attempt1精确HEAD全16jobs成功，八artifact实际解析231文件/3261项全PASS，无漏/重/pending/runtimeErrors；与官方冻结231一致，`pr90-fix1-coverage-verified.json`。原超时第8片这轮约11.43分钟，非本地样例或缩减清单。
+- 独立release gate复核后，按交付流程首次交付PR/squash使用基础V0.0.39，正文保fix1，不重写其历史；实际合并6041d80023fd02c7fe6784ca7fbbbc0cff7e89a1，整树83ddf539与已审9b候选完全一致。合并前公网基线200，旧主JS为index-CxMsz3IP.js、CSS为index-DxN1gHYv.css，`public-predeploy-baseline.json`。
+- main CI41233552342 attempt1实际FAIL：231完整文件3261项中3260PASS/1FAIL，唯一失败`ComponentProjectAdministration.test.tsx`的`protects a refresh and completes only the confirmed discard in the single-table workspace`，30452ms超原30000ms；其余7Web分片/API/四真实资源/checks/scope全部成功，foundation严格汇总失败。部署41235023043正确skipped，不能称已上线。
+- 已保存全部失败job日志、八artifact及`main-6041d80-failure-inventory.json`；不是分片20分钟取消，也没有其他取消前失败。该文件此前PR完整42项耗433秒，此例29552ms边缘通过，不能以“之前绿过”忽略或直接整片重跑刷绿。
+- 从main6041d80建立`codex/req0034-ci-fix2`，复用Issue89与V0.0.39-fix2；新实现代理`fix2_component_query`只拥有此测试文件及唯一Web验证窗口，先原例/自身阶段证据再最小真实region/row/form/dialog查询，完整42项及独立SPEC后QUALITY后新修复PR。既有development/motion/预算/业务安全断言保持，生产源码未授权随意改动；不再向已合并PR90推送充新交付。
+- fix2原例本地未改27.286秒PASS/41 filtered，诊断26.54秒PASS/41 filtered，均不是本地红灯，准确红来自main CI。自身累计入口7.826秒、刷新12.190秒、继续16.619秒、再次刷新21.116秒、放弃25.647秒、完成26.522秒，阶段包含查询/点击/更新，不充单次纯query或网络/机器归因。只限定实际组件toolbar、项目dialog及确认标题所属dialog内原role/name/visible，保末尾global dialog/tab/table及全文件原业务/安全断言。
+- 修后同原代表7.420秒PASS/41 filtered；随后完整42/42 PASS、exit0，总390.61秒，目标例7.354秒，`fix2-component-full.log/json`及`fix2-component-author-evidence.json`。原30000ms/async5000ms、development及motion保持，无生产变化，临时trace清零；没有同机未改完整文件基线，不宣称整文件加速比例。作者释放窗口，blob`fda8d5baaad4e30c0f0231f766f6fa0356647dfb`与completion独立SPEC后console独立QUALITY快照一致。
+- 父核冻结hash后运行Web lint/typecheck退出0（`fix2-parent-lint.log`），fetch main仍6041d80，fix2未被其他提交占用，user回读REQ仍rev348同实际record。最后来源逐项复核/治理和diff门禁输出保存`fix2-parent-governance.log`；运行源码/依赖/CI未变据指纹复用已过构建，不重复本地全量。
