@@ -47,14 +47,26 @@ function visibleButton(scope: HTMLElement, label: string) {
   expect(button).toBeVisible();
   return button;
 }
-async function openReview() {
-  const label = await screen.findByText('审核关闭职责', { selector: 'button span' });
+async function reviewTrigger(name = '审核关闭职责') {
+  const label = await screen.findByText(name, { selector: 'button span' });
   const button = label.closest('button')!;
-  await waitFor(() => { expect(button).toBeVisible(); expect(button).toBeEnabled(); });
-  fireEvent.click(button);
-  const dialog = await screen.findByRole('dialog', { name: '关闭职责审核' });
+  expect(button).toHaveRole('button');
+  expect(button).toHaveAccessibleName(name);
+  await waitFor(() => { expect(button).toBeVisible(); expect(button).toBeEnabled(); expect(button.closest('[aria-hidden="true"]')).toBeNull(); });
+  return button;
+}
+async function reviewDialog(name = '关闭职责审核') {
+  const title = await screen.findByText(name, { selector: '.ant-modal-title' });
+  const dialog = title.closest<HTMLElement>('[role="dialog"]')!;
+  expect(dialog).toHaveRole('dialog');
+  expect(dialog).toHaveAccessibleName(name);
+  expect(dialog.closest('[aria-hidden="true"]')).toBeNull();
   await waitFor(() => expect(dialog).toBeVisible());
   return dialog;
+}
+async function openReview() {
+  fireEvent.click(await reviewTrigger());
+  return reviewDialog();
 }
 async function fillReview() { const dialog = await openReview(); await within(dialog).findByText('第 2 轮'); fireEvent.change(within(dialog).getByLabelText('审核意见'), { target: { value: '核对完成' } }); return dialog; }
 const submit = (dialog: HTMLElement) => fireEvent.click(visibleButton(dialog, '提交审核'));
@@ -355,7 +367,7 @@ it('synchronously locks double submit while CSRF is pending', async () => {
 });
 
 it('guards dirty close, preserves on continue, and restores focus after confirmed discard', async () => {
-  stub(); render(scene()); const trigger = await screen.findByRole('button', { name: '审核关闭职责' });
+  stub(); render(scene()); const trigger = await reviewTrigger();
   const dialog = await fillReview(); fireEvent.click(visibleButton(dialog, '关闭审核'));
   // rc-dialog uses the same test-id for both modal headings in test mode.
   const guard = (await screen.findByText('当前草稿尚未保存，继续将放弃修改。')).closest('[role="dialog"]') as HTMLElement;
@@ -433,7 +445,7 @@ it('aborts old route reads and ignores late errors after a query-scope transitio
   render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><RouterProvider router={router} /></LanguageProvider></ConfigProvider>);
   await waitFor(() => expect(release).toBeDefined()); const original = requests.find(item => item.path.startsWith('/api/v1/tasks/closure?'))!;
   pending = false; await act(async () => { await router.navigate('/app/my-tasks?context=other'); });
-  expect(original.init!.signal!.aborted).toBe(true); await screen.findByRole('button', { name: '审核关闭职责' });
+  expect(original.init!.signal!.aborted).toBe(true); await reviewTrigger();
   await act(async () => { release(json({ code: 'AUTH_SESSION_REQUIRED' }, 401)); });
   expect(router.state.location.search).toBe('?context=other'); expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org:actor');
 });
@@ -453,7 +465,8 @@ it('protects refresh and route navigation while a write is pending, then complet
 
 it('uses local English copy for duty and status enums without changing shared translations', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US'); stub(); render(scene());
-  const dialog = await (async () => { fireEvent.click(await screen.findByRole('button', { name: 'Review closure duty' })); return screen.findByRole('dialog', { name: 'Closure duty review' }); })();
+  fireEvent.click(await reviewTrigger('Review closure duty'));
+  const dialog = await reviewDialog('Closure duty review');
   await within(dialog).findByText('Round 2'); fireEvent.click(within(dialog).getByText('Round and duty history'));
   expect(within(dialog).getAllByText(/Section manager/).length).toBeGreaterThan(0); expect(within(dialog).getAllByText(/Pending/).length).toBeGreaterThan(0);
   expect(within(dialog).queryByText('SECTION_MANAGER')).not.toBeInTheDocument(); expect(within(dialog).queryByText('PENDING')).not.toBeInTheDocument();
@@ -521,7 +534,7 @@ it.each(['GET', 'history', 'decide'] as const)('preserves safe 403 trace from %s
 
 it.each(['clean', 'keep', 'discard'] as const)('handles real Escape with %s through the existing draft guard', async action => {
   const requests = stub(); render(scene());
-  const trigger = await screen.findByRole('button', { name: '审核关闭职责' });
+  const trigger = await reviewTrigger();
   const dialog = action === 'clean' ? await openReview() : await fillReview();
   await within(dialog).findByText('第 2 轮');
   fireEvent.keyDown(dialog, { key: 'Escape', keyCode: 27 });
@@ -584,6 +597,6 @@ it.each(['route', 'unmount'] as const)('does not dispatch an old write when %s i
   expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org:actor');
   if (via === 'route') {
     expect(router.state.location.search).toBe('?context=other');
-    expect(await screen.findByRole('button', { name: '审核关闭职责' })).toBeEnabled();
+    expect(await reviewTrigger()).toBeEnabled();
   }
 });
