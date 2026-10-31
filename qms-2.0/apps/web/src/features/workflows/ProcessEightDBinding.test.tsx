@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { transferableAbortController } from 'node:util';
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -131,8 +131,11 @@ it('protects an unsaved binding selection from a destructive baseline refresh', 
   mount(); await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   fireEvent.change(screen.getByLabelText('8D已发布流程版本'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: '刷新8D配置基线' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeVisible());
-  fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
+  const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
+  const confirmation = title.closest('[role="dialog"]') as HTMLElement;
+  const continueButton = within(confirmation).getByRole('button', { name: '继续编辑' });
+  await waitFor(() => expect(continueButton).toBeVisible());
+  fireEvent.click(continueButton);
   expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('');
 });
 it.each(['network', 'HTTP_408', 'HTTP_425'])('retries an uncertain binding write with exactly the original payload and idempotency key after %s', async failure => {

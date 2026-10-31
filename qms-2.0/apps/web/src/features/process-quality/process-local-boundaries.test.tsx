@@ -40,13 +40,13 @@ it('retains a new shipment report when closing is declined', async () => {
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessShipmentReportPanel /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   await screen.findByLabelText('查看出货报告 SHIP-001');
   fireEvent.click(screen.getByText('新建出货报告', { selector: 'button span' }));
-  const input = await screen.findByLabelText('报告编号');
+  const input = await screen.findByLabelText('报告编号', { selector: 'input' });
   fireEvent.change(input, { target: { value: 'SHIP-DRAFT' } });
   fireEvent.click(within(input.closest('[role="dialog"]') as HTMLElement).getByLabelText('关闭'));
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
   fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByText('继续编辑'));
-  expect(screen.getByLabelText('报告编号')).toHaveValue('SHIP-DRAFT');
+  expect(screen.getByLabelText('报告编号', { selector: 'input' })).toHaveValue('SHIP-DRAFT');
 });
 
 it('retains a process issue form when closing is declined', async () => {

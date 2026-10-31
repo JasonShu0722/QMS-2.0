@@ -9,12 +9,12 @@
 | 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
 | 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
 | 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → `codex/unified-business-pages` → 一个联合PR；预留V0.0.39 |
+| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) → `codex/unified-business-pages` → [PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)；V0.0.39，已推送7e34a92 |
 | 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；从origin/main `478c325`新建隔离分支。旧`06b5fff`关闭归档保留原分支，不混入本PR |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | 本地必要受影响完整文件和已知失败闭环已收口，各返修先SPEC后独立QUALITY通过；最新共享33项、管理32项、DataExchange23项、Process任务25项完整通过。Closure仅中英2代表通过/56 filtered，原型仅同一case在HEAD旧主题和候选各通过，均不冒称整文件。最新Web lint/build退出0；原全量FAIL/第4片中断及完整阶段前置FAIL保留，未PR/部署 |
+| 状态 | 已提交PR90，精确7e34a92首轮CI41224780227实际FAIL保留；四组新实现代理返修的13个独立完整测试文件202项组合通过，各组SPEC后独立QUALITY通过，运行源码未变；父最终类型检查exit0。当前最终治理并集中推同PR fix1，不能称新HEAD CI已通过；未合并部署，本地原FAIL/中断/phase前置FAIL保留 |
 | 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | 不恢复旧八片本地串行队列，不重复未变API/PG门禁。完成最终文档来源复核/治理、需求范围及版本查重、差异安全检查后提交推送一个V0.0.39 PR；全231文件及真实资源交既有八独立VM CI，精确HEAD全绿/审查通过才按授权合并部署。heartbeat按此策略接续，不抢活动资源 |
+| 下一动作 | 不恢复本地全量、不重跑已成功未变门禁。最终类型/来源复核/治理/差异检查后提交推送V0.0.39-fix1更新原PR，核精确新HEAD全量16门禁和审查，成功才按授权合并部署；任何新失败继续完整取证、精准修复，不加超时/skip/motion/删断言 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -94,8 +94,8 @@
 
 ### T6 PR、发布及闭环（主代理）
 
-- [ ] 按record_id回查范围未撤回，核对远端main/相关事项版本与分支差异，排除旧线程归档及秘密；同范围V0.0.39复用，不重复消费版本。
-- [ ] 验证/双审通过后提交、推送并创建关联Issue89的PR，不用自动关闭关键字；正文列范围/例外/实际命令/回滚/限制。
+- [x] 按record_id回查范围未撤回，核对远端main/相关事项版本与分支差异，排除旧线程归档及秘密；同范围V0.0.39复用，不重复消费版本。
+- [x] 验证/双审通过后提交、推送并创建关联Issue89的PR90，不用自动关闭关键字；正文列范围/例外/实际命令/回滚/限制，首轮失败继续原PR。
 - [ ] 等精确head的全部CI与审查；合并/发布另核授权，未获准不推main。获准后逐版本核对迁移前快照、同SHA镜像/启动/健康/HTTP/目标变化。
 - [ ] 最终部署版逐需求及联合验收，用户认可样式不代替正式业务/拖拽验收；获准后先记录证据，再关闭Issue/最小回填Base并回读。
 - [ ] 按负责人追加要求逐条核对规范同步：统一规范7.3、专项设计/计划、FRONTEND-DESIGN、CAPABILITY-STATUS、README和来源索引与最终实现一致；未交付项保留真实状态，不能只改样例或仅刷新来源摘要。
@@ -175,3 +175,19 @@
 - 最新Web lint/build均exit0，`final-web-lint.log`/`final-web-build.log`；build23.27秒，最新CSS进入`index-BWUV8tEP.css`，脚本`index-CzJEdrry.js`，fixture标识未进生产产物，大chunk警告保留。`evidence-reuse-scope.json`核API/契约/lock/依赖/部署相对478c325无变化，复用2356API/116PG/契约/归档/Compose分项而不重跑。
 - 提PR前再次user回读REQ-0034 rev348仍开发中/范围与Issue不变，未写表；fetch的origin/main仍478c325，最近远端PR和本地计划无其他V0.0.39占用。文档事实同步与最终治理后主动提同一联合PR，全量231仅交既有八独立VM；精确HEAD全部16门禁与审查通过再按授权合并部署。phase1/2前置FAIL、filtered/中断与人工待验边界不变。
 - 最终来源逐项实际复核后治理通过：37文档/466本地链接/20来源复核、维护open3/closed0、157依赖、阶段覆盖1项；`pre-pr-governance-verified.log`及`git diff --check`。首轮`pre-pr-governance.log`因UTC检查把本地11-01复核日判未来而FAIL，按实际UTC10-31登记复核日期后通过，未修改检查器/时钟；文字时间保持Asia/Taipei。后续仅同步本行与勾选，计划摘要须据此重新计算。
+
+### 7.2 PR90首轮CI失败闭环（2026-11-01）
+
+- 已提交推送`7e34a92e9cb08040401f106d126f42f0be03b3c5`并建立PR90，Issue89实际追加交付链接评论；未关闭/回填。运行`41224780227` attempt1精确该HEAD，16jobs中scope/checks/API及四真实资源分片、Web1/2/3成功；其余Web和严格foundation汇总失败，不能合并。
+- 八片artifact和全部六失败job日志已下载Git外，`pr90-failure-inventory.json`记录完整清单。Web1为29文件381PASS、Web2为29文件499PASS、Web3为29文件316PASS；Web4为29文件618/624、Web5为29文件400/402、Web6为29文件326/330、Web7为29文件311/314。第8片只有21完整文件记录，已观察Binding1/AuditAdministration2失败，尚7文件未完成，20分钟step timeout无最终JSON，不把部分日志累加成全量结果。
+- 完整15失败覆盖console-migration1、LegacyAuthorizationEntries2、governance-draft-guards2、SupplierAdmission1、ConsoleLayout2、announcements-audit3、SupplierEvidenceRefresh1、admin-draft-guards2、process-local-boundaries1。已有同名th/input、缺named dialog、同步focus及原预算timeout各类明确错误；不能统一归环境或盲改fixture。第8片新增观察失败与耗时另外闭环，不遗漏取消前失败。
+- 新实现代理`ci_admin_guards_fix`拥有admin/governance guards及Legacy三个测试、当前唯一验证窗口；`ci_console_audit_fix`拥有ConsoleLayout/migration/announcement三个测试，`ci_supplier_boundary_fix`拥有Admission/Evidence/Process local三个测试，只读定位并排队取得准确red窗口。每组保原业务/权限/dirty/晚到响应/焦点语义，不改生产ARIA/预算/motion；生产缺陷先回报协调，完成后分别SPEC再独立QUALITY，不通过就继续原PR。
+- 第8片已完成记录中Closure58耗239秒、Structure27耗246秒、Configuration guard8耗172秒；前者58断言已由CI完整执行，但分片整体不通过，不能将超时解释为无断言失败。将对真实查询耗时精确收窄，不增CI step/job预算、分片数或降低覆盖。
+- 管理组已闭环：两个guard各只限定重开后的真实input；Legacy先等实际entry-user/直属岗行再行内点原具名动作，保原403和晚到响应保护。准确admin role RED1FAIL/3 filtered及Legacy自身阶段失败保留，完整admin4/governance3/Legacy14三个独立文件21项PASS，`ci1-admin-*-green.log`；supplier代理独立SPEC有限PASS后console代理独立QUALITY PASS。写集已冻结，不重复测试。
+- Console组已得两个准确named dialog红灯及实际`test-id`标签顺序空标签在标题前的证据；仅对应fixture局部development/恢复。focus两例CI准确FAIL、本地未改2代表PASS/18 filtered，不能把名为red的日志写红；最小等待原effect焦点断言，永久body仍失败。三个完整文件验证进行中，尚不写PASS。连续唯一Web窗口授权console结束直接交supplier，supplier结束直接唤醒新实现代理`ci_shard8_finish`处理Audit/Binding及Structure/Configuration四测试；不得并跑，不等待定时器再交接。各组完成后独立SPEC再QUALITY、root集中Git/文档/最终推送。
+- Console组后续完整migration66/Layout20/announcements3共89项分别exit0，实际24.85/13.31/25.08秒；supplier审者独立SPEC后completion审者独立QUALITY通过。只有局部fixture真实ID和原焦点effect等待适配，没有生产改动；原CI失败及focus本地非红灯边界保留。
+- 供应商边界组三原例准确RED：Admission1FAIL/7 filtered、Process1FAIL/4 filtered、Evidence F2原预算timeout1FAIL/1 filtered。F2自身mount186ms、全页查询2.47/4.53/2.62/2.69秒而reload78ms；按真实当前证据行查询后4.583秒。完整Admission8/Evidence2/Process5共15项分别exit0，三规范化SHA及日志见`ci1-boundary-result.json`；completion独立SPEC后console独立QUALITY通过。保兄弟选择/独立saved baseline/expectedVersion2/dirty/body，重载后重取行，无生产/预算/motion/fixture变化。
+- 第8片准确原RED为Audit2+Binding1共3FAIL/39 filtered。Audit首次完整6/7 FAIL保留；自身mount1268ms、累计ready4389ms/展开7532ms/输入8070ms后原预算超时，收窄真实query form后完整7PASS且导出例3.176秒。Binding全页角色查询有一次1899ms阻塞帧，确认Modal仍appear-prepare；改真实标题所属dialog内原role/可见断言后完整35PASS。Structure仅共用helper按真实岗位td所属行查原role，完整27PASS/214.86秒；不把运行完毕前的Configuration8计PASS。四文件静态SPEC后独立QUALITY有限通过，原预算/motion/全局安全及业务断言保持。
+- 返修运行源码不变：`ci1-runtime-unchanged.json`实际核相对7e34a92只改测试/文档，无未跟踪源码，API/DTO/迁移/依赖/CI/部署与生产Web源码均无变化；复用既有构建/浏览器/API/PG，不启动无关业务资源。最后Configuration完整/类型及治理完成后集中推一个fix1，不重跑本地八片或通过项。
+- Configuration最后完整8PASS/133.86秒，测试124.39秒；与Audit7/Binding35/Structure27组成四独立完整文件77项，作者释放唯一Web窗口，四source hash与静态独立SPEC/QUALITY快照一致。规则代表诊断23.812秒与修后完整中的16.061秒是同机不同次分项对比，不冒称CI加速实测。四组总13个不同完整文件202项组合通过，未改变测试数量/预算/环境/motion或生产逻辑；最新精确云端全量仍须另验。
+- root实际核对最终四source blob与独立双审快照一致，核读完整Configuration8项日志后接过唯一窗口；`corepack pnpm --filter @qms/web lint`退出0，`ci1-parent-lint.log`。不重复202项或未变生产build/API/PG；最终治理输出统一保存`ci1-parent-governance.log`，提交前以其实际退出码及diff检查为门禁，不能据本段预判成功。

@@ -54,10 +54,10 @@ it.each([
   vi.mocked(apiRequest).mockResolvedValue({ items: [{ id: 'd1', documentType: 'QUALITY_MANUAL', title: '质量手册', status: 'DRAFT', version: 1 }], total: 1 } as never);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierAdmissionPage portal /><Link to="/other">离开供应商资料页</Link></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByRole('button', { name: '提交审核' });
-  fireEvent.change(screen.getByLabelText(field), { target: { value } });
+  fireEvent.change(screen.getByLabelText(field, { selector: 'input' }), { target: { value } });
   fireEvent.click(screen.getByRole('link', { name: '离开供应商资料页' }));
   fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
-  expect(screen.getByLabelText(field)).toHaveValue(value);
+  expect(screen.getByLabelText(field, { selector: 'input' })).toHaveValue(value);
   expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
 });
 

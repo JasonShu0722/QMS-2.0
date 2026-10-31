@@ -61,7 +61,8 @@ function view(permissions: string[], details = roleDetails()) {
 
 async function positionAction() {
   await userEvent.click(await screen.findByRole('tab', { name: '岗位' }));
-  return screen.findByRole('button', { name: '岗位权限' });
+  const positionCell = await screen.findByText(position.name, { selector: 'td' });
+  return within(positionCell.closest('tr')!).findByRole('button', { name: '岗位权限' });
 }
 
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); });

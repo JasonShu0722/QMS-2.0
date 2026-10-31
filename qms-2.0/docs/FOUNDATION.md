@@ -2,19 +2,23 @@
 
 ## REQ-0034 统一业务页面验证检查点（2026-11-01，未发布）
 
-[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录本聊天直接授权、REQ-0034 / Issue89 / V0.0.39及逐项证据。本轮没有API/DTO、迁移或权限变更；本地必要受影响完整文件、已知失败闭环及各返修独立SPEC后QUALITY已收口。全量须PR精确HEAD CI，历史交接与接续见计划第6/7节，不把样例认可或分项通过称为工程完成。
+[实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录本聊天直接授权、REQ-0034 / Issue89 / V0.0.39及逐项证据。本轮没有API/DTO、迁移或权限变更；提交[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)前完成本地必要受影响验证及独立双审，首轮精确HEAD全量CI又暴露相邻测试接缝失败，现依第7.2节继续原PR返修。历史本地分项不代最新CI，不把样例认可或分项通过称为工程完成。
 
 本轮分项证据：共享32项、剩余列表新增14项与范围/英文返修6项、T4呈现冻结快照6完整文件35项、控制台范围20项均有各自日志；API162完整文件2356项通过。后续审核目录分页不能沿用T4快照替代原业务再回归。全workspace构建及契约检查退出0，生产产物未发现模拟夹具标识，归档隔离及foundation+scanning Compose配置检查通过；构建仍有大chunk警告。正式组件夹具已在真实浏览器核对1440/1024/390、指针拖宽/列序、键盘、缓存/目标组织与触控模拟，并补齐窄屏内置/独立分页入口。夹具不等于真实角色/API/物理触屏、六主题/英文或业务验收。
 
 后续真实PG证据：本任务新建PG18、loopback55491、tmpfs且无宿主挂载/卷，141链迁移和独立seed成功。8完整集成文件首批115/116通过，未改task-inbox的真实110事件backlog用例触原5000ms；保持原源码/预算，以独立Node完整运行该40项文件40/40通过，其余7完整文件76项与之形成116项组合证据，不声称首次全绿。任务容器按标签/无挂载核对后已stop+rm，未使用55440。主代理共享/剩余新增4完整文件52项独验、核心4完整文件114项组合、治理48项也已通过；原失败仍保留。
 
-完整阶段入口实际失败：`acceptance:phase-1`因缺`DATABASE_URL`退出1，`acceptance:phase-2`因缺显式一次性验收配置退出1，未用Mock或Skip替代真实资源。分项PG没有补齐网关、扫描、对象存储、Worker及真实认证浏览器的完整阶段前置；PR真实资源分项也不得自动改写成完整阶段PASS。最新结果以计划和Git外`unified-business-pages-20261031-01`目录实际日志为准，未创建PR、合并、发布或关闭需求。
+完整阶段入口实际失败：`acceptance:phase-1`因缺`DATABASE_URL`退出1，`acceptance:phase-2`因缺显式一次性验收配置退出1，未用Mock或Skip替代真实资源。分项PG没有补齐网关、扫描、对象存储、Worker及真实认证浏览器的完整阶段前置；PR真实资源分项也不得自动改写成完整阶段PASS。最新结果以计划和Git外`unified-business-pages-20261031-01`目录实际日志为准，已PR，未合并、发布或关闭需求。
 
 本地全量首片374/381、第二片488/499、第三片316/316；第4片中断无完整结果，后4片未跑，不称全量PASS。改为受影响本地门禁后，管理完整两文件32项、DataExchange23项、Process任务25项分别通过；Closure中英2代表通过/56 filtered，原型同一case在HEAD旧主题20.474秒和候选20.800秒各通过/17 filtered，不补称整文件或证明主题因果。供应商14完整文件120项、Problem返修及相邻46项、相邻81项均是独立完整文件组合，原FAIL全部保留；全231文件由现有八独立VM CI严格判定。
 
 最终Web lint/build退出0（`final-web-lint.log`、`final-web-build.log`），构建23.27秒且最新浮层CSS进入生产产物，模拟夹具标识未进入产物；大chunk警告保留。320/390浮层截断准确红1FAIL/27 filtered→共享完整33PASS，18秒，SPEC后独立QUALITY通过；真实组件六配色/中英/system及几何复验详见`themes-and-language-browser.json`和`popup-viewport-browser-green.json`。这是模拟身份/数据组件验收，非真实API/角色/物理触屏验收；本机落盘图片受文档加密策略影响，未绕过。
 
 API/PG/契约/lock/依赖/部署配置相对478c325未变的指纹见`evidence-reuse-scope.json`，按范围复用而不重复运行。短诊断worker8.516秒中模块加载累计6.758秒/79.4%，同20行8列Ledger挂载312ms，证明该样本主要慢在模块加载而非产品render；不能推广成全部用例耗时归因，也无证据归因杀软/磁盘故障。验证分工依`ENGINEERING-TOOLS.md`，不得用超时增加、Skip或删业务断言提速。
+
+PR90首轮`41224780227` attempt1 / HEAD7e34a92：16jobs中scope/checks/API、四真实资源分片和Web1/2/3成功，其余五Web及严格foundation汇总失败。Web4/5/6/7四完整片共15断言失败；Web8在20分钟step timeout前只有21文件记录，另观察Audit2/Binding1失败、7文件未完成，无最终JSON。全部日志/八片artifact与逐项库存`pr90-failure-inventory.json`保留；这些失败不能据其他分项成功而忽略，也未通过重跑整片刷绿或放宽预算处理。
+
+首轮返修本地四组13个不同完整测试文件202项为各独立Node进程组合：管理21、Console89、供应商边界15、第8片四文件77，逐组SPEC后独立QUALITY通过，原红灯及失败历史保留。当前运行源码相对7e34a92没有变化，证据`ci1-runtime-unchanged.json`，只改真实控件/行/form/dialog定位、已证实固定ID的局部fixture及既有焦点effect等待；无预算/motion/覆盖/CI配置变化。PPAP F2准确原超时后4.583秒，Audit导出原6/7完整失败后7/7且该例3.176秒；阶段4389/7532/8070ms是累计时间，不当单次query。修后新的精确HEAD全量CI仍待，不凭本地202项放行发布。
 
 ## REQ-0033 Web外壳与文案发布核验（2026-10-31）
 

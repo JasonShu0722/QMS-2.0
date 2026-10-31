@@ -88,7 +88,9 @@ it.each([401, 403])('clears the real user source modal and sensitive parent cont
 it.each(['organization', 'permissions', 'session'] as const)('retires a pending user source modal on %s change and ignores its late response', async change => {
   let resolve!: (value: Response) => void; let signal: AbortSignal | null | undefined;
   const fetcher = server(organization, user, (path, init) => path.includes('/authorization-sources?') ? (signal = init?.signal, new Promise<Response>(done => { resolve = done; })) : undefined);
-  const view = render(usersScene()); fireEvent.click(await screen.findByRole('button', { name: '查看授权来源' }));
+  const view = render(usersScene());
+  const row = within((await screen.findByText('entry-user')).closest('tr')!);
+  fireEvent.click(row.getByRole('button', { name: '查看授权来源' }));
   await waitFor(() => expect(sourceCalls(fetcher)).toHaveLength(1));
   if (change === 'session') act(() => useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:other`));
   else view.rerender(usersScene(change === 'organization' ? { ...organization, id: '22222222-2222-4222-8222-222222222222' } : { ...organization, permissions: ['account:users:read', 'account:roles:read'] }));
@@ -112,7 +114,11 @@ it('forwards a position source denial through the real structure owner to its ma
   const denied = vi.fn(); server(organization, user, path => path.includes('/positions?') ? json([{ id: 'position', organizationId, departmentId: null, categoryId: null, code: 'ADMIN', name: '直属岗', status: 'ACTIVE', version: 1 }]) : undefined);
   render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><StructureAdministration organization={organization} onDenied={denied} workspace={{ departments: [], onRefresh: vi.fn(), onChanged: vi.fn() }} /></MemoryRouter></ConfigProvider>);
   fireEvent.click(screen.getByRole('tab', { name: '岗位' }));
-  fireEvent.click(await screen.findByRole('button', { name: '岗位权限' })); fireEvent.click(screen.getByRole('button', { name: 'deny drawer source' }));
+  const row = within((await screen.findByText('直属岗')).closest('tr')!);
+  fireEvent.click(row.getByRole('button', { name: '岗位权限' }));
+  const denial = screen.getByText('deny drawer source', { selector: 'button' });
+  expect(denial).toHaveAccessibleName('deny drawer source');
+  fireEvent.click(denial);
   expect(denied).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 403 }));
 });
 

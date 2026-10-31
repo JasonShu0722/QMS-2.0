@@ -42,6 +42,14 @@ function mountConfiguration(saveFailureStatus?: number) {
   return { writes, reads, server };
 }
 
+async function confirmationButton(name: string | RegExp) {
+  const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
+  const dialog = title.closest('[role="dialog"]') as HTMLElement;
+  const button = within(dialog).getByRole('button', { name });
+  await waitFor(() => expect(button).toBeVisible());
+  return button;
+}
+
 it.each(['rule', 'category'] as const)('configuration %s refresh handler discards editor state only after confirmation and rereads server versions', async (kind) => {
   const user = userEvent.setup();
   const { writes, reads, server } = mountConfiguration();
@@ -64,7 +72,7 @@ it.each(['rule', 'category'] as const)('configuration %s refresh handler discard
   const confirmation = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
   await waitFor(() => expect(confirmation).toBeVisible(), { timeout: 5000 });
   expect(reads).toEqual(initialReads);
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
+  await user.click(await confirmationButton('继续编辑'));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
   await waitFor(() => expect(editor).toBeVisible(), { timeout: 5000 });
   expect(input).toHaveValue('未保存草稿');
@@ -77,7 +85,7 @@ it.each(['rule', 'category'] as const)('configuration %s refresh handler discard
   const discardConfirmation = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
   await waitFor(() => expect(discardConfirmation).toBeVisible(), { timeout: 5000 });
   expect(reads).toEqual(initialReads);
-  await user.click(screen.getByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(reads).toHaveLength(initialReads.length + 3));
   await waitFor(() => expect(refresh).toBeEnabled());
   const cleanUnload = new Event('beforeunload', { cancelable: true });
@@ -86,7 +94,7 @@ it.each(['rule', 'category'] as const)('configuration %s refresh handler discard
   await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument());
   expect(writes).toEqual([]);
 
-  const row = screen.getByRole('row', { name: kind === 'rule' ? /任务分配/ : /服务端新类别/ });
+  const row = screen.getByText(kind === 'rule' ? '任务分配' : '服务端新类别', { selector: 'td' }).closest('tr')!;
   if (kind === 'rule') expect(within(row).getByRole('cell', { name: /^7$/ })).toBeVisible();
   await user.click(within(row).getByRole('button', { name: /^编\s*辑$/ }));
   const reopened = await screen.findByRole('dialog', { name: title });
@@ -111,11 +119,11 @@ it('configuration category draft cancel retains changes until discard without sa
   fireEvent.change(within(editor).getByLabelText('名称'), { target: { value: '未保存类别' } });
   await user.click(within(editor).getByRole('button', { name: /^取\s*消$/ }));
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
+  await user.click(await confirmationButton('继续编辑'));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
   expect(within(editor).getByLabelText('名称')).toHaveValue('未保存类别');
   await user.click(within(editor).getByRole('button', { name: /^取\s*消$/ }));
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await user.click(screen.getByRole('button', { name: /^新\s*建$/ }));
   expect(within(await screen.findByRole('dialog', { name: '岗位类别' })).getByLabelText('名称')).toHaveValue('');
@@ -138,11 +146,11 @@ it.each(['refresh', 'navigate'] as const)('configuration settings draft requires
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
   expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads);
   expect(screen.queryByRole('heading', { name: '目标页面' })).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
+  await user.click(await confirmationButton('继续编辑'));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
   expect(retention).toHaveValue('120');
   await leave();
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   if (action === 'refresh') {
     await waitFor(() => expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads + 1));
     await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
@@ -163,11 +171,11 @@ it('configuration notification draft close requires confirmation and switching r
   expect(writes).toEqual([]);
   await user.click(within(editor).getByRole('button', { name: '关闭' }));
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
+  await user.click(await confirmationButton('继续编辑'));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
   expect(enabled).not.toBeChecked();
   await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await user.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
   const reopened = await screen.findByRole('dialog', { name: '通知规则' });
@@ -191,13 +199,13 @@ it.each([409, 500])('configuration error retry after a %s save failure protects 
   await user.click(screen.getByRole('button', { name: /^重\s*试$/ }));
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
   expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads);
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
+  await user.click(await confirmationButton('继续编辑'));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(retention).toHaveValue('120');
   expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads);
 
   await user.click(screen.getByRole('button', { name: /^重\s*试$/ }));
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  await user.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
   await waitFor(() => expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads + 1));
   await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
   expect(writes).toHaveLength(1);

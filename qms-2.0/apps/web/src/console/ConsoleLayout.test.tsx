@@ -46,7 +46,7 @@ it('keeps one focused home heading and the target selector while disclosing iden
   await screen.findByText('受保护内容');
   const main = screen.getByRole('main');
   const heading = within(main).getByRole('heading', { level: 1, name: '管理首页' });
-  expect(heading).toHaveFocus();
+  await waitFor(() => expect(heading).toHaveFocus());
   expect(screen.queryByRole('navigation', { name: '面包屑' })).not.toBeInTheDocument();
   expect(within(main).queryByText('QMS / 管理工作空间')).not.toBeInTheDocument();
   const target = within(main).getByRole('combobox', { name: '管理目标组织' });
@@ -73,7 +73,7 @@ it('retains a real return link and heading focus on a deep workflow route', asyn
   await screen.findByText('受保护内容');
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
-  expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus();
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus());
   expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {

@@ -13,8 +13,8 @@ function deferred() {
 }
 const receipts = (id: string) => [{ userId: `reader-${id}`, readAt: '2026-10-21T00:00:00Z', readTraceId: `receipt-${id}` }];
 
-beforeEach(() => localStorage.clear());
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => { localStorage.clear(); vi.stubEnv('NODE_ENV', 'development'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 function mountAnnouncements() {
   const first = deferred();
