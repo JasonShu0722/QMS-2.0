@@ -216,3 +216,16 @@ it('sends a mandatory review note and version with the package decision', async 
   await user.click(await screen.findByRole('button', { name: /^确\s*定$/ }));
   expect(vi.mocked(apiRequest)).toHaveBeenCalledWith('/api/v1/supplier-ppap/p1/review', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 2, decision: 'APPROVED', note: '文件有效' }) }));
 }, 30_000);
+it('requests real PPAP pages and resets to page one when the page size changes', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => String(path).includes('my-permissions') ? { permissions: ['supplier-ppap:read'] } as never : { ...page, total: 125 } as never);
+  render(<SupplierPpapPage />);
+  await screen.findByRole('button', { name: '查看与审核' });
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-ppap?page=1&pageSize=20');
+  expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-ppap?page=2&pageSize=20'));
+  await screen.findByRole('button', { name: '查看与审核' });
+  await userEvent.click(screen.getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-ppap?page=1&pageSize=50'));
+});

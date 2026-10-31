@@ -1,6 +1,6 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AuditAdministration } from './AuditAdministration';
 import type { AdminOrganization } from '../admin/admin';
 
@@ -8,7 +8,27 @@ const organization: AdminOrganization = { id: '10000000-0000-4000-8000-000000000
 const userId = '20000000-0000-4000-8000-000000000001';
 const event = { id: 'event', organizationId: organization.id, actorUserId: userId, action: 'USER_UPDATED', actionLabel: '更新用户', actorSummary: { username: 'current-alice', accountType: 'INTERNAL', organizationName: organization.name }, resourceType: 'User', resourceId: userId, outcome: 'DENIED', metadata: {}, traceId: 'trace', createdAt: '2026-10-18T00:00:00Z' };
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => { localStorage.clear(); vi.stubEnv('NODE_ENV', 'development'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it('changes the cursor batch size without carrying the old cursor or discarding applied filters', async () => {
+  const fetch = vi.fn(async (_path: string) => json({ items: [event], total: 90, nextCursor: 'next-batch' }));
+  vi.stubGlobal('fetch', fetch);
+  render(<AuditAdministration organization={organization} target={{ resourceType: 'User', resourceId: userId }} />);
+  await screen.findByText('current-alice');
+  expect(fetch.mock.calls[0][0]).toContain('pageSize=20');
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  await waitFor(() => expect(fetch.mock.calls.at(-1)?.[0]).toContain('cursor=next-batch'));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '每页条数' }));
+  fireEvent.click(await screen.findByText('50', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => {
+    const query = new URL(fetch.mock.calls.at(-1)![0], 'http://localhost').searchParams;
+    expect(query.get('pageSize')).toBe('50');
+    expect(query.has('cursor')).toBe(false);
+    expect(query.get('resourceId')).toBe(userId);
+  });
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
+});
 
 it('applies an audit resource target to the first query and export, then resets it on a new target', async () => {
   const fetch = vi.fn(async (path: string, _init?: RequestInit) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : path.endsWith('/audit-exports') ? json({ id: 'artifact', downloadPath: '/private-export', expiresAt: '2026-10-30', rowCount: 0 }) : json({ items: [], total: 0, nextCursor: null }));

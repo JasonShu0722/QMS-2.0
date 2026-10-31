@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Modal, Select, Skeleton, Table, Tag, type TableProps } from 'antd';
+import { Alert, Button, Input, Modal, Select, Skeleton, Tag, type TableProps } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../ui/ledger';
 import { Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { components, operations } from '@qms/contracts';
@@ -36,6 +37,7 @@ export function DataExchangePage() {
 }
 
 function ExchangeScope({ context, session, refresh, invalidate }: { context: ConsoleContext; session?: string; refresh: () => void; invalidate: () => void }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('console-data-exchanges', context.targetOrganization.id);
   const { locale } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
   const id = useId();
@@ -94,7 +96,7 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
     if (!canRead || !matchesSession || revoked.current) { setData(undefined); setError('denied'); setLoading(false); return; }
     const token: ReadToken = { controller: new AbortController(), pending: true, recheck: false }; active.current = token;
     const current = () => active.current === token && !token.controller.signal.aborted && useWorkTabsStore.getState().sessionScope === session;
-    const query = new URLSearchParams({ organizationId: context.targetOrganization.id, scope: filters.scope, ...range, page: String(filters.page), limit: '50' });
+    const query = new URLSearchParams({ organizationId: context.targetOrganization.id, scope: filters.scope, ...range, page: String(filters.page), limit: String(pageSize) });
     for (const key of ['sourceKey', 'direction', 'objectType', 'level', 'stage', 'outcome', 'batchId'] as const) if (filters[key]) query.set(key, filters[key]!);
     setData(undefined); setError(undefined); setLoading(true);
     void apiRequest<Page>(`/api/v1/admin/console/data-exchanges?${query}`, { signal: token.controller.signal }).then(result => {
@@ -103,7 +105,7 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
       if (token.recheck) { restart(); return; }
       if (result.scope !== filters.scope || result.organizationId !== context.targetOrganization.id || !Array.isArray(result.sources) || !Array.isArray(result.items)
         || result.items.some(row => !validRow(row, result.sources, result.scope))) { deny(); return; }
-      if (![result.asOf, result.from, result.to].every(value => Number.isFinite(Date.parse(value))) || result.page !== filters.page || result.limit !== 50
+      if (![result.asOf, result.from, result.to].every(value => Number.isFinite(Date.parse(value))) || result.page !== filters.page || result.limit !== pageSize
         || !Number.isSafeInteger(result.total) || result.total < 0 || !Object.values(result.summary).every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) throw new Error('Invalid exchange observation response');
       setData(result); setLoading(false);
     }).catch(cause => {
@@ -114,7 +116,7 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
       setData(undefined); setError('network'); setLoading(false);
     });
     return () => token.controller.abort();
-  }, [filters, range, session, context, canRead, matchesSession]);
+  }, [filters, range, pageSize, session, context, canRead, matchesSession]);
 
   useEffect(() => {
     if (!selected || !data || !canRead || !matchesSession || revoked.current) return;
@@ -188,8 +190,8 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
           <div><dt>{text('批次尝试', 'Batch attempts')}</dt><dd>{count(data.summary.batchAttempts)}</dd></div><div><dt>{text('记录尝试', 'Record attempts')}</dt><dd>{count(data.summary.recordAttempts)}</dd></div><div><dt>{text('传输成功批次', 'Transfer-succeeded batches')}</dt><dd>{count(data.summary.transferSucceededBatches)}</dd></div><div><dt>{text('处理失败批次', 'Processing-failed batches')}</dt><dd>{count(data.summary.processingFailedBatches)}</dd></div><div><dt>{text('对账成功批次', 'Reconciled batches')}</dt><dd>{count(data.summary.reconciliationSucceededBatches)}</dd></div>
         </dl></section>
         <section className="qms-exchange-records" aria-label={text('交换尝试记录', 'Exchange attempt records')}><h3>{text('交换尝试记录', 'Exchange attempts')}</h3>
-          {!data.items.length ? <div className="qms-exchange-empty"><strong>{text('当前范围没有交换观测记录', 'No exchange observations in this scope')}</strong></div> : <Table<Attempt> size="small" columns={columns} dataSource={data.items} rowKey="id" pagination={false} scroll={{ x: 1200 }} />}
-          <div className="qms-exchange-pagination"><span>{text(`共 ${count(data.total)} 个尝试 · 第 ${data.page} 页`, `${count(data.total)} attempts · Page ${data.page}`)}</span><div><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>
+          {!data.items.length ? <div className="qms-exchange-empty"><strong>{text('当前范围没有交换观测记录', 'No exchange observations in this scope')}</strong></div> : <LedgerTable<Attempt> ledgerId="console-data-exchanges" organizationId={context.targetOrganization.id} viewId={filters.scope} requiredColumnKeys={['record', 'details']} size="small" columns={columns} dataSource={data.items} rowKey="id" pagination={false} scroll={{ x: 1200 }} />}
+          <div className="qms-exchange-pagination"><span>{text(`共 ${count(data.total)} 个尝试 · 第 ${data.page} 页`, `${count(data.total)} attempts · Page ${data.page}`)}</span><div><Select aria-label={text('每页条数', 'Page size')} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={loading} onChange={size => { changePage(1); setPageSize(size); setRevision(value => value + 1); }} /><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>
         </section>
       </>}
       <Modal title={text('交换尝试详情', 'Exchange attempt details')} open={!!selected} onCancel={closeDetail} footer={<Button onClick={closeDetail}>{text('关闭', 'Close')}</Button>} destroyOnHidden width={720}>

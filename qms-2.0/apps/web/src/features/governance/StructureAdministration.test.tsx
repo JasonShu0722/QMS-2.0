@@ -66,6 +66,14 @@ async function positionAction() {
 
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); });
 
+it('offers independent column settings for department and position ledgers', async () => {
+  view(['organization:structure:read']);
+  expect(await screen.findByRole('button', { name: '列设置' })).toBeVisible();
+  await userEvent.click(screen.getByRole('tab', { name: '岗位' }));
+  await screen.findByText('质量工程师');
+  expect(screen.getAllByRole('button', { name: '列设置' }).length).toBeGreaterThanOrEqual(1);
+});
+
 it('only exposes the position-permission entry when both read permissions are present', async () => {
   const complete = view(['organization:structure:read', 'account:roles:read']);
   expect(await positionAction()).toBeInTheDocument();

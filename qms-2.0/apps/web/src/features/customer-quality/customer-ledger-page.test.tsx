@@ -2,7 +2,7 @@ import type { components } from '@qms/contracts';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ConfigProvider } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
@@ -30,6 +30,8 @@ const permissions = ['customer-quality:complaints:read', 'customer-quality:compl
 const preview = { items: [{ rowNumber: 2, outcome: 'PREVIEW', complaintId: null, errorCode: null, warnings: item.warnings, record: item, similarities: [item] }], created: 0, supplemented: 0, skipped: 0, failed: 0, pendingCorrection: 1 };
 
 beforeEach(() => {
+  localStorage.clear();
+  vi.stubEnv('NODE_ENV', 'development');
   useWorkTabsStore.getState().bindSession(`INTERNAL:${org}:user`);
   vi.mocked(getSession).mockReset().mockResolvedValue({ userId: 'user', organizationId: org, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf');
@@ -46,10 +48,31 @@ beforeEach(() => {
     throw new Error(`Unexpected API: ${path}`);
   });
 });
+afterEach(() => vi.unstubAllEnvs());
 const testContent = (content: ReactNode, route = '/app/customer-quality') => <ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter initialEntries={[route]}><UnsavedChangesProvider>{content}</UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>;
 function showContent(content: ReactNode, route = '/app/customer-quality') { return render(testContent(content, route)); }
 function show(route = '/app/customer-quality') { return showContent(<CustomerQualityPage renderAnalysis={complaintId => <div>解析插槽 {complaintId}</div>} />, route); }
 const writes = () => vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method);
+
+it('changes the real ledger page size and retains the selected source version', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => path.includes('/my-permissions') ? { organizationId: org, permissions: [...permissions, 'customer-quality:issues:issue'] } : read(path, init));
+  show();
+  fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-1'));
+  const columnSettings = screen.getByText('列设置', { selector: 'button span' }).closest('button')!;
+  fireEvent.click(columnSettings);
+  fireEvent.click(screen.getByLabelText('上移 台账状态', { selector: 'button' }));
+  expect(screen.getByLabelText('选择客诉 CQ-N4-1')).toBeChecked();
+  fireEvent.click(columnSettings);
+  fireEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('page=2&pageSize=20'))).toBe(true));
+  await screen.findByLabelText('选择客诉 CQ-N4-1');
+  fireEvent.mouseDown(document.querySelector('.ant-pagination-options-size-changer [role="combobox"]')!);
+  fireEvent.click(await screen.findByText('50 条/页', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('page=1&pageSize=50'))).toBe(true));
+  expect(await screen.findByLabelText('选择客诉 CQ-N4-1')).toBeChecked();
+  expect(screen.getByText('已选择 1/100 条（跨页保留）')).toBeVisible();
+});
 
 it('opens supplier copy from customer selection with copy-only access but does not enable customer issue', async () => {
   const read = vi.mocked(apiRequest).getMockImplementation()!;
@@ -60,16 +83,18 @@ it('opens supplier copy from customer selection with copy-only access but does n
     return read(path, init);
   });
   show();
-  const copy = await screen.findByRole('button', { name: '复制为供应商草稿' });
+  const toolbar = within((await screen.findByLabelText('搜索客诉')).closest('.customer-quality-toolbar')!);
+  const copy = await toolbar.findByRole('button', { name: '复制为供应商草稿' });
   expect(copy).toBeDisabled();
   fireEvent.click(await screen.findByLabelText('选择客诉 CQ-N4-1'));
   await waitFor(() => expect(copy).toBeEnabled());
   fireEvent.click(copy);
-  await waitFor(() => expect(screen.getByRole('dialog', { name: '受控复制为供应商草稿' })).toBeVisible());
-  expect(screen.queryByRole('button', { name: '发起客户8D' })).not.toBeInTheDocument();
+  const dialog = await screen.findByRole('dialog', { name: '受控复制为供应商草稿' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  expect(toolbar.queryByRole('button', { name: '发起客户8D' })).not.toBeInTheDocument();
   fireEvent.mouseDown(screen.getByLabelText('目标供应商档案'));
   fireEvent.click(await screen.findByText('复制目标档案', { selector: '.ant-select-item-option-content' }));
-  fireEvent.click(screen.getByRole('button', { name: '读取受控预览' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '读取受控预览' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ supplierProfileId: org, sources: [{ kind: 'CUSTOMER_LEDGER', sourceId: id, sourceVersion: item.version }] }) }), { replayAfterReauthentication: false }));
   expect(writes().map(([path]) => path)).toEqual(['/api/v1/supplier-quality/source-copies/preview']);
 });
@@ -199,10 +224,10 @@ it('keeps the edited draft and refreshes the expectedVersion after a conflict', 
   show();
   fireEvent.click(await screen.findByLabelText('CQ-N4-1'));
   fireEvent.click(await screen.findByLabelText('编辑台账'));
-  fireEvent.change(screen.getByLabelText('详细故障描述'), { target: { value: '保留草稿' } });
+  fireEvent.change(screen.getByLabelText('详细故障描述', { selector: 'textarea' }), { target: { value: '保留草稿' } });
   fireEvent.click(screen.getByLabelText('保存台账'));
   await waitFor(() => expect(screen.getByText(/已刷新服务器版本，草稿保留/)).toBeVisible());
-  expect(screen.getByLabelText('详细故障描述')).toHaveValue('保留草稿');
+  expect(screen.getByLabelText('详细故障描述', { selector: 'textarea' })).toHaveValue('保留草稿');
   fireEvent.click(screen.getByLabelText('保存台账'));
   await waitFor(() => expect(writes()).toHaveLength(2));
   expect(JSON.parse(String(writes()[1]?.[1]?.body))).toMatchObject({ expectedVersion: 2, fields: { defectDescription: '保留草稿' } });
@@ -216,7 +241,7 @@ it.each([401, 403])('clears sensitive list/detail/draft on %s rather than leavin
   show();
   fireEvent.click(await screen.findByLabelText('CQ-N4-1'));
   fireEvent.click(await screen.findByLabelText('编辑台账'));
-  fireEvent.change(screen.getByLabelText('详细故障描述'), { target: { value: '敏感草稿' } });
+  fireEvent.change(screen.getByLabelText('详细故障描述', { selector: 'textarea' }), { target: { value: '敏感草稿' } });
   fireEvent.click(screen.getByLabelText('保存台账'));
   expect(await screen.findByText(/访问已失效/)).toBeVisible();
   expect(screen.queryByDisplayValue('敏感草稿')).not.toBeInTheDocument();

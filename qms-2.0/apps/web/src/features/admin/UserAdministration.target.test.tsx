@@ -10,6 +10,20 @@ const user = { fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 afterEach(() => vi.unstubAllGlobals());
 
+it('paginates the complete user array locally with the standard default and configurable columns', async () => {
+  const users = Array.from({ length: 21 }, (_, index) => ({ ...user, id: `user-${index}`, username: `directory-${index}` }));
+  const fetch = vi.fn(async (_path: string) => json(users));
+  vi.stubGlobal('fetch', fetch);
+  render(<UserAdministration organization={organization} organizations={[organization]} />);
+  await screen.findByText('directory-0');
+  expect(screen.getByText('directory-19')).toBeVisible();
+  expect(screen.queryByText('directory-20')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByTitle('2'));
+  expect(await screen.findByText('directory-20')).toBeVisible();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
+});
+
 it('loads the exact UUID detail even if the current directory page is empty', async () => {
   const fetch = vi.fn(async (path: string) => json(path.includes(`/users/${targetUserId}?`) ? user : []));
   vi.stubGlobal('fetch', fetch);

@@ -17,8 +17,8 @@
 .customer-ledger-table .ant-table-cell { overflow-wrap: anywhere; }
 .customer-ledger-table .ant-table-thead th { white-space: nowrap; }
 .customer-ledger-table .customer-ledger-number { max-width: 100%; height: auto; padding-inline: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; }
-.customer-ledger-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qms-section-gap); min-width: 0; padding: 0; margin: 16px 0; border: 0; }
-.customer-ledger-form > label { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.customer-ledger-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--qms-form-column-min)), 1fr)); gap: var(--qms-section-gap); min-width: 0; padding: 0; margin: var(--qms-section-gap) 0; border: 0; }
+.customer-ledger-form > label { display: grid; align-content: start; gap: var(--qms-section-gap); min-width: 0; overflow-wrap: anywhere; }
 .customer-ledger-form-wide { grid-column: 1 / -1; }
 .customer-ledger-form select, .customer-quality-import select { width: 100%; min-height: 36px; padding: 5px 10px; color: var(--qms-text); background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 6px; font: inherit; }
 .customer-ledger-form select:focus-visible, .customer-quality-import select:focus-visible, .customer-ledger-warning:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
@@ -34,5 +34,5 @@
 .customer-ledger-detail summary, .customer-ledger-filters summary, .customer-quality-import summary { cursor: pointer; padding: 8px 0; }
 .customer-ledger-supplement { display: grid; gap: 8px; min-width: 250px; }
 .customer-ledger-legacy-banner { display: grid; gap: 8px; margin-bottom: var(--qms-section-gap); }
-@media (max-width: 720px) { .customer-ledger-form, .customer-ledger-facts { grid-template-columns: minmax(0, 1fr); } .customer-ledger-warning { width: 32px; height: 32px; } }
+@media (max-width: 720px) { .customer-ledger-facts { grid-template-columns: minmax(0, 1fr); } .customer-ledger-warning { width: 32px; height: 32px; } }
 @media (max-width: 720px) { .customer-quality-page { padding: 0;  min-width: 0; } .customer-quality-heading { flex-direction: column; } .customer-quality-card { padding: var(--qms-card-padding); } }

@@ -41,7 +41,9 @@ export function ConsoleTheme({ children }: { children: ReactNode }) {
           fontFamily: '"Segoe UI", "Microsoft YaHei", sans-serif', fontSize: 14, borderRadius: 6, controlHeight: 36 },
         components: { Button: { primaryColor: tokens['on-accent'], defaultShadow: 'none', primaryShadow: 'none', dangerShadow: 'none' },
           Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface },
-          Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 10, cellPaddingBlockMD: 10, cellPaddingBlockSM: 8 },
+          Table: { headerBg: tokens['surface-tint'], headerColor: tokens.text, borderColor: tokens.border, headerSplitColor: tokens.border,
+            rowHoverBg: tokens['surface-tint'], rowSelectedBg: tokens['accent-soft'], rowSelectedHoverBg: tokens['accent-soft'],
+            cellFontSize: 13, cellFontSizeMD: 13, cellFontSizeSM: 13, cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 },
           Card: { bodyPadding: 16, headerPadding: 16 } },
       }}>{container && <App>{children}</App>}</ConfigProvider>
     </AppearanceContext.Provider>

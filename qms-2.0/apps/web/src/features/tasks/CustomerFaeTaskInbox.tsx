@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Empty, Space, Spin, Table, Tag } from 'antd';
+import { Alert, Button, Empty, Space, Spin, Tag } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 
 type Task = components['schemas']['CustomerFaeAnalysisTaskDto'];
 
@@ -17,6 +19,9 @@ export function CustomerFaeTaskInbox() {
 
 function Inbox({ session, organizationId }: { session?: string; organizationId: string | null }) {
   const { t } = useLanguage();
+  const [pageSize, setPageSize] = useLedgerPageSize('customer-fae-tasks', organizationId ?? undefined);
+  const [page, setPage] = useState(1);
+  const requestLeave = useNavigationGuard();
   const [tasks, setTasks] = useState<Task[]>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
@@ -39,8 +44,8 @@ function Inbox({ session, organizationId }: { session?: string; organizationId: 
   return <Space orientation="vertical" style={{ width: '100%' }}>
     <Button onClick={() => setRevision(value => value + 1)} disabled={loading}>{t('刷新解析待办')}</Button>
     {error ? <Alert type="error" showIcon title={safeAccountError(error)} /> : null}
-    {loading ? <Spin aria-label={t('正在加载解析待办')} /> : tasks && <Table<Task>
-      rowKey={item => item.analysis.id} dataSource={tasks} pagination={{ pageSize: 20, showSizeChanger: false }}
+    {loading ? <Spin aria-label={t('正在加载解析待办')} /> : tasks && <LedgerTable<Task> ledgerId="customer-fae-tasks" organizationId={organizationId ?? undefined} requiredColumnKeys={['task']}
+      rowKey={item => item.analysis.id} dataSource={tasks} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }}
       locale={{ emptyText: <Empty description={t('暂无待解析客诉')} /> }}
       columns={[
         { title: t('任务'), key: 'task', render: (_, item) => <Link to={`/app/customer-quality?${new URLSearchParams({ complaintId: item.analysis.complaintId, organizationId: item.analysis.organizationId })}`}>{t('查看客诉并解析')}</Link> },

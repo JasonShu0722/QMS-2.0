@@ -1,9 +1,23 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Button, Modal, Select } from 'antd';
+import { Button, ConfigProvider, Modal, Select } from 'antd';
+import { useContext } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ConsoleTheme, consolePreferenceKey, useConsoleAppearance } from './ConsoleTheme';
 
 beforeEach(() => localStorage.clear());
+it.each(['light', 'dark'] as const)('uses compact table presentation within the independent neutral %s theme', (mode) => {
+  localStorage.setItem(consolePreferenceKey, mode);
+  function Probe() {
+    const { theme } = useContext(ConfigProvider.ConfigContext);
+    return <output aria-label="console configuration">{JSON.stringify(theme)}</output>;
+  }
+  const { container } = render(<ConsoleTheme><Probe /></ConsoleTheme>);
+  const configured = JSON.parse(screen.getByLabelText('console configuration').textContent!);
+  const scope = container.querySelector('.qms-console-theme') as HTMLElement;
+  expect(configured.components.Table).toMatchObject({ cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4, cellFontSize: 13, cellFontSizeMD: 13, cellFontSizeSM: 13, borderColor: scope.style.getPropertyValue('--qms-border'), rowSelectedBg: scope.style.getPropertyValue('--qms-accent-soft'), rowHoverBg: scope.style.getPropertyValue('--qms-surface-tint') });
+  expect(configured.token.controlHeight).toBe(36);
+  expect(configured.token.colorPrimary).toBe(mode === 'dark' ? '#e2e8f0' : '#172033');
+});
 function Content() {
   const { mode, setMode } = useConsoleAppearance();
   return <><output>{mode}</output><button onClick={() => setMode('dark')}>dark</button><button onClick={() => setMode('system')}>system</button><Select aria-label="选择" options={[{ value: 'one', label: 'Option One' }]} /><Modal open title="局部弹窗" footer={<Button>完成</Button>}>内容</Modal></>;

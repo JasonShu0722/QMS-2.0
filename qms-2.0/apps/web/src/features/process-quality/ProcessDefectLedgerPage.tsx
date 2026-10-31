@@ -6,6 +6,7 @@ import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
@@ -42,6 +43,9 @@ export function ProcessDefectLedgerPage() {
 }
 
 function ProcessLedgerContent({ organizationId, initialDefectId }: { organizationId?: string; initialDefectId?: string }) {
+  const sessionOrganizationId = useWorkTabsStore(state => state.sessionScope?.split(':')[1]);
+  const targetOrganizationId = organizationId ?? sessionOrganizationId;
+  const [pageSize, setPageSize] = useLedgerPageSize('process-defects', targetOrganizationId);
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const [form] = Form.useForm<IssueValues>();
@@ -163,7 +167,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     const controller = new AbortController(); listController.current = controller;
     setLoading(true);
     setListError(undefined);
-    const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+    const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search) query.set('search', search);
     if (ledgerStatus) query.set('ledgerStatus', ledgerStatus);
     void apiRequest<DefectPage>(scoped(`/api/v1/process-quality/defects?${query}`), { signal: controller.signal }).then((value) => {
@@ -172,7 +176,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       if (!controller.signal.aborted) { setResult(undefined); setListError(cause); if (denied(cause)) revoke(cause); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, search, revision, ledgerStatus, accessLost, organizationId]);
+  }, [page, pageSize, search, revision, ledgerStatus, accessLost, organizationId]);
 
   async function openDetail(id: string) {
     detailController.current?.abort();
@@ -247,12 +251,12 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
 
   const columns: TableColumnsType<Defect> = [
     { title: '选择', key: 'select', width: 64, render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={(event) => { const checked = event.target.checked; if (issueDirty) requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(record, checked); }); else toggle(record, checked); }} /> },
-    { title: '发生时间', dataIndex: 'occurredAt', width: 165, render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
-    { title: '失效现象', dataIndex: 'description', ellipsis: true, render: (value: string, record) => <Button type="link" className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value}</Button> },
-    { title: '类型', dataIndex: 'defectTypeCode', width: 115 },
-    { title: '数量', dataIndex: 'defectQuantity', width: 75 },
-    { title: '责任类别', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
-    { title: '状态', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
+    { title: '发生时间', key: 'occurredAt', dataIndex: 'occurredAt', width: 165, render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
+    { title: '失效现象', key: 'description', dataIndex: 'description', width: 260, ellipsis: true, render: (value: string, record) => <Button type="link" className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value}</Button> },
+    { title: '类型', key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115 },
+    { title: '数量', key: 'defectQuantity', dataIndex: 'defectQuantity', width: 75 },
+    { title: '责任类别', key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
+    { title: '状态', key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
     { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => <Space>{record.projectCode ?? '—'}<MappingHint record={record} /></Space> },
     { title: '批次 / 工单', key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
@@ -282,7 +286,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <Table<Defect> rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize: 20, total: result?.total ?? 0, showSizeChanger: false, onChange: setPage }} /> : null}
+      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>

@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [表单、台账与清单统一设计](../../docs/superpowers/specs/2026-10-31-qms-business-pages-design.md) | REQ-0034：四类模式、列宽/列序/显隐/固定、本地隔离和每页条数；沿用业务语义与现有保存视图 |
+| [统一业务页面实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md) | V0.0.39 / Issue89；正式调用方分类、TDD与独立双审、分页拥有者、联合验证及交付检查点；第6节保留暂停交接，第7节恢复收尾，未发布 |
 | [前端文案、标题与导航专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md) | REQ-0033：文案纪律、关联排版、单列两级折叠菜单、管理分类图标与标题去重；各自主题及业务边界保持 |
 | [REQ-0033实施与启动接续](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md) | V0.0.38/PR87已部署e37504e；准确PR/main各16CI及225文件3153项Web，人工视觉/角色/尺寸待验；原失败与组合证据保留，20分钟守护已暂停 |
 | [独立管理控制台整体设计](../../docs/superpowers/specs/2026-10-29-qms-management-console-design.md) | REQ-0032同源新窗口、分权限管理、shadcn-admin视觉、完整存量迁入与真实API/交换观测；CP-1/CP-2均已发布，最新89c2ddd/V0.0.37；人工验收/外部接入独立，heartbeat已删除 |

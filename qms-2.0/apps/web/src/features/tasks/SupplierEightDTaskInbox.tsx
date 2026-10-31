@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Select, Space, Spin, Tag, Typography } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { SupplierSourceCollaborationInbox, useSupplierSourceCollaboration } from './SupplierSourceCollaborationInbox';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Task = components['schemas']['SupplierEightDTaskDto'];
 type Notice = components['schemas']['SupplierEightDNotificationDto'];
@@ -34,7 +35,8 @@ function AccessScope(props: { session?: string; portal: boolean; organizationId:
   return <Inbox {...props} onDenied={revoke} />;
 }
 
-function useProjection<T extends { id: string }>(path: string, lifetime: React.RefObject<AbortController>, current: () => boolean, onDenied: () => void) {
+function useProjection<T extends { id: string }>(path: string, lifetime: React.RefObject<AbortController>, current: () => boolean, onDenied: () => void, ledgerId: string, organizationId?: string) {
+  const [pageSize, setPageSize] = useLedgerPageSize(ledgerId, organizationId);
   const [data, setData] = useState<Page<T>>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ function useProjection<T extends { id: string }>(path: string, lifetime: React.R
     const active = () => current() && !controller.signal.aborted;
     setError(undefined); setLoading(true);
     if (!request.cursor) setData(undefined);
-    const query = new URLSearchParams({ pageSize: '25' });
+    const query = new URLSearchParams({ pageSize: String(pageSize) });
     if (request.cursor) query.set('cursor', request.cursor);
     if (active()) void apiRequest<Page<T>>(`${path}${path.includes('?') ? '&' : '?'}${query}`, { signal: controller.signal }, { replayAfterReauthentication: false })
       .then(page => {
@@ -62,8 +64,8 @@ function useProjection<T extends { id: string }>(path: string, lifetime: React.R
         setError(cause);
       }).finally(() => { if (active()) setLoading(false); });
     return () => { controller.abort(); signal.removeEventListener('abort', abort); };
-  }, [path, request, lifetime, current, onDenied]);
-  return { data, error, loading, refresh: () => setRequest({}), retry: () => setRequest({ ...request }), more: () => { if (data?.nextCursor && !loading) setRequest({ cursor: data.nextCursor }); } };
+  }, [path, request, lifetime, current, onDenied, pageSize]);
+  return { data, error, loading, pageSize, changeSize: (size: number) => { setPageSize(size); setRequest({}); }, refresh: () => setRequest({}), retry: () => setRequest({ ...request }), more: () => { if (data?.nextCursor && !loading) setRequest({ cursor: data.nextCursor }); } };
 }
 
 function Inbox({ session, portal, organizationId, onDenied }: { session?: string; portal: boolean; organizationId: string | null; onDenied: () => void }) {
@@ -81,8 +83,8 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
   }, [onDenied]);
   const base = `/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}/eight-d`;
   const scope = organizationId ? `?${new URLSearchParams({ organizationId })}` : '';
-  const tasks = useProjection<Task>(`${base}/tasks${scope}`, lifetime, current, revoke);
-  const notices = useProjection<Notice>(`${base}/notifications${scope}`, lifetime, current, revoke);
+  const tasks = useProjection<Task>(`${base}/tasks${scope}`, lifetime, current, revoke, 'supplier-eight-d-tasks', organizationId ?? undefined);
+  const notices = useProjection<Notice>(`${base}/notifications${scope}`, lifetime, current, revoke, 'supplier-eight-d-notifications', organizationId ?? undefined);
   const collaboration = useSupplierSourceCollaboration(organizationId, lifetime, current, revoke, !portal);
   const workspace = (id: string) => `${portal ? '/supplier/corrections/problems' : '/app/supplier-quality/eight-d'}/${encodeURIComponent(id)}`;
   const date = (value: string | null) => value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : t('未设置期限');
@@ -92,21 +94,21 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
   return <div style={{ minWidth: 0, maxWidth: '100%' }}>
     {!portal && <SupplierSourceCollaborationInbox {...collaboration} />}
     <section aria-label={t('供应商8D正式待办')}>
-      <Space wrap><Typography.Title level={3}>{t('供应商8D正式待办')}</Typography.Title><Button disabled={tasks.loading} onClick={tasks.refresh}>{t('刷新8D待办')}</Button></Space>
+      <Space wrap><Typography.Title level={3}>{t('供应商8D正式待办')}</Typography.Title><Button disabled={tasks.loading} onClick={tasks.refresh}>{t('刷新8D待办')}</Button><Select aria-label={locale === 'en-US' ? 'Task load batch size' : '待办加载批次条数'} value={tasks.pageSize} onChange={tasks.changeSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} /></Space>
       {portal && <p>{t('同一问题的多份职责分别列出，不代表多个问题；处理、关闭审核和专用延期均在完整工作空间执行。')}</p>}
       {tasks.error ? error(tasks.error, '8D待办', tasks.retry) : null}
       {tasks.loading && <Spin aria-label={t('正在加载8D待办')} />}
       {tasks.data && <>
         <div role="group" aria-label={t('供应商8D待办表格')} tabIndex={0} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-        <Table<Task> size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={tasks.data.items}
+        <LedgerTable<Task> ledgerId="supplier-eight-d-tasks" organizationId={organizationId ?? undefined} requiredColumnKeys={['reportNumber', 'actions']} size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={tasks.data.items}
           locale={{ emptyText: t('暂无供应商8D待办') }} columns={[
-            { title: t('问题编号'), dataIndex: 'reportNumber' },
-            { title: t('任务类型'), render: (_, task) => t(kinds[task.kind] ?? task.kind) },
-            { title: t('职责'), render: (_, task) => task.duty ? t(duties[task.duty] ?? task.duty) : t('供应商处理') },
-            { title: t('阶段'), render: (_, task) => t(stages[task.stage] ?? task.stage) },
-            { title: t('状态'), render: (_, task) => t(statuses[task.status] ?? task.status) },
-            { title: t('原期限'), render: (_, task) => <>{date(task.dueAt)}{task.overdue && <Tag color="error">{t('已逾期')}</Tag>}{task.requestedDueAt && <div>{t('申请期限')}：{date(task.requestedDueAt)}</div>}</> },
-            { title: t('操作'), render: (_, task) => <Space wrap>{task.actions.map(action => <Link key={action} to={workspace(task.supplierProblemId)}>{t(actions[action] ?? action)}</Link>)}</Space> },
+            { key: 'reportNumber', title: t('问题编号'), dataIndex: 'reportNumber' },
+            { key: 'kind', title: t('任务类型'), render: (_, task) => t(kinds[task.kind] ?? task.kind) },
+            { key: 'duty', title: t('职责'), render: (_, task) => task.duty ? t(duties[task.duty] ?? task.duty) : t('供应商处理') },
+            { key: 'stage', title: t('阶段'), render: (_, task) => t(stages[task.stage] ?? task.stage) },
+            { key: 'status', title: t('状态'), render: (_, task) => t(statuses[task.status] ?? task.status) },
+            { key: 'dueAt', title: t('原期限'), render: (_, task) => <>{date(task.dueAt)}{task.overdue && <Tag color="error">{t('已逾期')}</Tag>}{task.requestedDueAt && <div>{t('申请期限')}：{date(task.requestedDueAt)}</div>}</> },
+            { key: 'actions', title: t('操作'), render: (_, task) => <Space wrap>{task.actions.map(action => <Link key={action} to={workspace(task.supplierProblemId)}>{t(actions[action] ?? action)}</Link>)}</Space> },
           ]} />
         </div>
         <p>{t('当前已加载任务')}：{tasks.data.items.length}</p><p>{t('已扫描问题')}：{tasks.data.examined}</p>
@@ -114,7 +116,7 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
       </>}
     </section>
     <section aria-label={t('供应商8D通知')}>
-      <Space wrap><Typography.Title level={3}>{t('供应商8D通知')}</Typography.Title><Button disabled={notices.loading} onClick={notices.refresh}>{t('刷新8D通知')}</Button></Space>
+      <Space wrap><Typography.Title level={3}>{t('供应商8D通知')}</Typography.Title><Button disabled={notices.loading} onClick={notices.refresh}>{t('刷新8D通知')}</Button><Select aria-label={locale === 'en-US' ? 'Notification load batch size' : '通知加载批次条数'} value={notices.pageSize} onChange={notices.changeSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} /></Space>
       {notices.error ? error(notices.error, '8D通知', notices.retry) : null}
       {notices.loading && <Spin aria-label={t('正在加载8D通知')} />}
       {notices.data && <>

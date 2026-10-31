@@ -61,7 +61,8 @@ it('renders three real source projections and uses the returned links verbatim, 
   const query = new URL(requests.find(request => request.path.startsWith(endpoint))!.path, 'https://qms.test').searchParams;
   expect(Object.fromEntries(query)).toEqual({ organizationId: 'old', scanLimit: '25' });
   expect(requests.every(({ init }) => !init?.method || init.method === 'GET')).toBe(true);
-  expect(within(section).getAllByRole('button').map(button => button.textContent)).toEqual(['刷新来源协作']);
+  expect(within(section).getAllByRole('button').map(button => button.textContent).filter(Boolean)).toEqual(['刷新来源协作', '列设置']);
+  expect(within(section).getAllByRole('button', { name: /^移动列 / })).toHaveLength(6);
   expect(within(section).getByRole('group', { name: 'SQE来源协作表格' })).toHaveAttribute('tabindex', '0');
   expect(within(section).getByRole('group', { name: 'SQE来源协作表格' })).toHaveStyle({ overflowX: 'auto', maxWidth: '100%' });
 });

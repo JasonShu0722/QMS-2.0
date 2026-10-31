@@ -38,13 +38,13 @@ it('loads only the supplier-scoped contract, links to the problem and sends the 
 });
 
 it('shows an empty state and requests server pagination', async () => {
-  const fetchMock = vi.fn(async (path: string) => json({ items: path.includes('offset=25') ? [notice] : [], total: 26 }));
+  const fetchMock = vi.fn(async (path: string) => json({ items: path.includes('offset=20') ? [notice] : [], total: 26 }));
   vi.stubGlobal('fetch', fetchMock);
   mount();
   expect(await screen.findByText('暂无通知')).toBeInTheDocument();
   await userEvent.click(screen.getByTitle('2'));
   expect(await screen.findByRole('link', { name: '查看关联问题' })).toBeInTheDocument();
-  expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/supplier-portal/notifications?pageSize=25&offset=25')).toBe(true);
+  expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/supplier-portal/notifications?pageSize=20&offset=20')).toBe(true);
 });
 
 it('shows access failure and a retry without displaying server internals', async () => {

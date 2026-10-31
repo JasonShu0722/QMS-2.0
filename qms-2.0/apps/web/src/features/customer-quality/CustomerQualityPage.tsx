@@ -1,10 +1,11 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Empty, Input, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Checkbox, Empty, Input, Space, Spin, Tag, Typography, type TableColumnsType } from 'antd';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, type SessionView } from '../../api/client';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { CustomerMasterSection } from './CustomerMasterSection';
 import { CustomerLegacyQualityPage } from './CustomerLegacyQualityPage';
 import { CustomerAnalysisPanel } from './customer-analysis-panel';
@@ -33,6 +34,8 @@ export function CustomerQualityPage({ renderAnalysis }: Props = {}) {
 function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnalysis }: Props & { organizationId?: string; initialComplaintId?: string }) {
   const scope = useWorkTabsStore(state => state.sessionScope);
   const [session, setSession] = useState<SessionView>(); const [permissions, setPermissions] = useState<string[]>([]);
+  const targetOrganizationId = organizationId ?? session?.organizationId;
+  const [pageSize, setPageSize] = useLedgerPageSize('customer-quality-ledger', targetOrganizationId);
   const [authorized, setAuthorized] = useState(false); const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<unknown>(); const [permissionError, setPermissionError] = useState<unknown>(); const [detailError, setDetailError] = useState<unknown>();
   const [loading, setLoading] = useState(true); const [detailLoading, setDetailLoading] = useState(false);
@@ -101,7 +104,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
   useEffect(() => {
     if (!authorized || legacy || accessLost) return;
     const controller = new AbortController(); setLoading(true); setError(undefined); setResult(undefined);
-    const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+    const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (view !== 'ALL') query.set('complaintType', view);
     if (search) query.set('search', search);
     if (status) query.set('status', status); if (stage) query.set('stage', stage); if (mine) query.set('mine', 'true');
@@ -111,7 +114,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       if (!controller.signal.aborted && !life.current?.signal.aborted) setResult(value);
     }).catch(cause => { if (!controller.signal.aborted && !life.current?.signal.aborted) { setError(cause); if (ledgerDenied(cause)) revoke(cause); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [authorized, legacy, accessLost, page, view, search, status, stage, mine, component, project, customerId, engineer, from, to, revision, organizationId, revoke]);
+  }, [authorized, legacy, accessLost, page, pageSize, view, search, status, stage, mine, component, project, customerId, engineer, from, to, revision, organizationId, revoke]);
 
   const openDetail = useCallback(async (id: string, preserve = false) => {
     detailController.current?.abort(); const controller = new AbortController(); detailController.current = controller;
@@ -140,21 +143,21 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
   const canCopy = permissions.includes('supplier-quality:issues:copy');
   const columns: TableColumnsType<LedgerItem> = [
     ...(canIssue || canCopy ? [{ title: '选择', width: 65, key: 'eight-d-select', render: (_: unknown, row: LedgerItem) => <Checkbox aria-label={`选择客诉 ${row.complaintNumber}`} checked={selectedSources.some(source => source.id === row.id)} disabled={selectedSources.length >= 100 && !selectedSources.some(source => source.id === row.id)} onChange={event => setSelectedSources(current => event.target.checked ? [...current.filter(source => source.id !== row.id), row] : current.filter(source => source.id !== row.id))} /> }] : []),
-    { title: '客诉编号', width: 180, render: (_, row) => <Space><Button className="customer-ledger-number" aria-label={row.complaintNumber} type="link" onClick={() => requestLeave(() => { void openDetail(row.id).catch(() => undefined); })}>{row.complaintNumber}</Button><LedgerWarnings label={row.complaintNumber} warnings={row.warnings} raw={row.raw} /></Space> },
-    { title: '客户 / 类型', width: 180, render: (_, row) => <><div>{row.normalized.customerName ?? '客户待匹配'}</div><Typography.Text type="secondary">{typeLabel(row.normalized.complaintType)}</Typography.Text></> },
-    { title: '组件 / 项目 / 阶段', width: 210, render: (_, row) => <><div>{row.normalized.componentCode ?? '组件待补'}</div><div>{row.mapping?.project ? `${row.mapping.project.code} · ${row.mapping.project.name}` : '未检索到映射关系'}</div><div>{row.mapping?.mapping?.productCategory ?? '分类待匹配'}{row.mapping?.mapping?.productSubcategory ? ` / ${row.mapping.mapping.productSubcategory}` : ''}</div><Tag>{stageLabel(row.stage)}</Tag></> },
-    { title: '发生日期', width: 120, render: (_, row) => row.normalized.occurredOn ?? '未填写' },
-    { title: '详细故障描述', width: 250, render: (_, row) => <span className="customer-ledger-raw">{row.normalized.defectDescription ?? '待补正'}</span> },
-    { title: '登记件数', width: 90, render: (_, row) => row.normalized.quantity ?? '待补正' },
+    { title: '客诉编号', key: 'complaintNumber', width: 180, render: (_, row) => <Space><Button className="customer-ledger-number" aria-label={row.complaintNumber} type="link" onClick={() => requestLeave(() => { void openDetail(row.id).catch(() => undefined); })}>{row.complaintNumber}</Button><LedgerWarnings label={row.complaintNumber} warnings={row.warnings} raw={row.raw} /></Space> },
+    { title: '客户 / 类型', key: 'customerType', width: 180, render: (_, row) => <><div>{row.normalized.customerName ?? '客户待匹配'}</div><Typography.Text type="secondary">{typeLabel(row.normalized.complaintType)}</Typography.Text></> },
+    { title: '组件 / 项目 / 阶段', key: 'componentProjectStage', width: 210, render: (_, row) => <><div>{row.normalized.componentCode ?? '组件待补'}</div><div>{row.mapping?.project ? `${row.mapping.project.code} · ${row.mapping.project.name}` : '未检索到映射关系'}</div><div>{row.mapping?.mapping?.productCategory ?? '分类待匹配'}{row.mapping?.mapping?.productSubcategory ? ` / ${row.mapping.mapping.productSubcategory}` : ''}</div><Tag>{stageLabel(row.stage)}</Tag></> },
+    { title: '发生日期', key: 'occurredOn', width: 120, render: (_, row) => row.normalized.occurredOn ?? '未填写' },
+    { title: '详细故障描述', key: 'defectDescription', width: 250, render: (_, row) => <span className="customer-ledger-raw">{row.normalized.defectDescription ?? '待补正'}</span> },
+    { title: '登记件数', key: 'quantity', width: 90, render: (_, row) => row.normalized.quantity ?? '待补正' },
     ...(view === 'ZERO_KM' ? [
-      { title: '上线日期', width: 120, render: (_: unknown, row: LedgerItem) => row.normalized.onlineOn ?? '未填写' },
-      { title: '生产日期 / 追溯', width: 180, render: (_: unknown, row: LedgerItem) => <>{row.normalized.productionOn ?? '未填写'}<br />{row.normalized.barcode ?? row.normalized.batch ?? '未填写'}</> },
+      { title: '上线日期', key: 'onlineOn', width: 120, render: (_: unknown, row: LedgerItem) => row.normalized.onlineOn ?? '未填写' },
+      { title: '生产日期 / 追溯', key: 'productionTrace', width: 180, render: (_: unknown, row: LedgerItem) => <>{row.normalized.productionOn ?? '未填写'}<br />{row.normalized.barcode ?? row.normalized.batch ?? '未填写'}</> },
     ] : view === 'AFTER_SALES' ? [
-      { title: '里程分档 / MIS', width: 160, render: (_: unknown, row: LedgerItem) => <>{row.mileageBand ?? '未计算'}<br />{row.misTag ?? '未计算'} / {row.serviceMonths === null ? '月数未计算' : `${row.serviceMonths} 月`}</> },
-      { title: '收件', width: 150, render: (_: unknown, row: LedgerItem) => <>{row.courierNumber ?? '未填写'}<br />{row.receivedOn ?? '日期未填写'}</> },
+      { title: '里程分档 / MIS', key: 'mileageMis', width: 160, render: (_: unknown, row: LedgerItem) => <>{row.mileageBand ?? '未计算'}<br />{row.misTag ?? '未计算'} / {row.serviceMonths === null ? '月数未计算' : `${row.serviceMonths} 月`}</> },
+      { title: '收件', key: 'receipt', width: 150, render: (_: unknown, row: LedgerItem) => <>{row.courierNumber ?? '未填写'}<br />{row.receivedOn ?? '日期未填写'}</> },
     ] : []),
-    { title: '实际工程师', width: 140, render: (_, row) => { const person = candidates.find(candidate => candidate.assignmentId === row.qualityEngineerAssignmentId && candidate.userId === row.qualityEngineerId); return person?.fullName || person?.username || (row.qualityEngineerId ? '原跟进人（任职待核对）' : '待分配'); } },
-    { title: '台账状态', width: 100, render: (_, row) => <Tag>{row.status === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
+    { title: '实际工程师', key: 'qualityEngineer', width: 140, render: (_, row) => { const person = candidates.find(candidate => candidate.assignmentId === row.qualityEngineerAssignmentId && candidate.userId === row.qualityEngineerId); return person?.fullName || person?.username || (row.qualityEngineerId ? '原跟进人（任职待核对）' : '待分配'); } },
+    { title: '台账状态', key: 'status', width: 100, render: (_, row) => <Tag>{row.status === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
   ];
   if (accessLost) return <main className="customer-quality-page"><Alert type="warning" showIcon title="访问已失效，当前列表、详情和草稿已清除。请重新登录或确认目标组织权限后重新进入。" /><LedgerError cause={error} /></main>;
   if (legacy) return <><div className="customer-ledger-legacy-banner"><Button onClick={() => requestLeave(() => setLegacy(false))}>返回正式台账</Button></div><CustomerLegacyQualityPage /></>;
@@ -183,7 +186,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
           <label><span>工程师</span><select aria-label="筛选工程师" value={engineer} onChange={event => { setEngineer(event.target.value); setPage(1); }}><option value="">全部工程师</option>{[...new Map(candidates.map(person => [person.userId, person])).values()].map(person => <option key={person.userId} value={person.userId}>{person.fullName || person.username || person.userId}</option>)}</select></label>
           <label><span>台账状态</span><select aria-label="筛选台账状态" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">全部状态</option><option value="FOLLOWING">跟进中</option><option value="CLOSED">已关闭</option></select></label>
         </div></details>
-        {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? <Button onClick={refresh}>重试台账读取</Button> : <Table<LedgerItem> className="customer-ledger-table" tableLayout="fixed" rowKey="id" dataSource={result?.items ?? []} columns={columns} scroll={{ x: view === 'ALL' ? 1350 : 1650 }} locale={{ emptyText: <Empty description="权限范围内暂无符合条件的客诉" /> }} pagination={{ current: page, pageSize: 20, total: result?.total ?? 0, showSizeChanger: false, onChange: next => { setPage(next); } }} />}
+        {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? <Button onClick={refresh}>重试台账读取</Button> : <LedgerTable<LedgerItem> ledgerId="customer-quality-ledger" organizationId={targetOrganizationId} viewId={view} requiredColumnKeys={['eight-d-select', 'complaintNumber']} className="customer-ledger-table" tableLayout="fixed" rowKey="id" dataSource={result?.items ?? []} columns={columns} scroll={{ x: view === 'ALL' ? 1350 : 1650 }} locale={{ emptyText: <Empty description="权限范围内暂无符合条件的客诉" /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} />}
       </section>
       {detailLoading && !detail ? <Spin /> : null}<LedgerError cause={detailError} />
       {detailError && selectedId.current ? <Button onClick={() => { void openDetail(selectedId.current!).catch(() => undefined); }}>重试详情读取</Button> : null}

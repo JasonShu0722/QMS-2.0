@@ -15,8 +15,18 @@ const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLe
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 function page(org = organization) { return <MemoryRouter initialEntries={['/admin']}><Routes><Route path="/admin" element={<UserAdministration organization={org} organizations={[org]} />} /><Route path="/login" element={<p>Login destination</p>} /></Routes></MemoryRouter>; }
 async function confirmSave() {
-  await userEvent.click(screen.getByRole('button', { name: '保存 MFA 设置' }));
-  await userEvent.click(await screen.findByRole('button', { name: '确认保存' }));
+  const save = within(screen.getByRole('dialog')).getByRole('button', { name: '保存 MFA 设置' });
+  await userEvent.click(save);
+  const confirm = (await screen.findByText('确认保存', { selector: 'button > span' })).closest('button')!;
+  await waitFor(() => expect(confirm).toBeVisible());
+  expect(confirm).toHaveAccessibleName('确认保存');
+  await userEvent.click(confirm);
+}
+async function openPolicy() {
+  const action = (await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!;
+  expect(action).toHaveAccessibleName('MFA 设置');
+  await userEvent.click(action);
+  return screen.getByRole('dialog');
 }
 beforeEach(() => { localStorage.clear(); useWorkTabsStore.getState().reset(); });
 afterEach(() => vi.unstubAllGlobals());
@@ -44,7 +54,8 @@ it('loads target MFA policy only after opening the user action and shows actual 
   const fetcher = vi.fn(async (path: string) => json(path.includes('mfa-policy') ? policy : [user]));
   vi.stubGlobal('fetch', fetcher);
   render(page());
-  const action = await screen.findByRole('button', { name: 'MFA 设置' });
+  const action = (await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!;
+  expect(action).toHaveAccessibleName('MFA 设置');
   expect(fetcher.mock.calls.some(([path]) => path.includes('mfa-policy'))).toBe(false);
   await userEvent.click(action);
   expect(await screen.findByText('默认策略')).toBeInTheDocument();
@@ -56,11 +67,11 @@ it('loads target MFA policy only after opening the user action and shows actual 
 it('permits read-only policy inspection without exposing mutation or factor controls', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('mfa-policy') ? { ...policy, required: true, override: true } : [user])));
   render(page({ ...organization, permissions: ['account:users:read'] }));
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
+  await openPolicy();
   expect(await screen.findByText('账号配置')).toBeInTheDocument();
   expect(screen.getByRole('switch', { name: '要求 MFA' })).toBeDisabled();
   expect(screen.getByText('没有重置用户权限，仅可查看 MFA 设置。')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '保存 MFA 设置' })).not.toBeInTheDocument();
+  for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('保存 MFA 设置');
   expect(screen.queryByText('解绑验证器')).not.toBeInTheDocument();
 });
 
@@ -68,10 +79,11 @@ it('retries a failed initial policy read without displaying backend details', as
   let reads = 0;
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.includes('mfa-policy') ? ++reads === 1 ? json({ code: 'UNAVAILABLE', message: 'backend secret' }, 500) : json(policy) : json([user])));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
+  const dialog = within(await openPolicy());
   expect(await screen.findByText('请求被拒绝，请检查权限和填写内容后重试')).toBeInTheDocument();
   expect(screen.queryByText('backend secret')).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: '重新加载 MFA 设置' }));
+  const reload = dialog.getByRole('button', { name: '重新加载 MFA 设置' });
+  await userEvent.click(reload);
   expect(await screen.findByRole('switch', { name: '要求 MFA' })).toBeEnabled();
 });
 
@@ -83,8 +95,9 @@ it('preserves failed draft and reuses its idempotency key until content changes'
     return json(path.includes('mfa-policy') ? policy : [user]);
   }));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await userEvent.click(await screen.findByRole('switch', { name: '要求 MFA' }));
+  await openPolicy();
+  const required = await screen.findByRole('switch', { name: '要求 MFA' });
+  await userEvent.click(required);
   await confirmSave();
   expect(await screen.findByText('请检查填写内容')).toBeInTheDocument();
   expect(screen.getByRole('switch', { name: '要求 MFA' })).toBeChecked();

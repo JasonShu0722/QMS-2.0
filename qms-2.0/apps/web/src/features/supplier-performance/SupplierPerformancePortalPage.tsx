@@ -1,6 +1,7 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Empty, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-performance.css';
@@ -14,6 +15,7 @@ const cardsPath = '/api/v1/supplier-portal/performance/cards';
 const appealsPath = '/api/v1/supplier-portal/performance/appeals';
 
 export function SupplierPerformancePortalPage() {
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-performance');
   const [cards, setCards] = useState<CardPage>();
   const [appeals, setAppeals] = useState<AppealPage>();
   const [page, setPage] = useState(1);
@@ -39,13 +41,13 @@ export function SupplierPerformancePortalPage() {
     let active = true;
     setLoading(true); setError(undefined);
     void Promise.all([
-      apiRequest<CardPage>(`${cardsPath}?page=${page}&pageSize=20`),
+      apiRequest<CardPage>(`${cardsPath}?page=${page}&pageSize=${pageSize}`),
       apiRequest<AppealPage>(appealsPath),
     ]).then(([cardPage, appealPage]) => { if (active) { setCards(cardPage); setAppeals(appealPage); } })
       .catch((cause) => { if (active) { setCards(undefined); setAppeals(undefined); setError(safeAccountError(cause)); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, revision]);
+  }, [page, pageSize, revision]);
 
   async function mutate(path: string, method: 'POST' | 'PUT', body: unknown) {
     const signature = JSON.stringify([path, method, body]);
@@ -82,10 +84,10 @@ export function SupplierPerformancePortalPage() {
     {notice && <Alert type="success" showIcon title={notice} />}
     {loading ? <Spin /> : !error && <>
       <section className="supplier-performance-card" aria-label="已发布绩效卡"><Typography.Title level={2}>已发布绩效卡</Typography.Title>
-        <Table<Card> rowKey="id" dataSource={cards?.items.filter((card) => card.status === 'PUBLISHED') ?? []} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无已发布绩效卡" /> }} pagination={{ current: page, pageSize: 20, total: cards?.total ?? 0, showSizeChanger: false, onChange: setPage }} columns={[
-          { title: '月份', dataIndex: 'month' }, { title: 'IQC 检验 / 合格', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
-          { title: '来料分', dataIndex: 'incomingScore' }, { title: '配合度', dataIndex: 'cooperationScore' }, { title: '总分', dataIndex: 'totalScore' },
-          { title: '操作', render: (_, card) => <Button onClick={() => { setSelectedCard(card); setReason(''); setMutationError(undefined); }}>提出申诉</Button> },
+        <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['month', 'actions']} rowKey="id" dataSource={cards?.items.filter((card) => card.status === 'PUBLISHED') ?? []} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无已发布绩效卡" /> }} pagination={{ current: page, pageSize, total: cards?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!busy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
+          { key: 'month', title: '月份', dataIndex: 'month' }, { key: 'incoming', title: 'IQC 检验 / 合格', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
+          { key: 'incomingScore', title: '来料分', dataIndex: 'incomingScore' }, { key: 'cooperationScore', title: '配合度', dataIndex: 'cooperationScore' }, { key: 'totalScore', title: '总分', dataIndex: 'totalScore' },
+          { key: 'actions', title: '操作', render: (_, card) => <Button onClick={() => { setSelectedCard(card); setReason(''); setMutationError(undefined); }}>提出申诉</Button> },
         ]} expandable={{ expandedRowRender: (card) => <div className="supplier-performance-source"><p>配合度说明：{card.cooperationNote}</p><p>来源检验：{card.sourceInspections.map((source) => `${source.id}（第 ${source.version} 版，${source.conclusion}）`).join('、') || '无'}</p></div> }} />
       </section>
       <section className="supplier-performance-card" aria-label="绩效申诉记录"><Typography.Title level={2}>申诉记录</Typography.Title>

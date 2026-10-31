@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Modal, Pagination, Space, Spin, Table, Typography } from 'antd';
+import { Alert, Button, Card, Modal, Pagination, Space, Spin, Typography } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Task = components['schemas']['ProcessEightDTaskDto'];
 type Tasks = components['schemas']['ProcessEightDTaskPageDto'];
@@ -26,6 +27,8 @@ export function ProcessEightDTaskInbox({ domain = 'process-quality' }: { domain?
 
 function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
   const base = `/api/v1/${domain}/eight-d`;
+  const [taskPageSize, setTaskPageSize] = useLedgerPageSize(`${domain}-eight-d-tasks`);
+  const [noticePageSize, setNoticePageSize] = useLedgerPageSize(`${domain}-eight-d-notifications`);
   const domainLabel = domain === 'customer-quality' ? '客户8D' : domain === 'new-product-quality' ? '新品8D' : '过程8D';
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
@@ -75,18 +78,18 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
     const controller = new AbortController();
     const active = () => current() && !controller.signal.aborted;
     setTasks(undefined); setTasksLoading(true); setTaskError(undefined);
-    apiRequest<Tasks>(`${base}/tasks?pageSize=25&offset=${taskOffset}`, { signal: controller.signal }).then(value => { if (active()) setTasks(value); })
+    apiRequest<Tasks>(`${base}/tasks?pageSize=${taskPageSize}&offset=${taskOffset}`, { signal: controller.signal }).then(value => { if (active()) setTasks(value); })
       .catch(cause => { if (active()) { setTaskError(cause); report(cause); } }).finally(() => { if (active()) setTasksLoading(false); });
     return () => controller.abort();
-  }, [taskOffset, taskRevision, session]);
+  }, [taskOffset, taskRevision, session, taskPageSize]);
   useEffect(() => {
     const controller = new AbortController();
     const active = () => current() && !controller.signal.aborted;
     setNotices(undefined); setNoticesLoading(true); setNoticeError(undefined);
-    apiRequest<Notices>(`${base}/notifications?pageSize=25&offset=${noticeOffset}`, { signal: controller.signal }).then(value => { if (active()) setNotices(value); })
+    apiRequest<Notices>(`${base}/notifications?pageSize=${noticePageSize}&offset=${noticeOffset}`, { signal: controller.signal }).then(value => { if (active()) setNotices(value); })
       .catch(cause => { if (active()) { setNoticeError(cause); report(cause); } }).finally(() => { if (active()) setNoticesLoading(false); });
     return () => controller.abort();
-  }, [noticeOffset, noticeRevision, session]);
+  }, [noticeOffset, noticeRevision, session, noticePageSize]);
   useUnsavedChanges(!!selected && (!!comment || decision !== 'APPROVE' || !!attempt));
   useNavigationBusy(busy || !!attempt);
   useEffect(() => {
@@ -104,7 +107,7 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
     setChecking(true); setBaseline(undefined); setReviewMessage(''); setError(undefined);
     try {
       const [fresh, history] = await Promise.all([
-        apiRequest<Tasks>(`${base}/tasks?pageSize=25&offset=${taskOffset}`, { signal: controller.signal }),
+        apiRequest<Tasks>(`${base}/tasks?pageSize=${taskPageSize}&offset=${taskOffset}`, { signal: controller.signal }),
         apiRequest<Extension[]>(`${extensionBase}/problems/${encodeURIComponent(task.problemId)}/requests`, { signal: controller.signal }),
       ]);
       if (!active()) return;
@@ -142,17 +145,17 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
       } else { setAttempt(undefined); setReviewMessage('延期审核被拒，意见已保留。'); }
     } finally { writing.current = false; if (current()) setBusy(false); }
   }
-  const pager = (offset: number, total: number, change: (value: number) => void) => <Pagination current={offset / 25 + 1} pageSize={25} total={Math.min(total, 10025)} showSizeChanger={false} onChange={page => leave(() => change((page - 1) * 25))} />;
+  const pager = (offset: number, total: number, pageSize: number, change: (value: number) => void, changeSize: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current && !attempt) leave(() => { change(size === pageSize ? (page - 1) * size : 0); changeSize(size); }); }} />;
   return <div className="closure-task-inbox">
     {!!error && <Alert type="error" showIcon title={t(safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
     {!denied && <>
       <section aria-label={t(`${domainLabel}正式待办`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}正式待办`)}</Typography.Title><Button disabled={tasksLoading || !!selected} onClick={() => setTaskRevision(value => value + 1)}>{t('刷新8D待办')}</Button></Space>
 
-        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <Table<Task> rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
-          { title: t('问题编号'), dataIndex: 'reportNumber' },
-          { title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },
-          { title: t('原期限'), render: (_, task) => <span>{date(task.dueAt)}{task.overdue ? ` · ${t('已逾期')}` : ''}</span> },
-          { title: t('操作'), render: (_, task) => <Space wrap>
+        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <LedgerTable<Task> ledgerId={`${domain}-eight-d-tasks`} requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
+          { key: 'reportNumber', title: t('问题编号'), dataIndex: 'reportNumber' },
+          { key: 'duty', title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },
+          { key: 'dueAt', title: t('原期限'), render: (_, task) => <span>{date(task.dueAt)}{task.overdue ? ` · ${t('已逾期')}` : ''}</span> },
+          { key: 'actions', title: t('操作'), render: (_, task) => <Space wrap>
             {task.actions.includes('OPEN_REPORT') && <Link to={workspace(task.problemId, true)}>{t('打开8D报告')}</Link>}
             {task.kind === 'HANDLING' && <>
               {task.actions.includes('ANALYSIS_COMPLETE') && <Link to={workspace(task.problemId)}>{t('确认分析完成')}</Link>}
@@ -162,14 +165,14 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
             {task.kind === 'EXTENSION' && task.actions.includes('DECIDE_EXTENSION') && task.extensionRequestId && <Button disabled={!!selected || busy} onClick={event => { trigger.current = event.currentTarget; setSelected(task); setComment(''); setDecision('APPROVE'); void check(task); }}>{t('审核延期')}</Button>}
           </Space> },
         ]} />}
-        {tasks && pager(taskOffset, tasks.total, setTaskOffset)}
+        {tasks && pager(taskOffset, tasks.total, taskPageSize, setTaskOffset, setTaskPageSize)}
       </section>
       <section aria-label={t(`${domainLabel}通知`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}通知`)}</Typography.Title><Button disabled={noticesLoading} onClick={() => setNoticeRevision(value => value + 1)}>{t('刷新8D通知')}</Button></Space>
         {noticeError ? <Alert type="error" title={t('8D通知加载失败，请重试')} /> : noticesLoading ? <Spin aria-label={t('正在加载8D通知')} /> : notices?.items.map(notice => <Card key={notice.id} title={notice.subject}>
           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{notice.body}</Typography.Paragraph><Space wrap><time>{date(notice.deliveredAt)}</time><Link to={workspace(notice.problemId)}>{t('查看关联8D')}</Link></Space>
         </Card>)}
         {notices && !notices.items.length && <p>{t(`暂无${domainLabel}通知`)}</p>}
-        {notices && pager(noticeOffset, notices.total, setNoticeOffset)}
+        {notices && pager(noticeOffset, notices.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
       </section>
     </>}
     {selected && !denied && <Modal open title={t('延期审核')} onCancel={close} closable={!busy && !attempt} mask={{ closable: !busy && !attempt }} keyboard={!busy && !attempt} focusable={{ focusTriggerAfterClose: false }} footer={<Space wrap>

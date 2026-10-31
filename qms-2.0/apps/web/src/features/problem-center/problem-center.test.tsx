@@ -1,9 +1,11 @@
 import type { components } from '@qms/contracts';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { preferenceKey } from '../../ui/ledger/model';
 import { ProblemCenterPage } from './ProblemCenterPage';
 import * as api from './problem-center-api';
 
@@ -61,14 +63,101 @@ const savedViewWithUnknownFilter = {
 beforeEach(() => {
   vi.resetAllMocks();
   localStorage.clear();
+  useWorkTabsStore.getState().reset();
   vi.mocked(api.getProblemOrganizationId).mockResolvedValue('organization-a');
   vi.mocked(api.getProblemIndex).mockResolvedValue(emptyPage);
   vi.mocked(api.getProblemViews).mockResolvedValue({ items: [], total: 0 });
 });
+afterEach(() => useWorkTabsStore.getState().reset());
 
 const renderPage = (path = '/app/problem-center') => render(
   <MemoryRouter initialEntries={[path]}><LanguageProvider><ProblemCenterPage /></LanguageProvider></MemoryRouter>,
 );
+
+const preferenceSession = 'INTERNAL:organization-a:problem-preferences';
+const defaultColumnKeys = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
+function seedDefaultLayout(organizationId: string, order: string[], visible: string[]) {
+  const key = preferenceKey({ sessionScope: preferenceSession, organizationId, portal: 'business' }, 'problem-center', 'columns', 'default-layout')!;
+  localStorage.setItem(key, JSON.stringify({ schema: 1, value: { order, visible } }));
+  return key;
+}
+function openColumnSettings() {
+  const button = document.querySelector('.qms-ledger__tools button')!;
+  expect(button).toHaveAccessibleName('列设置');
+  fireEvent.click(button);
+}
+
+it('persists the default layout across remounts and saves the displayed order and visibility without losing widths', async () => {
+  useWorkTabsStore.getState().bindSession(preferenceSession);
+  const first = renderPage('/app/problem-center?organizationId=organization-b');
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-b' }), expect.any(AbortSignal)));
+  openColumnSettings();
+  const width = screen.getByLabelText('列宽 标题', { selector: 'input' });
+  fireEvent.change(width, { target: { value: '320' } });
+  fireEvent.blur(width);
+  fireEvent.click(document.querySelector('button[aria-label="下移 标题"]')!);
+  fireEvent.click(screen.getByLabelText('显示 问题类型', { selector: 'input' }));
+  first.unmount();
+
+  const second = renderPage('/app/problem-center?organizationId=organization-b');
+  await waitFor(() => expect(second.container.querySelector('[role="separator"][aria-label="调整列宽 标题"]')).toHaveAttribute('aria-valuenow', '320'));
+  expect(Array.from(second.container.querySelectorAll('thead th')).map(header => header.getAttribute('aria-label')).slice(0, 3)).toEqual(['报告编号', '领域', '标题']);
+  expect(second.container.querySelector('th[aria-label="问题类型"]')).toBeNull();
+  fireEvent.change(screen.getByLabelText('视图名称'), { target: { value: '默认布局副本' } });
+  vi.mocked(api.createProblemView).mockImplementation(async (_organizationId, body) => ({ ...savedView, ...body }));
+  fireEvent.click(screen.getByText('保存新视图', { selector: 'button span' }));
+  await waitFor(() => expect(api.createProblemView).toHaveBeenCalledWith('organization-b', expect.objectContaining({ configuration: expect.objectContaining({
+    columnOrder: ['reportNumber', 'domainCode', 'title', ...defaultColumnKeys.slice(3)],
+    visibleColumns: defaultColumnKeys.filter(key => key !== 'problemType'),
+  }) })));
+  expect(Array.from(second.container.querySelectorAll('thead th')).map(header => header.getAttribute('aria-label')).slice(0, 3)).toEqual(['报告编号', '领域', '标题']);
+  expect(second.container.querySelector('th[aria-label="问题类型"]')).toBeNull();
+});
+
+it('keeps explicit server views authoritative without replacing the cached default layout', async () => {
+  useWorkTabsStore.getState().bindSession(preferenceSession);
+  const defaultOrder = ['reportNumber', 'status', 'title', ...defaultColumnKeys.filter(key => !['reportNumber', 'status', 'title'].includes(key))];
+  const defaultVisible = defaultColumnKeys.filter(key => key !== 'dueAt');
+  const key = seedDefaultLayout('organization-b', defaultOrder, defaultVisible);
+  vi.mocked(api.getProblemViews).mockResolvedValue({ items: [savedView], total: 1 });
+  const view = renderPage('/app/problem-center?organizationId=organization-b');
+  const selection = await screen.findByLabelText('保存视图');
+  fireEvent.change(selection, { target: { value: 'view-1' } });
+  expect(Array.from(view.container.querySelectorAll('thead th')).map(header => header.getAttribute('aria-label')).slice(0, 3)).toEqual(['报告编号', '状态', '标题']);
+  fireEvent.click(screen.getByText('应用视图', { selector: 'button span' }));
+  expect(view.container.querySelector('th[aria-label="标题"]')).toBeNull();
+  expect(view.container.querySelector('th[aria-label="截止时间"]')).not.toBeNull();
+  expect(JSON.parse(localStorage.getItem(key)!).value).toMatchObject({ order: defaultOrder, visible: defaultVisible });
+  fireEvent.change(selection, { target: { value: '' } });
+  expect(view.container.querySelector('th[aria-label="标题"]')).not.toBeNull();
+  expect(view.container.querySelector('th[aria-label="截止时间"]')).toBeNull();
+});
+
+it('resolves default layouts from the actual target organization instead of the session home', async () => {
+  useWorkTabsStore.getState().bindSession(preferenceSession);
+  seedDefaultLayout('organization-a', defaultColumnKeys, ['reportNumber', 'domainCode']);
+  seedDefaultLayout('organization-b', defaultColumnKeys, ['reportNumber', 'status']);
+  const first = renderPage('/app/problem-center?organizationId=organization-b');
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-b' }), expect.any(AbortSignal)));
+  expect(first.container.querySelector('th[aria-label="状态"]')).not.toBeNull();
+  expect(first.container.querySelector('th[aria-label="领域"]')).toBeNull();
+  first.unmount();
+  const home = renderPage('/app/problem-center');
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'organization-a' }), expect.any(AbortSignal)));
+  expect(home.container.querySelector('th[aria-label="领域"]')).not.toBeNull();
+  expect(home.container.querySelector('th[aria-label="状态"]')).toBeNull();
+});
+
+it('requests twenty rows by default and resets the server page when the page size changes', async () => {
+  vi.mocked(api.getProblemIndex).mockResolvedValue({ ...emptyPage, total: 101 });
+  renderPage('/app/problem-center?organizationId=organization-b');
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, pageSize: 20 }), expect.any(AbortSignal)));
+  fireEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, pageSize: 20 }), expect.any(AbortSignal)));
+  fireEvent.mouseDown(document.querySelector('.ant-pagination-options-size-changer [role="combobox"]')!);
+  fireEvent.click(await screen.findByText('50 条/页', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenLastCalledWith(expect.objectContaining({ organizationId: 'organization-b', page: 1, pageSize: 50 }), expect.any(AbortSignal)));
+});
 
 it.each([['customer-quality', 'customer-complaint'], ['new-product-quality', 'new-product-defect-selection']])('keeps %s follow-up constrained after reset and foreign saved views', async (domainCode, sourceType) => {
   render(<MemoryRouter><LanguageProvider><ProblemCenterPage eightDDomain={domainCode as 'customer-quality' | 'new-product-quality'} /></LanguageProvider></MemoryRouter>);

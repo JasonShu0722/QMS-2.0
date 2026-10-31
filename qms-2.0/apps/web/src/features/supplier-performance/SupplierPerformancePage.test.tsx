@@ -21,7 +21,8 @@ it('preserves the internal appeal review note when closing is declined', async (
   const modal = screen.getByRole('dialog', { name: '绩效申诉复核' });
   fireEvent.change(within(modal).getByRole('textbox', { name: '复核说明' }), { target: { value: '正在核对原始检验记录' } });
   fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
-  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  const confirmation = screen.getByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' }).closest('[role="dialog"]') as HTMLElement;
+  fireEvent.click(await within(confirmation).findByRole('button', { name: '继续编辑' }));
   expect(within(modal).getByRole('textbox', { name: '复核说明' })).toHaveValue('正在核对原始检验记录');
   expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PUT' }));
 });

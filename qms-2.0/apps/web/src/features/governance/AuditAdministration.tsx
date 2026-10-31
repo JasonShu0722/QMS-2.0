@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Descriptions, Form, Input, Modal, Select, Table, Typography } from 'antd';
+import { Button, Descriptions, Form, Input, Modal, Select, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import type { components, paths } from '@qms/contracts';
 import type { AdminOrganization } from '../admin/admin';
@@ -16,6 +17,7 @@ export function AuditAdministration({ organization, target }: Props) {
 }
 
 function AuditAdministrationPanel({ organization, target }: Props) {
+  const [pageSize, setPageSize] = useLedgerPageSize('admin-audit', organization.id);
   const { t, locale } = useLanguage();
   const [form] = Form.useForm<Record<string, string>>();
   const [filters, setFilters] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(target ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')));
@@ -35,10 +37,10 @@ function AuditAdministrationPanel({ organization, target }: Props) {
     let active = true;
     if (!canRead) { setLoading(false); return; }
     setLoading(true); setError(undefined);
-    const query = new URLSearchParams({ organizationId: organization.id, pageSize: '25', ...filters, ...(cursor ? { cursor } : {}) });
+    const query = new URLSearchParams({ organizationId: organization.id, pageSize: String(pageSize), ...filters, ...(cursor ? { cursor } : {}) });
     void apiRequest<AuditPage>(`/api/v1/admin/audit-events?${query}`).then((result) => { if (active) setPage(result); }).catch((cause) => { if (active) setError(cause); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [organization.id, filters, cursor, revision, canRead]);
+  }, [organization.id, filters, cursor, pageSize, revision, canRead]);
   async function exportAudit() {
     setExporting(true); setError(undefined); setArtifact(undefined);
     try {
@@ -82,13 +84,13 @@ function AuditAdministrationPanel({ organization, target }: Props) {
     </Form>
     {artifact ? <div className="governance-toolbar"><Button disabled={exporting} onClick={() => void download()}>{t('下载 CSV')}</Button><Typography.Text>{t('有效期至')}: {new Date(artifact.expiresAt).toLocaleString(locale)} · {artifact.rowCount}</Typography.Text></div> : null}
     <GovernanceFeedback error={error} retry={() => setRevision((value) => value + 1)} />
-    <Table rowKey="id" loading={loading} dataSource={error ? [] : page?.items} pagination={false} locale={{ emptyText: error ? '—' : t('暂无数据') }} scroll={{ x: 800 }} columns={[
-      { title: t('时间'), dataIndex: 'createdAt', render: (value: string) => new Date(value).toLocaleString(locale) },
-      { title: t('操作人'), render: (_value, entry) => actorSummary(entry) },
-      { title: t('动作'), render: (_value, entry) => <span className="audit-action"><span>{t(entry.actionLabel)}</span>{entry.actionLabel !== entry.action ? <Typography.Text type="secondary"><code>{entry.action}</code></Typography.Text> : null}</span> }, { title: t('资源类型'), dataIndex: 'resourceType' }, { title: t('结果'), dataIndex: 'outcome' },
-      { title: t('详情'), render: (_value, entry) => <Button onClick={() => setSelected(entry)}>{t('详情')}</Button> },
+    <LedgerTable ledgerId="admin-audit" organizationId={organization.id} requiredColumnKeys={['details']} rowKey="id" loading={loading} dataSource={error ? [] : page?.items} pagination={false} locale={{ emptyText: error ? '—' : t('暂无数据') }} scroll={{ x: 800 }} columns={[
+      { key: 'createdAt', title: t('时间'), dataIndex: 'createdAt', render: (value: string) => new Date(value).toLocaleString(locale) },
+      { key: 'actor', title: t('操作人'), render: (_value, entry) => actorSummary(entry) },
+      { key: 'action', title: t('动作'), render: (_value, entry) => <span className="audit-action"><span>{t(entry.actionLabel)}</span>{entry.actionLabel !== entry.action ? <Typography.Text type="secondary"><code>{entry.action}</code></Typography.Text> : null}</span> }, { key: 'resourceType', title: t('资源类型'), dataIndex: 'resourceType' }, { key: 'outcome', title: t('结果'), dataIndex: 'outcome' },
+      { key: 'details', title: t('详情'), render: (_value, entry) => <Button onClick={() => setSelected(entry)}>{t('详情')}</Button> },
     ]} />
-    <div className="governance-toolbar"><Typography.Text>{t('总数')}: {error ? '—' : page?.total ?? '—'}</Typography.Text><Button disabled={loading} onClick={() => { setCursor(undefined); setRevision((value) => value + 1); }}>{t('刷新')}</Button><Button disabled={loading || !!error || !page?.nextCursor} onClick={() => setCursor(page?.nextCursor ?? undefined)}>{t('下一页')}</Button></div>
+    <div className="governance-toolbar"><Typography.Text>{t('总数')}: {error ? '—' : page?.total ?? '—'}</Typography.Text><Select aria-label={locale === 'en-US' ? 'Page size' : '每页条数'} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={loading} onChange={size => { setCursor(undefined); setPageSize(size); }} /><Button disabled={loading} onClick={() => { setCursor(undefined); setRevision((value) => value + 1); }}>{t('刷新')}</Button><Button disabled={loading || !!error || !page?.nextCursor} onClick={() => setCursor(page?.nextCursor ?? undefined)}>{t('下一页')}</Button></div>
     <Modal open={!!selected} title={t('详情')} onCancel={() => setSelected(undefined)} footer={<div className="qms-dialog-actions" role="group" aria-label={t('详情')}><Button onClick={() => setSelected(undefined)}>{t('关闭')}</Button></div>}>
       {selected ? <Descriptions column={1} items={[{ key: 'summary', label: t('操作人'), children: actorSummary(selected) }, { key: 'actor', label: t('操作者 ID'), children: selected.actorUserId ?? t('未记录操作人') }, { key: 'resource', label: t('资源 ID'), children: selected.resourceId ?? '—' }, { key: 'trace', label: t('追踪标识'), children: <code>{selected.traceId}</code> }, { key: 'metadata', label: t('详情'), children: <pre>{JSON.stringify(selected.metadata, null, 2)}</pre> }]} /> : null}
     </Modal>

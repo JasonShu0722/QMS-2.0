@@ -1,4 +1,5 @@
-import { Alert, Button, Form, Input, Modal, Popconfirm, Space, Table, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Popconfirm, Space, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../../api/client';
@@ -15,6 +16,7 @@ export function SupplierProfilesPage(props: Props = {}) {
 }
 
 function ProfilesContent({ organizationId, organizationPermissions, onDenied }: Props) {
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-profiles', organizationId);
   const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -43,7 +45,7 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     const request = ++sequence.current;
     setLoading(true);
     try {
-      const result = await apiRequest<ProfilePage>(`${base}?page=${page}&search=${encodeURIComponent(search)}${scope}`);
+      const result = await apiRequest<ProfilePage>(`${base}?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}${scope}`);
       if (alive.current && request === sequence.current) { setData(result); setDenied(false); setError(undefined); }
     } catch (cause) { if (alive.current && request === sequence.current) { setData(undefined); setError(cause); } if (reportFailure) throw cause; }
     finally { if (alive.current && request === sequence.current) setLoading(false); }
@@ -53,7 +55,7 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     if (!organizationPermissions) void apiRequest<components['schemas']['PermissionsResponseDto']>(`/api/v1/system/my-permissions${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`).then((result) => { if (alive.current) setPermissions(result.permissions); }, (cause) => { if (alive.current) setError(cause); });
     return () => { alive.current = false; sequence.current++; };
   }, []);
-  useEffect(() => { if (canRead) void reload(); else { sequence.current++; setData(undefined); } }, [page, search, canRead]);
+  useEffect(() => { if (canRead) void reload(); else { sequence.current++; setData(undefined); } }, [page, pageSize, search, canRead]);
   function saved() { if (!alive.current) return; setCreating(false); setEditing(undefined); setNotice(true); if (canRead) void reload(); }
   async function exportPage() {
     if (!canRead || loading || exporting || !data?.items.length) return;
@@ -76,10 +78,10 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     {notice ? <Alert type="success" title={t('供应商资料已保存')} /> : null}
     {error ? <Alert type="error" title={t(supplierError(error))} action={granted.includes('supplier-quality:profiles:read') ? <Button onClick={() => void reload()}>{t('重新加载')}</Button> : undefined} /> : null}
     {canRead ? <><Space wrap><Input.Search aria-label={t('搜索供应商资料')} placeholder={t('搜索供应商名称或业务编码')} maxLength={100} allowClear onSearch={(value) => { setSearch(value); setPage(1); }} /><Button loading={loading} onClick={() => void reload()}>{t('重新加载')}</Button><Button loading={exporting} disabled={loading || !data?.items.length} onClick={() => void exportPage()}>{t('导出当前页供应商清单')}</Button></Space>
-      <Table<SupplierProfile> rowKey="id" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 800 }} pagination={{ current: page, pageSize: 20, total: data?.total ?? 0, showSizeChanger: false, onChange: setPage }} columns={[
-        { title: t('业务编码'), dataIndex: 'businessCode' }, { title: t('供应商名称'), dataIndex: 'displayName' }, { title: t('联系人'), dataIndex: 'contactName' }, { title: t('联系邮箱'), dataIndex: 'contactEmail' },
-        { title: t('协作边界'), render: (_, row) => t(row.supplierOrganizationId ? '已开通协作' : '未开通协作') },
-        { title: t('操作'), render: (_, profile) => <Space wrap>{canWrite ? <Button onClick={() => { setEditing(profile); setNotice(false); }}>{t('编辑资料')}</Button> : null}<Button onClick={() => setAccounts(profile)}>{t('供应商用户账号')}</Button></Space> },
+      <LedgerTable<SupplierProfile> ledgerId="supplier-profiles" organizationId={organizationId} requiredColumnKeys={['businessCode', 'actions']} rowKey="id" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 800 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
+        { key: 'businessCode', title: t('业务编码'), dataIndex: 'businessCode' }, { key: 'displayName', title: t('供应商名称'), dataIndex: 'displayName' }, { key: 'contactName', title: t('联系人'), dataIndex: 'contactName' }, { key: 'contactEmail', title: t('联系邮箱'), dataIndex: 'contactEmail' },
+        { key: 'collaboration', title: t('协作边界'), render: (_, row) => t(row.supplierOrganizationId ? '已开通协作' : '未开通协作') },
+        { key: 'actions', title: t('操作'), render: (_, profile) => <Space wrap>{canWrite ? <Button onClick={() => { setEditing(profile); setNotice(false); }}>{t('编辑资料')}</Button> : null}<Button onClick={() => setAccounts(profile)}>{t('供应商用户账号')}</Button></Space> },
       ]} /></> : <Alert type="info" title={t('没有供应商档案查看权限')} />}
     {canWrite ? <Space wrap><Button onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Space> : null}
     {canWrite && creating ? <ProfileCreator organizationId={organizationId} saved={saved} close={() => setCreating(false)} /> : null}

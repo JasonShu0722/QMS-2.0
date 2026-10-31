@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Button, Input, Space, Table, Typography } from 'antd';
+import { Alert, Button, Input, Space, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -12,7 +13,6 @@ type Props = { organization: AdminOrganization; onDenied?: (error: ApiError) => 
 type Page = components['schemas']['AdminSupplierAccountsPageDto'];
 type Account = Page['items'][number];
 const base = '/api/v1/admin/supplier-accounts';
-const pageSize = 20;
 
 export function AdminSupplierAccounts(props: Props) {
   const principal = useWorkTabsStore(state => state.sessionScope);
@@ -20,7 +20,8 @@ export function AdminSupplierAccounts(props: Props) {
   return <SupplierAccountsScope key={JSON.stringify([principal, props.organization.id, [...props.organization.permissions].sort()])} {...props} principal={principal} />;
 }
 
-function SupplierAccountsScope({ principal, onDenied }: Props & { principal: string }) {
+function SupplierAccountsScope({ organization, principal, onDenied }: Props & { principal: string }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('admin-supplier-accounts', organization.id);
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [search, setSearch] = useState('');
@@ -67,7 +68,7 @@ function SupplierAccountsScope({ principal, onDenied }: Props & { principal: str
       .catch(cause => { if (valid()) fail(cause); })
       .finally(() => { if (valid()) setLoading(false); });
     return () => { active = false; read.abort(); };
-  }, [principal, search, offset, revision]);
+  }, [principal, search, offset, pageSize, revision]);
 
   function reload() { if (current()) setRevision(value => value + 1); }
   function guarded(action: () => void) {
@@ -81,15 +82,15 @@ function SupplierAccountsScope({ principal, onDenied }: Props & { principal: str
       <Input.Search aria-label={t('搜索供应商账号或企业')} placeholder={t('搜索供应商账号或企业')} maxLength={100} disabled={invalidated} onSearch={value => guarded(() => { setSearch(value.trim()); setOffset(0); reload(); })} />
       <Button loading={loading} disabled={invalidated} onClick={() => guarded(reload)}>{t('刷新供应商账号')}</Button>
     </Space>
-    <Table<Account> rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 760 }}
+    <LedgerTable<Account> ledgerId="admin-supplier-accounts" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 760 }}
       locale={{ emptyText: data ? t('暂无供应商账号') : ' ' }}
-      pagination={{ current: offset / pageSize + 1, pageSize, total: data?.total ?? 0, showSizeChanger: false, onChange: page => guarded(() => { setOffset((page - 1) * pageSize); reload(); }) }}
+      pagination={{ current: offset / pageSize + 1, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: invalidated || loading, onChange: (page, size) => guarded(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); reload(); }) }}
       columns={[
-        { title: t('用户名'), dataIndex: 'username' },
-        { title: t('邮箱'), dataIndex: 'email' },
-        { title: t('所属供应商企业'), render: (_, account) => <><div>{account.organization.name}</div><Typography.Text type="secondary">{account.organization.code}</Typography.Text></> },
-        { title: t('状态'), dataIndex: 'status', render: (status: Account['status']) => t(status === 'ACTIVE' ? '启用' : '停用') },
-        { title: t('操作'), render: (_, account) => <UserForceDelete key={JSON.stringify([search, offset, revision, account.id])} target={account} canDelete={!invalidated} disabled={loading}
+        { key: 'username', title: t('用户名'), dataIndex: 'username' },
+        { key: 'email', title: t('邮箱'), dataIndex: 'email' },
+        { key: 'organization', title: t('所属供应商企业'), render: (_, account) => <><div>{account.organization.name}</div><Typography.Text type="secondary">{account.organization.code}</Typography.Text></> },
+        { key: 'status', title: t('状态'), dataIndex: 'status', render: (status: Account['status']) => t(status === 'ACTIVE' ? '启用' : '停用') },
+        { key: 'actions', title: t('操作'), render: (_, account) => <UserForceDelete key={JSON.stringify([search, offset, revision, account.id])} target={account} canDelete={!invalidated} disabled={loading}
           deletePath={`${base}/${encodeURIComponent(account.id)}?organizationId=${encodeURIComponent(account.organizationId)}`} onDeleted={reload} onRefresh={reload} onDenied={fail} /> },
       ]} />
   </section>;

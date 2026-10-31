@@ -1,4 +1,4 @@
-import { expect, it, vi, afterEach } from 'vitest';
+import { expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
@@ -12,7 +12,8 @@ const target = { id: 'target-1', profileId: 'profile-1', periodType: 'ANNUAL', t
 function server(permissions: string[], row = target) {
   request.mockImplementation(async (path) => path === '/api/v1/system/my-permissions' ? { permissions, organizationId: 'org-1' } as never : path.includes('/actuals') ? { items: [], total: 0, latestVersion: 0 } as never : { items: [row], total: 1 } as never);
 }
-afterEach(() => vi.clearAllMocks());
+beforeEach(() => vi.stubEnv('NODE_ENV', 'development'));
+afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 
 it('keeps the target drawer open while approval is pending', async () => {
   let finish!: () => void;

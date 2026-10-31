@@ -12,6 +12,7 @@ import { consoleNavigation, consoleRoute, type ConsoleContext as Context, type C
 import { ConsoleTheme, useConsoleAppearance } from './ConsoleTheme';
 import { SessionVerificationGate } from '../features/auth/SessionVerificationGate';
 import { subscribeSessionSignals } from '../features/auth/session-invalidation';
+import { LedgerScopeProvider } from '../ui/ledger';
 
 const Context = createContext<{ context: Context; refresh: () => void; invalidate: () => void } | null>(null);
 export function useConsoleContext() {
@@ -144,7 +145,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
                 <div><dt>{text('会话所属组织', 'Session home organization')}</dt><dd aria-label={text('会话所属组织', 'Session home organization')}>{context.actor.homeOrganization.name} ({context.actor.homeOrganization.code})</dd></div>
                 <div><dt>{text('模块资源范围', 'Module resource scope')}</dt><dd aria-label={text('模块资源范围', 'Module resource scope')}>{resourceOrganization?.name} · {module?.coverage === 'PLATFORM' ? text('平台级目录，以上组织为授权来源', 'Platform directory; organization is the authorization source') : text('组织范围', 'Organization scope')}</dd></div>
               </dl></details>
-              {route?.status === 'allowed' ? <Context.Provider key={capabilityKey} value={{ context, refresh, invalidate }}>{children ?? <Outlet />}</Context.Provider>
+              {route?.status === 'allowed' ? <Context.Provider key={capabilityKey} value={{ context, refresh, invalidate }}><LedgerScopeProvider organizationId={resourceOrganization?.id} portal="console">{children ?? <Outlet />}</LedgerScopeProvider></Context.Provider>
                 : <Alert type="warning" showIcon title={route?.status === 'not-found' ? text('管理页面不存在', 'Management page not found') : text('无权访问此管理模块', 'You cannot access this management module')} />}
             </>}
       </main>

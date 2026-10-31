@@ -1,10 +1,12 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Report = components['schemas']['ProcessShipmentReportDto'];
 type ReportPage = components['schemas']['ProcessShipmentReportPageDto'];
@@ -19,6 +21,10 @@ function message(cause: unknown, fallback: string) { return cause instanceof Api
 function denied(cause: unknown) { return cause instanceof ApiError && [401, 403].includes(cause.status ?? 0); }
 
 export function ProcessShipmentReportPanel() {
+  const organizationId = useWorkTabsStore(state => state.sessionScope?.split(':')[1]);
+  const [pageSize, setPageSize] = useLedgerPageSize('process-shipment-reports', organizationId);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [reports, setReports] = useState<Report[]>([]);
   const [permissions, setPermissions] = useState<Permissions>();
   const [selectedId, setSelectedId] = useState<string>();
@@ -37,11 +43,11 @@ export function ProcessShipmentReportPanel() {
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
-    void Promise.all([apiRequest<ReportPage>(`${base}?page=1&pageSize=50`), apiRequest<Permissions>('/api/v1/system/my-permissions')]).then(([page, access]) => {
-      if (active) { setReports(page.items); setPermissions(access); }
+    void Promise.all([apiRequest<ReportPage>(`${base}?page=${page}&pageSize=${pageSize}`), apiRequest<Permissions>('/api/v1/system/my-permissions')]).then(([result, access]) => {
+      if (active) { setReports(result.items); setTotal(result.total); setPermissions(access); }
     }).catch((cause) => { if (active) { setReports([]); if (denied(cause)) { setReport(undefined); setPermissions(undefined); } setError(cause); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [revision]);
+  }, [revision, page, pageSize]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -55,11 +61,11 @@ export function ProcessShipmentReportPanel() {
 
   return <section className="process-quality-card" aria-label="出货报告台账">
     <Space className="process-quality-toolbar" wrap><Button onClick={selectedId ? refreshFromUser : refresh} loading={loading}>刷新报告</Button>{canWrite ? <CreateReportDrawer created={refresh} /> : null}</Space>
-    {error ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={denied(error) ? '暂无出货报告访问权限' : message(error, '出货报告加载失败')} action={!denied(error) ? <Button onClick={refresh}>重试</Button> : undefined} /> : loading ? <Spin /> : <Table<Report> rowKey="id" dataSource={reports} pagination={{ pageSize: 10 }} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无出货报告" /> }} columns={[
-      { title: '报告编号', dataIndex: 'reportNumber' }, { title: '产品', dataIndex: 'productCode', render: (value: string | null) => value ?? '全部' },
-      { title: '批次数', dataIndex: 'batchCount' }, { title: '良率', dataIndex: 'yieldRate', render: (value: number | null) => value === null ? '—' : `${(value * 100).toFixed(1)}%` },
-      { title: '状态', dataIndex: 'status', render: (value: string) => <Tag>{value === 'ARCHIVED' ? '已归档' : '草稿'}</Tag> },
-      { title: '操作', render: (_, item) => <Button type="link" aria-label={`查看出货报告 ${item.reportNumber}`} onClick={() => requestLeave(() => { setReport(undefined); setSelectedId(item.id); if (item.id === selectedId) refresh(); })}>查看与关联</Button> },
+    {error ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={denied(error) ? '暂无出货报告访问权限' : message(error, '出货报告加载失败')} action={!denied(error) ? <Button onClick={refresh}>重试</Button> : undefined} /> : loading ? <Spin /> : <LedgerTable<Report> ledgerId="process-shipment-reports" organizationId={organizationId} viewId="ALL" requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" dataSource={reports} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无出货报告" /> }} columns={[
+      { title: '报告编号', key: 'reportNumber', width: 160, dataIndex: 'reportNumber' }, { title: '产品', key: 'productCode', width: 150, dataIndex: 'productCode', render: (value: string | null) => value ?? '全部' },
+      { title: '批次数', key: 'batchCount', width: 90, dataIndex: 'batchCount' }, { title: '良率', key: 'yieldRate', width: 100, dataIndex: 'yieldRate', render: (value: number | null) => value === null ? '—' : `${(value * 100).toFixed(1)}%` },
+      { title: '状态', key: 'status', width: 100, dataIndex: 'status', render: (value: string) => <Tag>{value === 'ARCHIVED' ? '已归档' : '草稿'}</Tag> },
+      { title: '操作', key: 'actions', width: 150, render: (_, item) => <Button type="link" aria-label={`查看出货报告 ${item.reportNumber}`} onClick={() => requestLeave(() => { setReport(undefined); setSelectedId(item.id); if (item.id === selectedId) refresh(); })}>查看与关联</Button> },
     ]} />}
     <Drawer title={report?.reportNumber ?? '出货报告详情'} open={!!selectedId} onClose={() => requestLeave(() => { setSelectedId(undefined); setReport(undefined); }, true)} width="min(760px, 100vw)" destroyOnHidden>
       {detailError ? <Alert type={denied(detailError) ? 'warning' : 'error'} showIcon title={denied(detailError) ? '暂无出货报告访问权限' : message(detailError, '详情加载失败')} action={!denied(detailError) ? <Button onClick={refreshFromUser}>重试</Button> : undefined} /> : null}

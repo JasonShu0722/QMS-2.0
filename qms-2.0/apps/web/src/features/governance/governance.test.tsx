@@ -30,6 +30,7 @@ it('uses generated configuration data for a read-only organization', async () =>
   render(<ConfigurationAdministration organization={organization} />);
   await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
   expect(screen.getByLabelText('导出保留时间（分钟）')).toBeDisabled();
+  expect(screen.getAllByRole('button', { name: '列设置' })).toHaveLength(2);
 });
 
 it('retries the exact write once after server-requested reauthentication', async () => {

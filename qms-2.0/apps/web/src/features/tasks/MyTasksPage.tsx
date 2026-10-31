@@ -9,10 +9,10 @@ import { ClosureTaskInbox } from './ClosureTaskInbox';
 import { ProcessEightDTaskInbox } from './ProcessEightDTaskInbox';
 import { CustomerFaeTaskInbox } from './CustomerFaeTaskInbox';
 import { SupplierEightDTaskInbox } from './SupplierEightDTaskInbox';
+import { useLedgerPageSize } from '../../ui/ledger';
 
 import './tasks.css';
 
-const pageSize = 25;
 
 function useInboxPage<Page>(path: string) {
   const [data, setData] = useState<Page>();
@@ -42,7 +42,7 @@ function InboxError({ cause }: { cause: unknown }) {
   return <Alert type="error" showIcon title={t(message)} description={cause instanceof ApiError && cause.traceId ? <span>{t('追踪标识')}：<code>{cause.traceId}</code></span> : undefined} />;
 }
 
-function pageQuery(offset: number, status: string, claim?: string) {
+function pageQuery(pageSize: number, offset: number, status: string, claim?: string) {
   const query = new URLSearchParams({ pageSize: String(pageSize), offset: String(offset) });
   if (status) query.set('status', status);
   if (claim) query.set('claim', claim);
@@ -51,6 +51,8 @@ function pageQuery(offset: number, status: string, claim?: string) {
 
 export function MyTasksPage() {
   const { t, locale } = useLanguage();
+  const [taskPageSize, setTaskPageSize] = useLedgerPageSize('my-tasks');
+  const [noticePageSize, setNoticePageSize] = useLedgerPageSize('my-notifications');
   const [activeTab, setActiveTab] = useState('tasks');
   const requestLeave = useNavigationGuard();
   const [taskOffset, setTaskOffset] = useState(0);
@@ -58,8 +60,8 @@ export function MyTasksPage() {
   const [taskStatus, setTaskStatus] = useState('');
   const [claim, setClaim] = useState('');
   const [noticeStatus, setNoticeStatus] = useState('');
-  const tasks = useInboxPage<TaskPage>(`/api/v1/tasks?${pageQuery(taskOffset, taskStatus, claim)}`);
-  const notifications = useInboxPage<NotificationPage>(`/api/v1/notifications?${pageQuery(noticeOffset, noticeStatus)}`);
+  const tasks = useInboxPage<TaskPage>(`/api/v1/tasks?${pageQuery(taskPageSize, taskOffset, taskStatus, claim)}`);
+  const notifications = useInboxPage<NotificationPage>(`/api/v1/notifications?${pageQuery(noticePageSize, noticeOffset, noticeStatus)}`);
   const [mutationError, setMutationError] = useState<unknown>();
   const [pendingId, setPendingId] = useState<string>();
   const writing = useRef(false);
@@ -73,7 +75,7 @@ export function MyTasksPage() {
     catch (cause) { setMutationError(cause); }
     finally { writing.current = false; setPendingId(undefined); refresh(); }
   }
-  const pagination = (offset: number, total: number, change: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger={false} onChange={(page) => change((page - 1) * pageSize)} showTotal={() => `${t('总数')}：${total}`} />;
+  const pagination = (offset: number, total: number, pageSize: number, change: (value: number) => void, changeSize: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { change(size === pageSize ? (page - 1) * size : 0); changeSize(size); }); }} showTotal={() => `${t('总数')}：${total}`} />;
   return <main className="task-inbox">
     <h1 className="sr-only">{t('我的待办')}</h1>
     <InboxError cause={mutationError} />
@@ -86,10 +88,10 @@ export function MyTasksPage() {
       { key: 'closure', label: t('关闭审核'), children: activeTab === 'closure' ? <ClosureTaskInbox /> : null },
       { key: 'tasks', label: t('我的待办'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         <Space wrap className="task-inbox__filters">
-          <label>{t('任务状态')} <select aria-label={t('任务状态')} value={taskStatus} onChange={(event) => { setTaskStatus(event.target.value); setTaskOffset(0); }}>
+          <label>{t('任务状态')} <select aria-label={t('任务状态')} value={taskStatus} onChange={(event) => { const value = event.target.value; if (!writing.current) requestLeave(() => { setTaskStatus(value); setTaskOffset(0); }); }}>
             <option value="">{t('全部状态')}</option><option value="PENDING">{t('待处理')}</option><option value="IN_PROGRESS">{t('处理中')}</option><option value="OVERDUE">{t('已逾期')}</option><option value="FAILED">{t('失败')}</option>
           </select></label>
-          <label>{t('领取状态')} <select aria-label={t('领取状态')} value={claim} onChange={(event) => { setClaim(event.target.value); setTaskOffset(0); }}>
+          <label>{t('领取状态')} <select aria-label={t('领取状态')} value={claim} onChange={(event) => { const value = event.target.value; if (!writing.current) requestLeave(() => { setClaim(value); setTaskOffset(0); }); }}>
             <option value="">{t('全部领取状态')}</option><option value="UNCLAIMED">{t('未领取')}</option><option value="MINE">{t('我已领取')}</option><option value="OTHERS">{t('他人已领取')}</option>
           </select></label>
           <Button onClick={tasks.refresh} disabled={tasks.loading}>{t('刷新')}</Button>
@@ -109,11 +111,11 @@ export function MyTasksPage() {
               {task.dueAt && <span>{t('截止时间')}：{date(task.dueAt)}</span>}
             </Space>} />
           </List.Item>} />
-          {pagination(taskOffset, tasks.data.total, setTaskOffset)}
+          {pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}
         </>}
       </Space> },
       { key: 'notifications', label: t('我的通知'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-        <Space wrap className="task-inbox__filters"><label>{t('阅读状态')} <select aria-label={t('阅读状态')} value={noticeStatus} onChange={(event) => { setNoticeStatus(event.target.value); setNoticeOffset(0); }}>
+        <Space wrap className="task-inbox__filters"><label>{t('阅读状态')} <select aria-label={t('阅读状态')} value={noticeStatus} onChange={(event) => { const value = event.target.value; if (!writing.current) requestLeave(() => { setNoticeStatus(value); setNoticeOffset(0); }); }}>
           <option value="">{t('全部通知')}</option><option value="UNREAD">{t('仅未读')}</option><option value="READ">{t('仅已读')}</option>
         </select></label><Button onClick={notifications.refresh} disabled={notifications.loading}>{t('刷新')}</Button></Space>
         <InboxError cause={notifications.error} />
@@ -127,7 +129,7 @@ export function MyTasksPage() {
               </Space>
             </Card>
           </List.Item>} />
-          {pagination(noticeOffset, notifications.data.total, setNoticeOffset)}
+          {pagination(noticeOffset, notifications.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
         </>}
       </Space> },
     ]} />

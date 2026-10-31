@@ -35,8 +35,8 @@ it.each([['客户8D', 'customer-quality'], ['新品8D', 'new-product-quality']])
   render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><MyTasksPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   fireEvent.click(screen.getByRole('tab', { name: label }));
   expect(await screen.findByText('8D-123')).toBeVisible();
-  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/tasks?pageSize=25&offset=0`, expect.anything());
-  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/notifications?pageSize=25&offset=0`, expect.anything());
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/tasks?pageSize=20&offset=0`, expect.anything());
+  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/${domain}/eight-d/notifications?pageSize=20&offset=0`, expect.anything());
   expect(screen.getByRole('link', { name: '打开8D报告' })).toHaveAttribute('href', '/app/problem-workspace/problem?view=report');
 });
 async function mount(page = false) {
@@ -50,7 +50,7 @@ it('loads independent real projections and never exposes generic claim or arbitr
   expect(screen.getByRole('link', { name: '打开8D报告' })).toHaveAttribute('href', '/app/problem-workspace/problem?view=report');
   expect(screen.queryByRole('button', { name: '领取' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
-  expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/tasks?pageSize=25&offset=0', expect.anything());
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/tasks?pageSize=20&offset=0', expect.anything());
 });
 
 it('shows request-only extension eligibility without inventing handling or decision actions', async () => {
@@ -121,6 +121,7 @@ it('completes extension decision 401 navigation past its busy guard and a parent
     { path: '/login', element: <p>延期审核登录目的页</p> },
   ], { initialEntries: ['/app/my-tasks'] });
   render(<RouterProvider router={router} />);
+  await screen.findByText('8D-123');
   fireEvent.click(await screen.findByRole('button', { name: '审核延期' }));
   await screen.findByText('等待真实验证');
   fireEvent.change(screen.getByLabelText('延期审核意见'), { target: { value: '不可带入其他会话' } });

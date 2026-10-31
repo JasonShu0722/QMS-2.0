@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Select, Skeleton, Table } from 'antd';
+import { Alert, Button, Input, Select, Skeleton } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../ui/ledger';
 import { Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { components, operations } from '@qms/contracts';
@@ -32,6 +33,7 @@ export function ApiMonitoringPage() {
 }
 
 function ObservationScope({ context, session, refresh, invalidate }: { context: ConsoleContext; session?: string; refresh: () => void; invalidate: () => void }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('console-api-monitoring', context.targetOrganization.id);
   const { locale } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
   const id = useId();
@@ -81,7 +83,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
     const token = { controller, pending: true, recheck: false }; active.current = token;
     const current = () => active.current === token && !controller.signal.aborted && useWorkTabsStore.getState().sessionScope === session;
     const query = new URLSearchParams({ organizationId: context.targetOrganization.id, scope: filters.scope,
-      ...range, page: String(filters.page), limit: '50' });
+      ...range, page: String(filters.page), limit: String(pageSize) });
     if (filters.method) query.set('method', filters.method);
     if (filters.statusClass) query.set('statusClass', String(filters.statusClass));
     if (filters.route) query.set('route', filters.route);
@@ -96,7 +98,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
         deny(); return;
       }
       if (![result.asOf, result.from, result.to].every(value => Number.isFinite(Date.parse(value)))
-        || result.page !== filters.page || result.limit !== 50 || !Number.isSafeInteger(result.total) || result.total < 0
+        || result.page !== filters.page || result.limit !== pageSize || !Number.isSafeInteger(result.total) || result.total < 0
         || !Object.values(result.summary).every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0)) throw new Error('Invalid observation response');
       setData(result); setLoading(false);
     }).catch(cause => {
@@ -107,7 +109,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
       setData(undefined); setError('network'); setLoading(false);
     });
     return () => controller.abort();
-  }, [filters, range, session, canRead, matchesSession, context]);
+  }, [filters, range, pageSize, session, canRead, matchesSession, context]);
 
   const denied = error === 'denied' || !canRead || !matchesSession;
   const apply = () => {
@@ -127,13 +129,13 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
   };
   const columns = [
     { title: text('分钟', 'Minute'), key: 'minute', width: 185, render: (_: unknown, row: Bucket) => clock(row.minute) },
-    ...(data?.scope === 'PLATFORM' ? [{ title: text('归属组织', 'Scope'), dataIndex: 'scopeKey', width: 235 }] : []),
-    { title: text('方法', 'Method'), dataIndex: 'method', width: 90 },
-    { title: text('注册路由模板', 'Registered route template'), dataIndex: 'route', render: (value: string) => <code className="qms-api-route">{value}</code> },
+    ...(data?.scope === 'PLATFORM' ? [{ key: 'scopeKey', title: text('归属组织', 'Scope'), dataIndex: 'scopeKey', width: 235 }] : []),
+    { key: 'method', title: text('方法', 'Method'), dataIndex: 'method', width: 90 },
+    { key: 'route', title: text('注册路由模板', 'Registered route template'), dataIndex: 'route', render: (value: string) => <code className="qms-api-route">{value}</code> },
     { title: text('状态类别', 'Status class'), key: 'status', width: 95, render: (_: unknown, row: Bucket) => `${row.statusClass}xx` },
-    { title: text('请求次数', 'Requests'), dataIndex: 'count', width: 100, render: count },
+    { key: 'count', title: text('请求次数', 'Requests'), dataIndex: 'count', width: 100, render: count },
     { title: text('平均耗时', 'Mean latency'), key: 'mean', width: 115, render: (_: unknown, row: Bucket) => duration(row.count ? row.durationTotal / row.count : 0) },
-    { title: text('最大耗时', 'Maximum latency'), dataIndex: 'durationMax', width: 115, render: duration },
+    { key: 'durationMax', title: text('最大耗时', 'Maximum latency'), dataIndex: 'durationMax', width: 115, render: duration },
   ];
   const latency = data ? [
     { label: '≤ 50 ms', value: data.summary.le50 }, { label: '50–200 ms', value: data.summary.le200 },
@@ -173,8 +175,8 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
         </dl></section>
         <section className="qms-api-latency" aria-label={text('耗时分布', 'Latency distribution')}><h3>{text('耗时分布', 'Latency distribution')}</h3><div>{latency.map(bucket => <dl key={bucket.label}><dt>{bucket.label}</dt><dd>{count(bucket.value)}</dd><div className="qms-api-meter" aria-hidden="true"><span style={{ width: `${data.summary.requests ? Math.min(100, bucket.value / data.summary.requests * 100) : 0}%` }} /></div></dl>)}</div></section>
         <section aria-label={text('分钟聚合明细', 'Minute aggregate details')} className="qms-api-details"><h3>{text('分钟聚合明细', 'Minute aggregate details')}</h3>
-          {!data.items.length ? <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div> : <Table<Bucket> size="small" columns={columns} dataSource={data.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data.scope === 'PLATFORM' ? 1170 : 950 }} />}
-          <div className="qms-api-pagination"><span>{text(`共 ${count(data.total)} 个聚合桶 · 第 ${data.page} 页`, `${count(data.total)} aggregate buckets · Page ${data.page}`)}</span><div><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>
+          {!data.items.length ? <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div> : <LedgerTable<Bucket> ledgerId="console-api-monitoring" organizationId={context.targetOrganization.id} viewId={filters.scope} requiredColumnKeys={['route']} size="small" columns={columns} dataSource={data.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data.scope === 'PLATFORM' ? 1170 : 950 }} />}
+          <div className="qms-api-pagination"><span>{text(`共 ${count(data.total)} 个聚合桶 · 第 ${data.page} 页`, `${count(data.total)} aggregate buckets · Page ${data.page}`)}</span><div><Select aria-label={text('每页条数', 'Page size')} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={loading} onChange={size => { changePage(1); setPageSize(size); setRevision(value => value + 1); }} /><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>
         </section>
       </>}
     </>}

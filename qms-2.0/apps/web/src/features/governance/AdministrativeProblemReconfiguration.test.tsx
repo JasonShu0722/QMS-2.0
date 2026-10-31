@@ -47,6 +47,7 @@ it('keeps the recovery section heading accessible while retaining the visible re
   expect(within(editor!).getByText('原归属（历史范围）')).toBeVisible();
   expect(within(editor!).getByText(internal.originalOrganizationId)).toBeVisible();
   expect(button('确认恢复责任')).toBeDisabled();
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
 });
 
 let editor: HTMLElement | undefined;

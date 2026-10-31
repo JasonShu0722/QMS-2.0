@@ -74,6 +74,20 @@ const writes = (calls: Call[]) => calls.filter(call => call.init?.method === 'PO
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().bindSession(`INTERNAL:${org.id}:actor`); });
 afterEach(() => { vi.unstubAllGlobals(); act(() => useWorkTabsStore.getState().reset()); });
 
+it('changes the real queue page size and resets offset through the existing leave guard', async () => {
+  const calls = server(undefined, call => call.path.includes('/reconfiguration?') ? json({ items: [pending('ORGANIZATION', ['parentId'])], total: 90, pageSize: Number(new URL(call.path, 'http://localhost').searchParams.get('pageSize')), offset: 0 }) : undefined);
+  render(scene());
+  await screen.findByLabelText('配置 · 待配置对象', { selector: 'button' });
+  fireEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(calls.some(call => call.path.includes('offset=20'))).toBe(true));
+  const control = screen.getAllByRole('combobox').find(input => input.closest('.ant-pagination-options'))!;
+  expect(control).toBeDefined();
+  fireEvent.mouseDown(control);
+  fireEvent.click(await screen.findByText(/^50 \//, { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(calls.at(-2)?.path.includes('pageSize=50&offset=0') || calls.at(-1)?.path.includes('pageSize=50&offset=0')).toBe(true));
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
+});
+
 it('requires explicit POSITION ownership and posts literal null only after organization-direct is selected', async () => {
   const calls = server(pending('POSITION', ['targetDepartmentId'])); render(scene());
   await select('对象类型', '岗位'); await edit();

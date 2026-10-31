@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Empty, Form, Select, Space, Spin, Table, Typography } from 'antd';
+import { Alert, Button, Descriptions, Empty, Form, Select, Space, Spin, Typography } from 'antd';
+import { LedgerTable } from '../../ui/ledger';
 import type { components, operations } from '@qms/contracts';
 import type { AdminOrganization } from '../admin/admin';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
@@ -56,7 +57,7 @@ export function AdministrativeProblemReconfiguration(props: Props) {
   return <ProblemReconfigurationScope key={JSON.stringify([principal, props.organization.id, [...props.organization.permissions].sort()])} {...props} />;
 }
 
-function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
+function ProblemReconfigurationScope({ organization, onChanged, onDenied }: Props) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [principal] = useState(() => useWorkTabsStore.getState().sessionScope);
@@ -190,7 +191,7 @@ function ProblemReconfigurationScope({ onChanged, onDenied }: Props) {
     {!!error && !selected && <Button disabled={locked || loading} onClick={reload}>{t('重试问题读取')}</Button>}
     {success && <Alert type="success" showIcon title={t('责任恢复成功')} />}
     {loading ? <div role="status" aria-label={t('读取问题责任')}><Spin /></div> : page && <>
-      {!page.items.length ? <Empty description={t('当前扫描窗口无待配置问题')} /> : <Table<Item> rowKey={itemId} size="small" dataSource={page.items} pagination={false} scroll={{ x: 620 }} columns={[
+      {!page.items.length ? <Empty description={t('当前扫描窗口无待配置问题')} /> : <LedgerTable<Item> ledgerId="admin-problem-reconfiguration" organizationId={organization.id} viewId={domain} requiredColumnKeys={['report', 'action']} rowKey={itemId} size="small" dataSource={page.items} pagination={false} scroll={{ x: 620 }} columns={[
         { key: 'report', title: t('原报告编号'), width: 190, render: (_, item) => item.reportNumber },
         { key: 'scope', title: t('原归属（历史范围）'), width: 240, render: (_, item) => item.originalOrganizationId },
         { key: 'action', title: t('操作'), width: 160, render: (_, item) => <Button disabled={locked} aria-label={`${t('恢复责任')} · ${item.reportNumber}`} onClick={() => edit(item)}>{t('恢复责任')}</Button> },

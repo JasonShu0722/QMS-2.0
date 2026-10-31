@@ -1,6 +1,7 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-performance.css';
@@ -24,6 +25,7 @@ function errorText(cause: unknown, fallback: string) {
 }
 
 export function SupplierPerformancePage() {
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-performance');
   const [form] = Form.useForm<CreateCard>();
   const [cards, setCards] = useState<Card[]>([]);
   const [profiles, setProfiles] = useState<ProfilePage['items']>([]);
@@ -60,12 +62,12 @@ export function SupplierPerformancePage() {
     let active = true;
     setLoading(true);
     setError(undefined);
-    void apiRequest<CardPage>(`/api/v1/supplier-performance/cards?page=${page}&pageSize=20`).then((result) => {
+    void apiRequest<CardPage>(`/api/v1/supplier-performance/cards?page=${page}&pageSize=${pageSize}`).then((result) => {
       if (active) { setCards(result.items); setTotal(result.total); }
     }).catch((cause) => { if (active) { setCards([]); setError(errorText(cause, '绩效卡加载失败，请重试')); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, revision]);
+  }, [page, pageSize, revision]);
 
   useEffect(() => {
     let active = true;
@@ -143,11 +145,11 @@ export function SupplierPerformancePage() {
     <section className="supplier-performance-card" aria-label="月度绩效卡台账">
       <Typography.Title level={2}>绩效卡台账</Typography.Title>
       {error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((current) => current + 1)}>重试</Button>} /> : null}
-      {loading ? <div className="supplier-performance-loading"><Spin /></div> : !error ? <Table<Card> rowKey="id" dataSource={cards} scroll={{ x: 850 }} locale={{ emptyText: <Empty description="暂无月度绩效卡" /> }} pagination={{ current: page, pageSize: 20, total, showSizeChanger: false, onChange: setPage }} columns={[
-        { title: '供应商', dataIndex: 'supplierName' }, { title: '月份', dataIndex: 'month' },
+      {loading ? <div className="supplier-performance-loading"><Spin /></div> : !error ? <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['supplierName', 'month', 'actions']} rowKey="id" dataSource={cards} scroll={{ x: 850 }} locale={{ emptyText: <Empty description="暂无月度绩效卡" /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving && !publishingId && !reviewBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
+        { key: 'supplierName', title: '供应商', dataIndex: 'supplierName' }, { key: 'month', title: '月份', dataIndex: 'month' },
         { title: 'IQC 检验 / 合格', key: 'incoming', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
-        { title: '来料分', dataIndex: 'incomingScore' }, { title: '配合度', dataIndex: 'cooperationScore' },
-        { title: '总分', dataIndex: 'totalScore' },
+        { key: 'incomingScore', title: '来料分', dataIndex: 'incomingScore' }, { key: 'cooperationScore', title: '配合度', dataIndex: 'cooperationScore' },
+        { key: 'totalScore', title: '总分', dataIndex: 'totalScore' },
         { title: '状态', key: 'status', render: (_, card) => card.status === 'PUBLISHED' ? '已发布' : '草稿' },
         { title: '操作', key: 'actions', render: (_, card) => card.status === 'DRAFT' ? <Button type="primary" loading={publishingId === card.id} disabled={!!publishingId} onClick={() => void publish(card)}>发布绩效卡</Button> : null },
       ]} expandable={{ expandedRowRender: (card) => <div className="supplier-performance-source"><p>计分：来料 {card.incomingScore} × {card.incomingWeight}% + 配合度 {card.cooperationScore} × {card.cooperationWeight}% = {card.totalScore}</p><p>配合度说明：{card.cooperationNote}</p><p>来源检验：{card.sourceInspections.map((source) => `${source.id}（第 ${source.version} 版，${source.conclusion}）`).join('、')}</p></div> }} /> : null}

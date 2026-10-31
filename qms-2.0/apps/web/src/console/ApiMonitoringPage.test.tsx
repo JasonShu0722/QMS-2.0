@@ -28,7 +28,7 @@ function context(platform = true): ConsoleContext {
     modules: [{ key: 'api-monitoring', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: targetId, permissions: ['console:api:read'] }] };
 }
 function result(scope: Page['scope'] = 'ORGANIZATION', overrides: Partial<Page> = {}): Page {
-  return { scope, organizationId: mocks.context.targetOrganization.id, from: '2026-10-29T04:00:00.000Z', to: time, asOf: time, page: 1, limit: 50, total: 1,
+  return { scope, organizationId: mocks.context.targetOrganization.id, from: '2026-10-29T04:00:00.000Z', to: time, asOf: time, page: 1, limit: 20, total: 1,
     items: [{ minute: '2026-10-30T03:59:00.000Z', scopeKey: mocks.context.targetOrganization.id, method: 'GET', route: '/api/v1/tasks/:id', statusClass: 2, count: 12, durationTotal: 240, durationMax: 80, le50: 10, le200: 2, le1000: 0, le5000: 0, gt5000: 0 }],
     summary: { requests: 12, errors: 2, durationTotal: 240, durationMax: 80, le50: 10, le200: 2, le1000: 0, le5000: 0, gt5000: 0 }, collector: { status: 'UNKNOWN' }, ...overrides };
 }
@@ -47,6 +47,23 @@ beforeEach(() => {
   read.mockResolvedValue(result());
 });
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
+
+it('uses the chosen page length in the request and response validation and resets the page in the target scope', async () => {
+  read.mockImplementation(async path => {
+    const query = new URL(path, 'http://localhost').searchParams;
+    return result('ORGANIZATION', { page: Number(query.get('page')), limit: Number(query.get('limit')), total: 101 });
+  });
+  view();
+  await screen.findByText('/api/v1/tasks/:id');
+  expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));
+  await choose('每页条数', '50');
+  await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=1&limit=50'));
+  expect(await screen.findByText('/api/v1/tasks/:id')).toBeVisible();
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
+  expect(new URL(read.mock.calls.at(-1)![0], 'http://localhost').searchParams.get('organizationId')).toBe(targetId);
+});
 
 it('reads the verified target and renders actual request totals, latency buckets and server range', async () => {
   view();
@@ -92,7 +109,7 @@ it('applies bounded static-route filters and paginates using bucket totals rathe
   const query = new URL(read.mock.calls.at(-1)![0], 'http://localhost').searchParams;
   expect(query.get('statusClass')).toBe('5'); expect(query.get('route')).toBe('/api/v1/tasks/:id');
   expect(query.get('from')).toBe(firstPage.get('from')); expect(query.get('to')).toBe(firstPage.get('to'));
-  expect(query.get('limit')).toBe('50'); expect(screen.getByText(/共 101 个聚合桶/)).toBeVisible();
+  expect(query.get('limit')).toBe('20'); expect(screen.getByText(/共 101 个聚合桶/)).toBeVisible();
 });
 it('rejects raw URL queries instead of sending them as route filters', async () => {
   view(); await screen.findByText('/api/v1/tasks/:id'); const count = read.mock.calls.length;

@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, List, Pagination, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -8,6 +8,7 @@ import { AuditMobileExecution } from './AuditMobileExecution';
 import { AuditNcClosurePanel } from './AuditNcClosurePanel';
 import './audit-management.css';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useLedgerPageSize } from '../../ui/ledger';
 
 type AuditPlan = components['schemas']['AuditPlanResponseDto'];
 type AuditImportPage = components['schemas']['AuditImportRowPageDto'];
@@ -53,6 +54,8 @@ function optionalText(value: unknown) {
 }
 
 export function AuditManagementPage({ planId: initialPlanId }: { planId?: string } = {}) {
+  const [importPageSize, setImportPageSize] = useLedgerPageSize('audit-imports');
+  const [importPage, setImportPage] = useState(1);
   const [issueForm] = Form.useForm<IssueFields>();
   const [input, setInput] = useState(initialPlanId ?? '');
   const [planId, setPlanId] = useState(initialPlanId ?? '');
@@ -159,7 +162,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     const requestId = ++importRequestId.current;
     importController.current = controller;
     const current = () => !controller.signal.aborted && requestId === importRequestId.current;
-    const params = new URLSearchParams({ page: '1', pageSize: '20' });
+    const params = new URLSearchParams({ page: String(importPage), pageSize: String(importPageSize) });
     if (importStatus) params.set('status', importStatus);
     if (importSource) params.set('sourceSystem', importSource);
     setImportLoading(true);
@@ -199,7 +202,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
       .catch((cause) => { if (current()) { if (permissionDenied(cause)) clearImportAccess(cause); else setImportError(cause); } })
       .finally(() => { if (current()) setImportLoading(false); });
     return () => controller.abort();
-  }, [importRevision, importSource, importStatus]);
+  }, [importRevision, importSource, importStatus, importPage, importPageSize]);
 
   async function reviewImport(row: AuditImportRow, decision: 'ACCEPTED' | 'REJECTED') {
     if (!canReview(row) || importBusyId || issueBusy) return;
@@ -310,8 +313,8 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
         <Button onClick={refreshImports} loading={importLoading}>刷新导入</Button>
       </div>
       <Space wrap className="audit-import-filters">
-        <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={(value) => requestLeave(() => { discardIssue(); setImportSource(value); })} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
-        <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={(value) => requestLeave(() => { discardIssue(); setImportStatus(value); })} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
+        <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={(value) => requestLeave(() => { discardIssue(); setImportSource(value); setImportPage(1); })} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
+        <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={(value) => requestLeave(() => { discardIssue(); setImportStatus(value); setImportPage(1); })} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
       </Space>
       {permissionError && !importError ? <Alert type="warning" showIcon title="无法验证发单权限" action={<Button onClick={refreshImports}>重试</Button>} /> : null}
       {permissions?.organizationId && permissions.permissions.includes('audit-management:write') ? <AuditExcelImport key={permissions.organizationId} organizationId={permissions.organizationId} onImported={() => setImportRevision((value) => value + 1)} onDenied={(cause) => clearImportAccess(cause)} /> : null}
@@ -320,6 +323,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
       {importLoading ? <div className="audit-management-loading"><Spin /></div> : !importError ? <List dataSource={imports?.items ?? []} locale={{ emptyText: <Empty description="暂无导入行" /> }} renderItem={(row) => <List.Item key={row.id} actions={canReview(row) ? [<Button key="accept" size="small" type="primary" loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'ACCEPTED')}>接受</Button>, <Button key="reject" size="small" danger loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'REJECTED')}>拒绝</Button>] : canIssue(row) ? [<Button key="issue" size="small" type="primary" onClick={() => openIssue(row)}>发起正式问题</Button>] : undefined}>
         <List.Item.Meta title={<Space wrap><Typography.Text strong>{row.external_key}</Typography.Text><Tag>{sourceLabels[row.source_system]}</Tag><Tag color={importStatusColor(row.status)}>{importStatusLabels[row.status]}</Tag></Space>} description={<Space orientation="vertical" size={0}><Typography.Text type="secondary">版本 v{row.version} · {new Date(row.created_at).toLocaleString('zh-CN')}</Typography.Text>{optionalText(row.review_note) ? <Typography.Text type="secondary">复核备注：{optionalText(row.review_note)}</Typography.Text> : null}{optionalText(row.problem_index_id) ? <Link to={`/app/problem-workspace/${optionalText(row.problem_index_id)}?organizationId=${encodeURIComponent(row.organization_id)}`}>已关联问题：{optionalText(row.problem_index_id)}</Link> : null}</Space>} />
       </List.Item>} /> : null}
+      {!importLoading && !importError && imports && <Pagination current={imports.page} pageSize={importPageSize} total={imports.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => requestLeave(() => { setImportPage(size === importPageSize ? page : 1); setImportPageSize(size); })} />}
     </section>
     <Drawer title="审核导入行发单" open={Boolean(issueRow)} onClose={closeIssue} closable={!issueBusy} keyboard={!issueBusy} mask={{ closable: !issueBusy }} width="min(620px, 100vw)" destroyOnHidden={false}>
       {issueRow ? <>

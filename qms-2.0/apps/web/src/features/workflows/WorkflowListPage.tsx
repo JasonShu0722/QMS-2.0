@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Empty, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Select, Space, Spin, Tag, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -19,6 +20,7 @@ export function WorkflowListPage({ expectedOrganizationId }: { expectedOrganizat
   return <List key={`${session ?? ''}:${expectedOrganizationId ?? ''}`} session={session} expectedOrganizationId={expectedOrganizationId} />;
 }
 function List({ session, expectedOrganizationId }: { session?: string; expectedOrganizationId?: string }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('workflows', expectedOrganizationId);
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
   const [page, setPage] = useState<Awaited<ReturnType<typeof api.getWorkflows>>>();
@@ -79,7 +81,7 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
     const checkingCreateConflict = stale;
     setLoading(true); setError(undefined);
     const timer = setTimeout(() => {
-      api.getWorkflows(new URLSearchParams({ search, ...(status ? { status } : {}), offset: String(offset), pageSize: '25' }), controller.signal)
+      api.getWorkflows(new URLSearchParams({ search, ...(status ? { status } : {}), offset: String(offset), pageSize: String(pageSize) }), controller.signal)
         .then((result) => { if (current() && !controller.signal.aborted) {
           if (expectedOrganizationId && result.items.some(item => item.organizationId !== expectedOrganizationId)) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
           setPage(result); if (checkingCreateConflict) { setStale(false); setActionError(undefined); }
@@ -88,7 +90,7 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
         .finally(() => { if (current() && !controller.signal.aborted) setLoading(false); });
     }, 150);
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [search, status, offset, revision]);
+  }, [search, status, offset, pageSize, revision]);
   async function act(id?: string, retry?: CreateAttempt) {
     if (!current() || lock.current || stale || (!retry && uncertain)) return;
     lock.current = true; setBusy(true); setActionError(undefined);
@@ -146,13 +148,15 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
 
       <Button htmlType="submit" disabled={createFrozen || !code.trim() || !name.trim()}>{t('创建草稿')}</Button>
     </form></Card>}
-    {loading ? <Spin aria-label={t('加载中')} /> : page && !page.items.length ? <Empty description={t('暂无流程')} /> : page && <div className="workflow-list__table"><table>
-      <thead><tr>{['代码', '名称', '状态', '版本', '操作'].map((label) => <th key={label} scope="col">{t(label)}</th>)}</tr></thead>
-      <tbody>{page.items.map((item) => <tr key={item.id}><td><code>{item.code}</code></td><td>{item.name}</td><td><Tag>{t(workflowLabel(item.version.status))}</Tag></td><td>{item.version.version}</td><td><Space>
-        <Link to={`/console/workflows/${item.id}/${item.version.id}`}>{t('打开流程')}</Link><Button disabled={createFrozen} aria-label={`${t('版本历史')} ${item.name}`} onClick={() => void act(item.id)}>{t('版本历史')}</Button>
-      </Space></td></tr>)}</tbody></table></div>}
-    {page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - 25))}>{t('上一页')}</Button>
-      <Button disabled={createFrozen || loading || offset + 25 >= page.total || offset + 25 > 10000} onClick={() => setOffset((value) => value + 25)}>{t('下一页')}</Button></Space>}
+    {loading ? <Spin aria-label={t('加载中')} /> : page && !page.items.length ? <Empty description={t('暂无流程')} /> : page && <LedgerTable ledgerId="workflows" organizationId={expectedOrganizationId} requiredColumnKeys={['code', 'actions']} className="workflow-list__table" rowKey="id" dataSource={page.items} pagination={false} scroll={{ x: 760 }} columns={[
+      { key: 'code', title: t('代码'), render: (_, item) => <code>{item.code}</code> },
+      { key: 'name', title: t('名称'), dataIndex: 'name' },
+      { key: 'status', title: t('状态'), render: (_, item) => <Tag>{t(workflowLabel(item.version.status))}</Tag> },
+      { key: 'version', title: t('版本'), render: (_, item) => item.version.version },
+      { key: 'actions', title: t('操作'), render: (_, item) => <Space><Link to={`/console/workflows/${item.id}/${item.version.id}`}>{t('打开流程')}</Link><Button disabled={createFrozen} aria-label={`${t('版本历史')} ${item.name}`} onClick={() => void act(item.id)}>{t('版本历史')}</Button></Space> },
+    ]} />}
+    {page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Select aria-label={locale === 'en-US' ? 'Page size' : '每页条数'} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={createFrozen || loading} onChange={size => requestLeave(() => { if (!current()) return; setOffset(0); setPageSize(size); })} /><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}>{t('上一页')}</Button>
+      <Button disabled={createFrozen || loading || offset + pageSize >= page.total || offset + pageSize > 10000} onClick={() => setOffset((value) => value + pageSize)}>{t('下一页')}</Button></Space>}
     {history && <Card title={`${history.name} · ${t('版本历史')}`}><ul>{history.versions.map((version) => <li key={version.id}>
       <Link to={`/console/workflows/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
     </li>)}</ul></Card>}

@@ -56,6 +56,8 @@ N2-B本地全量Jest单进程实际触及4GB堆上限，不能将其计为PASS�
 
 Web同批改为八独立VM、每片一个worker；case超时及motion配置不变，job30分钟内给测试step20分钟，失败/中断时尽量保留default文本及JSON诊断artifact。八片的文件覆盖通过实际Vitest清单及官方sequencer验证；纯文档按原计划跳过。完整部署结果严格16个同run/attempt/SHA的成功job，不接受旧9项或混合布局；队列和总runner分钟与墙钟时间分别测量，不能把并行数当实际收益。
 
+本地与CI的分工依[交付流程2.4/3.2](DELIVERY-MAINTENANCE-PROCESS.md)：本地先完成最小且足够的受影响完整文件、已知失败修复与独立审查，全量覆盖可由既有PR并行门禁执行；不能机械把八独立VM照搬为本机八片串行、再让CI重复一整轮。需要本地全量时说明额外目的并保清单/源码指纹。测试变慢先分开测量模块加载、组件渲染、控件查询与真实异步等待；限定真实控件拥有者以减少全页可访问树枚举，不以改预算/motion、关闭隔离、样式Mock或弱化断言换速度。中断、诊断过滤项及本地定向通过不冒称全量PASS。
+
 专项定向验证：`node --test test/ci-validation-scope.test.mjs`；默认 workspace 测试也包含该项。执行频率与重跑纪律依[交付流程](DELIVERY-MAINTENANCE-PROCESS.md)，运行占用按 job 分钟累计，不把并行缩短的等待时间当成计费节省。
 
 ## 源码指纹与限制

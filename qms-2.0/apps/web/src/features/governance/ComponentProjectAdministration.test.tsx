@@ -86,6 +86,16 @@ async function choose(label: string, text: string) {
 }
 function submit(dialog: HTMLElement) { fireEvent.submit(dialog.querySelector('form')!); }
 
+it('offers mapping columns without remounting an unsaved component editor', async () => {
+  server(); mount();
+  await screen.findByText('驱动总成');
+  await userEvent.click(screen.getByRole('button', { name: '新增组件' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('组件编码'), { target: { value: 'KEEP-COMPONENT' } });
+  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+  expect(within(dialog).getByLabelText('组件编码')).toHaveValue('KEEP-COMPONENT');
+});
+
 it('requires an explicit project stage and creates a project with nullable engineers using the platform mutation', async () => {
   const { writes } = server({ projects: [] }); mount();
   await screen.findByText('驱动总成');

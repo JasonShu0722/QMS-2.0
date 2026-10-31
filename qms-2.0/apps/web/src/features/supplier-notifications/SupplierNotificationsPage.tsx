@@ -5,9 +5,10 @@ import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { listSupplierNotifications, readSupplierNotification, type SupplierNotificationPage } from './supplierNotifications';
 import { SupplierEightDTaskInbox } from '../tasks/SupplierEightDTaskInbox';
+import { useLedgerPageSize } from '../../ui/ledger';
+import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import './supplier-notifications.css';
 
-const pageSize = 25;
 
 function InboxError({ cause }: { cause: unknown }) {
   const { t } = useLanguage();
@@ -28,6 +29,8 @@ export function SupplierNotificationsPage() {
 
 function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> }) {
   const { t, locale } = useLanguage();
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-notifications');
+  const requestLeave = useNavigationGuard();
   const [offset, setOffset] = useState(0);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<SupplierNotificationPage>();
@@ -49,7 +52,7 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
       if (!controller.signal.aborted) setError(cause);
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [offset, revision]);
+  }, [offset, revision, pageSize]);
 
   async function markRead(id: string, version: number) {
     if (writing.current) return;
@@ -83,7 +86,7 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
           </Card>
         </List.Item>} />
       <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(data.total, 10000 + pageSize)}
-        showSizeChanger={false} onChange={(page) => setOffset((page - 1) * pageSize)} showTotal={() => `${t('总数')}：${data.total}`} />
+        showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />
     </>}
   </section>;
 }

@@ -1,8 +1,9 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Empty, Form, Input, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Empty, Form, Input, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
-import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Document = components['schemas']['SupplierAdmissionDocumentDto'];
 type Page = components['schemas']['SupplierAdmissionPageDto'];
@@ -26,6 +27,9 @@ async function mutate<T>(path: string, body: object) {
 }
 
 export function SupplierAdmissionPage({ portal = false }: { portal?: boolean }) {
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-admission');
+  const requestLeave = useNavigationGuard();
   const base = portal ? portalPath : internalPath;
   const [page, setPage] = useState<Page>();
   const [loading, setLoading] = useState(true);
@@ -45,10 +49,10 @@ export function SupplierAdmissionPage({ portal = false }: { portal?: boolean }) 
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
-    const query = new URLSearchParams({ page: '1', pageSize: '50' }); if (status) query.set('status', status);
+    const query = new URLSearchParams({ page: String(pageNumber), pageSize: String(pageSize) }); if (status) query.set('status', status);
     void apiRequest<Page>(`${base}?${query}`).then((result) => { if (active) setPage(result); }).catch((cause) => { if (active) setError(textError(cause)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [base, status, revision]);
+  }, [base, status, pageNumber, pageSize, revision]);
 
   async function create(values: Create) { if (key.current) return;
     key.current = true; setSaving(true); setActionError(undefined);
@@ -74,9 +78,9 @@ export function SupplierAdmissionPage({ portal = false }: { portal?: boolean }) 
   }
 
   return <main className="supplier-admission-page">
-    <header>{portal ? <><Typography.Text type="secondary">供应商质量 · 质量资料</Typography.Text><Typography.Title level={1}>质量资料提交</Typography.Title><Typography.Paragraph type="secondary">资料必须绑定真实附件，只有通过安全扫描的版本才可提交审核。</Typography.Paragraph></> : <h1 className="sr-only">供应商质量资料审核</h1>}<Space><Select aria-label="按状态筛选" allowClear placeholder="全部状态" value={status} onChange={setStatus} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} /><Button onClick={() => setRevision((value) => value + 1)}>刷新</Button></Space></header>
+    <header>{portal ? <><Typography.Text type="secondary">供应商质量 · 质量资料</Typography.Text><Typography.Title level={1}>质量资料提交</Typography.Title><Typography.Paragraph type="secondary">资料必须绑定真实附件，只有通过安全扫描的版本才可提交审核。</Typography.Paragraph></> : <h1 className="sr-only">供应商质量资料审核</h1>}<Space><Select aria-label="按状态筛选" allowClear placeholder="全部状态" value={status} disabled={saving} onChange={(value) => requestLeave(() => { setStatus(value); setPageNumber(1); })} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} /><Button onClick={() => setRevision((value) => value + 1)}>刷新</Button></Space></header>
     {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
     {portal ? <Form form={form} layout="inline" onValuesChange={() => setDirty(true)} onFinish={(values) => void create(values)} disabled={saving}><Form.Item name="profileId" label="供应商档案 ID" rules={[{ required: true }]}><Input placeholder="档案 UUID" /></Form.Item><Form.Item name="documentType" label="资料类型" rules={[{ required: true }]}><Select style={{ width: 150 }} options={Object.entries(types).map(([value, label]) => ({ value, label }))} /></Form.Item><Form.Item name="title" label="资料标题" rules={[{ required: true }]}><Input placeholder="例如：质量手册" /></Form.Item><Button type="primary" htmlType="submit" loading={saving}>新建资料</Button></Form> : null}
-    <section aria-label="质量资料台账">{loading ? <Spin /> : error ? <Alert type="error" showIcon title={error} /> : <Table<Document> rowKey="id" dataSource={page?.items ?? []} pagination={false} locale={{ emptyText: <Empty description="暂无质量资料" /> }} columns={[{ title: '资料标题', dataIndex: 'title' }, { title: '类型', dataIndex: 'documentType', render: (value: string) => types[value] ?? value }, { title: '状态', dataIndex: 'status', render: (value: string) => <Tag color={value === 'ACCEPTED' ? 'green' : value === 'NEEDS_CHANGES' ? 'orange' : 'blue'}>{statuses[value] ?? value}</Tag> }, { title: '版本', dataIndex: 'version' }, { title: '操作', key: 'actions', render: (_: unknown, record) => portal ? <Space><Input disabled={saving} aria-label={`${record.title}附件 ID`} placeholder="附件 UUID" value={selected?.id === record.id ? fileId : ''} onChange={(event) => { setSelected(record); setFileId(event.target.value); }} /><Button disabled={!['DRAFT', 'NEEDS_CHANGES'].includes(record.status)} loading={saving} onClick={() => void submit(record)}>提交审核</Button></Space> : <Space><Button disabled={record.status !== 'SUBMITTED'} loading={saving} onClick={() => void review(record, 'ACCEPTED')}>通过</Button><Button disabled={record.status !== 'SUBMITTED'} loading={saving} onClick={() => void review(record, 'NEEDS_CHANGES')}>退回补充</Button></Space> }]} />}</section>
+    <section aria-label="质量资料台账">{loading ? <Spin /> : error ? <Alert type="error" showIcon title={error} /> : <LedgerTable<Document> ledgerId="supplier-admission" requiredColumnKeys={['title', 'actions']} rowKey="id" dataSource={page?.items ?? []} pagination={{ current: pageNumber, pageSize, total: page?.total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving) requestLeave(() => { setPageNumber(size === pageSize ? next : 1); setPageSize(size); }); } }} locale={{ emptyText: <Empty description="暂无质量资料" /> }} columns={[{ key: 'title', title: '资料标题', dataIndex: 'title' }, { key: 'documentType', title: '类型', dataIndex: 'documentType', render: (value: string) => types[value] ?? value }, { key: 'status', title: '状态', dataIndex: 'status', render: (value: string) => <Tag color={value === 'ACCEPTED' ? 'green' : value === 'NEEDS_CHANGES' ? 'orange' : 'blue'}>{statuses[value] ?? value}</Tag> }, { key: 'version', title: '版本', dataIndex: 'version' }, { title: '操作', key: 'actions', render: (_: unknown, record) => portal ? <Space><Input disabled={saving} aria-label={`${record.title}附件 ID`} placeholder="附件 UUID" value={selected?.id === record.id ? fileId : ''} onChange={(event) => { setSelected(record); setFileId(event.target.value); }} /><Button disabled={!['DRAFT', 'NEEDS_CHANGES'].includes(record.status)} loading={saving} onClick={() => void submit(record)}>提交审核</Button></Space> : <Space><Button disabled={record.status !== 'SUBMITTED'} loading={saving} onClick={() => void review(record, 'ACCEPTED')}>通过</Button><Button disabled={record.status !== 'SUBMITTED'} loading={saving} onClick={() => void review(record, 'NEEDS_CHANGES')}>退回补充</Button></Space> }]} />}</section>
   </main>;
 }

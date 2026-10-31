@@ -16,8 +16,8 @@ function deferred() {
 const attempts = (id: string) => ({ items: [{ id: `attempt-${id}`, attemptNumber: 1, outcome: `RECEIPT_${id}`, occurredAt: '2026-10-21T00:00:00Z' }] });
 const view = (org = organization) => <ConfigProvider locale={zhCN} theme={{ token: { motion: false } }}><OutboxAdministration organization={org} /></ConfigProvider>;
 
-beforeEach(() => localStorage.clear());
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => { localStorage.clear(); vi.stubEnv('NODE_ENV', 'development'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 function mountOutbox() {
   const first = deferred();

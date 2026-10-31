@@ -4,5 +4,5 @@
 .coordinate-inspection-heading p { margin-bottom: 0; max-width: 760px; }
 .coordinate-inspection-card { padding: var(--qms-card-padding); border: 1px solid var(--qms-border, #dce3ea); border-radius: 8px; background: var(--qms-surface, #fff); min-width: 0; }
 .coordinate-inspection-loading { min-height: 220px; display: grid; place-items: center; }
-.coordinate-inspection-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--qms-section-gap); }
-@media (max-width: 720px) { .coordinate-inspection-page { padding: 0;  min-width: 0; } .coordinate-inspection-heading { flex-direction: column; } .coordinate-inspection-card { padding: var(--qms-card-padding); } .coordinate-inspection-form-grid { grid-template-columns: 1fr; } }
+.coordinate-inspection-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--qms-form-column-min)), 1fr)); gap: 0 var(--qms-section-gap); }
+@media (max-width: 720px) { .coordinate-inspection-page { padding: 0;  min-width: 0; } .coordinate-inspection-heading { flex-direction: column; } .coordinate-inspection-card { padding: var(--qms-card-padding); } }

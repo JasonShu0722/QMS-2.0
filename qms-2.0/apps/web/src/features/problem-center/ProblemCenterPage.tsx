@@ -1,10 +1,13 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Popconfirm, Select, Space, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Popconfirm, Select, Space, Tag, Typography, type TableColumnsType } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { normalizePreferences, preferenceKey } from '../../ui/ledger/model';
+import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { ProcessProblemDeadlines, ProcessProblemTitle, processSummaryValue } from '../process-quality/ProcessProblemSummary';
 import { useEightDSeverityText } from '../process-eight-d/eight-d';
 import {
@@ -26,6 +29,7 @@ type ProblemFilters = components['schemas']['ProblemSavedViewFiltersDto'];
 type ProblemSort = components['schemas']['ProblemSavedViewSortDto'];
 type ProblemStatus = NonNullable<ProblemFilters['status']>;
 type ColumnKey = ProblemViewConfiguration['visibleColumns'][number];
+type ColumnLayout = { order: ColumnKey[]; visible: ColumnKey[] };
 type ErrorState = { message: string; traceId?: string; code?: string };
 
 const statuses: ProblemStatus[] = ['OPEN', 'IN_PROGRESS', 'PENDING', 'RESOLVED', 'CLOSED', 'ARCHIVED'];
@@ -38,10 +42,10 @@ const defaultConfiguration: ProblemViewConfiguration = {
   visibleColumns: [...allColumns],
   columnOrder: [...allColumns],
 };
-const columnLabels: Record<ColumnKey, string> = {
-  reportNumber: '报告编号', title: '标题', domainCode: '领域', problemType: '问题类型', status: '状态', severity: '严重度',
-  responsibleParty: '责任方', ownerId: '负责人 ID', dueAt: '截止时间', updatedAt: '更新时间',
-};
+function normalizeColumnLayout(input: unknown): ColumnLayout {
+  const normalized = normalizePreferences(input, allColumns);
+  return { order: normalized.order as ColumnKey[], visible: normalized.visible as ColumnKey[] };
+}
 const statusLabels: Record<ProblemStatus, string> = {
   OPEN: '待处理', IN_PROGRESS: '处理中', PENDING: '等待中', RESOLVED: '已解决', CLOSED: '已关闭', ARCHIVED: '已归档',
 };
@@ -123,10 +127,10 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [filters, setFilters] = useState<ProblemFilters>({});
   const [appliedFilters, setAppliedFilters] = useState<ProblemFilters>({});
   const [sort, setSort] = useState<ProblemSort>(defaultConfiguration.sort);
-  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(defaultConfiguration.visibleColumns);
-  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(defaultConfiguration.columnOrder);
+  const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => normalizeColumnLayout(undefined));
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const ledgerId = eightDDomain ? `${eightDDomain}-problem-followup` : processOnly ? 'process-problem-followup' : 'problem-center';
+  const [pageSize, setPageSize] = useLedgerPageSize(ledgerId, organizationId);
   const [result, setResult] = useState<ProblemPage>();
   const [resultError, setResultError] = useState<ErrorState>();
   const [resultLoading, setResultLoading] = useState(false);
@@ -136,6 +140,13 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [viewsError, setViewsError] = useState<ErrorState>();
   const [viewsLoading, setViewsLoading] = useState(false);
   const [selectedViewId, setSelectedViewId] = useState('');
+  const ledgerScope = useLedgerScope(organizationId);
+  const layoutKey = organizationId ? preferenceKey(ledgerScope, ledgerId, 'columns', 'default-layout') : undefined;
+  const layoutStateKey = layoutKey ?? JSON.stringify([ledgerScope, ledgerId, 'default-layout']);
+  const [defaultLayout, setDefaultLayout] = usePreference(layoutKey, ledgerScope.sessionScope, normalizeColumnLayout, layoutStateKey);
+  const activeLayout = useRef({ key: layoutStateKey, viewId: selectedViewId, value: defaultLayout });
+  activeLayout.current = { key: layoutStateKey, viewId: selectedViewId, value: defaultLayout };
+  const { order: columnOrder, visible: visibleColumns } = selectedViewId ? viewLayout : defaultLayout;
   const [viewName, setViewName] = useState('');
   const [mutationError, setMutationError] = useState<ErrorState>();
   const [mutationMessage, setMutationMessage] = useState('');
@@ -269,6 +280,15 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }, [query, revision, processQuality, revokeProcessAccess]);
 
   const selectedView = views.find((view) => view.id === selectedViewId);
+  function changeColumnLayout(next: Partial<ColumnLayout>) {
+    if (activeLayout.current.key !== layoutStateKey || activeLayout.current.viewId !== selectedViewId) return;
+    if (selectedViewId) setViewLayout(current => ({ ...current, ...next }));
+    else {
+      const value = { ...activeLayout.current.value, ...next };
+      activeLayout.current.value = value;
+      setDefaultLayout(value);
+    }
+  }
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
     filters: { ...filters, ...(processQuality ? { domainCode: eightDDomain ?? 'process-quality', problemType: eightDDomain ? undefined : 'PROCESS_DEFECT' } : {}) },
@@ -277,19 +297,18 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     columnOrder: [...columnOrder],
   }), [columnOrder, filters, sort, visibleColumns, processQuality, eightDDomain]);
 
-  const applyConfiguration = useCallback((next: ProblemViewConfiguration, name?: string) => {
+  const applyConfiguration = (next: ProblemViewConfiguration, name?: string) => {
     const normalized = normalizeConfiguration(next);
     setFilters(normalized.filters);
     setAppliedFilters(normalized.filters);
     setSort(normalized.sort);
-    setVisibleColumns(normalized.visibleColumns);
-    setColumnOrder(normalized.columnOrder);
+    changeColumnLayout({ visible: normalized.visibleColumns, order: normalized.columnOrder });
     if (name !== undefined) setViewName(name);
     setPage(1);
     setMutationError(undefined);
     setMutationMessage('');
     setConflicted(false);
-  }, []);
+  };
 
   const switchOrganization = () => {
     const selected = organizationInput.trim();
@@ -342,6 +361,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       if (processQuality && !scopeActive.current) return;
       setViews((current) => [created, ...current]);
       setViewTotal((total) => total + 1);
+      setViewLayout({ visible: configuration.visibleColumns, order: configuration.columnOrder });
       setSelectedViewId(created.id);
     }, '视图已保存');
   };
@@ -380,21 +400,6 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     })();
   };
 
-  const changeColumn = (column: ColumnKey, checked: boolean) => {
-    setVisibleColumns((current) => checked ? [...current, column] : current.filter((value) => value !== column));
-  };
-
-  const moveColumn = (column: ColumnKey, direction: -1 | 1) => {
-    setColumnOrder((current) => {
-      const index = current.indexOf(column);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next;
-    });
-  };
-
   const columns = useMemo<TableColumnsType<ProblemItem>>(() => {
     const definitions: Record<ColumnKey, TableColumnsType<ProblemItem>[number]> = {
       reportNumber: { title: t('报告编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={`/app/problem-workspace/${item.id}?organizationId=${encodeURIComponent(item.organizationId)}`}>{value}</Link> },
@@ -408,16 +413,15 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       dueAt: { title: t(processQuality ? '问题截止时间' : '截止时间'), dataIndex: 'dueAt', render: (value: string | null) => value ? new Date(value).toLocaleString(locale) : '—' },
       updatedAt: { title: t('更新时间'), dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString(locale) },
     };
-    const selected: TableColumnsType<ProblemItem> = columnOrder.filter((column) => visibleColumns.includes(column)).map((column) => ({ ...definitions[column], key: column }));
+    const selected: TableColumnsType<ProblemItem> = allColumns.map((column) => ({ ...definitions[column], key: column, width: column === 'title' ? 260 : 170 }));
     if (processQuality) selected.push(
-      { title: t('当前阶段'), key: 'processStage', render: (_, item) => t(processSummaryValue(item.summary, 'stage') || '—') },
-      { title: t('当前期限'), key: 'processDeadlines', render: (_, item) => <ProcessProblemDeadlines problem={item} /> },
+      { title: t('当前阶段'), key: 'processStage', width: 170, render: (_, item) => t(processSummaryValue(item.summary, 'stage') || '—') },
+      { title: t('当前期限'), key: 'processDeadlines', width: 230, render: (_, item) => <ProcessProblemDeadlines problem={item} /> },
     );
     return selected;
-  }, [columnOrder, locale, t, visibleColumns, processQuality, severityText]);
+  }, [locale, t, processQuality, severityText]);
 
   const disabledWrites = writeForbidden || mutating || viewsLoading;
-  const visibleColumnLabels = processQuality ? { ...columnLabels, severity: '风险', responsibleParty: '责任科室', ownerId: '负责人', dueAt: '问题截止时间' } : columnLabels;
   if (accessLost) return <main className="problem-center"><h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
   return <main className="problem-center">
     <div className="problem-center__heading">
@@ -432,6 +436,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       <div className="problem-center__view-row">
         <label>{t('保存视图')}<select aria-label={t('保存视图')} value={selectedViewId} onChange={(event) => {
           const id = event.target.value;
+          if (id) setViewLayout({ visible: visibleColumns, order: columnOrder });
           setSelectedViewId(id);
           const view = views.find((candidate) => candidate.id === id);
           if (view) setViewName(view.name);
@@ -481,15 +486,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       </Space>
     </Card>
 
-    <Card title={t('显示列')}>
-      <div className="problem-center__columns">{columnOrder.map((column, index) => <div key={column} className="problem-center__column-option"><Checkbox checked={visibleColumns.includes(column)} onChange={(event) => changeColumn(column, event.target.checked)}>{t(visibleColumnLabels[column])}</Checkbox><Space.Compact><Button size="small" aria-label={`${t('上移')} ${t(visibleColumnLabels[column])}`} disabled={index === 0} onClick={() => moveColumn(column, -1)}>↑</Button><Button size="small" aria-label={`${t('下移')} ${t(visibleColumnLabels[column])}`} disabled={index === columnOrder.length - 1} onClick={() => moveColumn(column, 1)}>↓</Button></Space.Compact></div>)}</div>
-    </Card>
-
     <section aria-label={t('问题列表')}>
       {result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null}
       <Feedback error={resultError} t={t} />
-      {!resultError ? <Table<ProblemItem> rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} pagination={false} locale={{ emptyText: resultLoading ? t('加载中') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} /> : null}
-      {result ? <div className="problem-center__pagination"><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[25, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(Math.min(100, nextPageSize)); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></div> : null}
+      {!resultError ? <LedgerTable<ProblemItem> ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} requiredColumnKeys={processQuality ? ['reportNumber', 'processStage', 'processDeadlines'] : ['reportNumber']} columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={keys => changeColumnLayout({ order: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} onVisibleColumnKeysChange={keys => changeColumnLayout({ visible: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} pagination={false} locale={{ emptyText: resultLoading ? t('加载中') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} /> : null}
+      {result ? <div className="problem-center__pagination"><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(nextPageSize); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></div> : null}
     </section>
   </main>;
 }
