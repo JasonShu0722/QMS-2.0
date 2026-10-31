@@ -42,7 +42,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       components: {
         Button: { primaryColor: tokens['on-accent'], paddingInline: 14, fontWeight: 500, defaultShadow: 'none', primaryShadow: 'none', dangerShadow: 'none' },
         Card: { bodyPadding: 8, bodyPaddingSM: 8, headerPadding: 8, headerPaddingSM: 8, headerHeight: 44, headerHeightSM: 44 },
-        Table: { headerBg: tokens['surface-tint'], cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 },
+        Table: { headerBg: tokens['surface-tint'], headerColor: tokens.text, borderColor: tokens.border, headerSplitColor: tokens.border,
+          rowHoverBg: tokens['surface-tint'], rowSelectedBg: tokens['accent-soft'], rowSelectedHoverBg: tokens['accent-soft'],
+          cellFontSize: 13, cellFontSizeMD: 13, cellFontSizeSM: 13, cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 },
         Layout: { bodyBg: tokens.background, siderBg: tokens.surface, headerBg: tokens.surface },
       },
     }}>{children}</ConfigProvider>

@@ -9,6 +9,7 @@ import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { ConsoleLayout, useConsoleContext } from './ConsoleLayout';
 import { getConsoleContext } from './console-api';
 import type { ConsoleContext } from './console-navigation';
+import { useLedgerPageSize } from '../ui/ledger';
 
 vi.mock('./console-api', () => ({ getConsoleContext: vi.fn() }));
 const getContext = vi.mocked(getConsoleContext);
@@ -21,13 +22,31 @@ function context(target: string = a.id): ConsoleContext { return { actor: { id: 
 beforeEach(() => { getContext.mockReset(); useWorkTabsStore.getState().bindSession('INTERNAL:a:actor'); localStorage.clear(); });
 function Page({ dirty = false }: { dirty?: boolean }) { const location = useLocation(); useUnsavedChanges(dirty); return <div>受保护内容<output aria-label="path">{location.pathname}{location.search}</output></div>; }
 function renderLayout(path = '/console/users', dirty = false) { return render(<MemoryRouter initialEntries={[path]}><ConsoleLayout><Page dirty={dirty} /></ConsoleLayout></MemoryRouter>); }
+function LedgerPreferenceProbe() {
+  const [pageSize, setPageSize] = useLedgerPageSize('scope-probe');
+  return <button onClick={() => setPageSize(50)}>记住页长 {pageSize}</button>;
+}
+it('scopes ledger preferences to the verified console target rather than the actor home organization', async () => {
+  getContext.mockResolvedValue(context('b'));
+  render(<MemoryRouter initialEntries={['/console/users?organizationId=b']}><ConsoleLayout><LedgerPreferenceProbe /></ConsoleLayout></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '记住页长 20' }));
+  const keys = Object.keys(localStorage).filter(key => key.startsWith('qms:ledger:v1:'));
+  expect(keys).toEqual(['qms:ledger:v1:["INTERNAL:a:actor","b","console","scope-probe","pageSize"]']);
+  expect(JSON.parse(localStorage.getItem(keys[0]!)!)).toMatchObject({ value: 50 });
+});
+it('scopes session-home console ledger preferences to the real resource organization', async () => {
+  getContext.mockResolvedValue(context('b'));
+  render(<MemoryRouter initialEntries={['/console/workflows?organizationId=b']}><ConsoleLayout><LedgerPreferenceProbe /></ConsoleLayout></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: '记住页长 20' }));
+  expect(Object.keys(localStorage).filter(key => key.startsWith('qms:ledger:v1:'))).toEqual(['qms:ledger:v1:["INTERNAL:a:actor","a","console","scope-probe","pageSize"]']);
+});
 it('keeps one focused home heading and the target selector while disclosing identity and resource facts on demand', async () => {
   getContext.mockResolvedValue(context());
   renderLayout('/console');
   await screen.findByText('受保护内容');
   const main = screen.getByRole('main');
   const heading = within(main).getByRole('heading', { level: 1, name: '管理首页' });
-  expect(heading).toHaveFocus();
+  await waitFor(() => expect(heading).toHaveFocus());
   expect(screen.queryByRole('navigation', { name: '面包屑' })).not.toBeInTheDocument();
   expect(within(main).queryByText('QMS / 管理工作空间')).not.toBeInTheDocument();
   const target = within(main).getByRole('combobox', { name: '管理目标组织' });
@@ -54,7 +73,7 @@ it('retains a real return link and heading focus on a deep workflow route', asyn
   await screen.findByText('受保护内容');
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
-  expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus();
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus());
   expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {

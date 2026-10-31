@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { webcrypto } from 'node:crypto';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
@@ -32,6 +32,7 @@ function mount(portal = false, id = 'supplier-1', onDenied = vi.fn()) {
   return render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter><UnsavedChangesProvider><SupplierEightDWorkspace supplierProblemId={id} portal={portal} onDenied={onDenied} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>);
 }
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'development');
   vi.unstubAllGlobals();
   localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession('INTERNAL:org-1:sqe-1');
   actor = { accountType: 'INTERNAL', organizationId: 'org-1', id: 'sqe-1' };
@@ -52,6 +53,7 @@ beforeEach(() => {
   });
   vi.stubGlobal('fetch', fetcher);
 });
+afterEach(() => vi.unstubAllEnvs());
 
 it.each([false, true])('C SPEC review copy preserves actual lock round and duties (portal=%s)', async portal => {
   current.status = 'IN_REVIEW'; current.allowedActions = ['read'];
@@ -625,7 +627,8 @@ it.each(['PROFESSIONAL', 'JOINT'] as const)('reuses the real closure inbox with 
   });
   mount(); await screen.findByDisplayValue('供应商实际问题');
   fireEvent.click(screen.getByRole('button', { name: '打开关闭职责待办' }));
-  const review = await screen.findByRole('button', { name: '审核关闭职责' }); await waitFor(() => expect(review).toBeEnabled()); fireEvent.click(review);
+  const inbox = within(screen.getByRole('region', { name: '关闭职责待办' }));
+  const review = await inbox.findByRole('button', { name: '审核关闭职责' }); await waitFor(() => expect(review).toBeEnabled()); fireEvent.click(review);
   const dialog = within(await screen.findByRole('dialog', { name: '关闭职责审核' }));
   await dialog.findByText('固定内容版本：6');
   fireEvent.change(dialog.getByLabelText('审核意见'), { target: { value: '核对完整受控版本后同意' } });

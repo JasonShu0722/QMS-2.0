@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Descriptions, Empty, Form, Pagination, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Empty, Form, Pagination, Select, Space, Spin, Tag, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
 import type { AdminOrganization } from '../admin/admin';
@@ -21,7 +22,6 @@ type Props = {
   renderAdditionalActions?: (item: Item, onCompleted: () => void) => ReactNode;
 };
 const names: Record<Item['kind'], string> = { ORGANIZATION: '组织', DEPARTMENT: '部门/科室', POSITION: '岗位', USER: '用户' };
-const pageSize = 20;
 
 export function AdministrativeReconfiguration(props: Props) {
   const principal = useWorkTabsStore(state => state.sessionScope);
@@ -29,6 +29,7 @@ export function AdministrativeReconfiguration(props: Props) {
 }
 
 function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditionalActions }: Props) {
+  const [pageSize, setPageSize] = useLedgerPageSize('admin-reconfiguration', organization.id);
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [principal] = useState(() => useWorkTabsStore.getState().sessionScope);
@@ -112,7 +113,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
     }).catch(cause => { if (valid()) { setOrganizations([]); fail(cause); } })
       .finally(() => { if (valid()) setLoading(false); });
     return () => { active = false; controller.abort(); lifetime.current?.signal.removeEventListener('abort', abort); };
-  }, [kind, offset, revision, organization.id]);
+  }, [kind, offset, pageSize, revision, organization.id]);
 
   const requirements = selected?.requiredConfiguration ?? [];
   const needsOrganization = requirements.includes('targetOrganizationId');
@@ -227,7 +228,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
       {success.replacementId && <span>{t('替代对象')}：<code>{success.replacementId}</code></span>}
     </Space>} />}
     {loading ? <div role="status" aria-label={t('读取待配置')}><Spin /></div> : page && <>
-      {!page.items.length ? <Empty description={t('暂无待配置对象')} /> : <Table<Item> className="administrative-reconfiguration-table" size="small" rowKey={item => `${item.kind}:${item.id}`} dataSource={page.items} pagination={false} scroll={{ x: 660 }} columns={[
+      {!page.items.length ? <Empty description={t('暂无待配置对象')} /> : <LedgerTable<Item> ledgerId="admin-reconfiguration" organizationId={organization.id} requiredColumnKeys={['label', 'actions']} className="administrative-reconfiguration-table" size="small" rowKey={item => `${item.kind}:${item.id}`} dataSource={page.items} pagination={false} scroll={{ x: 660 }} columns={[
         { key: 'label', title: t('待配置对象'), width: 220, render: (_, item) => <><Typography.Text strong>{item.label}</Typography.Text> <Tag>{t(names[item.kind])}</Tag></> },
         { key: 'scope', title: t('原归属（历史范围）'), width: 260, render: (_, item) => organizations.find(entry => entry.id === item.originalOrganizationId)?.name ?? item.originalOrganizationId },
         { key: 'actions', title: t('操作'), width: 180, render: (_, item) => <fieldset className="administrative-reconfiguration-actions" disabled={locked}><Space wrap>
@@ -235,7 +236,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
           {renderAdditionalActions?.(item, refreshCurrentKind)}
         </Space></fieldset> },
       ]} />}
-      <Pagination size="small" current={Math.floor(offset / pageSize) + 1} pageSize={pageSize} total={page.total} showSizeChanger={false} disabled={locked} onChange={value => requestLeave(() => { closeEditor(); setOffset((value - 1) * pageSize); })} />
+      <Pagination size="small" current={Math.floor(offset / pageSize) + 1} pageSize={pageSize} total={page.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} disabled={locked} onChange={(value, size) => requestLeave(() => { if (!current()) return; closeEditor(); setOffset(size === pageSize ? (value - 1) * size : 0); setPageSize(size); })} />
     </>}
     {selected && <section className="administrative-reconfiguration-editor" aria-label={`${t('配置')} · ${selected.label}`}>
       <Typography.Title level={5}>{t('补配当前配置')} · {selected.label}</Typography.Title>

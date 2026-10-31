@@ -1,4 +1,5 @@
-import { Alert, Button, Descriptions, Empty, Form, Input, InputNumber, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Empty, Form, Input, InputNumber, Select, Space, Spin, Tag, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -21,13 +22,14 @@ function LoadError({ error, retry }: { error?: string; retry: () => void }) {
 }
 
 function ProblemLedger({ portal }: { portal: boolean }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-quality');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [severity, setSeverity] = useState<ProblemQuery['severity']>();
   const [responseForm, setResponseForm] = useState<ProblemQuery['responseForm']>();
   const [stage, setStage] = useState<ProblemQuery['stage']>();
   const navigate = useNavigate();
-  const query = new URLSearchParams({ page: String(page), search });
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize), search });
   if (severity) query.set('severity', severity);
   if (responseForm) query.set('responseForm', responseForm);
   if (stage && !portal) query.set('stage', stage);
@@ -41,9 +43,9 @@ function ProblemLedger({ portal }: { portal: boolean }) {
       {!portal ? <Select aria-label="筛选发单状态" placeholder="全部发单状态" allowClear value={stage} onChange={(value) => { setStage(value); setPage(1); }} options={[{ value: 'DRAFT', label: '草稿' }, { value: 'ISSUED', label: '已发单' }]} /> : null}
     </Space>
     <LoadError error={result.error} retry={result.reload} />
-    {!result.error ? <Table<SupplierProblem> rowKey="id" loading={result.loading} dataSource={result.data?.items ?? []} scroll={{ x: 850 }} pagination={{ current: page, pageSize: 20, total: result.data?.total ?? 0, showSizeChanger: false, onChange: setPage }} locale={{ emptyText: <Empty description={portal ? '尚未收到问题单' : '暂无问题草稿'} /> }} columns={[
+    {!result.error ? <LedgerTable<SupplierProblem> ledgerId="supplier-quality" requiredColumnKeys={['title']} rowKey="id" loading={result.loading} dataSource={result.data?.items ?? []} scroll={{ x: 850 }} pagination={{ current: page, pageSize, total: result.data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} locale={{ emptyText: <Empty description={portal ? '尚未收到问题单' : '暂无问题草稿'} /> }} columns={[
       { title: '问题 / 编号', key: 'title', render: (_, record) => <><Link to={`${supplierPath(portal)}/problems/${record.id}`}>{record.title}</Link><div className="supplier-secondary">{record.reportNumber ?? '未发单'}</div></> },
-      { title: '供应商', dataIndex: 'supplierName' }, { title: '物料号', dataIndex: 'materialCode' },
+      { key: 'supplierName', title: '供应商', dataIndex: 'supplierName' }, { key: 'materialCode', title: '物料号', dataIndex: 'materialCode' },
       { title: '严重度', key: 'severity', render: (_, record) => <Tag color={record.severity === 'CRITICAL' || record.severity === 'HIGH' ? 'red' : 'default'}>{severityLabels[record.severity]}</Tag> },
       { title: '回复形式', key: 'form', render: (_, record) => record.responseForm === 'BRIEF' ? '简报' : '8D' },
       { title: '进度', key: 'stage', render: (_, record) => record.problemStatus ? statusLabels[record.problemStatus] : '草稿' },

@@ -36,7 +36,7 @@ function attempt(overrides: Partial<Attempt> = {}): Attempt {
     startedAt: time, observedAt: time, finishedAt: null, ...overrides };
 }
 function result(scope: Page['scope'] = 'ORGANIZATION', overrides: Partial<Page> = {}): Page {
-  return { scope, organizationId: mocks.context.targetOrganization.id, connectionStatus: 'REGISTERED', sources: [{ key: 'TECHNICAL_TEST', label: '技术验证来源', directions: ['INBOUND', 'OUTBOUND'], objectTypes: ['FIXTURE'] }], items: [attempt()], total: 1, page: 1, limit: 50,
+  return { scope, organizationId: mocks.context.targetOrganization.id, connectionStatus: 'REGISTERED', sources: [{ key: 'TECHNICAL_TEST', label: '技术验证来源', directions: ['INBOUND', 'OUTBOUND'], objectTypes: ['FIXTURE'] }], items: [attempt()], total: 1, page: 1, limit: 20,
     from: '2026-10-29T04:00:00.000Z', to: time, asOf: time, summary: { batchAttempts: 7, recordAttempts: 12, transferSucceededBatches: 5, processingFailedBatches: 2, reconciliationSucceededBatches: 0 }, collection: { status: 'UNKNOWN' }, ...overrides };
 }
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
@@ -62,6 +62,23 @@ beforeEach(() => {
   read.mockImplementation(async path => path.includes('/attempts/') ? attempt() : result());
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); localStorage.clear(); });
+
+it('uses the chosen page length for real attempt reads and resets the old page', async () => {
+  read.mockImplementation(async path => {
+    if (path.includes('/attempts/')) return attempt();
+    const query = new URL(path, 'http://localhost').searchParams;
+    return result('ORGANIZATION', { page: Number(query.get('page')), limit: Number(query.get('limit')), total: 101 });
+  });
+  view();
+  await screen.findByText('batch-001');
+  expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));
+  await choose('每页条数', '50');
+  await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=1&limit=50'));
+  expect(await screen.findByText('batch-001')).toBeVisible();
+  expect(screen.getByText('列设置').closest('button')).toBeVisible();
+});
 
 it('reads the verified scope and keeps transfer, business processing and reconciliation facts distinct', async () => {
   view(); const metrics = await screen.findByRole('region', { name: '交换摘要' });
@@ -113,7 +130,7 @@ it('applies source and paired stage filters, and keeps the same window when pagi
   fireEvent.click(apply);
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('outcome=FAILED'));
   const first = new URL(read.mock.calls.at(-1)![0], 'http://localhost').searchParams;
-  expect(Object.fromEntries(first)).toMatchObject({ sourceKey: 'TECHNICAL_TEST', direction: 'OUTBOUND', objectType: 'FIXTURE', level: 'RECORD', stage: 'processing', outcome: 'FAILED', batchId: 'batch-001', limit: '50' });
+  expect(Object.fromEntries(first)).toMatchObject({ sourceKey: 'TECHNICAL_TEST', direction: 'OUTBOUND', objectType: 'FIXTURE', level: 'RECORD', stage: 'processing', outcome: 'FAILED', batchId: 'batch-001', limit: '20' });
   const next = await screen.findByRole('button', { name: '下一页' });
   await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next);
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));

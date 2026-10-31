@@ -59,21 +59,22 @@ async function openReview() {
 async function fillReview() { const dialog = await openReview(); await within(dialog).findByText('第 2 轮'); fireEvent.change(within(dialog).getByLabelText('审核意见'), { target: { value: '核对完成' } }); return dialog; }
 const submit = (dialog: HTMLElement) => fireEvent.click(visibleButton(dialog, '提交审核'));
 beforeEach(() => {
+  vi.stubEnv('NODE_ENV', 'development');
   localStorage.clear(); sessionStorage.clear(); useWorkTabsStore.getState().bindSession('INTERNAL:org:actor');
   // Match the existing navigation tests: data routers use Node's native Request.
   vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
 });
-afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); useWorkTabsStore.getState().reset(); });
 
 it('reads real paginated duty tasks and notifications without counting problems or exposing claim/transfer', async () => {
   const requests = stub({ tasks: [task, { ...task, id: 'second', duty: 'MINISTER' }], total: 27 }); render(scene());
   expect(await screen.findByText('职责待办总数：27（非问题数）')).toBeInTheDocument();
-  expect(requests.some(item => item.path === '/api/v1/tasks/closure?pageSize=25&offset=0')).toBe(true);
+  expect(requests.some(item => item.path === '/api/v1/tasks/closure?pageSize=20&offset=0')).toBe(true);
   expect(await screen.findByText(notice.subject)).toBeInTheDocument();
-  expect(requests.some(item => item.path === '/api/v1/notifications/closure?pageSize=25&offset=0')).toBe(true);
+  expect(requests.some(item => item.path === '/api/v1/notifications/closure?pageSize=20&offset=0')).toBe(true);
   expect(screen.queryByRole('button', { name: /领取|转派|指派/ })).not.toBeInTheDocument();
   fireEvent.click(within(screen.getByRole('region', { name: '关闭职责待办' })).getByTitle('2'));
-  await waitFor(() => expect(requests.some(item => item.path.endsWith('pageSize=25&offset=25'))).toBe(true));
+  await waitFor(() => expect(requests.some(item => item.path.endsWith('pageSize=20&offset=20'))).toBe(true));
 });
 
 it('rechecks round history, shows fixed version and a real workspace link without claiming a full snapshot', async () => {
@@ -419,7 +420,7 @@ it('does not submit blank comments and focuses the editable comment field', asyn
 it('paginates notifications independently and confines wide tables to their own scroll containers', async () => {
   const requests = stub({ noticeTotal: 26 }); render(scene()); await screen.findByText(notice.subject);
   const region = screen.getByRole('region', { name: '关闭职责通知' }); fireEvent.click(within(region).getByTitle('2'));
-  await waitFor(() => expect(requests.some(item => item.path === '/api/v1/notifications/closure?pageSize=25&offset=25')).toBe(true));
+  await waitFor(() => expect(requests.some(item => item.path === '/api/v1/notifications/closure?pageSize=20&offset=20')).toBe(true));
   expect(requests.filter(item => item.path.startsWith('/api/v1/tasks/closure?'))).toHaveLength(1);
   expect(region.querySelector('.ant-table-content')).toHaveStyle({ overflowX: 'auto' });
 });

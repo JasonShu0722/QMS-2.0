@@ -39,6 +39,25 @@ const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', re
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 
+it('resets real server pagination on page-size changes without discarding selected source versions', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, total: 101 } : baseResponse(path));
+  mount();
+  fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
+  const columnSettings = screen.getByText('列设置', { selector: 'button span' }).closest('button')!;
+  fireEvent.click(columnSettings);
+  fireEvent.click(screen.getByLabelText('上移 状态', { selector: 'button' }));
+  expect(screen.getByLabelText('选择制程不良 表面划伤')).toBeChecked();
+  fireEvent.click(columnSettings);
+  fireEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('page=2&pageSize=20'))).toBe(true));
+  await screen.findByLabelText('选择制程不良 表面划伤');
+  fireEvent.mouseDown(document.querySelector('.ant-pagination-options-size-changer [role="combobox"]')!);
+  fireEvent.click(await screen.findByText('50 条/页', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('page=1&pageSize=50'))).toBe(true));
+  expect(screen.getByLabelText('选择制程不良 表面划伤')).toBeChecked();
+  expect(screen.getByText('已选择 1 条来源')).toBeVisible();
+});
+
 it('opens supplier copy from selected process facts without enabling internal issue for copy-only access', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => {
     if (path.includes('/my-permissions')) return { permissions: ['process-quality:defects:read', 'supplier-quality:issues:copy'] };
@@ -55,8 +74,8 @@ it('opens supplier copy from selected process facts without enabling internal is
   fireEvent.click(copy);
   await waitFor(() => expect(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]')).toBeVisible());
   const dialog = within(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]') as HTMLElement);
-  expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  expect(toolbar.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
+  expect(toolbar.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
   await selectOption('目标供应商档案', '复制目标档案');
   fireEvent.click(dialog.getByRole('button', { name: '读取受控预览' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ organizationId, supplierProfileId: section.id, sources: [{ kind: 'PROCESS_LEDGER', sourceId: defect.id, sourceVersion: defect.version }] }) }), { replayAfterReauthentication: false }));
@@ -119,7 +138,8 @@ it('opens a source deep-link only after scoped READ authorization, without selec
   const drawer = screen.getByText('来源详情').closest('[role="dialog"]') as HTMLElement;
   fireEvent.click(within(drawer).getByRole('button', { name: /^(close|关闭)$/i }));
   await waitFor(() => expect(screen.queryByText('来源详情')).not.toBeInTheDocument(), { timeout: 5000 });
-  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  const heading = within(screen.getByText('不良品台账', { selector: 'h1' }).closest('header')!);
+  fireEvent.click(heading.getByRole('button', { name: /^刷\s*新$/ }));
   await waitFor(() => expect(permissionReads).toBeGreaterThan(1));
   expect(sourceDetailCalls()).toHaveLength(1);
   expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
@@ -335,7 +355,7 @@ it.each(['material-sqes', 'defect-types'])('ends the parent session when only ed
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(await screen.findByText('登记不良', { selector: 'button span' }));
-  fireEvent.change(await screen.findByLabelText('失效现象'), { target: { value: '敏感登记草稿' } });
+  fireEvent.change(await screen.findByLabelText('失效现象', { selector: 'textarea' }), { target: { value: '敏感登记草稿' } });
   await waitFor(() => expect(reject).toBeTypeOf('function'));
   await act(async () => { reject(new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: 'private' }, 401)); });
   expect(await screen.findByText('会话已退出，请登录')).toBeVisible();
@@ -365,10 +385,10 @@ it.each([
   mount();
   fireEvent.click(await screen.findByText('查看详情'));
   fireEvent.click(await screen.findByText('维护台账'));
-  const time = await screen.findByLabelText('发生时间');
+  const time = await screen.findByLabelText('发生时间', { selector: 'input' });
   expect(time).toHaveValue(display);
   if (action !== 'untouched') fireEvent.change(time, { target: { value: action === 'cleared' ? '' : '2026-10-26T14:15' } });
-  fireEvent.change(screen.getByLabelText('失效现象'), { target: { value: '只补充描述，不猜时间精度' } });
+  fireEvent.change(screen.getByLabelText('失效现象', { selector: 'textarea' }), { target: { value: '只补充描述，不猜时间精度' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(persisted.version).toBe(3));
   expect(persisted.occurredAt).toBe(action === 'untouched' ? original : action === 'cleared' ? null : edited);

@@ -44,7 +44,7 @@ it.each([
     expect(await screen.findByText('检验记录 ID')).toBeVisible();
   }
   await user.click(await screen.findByRole('button', { name: trigger }));
-  const input = await screen.findByLabelText(field);
+  const input = await screen.findByRole('textbox', { name: field });
   const modal = input.closest('[role="dialog"]') as HTMLElement;
   await waitFor(() => expect(modal).toBeVisible());
   expect(within(modal).getByText(title, { selector: '.ant-modal-title' })).toBeVisible();
@@ -77,8 +77,8 @@ it('creates a manual inspection draft', async () => {
   render(<SupplierIncomingPage />);
   fireEvent.click(await screen.findByRole('button', { name: '新建检验草稿' }));
   fireEvent.change(screen.getByLabelText('供应商资料 ID'), { target: { value: 'profile-1' } });
-  fireEvent.change(screen.getByLabelText('物料编码'), { target: { value: 'MAT-01' } });
-  fireEvent.change(screen.getByLabelText('来料批次'), { target: { value: 'B-01' } });
+  fireEvent.change(screen.getByRole('textbox', { name: '物料编码' }), { target: { value: 'MAT-01' } });
+  fireEvent.change(screen.getByRole('textbox', { name: '来料批次' }), { target: { value: 'B-01' } });
   fireEvent.change(screen.getByLabelText('收货数量'), { target: { value: '100' } });
   fireEvent.change(screen.getByLabelText('抽检数量'), { target: { value: '10' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
@@ -109,9 +109,10 @@ it('archives an uploaded photo only after the file lifecycle panel reports it cl
     .mockResolvedValueOnce({ ...record, version: 2, items: [], photos: [{ id: 'photo-link-1', file_id: 'photo-1' }] });
   render(<SupplierIncomingPage />);
   fireEvent.click(await screen.findByRole('button', { name: '测试供应商' }));
-  expect(screen.queryByRole('button', { name: '归档已扫描照片' })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('button', { name: '模拟扫描通过' }));
-  fireEvent.click(screen.getByRole('button', { name: '归档已扫描照片' }));
+  const drawer = within(screen.getByText('来料检验详情', { selector: '.ant-drawer-title' }).closest('[role="dialog"]') as HTMLElement);
+  expect(drawer.queryByRole('button', { name: '归档已扫描照片' })).not.toBeInTheDocument();
+  fireEvent.click(await drawer.findByRole('button', { name: '模拟扫描通过' }));
+  fireEvent.click(drawer.getByRole('button', { name: '归档已扫描照片' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-incoming/inspections/inspection-1/photos', expect.objectContaining({ method: 'POST', body: JSON.stringify({ fileId: 'photo-1', expectedVersion: 1 }) })));
 }, 30000);
 

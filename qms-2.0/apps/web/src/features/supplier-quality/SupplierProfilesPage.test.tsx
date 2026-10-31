@@ -14,6 +14,16 @@ vi.mock('exceljs', () => ({ default: { Workbook: class {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('requests an explicit page size for the target organization', async () => {
+  const request = vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0 }), { headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', request);
+  render(<SupplierProfilesPage organizationId="target-org" organizationPermissions={['supplier-quality:profiles:read']} />);
+  await waitFor(() => expect(request).toHaveBeenCalled());
+  expect(request).toHaveBeenCalledWith(expect.stringContaining('pageSize=20'), expect.anything());
+  expect(request).toHaveBeenCalledWith(expect.stringContaining('organizationId=target-org'), expect.anything());
+  expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
+});
+
 it.each(['create', 'edit'])('shows success and releases busy after a StrictMode supplier %s', async (action) => {
   const profile = { id: 'p', version: 1, supplierOrganizationId: null, businessCode: 'A', displayName: '甲' };
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
@@ -21,8 +31,8 @@ it.each(['create', 'edit'])('shows success and releases busy after a StrictMode 
   render(<StrictMode><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:read', 'supplier-quality:profiles:write']} /></StrictMode>);
   if (action === 'create') {
     fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
-    fireEvent.change(screen.getByLabelText('供应商名称'), { target: { value: '新供应商' } });
-    fireEvent.change(screen.getByLabelText('业务编码'), { target: { value: 'B' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '供应商名称' }), { target: { value: '新供应商' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '业务编码' }), { target: { value: 'B' } });
     fireEvent.click(screen.getByRole('button', { name: '登记供应商' }));
   } else {
     fireEvent.click(await screen.findByRole('button', { name: '编辑资料' }));

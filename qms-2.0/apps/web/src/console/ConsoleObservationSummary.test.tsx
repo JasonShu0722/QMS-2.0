@@ -24,9 +24,9 @@ const capabilities = [
 ] as const;
 function context(): ConsoleContext { return { actor: { id: actor, accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false,
   modules: capabilities.map(item => ({ key: item.key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: org, permissions: [item.permission] })) }; }
-function api(requests = 12): components['schemas']['ApiObservationPageDto'] { return { scope: 'ORGANIZATION', organizationId: org, from: '2026-10-29T04:00:00.000Z', to: time, asOf: time, page: 1, limit: 50, total: 0, items: [],
+function api(requests = 12): components['schemas']['ApiObservationPageDto'] { return { scope: 'ORGANIZATION', organizationId: org, from: '2026-10-29T04:00:00.000Z', to: time, asOf: time, page: 1, limit: 20, total: 0, items: [],
   summary: { requests, errors: 2, durationTotal: 240, durationMax: 80, le50: 10, le200: 2, le1000: 0, le5000: 0, gt5000: 0 }, collector: { status: 'UNKNOWN' } }; }
-function exchange(): components['schemas']['DataExchangePageDto'] { return { scope: 'ORGANIZATION', organizationId: org, from: time, to: time, asOf: time, page: 1, limit: 50, total: 0, sources: [], items: [], connectionStatus: 'NOT_CONNECTED', collection: { status: 'UNKNOWN' },
+function exchange(): components['schemas']['DataExchangePageDto'] { return { scope: 'ORGANIZATION', organizationId: org, from: time, to: time, asOf: time, page: 1, limit: 20, total: 0, sources: [], items: [], connectionStatus: 'NOT_CONNECTED', collection: { status: 'UNKNOWN' },
   summary: { batchAttempts: 0, recordAttempts: 0, transferSucceededBatches: 0, processingFailedBatches: 0, reconciliationSucceededBatches: 0 } }; }
 function services(): components['schemas']['ServiceOperationsPageDto'] { return { scope: 'ORGANIZATION', organizationId: org, asOf: time, sources: [{ key: 'files', coverage: 'ORGANIZATION', organizationId: org, asOf: time, status: 'RECENT_RESULT', configured: true, results: [{ status: 'FAILED', observedAt: time }] }] }; }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }

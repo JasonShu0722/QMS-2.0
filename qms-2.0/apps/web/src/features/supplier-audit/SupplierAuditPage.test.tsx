@@ -1,4 +1,4 @@
-import { expect, it, vi, afterEach } from 'vitest';
+import { expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
@@ -20,12 +20,28 @@ function server(permissions: string[]) {
     return { items: [record], total: 1 } as never;
   });
 }
-afterEach(() => vi.clearAllMocks());
+beforeEach(() => vi.stubEnv('NODE_ENV', 'development'));
+afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
+
+it('keeps plan and record page sizes independent', async () => {
+  server(['supplier-audit:plans:read', 'supplier-audit:records:read']);
+  render(<SupplierAuditPage />);
+  await screen.findByText(record.summary);
+  const plans = screen.getByRole('region', { name: '供应商审核计划' });
+  const records = screen.getByRole('region', { name: '供应商审核记录台账' });
+  expect(within(plans).getByRole('button', { name: '列设置' })).toBeEnabled();
+  expect(within(records).getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(within(plans).getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/plans?page=1&pageSize=50'));
+  expect(request).not.toHaveBeenCalledWith('/api/v1/supplier-audit/records?page=1&pageSize=50');
+});
 
 it('keeps the audit closure note when closing the drawer is declined', async () => {
   server(['supplier-audit:records:read', 'supplier-audit:records:close']);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierAuditPage /></UnsavedChangesProvider></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: '检查项与动作' }));
+  const summary = await screen.findByText(record.summary);
+  fireEvent.click(within(summary.closest('tr') as HTMLElement).getByRole('button', { name: '检查项与动作' }));
   const drawer = await screen.findByRole('dialog', { name: '供应商审核检查项' });
   fireEvent.change(await within(drawer).findByLabelText('关闭说明'), { target: { value: '已完成现场核查，尚待最终确认' } });
   fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
@@ -43,14 +59,15 @@ it('keeps the audit drawer open while closure is pending', async () => {
   render(<MemoryRouter><UnsavedChangesProvider><SupplierAuditPage /></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByText(record.summary);
   fireEvent.click(screen.getByRole('button', { name: '检查项与动作' }));
-  fireEvent.change(await screen.findByLabelText('关闭说明'), { target: { value: '现场证据完整' } });
-  fireEvent.click(screen.getByRole('button', { name: '关闭审核' }));
+  const drawer = await screen.findByRole('dialog', { name: '供应商审核检查项' });
+  fireEvent.change(await within(drawer).findByLabelText('关闭说明'), { target: { value: '现场证据完整' } });
+  fireEvent.click(within(drawer).getByRole('button', { name: '关闭审核' }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/records/record-1/close', expect.objectContaining({ method: 'PUT' })));
   try {
-    const close = within(screen.getByRole('dialog', { name: '供应商审核检查项' })).queryByRole('button', { name: 'Close' });
+    const close = within(drawer).queryByRole('button', { name: 'Close' });
     if (close) fireEvent.click(close);
     expect(screen.getByRole('dialog', { name: '供应商审核检查项' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: '放弃修改并关闭' })).not.toBeInTheDocument();
+    for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('放弃修改并关闭');
   } finally { await act(async () => { finish(); await pending; }); }
 });
 
@@ -98,8 +115,8 @@ it('loads a submitted plan beyond the ledger page when creating a record', async
   fireEvent.click(await screen.findByText('加载更多计划'));
   expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/plans?page=2&pageSize=20');
   fireEvent.click(await screen.findByText('上年度专项审核 · 2025'));
-  fireEvent.change(screen.getByLabelText('审核日期'), { target: { value: '2026-09-27' } });
-  fireEvent.change(screen.getByLabelText('审核员'), { target: { value: '张三' } });
+  fireEvent.change(screen.getByLabelText('审核日期', { selector: 'input' }), { target: { value: '2026-09-27' } });
+  fireEvent.change(screen.getByLabelText('审核员', { selector: 'input' }), { target: { value: '张三' } });
   fireEvent.change(screen.getByLabelText('审核摘要'), { target: { value: '现场审核' } });
   fireEvent.click(screen.getByText(/保\s*存/));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/records', expect.objectContaining({ method: 'POST', body: JSON.stringify({ planId: 'plan-older', auditDate: '2026-09-27', auditor: '张三', summary: '现场审核' }) })));

@@ -43,7 +43,7 @@ it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled clo
   await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await user.click(screen.getByRole('button', { name: kind === 'role' ? '编辑角色' : /^编\s*辑$/ }));
-  expect(screen.getByLabelText(label)).toHaveValue(kind === 'role' ? role.name : account.fullName);
+  expect(screen.getByLabelText(label, { selector: 'input' })).toHaveValue(kind === 'role' ? role.name : account.fullName);
   expect(writes).toEqual([]);
 }, 30000);
 

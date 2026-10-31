@@ -1,10 +1,11 @@
 import { useEffect, useState, type RefObject } from 'react';
-import { Alert, Button, Space, Spin, Table, Typography } from 'antd';
+import { Alert, Button, Space, Spin, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { verificationLabels } from '../process-quality/process-ledger';
+import { LedgerTable } from '../../ui/ledger';
 
 type Task = components['schemas']['SupplierSourceCollaborationTaskDto'];
 type Page = components['schemas']['SupplierSourceCollaborationPageDto'];
@@ -42,10 +43,10 @@ export function useSupplierSourceCollaboration(organizationId: string | null, li
       }).finally(() => { if (active()) setLoading(false); });
     return () => { controller.abort(); signal.removeEventListener('abort', abort); };
   }, [organizationId, lifetime, current, onDenied, enabled, request]);
-  return { data, error, loading, refresh: () => setRequest({}), retry: () => setRequest({ ...request }), more: () => { if (data?.nextCursor && !loading) setRequest({ cursor: data.nextCursor }); } };
+  return { data, error, loading, organizationId, refresh: () => setRequest({}), retry: () => setRequest({ ...request }), more: () => { if (data?.nextCursor && !loading) setRequest({ cursor: data.nextCursor }); } };
 }
 
-export function SupplierSourceCollaborationInbox({ data, error, loading, refresh, retry, more }: ReturnType<typeof useSupplierSourceCollaboration>) {
+export function SupplierSourceCollaborationInbox({ data, error, loading, organizationId, refresh, retry, more }: ReturnType<typeof useSupplierSourceCollaboration>) {
   const { t } = useLanguage();
   const text = (value: string | null) => value ?? t('未填写');
   return <section aria-label={t('SQE来源协作跟进')}>
@@ -56,16 +57,16 @@ export function SupplierSourceCollaborationInbox({ data, error, loading, refresh
     {loading && <Spin aria-label={t('正在加载来源协作')} />}
     {data && <>
       <div role="group" aria-label={t('SQE来源协作表格')} tabIndex={0} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-        <Table<Task> size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={data.items}
+        <LedgerTable<Task> ledgerId="supplier-source-collaboration" organizationId={organizationId ?? undefined} requiredColumnKeys={['title', 'actions']} size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={data.items}
           locale={{ emptyText: t('暂无SQE来源协作跟进') }} columns={[
-            { title: t('协作事项'), dataIndex: 'title' },
-            { title: t('来源类型'), render: (_, task) => t(sources[task.sourceKind] ?? task.sourceKind) },
-            { title: t('来源标识'), dataIndex: 'sourceId' },
-            { title: t('物料项标识'), dataIndex: 'materialItemId' },
-            { title: t('复核状态'), render: (_, task) => task.verification ? t(verificationLabels[task.verification] ?? task.verification) : t('暂无复核状态') },
-            { title: t('进展'), render: (_, task) => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text(task.progress)}</span> },
-            { title: t('结果'), render: (_, task) => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text(task.result)}</span> },
-            { title: t('操作'), render: (_, task) => <Link to={task.link}>{t('查看来源')}</Link> },
+            { key: 'title', title: t('协作事项'), dataIndex: 'title' },
+            { key: 'sourceKind', title: t('来源类型'), render: (_, task) => t(sources[task.sourceKind] ?? task.sourceKind) },
+            { key: 'sourceId', title: t('来源标识'), dataIndex: 'sourceId' },
+            { key: 'materialItemId', title: t('物料项标识'), dataIndex: 'materialItemId' },
+            { key: 'verification', title: t('复核状态'), render: (_, task) => task.verification ? t(verificationLabels[task.verification] ?? task.verification) : t('暂无复核状态') },
+            { key: 'progress', title: t('进展'), render: (_, task) => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text(task.progress)}</span> },
+            { key: 'result', title: t('结果'), render: (_, task) => <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text(task.result)}</span> },
+            { key: 'actions', title: t('操作'), render: (_, task) => <Link to={task.link}>{t('查看来源')}</Link> },
           ]} />
       </div>
       <p>{t('当前已加载协作')}：{data.items.length}</p><p>{t('协作已扫描问题')}：{data.scannedCount}</p>

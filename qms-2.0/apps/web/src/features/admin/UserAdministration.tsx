@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
-import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Tag, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation, getAdminUser, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -22,6 +23,8 @@ type UserForm = CreateUser & Pick<AdminUser, 'status'>;
 type ResetIssued = components['schemas']['PasswordResetIssuedDto'];
 
 export function UserAdministration({ organization, organizations, targetUserId, onDenied }: { organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string; onDenied?: (error: ApiError) => void }) {
+  const [pageSize, setPageSize] = useLedgerPageSize('admin-users', organization.id);
+  const [page, setPage] = useState(1);
   const { t, locale } = useLanguage();
   const sessionScope = useWorkTabsStore(state => state.sessionScope);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -83,7 +86,7 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const sourceScopeKey = JSON.stringify([sessionScope, organization.id, [...organization.permissions].sort()]);
   useEffect(() => { setSourceUser(undefined); }, [sourceScopeKey]);
   const canAssignPositions = canRead && canPreviewPositions(organization);
-  useEffect(() => { scopeGeneration.current += 1; setLifecycleDenied(false); setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, form]);
+  useEffect(() => { setPage(1); scopeGeneration.current += 1; setLifecycleDenied(false); setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setTemporary(undefined); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, form]);
 
   useEffect(() => {
     let current = true;
@@ -225,13 +228,13 @@ export function UserAdministration({ organization, organizations, targetUserId, 
       {canCreate && <Button type="primary" disabled={busy} onClick={() => edit('new')}>{t('创建用户')}</Button>}
       {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
     </Space></div>
-    {canRead && <Table<AdminUser> rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} columns={[
-      { title: t('用户名'), dataIndex: 'username' }, { title: t('姓名'), render: (_, user) => user.fullName || t('未填写') }, { title: t('电话'), render: (_, user) => user.phone || t('未填写') }, { title: t('邮箱'), dataIndex: 'email' },
-      { title: t('账号类型'), render: (_, user) => user.accountType === 'INTERNAL' ? t('内部') : t('供应商') },
-      { title: t('主组织'), render: (_, user) => user.organization.name },
-      { title: t('任职摘要'), render: (_, user) => user.positions?.length ? <>{user.positions.map(position => <div key={position.id}>{position.department?.name ?? t('组织直属')} · {position.name}</div>)}{(user.totalPositions ?? 0) > user.positions.length && <Typography.Text type="secondary">{t('更多任职请查看详情')}</Typography.Text>}</> : '—' },
-      { title: t('状态'), render: (_, user) => <Tag color={user.status === 'ACTIVE' ? 'green' : 'default'}>{user.status === 'ACTIVE' ? t('启用') : t('停用')}</Tag> },
-      { title: t('操作'), render: (_, user) => <Space wrap>
+    {canRead && <LedgerTable<AdminUser> ledgerId="admin-users" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || batchBusy, onChange: (nextPage, size) => requestLeave(() => { setPage(size === pageSize ? nextPage : 1); setPageSize(size); }) }} columns={[
+      { key: 'username', title: t('用户名'), dataIndex: 'username' }, { key: 'fullName', title: t('姓名'), render: (_, user) => user.fullName || t('未填写') }, { key: 'phone', title: t('电话'), render: (_, user) => user.phone || t('未填写') }, { key: 'email', title: t('邮箱'), dataIndex: 'email' },
+      { key: 'accountType', title: t('账号类型'), render: (_, user) => user.accountType === 'INTERNAL' ? t('内部') : t('供应商') },
+      { key: 'organization', title: t('主组织'), render: (_, user) => user.organization.name },
+      { key: 'positions', title: t('任职摘要'), render: (_, user) => user.positions?.length ? <>{user.positions.map(position => <div key={position.id}>{position.department?.name ?? t('组织直属')} · {position.name}</div>)}{(user.totalPositions ?? 0) > user.positions.length && <Typography.Text type="secondary">{t('更多任职请查看详情')}</Typography.Text>}</> : '—' },
+      { key: 'status', title: t('状态'), render: (_, user) => <Tag color={user.status === 'ACTIVE' ? 'green' : 'default'}>{user.status === 'ACTIVE' ? t('启用') : t('停用')}</Tag> },
+      { key: 'actions', title: t('操作'), render: (_, user) => <Space wrap>
         <Button size="small" disabled={busy} onClick={() => setMfa({ user, organizationId: organization.id })}>{t('MFA 设置')}</Button>
         {(canUpdate || canStatus || canTransfer) && <Button size="small" disabled={busy} onClick={() => edit(user)}>{t('编辑')}</Button>}
         {canStatus && <Button size="small" disabled={busy} onClick={() => void perform(async () => { await mutate.current<AdminUser>(scopePath(`users/${user.id}`, organization.id), 'PATCH', { status: user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE' }); }, user.status === 'ACTIVE' ? '用户已停用' : '用户已启用')}>{user.status === 'ACTIVE' ? t('停用') : t('启用')}</Button>}

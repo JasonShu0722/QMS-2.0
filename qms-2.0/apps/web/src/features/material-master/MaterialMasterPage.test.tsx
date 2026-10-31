@@ -31,6 +31,19 @@ beforeEach(() => {
 });
 const upload = () => { if (!screen.queryByLabelText('物料清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入物料' })); fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } }); };
 
+it('paginates the complete material array locally without a new request', async () => {
+  vi.mocked(apiRequest).mockResolvedValue(Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` })));
+  render(<MaterialMasterPage organizationId="target-org" organizationPermissions={permissions} />);
+  await screen.findByText('物料-0');
+  expect(screen.queryByText('物料-24')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(screen.getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  expect(await screen.findByText('物料-24')).toBeInTheDocument();
+  expect(apiRequest).toHaveBeenCalledTimes(1);
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org');
+});
+
 it('keeps the material section heading accessible without a duplicate visible title', async () => {
   render(<MaterialMasterPage organizationPermissions={permissions} />);
   await screen.findByText('原物料');
@@ -43,8 +56,8 @@ it('shows two fields only and creates string codes through the generated contrac
   render(<MaterialMasterPage organizationPermissions={permissions} />);
   await screen.findByText('原物料');
   fireEvent.click(screen.getByRole('button', { name: '新增物料' }));
-  fireEvent.change(screen.getByLabelText('物料编码'), { target: { value: '00043' } });
-  fireEvent.change(screen.getByLabelText('物料名称'), { target: { value: '中文新物料' } });
+  fireEvent.change(screen.getByLabelText('物料编码', { selector: 'input' }), { target: { value: '00043' } });
+  fireEvent.change(screen.getByLabelText('物料名称', { selector: 'input' }), { target: { value: '中文新物料' } });
   fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters', expect.objectContaining({ method: 'POST', body: JSON.stringify({ materialCode: '00043', materialName: '中文新物料' }) })));
   expect(screen.queryByText('单位')).not.toBeInTheDocument();

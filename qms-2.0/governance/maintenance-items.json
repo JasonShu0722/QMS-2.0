@@ -6,11 +6,11 @@
       "category": "deprecation",
       "status": "open",
       "owner": "QMS Web 维护者",
-      "fact": "历史记录：2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-20 REQ-0022账号改为两区概览和独立设置，继续使用Card/Table和Space，账号31项及资料返修24项通过；本轮仍出现其他页面Drawer width、Spin tip提示及useForm连接警告，升级前须分别核对。2026-10-24 重新复核：AccountCenterPage 仍使用 Card/Descriptions/Space；仅运行 AccountCenter.u3.test.tsx，20/20 通过、退出码0，本次输出未出现 warning。静态读取仍发现审核标准页使用 List/Drawer width、新产品质量页使用 Space direction；已安装 Ant Design 的 List/Space 实现仍有对应弃用分支，不能据账号单文件无警告认定全站已消除。 2026-10-27 N4来源复核：新品项目页本批仅增加独立同源8D入口及真实项目上下文，既有List与Space direction用法仍保留；对应新品页面完整文件已回归，但未实施全站弃用迁移，维护项继续open，原复核期限不变。 2026-10-30 CP-1来源复核：AccountCenter新增受真实context约束的新窗口管理入口、nullable直属岗位展示及对应用例；Card/Descriptions/Space既有组合保留，本次未作全站弃用迁移，不关闭或延长原复核期限。 2026-10-31 REQ0033复核：账号仅标题去重及设置入口重排、供应商标题分支保留，审核标准和新品仅固定标题/泛化介绍精简；原Card/Descriptions/Space与List/Space旧用法仍存在，回归原Ant Design告警保留，未执行全站弃用迁移，维持open及原reviewDue。 2026-10-31 REQ0033-fix1人工验收失败返修：审核标准仅删除常态发布版本介绍并把不可编辑后果放到草稿发布操作旁；List与原组件用法不变，维持open和原reviewDue，不将文案整改当作弃用迁移完成。",
+      "fact": "历史记录：2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-20 REQ-0022账号改为两区概览和独立设置，继续使用Card/Table和Space，账号31项及资料返修24项通过；本轮仍出现其他页面Drawer width、Spin tip提示及useForm连接警告，升级前须分别核对。2026-10-24 重新复核：AccountCenterPage 仍使用 Card/Descriptions/Space；仅运行 AccountCenter.u3.test.tsx，20/20 通过、退出码0，本次输出未出现 warning。静态读取仍发现审核标准页使用 List/Drawer width、新产品质量页使用 Space direction；已安装 Ant Design 的 List/Space 实现仍有对应弃用分支，不能据账号单文件无警告认定全站已消除。 2026-10-27 N4来源复核：新品项目页本批仅增加独立同源8D入口及真实项目上下文，既有List与Space direction用法仍保留；对应新品页面完整文件已回归，但未实施全站弃用迁移，维护项继续open，原复核期限不变。 2026-10-30 CP-1来源复核：AccountCenter新增受真实context约束的新窗口管理入口、nullable直属岗位展示及对应用例；Card/Descriptions/Space既有组合保留，本次未作全站弃用迁移，不关闭或延长原复核期限。 2026-10-31 REQ0033复核：账号仅标题去重及设置入口重排、供应商标题分支保留，审核标准和新品仅固定标题/泛化介绍精简；原Card/Descriptions/Space与List/Space旧用法仍存在，回归原Ant Design告警保留，未执行全站弃用迁移，维持open及原reviewDue。 2026-10-31 REQ0033-fix1人工验收失败返修：审核标准仅删除常态发布版本介绍并把不可编辑后果放到草稿发布操作旁；List与原组件用法不变，维持open和原reviewDue，不将文案整改当作弃用迁移完成。 2026-10-31 REQ-0034复核：审核标准动态检查项增加编号/内容显式字段标签，标准目录另有从固定首屏20改为现有契约真实分页的候选；原List、Space和Drawer及编辑器保存边界仍保留，新增分页回归待完成；本轮不做弃用迁移，不以样式/规范/局部测试结案，保持open与原reviewDue。",
       "impact": "全站仍有组件弃用用法，未来升级 Ant Design 可能需要兼容性修改；账号单文件测试通过不证明其他页面无警告、真实浏览器已验收或生产存在/不存在故障。",
       "trigger": "升级 Ant Design 前、相关来源变化或警告升级为构建/测试失败时提前复核；无新触发时30天复核。",
-      "nextAction": "升级前核对官方迁移说明并逐页验证 List、Space direction、Drawer width 及历史 Spin tip/useForm 提示；本轮仅确认账号所选文件无警告，不修改业务代码，不据此关闭全局事项。命令、退出码和未覆盖范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。",
-      "reviewedOn": "2026-10-30",
+      "nextAction": "升级前核对官方迁移说明并逐页验证 List、Space direction、Drawer width 及历史 Spin tip/useForm 提示。2026-10-24复核仅确认账号所选文件无警告，命令、退出码和未覆盖范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md；REQ-0034标签与分页候选不是弃用迁移，不据此关闭全局事项，仍按原期限接续复核。",
+      "reviewedOn": "2026-10-31",
       "reviewDue": "2026-11-23",
       "sources": [
         {
@@ -23,7 +23,7 @@
         },
         {
           "path": "apps/web/src/features/audit-standards/AuditStandardsPage.tsx",
-          "sha256": "defc5b81fa2548e1b8d7e83d9e205b57dc1e925222a2aedd9b7de6f5b2d6376d"
+          "sha256": "3e046e47612c49cbf30dfddfb795bef331a3536acc4843e077223ad55c3be619"
         },
         {
           "path": "apps/web/src/features/new-product-quality/NewProductQualityPage.tsx",

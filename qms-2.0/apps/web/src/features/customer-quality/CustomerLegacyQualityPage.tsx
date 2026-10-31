@@ -8,6 +8,7 @@ import { CustomerComplaintProcessing } from './CustomerComplaintProcessing';
 import { CustomerComplaintEntry } from './CustomerComplaintEntry';
 import './customer-quality.css';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Complaint = components['schemas']['CustomerComplaintDto'];
 type ComplaintDetail = components['schemas']['CustomerComplaintDetailDto'];
@@ -18,6 +19,8 @@ type Permissions = components['schemas']['PermissionsResponseDto'];
 const typeLabels: Record<Complaint['complaint_type'], string> = { ZERO_KM: '0KM', AFTER_SALES: '售后' };
 
 export function CustomerLegacyQualityPage() {
+  const [pageSize, setPageSize] = useLedgerPageSize('customer-legacy-quality');
+  const [page, setPage] = useState(1);
   const [items, setItems] = useState<Complaint[]>([]);
   const [selected, setSelected] = useState<ComplaintDetail>();
   const [search, setSearch] = useState('');
@@ -95,14 +98,14 @@ export function CustomerLegacyQualityPage() {
   return <main className="customer-quality-page">
     <header className="customer-quality-heading"><h1 className="sr-only">客诉台账</h1><Button onClick={() => void load()} loading={loading}>刷新</Button></header>
     {error ? <Alert type={error instanceof ApiError && error.status === 403 ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 403 ? '暂无客诉台账访问权限' : error instanceof ApiError ? safeAccountError(error) : '客诉台账加载失败，请重试。'} description={error instanceof ApiError ? error.traceId : undefined} action={error instanceof ApiError && error.status === 403 ? undefined : <Button onClick={() => void load()}>重试</Button>} /> : null}
-    <section className="customer-quality-card"><Space className="customer-quality-toolbar" wrap><Input.Search aria-label="搜索客诉" placeholder="搜索编号、产品、VIN 或描述" allowClear onSearch={setSearch} onChange={(event) => setSearch(event.target.value)} /><Typography.Text type="secondary">共 {filtered.length} 条</Typography.Text></Space>
-      {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? null : <Table<Complaint> rowKey="id" dataSource={filtered} scroll={{ x: 900 }} locale={{ emptyText: <Empty description={search ? '没有匹配的客诉' : '暂无客诉记录'} /> }} columns={[
-        { title: '客诉编号', dataIndex: 'complaint_number', render: (value: string, row) => <Button type="link" onClick={() => requestLeave(() => { setSelected(undefined); void openDetail(row.id); })}>{value}</Button> },
-        { title: '类型', dataIndex: 'complaint_type', render: (value: Complaint['complaint_type']) => typeLabels[value] },
-        { title: '产品', dataIndex: 'product_code', render: (value?: string | null) => value || '未填写' },
-        { title: '严重度', dataIndex: 'severity', render: (value: string) => <Tag color={value === 'CRITICAL' || value === 'HIGH' ? 'red' : 'blue'}>{value}</Tag> },
-        { title: '状态', dataIndex: 'status' },
-        { title: '更新时间', dataIndex: 'created_at', render: (value: string) => new Date(value).toLocaleString() },
+    <section className="customer-quality-card"><Space className="customer-quality-toolbar" wrap><Input.Search aria-label="搜索客诉" placeholder="搜索编号、产品、VIN 或描述" allowClear onSearch={(value) => { setSearch(value); setPage(1); }} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /><Typography.Text type="secondary">共 {filtered.length} 条</Typography.Text></Space>
+      {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? null : <LedgerTable<Complaint> ledgerId="customer-legacy-quality" requiredColumnKeys={['complaint_number']} rowKey="id" dataSource={filtered} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} scroll={{ x: 900 }} locale={{ emptyText: <Empty description={search ? '没有匹配的客诉' : '暂无客诉记录'} /> }} columns={[
+        { key: 'complaint_number', title: '客诉编号', dataIndex: 'complaint_number', render: (value: string, row) => <Button type="link" onClick={() => requestLeave(() => { setSelected(undefined); void openDetail(row.id); })}>{value}</Button> },
+        { key: 'complaint_type', title: '类型', dataIndex: 'complaint_type', render: (value: Complaint['complaint_type']) => typeLabels[value] },
+        { key: 'product_code', title: '产品', dataIndex: 'product_code', render: (value?: string | null) => value || '未填写' },
+        { key: 'severity', title: '严重度', dataIndex: 'severity', render: (value: string) => <Tag color={value === 'CRITICAL' || value === 'HIGH' ? 'red' : 'blue'}>{value}</Tag> },
+        { key: 'status', title: '状态', dataIndex: 'status' },
+        { key: 'created_at', title: '更新时间', dataIndex: 'created_at', render: (value: string) => new Date(value).toLocaleString() },
       ]} />}
     </section>
     {permissionError && !(error instanceof ApiError && error.status === 403) ? <Alert type="warning" showIcon title="无法验证客诉导入权限" action={<Button onClick={() => void loadPermissions()}>重试</Button>} /> : null}

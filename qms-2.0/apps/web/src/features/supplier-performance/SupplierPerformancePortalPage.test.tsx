@@ -41,9 +41,9 @@ it('keeps the supplier appeal reason when closing is cancelled and discards only
   await waitFor(() => expect(confirmation).not.toBeVisible());
   expect(within(modal).getByRole('textbox', { name: '申诉说明' })).toHaveValue('待核查的检验批次');
   await user.click(within(modal).getByRole('button', { name: '关闭' }));
-  await user.click(await screen.findByRole('button', { name: '放弃修改并关闭' }));
+  await user.click(await within(confirmation).findByRole('button', { name: '放弃修改并关闭' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '申诉 2026-09 绩效卡' })).not.toBeInTheDocument());
-  await user.click(screen.getByRole('button', { name: '提出申诉' }));
+  await user.click(within(screen.getByRole('region', { name: '已发布绩效卡' })).getByRole('button', { name: '提出申诉' }));
   const reopened = await screen.findByRole('dialog', { name: '申诉 2026-09 绩效卡' });
   await waitFor(() => expect(reopened).toBeVisible());
   expect(within(reopened).getByRole('textbox', { name: '申诉说明' })).toHaveValue('');

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest } from '../../api/client';
@@ -8,6 +9,34 @@ import { SupplierAdmissionPage } from './SupplierAdmissionPage';
 vi.mock('../../api/client', async () => { const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client'); return { ...actual, apiRequest: vi.fn() }; });
 
 beforeEach(() => vi.mocked(apiRequest).mockReset());
+
+it('resets document pagination to page one when the status filter changes', async () => {
+  vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 125 } as never);
+  render(<SupplierAdmissionPage />);
+  await screen.findByText('暂无质量资料');
+  await userEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-admission/quality-documents?page=2&pageSize=20'));
+  await screen.findByText('暂无质量资料');
+  await userEvent.click(screen.getByRole('combobox', { name: '按状态筛选' }));
+  await userEvent.click(await screen.findByText('待审核', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-admission/quality-documents?page=1&pageSize=20&status=SUBMITTED'));
+});
+
+it.each([false, true])('uses real document pagination and a local column settings entry (portal=%s)', async portal => {
+  vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 125 } as never);
+  render(<SupplierAdmissionPage portal={portal} />);
+  const base = portal ? '/api/v1/supplier-portal/quality-documents' : '/api/v1/supplier-admission/quality-documents';
+  await screen.findByText('暂无质量资料');
+  expect(apiRequest).toHaveBeenCalledWith(`${base}?page=1&pageSize=20`);
+  const ledger = screen.getByRole('region', { name: '质量资料台账' });
+  expect(within(ledger).getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(within(ledger).getByTitle('2'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}?page=2&pageSize=20`));
+  await screen.findByText('暂无质量资料');
+  await userEvent.click(within(ledger).getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}?page=1&pageSize=50`));
+});
 
 it.each([false, true])('keeps header guidance scoped to the portal (portal=%s)', async portal => {
   vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 0 } as never);
@@ -25,10 +54,10 @@ it.each([
   vi.mocked(apiRequest).mockResolvedValue({ items: [{ id: 'd1', documentType: 'QUALITY_MANUAL', title: '质量手册', status: 'DRAFT', version: 1 }], total: 1 } as never);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierAdmissionPage portal /><Link to="/other">离开供应商资料页</Link></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByRole('button', { name: '提交审核' });
-  fireEvent.change(screen.getByLabelText(field), { target: { value } });
+  fireEvent.change(screen.getByLabelText(field, { selector: 'input' }), { target: { value } });
   fireEvent.click(screen.getByRole('link', { name: '离开供应商资料页' }));
   fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
-  expect(screen.getByLabelText(field)).toHaveValue(value);
+  expect(screen.getByLabelText(field, { selector: 'input' })).toHaveValue(value);
   expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
 });
 

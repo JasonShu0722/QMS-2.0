@@ -6,14 +6,14 @@ import { ApiError, apiRequest, createAdminMutation, safeAccountError } from '../
 import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 
 type Task = components['schemas']['ClosureTaskDto'];
 type Tasks = components['schemas']['ClosureTaskPageDto'];
 type Notices = components['schemas']['ClosureNotificationPageDto'];
 type Round = components['schemas']['WorkflowClosureRoundDto'];
 type Decision = components['schemas']['DecideWorkflowClosureRoundDto'];
-const pageSize = 25;
-const taskPath = (offset: number) => `/api/v1/tasks/closure?pageSize=${pageSize}&offset=${offset}`;
+const taskPath = (offset: number, pageSize: number) => `/api/v1/tasks/closure?pageSize=${pageSize}&offset=${offset}`;
 const historyPath = (problemId: string) => `/api/v1/workflow-closure/problems/${encodeURIComponent(problemId)}/rounds`;
 const dutyNames = { PROFESSIONAL: '专业审核', SECTION_MANAGER: '科室经理', MINISTER: '部长' };
 const statusNames = { PENDING: '待处理', WAITING: '等待前序', APPROVED: '已通过', RETURNED: '已退回', CANCELLED: '已取消', SKIPPED_SAME_PERSON: '同人跳过' };
@@ -68,6 +68,8 @@ export function ClosureTaskInbox({ onDenied }: { onDenied?: (cause: unknown) => 
 
 function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?: (cause: unknown) => void }) {
   const { t, locale } = useLanguage();
+  const [taskPageSize, setTaskPageSize] = useLedgerPageSize('closure-duties');
+  const [noticePageSize, setNoticePageSize] = useLedgerPageSize('closure-notifications');
   const text = (value: string) => locale === 'en-US' ? english[value] ?? t(value) : t(value);
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
@@ -120,8 +122,8 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
     }
     if (cause instanceof ApiError && [401, 403].includes(cause.status ?? 0)) deniedCallback.current?.(cause);
   }, [current]);
-  const tasks = usePage<Tasks>(taskPath(taskOffset), current, reportError);
-  const notices = usePage<Notices>(`/api/v1/notifications/closure?pageSize=${pageSize}&offset=${noticeOffset}`, current, reportError);
+  const tasks = usePage<Tasks>(taskPath(taskOffset, taskPageSize), current, reportError);
+  const notices = usePage<Notices>(`/api/v1/notifications/closure?pageSize=${noticePageSize}&offset=${noticeOffset}`, current, reportError);
   useUnsavedChanges(!!selected && (comment.length > 0 || decision !== 'APPROVE' || jointConfirmed || !!attempt));
   useNavigationBusy(!denied && (busy || !!attempt));
   useEffect(() => {
@@ -138,7 +140,7 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
     const active = () => current() && !controller.signal.aborted;
     try {
       if (reloadTask) {
-        const fresh = await apiRequest<Tasks>(taskPath(taskOffset), { signal: controller.signal });
+        const fresh = await apiRequest<Tasks>(taskPath(taskOffset, taskPageSize), { signal: controller.signal });
         if (!active()) return;
         tasks.replace(fresh);
         const updated = fresh.items.find(item => item.id === task.id && item.roundId === task.roundId && item.userId === task.userId && item.duty === task.duty);
@@ -194,7 +196,7 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
       reportError(cause, true);
     } finally { if (current()) { writing.current = false; setBusy(false); } }
   }
-  const pagination = (offset: number, total: number, change: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger={false} onChange={page => change((page - 1) * pageSize)} />;
+  const pagination = (offset: number, total: number, pageSize: number, change: (value: number) => void, changeSize: (value: number) => void) => <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(total, 10000 + pageSize)} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current && !attempt) requestLeave(() => { change(size === pageSize ? (page - 1) * size : 0); changeSize(size); }); }} />;
   const refreshTasks = () => { if (!writing.current && !attempt) requestLeave(tasks.refresh); };
   const locked = busy || !!attempt || !!denied;
   const closeLocked = !denied && (busy || !!attempt);
@@ -209,24 +211,24 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
       <section aria-label={text('关闭职责待办')} style={{ minWidth: 0 }}>
         <Space wrap><Typography.Title level={4}>{text('关闭职责待办')}</Typography.Title><Button onClick={refreshTasks} disabled={tasks.loading || locked || checking}>{text('刷新职责待办')}</Button></Space>
         {tasks.error && <Alert type="error" showIcon title={text('加载失败，请重试')} />}
-        {!tasks.error && <Table<Task> rowKey="id" size="small" loading={tasks.loading} dataSource={tasks.data?.items ?? []} pagination={false} scroll={{ x: 880 }} locale={{ emptyText: text('暂无关闭职责待办') }} columns={[
+        {!tasks.error && <LedgerTable<Task> ledgerId="closure-duties" requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasks.loading} dataSource={tasks.data?.items ?? []} pagination={false} scroll={{ x: 880 }} locale={{ emptyText: text('暂无关闭职责待办') }} columns={[
           { title: text('问题编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={workspace(item.problemId)}>{value}</Link> },
           { title: text('职责'), dataIndex: 'duty', render: (value: Task['duty'], item) => <Space orientation="vertical" size={0}><Tag>{text(dutyNames[value])}</Tag>{value !== 'PROFESSIONAL' && item.requiresJointConfirmation && <Typography.Text strong>{text('本次一次确认科室经理与部长两份职责，不包含专业审核。')}</Typography.Text>}</Space> },
           { title: text('固定内容版本'), dataIndex: 'contentVersion' }, { title: text('轮次版本'), dataIndex: 'roundVersion' },
           { title: text('轮次标识'), dataIndex: 'roundId' },
-          { title: text('操作'), render: (_, item) => <Button disabled={!item.canAct || item.status !== 'PENDING' || locked || checking || !!selected} onClick={event => { trigger.current = event.currentTarget; setSelected(item); setComment(''); setDecision('APPROVE'); void checkHistory(item); }}>{text('审核关闭职责')}</Button> },
+          { key: 'actions', title: text('操作'), render: (_, item) => <Button disabled={!item.canAct || item.status !== 'PENDING' || locked || checking || !!selected} onClick={event => { trigger.current = event.currentTarget; setSelected(item); setComment(''); setDecision('APPROVE'); void checkHistory(item); }}>{text('审核关闭职责')}</Button> },
         ]} />}
-        {tasks.data && <><Typography.Paragraph>{locale === 'en-US' ? `Duty tasks: ${tasks.data.total} (not problem count)` : `职责待办总数：${tasks.data.total}（非问题数）`}</Typography.Paragraph>{pagination(taskOffset, tasks.data.total, value => requestLeave(() => setTaskOffset(value)))}</>}
+        {tasks.data && <><Typography.Paragraph>{locale === 'en-US' ? `Duty tasks: ${tasks.data.total} (not problem count)` : `职责待办总数：${tasks.data.total}（非问题数）`}</Typography.Paragraph>{pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}</>}
       </section>
       <section aria-label={text('关闭职责通知')} style={{ minWidth: 0 }}>
         <Space wrap><Typography.Title level={4}>{text('关闭职责通知')}</Typography.Title><Button onClick={notices.refresh} disabled={notices.loading}>{text('刷新职责通知')}</Button></Space>
         {notices.error && <Alert type="error" showIcon title={text('加载失败，请重试')} />}
-        {!notices.error && <Table<Notices['items'][number]> rowKey="id" size="small" loading={notices.loading} dataSource={notices.data?.items ?? []} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: text('暂无关闭职责通知') }} columns={[
-          { title: text('问题编号'), render: (_, item) => <Link to={workspace(item.problemId)}>{item.reportNumber}</Link> },
-          { title: text('通知'), render: (_, item) => <Space orientation="vertical" size={0}><Typography.Text strong>{item.subject}</Typography.Text><Typography.Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.body}</Typography.Text></Space> },
-          { title: text('职责'), render: (_, item) => item.duties.map(name => text(dutyNames[name])).join(' / ') },
+        {!notices.error && <LedgerTable<Notices['items'][number]> ledgerId="closure-notifications" requiredColumnKeys={['reportNumber']} rowKey="id" size="small" loading={notices.loading} dataSource={notices.data?.items ?? []} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: text('暂无关闭职责通知') }} columns={[
+          { key: 'reportNumber', title: text('问题编号'), render: (_, item) => <Link to={workspace(item.problemId)}>{item.reportNumber}</Link> },
+          { key: 'notice', title: text('通知'), render: (_, item) => <Space orientation="vertical" size={0}><Typography.Text strong>{item.subject}</Typography.Text><Typography.Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.body}</Typography.Text></Space> },
+          { key: 'duties', title: text('职责'), render: (_, item) => item.duties.map(name => text(dutyNames[name])).join(' / ') },
         ]} />}
-        {notices.data && pagination(noticeOffset, notices.data.total, setNoticeOffset)}
+        {notices.data && pagination(noticeOffset, notices.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
       </section>
     </>}
     {!selected && deniedOutcome}

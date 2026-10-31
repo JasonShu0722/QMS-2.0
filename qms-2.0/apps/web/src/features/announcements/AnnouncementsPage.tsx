@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Card, Drawer, Empty, Form, Input, List, Modal, Pa
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useLedgerPageSize } from '../../ui/ledger';
 import './announcements.css';
 
 type AnnouncementInput = components['schemas']['AnnouncementInputDto'];
@@ -14,13 +15,14 @@ type Receipt = components['schemas']['AnnouncementReceiptDto'];
 type AudienceUsers = components['schemas']['AnnouncementAudienceUsersDto'];
 
 const basePath = '/api/v1/announcements';
-const managePageSize = 20;
 const statusLabel: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' };
 
 function denied(error: unknown) { return error instanceof ApiError && error.status === 403; }
 function formatDate(value: unknown) { return typeof value === 'string' ? new Date(value).toLocaleString('zh-CN') : ''; }
 
 export function AnnouncementsPage() {
+  const [managePageSize, setManagePageSize] = useLedgerPageSize('announcements-management');
+  const requestLeave = useNavigationGuard();
   const [mine, setMine] = useState<MinePage>();
   const [managed, setManaged] = useState<ManagePage>();
   const [users, setUsers] = useState<AudienceUsers>();
@@ -57,7 +59,7 @@ export function AnnouncementsPage() {
       if (managePage) void apiRequest<AudienceUsers>(basePath + '/audience-users', { signal: controller.signal }).then((value) => { if (!controller.signal.aborted) setUsers(value); }).catch((error: unknown) => { if (!controller.signal.aborted) setLoadError(error); });
     }).catch((error: unknown) => { if (!controller.signal.aborted) setLoadError(error); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [revision, managePageIndex]);
+  }, [revision, managePageIndex, managePageSize]);
 
   async function mutate<T>(path: string, method: 'POST' | 'PUT', body?: unknown) {
     const signature = JSON.stringify([path, method, body]);
@@ -112,7 +114,7 @@ export function AnnouncementsPage() {
         {mine.unreadMustReadCount > 0 && <Alert type="warning" showIcon title={mine.unreadMustReadCount + ' 条重要公告待阅读'} />}
         <List dataSource={mine.items} locale={{ emptyText: <Empty description="暂无面向我的公告" /> }} renderItem={(item: MineItem) => <List.Item key={item.id}><Card className="announcements-item" title={<Space wrap><span>{item.title}</span>{item.importance === 'IMPORTANT' && <Tag color="orange">重要</Tag>}{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Tag>{item.readAt ? '已读' : '未读'}</Tag>}><Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph><Space wrap><Typography.Text type="secondary">{formatDate(item.publishedAt)}</Typography.Text>{!item.readAt && <Button type="primary" loading={busy} onClick={() => void act(async () => { await mutate(basePath + '/' + item.id + '/read', 'POST'); window.dispatchEvent(new Event('qms:announcement-read')); })}>我已阅读</Button>}</Space></Card></List.Item>} />
       </Space> },
-      ...(managed ? [{ key: 'manage', label: '公告管理', children: <div className="announcements-column"><List dataSource={managed.items} locale={{ emptyText: <Empty description="暂无公告" /> }} renderItem={(item: ManageItem) => <List.Item key={item.id}><Card className="announcements-item" title={<Space wrap><span>{item.title}</span><Tag>{statusLabel[item.status] ?? item.status}</Tag>{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Space wrap><Typography.Text type="secondary">阅读 {item.readCount}/{item.recipientCount}</Typography.Text></Space>}><Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph><Space wrap>{item.status === 'DRAFT' && <><Button onClick={() => setEditor(item)}>编辑</Button><Button type="primary" loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/publish', 'POST', { expectedVersion: item.version }))}>发布</Button></>}{item.status === 'PUBLISHED' && <Button loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/archive', 'POST', { expectedVersion: item.version }))}>归档</Button>}{item.status !== 'DRAFT' && <Button onClick={() => void showReceipts(item.id)}>阅读审计</Button>}</Space></Card></List.Item>} /><Pagination className="announcements-pagination" current={managed.page} pageSize={managed.pageSize} total={managed.total} showSizeChanger={false} onChange={setManagePageIndex} showTotal={(total) => '共 ' + total + ' 条'} /></div> }] : []),
+      ...(managed ? [{ key: 'manage', label: '公告管理', children: <div className="announcements-column"><List dataSource={managed.items} locale={{ emptyText: <Empty description="暂无公告" /> }} renderItem={(item: ManageItem) => <List.Item key={item.id}><Card className="announcements-item" title={<Space wrap><span>{item.title}</span><Tag>{statusLabel[item.status] ?? item.status}</Tag>{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Space wrap><Typography.Text type="secondary">阅读 {item.readCount}/{item.recipientCount}</Typography.Text></Space>}><Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph><Space wrap>{item.status === 'DRAFT' && <><Button onClick={() => setEditor(item)}>编辑</Button><Button type="primary" loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/publish', 'POST', { expectedVersion: item.version }))}>发布</Button></>}{item.status === 'PUBLISHED' && <Button loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/archive', 'POST', { expectedVersion: item.version }))}>归档</Button>}{item.status !== 'DRAFT' && <Button onClick={() => void showReceipts(item.id)}>阅读审计</Button>}</Space></Card></List.Item>} /><Pagination className="announcements-pagination" current={managed.page} pageSize={managePageSize} total={managed.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!busy) requestLeave(() => { setManagePageIndex(size === managePageSize ? page : 1); setManagePageSize(size); }); }} showTotal={(total) => '共 ' + total + ' 条'} /></div> }] : []),
     ]} />}
     {editor && <AnnouncementEditor key={editor === 'new' ? 'new' : editor.id} initial={editor === 'new' ? undefined : editor} users={users?.items ?? []} totalUsers={users?.total} busy={busy} error={mutationError} close={() => { setEditor(undefined); setMutationError(undefined); }} save={save} />}
     <Drawer title="阅读审计" open={!!auditId} onClose={closeReceipts} width={560}>{Boolean(auditError) && <Alert type={denied(auditError) ? 'warning' : 'error'} title={safeAccountError(auditError)} />}{!receipts && !auditError ? <Spin /> : <List dataSource={receipts} locale={{ emptyText: <Empty description="暂无阅读记录" /> }} renderItem={(receipt) => <List.Item key={receipt.userId}><List.Item.Meta title={users?.items.find((user) => user.id === receipt.userId)?.username ?? receipt.userId} description={receipt.readAt ? '已读：' + formatDate(receipt.readAt) : '未读'} />{receipt.readTraceId && <Typography.Text type="secondary" copyable>{String(receipt.readTraceId)}</Typography.Text>}</List.Item>} />}</Drawer>

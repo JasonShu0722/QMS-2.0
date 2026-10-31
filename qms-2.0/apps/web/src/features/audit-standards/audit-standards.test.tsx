@@ -12,6 +12,22 @@ vi.mock('../../api/client', async () => {
 
 beforeEach(() => vi.mocked(apiRequest).mockReset());
 
+it('labels repeated checklist fields with stable row identities after another row is removed', async () => {
+  vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+  render(<AuditStandardsPage />);
+  fireEvent.click(screen.getByRole('button', { name: '新建标准' }));
+  const title = await screen.findByText('新建审核标准', { selector: '.ant-drawer-title' });
+  const editor = within(title.closest('[role="dialog"]') as HTMLElement);
+  expect(editor.getByRole('textbox', { name: '检查项 1 编号' })).toBeVisible();
+  expect(editor.getByRole('textbox', { name: '检查项 1 内容' })).toBeVisible();
+  fireEvent.click(editor.getByRole('button', { name: '添加检查项' }));
+  fireEvent.change(editor.getByRole('textbox', { name: '检查项 2 内容' }), { target: { value: '保留第二项内容' } });
+  fireEvent.click(editor.getAllByRole('button', { name: /删\s*除/ })[0]!);
+  expect(editor.queryByRole('textbox', { name: '检查项 1 编号' })).not.toBeInTheDocument();
+  expect(editor.getByRole('textbox', { name: '检查项 2 内容' })).toHaveValue('保留第二项内容');
+  expect(editor.getByRole('textbox', { name: '检查项 2 编号' })).toBeVisible();
+});
+
 it('lists published standards and opens immutable version details', async () => {
   vi.mocked(apiRequest)
     .mockResolvedValueOnce({ items: [{ id: 'standard-1', name: '过程审核检查表', auditType: 'PROCESS', status: 'PUBLISHED', version: 2, latestVersion: 1, updatedAt: '2026-09-24T00:00:00.000Z' }], total: 1, page: 1, pageSize: 20 })

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Space, Spin, Table, Tooltip, Typography } from 'antd';
+import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Space, Spin, Tooltip, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { CircleAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
@@ -331,12 +332,13 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
 }
 
 function ComponentProjectScope({ organization }: { organization: AdminOrganization }) {
+  const [preferredPageSize, setPageSize] = useLedgerPageSize('component-project-mappings', organization.id);
   const t = useCopy();
   const navigate = useNavigate();
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const session = useWorkTabsStore.getState().sessionScope;
-  const [query, setQuery] = useState({ search: '', page: 1, pageSize: 20 });
+  const [query, setQuery] = useState({ search: '', page: 1, pageSize: preferredPageSize });
   const [searchInput, setSearchInput] = useState('');
   const [revision, setRevision] = useState(0);
   const [mappings, setMappings] = useState<MappingsPage>();
@@ -479,7 +481,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   if (!read) return <Alert type="info" showIcon title={t('无组件项目映射读取权限')} />;
   const statusOptions = [{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }];
   const empty = error ? t('加载失败') : query.search ? t('无匹配结果') : t('暂无数据');
-  const pagination = { current: query.page, pageSize: query.pageSize, total: mappings?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || loading, onChange: (page: number, pageSize: number) => leave(() => setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize }))) };
+  const pagination = { current: query.page, pageSize: query.pageSize, total: mappings?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || loading, onChange: (page: number, pageSize: number) => leave(() => { setPageSize(pageSize); setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize })); }) };
   const text = (value: string) => <Typography.Text ellipsis={{ tooltip: value }} style={{ maxWidth: '100%' }}>{value}</Typography.Text>;
   const required = [{ required: true, whitespace: true, message: t('请填写必填内容') }];
   const frozen = busy || !!uncertain;
@@ -496,7 +498,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       {!manage && <Typography.Text>{t('只读')}</Typography.Text>}
     </div>
     {manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 100').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
-    <Table<Mapping> rowKey="id" loading={loading} dataSource={mappings?.items ?? []} scroll={{ x: 1550 }} pagination={pagination}
+    <LedgerTable<Mapping> ledgerId="component-project-mappings" organizationId={organization.id} requiredColumnKeys={['componentCode', 'actions']} rowKey="id" loading={loading} dataSource={mappings?.items ?? []} scroll={{ x: 1550 }} pagination={pagination}
       rowSelection={manage ? { selectedRowKeys: Object.keys(selection), preserveSelectedRowKeys: true,
         getCheckboxProps: record => ({ disabled: busy || bulkOpen || !selection[record.id] && Object.keys(selection).length >= 100 }),
         onChange: keys => {
@@ -511,15 +513,15 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
         },
       } : undefined}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> }} columns={[
-        { title: t('组件编码'), dataIndex: 'componentCode', width: 160, render: text },
-        { title: t('组件名称'), dataIndex: 'componentName', width: 200, render: value => value ? text(value) : '—' },
-        { title: t('关联项目'), width: 230, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
-        { title: t('产品大类'), dataIndex: 'productCategory', width: 140, render: value => value ? text(value) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> }, { title: t('产品细分'), dataIndex: 'productSubcategory', width: 140, render: value => value ? text(value) : '—' },
-        { title: t('项目阶段'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },
-        { title: t('客户质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.customerEngineer} label={t('客户质量工程师')} /> : '—' },
-        { title: t('项目质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.projectEngineer} label={t('项目质量工程师')} /> : '—' },
-        { title: t('状态'), dataIndex: 'status', width: 100, render: status => t(status === 'ACTIVE' ? '启用' : '停用') },
-        { title: t('操作'), width: 200, render: (_, record) => <Space wrap>{manage ? <Button disabled={busy} aria-label={`${t('编辑组件')} ${record.componentCode}`} onClick={event => open({ kind: 'mapping', record }, event.currentTarget)}>{t('编辑')}</Button> : t('只读')}{record.project && <Button disabled={busy} aria-label={`${t(manage ? '编辑项目' : '查看项目')} ${record.project.code}`} onClick={event => editProject(record.project!.id, event.currentTarget)}>{t('项目资料')}</Button>}</Space> },
+        { key: 'componentCode', title: t('组件编码'), dataIndex: 'componentCode', width: 160, render: text },
+        { key: 'componentName', title: t('组件名称'), dataIndex: 'componentName', width: 200, render: value => value ? text(value) : '—' },
+        { key: 'project', title: t('关联项目'), width: 230, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
+        { key: 'productCategory', title: t('产品大类'), dataIndex: 'productCategory', width: 140, render: value => value ? text(value) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> }, { key: 'productSubcategory', title: t('产品细分'), dataIndex: 'productSubcategory', width: 140, render: value => value ? text(value) : '—' },
+        { key: 'stage', title: t('项目阶段'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },
+        { key: 'customerEngineer', title: t('客户质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.customerEngineer} label={t('客户质量工程师')} /> : '—' },
+        { key: 'projectEngineer', title: t('项目质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.projectEngineer} label={t('项目质量工程师')} /> : '—' },
+        { key: 'status', title: t('状态'), dataIndex: 'status', width: 100, render: status => t(status === 'ACTIVE' ? '启用' : '停用') },
+        { key: 'actions', title: t('操作'), width: 200, render: (_, record) => <Space wrap>{manage ? <Button disabled={busy} aria-label={`${t('编辑组件')} ${record.componentCode}`} onClick={event => open({ kind: 'mapping', record }, event.currentTarget)}>{t('编辑')}</Button> : t('只读')}{record.project && <Button disabled={busy} aria-label={`${t(manage ? '编辑项目' : '查看项目')} ${record.project.code}`} onClick={event => editProject(record.project!.id, event.currentTarget)}>{t('项目资料')}</Button>}</Space> },
       ]} />
     {bulkOpen && manage && <BulkEditor organizationId={organization.id} selection={Object.values(selection).map(record => ({ id: record.id, expectedVersion: record.version }))}
       onClose={() => { if (current()) setBulkOpen(false); }} onBusyChange={setBulkBusy} onUnauthorized={reportError}

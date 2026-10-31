@@ -45,6 +45,6 @@ it.each(['organization', 'department', 'position'] as const)('guards the %s edit
   await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await user.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
-  expect(screen.getByLabelText('名称')).toHaveValue(kind === 'organization' ? record.name : kind === 'department' ? department.name : position.name);
+  expect(screen.getByLabelText('名称', { selector: 'input' })).toHaveValue(kind === 'organization' ? record.name : kind === 'department' ? department.name : position.name);
   expect(writes).toEqual([]);
 }, 30000);

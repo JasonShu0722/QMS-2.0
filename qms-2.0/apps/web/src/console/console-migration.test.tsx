@@ -74,7 +74,7 @@ beforeEach(() => {
   vi.mocked(ConfigurationAdministration).mockImplementation(page('configuration'));
   vi.mocked(OrganizationWorkspace).mockImplementation(page('organizations'));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it('dispatches the real user component only after directory and matching management verification', async () => {
   let resolve!: (entries: Organization[]) => void;
@@ -295,6 +295,7 @@ it('ignores stale callbacks after routing to a different management page', async
 });
 
 it.each(['settings', 'portal'] as const)('preserves the real configuration %s draft and focused DOM across equivalent metadata revalidation', async kind => {
+  if (kind === 'portal') vi.stubEnv('NODE_ENV', 'development');
   const actual = await vi.importActual<typeof import('../features/governance/ConfigurationAdministration')>('../features/governance/ConfigurationAdministration');
   vi.mocked(ConfigurationAdministration).mockImplementation(actual.ConfigurationAdministration);
   const grants = [...permissions, 'configuration:manage'];

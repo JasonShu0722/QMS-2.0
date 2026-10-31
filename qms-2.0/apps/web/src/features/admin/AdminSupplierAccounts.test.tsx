@@ -49,7 +49,7 @@ async function confirmDelete() {
   return dialog;
 }
 const reads = (fetcher: ReturnType<typeof server>) => fetcher.mock.calls.filter(([path]) => path.startsWith(`${base}?`));
-beforeEach(() => { useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession(principal); });
+beforeEach(() => { localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession(principal); });
 afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); });
 
 it('keeps the platform account heading accessible without a duplicate visible title', async () => {
@@ -59,6 +59,18 @@ it('keeps the platform account heading accessible without a duplicate visible ti
   const heading = screen.getByRole('heading', { name: '供应商账号（全平台）', level: 4 });
   expect(heading).toHaveClass('sr-only');
   expect(heading.parentElement).toBe(screen.getByRole('region', { name: '供应商账号（全平台）' }));
+});
+
+it('changes the real directory page size and returns to offset zero with column settings', async () => {
+  const fetcher = server(path => path.startsWith(`${base}?`) ? json(page([account], 90)) : undefined);
+  render(scene());
+  await screen.findByText(account.username);
+  fireEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(reads(fetcher).at(-1)?.[0]).toContain('offset=20'));
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(await screen.findByText(/^50 \//));
+  await waitFor(() => expect(reads(fetcher).at(-1)?.[0]).toBe(`${base}?search=&pageSize=50&offset=0`));
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
 });
 
 it('reads the dedicated global directory, displays actual company data, and deletes using the real version and supplier UUID before reloading', async () => {

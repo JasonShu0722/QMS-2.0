@@ -21,23 +21,27 @@ it.each([200, 409])('keeps the user editor busy until saving with status %s sett
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
-  await userEvent.clear(screen.getByLabelText('邮箱'));
-  await userEvent.type(screen.getByLabelText('邮箱'), 'pending@example.test');
-  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
-  await waitFor(() => expect(resolveSave).toBeDefined());
+  const edit = (await screen.findByText(/^编\s*辑$/, { selector: 'button > span' })).closest('button')!;
+  expect(edit).toHaveAccessibleName(/^编\s*辑$/);
+  await userEvent.click(edit);
   const editor = screen.getByRole('dialog');
+  await userEvent.clear(screen.getByLabelText('邮箱', { selector: 'input' }));
+  await userEvent.type(screen.getByLabelText('邮箱', { selector: 'input' }), 'pending@example.test');
+  const save = within(editor).getByRole('button', { name: '保存用户' });
+  await userEvent.click(save);
+  await waitFor(() => expect(resolveSave).toBeDefined());
   expect(within(editor).getByLabelText('邮箱')).toBeDisabled();
   expect(within(editor).getByLabelText('姓名')).toBeDisabled();
   expect(within(editor).getByLabelText('电话')).toBeDisabled();
   within(editor).getAllByRole('combobox').forEach(input => expect(input).toBeDisabled());
   expect(within(editor).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
-  const create = screen.getByRole('button', { name: '创建用户' });
+  const create = screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!;
+  expect(create).toHaveAccessibleName('创建用户');
   expect(create).toBeDisabled();
   await userEvent.click(create);
   expect(screen.getByRole('dialog')).toBe(editor);
-  expect(screen.getByLabelText('邮箱')).toHaveValue('pending@example.test');
+  expect(screen.getByLabelText('邮箱', { selector: 'input' })).toHaveValue('pending@example.test');
   resolveSave!(status === 200 ? json(user) : json({ code: 'ADMIN_USER_ORGANIZATION_IN_USE' }, status));
   if (status === 409) {
     await within(editor).findByText('该用户仍关联业务记录，无法变更主组织');
@@ -51,8 +55,8 @@ it.each([200, 409])('keeps the user editor busy until saving with status %s sett
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(create).toBeEnabled());
   await userEvent.click(create);
-  await userEvent.type(screen.getByLabelText('用户名'), 'next-user');
-  expect(screen.getByLabelText('用户名')).toHaveValue('next-user');
+  await userEvent.type(screen.getByLabelText('用户名', { selector: 'input' }), 'next-user');
+  expect(screen.getByLabelText('用户名', { selector: 'input' })).toHaveValue('next-user');
 }, 15_000);
 
 it.each([200, 409])('keeps the role editor open and blocks another role while saving with status %s', async (status) => {
@@ -64,16 +68,19 @@ it.each([200, 409])('keeps the role editor open and blocks another role while sa
     return Promise.resolve(json(path.includes('/permission-catalog') ? [] : [role]));
   }));
   render(<RoleAdministration organization={organization} />);
-  await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
-  await userEvent.clear(screen.getByLabelText('角色名称'));
-  await userEvent.type(screen.getByLabelText('角色名称'), 'Pending Role');
-  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
-  await waitFor(() => expect(resolveSave).toBeDefined());
+  const edit = await screen.findByRole('button', { name: '编辑角色' });
+  await userEvent.click(edit);
   const editor = screen.getByRole('dialog');
+  await userEvent.clear(screen.getByLabelText('角色名称', { selector: 'input' }));
+  await userEvent.type(screen.getByLabelText('角色名称', { selector: 'input' }), 'Pending Role');
+  const save = within(editor).getByRole('button', { name: '保存角色' });
+  await userEvent.click(save);
+  await waitFor(() => expect(resolveSave).toBeDefined());
   expect(within(editor).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   expect(within(editor).getByLabelText('角色名称')).toBeDisabled();
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
-  const create = screen.getByRole('button', { name: '创建角色' });
+  const create = screen.getByText('创建角色', { selector: 'button > span' }).closest('button')!;
+  expect(create).toHaveAccessibleName('创建角色');
   expect(create).toBeDisabled();
   await userEvent.click(create);
   expect(screen.getByRole('dialog')).toBe(editor);
@@ -85,8 +92,8 @@ it.each([200, 409])('keeps the role editor open and blocks another role while sa
   }
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await userEvent.click(create);
-  await userEvent.type(screen.getByLabelText('角色名称'), 'Next Role');
-  expect(screen.getByLabelText('角色名称')).toHaveValue('Next Role');
+  await userEvent.type(screen.getByLabelText('角色名称', { selector: 'input' }), 'Next Role');
+  expect(screen.getByLabelText('角色名称', { selector: 'input' })).toHaveValue('Next Role');
 }, 15_000);
 
 it('edits only changed user fields and keeps failed writes retryable with safe errors', async () => {
@@ -101,15 +108,19 @@ it('edits only changed user fields and keeps failed writes retryable with safe e
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
-  await userEvent.clear(screen.getByLabelText('邮箱'));
-  await userEvent.type(screen.getByLabelText('邮箱'), 'updated@example.test');
-  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
+  const edit = (await screen.findByText(/^编\s*辑$/, { selector: 'button > span' })).closest('button')!;
+  expect(edit).toHaveAccessibleName(/^编\s*辑$/);
+  await userEvent.click(edit);
+  const editor = screen.getByRole('dialog');
+  await userEvent.clear(screen.getByLabelText('邮箱', { selector: 'input' }));
+  await userEvent.type(screen.getByLabelText('邮箱', { selector: 'input' }), 'updated@example.test');
+  const save = within(editor).getByRole('button', { name: '保存用户' });
+  await userEvent.click(save);
   expect(await within(screen.getByRole('dialog')).findByText('该用户仍关联业务记录，无法变更主组织')).toBeInTheDocument();
   expect(screen.queryByText('private backend detail')).not.toBeInTheDocument();
-  expect(screen.getByLabelText('邮箱')).toHaveValue('updated@example.test');
+  expect(screen.getByLabelText('邮箱', { selector: 'input' })).toHaveValue('updated@example.test');
   fail = false;
-  await userEvent.click(screen.getByRole('button', { name: '保存用户' }));
+  await userEvent.click(save);
   expect(await screen.findByText('用户已保存')).toBeInTheDocument();
   expect(requests.map((entry) => JSON.parse(String(entry.body)))).toEqual([{ email: 'updated@example.test', expectedProfileVersion: 1 }, { email: 'updated@example.test', expectedProfileVersion: 1 }]);
   expect((requests[0].headers as Record<string, string>)['Idempotency-Key']).toBe((requests[1].headers as Record<string, string>)['Idempotency-Key']);
@@ -316,8 +327,8 @@ it.each([
   render(<RoleAdministration organization={organization} />);
   await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
   if (action === 'rename') {
-    await userEvent.clear(screen.getByLabelText('角色名称'));
-    await userEvent.type(screen.getByLabelText('角色名称'), 'Renamed Role');
+    await userEvent.clear(screen.getByLabelText('角色名称', { selector: 'input' }));
+    await userEvent.type(screen.getByLabelText('角色名称', { selector: 'input' }), 'Renamed Role');
   }
   if (action === 'remove permission' || action === 'reorder permissions') {
     await userEvent.click(screen.getByRole('checkbox', { name: '账号 · Read users' }));
@@ -350,10 +361,14 @@ it('never redisplays a credential when its pending issue dialog was closed', asy
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(await screen.findByRole('button', { name: '签发重置凭证' }));
-  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
+  const issue = (await screen.findByText('签发重置凭证', { selector: 'button > span' })).closest('button')!;
+  expect(issue).toHaveAccessibleName('签发重置凭证');
+  await userEvent.click(issue);
+  const dialog = screen.getByRole('dialog');
+  const confirm = within(dialog).getByRole('button', { name: '确认签发' });
+  await userEvent.click(confirm);
   await waitFor(() => expect(resolveIssue).toBeDefined());
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   resolveIssue!(json({ resetId: 'reset-id', expiresAt: '2026-09-19' }, 201));
   await screen.findByText('重置凭证已签发');
@@ -390,7 +405,7 @@ it('reloads the MFA form value and comparison baseline before retrying a role ed
   }));
   render(<RoleAdministration organization={organization} />);
   fireEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
-  fireEvent.change(screen.getByLabelText('角色名称'), { target: { value: 'Renamed Role' } });
+  fireEvent.change(screen.getByLabelText('角色名称', { selector: 'input' }), { target: { value: 'Renamed Role' } });
   fireEvent.click(screen.getByRole('button', { name: '保存角色' }));
   const dialog = screen.getByRole('dialog');
   expect(await within(dialog).findByText('trace-role-reload')).toBeInTheDocument();

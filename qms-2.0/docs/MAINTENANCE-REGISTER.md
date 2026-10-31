@@ -8,6 +8,8 @@
 
 2026-10-31 REQ-0033来源复核：账号仅重排设置入口与标题，审核标准/新品页面仅精简固定标题和介绍；Card/Descriptions/Space与List/Space旧用法仍保留。相关回归仍观察到Ant Design弃用提示，本轮未做全站兼容迁移。MAINT-001保持open及2026-11-23原期限，局部文案和导航验证不能用来关闭维护项；本次执行与限制见[实施计划](../../docs/superpowers/plans/2026-10-31-qms-ui-content-navigation-preparation.md)。
 
+2026-10-31 REQ-0034来源复核：审核标准为动态检查项编号和内容补充显式标签，并将标准目录从固定首屏20条改为现有契约支持的真实分页候选；仍使用原List、Space及Drawer，编辑器与原业务保存边界保留，未完成全站弃用迁移。MAINT-001保持open与2026-11-23原复核期限；本轮页面统一、规范1.5和来源登记不能作为该维护项的关闭证据，新增目录分页尚待回归，实施状态见[统一业务页面计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。
+
 从 `qms-2.0/` 执行：
 
 ```powershell

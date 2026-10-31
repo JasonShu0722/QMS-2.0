@@ -1,6 +1,7 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Timeline, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import './supplier-concession.css';
@@ -39,6 +40,8 @@ async function mutation<Result>(path: string, body: object, key: string) {
 }
 
 export function SupplierConcessionPage() {
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-concession');
+  const requestLeave = useNavigationGuard();
   const [rows, setRows] = useState<Concession[]>([]);
   const [total, setTotal] = useState(0);
   const [canCreate, setCanCreate] = useState(false);
@@ -53,7 +56,7 @@ export function SupplierConcessionPage() {
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
-    const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+    const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (status) query.set('status', status);
     void apiRequest<ConcessionPage>(`${basePath}?${query}`).then((result) => {
       if (active) { setRows(result.items); setTotal(result.total); setCanCreate(result.canCreate); }
@@ -61,19 +64,19 @@ export function SupplierConcessionPage() {
       if (active) { setRows([]); setCanCreate(false); setError(errorText(cause, '特采台账加载失败，请重试')); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, status, revision]);
+  }, [page, pageSize, status, revision]);
 
   return <main className="supplier-concession-page">
     <header className="supplier-concession-heading"><h1 className="sr-only">特采申请与批次放行</h1><Space><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>{canCreate ? <Button type="primary" onClick={() => setCreateOpen(true)}>发起特采申请</Button> : null}</Space></header>
     <section className="supplier-concession-card" aria-label="特采申请台账">
       <div className="supplier-concession-toolbar"><Select aria-label="按状态筛选" allowClear placeholder="全部状态" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={Object.entries(labels).map(([value, label]) => ({ value, label }))} /><Typography.Text type="secondary">共 {total} 条</Typography.Text></div>
       {error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}
-      {loading ? <div className="supplier-concession-loading"><Spin /></div> : !error ? <Table<Concession> rowKey="id" dataSource={rows} scroll={{ x: 980 }} locale={{ emptyText: <Empty description="暂无特采申请" /> }} pagination={{ current: page, pageSize: 20, total, showSizeChanger: false, onChange: setPage }} columns={[
-        { title: '供应商', dataIndex: 'supplierName', render: (value: string, row) => <Button type="link" onClick={() => setSelectedId(row.id)}>{value}</Button> },
-        { title: '物料', dataIndex: 'materialCode' }, { title: '批次', dataIndex: 'incomingBatch' },
+      {loading ? <div className="supplier-concession-loading"><Spin /></div> : !error ? <LedgerTable<Concession> ledgerId="supplier-concession" requiredColumnKeys={['supplierName']} rowKey="id" dataSource={rows} scroll={{ x: 980 }} locale={{ emptyText: <Empty description="暂无特采申请" /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} columns={[
+        { key: 'supplierName', title: '供应商', dataIndex: 'supplierName', render: (value: string, row) => <Button type="link" onClick={() => setSelectedId(row.id)}>{value}</Button> },
+        { key: 'materialCode', title: '物料', dataIndex: 'materialCode' }, { key: 'incomingBatch', title: '批次', dataIndex: 'incomingBatch' },
         { title: '申请 / 来料', key: 'quantity', render: (_value: unknown, row) => `${row.quantity} / ${row.receivedQuantity}` },
-        { title: '状态', dataIndex: 'status', render: statusTag },
-        { title: '有效期至', dataIndex: 'expiresAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+        { key: 'status', title: '状态', dataIndex: 'status', render: statusTag },
+        { key: 'expiresAt', title: '有效期至', dataIndex: 'expiresAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
       ]} /> : null}
     </section>
     {createOpen ? <CreateConcessionModal close={() => setCreateOpen(false)} saved={() => { setCreateOpen(false); setPage(1); setRevision((value) => value + 1); }} /> : null}

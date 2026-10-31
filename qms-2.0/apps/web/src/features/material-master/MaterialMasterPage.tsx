@@ -1,4 +1,5 @@
-import { Alert, Button, Form, Input, Modal, Space, Table, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Space, Typography } from 'antd';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError, csrfToken, safeAccountError } from '../../api/client';
@@ -18,6 +19,8 @@ export function MaterialMasterPage(props: Props = {}) {
 }
 
 function MaterialMasterContent({ organizationId, organizationPermissions }: Props) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useLedgerPageSize('material-master', organizationId);
   const { t } = useLanguage();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -143,7 +146,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
       {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} /> : null}
       <div className="qms-dialog-actions" role="group" aria-label={t('新增物料')}><Button htmlType="submit" loading={busy}>{t('保存')}</Button></div>
     </Form></Modal> : null}
-    {canRead ? <Table<Material> loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} pagination={{ pageSize: 20 }} columns={[{ title: t('物料编码'), dataIndex: 'materialCode' }, { title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
+    {canRead ? <LedgerTable<Material> ledgerId="material-master" organizationId={organizationId} requiredColumnKeys={['materialCode', 'actions']} loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!busy) { setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[{ key: 'materialCode', title: t('物料编码'), dataIndex: 'materialCode' }, { key: 'materialName', title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ key: 'actions', title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
     <Modal title={t('修改物料名称')} open={Boolean(edit)} onCancel={cancelEdit} footer={null} destroyOnHidden>
       <Typography.Paragraph>{edit?.item.materialCode}</Typography.Paragraph>
       <Input aria-label={t('编辑物料名称')} maxLength={200} disabled={busy || loading} value={edit?.materialName ?? ''} onChange={(event) => setEdit((current) => current ? { ...current, materialName: event.target.value } : current)} />

@@ -167,3 +167,16 @@ it('submits bound evidence with the current ASN version', async () => {
   await userEvent.click(await screen.findByRole('button', { name: '提交 ASN' }));
   expect(vi.mocked(apiRequest)).toHaveBeenCalledWith('/api/v1/supplier-asn/a1/submit', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 4 }) }));
 });
+it('requests real ASN pages and resets to page one when the page size changes', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => String(path).includes('my-permissions') ? { permissions: ['supplier-asn:read'] } as never : { ...page, total: 125 } as never);
+  render(<SupplierAsnPage />);
+  await screen.findByRole('button', { name: '查看与提交' });
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-asn?page=1&pageSize=20');
+  expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(screen.getByTitle('2'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-asn?page=2&pageSize=20'));
+  await screen.findByRole('button', { name: '查看与提交' });
+  await userEvent.click(screen.getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-asn?page=1&pageSize=50'));
+});

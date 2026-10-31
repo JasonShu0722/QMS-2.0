@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { StructureAdministration } from './StructureAdministration';
 import type { AdminOrganization } from '../admin/admin';
@@ -28,7 +28,7 @@ function setup(positions = [direct, departmental], departmentId?: string) {
   return calls;
 }
 async function select(label: string, name: string) {
-  fireEvent.mouseDown(screen.getByLabelText(label));
+  fireEvent.mouseDown(screen.getByLabelText(label, { selector: 'input' }));
   fireEvent.click(await screen.findByText(name, { selector: '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content' }));
 }
 const button = (name: string | RegExp) => screen.getByText(name, { selector: 'button > span' }).closest('button')!;
@@ -36,7 +36,8 @@ async function positionsTab() {
   await waitFor(() => expect(button(/^刷\s*新$/)).toBeEnabled());
   fireEvent.click(screen.getByRole('tab', { name: '岗位' }));
 }
-afterEach(() => { vi.unstubAllGlobals(); });
+beforeEach(() => vi.stubEnv('NODE_ENV', 'development'));
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it('shows only direct positions at the organization root, without a department-management tab', async () => {
   setup(); await positionsTab();

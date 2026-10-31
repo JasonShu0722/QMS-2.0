@@ -22,6 +22,8 @@ describe('shared appearance', () => {
     const configured = JSON.parse(screen.getByTestId('density').textContent!);
     expect(configured.components.Card).toMatchObject({ bodyPadding: 8, bodyPaddingSM: 8, headerPadding: 8, headerPaddingSM: 8, headerHeight: 44, headerHeightSM: 44 });
     expect(configured.components.Table).toMatchObject({ cellPaddingBlock: 4, cellPaddingBlockMD: 4, cellPaddingBlockSM: 4 });
+    const palette = resolveTokens(false, 'blue');
+    expect(configured.components.Table).toMatchObject({ cellFontSize: 13, cellFontSizeMD: 13, cellFontSizeSM: 13, headerColor: palette.text, borderColor: palette.border, headerSplitColor: palette.border, rowHoverBg: palette['surface-tint'], rowSelectedBg: palette['accent-soft'], rowSelectedHoverBg: palette['accent-soft'] });
     expect(configured.token.controlHeight).toBe(36);
     expect(configured.token).not.toHaveProperty('padding');
     expect(configured.token).not.toHaveProperty('margin');
@@ -38,6 +40,37 @@ describe('shared appearance', () => {
     expect(styles('features/supplier-quality/supplier-quality.css')).toMatch(/\.supplier-form-grid\s*\{[^}]*column-gap:\s*var\(--qms-section-gap\)/);
     expect(styles('features/coordinate-inspection/coordinate-inspection.css')).toMatch(/\.coordinate-inspection-form-grid\s*\{[^}]*gap:\s*0\s+var\(--qms-section-gap\)/);
     expect(styles('workbench/workbench.css')).toMatch(/\.qms-workbench h2\s*\{[^}]*margin:\s*0 0 var\(--qms-section-gap\)/);
+  });
+  it('adapts field groups to their own available width and keeps wide fields across columns', () => {
+    expect(themeStyles).toMatch(/--qms-form-column-min:\s*240px/);
+    for (const [file, selector] of [
+      ['customer-quality', 'customer-ledger-form'], ['process-quality', 'process-quality-form-grid'],
+      ['supplier-incoming', 'supplier-incoming-form-grid'], ['coordinate-inspection', 'coordinate-inspection-form-grid'],
+    ]) {
+      const css = styles(`features/${file}/${file}.css`);
+      const block = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]+)\\}`))?.[1];
+      expect(block, selector).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*var\(--qms-form-column-min\)\),\s*1fr\)\)/);
+      expect(css, selector).not.toMatch(new RegExp(`@media[^}]*\\.${selector}\\s*\\{[^}]*grid-template-columns`));
+    }
+    expect(styles('features/customer-quality/customer-quality.css')).toMatch(/\.customer-ledger-form\s*\{[^}]*margin:\s*var\(--qms-section-gap\) 0/);
+    expect(styles('features/customer-quality/customer-quality.css')).toMatch(/\.customer-ledger-form-wide\s*\{[^}]*grid-column:\s*1 \/ -1/);
+  });
+  it('keeps labels, validation and action focus readable without clipping or moving actions', () => {
+    expect(themeStyles).toMatch(/\.ant-form-item-label > label\s*\{[^}]*height:\s*auto;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere/);
+    expect(themeStyles).toMatch(/\.ant-form-item-explain\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(themeStyles).toMatch(/\.qms-dialog-actions\s*\{[^}]*gap:\s*var\(--qms-section-gap\);[^}]*flex-wrap:\s*wrap/);
+    expect(themeStyles).toMatch(/\.qms-dialog-actions > \.ant-btn:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--qms-accent-action\)/);
+    expect(themeStyles).not.toMatch(/\.ant-form-item-explain[^}]*overflow:\s*hidden/);
+  });
+  it('maps professional 8D spacing to the shared density while retaining local table scrolling', () => {
+    const css = styles('features/process-eight-d/eight-d.module.css');
+    expect(css).toMatch(/\.section\s*\{[^}]*padding:\s*var\(--qms-card-padding\)/);
+    expect(css).toMatch(/\.fields\s*\{[^}]*gap:\s*var\(--qms-section-gap\)/);
+    expect(css).toMatch(/\.table th, \.table td\s*\{[^}]*padding:\s*var\(--qms-table-cell-padding-block\) var\(--qms-card-padding\)/);
+    expect(css).toMatch(/\.scroll\s*\{[^}]*overflow-x:\s*auto/);
+    expect(css).toMatch(/\.table\s*\{[^}]*min-width:\s*1000px/);
+    expect(css).toMatch(/\.field input, \.field select[^}]*min-height:\s*36px/);
+    expect(css).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{[^}]*min-height:\s*44px/);
   });
   it('keeps admin, permission, governance and legacy account spacing compact at every breakpoint', () => {
     const globalStyles = styles('styles/global.css');

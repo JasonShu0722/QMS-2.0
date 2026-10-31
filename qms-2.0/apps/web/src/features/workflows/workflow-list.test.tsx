@@ -21,6 +21,23 @@ const renderGuardedList = () => {
   ], { initialEntries: ['/console/workflows'] });
   return { ...render(<RouterProvider router={router} />), router };
 };
+
+it('uses the standard real offset batch size and resets offset when the user changes it', async () => {
+  const version = { id: 'version', workflowDefinitionId: 'definition', version: 1, status: 'DRAFT' as const, publishedAt: null, publishedById: null, changeNote: null };
+  vi.mocked(api.getWorkflows).mockResolvedValue({ items: [{ id: 'definition', organizationId: 'org', code: 'QA', name: '质量流程', description: null, revision: 1, version, draftVersionId: 'version' }], total: 101 });
+  renderList();
+  await screen.findByText('质量流程');
+  expect(vi.mocked(api.getWorkflows).mock.calls[0][0].get('pageSize')).toBe('20');
+  fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  await waitFor(() => expect(vi.mocked(api.getWorkflows).mock.calls.at(-1)![0].get('offset')).toBe('20'));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '每页条数' }));
+  fireEvent.click(await screen.findByText('50', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => {
+    const query = vi.mocked(api.getWorkflows).mock.calls.at(-1)![0];
+    expect(query.get('pageSize')).toBe('50'); expect(query.get('offset')).toBe('0');
+  });
+  expect(screen.getByRole('button', { name: '列设置' })).toBeVisible();
+});
 it('shows a read failure instead of an empty successful list and retries explicitly', async () => {
   vi.mocked(api.getWorkflows).mockRejectedValueOnce(new Error('raw unsafe')).mockResolvedValue({ items: [], total: 0 });
   renderList();

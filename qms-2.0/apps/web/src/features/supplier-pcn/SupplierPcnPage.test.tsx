@@ -20,6 +20,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+it('passes the changed PCN page size to the server and resets page one', async () => {
+  vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 125 } as never);
+  render(<SupplierPcnPage />);
+  await screen.findByText('暂无 PCN 变更');
+  const ledger = screen.getByRole('region', { name: 'PCN 变更台账' });
+  expect(within(ledger).getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(within(ledger).getByTitle('2'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=2&pageSize=20'));
+  await screen.findByText('暂无 PCN 变更');
+  await userEvent.click(within(ledger).getByRole('combobox'));
+  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=1&pageSize=50'));
+});
+
 it.each([false, true])('keeps header guidance scoped to the portal (portal=%s)', async portal => {
   const view = render(<SupplierPcnPage portal={portal} />);
   await screen.findByText('暂无 PCN 变更');
@@ -66,7 +80,8 @@ it.each([
   const input = field === '审批意见' ? await within(drawer).findByLabelText(field) : await within(drawer).findByPlaceholderText(field);
   fireEvent.change(input, { target: { value: '尚未提交的处理输入' } });
   fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }));
-  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  const confirmation = screen.getByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' }).closest('[role="dialog"]') as HTMLElement;
+  fireEvent.click(await within(confirmation).findByRole('button', { name: '继续编辑' }));
   expect(input).toHaveValue('尚未提交的处理输入');
   expect(input).toBeInTheDocument();
   expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
@@ -81,13 +96,13 @@ it('does not offer to discard the PCN while approval is pending', async () => {
   fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
   const drawer = await screen.findByRole('dialog', { name: '待审批变更' });
   fireEvent.change(await screen.findByLabelText('审批意见'), { target: { value: '资料已核验' } });
-  fireEvent.click(screen.getByRole('button', { name: '审批通过' }));
+  fireEvent.click(within(drawer).getByRole('button', { name: '审批通过' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/review', expect.objectContaining({ method: 'POST' })));
   try {
     const close = within(drawer).queryByRole('button', { name: '关闭' });
     if (close) fireEvent.click(close);
     expect(screen.getByRole('dialog', { name: '待审批变更' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: '放弃修改并关闭' })).not.toBeInTheDocument();
+    for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('放弃修改并关闭');
   } finally { await act(async () => { finish(); await pending; }); }
 });
 
