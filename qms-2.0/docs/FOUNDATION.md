@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0034-fix4 表头边界与空列横展（2026-11-01，候选待PR）
+
+负责人截图人工反馈未通过，复用Issue89及[计划8节](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)，不以原机器发布证明界面无缺陷。完整静态盘点79业务表/4展开入口，唯一共享resize覆盖42Ledger，普通WorkflowClosurePreview单独处理全部无participant空列，其余专业小表/选择/矩阵保持。
+
+共享准确RED及固定列候选实际回归后最小修复，最终2文件45PASS；普通职责预览准确4FAIL后完整30PASS；制程旧37+2新增完整39PASS，两绩效完整5/2PASS。6文件121项是独立完整日志组合，保首合跑45/46中新增spaced按钮断言误判FAIL，不改旧业务断言/预算/motion，分别独立SPEC后QUALITY通过。父类型/build22.34秒/contracts/归档exit0，新fixture未进生产包，原大chunk/弃用告警保留。未改API/DTO/迁移/依赖/CI/部署，真实后端门禁按5880894指纹复用，不新开真实业务资源或连接55440。
+
+正式组件真实浏览器旧边缘内移13.8px，修后命中区在实际th边界，重复before/after不绘、固定仍sticky，sorter指针180→240不sort、键盘与刷新缓存/换列头体一致、1024横滚及390无页面横溢、有无明细和selection保留均分项核到。均为合成数据组件证据，不代真实角色或物理手机。日志Git外`unified-business-pages-20261101-fix4`，来源/规范1.6/治理及新PR真实24门禁按实际结果接续，不称本候选已部署。
+
 ## REQ-0034 统一业务页面发布核验（2026-11-01，待人工验收）
 
 [实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)记录REQ-0034 / Issue89、有效夜间授权及逐项证据。[PR90](https://github.com/JasonShu0722/QMS-2.0/pull/90)/[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)最终5880894已机器发布：精确PR/main各24门禁与16JSON231文件3261项全部成功，[部署41245832801](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41245832801)前置快照/迁移/同SHA服务/公网变化分别核验。本轮无API/DTO/迁移/权限业务变更，历史FAIL及phase1/2前置FAIL保留，不据发布代真实角色/设备/人工验收或关闭回填。后文各历史检查点与最终7.6分层，发布事实归档本地提交待同步。

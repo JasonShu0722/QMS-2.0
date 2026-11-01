@@ -35,6 +35,24 @@ function FixtureTable() {
     </section>
   </Space>;
 }
+function BoundaryFixture() {
+  const [mode, setMode] = useState('none');
+  const [draft, setDraft] = useState('保留草稿');
+  const data = mode === 'empty' ? [] : rows.slice(0, 2).map((row, index) => ({ ...row, detail: mode === 'mixed' && index === 0 }));
+  return <Space orientation="vertical" style={{ width: '100%' }}>
+    <Input aria-label="边界模拟草稿" value={draft} onChange={event => setDraft(event.target.value)} />
+    <Space><Button onClick={() => setMode('none')}>无可展开记录</Button><Button onClick={() => setMode('mixed')}>混合明细记录</Button><Button onClick={() => setMode('empty')}>空数据记录</Button></Space>
+    <LedgerTable ledgerId="browser-boundaries-fix4" rowKey="id" requiredColumnKeys={['number']} dataSource={data} pagination={false}
+      scroll={{ x: 1200 }} rowSelection={{}}
+      expandable={{ rowExpandable: row => row.detail, expandedRowRender: row => <span>明细内容 {row.number}</span> }}
+      columns={[
+        { title: '编号', key: 'number', dataIndex: 'number', width: 180, fixed: 'left', sorter: (left, right) => left.number.localeCompare(right.number) },
+        { title: '问题说明', key: 'title', dataIndex: 'title', width: 460, ellipsis: true },
+        { title: '状态', key: 'status', dataIndex: 'status', width: 220, filters: [{ text: '处理中', value: '处理中' }], onFilter: (value, row) => row.status === value },
+        { title: '操作', key: 'actions', width: 150, fixed: 'right', render: () => <Button>查看</Button> },
+      ]} />
+  </Space>;
+}
 function Fixture() {
   const [organization, setOrganization] = useState('fixture-target-a');
   const [consoleHost, setConsoleHost] = useState(false);
@@ -46,7 +64,7 @@ function Fixture() {
       {consoleHost ? <ConsoleAppearanceControls /> : <AppearanceButton />}
     </Space>
     <p>宿主切换会重建模拟页，不验证业务草稿保持。</p>
-    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}><FixtureTable /></LedgerScopeProvider>
+    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{new URLSearchParams(window.location.search).has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
   </main>;
   return <LanguageProvider><ThemeProvider>{consoleHost ? <ConsoleTheme>{content}</ConsoleTheme> : content}</ThemeProvider></LanguageProvider>;
 }

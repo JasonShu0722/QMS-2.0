@@ -6,6 +6,7 @@ import { LedgerScopeProvider, LedgerTable, useLedgerPageSize } from './index';
 import { preferenceKey } from './model';
 import { readFileSync } from 'node:fs';
 import { Pagination } from 'antd';
+import { LanguageProvider } from '../../i18n/Language';
 
 const ledgerCss = readFileSync('src/ui/ledger/ledger.css', 'utf8');
 
@@ -117,6 +118,106 @@ describe('ledger page size', () => {
 });
 
 describe('LedgerTable', () => {
+  it('anchors resize handles directly to real grouped, sortable, ellipsis and fixed header cells', () => {
+    const click = vi.fn();
+    render(<LedgerTable ledgerId="header-boundary" columns={[{ title: 'Group', children: [{ ...columns[0], sorter: true, ellipsis: true, fixed: 'left', onHeaderCell: () => ({ className: 'caller-edge', style: { paddingInline: 24 }, onClick: click, 'aria-label': 'Caller edge' }) }, columns[1]] }, columns[2]]} dataSource={data} pagination={false} />);
+    for (const handle of screen.getAllByRole('separator')) {
+      expect(handle.parentElement?.tagName).toBe('TH');
+      expect(handle.parentElement).toHaveClass('qms-ledger__header-cell');
+      expect(handle.closest('.qms-ledger__heading')).toBeNull();
+      expect(handle.closest('.ant-table-column-title')).toBeNull();
+    }
+    const header = screen.getByRole('columnheader', { name: 'Caller edge' });
+    expect(header).toHaveClass('caller-edge', 'ant-table-cell-fix-start');
+    expect(header).toHaveStyle({ paddingInline: '24px' });
+    fireEvent.click(screen.getByRole('separator', { name: '调整列宽 编号' }));
+    expect(click).not.toHaveBeenCalled();
+    fireEvent.click(header);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('columnheader', { name: 'Group' }).querySelector(':scope > .qms-ledger__resize')).toBeNull();
+  });
+  it('uses the full cell edge as the sole resize line and suppresses duplicate native header dividers', () => {
+    render(<LedgerTable ledgerId="edge-css" columns={[{ ...columns[0], ellipsis: true, sorter: true }]} dataSource={data} pagination={false} />);
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      const header = screen.getByRole('columnheader', { name: '编号' });
+      const handle = screen.getByRole('separator');
+      expect(rules.some(rule => header.matches(rule.selectorText) && rule.style.getPropertyValue('overflow') === 'visible')).toBe(true);
+      const edge = rules.find(rule => handle.matches(rule.selectorText) && rule.style.getPropertyValue('position') === 'absolute')!;
+      expect(edge.style.getPropertyValue('inset-block')).toBe('0');
+      expect(edge.style.getPropertyValue('inset-inline-end')).toBe('-5px');
+      expect(Number.parseInt(edge.style.getPropertyValue('width'))).toBeGreaterThanOrEqual(10);
+      expect(rules.some(rule => rule.selectorText.includes('th:has(> .qms-ledger__resize:hover)') && rule.style.getPropertyValue('border-inline-end-color') === 'var(--qms-accent)')).toBe(true);
+      expect(rules.some(rule => rule.selectorText.endsWith('th::before') && header.matches(rule.selectorText.replace('::before', '')) && rule.style.getPropertyValue('display') === 'none')).toBe(true);
+      expect(rules.filter(rule => rule.selectorText.includes('.qms-ledger__resize::after'))).toHaveLength(0);
+      expect(screen.getByRole('button', { name: '移动列 编号' })).not.toBe(handle);
+    } finally { style.remove(); }
+  });
+  it('does not override native sticky positioning on fixed header cells', () => {
+    render(<LedgerTable ledgerId="fixed-edge-css" columns={[{ ...columns[0], fixed: 'left' }, columns[1], { ...columns[2], fixed: 'right' }]} dataSource={data} pagination={false} />);
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      for (const name of ['编号', '操作']) {
+        const header = screen.getByRole('columnheader', { name });
+        expect(header.className).toMatch(/ant-table-cell-fix-(start|end)/);
+        expect(rules.filter(rule => header.matches(rule.selectorText) && rule.style.getPropertyValue('position') === 'relative')).toHaveLength(0);
+      }
+    } finally { style.remove(); }
+  });
+  it.each(['empty', 'none', 'missing'] as const)('does not allocate a detail column when expandable rows are %s', mode => {
+    const { container } = render(<LedgerTable ledgerId={`no-detail-${mode}`} columns={columns} dataSource={mode === 'none' ? data : mode === 'empty' ? [] : undefined} pagination={false} rowSelection={{}} expandable={{ rowExpandable: mode === 'none' ? () => false : undefined, expandedRowRender: () => <p>Detail content</p> }} />);
+    expect(container.querySelector('.ant-table-row-expand-icon-cell')).toBeNull();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
+  });
+  it.each(['mixed', 'all', 'no-predicate'] as const)('keeps native detail controls and a named bounded column for %s rows', mode => {
+    const rows = [...data, { key: 'two', a: 'Second', b: 'Name' }];
+    const onExpand = vi.fn();
+    const { container } = render(<LedgerTable ledgerId={`details-${mode}`} columns={columns} dataSource={rows} pagination={false} expandable={{ rowExpandable: mode === 'no-predicate' ? undefined : row => mode === 'all' || row.key === 'one', expandedRowRender: row => <p>Detail {row.key}</p>, onExpand }} />);
+    const header = screen.getByRole('columnheader', { name: '明细' });
+    expect(header).toHaveClass('ant-table-row-expand-icon-cell');
+    const width = container.querySelector('colgroup col') as HTMLElement;
+    expect(Number.parseFloat(width.style.width)).toBeGreaterThanOrEqual(40);
+    expect(Number.parseFloat(width.style.width)).toBeLessThanOrEqual(80);
+    const buttons = container.querySelectorAll<HTMLButtonElement>('button.ant-table-row-expand-icon:not(.ant-table-row-expand-icon-spaced)');
+    expect(buttons).toHaveLength(mode === 'mixed' ? 1 : 2);
+    fireEvent.click(buttons[0]);
+    expect(screen.getByText('Detail one')).toBeInTheDocument();
+    expect(onExpand).toHaveBeenCalledWith(true, rows[0]);
+  });
+  it('respects caller expand-column visibility, title, width and controlled expanded keys', () => {
+    const props = { ledgerId: 'explicit-details', columns, dataSource: data, pagination: false as const };
+    const { container, rerender } = render(<LedgerTable {...props} expandable={{ rowExpandable: () => false, expandedRowRender: () => 'Detail', showExpandColumn: true, columnTitle: 'Caller details', columnWidth: 72 }} />);
+    expect(screen.getByRole('columnheader', { name: 'Caller details' })).toBeInTheDocument();
+    expect((container.querySelector('colgroup col') as HTMLElement).style.width).toBe('72px');
+    rerender(<LedgerTable {...props} expandable={{ expandedRowRender: () => 'Controlled detail', expandedRowKeys: ['one'], showExpandColumn: false }} />);
+    expect(container.querySelector('.ant-table-row-expand-icon-cell')).toBeNull();
+    expect(screen.getByText('Controlled detail')).toBeInTheDocument();
+    rerender(<LedgerTable {...props} dataSource={[]} expandable={{ expandedRowRender: () => 'Detail', showExpandColumn: true, columnTitle: null, columnWidth: 60 }} />);
+    expect(container.querySelector('th.ant-table-row-expand-icon-cell')).toBeEmptyDOMElement();
+    expect((container.querySelector('colgroup col') as HTMLElement).style.width).toBe('60px');
+  });
+  it('does not add a detail column to children-based tree tables', () => {
+    const { container } = render(<LedgerTable ledgerId="tree-details" columns={columns} dataSource={[{ ...data[0], children: [{ key: 'child', a: 'Child', b: 'Name' }] }]} pagination={false} />);
+    expect(container.querySelector('.ant-table-row-expand-icon-cell')).toBeNull();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(3);
+    fireEvent.click(container.querySelector('button.ant-table-row-expand-icon')!);
+    expect(screen.getByText('Child')).toBeInTheDocument();
+  });
+  it('preserves custom caller header cells and labels the default detail column in English', () => {
+    localStorage.setItem('qms:locale:v1', 'en-US');
+    function CallerHeader({ children, ...props }: React.ComponentProps<'th'>) { return <th {...props} data-caller-header="true">{children}</th>; }
+    render(<LanguageProvider><LedgerTable ledgerId="custom-header" columns={columns} dataSource={data} pagination={false} components={{ header: { cell: CallerHeader } }} expandable={{ expandedRowRender: () => 'Details content' }} /></LanguageProvider>);
+    const details = screen.getByRole('columnheader', { name: 'Details' });
+    expect(details).toHaveAttribute('data-caller-header', 'true');
+    for (const handle of screen.getAllByRole('separator')) expect(handle.parentElement).toHaveAttribute('data-caller-header', 'true');
+  });
   it('reserves popup padding and the scrollbar gutter within narrow viewports without shrinking desktop settings', () => {
     render(<LedgerTable ledgerId="popup-viewport" columns={columns} dataSource={data} pagination={false} />);
     settings();

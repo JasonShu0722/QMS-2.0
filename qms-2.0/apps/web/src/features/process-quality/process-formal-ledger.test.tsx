@@ -39,6 +39,41 @@ const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', re
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 
+it('starts the real material-free ledger with selection instead of an empty expand column', async () => {
+  const { container } = mount();
+  const selection = await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  const ledger = container.querySelector('.qms-ledger') as HTMLElement;
+  expect(within(ledger).getAllByRole('columnheader')[0]).toHaveAccessibleName('选择');
+  expect(ledger.querySelector('.ant-table-row-expand-icon-cell')).toBeNull();
+  expect(ledger.querySelector('button.ant-table-row-expand-icon')).toBeNull();
+  fireEvent.click(selection);
+  expect(selection).toBeChecked();
+  expect(screen.getByText('已选择 1 条来源')).toBeVisible();
+});
+
+it('keeps native expansion and the real material detail table for mixed process rows', async () => {
+  const material: components['schemas']['ProcessDefectMaterialDto'] = { id: '55555555-5555-4555-8555-555555555555', organizationId, defectId: section.id, position: 0, materialName: '真实明细物料', materialBatch: 'BATCH-DETAIL', verification: 'UNREVIEWED', verificationNotes: null, verifiedById: null, verifiedAt: null, verificationHistory: [] };
+  const withMaterial: components['schemas']['ProcessDefectDto'] = { ...defect, id: section.id, description: '含物料不良', materials: [material] };
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, items: [defect, withMaterial], total: 2 } : baseResponse(path));
+  mount();
+  const materialRow = (await screen.findByLabelText(`选择制程不良 ${withMaterial.description}`)).closest('tr')!;
+  const noMaterialRow = screen.getByLabelText(`选择制程不良 ${defect.description}`).closest('tr')!;
+  expect(screen.getByRole('columnheader', { name: '明细' })).toHaveClass('ant-table-row-expand-icon-cell');
+  expect(noMaterialRow.querySelector('button.ant-table-row-expand-icon:not(.ant-table-row-expand-icon-spaced)')).toBeNull();
+  expect(noMaterialRow.querySelector('button.ant-table-row-expand-icon')).toHaveClass('ant-table-row-expand-icon-spaced');
+  const expand = materialRow.querySelector('button.ant-table-row-expand-icon')!;
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText(material.materialName!)).not.toBeInTheDocument();
+  fireEvent.click(expand);
+  expect(expand).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText(material.materialName!)).toBeVisible();
+  expect(screen.getByText(material.materialBatch!)).toBeVisible();
+  const details = screen.getByText(material.materialName!).closest('table')!;
+  expect(within(details).getByRole('columnheader', { name: '物料名称' })).toBeInTheDocument();
+  expect(within(details).getByRole('columnheader', { name: '复核状态' })).toBeInTheDocument();
+  expect(within(details).getByText('未复核')).toBeVisible();
+});
+
 it('resets real server pagination on page-size changes without discarding selected source versions', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, total: 101 } : baseResponse(path));
   mount();
