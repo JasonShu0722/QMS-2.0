@@ -34,7 +34,7 @@ const english: Record<string, string> = {
   '配置解析完成': 'Configuration resolved.',
   '专业人员': 'Professional', '科室经理': 'Section manager', '部长': 'Minister', '负责人': 'Owner',
   '待审': 'Pending', '尚未启动': 'Not started', '同人跳过': 'Skipped: same person',
-  '职责': 'Duty', '状态': 'Status', '人员': 'Person', '尚未解析': 'Unresolved',
+  '职责': 'Duty', '状态': 'Status', '人员': 'Person', '尚未解析': 'Unresolved', '明细': 'Details',
   '展开来源明细': 'Expand source details', '组织 ID': 'Organization ID', '科室 ID': 'Section ID', '解析时间': 'Resolved at',
   '执行顺序': 'Execution order', '并行审核': 'Parallel review', '专业先审，再启动管理审核': 'Professional first, then management review',
   '用户 ID': 'User ID', '任职 ID': 'Assignment ID', '岗位 ID': 'Position ID', '部门 ID': 'Department ID',
@@ -192,7 +192,8 @@ function ClosureScope({ policy, disabled, session }: Props & { session?: string 
             { title: t('职责'), dataIndex: 'duty', render: (value: keyof typeof duties) => t(duties[value]) },
             { title: t('状态'), dataIndex: 'status', render: (value: keyof typeof statuses) => t(statuses[value]) },
             { title: t('人员'), render: (_, duty) => person(duty.participant) },
-          ]} expandable={{ rowExpandable: duty => !!duty.participant, expandedRowRender: duty => duty.participant ? <Descriptions size="small" column={1} items={[
+          ]} expandable={{ showExpandColumn: result.duties.some(duty => !!duty.participant), columnTitle: t('明细'), columnWidth: 56,
+            rowExpandable: duty => !!duty.participant, expandedRowRender: duty => duty.participant ? <Descriptions size="small" column={1} items={[
             ['用户 ID', duty.participant.userId], ['任职 ID', duty.participant.assignmentId], ['岗位 ID', duty.participant.positionId],
             ['部门 ID', duty.participant.departmentId], ['职责绑定 ID', duty.participant.bindingId], ['分管 ID', duty.participant.scopeId],
             ['职责绑定版本', duty.participant.bindingVersion], ['分管版本', duty.participant.scopeVersion],

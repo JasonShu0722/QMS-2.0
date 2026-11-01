@@ -303,6 +303,56 @@ it('renders unresolved participants and configuration issues without pretending 
   expect(await screen.findByText('尚未解析')).toBeVisible();
   expect(screen.getByText('部长：缺少有效分管')).toBeVisible();
   expect(screen.getByText('配置缺项，请维护后重新预览。')).toBeVisible();
+  const table = within(previewDialog()).getByRole('columnheader', { name: '职责' }).closest('table')!;
+  expect(within(table).getAllByRole('columnheader').map(header => header.textContent)).toEqual(['职责', '状态', '人员']);
+  expect(table.querySelector('.ant-table-row-expand-icon-cell')).not.toBeInTheDocument();
+  expect(table.querySelector('tr[data-row-key="PROFESSIONAL"]')?.children).toHaveLength(3);
+});
+
+it('does not reserve an empty expansion column when the preview has no duties', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('closure-options') ? directory : { ...preview, duties: [] });
+  mount('SUPPLIER'); await configure('SUPPLIER'); await submit();
+  const table = (await within(previewDialog()).findByRole('columnheader', { name: '职责' })).closest('table')!;
+  expect(within(table).getAllByRole('columnheader').map(header => header.textContent)).toEqual(['职责', '状态', '人员']);
+  expect(table.querySelector('.ant-table-row-expand-icon-cell')).not.toBeInTheDocument();
+});
+
+it.each([false, true])('keeps a named compact native expansion column and all source details when all duties resolve=%s', async allResolved => {
+  const source = { ...participant, assignmentId: owner, positionId: manager, bindingId: 'binding-source', scopeId: 'scope-source', bindingVersion: 7, scopeVersion: 9 };
+  const resolved = { ...preview.duties[0]!, participant: source };
+  const other = { ...preview.duties[1]!, participant: allResolved ? preview.duties[1]!.participant : null };
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('closure-options') ? directory : {
+    ...preview, duties: allResolved ? [resolved, other] : [other, resolved],
+  });
+  mount('SUPPLIER'); await configure('SUPPLIER'); await submit();
+  const table = (await within(previewDialog()).findByRole('columnheader', { name: '职责' })).closest('table')!;
+  expect(within(table).getAllByRole('columnheader').map(header => header.textContent)).toEqual(['明细', '职责', '状态', '人员']);
+  expect(table.querySelector('colgroup col')).toHaveStyle({ width: '56px' });
+  const professionalRow = table.querySelector<HTMLTableRowElement>('tr[data-row-key="PROFESSIONAL"]')!;
+  const managerRow = table.querySelector<HTMLTableRowElement>('tr[data-row-key="SECTION_MANAGER"]')!;
+  expect(professionalRow.children).toHaveLength(4);
+  expect(professionalRow).toHaveTextContent('专业人员');
+  expect(professionalRow).toHaveTextContent('待审');
+  expect(professionalRow).toHaveTextContent('专业张工 (engineer)');
+  expect(managerRow.children).toHaveLength(4);
+  expect(managerRow).toHaveTextContent(allResolved ? '负责人李工 (owner)' : '尚未解析');
+  expect(managerRow.querySelector('button.ant-table-row-expand-icon')).toBeInTheDocument();
+  expect(managerRow.querySelector('button.ant-table-row-expand-icon')).toHaveClass(allResolved ? 'ant-table-row-expand-icon-collapsed' : 'ant-table-row-expand-icon-spaced');
+  const expand = professionalRow.querySelector<HTMLButtonElement>('button.ant-table-row-expand-icon')!;
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(expand);
+  expect(expand).toHaveAttribute('aria-expanded', 'true');
+  const details = table.querySelector<HTMLTableRowElement>('.ant-table-expanded-row')!;
+  expect(details.querySelector('td')).toHaveAttribute('colspan', '4');
+  const fields = within(details).getAllByRole('row');
+  expect(fields).toHaveLength(8);
+  for (const [index, [label, value]] of [
+    ['用户 ID', professional], ['任职 ID', owner], ['岗位 ID', manager], ['部门 ID', section],
+    ['职责绑定 ID', 'binding-source'], ['分管 ID', 'scope-source'], ['职责绑定版本', '7'], ['分管版本', '9'],
+  ].entries()) {
+    expect(fields[index]).toHaveTextContent(label!);
+    expect(fields[index]).toHaveTextContent(value!);
+  }
 });
 
 it('does not open or load the directory when disabled', () => {

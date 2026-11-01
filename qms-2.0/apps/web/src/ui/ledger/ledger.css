@@ -2,13 +2,15 @@
 .qms-ledger > .ant-table-wrapper { min-width: 0; max-width: 100%; }
 .qms-ledger .ant-table-content { overflow-x: auto; }
 .qms-ledger .ant-table-cell { padding-block: var(--qms-table-cell-padding-block, 4px); border-inline-end: 1px solid var(--qms-border); }
+.qms-ledger .ant-table-thead > tr > th.qms-ledger__header-cell { overflow: visible; }
+.qms-ledger .ant-table-thead > tr > th::before { display: none; }
+.qms-ledger .ant-table-thead > tr > th:has(> .qms-ledger__resize:hover), .qms-ledger .ant-table-thead > tr > th:has(> .qms-ledger__resize:focus-visible) { border-inline-end-color: var(--qms-accent); }
+.qms-ledger .ant-table-cell-ellipsis .qms-ledger__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qms-ledger__tools { display: flex; justify-content: flex-end; margin-bottom: 4px; }
-.qms-ledger__heading { display: flex; align-items: center; gap: 3px; position: relative; min-width: 0; }
+.qms-ledger__heading { display: flex; align-items: center; gap: 3px; min-width: 0; }
 .qms-ledger__title { flex: 1; min-width: 0; }
 .qms-ledger__grip { display: inline-flex; align-items: center; padding: 2px 0; border: 0; background: transparent; color: var(--qms-muted); cursor: grab; touch-action: none; }
-.qms-ledger__resize { position: absolute; inset-block: -4px; inset-inline-end: -8px; width: 10px; cursor: col-resize; touch-action: none; }
-.qms-ledger__resize::after { content: ''; position: absolute; inset-inline-start: 4px; inset-block: 2px; width: 2px; background: var(--qms-border); }
-.qms-ledger__resize:hover::after, .qms-ledger__resize:focus-visible::after { background: var(--qms-accent); }
+.qms-ledger__resize { position: absolute; inset-block: 0; inset-inline-end: -5px; width: 10px; z-index: 3; cursor: col-resize; touch-action: none; }
 .qms-ledger__grip:focus-visible, .qms-ledger__resize:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
 .qms-ledger__heading--drop { box-shadow: inset 2px 0 var(--qms-accent); }
 .qms-ledger__settings { max-width: min(580px, calc(100vw - 64px)); max-height: min(480px, 65vh); overflow: auto; color: var(--qms-text); }
