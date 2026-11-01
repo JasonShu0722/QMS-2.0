@@ -9,12 +9,12 @@
 | 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
 | 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
 | 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / REQ0034；PR90/91已发布5880894，负责人截图反馈后同范围V0.0.39-fix4，隔离`codex/req0034-table-boundaries-fix4`，新修复PR待建 |
-| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；候选1772480与合并5880894整树相同；运行/规范已远端同步。从origin/main5880894新建`codex/req0034-release-record`只做最终本地归档，旧功能分支和diverged本地main保留不重写，旧归档不混入 |
+| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / REQ0034 → [PR92](https://github.com/JasonShu0722/QMS-2.0/pull/92) / V0.0.39-fix4 / 7660314，已合并部署；PR90/91及旧失败历史保留，未关闭回填需求 |
+| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；fix4候选ac98654与合并7660314整树相同；从origin/main7660314新建`codex/req0034-fix4-release-record`仅本地最终归档。旧588归档747已随PR92同步，旧功能分支和diverged本地main保留不重写，不混旧归档 |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | fix4候选已覆盖42处Ledger及4展开入口；共享/职责/制程接缝各独立SPEC后QUALITY通过，6完整文件121项为分项组合通过，父类型/构建/契约/归档检查通过。真实th边界/单线/拖宽不排序/换列及数据一致/固定横滚/390无页面横溢/有无明细已核，非真实角色业务验收；当前最终来源/治理后提PR，未称fix4已部署 |
-| 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | 按8节共享根因修复覆盖全部42处Ledger及非Ledger职责预览，准确RED/完整定向回归/独立SPEC后QUALITY，实际桌面窄屏/固定横滚/sorter/ellipsis几何与拖动验证；同步规范及来源后提fix4 PR。已有本地发布归档747cac2完整保留并随本修复同步，不新建需求/重启夜间heartbeat，不据旧发布称本次已修复 |
+| 状态 | fix4已机器发布：精确PR/ac98654与main7660314各24CI、各16JSON231文件3278项全部通过，独立release gate后合并同树；自动部署41265280131成功，快照→141链无待执行→同SHA健康/Worker成功出口及公网新header/edge资源已分别核验。覆盖42Ledger/4展开入口，仍待负责人真实页面/角色验收 |
+| 工程证据 | 早期样例与组件模拟不代真实角色验收；原过程证据Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/`保留。fix4盘点/准确红绿/浏览器几何/精确PR及main24与16JSON/发布公网证据位于`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261101-fix4/` |
+| 下一动作 | 规范1.6与修复已远端main实际回读，旧发布归档747cac2已随PR92同步；本轮最新发布事实/来源索引在`codex/req0034-fix4-release-record`本地提交暂不推，避免无运行变化重复部署。记录交接，等待负责人刷新实页验收；不关闭Issue/Base回填，不重启已删除heartbeat |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -262,3 +262,11 @@
 - Workflow独立QUALITY亦通过，四处展开入口盘点闭合。制程新增两接缝只插35行/2例，旧37及生产未变，真实AntD/生成DTO验证无物料时首选择列可选、有无料混合时原生明细可展开；首合跑45/46失败来自新断言误把AntD spaced对齐按钮当功能入口，正确区分后Process完整39/39 PASS。该首run两个绩效完整5/2 PASS保留，未重复刷已过文件；后续制程两新增例静态SPEC后QUALITY通过。与共享45/职责30组成6完整文件121项独立日志组合，非一次整包全绿或本地全站回归。
 - 父Web lint/type、build22.34秒、contracts:check及归档隔离均exit0；产物index-BrlSWntp.js/index-BEPfk-G2.css有新header/edge样式、无旧resize after，新增边界fixture未进入生产包，原大chunk及AntD弃用告警保留。源hash与审查一致，`parent-verification.json`记录分项与首次FAIL边界，未变后端/契约/依赖/CI/部署来源指纹确认后复用精确5880894真实API/PG/Worker证据，不以Mock代真实服务。浏览器viewport已恢复、任务tab及Vite80934已停止，不触保留55440。
 - 规范升1.6，在7.3明确真实th边界/一线/hover命中及无空展开占位；专项设计、指南、能力状态同步人工反馈和例外。Issue89实际登记fix4范围，user需求回读仅确认不改表；最终治理/diff和来源复核日志入Git外，精确fix4 PR/main24检查及部署仍待，旧机器发布和人工认可不代本次验证。
+
+### 8.4 fix4发布核验（2026-11-01）
+
+- PR92实际ac986541c80a865f90ea8f2fc42bccb31c5bf393 / run41263167739 attempt1全24同源job成功，16artifact逐项核官方231文件、3278项全PASS无漏/重/skip/pending/runtimeErrors，本轮新增17例。独立release gate通过后按同需求连续修复授权squash7660314d819b0cdbb1b1fc8dfba5f99c1001b309，整树81f153066d5f7ab991d72e8b5d6d84c23bfe88df与已审候选相同。
+- main run41264384940 attempt1也实际24同源success、16JSON231文件3278项再次全PASS，`main-coverage-verified.json`；不是用PR结果代main。自动deploy41265280131成功，来源完整attempt校验/SSH均success，未手动重复触发或绕门禁。
+- 部署job124726703309日志1064行前置加密snapshot verified先1070行141链及1073行无待执行；1112/1116/1117行API/Web/Worker镜像同7660314，1105–1110服务健康，1127行成功出口，builder Total1.502GB。READY及原子deployed-sha仍由同版脚本强制成功出口支持，未另SSH读回或取原Worker stdout；不代异地灾备/恢复演练。本次发布等待主要在API安装/构建层（02:27:58Z至约02:44:08Z）及Web重建，不是重复Web回归；仅记录事实，不顺手改镜像/部署策略。
+- 独立公网新index-ChZsk5Q2.js/index-FOu2Dq6D.css均200，区别fix4前index-KJw082o1.js/index-CBVgIpis.css；JS有新ledgerResize组件标识，CSS有header-cell及edge -5px、无旧resize after绘线，新增fixture标识排除。login/openapi/三SPA入口200、管理用户/console上下文/关闭职责/制程缺陷四契约路径匿名401；`machine-release-verification.json`准确记录，SPA200/资产变化不代真实登录或业务保存验收。
+- 统一规范1.6/7.3、专项设计、42/4横展实现及旧747发布归档已进远端main并实际git show回读；本轮最新发布事实本地记录暂不推以免索引JSON触发无运行变化full CI/重复部署。原FAIL/阶段前置FAIL/独立日志组合与真实角色待验边界不抹去；用户刷新正式页面验收后另核闭环授权，不自动关闭Issue89或写Base，不新建heartbeat。
