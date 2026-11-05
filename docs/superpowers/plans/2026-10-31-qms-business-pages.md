@@ -6,6 +6,8 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
+| 2026-11-06 最新发布接续 | 负责人在全绿PR/待合并发布上下文明确“继续”，已获本次合并发布授权。PR94按精确9475742 squash合并fb8877998c771cc3dbb724110c3a278a09625008，整树13918e15与审候选一致；但main42064462310 attempt1唯一ConsolePreview可见态断言失败，其他3289项通过，deploy42066685510正确跳过，未发布。新分支`codex/req0035-ci-fix6`从fb建立、复用REQ0035/Issue93，先最小返修再独立修复PR，见9.1；不再向已合并PR94推送或重跑旧main刷绿 |
+| fix6本地收口 | 唯一原测试一行等待已冻结，CI准确RED/本地原代表PASS分开；完整12/12 PASS、独立SPEC后QUALITY及父类型PASS。运行源/API/依赖/CI不变经核后复用既有build/真实服务/浏览器；最终治理及暂存源核验后主动提交独立fix6 PR，实时对象与新CI/发布状态在Git外checkpoint接续，不为进度反复推送或改已合并PR94 |
 | 最新接续（2026-11-05） | 新反馈：组织与岗位/平台配置横向撑宽、两套侧栏点击回顶；已补登REQ-0035 / `reczz28W1w4YTodF` → 独立[Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93)，预留V0.0.39-fix5，见第9节。以下fix4行保留发布时历史，不作为当前修复完成事实 |
 | 本次状态与下一动作 | 负责人明确“状态已更新，继续推进”；user实时回读REQ0035 rev357为开发中/P0，较补登仅提出人改为舒子杰及优先级变化，批准业务范围保持。解除登记纠偏停点，复用8完整文件63项、真实组件/外壳浏览器及各单元最终独立SPEC后QUALITY，无重复全量。父lint/type/build/契约/归档通过，最终来源治理后提交推送同分支PR；PR/CI实时对象接续Git外`pr-delivery-checkpoint.json`，不以提交时尚未建PR的历史句重复开发 |
 | 核对时间与范围 | 2026-11-05 Asia/Taipei；新发现的治理撑宽/双端侧栏导航回顶，不改原业务模型 |
@@ -301,5 +303,18 @@
 父检查已取得：Web lint/type、build39.88秒、contracts:check及归档隔离均exit0；index-BRkCcdoJ.js/index-5BMr-rKx.css含治理轨道且两fixture标识均排除，既有大chunk告警保持。相对7660314的后端/契约/依赖/脚本/部署来源无变化，经`parent-evidence-reuse.json`复用同源API/真实PG/Worker证据。Vite任务session28937已停止，所有作者browser关闭，无后台验证；无新API/数据/权限变更。最终治理与PR/CI按当前快照接续，不重跑这些未变分项。
 
 提交检查点：本次8完整文件63项分次PASS、最终双审及父门禁已就绪，PR创建与精确HEAD CI是下一独立步骤；提交时PR编号/检查结果尚未产生，不预造链接或写已发布。创建后将实时PR/HEAD/run和后续状态写Git外`pr-delivery-checkpoint.json`及Issue93，避免只为进度文档反复推送触发无运行变化CI/部署。REQ0035的开发中/P0来源为负责人，缺合并发布授权只停止对应动作，不自动关闭Issue/写Base完成。
+
+### 9.1 main单例可见态返修 fix6（2026-11-06）
+
+- 授权与真实对象：负责人在PR94全24CI/234文件3290项通过、明确等待合并发布的上下文再次“继续”，接续本需求合并发布，不扩关闭Issue/回填/人工验收。PR94合并fb88779与审候选9475742整树相等；合并前/后源核验、原Git/TLS及连接器传输失败记录保留，原生HTTPS读回后验证成功，不将网络读取失败写成CI或产品FAIL。
+- main42064462310 attempt1实际全24job完成，Web4失败及foundation聚合失败；全部16artifact逐项核234文件3290项，其中3289PASS/1FAIL，零漏重/skip/pending/runtimeErrors。唯一失败为`interaction-preview/console/ConsolePreview.test.tsx`的outside pointer/自然输入焦点用例第51行：findByRole找到深色menuitemradio但立即toBeVisible失败。尚未进入后续外部点击/输入/过滤断言，不是这些产品行为已证明失败，不是timeout或容量失败。自动deploy42066685510正确skipped，原7660314线上仍是旧版。
+- 本单元复用REQ0035/Issue93；预留V0.0.39-fix6，分支`codex/req0035-ci-fix6`从origin/main fb建立，保用户CodeGraph四dirty。旧PR94已经合并，不向旧PR推送；本次最小返修/门禁/双审后另建关联修复PR，精确新HEAD/main CI及自动部署另核。
+- 新实施者`req0035_fix6_preview`只拥有该测试文件。先读取依赖/真实进入态及原精确代表基线：本地PASS不冒称RED，CI真红保留。若证据支持，使用现有waitFor等待原可见性断言满足后再点击外部；不改生产样例/Dropdown、原动效/预算、focus/type/filter、Esc/选择焦点、只读/dirty/错误等断言，不以强制visible或隐藏断言放行。
+- [x] 原精确代表1PASS/11filtered（17.16秒、目标1.752）不是本地RED，准确红来自main。唯一一行现waitFor等待同role/name的原toBeVisible后再点击外部，完整12/12 PASS、exit0、41.78秒/目标2.666秒，原默认10秒及等待预算/动效/全部断言不变。未捕获原失败具体动画帧，不虚构诊断或速度收益，证据`fix6-preview-author-evidence.json`。
+- [x] 新实现者`req0035_fix6_preview`冻结后独立`fix6_spec` SPEC、独立`fix6_quality` QUALITY均PASS；父Web lint/type exit0。规范化源hash8553ede65db066e009a60a67cb780c2b51dca79c9cf39ea1d1e9549592729e90与证据相同，raw CRLF字节另列不误报源变。运行源码/API/依赖/CI仅该test变化经`fix6-parent-evidence-reuse.json`核实，复用已有效build/API/真实PG/契约/浏览器证据，不重复旧63项/本地全量。
+- [ ] 主动提交推送独立fix6 PR，关联Issue93，核精确新24门禁/16JSON完整覆盖后按现有本需求发布授权合并；再核新main24及其自动deploy的快照/141链/同SHA服务/READY成功出口/marker/cleanup/公网新产物。失败保存完整日志分类，未合并同PR、已合并另修复PR，不重跑旧run刷绿或放宽门禁。
+- [ ] 机器发布后集中归档指南/能力/Foundation/计划及来源索引，区分本地/远端归档，真实角色/物理设备及原持续增长另待人工复验；不自动关闭或写Base完成、不重启heartbeat。
+
+证据继续Git外`layout-sidebar-20261105/`：`main-failure-inventory-verified.json`、main完整24jobs/16artifact、两个失败job完整日志、跳过deploy对象及`fix6-preview-*`。当前生产源码没有返修变化，尚未把候选或绿PR当上线。
 
 证据：Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。录屏抽帧、最小grid A/B、准确红绿、六链连续几何及18窄屏场景已保存；旧连续无界增长仍未复现，不把稳定溢出写成增长反馈根因。初次fetch因用户`http.postBuffer=524288000`分配失败保留，后仅该命令临时`-c http.postBuffer=1048576 fetch origin`成功，未改用户配置，远端仍7660314。
