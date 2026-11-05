@@ -1,5 +1,19 @@
 # 前端设计实施与参考代码
 
+## 治理页面撑宽与双端侧栏回顶（2026-11-05，返修中）
+
+负责人新录屏反馈组织与岗位/平台配置横向拉伸，以及业务/管理端侧栏点击回顶。独立[Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93) / V0.0.39-fix5按[计划第9节](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)处理；原Issue89已于11-03关闭，本次不重开或自动改需求表。修复限定治理容器可收缩与会话内非敏感导航UI恢复，不保旧权限菜单/草稿，不降低逐路径重验。
+
+本次此前先本地实施而漏登飞书需求，负责人指出后冻结新增实施/PR并如实补登REQ-0035（`reczz28W1w4YTodF`）；user回读rev354确认12个提交字段一致，系统实际待评估，未代设开发中。后续交付以该条需求承接，不把Issue或本地修复当作已完成需求登记的历史事实。
+
+负责人后续明确状态已更新并继续；user实时回读rev357为开发中/P0，业务方案及验收保持，按有效批准恢复同范围交付，不倒写此前先实施后登记的漏项。最终PR/CI/发布状态以计划当前摘要及实际对象为准，不从本文的提交前时点推断已经上线。
+
+治理容器已用一条`grid-template-columns:minmax(0,1fr)`修复：Configuration/Structure/OrganizationWorkspace×两宿主六链各181连续帧约3秒、刷新及岗位切换保持900px边界，320/390/420共18场景无全页横溢且真实表格局部横滚可用。样式两完整文件3项通过，独立SPEC后QUALITY通过。旧场景复现的是稳定溢出，持续增长仍未复现，不能由ResizeObserver存在直接推断反馈循环。
+
+两套侧栏新增`apps/web/src/layouts/sidebarState.ts`纯内存UI接缝，复用现有workTabs会话生命周期并以epoch拒绝ABA旧写回；只存滚动/折叠/展开，不把菜单/URL/权限context/正文放进缓存或sessionStorage。Console重验菜单缩短时不写入归零，当前验证完成后恢复；业务侧先恢复展开后恢复真实容器。六完整文件60项独立Node组合通过，原4项安全文件无断言或预算变化；新增dirty用例初次固定`test-id`碰撞的9/10失败与局部fixture修正均保留，最终10/10不抹去原FAIL。真实模拟外壳1024×420下业务862→862、Console642→验证中0且菜单0链接→642/17链接，身份切换归零；390×780 Console dirty取消/busy阻离保Drawer/路由。最终独立SPEC后QUALITY均PASS，未以轮询文字冒充pending几何；首模拟landingPath失败保留。父类型/lint/build/契约/归档已通过，PR/CI与生产角色/物理设备验收仍另列。
+
+回归按统一规范1.7穿透真实AuthenticatedRoute与Console context重验链，覆盖旧菜单清敏、路径/目标组织ABA、身份切换、dirty/busy和移动Drawer；直接挂布局、jsdom设置scrollTop或独立裸表不足以证明真实导航/布局。新夹具仅本地模拟，不能代生产角色/API与物理设备验收。下方历史发布与待验条目以记录时点为准。
+
 ## REQ-0034-fix4 人工反馈横展（2026-11-01，已发布待复验）
 
 负责人两张截图确认制程首空展开列、所有台账重复竖线与拖宽命中位置内移不符合已确认设计，要求全面横展。原5880894机器发布事实有效但不能作为界面人工通过；沿用Issue89，见[计划8节](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。正式79业务表盘点中42处Ledger由唯一共享resize修复覆盖；4处展开入口包含一处非Ledger职责预览，均纳入无空占位/保真实明细验证，不强迁移专业小表或误删选择列。root旧组件真实测得命中中心内移13.8px；修复必须经实际th边界、sorter/ellipsis/固定sticky/横滚与明细有无验证，不据CSS文本宣称几何通过。

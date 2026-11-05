@@ -1,6 +1,6 @@
 import { Alert, Button, Drawer, Dropdown, Skeleton } from 'antd';
 import { ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useLanguage } from '../i18n/Language';
@@ -13,6 +13,7 @@ import { ConsoleTheme, useConsoleAppearance } from './ConsoleTheme';
 import { SessionVerificationGate } from '../features/auth/SessionVerificationGate';
 import { subscribeSessionSignals } from '../features/auth/session-invalidation';
 import { LedgerScopeProvider } from '../ui/ledger';
+import { useSidebarState } from '../layouts/sidebarState';
 
 const Context = createContext<{ context: Context; refresh: () => void; invalidate: () => void } | null>(null);
 export function useConsoleContext() {
@@ -38,7 +39,9 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const [result, setResult] = useState<{ key: symbol; context?: Context; error?: 'denied' | 'network' }>();
   const [preserved, setPreserved] = useState<{ scope: symbol; context: Context }>();
   const verified = useRef<{ scope: symbol; context: Context }>(undefined);
-  const [collapsed, setCollapsed] = useState(false);
+  const sidebar = useSidebarState('console');
+  const navigationElement = useRef<HTMLElement>(null);
+  const [collapsed, setCollapsed] = useState(sidebar.value.collapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const activeRequest = useRef<{ key: symbol; controller: AbortController } | null>(null);
@@ -88,6 +91,10 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const value = result?.key === key ? result : undefined;
   const context = value?.context ?? (preserved?.scope === scope ? preserved.context : undefined);
   const blocked = !!context && !value?.context;
+  useLayoutEffect(() => { setCollapsed(sidebar.value.collapsed); }, [sidebar]);
+  useLayoutEffect(() => {
+    if (value?.context && !blocked && navigationElement.current) navigationElement.current.scrollTop = sidebar.value.scrollTop;
+  }, [sidebar, value?.context, blocked, collapsed]);
   const capabilityKey = context ? JSON.stringify([context.actor.id, context.actor.homeOrganization.id, context.targetOrganization.id, context.modules]) : undefined;
   useEffect(() => { if (capabilityKey) heading.current?.focus(); }, [scope, capabilityKey, location.search]);
   const route = context ? consoleRoute(location.pathname, context) : undefined;
@@ -117,11 +124,15 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
     <SessionVerificationGate open={blocked} onUnavailable={discardPreserved}>{verification}</SessionVerificationGate>
     <div className={`qms-console-layout${collapsed ? ' qms-console-collapsed' : ''}`}>
     <a className="qms-console-skip" href="#qms-console-content">{text('跳到管理内容', 'Skip to management content')}</a>
-    <aside className="qms-console-sidebar">{navigation}</aside>
+    <aside ref={navigationElement} className="qms-console-sidebar" onScroll={event => {
+      if (value?.context && !blocked) sidebar.update({ scrollTop: event.currentTarget.scrollTop });
+    }}>{navigation}</aside>
     <div className="qms-console-body">
       <header className="qms-console-topbar">
         <div className="qms-console-topbar-leading">
-          <Button className="qms-console-desktop-toggle" type="text" aria-label={text(collapsed ? '展开导航' : '折叠导航', collapsed ? 'Expand navigation' : 'Collapse navigation')} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)} icon={collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />} />
+          <Button className="qms-console-desktop-toggle" type="text" aria-label={text(collapsed ? '展开导航' : '折叠导航', collapsed ? 'Expand navigation' : 'Collapse navigation')} aria-expanded={!collapsed} onClick={() => {
+            sidebar.update({ collapsed: !collapsed }); setCollapsed(!collapsed);
+          }} icon={collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />} />
           <Button className="qms-console-mobile-toggle" type="text" aria-label={text('打开管理导航', 'Open management navigation')} aria-expanded={mobileOpen} aria-controls="qms-console-mobile-navigation" onClick={() => setMobileOpen(true)} icon={<Menu size={20} />} />
           {location.pathname !== '/console' && location.pathname !== '/console/' && <nav className="qms-console-breadcrumb" aria-label={text('面包屑', 'Breadcrumb')}><Link to={href('/console')}>{text('管理控制台', 'Console')}</Link><span aria-hidden="true">/</span><strong>{route?.item ? label(route.item) : text('访问验证', 'Access verification')}</strong></nav>}
         </div>

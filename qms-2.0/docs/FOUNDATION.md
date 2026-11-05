@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## 治理布局与侧栏回归 fix5（2026-11-05，本地验证）
+
+独立[Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93)，细节见[计划第9节](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。仅治理网格可收缩轨道与两门户会话内导航UI恢复，未改API/DTO/迁移/权限/scope/Worker/附件/依赖/CI。原Issue89已关闭，本次不据滞后历史条目重开需求或自动关闭新问题。
+
+本地样式2完整文件3项、侧栏及安全相邻6完整文件60项分次组合通过，各单元独立SPEC后QUALITY限定通过；新增guard首轮固定test-id碰撞9/10失败与最终局部fixture修正保留，不增预算/动效或删业务断言。父Web lint/type、build（39.88秒）、contracts:check、归档隔离均exit0，产物index-BRkCcdoJ.js/index-5BMr-rKx.css含治理轨道且无两测试夹具标识，既有大chunk告警未顺手调整。真实组件布局六链约3秒连续采样/刷新/岗位及320/390/420共18场景界内且可局部横滚；旧持续增长NOT_REPRODUCED。真实模拟外壳1024×420两端wheel/滚动恢复/身份清空、390×780 Console dirty/busy Drawer及路由保护通过，最终fixture/证据独立SPEC后QUALITY亦通过。首模拟landingPath失败及轮询文字滞后局限保留，未将合成身份当生产登录验收。
+
+相对已发布7660314的API/契约/依赖/脚本/部署来源已检查无tracked或untracked变化，`parent-evidence-reuse.json`支持复用同源API/真实PG/Worker证据，不新开数据库或以模拟替代真实服务。本次尚未PR/CI/部署，不称完整phase验收；既有阶段前置FAIL和原失败历史保留，生产角色/物理设备与最终人工验收另列。证据Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。
+
 ## REQ-0034-fix4 表头边界与空列横展（2026-11-01，已发布待复验）
 
 以下三段保留候选阶段的本地证据与当时未发布边界，随后“后续实际”段接续最终精确CI和发布事实，不将旧待执行状态当当前结论。
