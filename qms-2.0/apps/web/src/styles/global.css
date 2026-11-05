@@ -427,7 +427,7 @@ a {
 
 .language-switcher.ant-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; background: var(--qms-surface); color: var(--qms-text); border: 1px solid var(--qms-border); border-radius: 7px; font-size: 13px; font-weight: 500; }
 .language-switcher.ant-btn:hover { color: var(--qms-text); border-color: var(--qms-accent); }
- .governance-panel { display: grid; gap: var(--qms-section-gap); padding-block: var(--qms-section-gap); }
+ .governance-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-section-gap); padding-block: var(--qms-section-gap); }
  .governance-toolbar { display: flex; gap: var(--qms-section-gap); align-items: center; flex-wrap: wrap; }
  .governance-panel table { width: 100%; }
  .governance-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }

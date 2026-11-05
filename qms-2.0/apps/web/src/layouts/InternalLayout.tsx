@@ -1,5 +1,5 @@
 import { Drawer, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { activeInternalDomain, internalDomains } from '../features/navigation/navigation';
 import { FeedbackButton } from '../features/feedback/FeedbackButton';
@@ -34,6 +34,7 @@ import { useLanguage } from '../i18n/Language';
 import { ShellHeader } from './ShellHeader';
 import { UnsavedChangesProvider } from './UnsavedChanges';
 import { InternalNavigation } from './InternalNavigation';
+import { useSidebarState } from './sidebarState';
 import './shell.css';
 
 function EmptyDomain({ title }: { title: string }) {
@@ -50,16 +51,24 @@ function InternalShell() {
   const openTab = useWorkTabsStore((state) => state.openTab);
   const isWorkbench = location.pathname === '/app/workbench' || location.pathname === '/app';
   const active = activeInternalDomain(location.pathname);
-  const [menuCollapsed, setMenuCollapsed] = useState(false);
+  const sidebar = useSidebarState('business');
+  const navigationElement = useRef<HTMLDivElement>(null);
+  const [menuCollapsed, setMenuCollapsed] = useState(sidebar.value.collapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const activeDomain = internalDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
-  const [expandedDomains, setExpandedDomains] = useState<string[]>(() => activeDomain ? [activeDomain.path] : []);
+  const [expandedDomains, setExpandedDomains] = useState<string[]>(sidebar.value.expandedDomains);
   const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
   const processPath = location.pathname.replace(/\/$/, '');
   const implemented = ['/app/problem-center', '/app/my-tasks', '/app/problem-workspace', '/app/account', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
-  useEffect(() => {
-    if (activeDomain) setExpandedDomains(current => current.includes(activeDomain.path) ? current : [...current, activeDomain.path]);
-  }, [location, activeDomain]);
+  useLayoutEffect(() => {
+    const expanded = sidebar.value.expandedDomains;
+    const next = activeDomain && !expanded.includes(activeDomain.path) ? [...expanded, activeDomain.path] : expanded;
+    sidebar.update({ expandedDomains: next });
+    setExpandedDomains(next); setMenuCollapsed(sidebar.value.collapsed);
+  }, [sidebar, location, activeDomain]);
+  useLayoutEffect(() => {
+    if (navigationElement.current) navigationElement.current.scrollTop = sidebar.value.scrollTop;
+  }, [sidebar, expandedDomains, menuCollapsed]);
   useEffect(() => {
     setMobileOpen(false);
     const store = useWorkTabsStore.getState();
@@ -71,18 +80,20 @@ function InternalShell() {
     const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : active.label;
     openTab({ id, path, title });
   }, [location.pathname, location.search, isWorkbench, active, openTab, t]);
-  const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleCollapsed={mobile ? undefined : () => setMenuCollapsed(current => !current)} onToggleDomain={path => {
+  const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleCollapsed={mobile ? undefined : () => {
+    sidebar.update({ collapsed: !menuCollapsed }); setMenuCollapsed(!menuCollapsed);
+  }} onToggleDomain={path => {
     setExpandedDomains(current => {
-      if (!current.includes(path)) return [...current, path];
+      if (!current.includes(path)) { const next = [...current, path]; sidebar.update({ expandedDomains: next }); return next; }
       if (!mobile && menuCollapsed) return current;
-      return current.filter(entry => entry !== path);
+      const next = current.filter(entry => entry !== path); sidebar.update({ expandedDomains: next }); return next;
     });
-    if (!mobile) setMenuCollapsed(false);
+    if (!mobile) { sidebar.update({ collapsed: false }); setMenuCollapsed(false); }
   }} />;
   return <div className={`qms-shell internal-shell${menuCollapsed ? ' menu-collapsed' : ''}`}>
     <a className="skip-link" href="#main-content">{t('跳到正文')}</a>
     <aside className="qms-navigation">
-      <div className="qms-primary-navigation">{navigation()}</div>
+      <div ref={navigationElement} className="qms-primary-navigation" onScroll={event => sidebar.update({ scrollTop: event.currentTarget.scrollTop })}>{navigation()}</div>
     </aside>
     <div className="qms-main">
       <ShellHeader onOpenNavigation={() => setMobileOpen(true)} />

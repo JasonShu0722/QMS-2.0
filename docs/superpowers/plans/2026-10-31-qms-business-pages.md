@@ -6,15 +6,16 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 核对时间与范围 | 2026-11-01 Asia/Taipei；台账/对象表单/编辑明细/检查清单及列操作和分页，不改业务模型 |
-| 授权 | 负责人恢复同一REQ-0034后又明确夜间连续开发、失败修复后继续、PR检查通过无需停顿即可合并部署，并要求20分钟heartbeat确保接续。当前授权覆盖本需求开发/验证/PR/精确CI检查/合并部署与发布核验，不扩为生产赋权、业务删除/外发、Issue关闭、Base回填或人工业务验收；不代设Base状态 |
-| 需求 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf)，`reczz28TwMc1lDEg`；首次user九业务字段回读rev344，当时待评估；恢复实时user回读rev348已为开发中，业务范围与Issue89未变，本轮未写Base状态，源码依据仍为负责人直接授权 |
-| 映射 | [Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89) / REQ0034；PR90/91已发布5880894，负责人截图反馈后同范围V0.0.39-fix4，隔离`codex/req0034-table-boundaries-fix4`，新修复PR待建 |
-| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；候选1772480与合并5880894整树相同；运行/规范已远端同步。从origin/main5880894新建`codex/req0034-release-record`只做最终本地归档，旧功能分支和diverged本地main保留不重写，旧归档不混入 |
+| 最新接续（2026-11-05） | 新反馈：组织与岗位/平台配置横向撑宽、两套侧栏点击回顶；已补登REQ-0035 / `reczz28W1w4YTodF` → 独立[Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93)，预留V0.0.39-fix5，见第9节。以下fix4行保留发布时历史，不作为当前修复完成事实 |
+| 本次状态与下一动作 | 负责人明确“状态已更新，继续推进”；user实时回读REQ0035 rev357为开发中/P0，较补登仅提出人改为舒子杰及优先级变化，批准业务范围保持。解除登记纠偏停点，复用8完整文件63项、真实组件/外壳浏览器及各单元最终独立SPEC后QUALITY，无重复全量。父lint/type/build/契约/归档通过，最终来源治理后提交推送同分支PR；PR/CI实时对象接续Git外`pr-delivery-checkpoint.json`，不以提交时尚未建PR的历史句重复开发 |
+| 核对时间与范围 | 2026-11-05 Asia/Taipei；新发现的治理撑宽/双端侧栏导航回顶，不改原业务模型 |
+| 授权 | 负责人本轮明确状态更新并继续，同范围本地开发/验证/Issue/提交推送PR有效；原夜间任务结束，不自动扩为本次合并发布/生产写入/关闭回填或人工验收 |
+| 原需求与当前映射 | [REQ-0034](https://larkcommunity.feishu.cn/record/FSsRrSqvieF2wBcPm5lcHM6Lngf) / `reczz28TwMc1lDEg`；本次不改表。2026-11-05实时回查[Issue89](https://github.com/JasonShu0722/QMS-2.0/issues/89)已于11-03关闭，原负责人确认验收不代此次修复验收；新Issue93独立承接 |
+| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`，本地56094fa/远端7660314；新分支`codex/req0034-layout-sidebar-fix5`。原发布归档保留，用户CodeGraph四项dirty不混入；不重写diverged本地main |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
-| 状态 | fix4候选已覆盖42处Ledger及4展开入口；共享/职责/制程接缝各独立SPEC后QUALITY通过，6完整文件121项为分项组合通过，父类型/构建/契约/归档检查通过。真实th边界/单线/拖宽不排序/换列及数据一致/固定横滚/390无页面横溢/有无明细已核，非真实角色业务验收；当前最终来源/治理后提PR，未称fix4已部署 |
-| 工程证据 | 独立HTML样例只证明样例；后续正式React/AntD组件已取得指针拖宽/拖列/缓存/键盘/窄屏分页浏览器模拟数据证据，仍非真实API/角色业务验收。日志与截图位于Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/` |
-| 下一动作 | 按8节共享根因修复覆盖全部42处Ledger及非Ledger职责预览，准确RED/完整定向回归/独立SPEC后QUALITY，实际桌面窄屏/固定横滚/sorter/ellipsis几何与拖动验证；同步规范及来源后提fix4 PR。已有本地发布归档747cac2完整保留并随本修复同步，不新建需求/重启夜间heartbeat，不据旧发布称本次已修复 |
+| 原发布状态 | fix4 PR92 / 7660314机器发布事实见8.4，Issue89已关闭。不是本次fix5已完成或已发布 |
+| 工程证据 | 早期样例与组件模拟不代真实角色验收；原过程证据Git外`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261031-01/`保留。fix4盘点/准确红绿/浏览器几何/精确PR及main24与16JSON/发布公网证据位于`D:/WorkSpace/QMS-2.0-local/unified-business-pages-20261101-fix4/` |
+| 下一动作 | 最终来源治理/差异及安全检查后主动提交同分支PR并核精确HEAD完整CI，不恢复本地全量。合并发布与关闭回填另核；未授权不绕门禁 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -262,3 +263,43 @@
 - Workflow独立QUALITY亦通过，四处展开入口盘点闭合。制程新增两接缝只插35行/2例，旧37及生产未变，真实AntD/生成DTO验证无物料时首选择列可选、有无料混合时原生明细可展开；首合跑45/46失败来自新断言误把AntD spaced对齐按钮当功能入口，正确区分后Process完整39/39 PASS。该首run两个绩效完整5/2 PASS保留，未重复刷已过文件；后续制程两新增例静态SPEC后QUALITY通过。与共享45/职责30组成6完整文件121项独立日志组合，非一次整包全绿或本地全站回归。
 - 父Web lint/type、build22.34秒、contracts:check及归档隔离均exit0；产物index-BrlSWntp.js/index-BEPfk-G2.css有新header/edge样式、无旧resize after，新增边界fixture未进入生产包，原大chunk及AntD弃用告警保留。源hash与审查一致，`parent-verification.json`记录分项与首次FAIL边界，未变后端/契约/依赖/CI/部署来源指纹确认后复用精确5880894真实API/PG/Worker证据，不以Mock代真实服务。浏览器viewport已恢复、任务tab及Vite80934已停止，不触保留55440。
 - 规范升1.6，在7.3明确真实th边界/一线/hover命中及无空展开占位；专项设计、指南、能力状态同步人工反馈和例外。Issue89实际登记fix4范围，user需求回读仅确认不改表；最终治理/diff和来源复核日志入Git外，精确fix4 PR/main24检查及部署仍待，旧机器发布和人工认可不代本次验证。
+
+### 8.4 fix4发布核验（2026-11-01）
+
+- PR92实际ac986541c80a865f90ea8f2fc42bccb31c5bf393 / run41263167739 attempt1全24同源job成功，16artifact逐项核官方231文件、3278项全PASS无漏/重/skip/pending/runtimeErrors，本轮新增17例。独立release gate通过后按同需求连续修复授权squash7660314d819b0cdbb1b1fc8dfba5f99c1001b309，整树81f153066d5f7ab991d72e8b5d6d84c23bfe88df与已审候选相同。
+- main run41264384940 attempt1也实际24同源success、16JSON231文件3278项再次全PASS，`main-coverage-verified.json`；不是用PR结果代main。自动deploy41265280131成功，来源完整attempt校验/SSH均success，未手动重复触发或绕门禁。
+- 部署job124726703309日志1064行前置加密snapshot verified先1070行141链及1073行无待执行；1112/1116/1117行API/Web/Worker镜像同7660314，1105–1110服务健康，1127行成功出口，builder Total1.502GB。READY及原子deployed-sha仍由同版脚本强制成功出口支持，未另SSH读回或取原Worker stdout；不代异地灾备/恢复演练。本次发布等待主要在API安装/构建层（02:27:58Z至约02:44:08Z）及Web重建，不是重复Web回归；仅记录事实，不顺手改镜像/部署策略。
+- 独立公网新index-ChZsk5Q2.js/index-FOu2Dq6D.css均200，区别fix4前index-KJw082o1.js/index-CBVgIpis.css；JS有新ledgerResize组件标识，CSS有header-cell及edge -5px、无旧resize after绘线，新增fixture标识排除。login/openapi/三SPA入口200、管理用户/console上下文/关闭职责/制程缺陷四契约路径匿名401；`machine-release-verification.json`准确记录，SPA200/资产变化不代真实登录或业务保存验收。
+- 统一规范1.6/7.3、专项设计、42/4横展实现及旧747发布归档已进远端main并实际git show回读；本轮最新发布事实本地记录暂不推以免索引JSON触发无运行变化full CI/重复部署。原FAIL/阶段前置FAIL/独立日志组合与真实角色待验边界不抹去；用户刷新正式页面验收后另核闭环授权，不自动关闭Issue89或写Base，不新建heartbeat。
+
+## 9. fix5 治理撑宽与双端侧栏回顶（2026-11-05）
+
+### 范围、设计与授权
+
+- 流程纠偏：负责人于本轮追问“你直接就开始优化了么，需求清单有提交么”。此前只有Issue93、没有新飞书需求记录，已发生本地实施先于需求登记的漏项，不能把Issue建单或本地计划冒充需求已提交。已冻结新增实施与PR；user读取字段真实报token_missing，没有改用bot绕过。仅请求字段读/记录读/创建的最小重新授权，授权后先查重/字段结构再提交并回读真实编号，不伪造记录或自行设“开发中”。历史漏项保留，不倒写成先登记后开发。
+- 补登结果：负责人回复“已授权”后，旧device poll返回invalid，但实际user身份已ready且字段读取成功，未重复发起授权或切bot。按真实字段及选项先用名称关键词/Issue93云端查重，完整返回0条/has_more=false（rev353）；随后user创建`reczz28W1w4YTodF`，系统编号REQ-0035。逐字段回读rev354：12个提交业务字段全部一致（单选及URL按接口表达规范化比较），状态由系统默认为待评估，完成时间/PR链接为空，未写进度状态或完成时间。实际需求、业务背景、方案/子任务/验收及Issue93已一并提交，证据`requirement-{fields,dedup-verified,create-payload,created,readback,verified}.json`在Git外。鉴权与建单真实先后保留，不修饰成实施前已经登记。
+- 开工接续：负责人随后明确“状态已更新，继续推进”，user按record_id回读rev357为开发中/P0；12个原业务字段逐项核对，仅提出人从登录显示名改为舒子杰、紧急程度P1改P0，目标/方案/子任务/验收及Issue93保持。该当前直接批准恢复同范围交付，不倒写此前实施合法顺序；不代改表或将继续扩大为合并部署。
+- 目标：组织与岗位/平台配置不持续撑宽，表格保持局部横滚；业务/管理端侧栏在同会话导航后保持原滚动与展开折叠。不改页面主题或业务表单。
+- 新问题独立Issue93，关联已结束REQ0034而不重开旧Issue89，不自动写Base。预留V0.0.39-fix5；远端main连接器实时回读7660314，本地56094fa额外只有fix4发布归档，保留随修复同步。`git fetch`实际malloc失败不充成功，未改远端引用。
+- 使用活动checkout新分支`codex/req0034-layout-sidebar-fix5`，不另建被禁止的开发目录。初始用户四项CodeGraph修改（`.gitignore`、实现AGENTS、ENGINEERING-TOOLS、documentation-index）保留且不混入本次提交；索引若需要共同编辑，最终按已提交来源选择性整合，不凭用户工作区绿色冒充远端一致。
+- 当前用户明确报告待修问题，按常规持续授权推进Issue/开发/验证/提交推送PR。原夜间任务已结束，本次合并发布另核；不自动关闭/回填或恢复heartbeat。
+- 横向布局首选约束治理grid轨道/实际撑宽项，保表格列宽与内部滚动；拒绝用overflow隐藏裁切、缩小全部业务列或改缓存掩盖。900px最小A/B原Card/Tabs1113px，minmax后900px且列180不变，只证明稳定溢出路径，尚不证明用户连续增长。
+- 侧栏首选只保会话内非敏感导航UI（滚动/折叠/展开），仍在每路径/目标组织重验时撤下旧内容与权限菜单。拒绝删除pathname安全scope或持久化旧授权context；不为保滚动保留旧草稿。复用现有会话生命周期，不新增跨会话偏好/持久存储。
+- API/DTO/数据/权限/Worker/附件无计划变更，相关真实服务证据只在来源仍有效时复用；本次合成页面仅证明正式组件布局和导航，不代真实登录/生产业务验收。
+
+### 实施与门禁
+
+- [x] 两名独立只读诊断，确认治理grid和安全gate重挂/菜单清空候选；Issue93建立，版本/分支登记。
+- [x] `fix5_growth_implementation`：global.css仅一条轨道约束、邻近样式回归及layout-regression-fixture；准确RED1FAIL/1PASS→两个完整文件3PASS。正式Configuration/Structure/OrganizationWorkspace×两宿主6链各181RAF约3秒及刷新/岗位切换均在900px边界；320/390/420共18场景界内且真实局部横滚可用。旧版稳定溢出已复现，持续增长NOT_REPRODUCED。独立`fix5_growth_spec`后`sidebar_scroll_diagnosis` QUALITY均限定范围PASS，4源冻结一致，证据`fix5-growth-report.md`。
+- [x] 全新`fix5_sidebar_implementation`：Internal/Console及sidebarState纯内存UI，真实Auth包装准确4FAIL→初7PASS；最终新route7+state3完整10PASS，原Internal9/Console20/session16/console-window5完整分次组合共60PASS。新增dirty首9/10因两个dialog固定test-id碰撞，准确DOM记录后仅局部fixture development/恢复，原预算/断言/安全scope未改。首browser非法模拟landingPath被正式校验拒绝，最终仅fixture改workbench，失败保留。
+- [x] 单一Web验证owner串行：growth完成释放后sidebar，最后root lint/build；不增预算/motion、不Skip，不本地全量，8完整63项是分次组合不是同次全量。
+- [x] growth独立SPEC后QUALITY及sidebar独立SPEC后QUALITY（包含最终测试与fixture/browser窄补核）均PASS。主代理读取diff、完整日志、退出码与来源。布局900px六链及320/390/420、侧栏1024×420真实wheel：业务862→862、Console642→pending0/links0→642/links17，两端身份切换0；390×780 Console真实DataRouter dirty取消/busy阻离保持Drawer及/users，pageerror0。sessionPending轮询滞后一帧不作pending几何证据，脚本另等DOM撤下。未覆盖真实生产登录/物理设备/业务mobile browser（后者有真Router单测）。
+- [x] 父类型/lint/build、契约/归档隔离、治理/diff及适用来源复核均通过，夹具不入生产包。规范1.7/指南/能力/验收记录已同步；治理37文档/474链接/20来源/157依赖及阶段覆盖1项通过。初始用户CodeGraph四项保持，提交时仅暂存本次变更并反向排除原索引hunk，另核暂存来源摘要与实际提交树，不把仅工作区绿色代暂存一致。
+- [ ] 验证审查通过后主动提交推送同分支PR关联Issue93，不用自动关闭语句；精确HEAD现有16Web/严格24job CI检查与覆盖清单，普通失败修复继续同PR。
+- [ ] 合并发布授权成立才接续同SHA main/自动部署/公网目标核验；最终部署版人工确认后获准关闭回填，清任务资源并归档。缺授权只停对应动作，不阻前面的本地/PR。
+
+父检查已取得：Web lint/type、build39.88秒、contracts:check及归档隔离均exit0；index-BRkCcdoJ.js/index-5BMr-rKx.css含治理轨道且两fixture标识均排除，既有大chunk告警保持。相对7660314的后端/契约/依赖/脚本/部署来源无变化，经`parent-evidence-reuse.json`复用同源API/真实PG/Worker证据。Vite任务session28937已停止，所有作者browser关闭，无后台验证；无新API/数据/权限变更。最终治理与PR/CI按当前快照接续，不重跑这些未变分项。
+
+提交检查点：本次8完整文件63项分次PASS、最终双审及父门禁已就绪，PR创建与精确HEAD CI是下一独立步骤；提交时PR编号/检查结果尚未产生，不预造链接或写已发布。创建后将实时PR/HEAD/run和后续状态写Git外`pr-delivery-checkpoint.json`及Issue93，避免只为进度文档反复推送触发无运行变化CI/部署。REQ0035的开发中/P0来源为负责人，缺合并发布授权只停止对应动作，不自动关闭Issue/写Base完成。
+
+证据：Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。录屏抽帧、最小grid A/B、准确红绿、六链连续几何及18窄屏场景已保存；旧连续无界增长仍未复现，不把稳定溢出写成增长反馈根因。初次fetch因用户`http.postBuffer=524288000`分配失败保留，后仅该命令临时`-c http.postBuffer=1048576 fetch origin`成功，未改用户配置，远端仍7660314。
