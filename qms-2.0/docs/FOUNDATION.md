@@ -2,6 +2,8 @@
 
 ## 治理布局与侧栏回归 fix5（2026-11-05，本地验证）
 
+2026-11-06接续：PR94精确9475742 run42051494524 attempt1全24CI/16JSON234文件3290项全PASS后按负责人“继续”合并fb88779，整树13918e15相等；main42064462310 attempt1却唯一ConsolePreview菜单可见态断言失败（3289PASS/1FAIL，零漏重/skip/pending/runtimeErrors），foundation聚合失败，deploy42066685510正确skipped。完整main日志/16artifact及失败清单均保留，不rerun刷绿；V0.0.39-fix6独立修复PR仅等待原可见态后继续同原焦点/过滤断言，原预算/动效/生产源保持。当前仍未发布，不以绿PR或合并代上线，详见计划9.1。
+
 独立[Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93)，细节见[计划第9节](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md)。仅治理网格可收缩轨道与两门户会话内导航UI恢复，未改API/DTO/迁移/权限/scope/Worker/附件/依赖/CI。原Issue89已关闭，本次不据滞后历史条目重开需求或自动关闭新问题。
 
 本地样式2完整文件3项、侧栏及安全相邻6完整文件60项分次组合通过，各单元独立SPEC后QUALITY限定通过；新增guard首轮固定test-id碰撞9/10失败与最终局部fixture修正保留，不增预算/动效或删业务断言。父Web lint/type、build（39.88秒）、contracts:check、归档隔离均exit0，产物index-BRkCcdoJ.js/index-5BMr-rKx.css含治理轨道且无两测试夹具标识，既有大chunk告警未顺手调整。真实组件布局六链约3秒连续采样/刷新/岗位及320/390/420共18场景界内且可局部横滚；旧持续增长NOT_REPRODUCED。真实模拟外壳1024×420两端wheel/滚动恢复/身份清空、390×780 Console dirty/busy Drawer及路由保护通过，最终fixture/证据独立SPEC后QUALITY亦通过。首模拟landingPath失败及轮询文字滞后局限保留，未将合成身份当生产登录验收。

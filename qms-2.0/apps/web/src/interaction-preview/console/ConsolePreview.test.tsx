@@ -48,7 +48,7 @@ describe('isolated management console preview', () => {
     setup(); users();
     const search = screen.getByRole('textbox', { name: '搜索本地用户' });
     await user.click(screen.getByRole('button', { name: '管理外观' }));
-    expect(await screen.findByRole('menuitemradio', { name: '深色' })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('menuitemradio', { name: '深色' })).toBeVisible());
     await user.click(search);
     expect(search).toHaveFocus();
     await user.type(search, '林');
