@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ0035 fix6机器发布（2026-11-06，待负责人实页复验）
+
+[PR95](https://github.com/JasonShu0722/QMS-2.0/pull/95)候选b4044e0与main8c90c84cc52dce85d2c1ed98e44996dcbbe170d2整树一致，run42077424051与run42080092505各attempt1、各24完整同源success，各16JSON234文件3290项全PASS，无漏重/skip/pending/runtimeErrors。原main42064462310唯一可见态FAIL/3289PASS及正确跳过deploy42066685510、CI红/本地原代表PASS和失败夹具历史均保留，未rerun刷绿；fix6仅原test一行等待，无生产/API/DTO/迁移/权限/依赖/CI变更。
+
+[自动deploy42082353182](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42082353182) job127438410440：725行快照核验先731行141链、734行无待迁移；三服务同8c90c84镜像与Healthy，788行成功、builder1.524GB。Worker READY与原子marker由同版脚本强制成功出口支持，未另SSH读回，不代恢复演练。独立公网login/OpenAPI/新JS及CSS均200，资源为index-CRHXM3Qr.js/index-CEYAWm_B.css，侧栏会话/可收缩轨道标识正确、fixture排除，四目标匿名401。
+
+完整发布证据Git外`layout-sidebar-20261105/fix6-machine-release-verification.json`，实际规则/源码已远端main回读；本段最终发布事实本地归档待同步，避免索引JSON触发重复无运行变化部署。机器发布不代真实角色/物理设备及负责人实页验收，原持续增长未本地复现；Issue93开放、Base未代写、不恢复heartbeat，不称完整phase通过。下方各候选/待发布段为历史检查点。
+
 ## 治理布局与侧栏回归 fix5（2026-11-05，本地验证）
 
 2026-11-06接续：PR94精确9475742 run42051494524 attempt1全24CI/16JSON234文件3290项全PASS后按负责人“继续”合并fb88779，整树13918e15相等；main42064462310 attempt1却唯一ConsolePreview菜单可见态断言失败（3289PASS/1FAIL，零漏重/skip/pending/runtimeErrors），foundation聚合失败，deploy42066685510正确skipped。完整main日志/16artifact及失败清单均保留，不rerun刷绿；V0.0.39-fix6独立修复PR仅等待原可见态后继续同原焦点/过滤断言，原预算/动效/生产源保持。当前仍未发布，不以绿PR或合并代上线，详见计划9.1。
