@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom';
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { transferableAbortController } from 'node:util';
 import { useState } from 'react';
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AuthenticatedRoute } from '../features/auth/AuthenticatedRoute';
 import { LanguageProvider } from '../i18n/Language';
@@ -13,7 +15,7 @@ import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { useNavigationBusy, useUnsavedChanges } from './UnsavedChanges';
 
 vi.mock('../workbench/Workbench', () => ({ Workbench: () => <GuardProbe /> }));
-vi.mock('../features/supplier-pcn/SupplierPcnPage', () => ({ SupplierPcnPage: () => <div>PCN ledger</div> }));
+vi.mock('../features/supplier-pcn/SupplierPcnPage', () => ({ SupplierPcnPage: () => <><div>PCN ledger</div><GuardProbe /></> }));
 vi.mock('../layouts/AnnouncementReminder', () => ({ AnnouncementReminder: () => null }));
 vi.mock('../console/console-api', () => ({ getConsoleContext: vi.fn() }));
 
@@ -93,7 +95,7 @@ it('restores the collapsed business rail after a verified route remount', async 
 it('restores console scroll after both gates without caching the old menu or a pending clamp', async () => {
   mount('console');
   await screen.findByText('Verified console page');
-  const sidebar = document.querySelector<HTMLElement>('.qms-console-sidebar')!;
+  const sidebar = document.querySelector<HTMLElement>('.qms-console-menu')!;
   sidebar.scrollTop = 220; fireEvent.scroll(sidebar);
   fireEvent.click(within(sidebar).getByRole('link', { name: '流程管理' }));
   expect(sidebar.isConnected).toBe(false);
@@ -102,22 +104,97 @@ it('restores console scroll after both gates without caching the old menu or a p
   getContext.mockReturnValueOnce(new Promise(resolve => { finishContext = resolve; }));
   await act(async () => finishSession(response(session)));
   await waitFor(() => expect(finishContext).toBeDefined());
-  const pendingSidebar = document.querySelector<HTMLElement>('.qms-console-sidebar')!;
+  const pendingSidebar = document.querySelector<HTMLElement>('.qms-console-menu')!;
   expect(within(pendingSidebar).queryByRole('link', { name: '用户与任职' })).not.toBeInTheDocument();
   pendingSidebar.scrollTop = 0; fireEvent.scroll(pendingSidebar);
   await act(async () => finishContext(context));
   expect(await screen.findByText('Verified console page')).toBeInTheDocument();
-  expect(document.querySelector<HTMLElement>('.qms-console-sidebar')!.scrollTop).toBe(220);
+  expect(document.querySelector<HTMLElement>('.qms-console-menu')!.scrollTop).toBe(220);
 });
 
 it('retains console collapse through a verified route remount', async () => {
   mount('console');
   await screen.findByText('Verified console page');
   fireEvent.click(screen.getByRole('button', { name: '折叠导航' }));
-  fireEvent.click(within(document.querySelector<HTMLElement>('.qms-console-sidebar')!).getByRole('link', { name: '流程管理' }));
+  fireEvent.click(within(document.querySelector<HTMLElement>('.qms-console-menu')!).getByRole('link', { name: '流程管理' }));
   await act(async () => finishSession(response(session)));
   await screen.findByText('Verified console page');
   expect(screen.getByRole('button', { name: '展开导航' })).toBeInTheDocument();
+});
+
+it('keeps the business brand and collapse control outside the remembered menu scroller', async () => {
+  mount();
+  await screen.findByRole('navigation', { name: '内部领域导航' });
+  const sidebar = document.querySelector<HTMLElement>('.qms-primary-navigation')!;
+  const brand = screen.getByRole('link', { name: 'QMS 2.0' });
+  expect(sidebar).not.toContainElement(brand);
+  expect(sidebar).not.toContainElement(screen.getByRole('button', { name: '收起业务菜单' }));
+  expect(brand).toHaveAttribute('href', '/app/workbench');
+  expect(sidebar).toContainElement(screen.getByRole('navigation', { name: '内部领域导航' }));
+});
+
+it('makes the fixed console brand a home link while preserving the target organization', async () => {
+  mount('console', '/console/users?organizationId=a');
+  await screen.findByText('Verified console page');
+  const brand = screen.getByRole('link', { name: 'QMS Console · 管理首页' });
+  expect(brand).toHaveAttribute('href', '/console?organizationId=a');
+  const menu = document.querySelector<HTMLElement>('.qms-console-menu')!;
+  expect(menu).not.toContainElement(brand);
+  expect(menu).toContainElement(screen.getByRole('link', { name: '流程管理' }));
+});
+
+it('constrains only menu regions to scroll and reserves fixed brand space in both drawers', () => {
+  const shell = readFileSync('src/layouts/shell.css', 'utf8');
+  const consoleStyle = readFileSync('src/console/console.css', 'utf8');
+  expect(shell).toMatch(/\.internal-shell \.qms-navigation\s*\{[^}]*flex-direction:\s*column/);
+  expect(shell).toMatch(/\.internal-shell \.qms-primary-navigation\s*\{[^}]*min-height:\s*0[^}]*flex:\s*1/);
+  expect(shell).toMatch(/\.qms-business-mobile-drawer \.ant-drawer-body\s*\{[^}]*overflow:\s*hidden/);
+  expect(consoleStyle).toMatch(/\.qms-console-menu\s*\{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/);
+  expect(consoleStyle).not.toMatch(/\.qms-console-sidebar\s*\{[^}]*overflow-y:\s*auto/);
+  expect(consoleStyle).toMatch(/\.qms-console-mobile-drawer \.ant-drawer-body\s*\{[^}]*overflow:\s*hidden/);
+});
+
+function RouteProbe() {
+  const location = useLocation();
+  return <output aria-label="home path">{location.pathname}{location.search}</output>;
+}
+
+it('keeps the console home link keyboard accessible after collapse and localizes its name', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('qms:locale:v1', 'en-US');
+  useWorkTabsStore.getState().bindSession('INTERNAL:a:actor');
+  render(<MemoryRouter initialEntries={['/console/users?organizationId=a']}><LanguageProvider><ConsoleLayout><RouteProbe /></ConsoleLayout></LanguageProvider></MemoryRouter>);
+  await screen.findByLabelText('home path');
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse navigation' }));
+  const brand = screen.getByRole('link', { name: 'QMS Console · Management home' });
+  brand.focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByLabelText('home path')).toHaveTextContent('/console?organizationId=a'));
+  expect(screen.getByRole('button', { name: 'Expand navigation' })).toBeInTheDocument();
+});
+
+it.each(['business', 'console'] as const)('blocks the %s logo during dirty or busy editing without bypassing the real router guard', async portal => {
+  const original = globalThis.AbortController;
+  globalThis.AbortController = function () { return transferableAbortController(); } as unknown as typeof AbortController;
+  useWorkTabsStore.getState().bindSession('INTERNAL:a:actor');
+  const path = portal === 'business' ? '/app/supplier-pcn' : '/console/users?organizationId=a';
+  const router = createMemoryRouter([{ path: '*', element: portal === 'business' ? <InternalLayout /> : <ConsoleLayout><GuardProbe /><RouteProbe /></ConsoleLayout> }], { initialEntries: [path] });
+  try {
+    render(<LanguageProvider><RouterProvider router={router} /></LanguageProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Toggle dirty' }));
+    const brand = screen.getByRole('link', { name: portal === 'business' ? 'QMS 2.0' : 'QMS Console · 管理首页' });
+    fireEvent.click(brand);
+    fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+    expect(router.state.location.pathname + router.state.location.search).toBe(path);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle dirty' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle busy' }));
+    fireEvent.click(brand);
+    expect(router.state.location.pathname + router.state.location.search).toBe(path);
+    expect(screen.queryByRole('button', { name: '放弃修改' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle busy' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe(portal === 'business' ? '/app/workbench' : '/console'));
+    expect(router.state.location.search).toBe(portal === 'business' ? '' : '?organizationId=a');
+  } finally { router.dispose(); globalThis.AbortController = original; }
 });
 
 it('resets live business navigation after a batched session A to B to A transition', async () => {

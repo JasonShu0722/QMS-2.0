@@ -14,15 +14,18 @@ type InternalNavigationProps = {
   onToggleCollapsed?: () => void;
 };
 
-export function InternalNavigation({ activePath, isWorkbench, collapsed = false, expandedDomains, onToggleDomain, onToggleCollapsed }: InternalNavigationProps) {
+export function InternalNavigationHeading({ collapsed = false, onToggleCollapsed }: Pick<InternalNavigationProps, 'collapsed' | 'onToggleCollapsed'>) {
   const { t } = useLanguage();
-  const id = useId();
-  return <>
-    <div className="qms-navigation-heading">
+  return <div className="qms-navigation-heading">
       <Link className="qms-brand" to="/app/workbench" aria-label="QMS 2.0"><span className="qms-brand-symbol">Q</span><span className={collapsed ? 'sr-only' : ''}>QMS <small>2.0</small></span></Link>
       {onToggleCollapsed && <Button type="text" icon={collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />} aria-label={t(collapsed ? '展开业务菜单' : '收起业务菜单')} title={t(collapsed ? '展开业务菜单' : '收起业务菜单')} onClick={onToggleCollapsed} />}
-    </div>
-    <nav className="qms-domain-nav" aria-label={t(collapsed ? '内部领域图标导航' : '内部领域导航')}>
+    </div>;
+}
+
+export function InternalNavigation({ activePath, isWorkbench, collapsed = false, expandedDomains, onToggleDomain }: InternalNavigationProps) {
+  const { t } = useLanguage();
+  const id = useId();
+  return <nav className="qms-domain-nav" aria-label={t(collapsed ? '内部领域图标导航' : '内部领域导航')}>
       <Link className={`qms-nav-item${isWorkbench ? ' active' : ''}`} to="/app/workbench" title={t('综合工作台')} aria-current={isWorkbench ? 'page' : undefined}><House size={19} aria-hidden="true" /><span className={collapsed ? 'sr-only' : ''}>{t('综合工作台')}</span></Link>
       {internalDomains.map((domain, index) => {
         const selected = domain.children.some(entry => entry.path === activePath);
@@ -37,6 +40,5 @@ export function InternalNavigation({ activePath, isWorkbench, collapsed = false,
           </nav>
         </div>;
       })}
-    </nav>
-  </>;
+    </nav>;
 }

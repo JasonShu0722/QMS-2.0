@@ -108,7 +108,7 @@ describe('legacy role HTTP writes are read-only with real PostgreSQL', () => {
   async function snapshot(f: Fixture) {
     const where = { organizationId: f.org.id };
     return {
-      roles: await prisma.role.findMany({ where, include: { permissions: true }, orderBy: { id: 'asc' } }),
+      roles: await prisma.role.findMany({ where, include: { permissions: { orderBy: { permissionId: 'asc' } } }, orderBy: { id: 'asc' } }),
       users: await prisma.user.findMany({ where, select: { id: true, securityVersion: true }, orderBy: { id: 'asc' } }),
       direct: await prisma.userRole.findMany({ where, orderBy: [{ userId: 'asc' }, { roleId: 'asc' }] }),
       mapping: await prisma.positionRole.findMany({ where, orderBy: [{ positionId: 'asc' }, { roleId: 'asc' }] }),

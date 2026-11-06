@@ -1,5 +1,23 @@
 # 底座与阶段二平台验收记录
 
+## REQ0035固定Logo追加fix7（2026-11-06，本地验证）
+
+PR96首CI42186914067 attempt1：全部24job完成，22success；integration2旧legacy-role-http测试:153完整快照深比较FAIL，foundation派生FAIL。16份Web JSON逐项核234文件3296项全PASS，零漏重/skip/pending/runtimeErrors；integration2实际52套件中1失败、484项中1失败/483通过。独立只读diff支持同roleId的permissions数组仅22个ID重排、集合相同，没有权限增删差异证据，但不能据此忽略真实gate失败。负责人反馈“PR没通过”后按计划9.4最小修测试snapshot嵌套orderBy、真实一次性PG/HTTP完整文件及独立审查；不改生产授权规则或弱化原断言，不rerun旧任务刷绿，未合并/发布。
+
+fix8真实新PostgreSQL18.6/127.0.0.1:55517/独立随机label/tmpfs无宿主卷，generate/141迁移/seed全0；原代表1PASS/16按-t过滤不是RED，改后完整17/17 PASS0skip，原120000ms/403/receipt/audit/securityVersion断言保全。独立SPEC后QUALITY及配置API lint/type通过，精确核容器ID/label stop/rm0、最终回读为空，禁止55440保持。额外全API测试tsc实际FAIL，既有类型/@jest/globals问题保留，不顺手修改无关测试；新HEAD24门禁与16JSON另验，局部通过不代PR或上线验收。
+
+负责人明确当前需求追加并继续调整；user先写五业务字段并回读rev358、14其他字段保持，状态开发中/P0，沿Issue93不新建。生产改动限两端品牌/菜单真实分区、菜单scroll ref与管理品牌Router Link；保原dirty/busy、Auth/path/target/epoch，Supplier共用规则不改。准确RED3FAIL/7filtered，初新英文fixture键错误15/16后精准修正，最终sidebar13+state3、Internal9、Console20共4完整文件45项分次PASS，不增预算/关动效/删断言。
+
+8个正式模拟外壳浏览器场景核1440/1024/390两端品牌y恒定/真实菜单滚至末项/Enter回home，另管理英文collapsed点击保target及mobile Logo dirtycancel/busy保护；console390初进场x不当横向不动证据。父类型与Web build（27.37秒）exit0，生产包有qms-console-menu/home标签且fixture标识排除，既有大chunk告警保留。未改安全store/原会话窗口测试及API/契约/依赖/脚本/部署，相关旧证据按源有效复用；最终独立SPEC后QUALITY及治理（37文档/474链接/20来源/157依赖）通过，精确新HEAD CI待。细节见计划9.3和Git外`layout-sidebar-20261105/fix7-*`，尚未发布，不用旧fix6机器发布代本追加验收。
+
+## REQ0035 fix6机器发布（2026-11-06，待负责人实页复验）
+
+[PR95](https://github.com/JasonShu0722/QMS-2.0/pull/95)候选b4044e0与main8c90c84cc52dce85d2c1ed98e44996dcbbe170d2整树一致，run42077424051与run42080092505各attempt1、各24完整同源success，各16JSON234文件3290项全PASS，无漏重/skip/pending/runtimeErrors。原main42064462310唯一可见态FAIL/3289PASS及正确跳过deploy42066685510、CI红/本地原代表PASS和失败夹具历史均保留，未rerun刷绿；fix6仅原test一行等待，无生产/API/DTO/迁移/权限/依赖/CI变更。
+
+[自动deploy42082353182](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42082353182) job127438410440：725行快照核验先731行141链、734行无待迁移；三服务同8c90c84镜像与Healthy，788行成功、builder1.524GB。Worker READY与原子marker由同版脚本强制成功出口支持，未另SSH读回，不代恢复演练。独立公网login/OpenAPI/新JS及CSS均200，资源为index-CRHXM3Qr.js/index-CEYAWm_B.css，侧栏会话/可收缩轨道标识正确、fixture排除，四目标匿名401。
+
+完整发布证据Git外`layout-sidebar-20261105/fix6-machine-release-verification.json`，实际规则/源码已远端main回读；本段最终发布事实本地归档待同步，避免索引JSON触发重复无运行变化部署。机器发布不代真实角色/物理设备及负责人实页验收，原持续增长未本地复现；Issue93开放、Base未代写、不恢复heartbeat，不称完整phase通过。下方各候选/待发布段为历史检查点。
+
 ## 治理布局与侧栏回归 fix5（2026-11-05，本地验证）
 
 2026-11-06接续：PR94精确9475742 run42051494524 attempt1全24CI/16JSON234文件3290项全PASS后按负责人“继续”合并fb88779，整树13918e15相等；main42064462310 attempt1却唯一ConsolePreview菜单可见态断言失败（3289PASS/1FAIL，零漏重/skip/pending/runtimeErrors），foundation聚合失败，deploy42066685510正确skipped。完整main日志/16artifact及失败清单均保留，不rerun刷绿；V0.0.39-fix6独立修复PR仅等待原可见态后继续同原焦点/过滤断言，原预算/动效/生产源保持。当前仍未发布，不以绿PR或合并代上线，详见计划9.1。

@@ -105,9 +105,10 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const label = (item: ConsoleNavigationItem) => text(item.label, item.english);
   const groups = [['workspace', '工作空间', 'Workspace'], ['administration', '组织与授权', 'Organizations & access'], ['configuration', '基础数据与配置', 'Data & configuration'], ['security', '安全与运行', 'Security & operations']];
   const href = (path: string) => organizationId === undefined ? path : `${path}?${new URLSearchParams({ organizationId })}`;
-  const navigation = <>
-    <div className="qms-console-brand"><ShieldCheck size={24} aria-hidden="true" /><span className="qms-console-nav-label"><strong>QMS Console</strong><small>{text('管理工作空间', 'Management workspace')}</small></span></div>
-    <nav aria-label={text('管理导航', 'Management navigation')}>
+  const brand = <Link className="qms-console-brand" to={href('/console')} aria-label={text('QMS Console · 管理首页', 'QMS Console · Management home')} title={text('返回管理首页', 'Return to management home')}><ShieldCheck size={24} aria-hidden="true" /><span className="qms-console-nav-label"><strong>QMS Console</strong><small>{text('管理工作空间', 'Management workspace')}</small></span></Link>;
+  const navigation = (mobile = false) => <nav ref={mobile ? undefined : navigationElement} className="qms-console-menu" aria-label={text('管理导航', 'Management navigation')} onScroll={mobile ? undefined : event => {
+      if (value?.context && !blocked) sidebar.update({ scrollTop: event.currentTarget.scrollTop });
+    }}>
       {groups.map(([group, zh, en]) => {
         const items = entries.filter(item => item.group === group);
         return items.length ? <section key={group}><p className="qms-console-nav-label">{text(zh!, en!)}</p>{items.map(item => {
@@ -115,8 +116,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
           return <Link key={item.path} to={href(item.path)} aria-label={label(item)} title={label(item)} aria-current={route?.item?.path === item.path ? 'page' : undefined}><Icon size={18} aria-hidden="true" /><span className="qms-console-nav-label">{label(item)}</span></Link>;
         })}</section> : null;
       })}
-    </nav>
-  </>;
+    </nav>;
 
   const verification = value?.error ? <div className="qms-console-state"><Alert type="error" showIcon title={value.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
     : <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>;
@@ -124,9 +124,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
     <SessionVerificationGate open={blocked} onUnavailable={discardPreserved}>{verification}</SessionVerificationGate>
     <div className={`qms-console-layout${collapsed ? ' qms-console-collapsed' : ''}`}>
     <a className="qms-console-skip" href="#qms-console-content">{text('跳到管理内容', 'Skip to management content')}</a>
-    <aside ref={navigationElement} className="qms-console-sidebar" onScroll={event => {
-      if (value?.context && !blocked) sidebar.update({ scrollTop: event.currentTarget.scrollTop });
-    }}>{navigation}</aside>
+    <aside className="qms-console-sidebar">{brand}{navigation()}</aside>
     <div className="qms-console-body">
       <header className="qms-console-topbar">
         <div className="qms-console-topbar-leading">
@@ -161,6 +159,6 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
             </>}
       </main>
     </div>
-    <Drawer title={text('管理导航', 'Management navigation')} open={mobileOpen} onClose={() => setMobileOpen(false)} placement="left" size={288} className="qms-console-mobile-drawer"><div id="qms-console-mobile-navigation">{navigation}</div></Drawer>
+    <Drawer title={text('管理导航', 'Management navigation')} open={mobileOpen} onClose={() => setMobileOpen(false)} placement="left" size={288} className="qms-console-mobile-drawer"><div id="qms-console-mobile-navigation">{brand}{navigation(true)}</div></Drawer>
   </div></>;
 }

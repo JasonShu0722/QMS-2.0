@@ -33,7 +33,7 @@ import { SupplierAsnPage } from '../features/supplier-asn/SupplierAsnPage';
 import { useLanguage } from '../i18n/Language';
 import { ShellHeader } from './ShellHeader';
 import { UnsavedChangesProvider } from './UnsavedChanges';
-import { InternalNavigation } from './InternalNavigation';
+import { InternalNavigation, InternalNavigationHeading } from './InternalNavigation';
 import { useSidebarState } from './sidebarState';
 import './shell.css';
 
@@ -80,9 +80,7 @@ function InternalShell() {
     const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : active.label;
     openTab({ id, path, title });
   }, [location.pathname, location.search, isWorkbench, active, openTab, t]);
-  const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleCollapsed={mobile ? undefined : () => {
-    sidebar.update({ collapsed: !menuCollapsed }); setMenuCollapsed(!menuCollapsed);
-  }} onToggleDomain={path => {
+  const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleDomain={path => {
     setExpandedDomains(current => {
       if (!current.includes(path)) { const next = [...current, path]; sidebar.update({ expandedDomains: next }); return next; }
       if (!mobile && menuCollapsed) return current;
@@ -93,6 +91,9 @@ function InternalShell() {
   return <div className={`qms-shell internal-shell${menuCollapsed ? ' menu-collapsed' : ''}`}>
     <a className="skip-link" href="#main-content">{t('跳到正文')}</a>
     <aside className="qms-navigation">
+      <InternalNavigationHeading collapsed={menuCollapsed} onToggleCollapsed={() => {
+        sidebar.update({ collapsed: !menuCollapsed }); setMenuCollapsed(!menuCollapsed);
+      }} />
       <div ref={navigationElement} className="qms-primary-navigation" onScroll={event => sidebar.update({ scrollTop: event.currentTarget.scrollTop })}>{navigation()}</div>
     </aside>
     <div className="qms-main">
@@ -130,7 +131,7 @@ function InternalShell() {
         {location.pathname.startsWith('/app/site-scanning') ? <SiteScanningPage /> : null}
       </main>
     </div>
-    <Drawer title={t('业务导航')} open={mobileOpen} placement="left" size={280} onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation">{navigation(true)}</div></Drawer>
+    <Drawer title={t('业务导航')} open={mobileOpen} placement="left" size={280} className="qms-business-mobile-drawer" onClose={() => setMobileOpen(false)}><div className="qms-mobile-navigation"><InternalNavigationHeading />{navigation(true)}</div></Drawer>
     <FeedbackButton />
   </div>;
 }

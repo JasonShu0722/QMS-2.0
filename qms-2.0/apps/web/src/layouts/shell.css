@@ -12,7 +12,10 @@
 .qms-nav-item:hover { background: var(--qms-surface-tint); color: var(--qms-text); }
 .qms-nav-item.active { background: var(--qms-accent-soft); color: var(--qms-text); font-weight: 600; }
 .qms-nav-item.active svg { color: var(--qms-accent-action); }
-.internal-shell .qms-primary-navigation { width: 100%; padding: 16px 8px; }
+.internal-shell .qms-navigation { flex-direction: column; }
+.internal-shell .qms-primary-navigation { width: 100%; padding: 0 8px 16px; min-height: 0; flex: 1; }
+.internal-shell .qms-primary-navigation > .qms-domain-nav { margin-top: 0; }
+.internal-shell .qms-navigation > .qms-navigation-heading { padding: 16px 8px 20px; flex: none; }
 .qms-navigation-heading { display: flex; align-items: center; justify-content: space-between; }
 .qms-navigation-heading .qms-brand { gap: 8px; padding: 0 6px; }
 .qms-navigation-heading > .ant-btn { width: 44px; height: 44px; flex-shrink: 0; }
@@ -50,6 +53,10 @@ button.qms-domain-toggle { width: 100%; border: 0; background: transparent; font
 .qms-mobile-navigation .qms-brand { padding: 0 12px; }
 .qms-mobile-navigation .qms-nav-item { padding: 12px 14px; justify-content: flex-start; }
 .qms-mobile-navigation .qms-domain-nav { margin-top: 20px; }
+.qms-business-mobile-drawer .ant-drawer-body { overflow: hidden; display: flex; flex-direction: column; }
+.qms-business-mobile-drawer .qms-mobile-navigation { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.qms-business-mobile-drawer .qms-navigation-heading { flex: none; }
+.qms-business-mobile-drawer .qms-domain-nav { min-height: 0; overflow-y: auto; flex: 1; }
 .qms-nav-item:focus-visible, .qms-context-link:focus-visible { outline: 2px solid var(--qms-accent-action); outline-offset: 2px; }
 .qms-shell:has(.problem-workspace.is-focused) { --navigation-width: 0px; }
 .qms-shell:has(.problem-workspace.is-focused) > .qms-navigation { display: none; }
