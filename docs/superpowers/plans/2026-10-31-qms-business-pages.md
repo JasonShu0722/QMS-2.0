@@ -6,6 +6,8 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
+| 2026-11-06 Logo追加接续 | 负责人反馈滚动不含顶部Logo/管理Logo应可回首页，明确在当前需求追加并“继续调整”。已先user补REQ0035五字段并回读rev358、14无关字段不变，开发中/P0；Issue93同样追加，不新建。基于8c90c84与本地发布归档6b055d6建`codex/req0035-logo-fix7`，预留V0.0.39-fix7，方案/验收见9.3；本追加未发布，不以fix6已发布代通过 |
+| fix7实际进展 | 固定品牌/菜单分区和管理Logo链接本地完成，准确3FAIL/7filtered→最终4完整45项分次PASS，首新英文fixture15/16失败保留。8个模拟外壳浏览器场景、父类型/build27.37秒与治理通过，最终独立SPEC后QUALITY限定PASS；暂存源核验后主动同分支PR，实时HEAD/PR/CI记Git外fix7-checkpoint.json，不为进度反复推送；本追加尚未发布，不重跑已过文件或旧版全量 |
 | 核对时间与范围 | 2026-11-06 Asia/Taipei；REQ0035治理页面撑宽/双端侧栏回顶已机器发布，真实角色页面待负责人复验，不改业务模型 |
 | 当前版本与映射 | REQ-0035 / `reczz28W1w4YTodF` → [Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93) → [PR94](https://github.com/JasonShu0722/QMS-2.0/pull/94) / [PR95](https://github.com/JasonShu0722/QMS-2.0/pull/95) → V0.0.39-fix6 / `8c90c84cc52dce85d2c1ed98e44996dcbbe170d2` |
 | 授权与外部状态 | 负责人更新开发中/P0并继续开发，后在全绿PR/待合并发布上下文明确继续，已执行本次合并发布。最近user需求回读rev357仍开发中/P0，未代写Base或关闭Issue；不含生产赋权/业务删除、关闭回填或代人工验收，旧heartbeat不恢复 |
@@ -324,5 +326,19 @@
 - 独立公网login/OpenAPI与新index-CRHXM3Qr.js/index-CEYAWm_B.css均200，区别发布前index-ChZsk5Q2.js/index-FOu2Dq6D.css；JS含sidebar-session、CSS含governance-panel可收缩轨道，两fixture标识排除。console context、organizations/tree、configuration/settings与process defects匿名均401。新资源/拒绝边界是机器事实，不能推成真实角色业务完成或持续增长动态因果已证。
 - 证据`fix6-{pr,main}-coverage-verified.json`、`fix6-deploy-log-verified.json`、`fix6-public-verification.json`及合并后的`fix6-machine-release-verification.json`。用户四项CodeGraph原dirty保持；本次最新发布事实仅本地归档提交，不推索引JSON导致无运行变化重复CI/部署。规范1.7和已发布源已实际git show origin/main回读。
 - 人工复验聚焦两目标：刷新真实组织与岗位/平台配置，持续操作/页签/刷新观察无拉伸且局部横滚可用；业务与控制台滚至下部点击叶项检查滚动/展开保持。真实角色、物理设备及原持续无界增长未被本地合成验证替代。Issue93开放、Base本轮未写进度/完成/PR字段，等待负责人反馈及单独关闭回填授权；旧REQ0034不重开，其他需求不自动接单。
+
+### 9.3 fix7 固定品牌区与首页链接（2026-11-06）
+
+- 用户两张截图明确固定Logo、只滚菜单，管理Logo可点回首页；随后“直接在当前需求条目中更新即可”“继续调整”。先user读字段与原记录rev357，追加业务背景/期望效果/方案/子任务/验收五字段，再回读rev358全部一致，14其他字段未变，开发中/P0，不新增需求或自行改状态；Issue93追加范围亦回读，录屏/截图不入Git。
+- 新分支`codex/req0035-logo-fix7`基于6b055d6（发布8c90c84加纯文档归档），远端main仍8c90c84，保用户CodeGraph四dirty，不混入。预留V0.0.39-fix7，提交前再核冲突；本追加当前授权实现/验证/PR，合并发布按具体后续授权核定，不自动关闭/回填或恢复heartbeat。
+- 最小设计：保现有主题、品牌与导航层级；桌面品牌/折叠入口在非滚动区，Flex/Grid父链允许菜单收缩，只有菜单节点overflow-y:auto，并把原scrollTop读写/ref绑定该真实菜单容器。管理品牌区从静态div改现有Router Link回`/console`、沿既有href保目标组织，业务Link仍`/app/workbench`。移动Drawer品牌同样固定/链接可达，不另建滚动缓存、不删安全gate或dirty/busy阻离。
+- sticky整个品牌虽然代码少，但仍把品牌留在滚动内容中，不能满足滚动条只属于菜单；因此采用实际分区。只改必要布局调用方，SupplierLayout共用shell样式时核相邻不退化，不新增供应商业务或改变其会话状态语义。
+- [x] 新实现代理`fix7_logo_implementation`单一写集：InternalNavigation提取现有品牌Heading至固定区，Console品牌Link与真实menu滚动分离，原ref/scroll绑定menu；CSS只internal/专用Drawer，不改Supplier共用旧规则或sidebarState。准确RED3FAIL/7filtered；新增中英键盘/品牌结构/同目标首页/Logo dirtybusy及原ABA/恢复断言保留。首15/16新英文fixture误写旧locale key，精准改为现有key后未放宽英文名或业务断言。
+- [x] 单一窗口4完整文件45项分次PASS：sidebar13+state3为27.47秒，Internal9为21.05秒，Console20为17.34秒。未变session-window16/console-window5与Auth/store及后端来源核对后复用，不重复旧63项/全量。8个浏览器场景：1440/1024/390两端品牌y恒定、菜单滚至末项/Enter回home，管理英文collapsed点击保target，390 Console Logo dirtycancel/busy阻离。旧真实生产登录/物理设备不由合成身份替代；Console390初始x=-276是Drawer进场帧，断言只核y不宣称横向before/after相同，最终x12可达。中断恢复时作者进程已退出，root读取原日志/JSON保留有效证据，未重复跑。
+- [x] 最终独立`fix7_final_spec` SPEC后`fix7_final_quality` QUALITY限定PASS，主代理实际读diff/完整日志及浏览器JSON/7源规范化hash吻合。父类型/lint与build27.37秒exit0，新index-JA7UiUCn.js/index-CKKqSqU4.css有独立menu/home标识且fixture排除；治理37文档/474链接/20来源/157依赖及阶段覆盖通过。未变后端/契约/部署/安全源已核，复用有效证据，不重复真实服务/本地全量。新菜单切叶后的像素恢复未另browser复测，原真Auth数值恢复单测完整保留；生产角色/物理设备仍未覆。
+- [ ] 规范1.8/指南/能力/本地验收/计划与来源索引已同步，用户原CodeGraph摘要选择性排除，暂存树核验后主动提交推送一个fix7 PR关联Issue93，不向已合并PR95推送冒充交付。精确新CI覆盖按实际清单，不沿旧234/3290冒充新增测试已覆盖。
+- [ ] 获准合并发布才接续main/自动deploy/同SHA快照健康公网目标，实际人工反馈再按授权关闭回填；不自动执行生产角色配置、删除/外发。
+
+本次证据继续Git外`layout-sidebar-20261105/`前缀`fix7-logo-*`，需求与Issue追加证据前缀`logo-requirement-*`/`logo-issue-*`。旧fix6发布与失败历史原样保留，不把Logo新增要求追写为原版本已实现。
 
 证据：Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。录屏抽帧、最小grid A/B、准确红绿、六链连续几何及18窄屏场景已保存；旧连续无界增长仍未复现，不把稳定溢出写成增长反馈根因。初次fetch因用户`http.postBuffer=524288000`分配失败保留，后仅该命令临时`-c http.postBuffer=1048576 fetch origin`成功，未改用户配置，远端仍7660314。

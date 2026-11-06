@@ -54,7 +54,7 @@ function Controls() {
   const [sample, setSample] = useState('');
   useEffect(() => {
     const timer = setInterval(() => {
-      const element = document.querySelector<HTMLElement>('.qms-primary-navigation, .qms-console-sidebar');
+      const element = document.querySelector<HTMLElement>('.qms-primary-navigation, .qms-console-sidebar .qms-console-menu');
       setSample(JSON.stringify({ path: document.querySelector('[aria-current="page"]')?.getAttribute('href'), scrollTop: element?.scrollTop, clientHeight: element?.clientHeight, scrollHeight: element?.scrollHeight, windowScrollY: window.scrollY, activeElement: document.activeElement?.tagName, pendingSession: pendingSession.length, pendingContext: pendingContext.length }));
     }, 100);
     return () => clearInterval(timer);
@@ -66,8 +66,9 @@ function Controls() {
   </div>;
 }
 const portal = new URLSearchParams(window.location.search).get('portal') === 'console' ? 'console' : 'business';
+const target = new URLSearchParams(window.location.search).get('target');
 const router = createMemoryRouter([
   { path: '/console/*', element: <AuthenticatedRoute accountType="INTERNAL"><ConsoleLayout><DraftProbe /></ConsoleLayout></AuthenticatedRoute> },
   { path: '/app/*', element: <AuthenticatedRoute accountType="INTERNAL"><InternalLayout /></AuthenticatedRoute> },
-], { initialEntries: [portal === 'console' ? '/console/users' : '/app/site-scanning'] });
+], { initialEntries: [portal === 'console' ? `/console/users${target ? `?${new URLSearchParams({ organizationId: target })}` : ''}` : '/app/site-scanning'] });
 createRoot(document.getElementById('root')!).render(<LanguageProvider><ThemeProvider><Controls /><RouterProvider router={router} /></ThemeProvider></LanguageProvider>);

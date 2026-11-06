@@ -1,5 +1,11 @@
 # 底座与阶段二平台验收记录
 
+## REQ0035固定Logo追加fix7（2026-11-06，本地验证）
+
+负责人明确当前需求追加并继续调整；user先写五业务字段并回读rev358、14其他字段保持，状态开发中/P0，沿Issue93不新建。生产改动限两端品牌/菜单真实分区、菜单scroll ref与管理品牌Router Link；保原dirty/busy、Auth/path/target/epoch，Supplier共用规则不改。准确RED3FAIL/7filtered，初新英文fixture键错误15/16后精准修正，最终sidebar13+state3、Internal9、Console20共4完整文件45项分次PASS，不增预算/关动效/删断言。
+
+8个正式模拟外壳浏览器场景核1440/1024/390两端品牌y恒定/真实菜单滚至末项/Enter回home，另管理英文collapsed点击保target及mobile Logo dirtycancel/busy保护；console390初进场x不当横向不动证据。父类型与Web build（27.37秒）exit0，生产包有qms-console-menu/home标签且fixture标识排除，既有大chunk告警保留。未改安全store/原会话窗口测试及API/契约/依赖/脚本/部署，相关旧证据按源有效复用；最终独立SPEC后QUALITY及治理（37文档/474链接/20来源/157依赖）通过，精确新HEAD CI待。细节见计划9.3和Git外`layout-sidebar-20261105/fix7-*`，尚未发布，不用旧fix6机器发布代本追加验收。
+
 ## REQ0035 fix6机器发布（2026-11-06，待负责人实页复验）
 
 [PR95](https://github.com/JasonShu0722/QMS-2.0/pull/95)候选b4044e0与main8c90c84cc52dce85d2c1ed98e44996dcbbe170d2整树一致，run42077424051与run42080092505各attempt1、各24完整同源success，各16JSON234文件3290项全PASS，无漏重/skip/pending/runtimeErrors。原main42064462310唯一可见态FAIL/3289PASS及正确跳过deploy42066685510、CI红/本地原代表PASS和失败夹具历史均保留，未rerun刷绿；fix6仅原test一行等待，无生产/API/DTO/迁移/权限/依赖/CI变更。
