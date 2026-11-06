@@ -6,6 +6,8 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
+| fix8门禁接续（2026-11-06） | PR96/670c41e首CI42186914067 attempt1真实整体FAIL：integration2的旧legacy-role快照嵌套permissions无序，foundation派生失败；其余22job成功，16Web234文件3296项全PASS不代PR通过。负责人反馈“PR没通过”后接续仅测试快照显式排序、真实一次性PG与独立双审，保持完整权限断言/原门禁，继续同PR96，不rerun旧run刷绿；见9.4。当前尚未合并发布 |
+| fix8当前进展 | 一行测试快照排序完成，真实PG18/55517完整17/17、0skip，原代表1PASS/16过滤非红；独立SPEC后QUALITY、配置API lint与治理通过，任务容器核ID/label清理为空。额外全spec类型检查既有346诊断前后完全相同并保留，不修无关测试或冒称PASS。暂存源核验后提交fix8更新同PR96，新HEAD/run结果在Git外fix7-checkpoint.json接续，旧首FAIL不抹去 |
 | 2026-11-06 Logo追加接续 | 负责人反馈滚动不含顶部Logo/管理Logo应可回首页，明确在当前需求追加并“继续调整”。已先user补REQ0035五字段并回读rev358、14无关字段不变，开发中/P0；Issue93同样追加，不新建。基于8c90c84与本地发布归档6b055d6建`codex/req0035-logo-fix7`，预留V0.0.39-fix7，方案/验收见9.3；本追加未发布，不以fix6已发布代通过 |
 | fix7实际进展 | 固定品牌/菜单分区和管理Logo链接本地完成，准确3FAIL/7filtered→最终4完整45项分次PASS，首新英文fixture15/16失败保留。8个模拟外壳浏览器场景、父类型/build27.37秒与治理通过，最终独立SPEC后QUALITY限定PASS；暂存源核验后主动同分支PR，实时HEAD/PR/CI记Git外fix7-checkpoint.json，不为进度反复推送；本追加尚未发布，不重跑已过文件或旧版全量 |
 | 核对时间与范围 | 2026-11-06 Asia/Taipei；REQ0035治理页面撑宽/双端侧栏回顶已机器发布，真实角色页面待负责人复验，不改业务模型 |
@@ -340,5 +342,20 @@
 - [ ] 获准合并发布才接续main/自动deploy/同SHA快照健康公网目标，实际人工反馈再按授权关闭回填；不自动执行生产角色配置、删除/外发。
 
 本次证据继续Git外`layout-sidebar-20261105/`前缀`fix7-logo-*`，需求与Issue追加证据前缀`logo-requirement-*`/`logo-issue-*`。旧fix6发布与失败历史原样保留，不把Logo新增要求追写为原版本已实现。
+
+### 9.4 PR96测试快照排序返修fix8（2026-11-06）
+
+- 首PR已建立96 / HEAD670c41e160503977032a12e100d77d36239e3cac，run42186914067 attempt1全24job结束；integration2(job127789433682)实质FAIL、foundation(job127794812379)派生FAIL，其他22job success。16份Web JSON逐一核234文件3296项全PASS、零漏重/skip/pending/runtimeErrors，不把前端绿色改写为整体PR通过。两个失败job完整日志与全部artifact库存保留，Issue/PR正文实际登记。
+- 独立QUALITY只读分类：旧`apps/api/test/authorization/legacy-role-http.integration-spec.ts:153`读取后比较前后完整快照失败；:111外层roles按id排序，`include.permissions:true`无内部顺序。完整两份相同diff显示同roleId的22个permissionId移出/移入集合完全相同且各唯一，另2条原位，无集合增删或其他字段差异。证据仅支持嵌套数组返回顺序不同，不证明执行期绝无同值写入或具体数据库计划原因；严格gate仍FAIL。
+- 负责人反馈“PR没通过”，本轮明确接续该CI阻塞，不再仅交付前端通过结果。范围限定测试快照关系显式`orderBy:permissionId asc`，仍比较所有记录/字段/数量，不改生产权限代码、读写规则/DTO/迁移/依赖/CI；不使用弱化集合断言、加超时/motion或Mock/Skip替代真实PG。版本预留V0.0.39-fix8，原分支/PR96继续，不另建需求或PR，不扩大合并发布/关闭回填授权。
+- [x] 原`fix8_snapshot_order`代理在工具会话刷新后不再出现在live列表，实际检查无本轮源码/产物/容器，主代理明确交接全新`fix8_snapshot_execute`而非把静默算完成。新作者只改该测试一行include.permissions排序，原完整deepEqual/403/audit/receipt/securityVersion/120000保全。真实PG/HTTP基线1PASS/16按-t过滤，Jest28.207秒/命令32.147秒不是RED；修后完整17/17 PASS、0skip，Jest14.036秒/命令16.164秒，不据分次时长称性能收益。
+- [x] `fix8_order_spec` SPEC后独立`fix8_order_quality` QUALITY限定PASS，当前LF SHA13b888baa4ec8de93d598f4e4aa957c6a033763c418051e27f4cbe3661e382e6，内存仅还原该一行即baseline d79c8fe83db9ae2f97068a990e174912164b2436c75f8fe86a7f9837c3435c65。父配置的API lint/type exit0；未改运行源，复用有效Web45/browser/build/其他后端证据。任务PostgreSQL18.6 loopback55517、独立随机label/tmpfs无宿主卷；141迁移/seed0，精确核ID/label stop/rm0及最终空回读，未连55440、不globalprune。
+- [ ] 验证后提交fix8推送更新同PR96及Issue93，精确新HEAD的全24门禁/16JSON实际成功才报告PR通过；旧FAIL/未发布事实保留，不重跑旧run刷绿。后续合并发布/人工验收/关闭回填按有效授权分别接续。
+
+证据目录继续Git外`layout-sidebar-20261105/`，首失败`fix7-ci-{integration2,foundation}-failure.log`/`fix7-ci-final-inventory-verified.json`及`fix8-*`。此前“待决定是否处理”是原停点历史，本轮已明确接续最小门禁修复，不扩大业务范围。
+
+额外类型检查边界：主代理尝试`tsc --project tsconfig.spec.json --noEmit`覆盖全API测试，实际FAIL（既有测试类型/@jest/globals解析错误），不是项目已配置lint/CI门禁，不删除日志或顺手修无关测试。正常`@qms/api lint`使用现配置生成/生产tsc实际PASS；该一行通过真实PG/HTTP原完整文件，所有新HEAD严格CI仍需实际成功，不用局部绿抹去失败。全spec前后同配置内存还原该一行的诊断对照证据另存`fix8-parent-test-types-baseline.json`，若未完成不得引用为已确认。
+
+父收口：配置API lint、治理37文档/474链接/20来源/157依赖及阶段覆盖、diff已PASS；正确API cwd/configFilePath下全spec内存还原前后各346条诊断完全相同，目标文件仅既有@jest/globals解析诊断，无新类型回归。初TypeScript API探针曾误用根cwd/漏configFilePath得15946诊断，不当CLI对照，该方法失配事实同证据保留并以正确346对照为准。仅测试排序加文档/索引，无运行源码/依赖/契约/CI变化，旧Web45及首精确3296项、browser/build按源复用，新HEAD完整CI仍实际核验。
 
 证据：Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。录屏抽帧、最小grid A/B、准确红绿、六链连续几何及18窄屏场景已保存；旧连续无界增长仍未复现，不把稳定溢出写成增长反馈根因。初次fetch因用户`http.postBuffer=524288000`分配失败保留，后仅该命令临时`-c http.postBuffer=1048576 fetch origin`成功，未改用户配置，远端仍7660314。

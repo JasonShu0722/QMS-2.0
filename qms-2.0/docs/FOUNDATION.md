@@ -2,6 +2,10 @@
 
 ## REQ0035固定Logo追加fix7（2026-11-06，本地验证）
 
+PR96首CI42186914067 attempt1：全部24job完成，22success；integration2旧legacy-role-http测试:153完整快照深比较FAIL，foundation派生FAIL。16份Web JSON逐项核234文件3296项全PASS，零漏重/skip/pending/runtimeErrors；integration2实际52套件中1失败、484项中1失败/483通过。独立只读diff支持同roleId的permissions数组仅22个ID重排、集合相同，没有权限增删差异证据，但不能据此忽略真实gate失败。负责人反馈“PR没通过”后按计划9.4最小修测试snapshot嵌套orderBy、真实一次性PG/HTTP完整文件及独立审查；不改生产授权规则或弱化原断言，不rerun旧任务刷绿，未合并/发布。
+
+fix8真实新PostgreSQL18.6/127.0.0.1:55517/独立随机label/tmpfs无宿主卷，generate/141迁移/seed全0；原代表1PASS/16按-t过滤不是RED，改后完整17/17 PASS0skip，原120000ms/403/receipt/audit/securityVersion断言保全。独立SPEC后QUALITY及配置API lint/type通过，精确核容器ID/label stop/rm0、最终回读为空，禁止55440保持。额外全API测试tsc实际FAIL，既有类型/@jest/globals问题保留，不顺手修改无关测试；新HEAD24门禁与16JSON另验，局部通过不代PR或上线验收。
+
 负责人明确当前需求追加并继续调整；user先写五业务字段并回读rev358、14其他字段保持，状态开发中/P0，沿Issue93不新建。生产改动限两端品牌/菜单真实分区、菜单scroll ref与管理品牌Router Link；保原dirty/busy、Auth/path/target/epoch，Supplier共用规则不改。准确RED3FAIL/7filtered，初新英文fixture键错误15/16后精准修正，最终sidebar13+state3、Internal9、Console20共4完整文件45项分次PASS，不增预算/关动效/删断言。
 
 8个正式模拟外壳浏览器场景核1440/1024/390两端品牌y恒定/真实菜单滚至末项/Enter回home，另管理英文collapsed点击保target及mobile Logo dirtycancel/busy保护；console390初进场x不当横向不动证据。父类型与Web build（27.37秒）exit0，生产包有qms-console-menu/home标签且fixture标识排除，既有大chunk告警保留。未改安全store/原会话窗口测试及API/契约/依赖/脚本/部署，相关旧证据按源有效复用；最终独立SPEC后QUALITY及治理（37文档/474链接/20来源/157依赖）通过，精确新HEAD CI待。细节见计划9.3和Git外`layout-sidebar-20261105/fix7-*`，尚未发布，不用旧fix6机器发布代本追加验收。
