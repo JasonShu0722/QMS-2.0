@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ0035固定Logo追加机器发布（2026-11-06，待实页复验）
+
+[PR96](https://github.com/JasonShu0722/QMS-2.0/pull/96)候选4f96ba7与mainbadd14b08275d29b361e596e2184d74e649b5acf整树相同，负责人明确继续合并部署；run42200502252与main42205932537各attempt1、各24同源success，各16份JSON234文件3296项全PASS无漏重/skip/pending/runtimeErrors。首42186914067真实integration2无序快照FAIL/派生FAIL与Web绿色区别、fix8真实PG17PASS及额外全spec346旧诊断FAIL均保留，不rerun刷绿或修业务授权。
+
+[自动deploy42207748552](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42207748552) job127858517785完整日志690行快照先696行141链/699无待迁移，三服务镜像同badd14b均Healthy，753行强制成功出口、builder1.511GB；Worker READY/原子marker由同版脚本成功出口支持，非独立SSH读回。公网login/OpenAPI/两首页SPA和新index-BpThNLlk.js/index-BlMtSdkC.css均200，固定品牌/menu/home标识及fixture排除、四目标匿名401实际核验。首公网证据脚本只读HOME变量错误保留，改变量名后核验，不是生产变更。
+
+规范1.8/实现已远端main实际回读，完整证据Git外`layout-sidebar-20261105/fix7-machine-release-verification.json`及分项JSON/原日志；最新发布事实本地归档暂不推索引JSON触发重复部署，区分本地/远端。机器发布不代生产真实角色/物理设备/最终人工验收，Issue93开放、Base未代写、不恢复heartbeat；下文候选/未发布句子保留历史时点。
+
 ## REQ0035固定Logo追加fix7（2026-11-06，本地验证）
 
 PR96首CI42186914067 attempt1：全部24job完成，22success；integration2旧legacy-role-http测试:153完整快照深比较FAIL，foundation派生FAIL。16份Web JSON逐项核234文件3296项全PASS，零漏重/skip/pending/runtimeErrors；integration2实际52套件中1失败、484项中1失败/483通过。独立只读diff支持同roleId的permissions数组仅22个ID重排、集合相同，没有权限增删差异证据，但不能据此忽略真实gate失败。负责人反馈“PR没通过”后按计划9.4最小修测试snapshot嵌套orderBy、真实一次性PG/HTTP完整文件及独立审查；不改生产授权规则或弱化原断言，不rerun旧任务刷绿，未合并/发布。
