@@ -61,7 +61,7 @@ it.each([
   } else {
     await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
     expect(onUnauthorized).not.toHaveBeenCalled();
-    expect(screen.getByText('当前批次结果未知，请使用原批次重试；已确认结果保留。')).toBeVisible();
+    await waitFor(() => expect(screen.getByText('当前批次结果未知，请使用原批次重试；已确认结果保留。')).toBeVisible());
   }
   expect(apiRequest).toHaveBeenCalledTimes(source === 'later csrf' ? 1 : 2);
   expect(csrfToken).toHaveBeenCalledTimes(2);
