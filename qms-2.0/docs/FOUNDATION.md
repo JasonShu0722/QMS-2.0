@@ -1,6 +1,10 @@
 # 底座与阶段二平台验收记录
 
-## REQ0036 fix5正文可见态回归（2026-11-09，待新候选门禁）
+## REQ0036 fix4/fix5发布与入口确认（2026-11-09）
+
+PR100候选e0ab78c与main/部署 `ce4a72f33f6c6261dbd7525e431c1db3655f0210` 整tree相同，PR CI42620866574及[main CI42622679109](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42622679109)各attempt1、各精确24/24 success，同候选Review clear。[自动deploy42624847559](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42624847559)/job129185860112同SHA来源门禁通过，13:35:48Z加密快照，143链无待迁移，三服务镜像同ce4a72f，13:36:16Z明确成功；Worker READY/HTTP/原子marker由同版强制成功出口支持，非独立SSH读回。
+
+13:38:09Z公开HTTP独立PASS：login/OpenAPI/管理页及资源200，四受控GET匿名401，机器无Bearer401且trace头体一致。JS/CSS与0181a89相同符合Web生产源未变，变化来自API默认权限投影。CUA生产窗口曾因URL识别策略中止且未绕过；随后负责人直接确认已可看到，绑定本版记Admin入口/页面可见性MANUAL PASS，不扩为全部操作验收，不要求重复截图。一次性marker-only浏览器2例已核配置/凭据/收件；Issue97开放、Base未写、具体接收接口未启用/凭据未分发。证据Git外fix4/release及[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)，最新结果本地归档。本段为当前事实，下文首失败及待门禁语句保留历史时点。
 
 PR100首head1d0b2cb的CI42617559662 attempt1全24实际22success/2failure：仅Web11 ReceiptList正文安全场景的pre已存在但不可见时立即断言失败，15文件166项1FAIL165PASS；foundation明确web-tests must be success，派生失败。API/四PG及其余15Web成功，同headReview clear，仍不得合并。fix5仅一行改为waitFor等待同一正文可见，保PRE/noimgscript、原8例及预算/动效；六完整UI/导航文件44/44 PASS、138.22s，限定独立SPEC后QUALITY PASS。原Admin生产一行及API/契约/迁移/浏览器源未变，按范围复用先前证据；新head完整门禁、main与部署另核，详见[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
 

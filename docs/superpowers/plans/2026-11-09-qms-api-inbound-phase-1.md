@@ -15,13 +15,13 @@
 | 最后核对与范围 | 2026-11-09，Asia/Taipei；负责人更新状态并明确“继续推进”，user 实时回读 rev363 开发中/P0，目标/五字段范围保持，提出人已由负责人改为舒子杰 |
 | 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
 | 本次追加范围 | 负责人截图反馈Admin无权限且菜单缺入口，明确要求Admin默认具备权限；修订五项integration权限纳入显式platform:admin的既有内部组织权限投影，菜单继续使用受控context显示；不按用户名特判、不批量改普通岗位、不放宽机器鉴权。逐接口returnReceipt原行为保持 |
-| 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）→ PR99（V0.0.40-fix3）。最终main与部署均为0181a899eee277585eb38448ce956c147572d518，整tree与审候选8d761c02一致；旧main042首轮失败、旧分支档案f5b00d8及各修复证据保留 |
+| 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
+| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 生产仍为0181a89，第12节原机器发布有效；Admin默认权限返修PR100的head1d0b2cb首CI42617559662 attempt1实际22成功2失败，唯一实质为Web11正文存在但尚不可见的断言，foundation派生；同headReview clear。fix5仅补原断言等待，完整六文件44/44及限定SPEC后QUALITY PASS，继续同PR100更新候选，不rerun旧run刷绿 |
+| 当前检查点 | PR100候选CI42620866574与main push CI42622679109各attempt1、各精确24/24全success，同候选Review clear，整tree一致。自动deploy42624847559/job129185860112同ce4a72f完成success，来源CI、迁移前加密快照、143链无待迁移、三服务同SHA及强制成功出口已核；13:38:09Z独立公开HTTP PASS。自动CUA策略中止后，负责人已确认Admin可看到，记入口/页面可见性MANUAL PASS，不扩为全部操作验收 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 原Admin一行修复的PG102/unit53/浏览器2/build/契约证据仍适用；fix5同PR100提交等待返修及六完整UI/导航44项证明，再核新head完整CI与Review，按原授权合并部署。生产CUA因网址识别安全策略中止，未绕过，负责人最终刷新确认Admin实页；不启用具体接口/分发凭据/关闭回填 |
+| 下一动作与负责人 | 当前Admin权限/入口返修已完成机器发布与入口可见性人工确认，主代理归档实际证据。不启用具体接口/分发凭据，不关闭Issue或写飞书；真实来源、匹配容量恢复及其他人工操作验收仍按原范围承接 |
 
 ## 1. 交付单元、映射与范围
 
@@ -352,3 +352,20 @@ Git外最终证据：`D:/WorkSpace/QMS-2.0-local/req0036-20261109/release-fix3-f
 父串行六个完整UI/导航文件44/44 PASS、0skip（138.22s），其中原ReceiptList全部8/8，失败场景4.250s；没有同环境原完整基线，不宣称性能改善。fix4_spec限定SPEC PASS后fix4_quality限定QUALITY PASS。父核生产源码与1d0b2cb保持，按范围复用原真实PG、API build、契约及浏览器证据；本次新增代码消耗V0.0.40-fix5，仍更新同PR100及原Issue97，不另建PR或扩大业务。
 
 Git外fix4目录保留first-failed run/jobs/comments、web-ui完整日志、原RED及修后证据；check:governance/暂存来源核验按当前提交再核。生产浏览器绑定因CUA无法可靠识别Windows浏览器URL而被安全策略中止，已停止且未用其他手段绕过；生产实页NOT_VERIFIED，不影响继续核云端/部署及公开HTTP。fix4临时PG已核精确ID/标签/端口/tmpfs后stop与rm --volumes，回读为空；3136/5186已空闲，没有恢复重服务或连接55440。
+
+### fix4/fix5最终发布与可见性确认
+
+| 验证项 | 实际结果 |
+| --- | --- |
+| 候选与合并 | PR100的e0ab78c2a061e4465ade04577ff273131cb82ea0，CI42620866574 attempt1精确24/24及同head Review completed/无发现；父独立复核后按授权squash ce4a72f33f6c6261dbd7525e431c1db3655f0210，完整Git tree一致 |
+| main门禁 | [CI42622679109](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42622679109) push/main/attempt1精确24/24 success，父独立读取并用原evaluateDeployJobs核head/run/attempt全集为full |
+| 部署 | [deploy42624847559](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42624847559)/job129185860112同ce4a72f，attempt1 completed/success；日志明确来源RUN_ID42622679109/ATTEMPT1/HEAD_SHA同版及Full validation scope，未skip或superseded |
+| 快照与迁移 | 13:35:48Z迁移前加密快照验证成功；13:35:51Z确认143链且No pending migrations，本次无新增迁移，迁移步骤实际执行 |
+| 服务与出口 | API/Worker/Web镜像标签均ce4a72f，API healthy、Worker/Web启动健康，13:36:16Z明确Deployment successful；稳定Worker READY、公共HTTP200及原子deployed-sha由同版脚本强制成功出口支持，未另SSH读marker |
+| 独立公开HTTP | 13:38:09Z，login/OpenAPI/console/api-integrations及资源200；四受控GET匿名401 AUTH_SESSION_REQUIRED，无Bearer机器401 INTEGRATION_AUTH_INVALID且头体traceId一致。接收契约200/201/204、路由/权限/回执及CSS标识存在 |
+| 资源与行为边界 | JS仍index-B6Iqlx7U.js、CSS仍index-3kA8cBHz.css，与0181a89相同符合生产Web源码未变；本次变化来自API默认权限投影，不以资源变化冒充证明。真实marker-only侧栏→配置/凭据/收件由一次性浏览器2例证明，公开匿名HTTP不代生产角色 |
+| 人工反馈 | ce4a72f上线后，负责人在本次会话直接确认已可看到。记Admin入口/页面可见性MANUAL PASS；不扩为创建接口、发放凭据或真实系统联调已通过。此前CUA网址识别策略中止仍保留为自动验证限制，不要求重复截图或重做该可见性确认 |
+
+Git外fix4/release保留merge-tree、main-ci-verified、fix5-main/deploy-verified、public-final、资源及部署日志摘录。工具省略中段构建日志，不称完整日志已下载；已读取首尾关键证据。慢仓库请求、pnpm升级、Vite chunk及SSH提示未被当作产品失败或擅改全局设置的理由。
+
+权限修复已上线，Admin的有效platform marker无需额外逐项数据库grant，普通岗位仍显式授权。“基础数据与配置→API接口管理”已由负责人确认可见。Issue97保持开放，未启用生产端点、分发秘密或回填飞书；真实来源与其余未覆盖项继续承接，最新结果本地归档避免为记录重复触发部署。
