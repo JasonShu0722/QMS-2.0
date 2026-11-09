@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFile, writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -64,7 +64,13 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
     const messageText = '{"technicalFixture":"backup"}';
     const receiptCiphertext = encryptSecret(messageText, receiptContext), receiptBytes = Buffer.byteLength(receiptCiphertext);
     await source.query("INSERT INTO integration_endpoints(id,organization_id,code,name,source_code,source_name,return_receipt,used_body_bytes) VALUES($1,$2,'backup-receiver','Backup receiver','BACKUP','Backup source',false,$3)", [endpointId, organizationId, receiptBytes]);
-    await source.query("INSERT INTO integration_credentials(id,organization_id,endpoint_id,name,secret_hash,expires_at,created_by_id) VALUES($1,$2,$3,'Backup credential',$4,NOW()+INTERVAL '1 day',$5)", [credentialId, organizationId, endpointId, '0'.repeat(64), userId]);
+    const credentialSecret = randomBytes(32).toString('base64url');
+    const credentialHash = createHash('sha256').update(credentialSecret).digest('hex');
+    const credentialContext = `integration-credential:${organizationId}:${endpointId}:${credentialId}`;
+    const credentialCiphertext = encryptSecret(credentialSecret, credentialContext);
+    await source.query("INSERT INTO integration_credentials(id,organization_id,endpoint_id,name,secret_hash,expires_at,created_by_id,secret_ciphertext) VALUES($1,$2,$3,'Backup credential',$4,NULL,$5,$6)", [credentialId, organizationId, endpointId, credentialHash, userId, credentialCiphertext]);
+    const legacyId = randomUUID(), legacyExpiry = new Date(Date.now() + 86400000);
+    await source.query("INSERT INTO integration_credentials(id,organization_id,endpoint_id,name,secret_hash,expires_at) VALUES($1,$2,$3,'Legacy credential',$4,$5)", [legacyId, organizationId, endpointId, '0'.repeat(64), legacyExpiry]);
     await source.query("INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,body_digest,configuration_version,configuration_snapshot,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) VALUES($1,$2,$3,$4,'backup.message.001',$5,1,'{}'::jsonb,NOW()+INTERVAL '1 day',NOW()+INTERVAL '90 days',$6,$7)", [receiptId, organizationId, endpointId, credentialId, createHash('sha256').update(messageText).digest('hex'), receiptCiphertext, receiptBytes]);
     await source.query('INSERT INTO integration_scope_capacities(organization_id,used_body_bytes,receipt_count) VALUES($1,$2,1)', [organizationId, receiptBytes]);
     await source.query("INSERT INTO file_objects(id,organization_id,object_key,original_name,content_type,size_bytes,sha256,status,uploaded_by_id,updated_at,object_version_id,verified_sha256,verified_size_bytes,verified_content_type,scan_status,scanned_at,scanner_engine,upload_completed_at,upload_expires_at,retain_until,resource_type,resource_id,resource_version) VALUES($1,$2,$3,$4,$5,$6,$7,'AVAILABLE',$8,NOW(),$9,$7,$6,$5,'CLEAN',NOW(),'backup-integrity-fixture',NOW(),NOW()+INTERVAL '15 minutes',NOW()+INTERVAL '7 days','backup-integrity-test',$1::uuid::text,1)", [fileId, organizationId, key, 'fixture.pdf', 'application/pdf', bytes.length, sha256, userId, pinnedVersion]);
@@ -136,8 +142,12 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
         assert.equal(Number(restoredEndpoint.used_body_bytes), receiptBytes);
         const restoredCapacity = (await restoredDatabase.query('SELECT used_body_bytes,receipt_count FROM integration_scope_capacities WHERE organization_id=$1', [organizationId])).rows[0];
         assert.equal(Number(restoredCapacity.used_body_bytes), receiptBytes); assert.equal(restoredCapacity.receipt_count, 1);
-        const restoredCredential = (await restoredDatabase.query('SELECT secret_hash,created_by_id FROM integration_credentials WHERE id=$1', [credentialId])).rows[0];
-        assert.equal(restoredCredential.secret_hash, '0'.repeat(64)); assert.equal(restoredCredential.created_by_id, userId);
+        const restoredCredential = (await restoredDatabase.query('SELECT secret_hash,created_by_id,secret_ciphertext,expires_at FROM integration_credentials WHERE id=$1', [credentialId])).rows[0];
+        assert.equal(restoredCredential.secret_hash, credentialHash); assert.equal(restoredCredential.created_by_id, userId);
+        assert.equal(restoredCredential.expires_at, null); assert.equal(restoredCredential.secret_ciphertext, credentialCiphertext);
+        assert.equal(decryptSecret(restoredCredential.secret_ciphertext, credentialContext) === credentialSecret, true);
+        const restoredLegacy = (await restoredDatabase.query('SELECT expires_at,secret_ciphertext FROM integration_credentials WHERE id=$1', [legacyId])).rows[0];
+        assert.equal(restoredLegacy.expires_at.toISOString(), legacyExpiry.toISOString()); assert.equal(restoredLegacy.secret_ciphertext, null);
       } finally { await restoredDatabase.end(); }
       assert.notEqual(cli('restore', artifact, { DATABASE_URL: targetUrl.toString(), QMS_OBJECT_STORAGE_BUCKET: targetBucket, QMS_RESTORE_CONFIRM: targetName }).status, 0);
     });

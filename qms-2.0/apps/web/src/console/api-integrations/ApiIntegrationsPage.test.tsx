@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({ context: {} as ConsoleContext, refresh: vi.fn(
 vi.mock('../ConsoleLayout', () => ({ useConsoleContext: () => mocks }));
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn(() => mocks.mutate) }));
 const read = vi.mocked(apiRequest);
+const clipboard = vi.fn(async (_value: string) => {});
 const homeId = '11111111-1111-4111-8111-111111111111';
 const targetId = '22222222-2222-4222-8222-222222222222';
 const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -38,6 +39,7 @@ beforeEach(() => {
   useWorkTabsStore.getState().bindSession(`INTERNAL:${homeId}:${actorId}`);
   read.mockResolvedValue({ items: [endpoint()], total: 1, page: 1, limit: 20 });
   mocks.mutate.mockResolvedValue(endpoint());
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
 });
 afterEach(() => { vi.unstubAllEnvs(); localStorage.clear(); });
 
@@ -74,7 +76,7 @@ it('retires pending private results during an A to B to A session transition', a
   expect(screen.queryByText('MES质量推送')).not.toBeInTheDocument();
 });
 
-it('provides a copyable curl example with placeholder credentials and an unchanged payload file', async () => {
+it('copies a complete current connection configuration with actual authorization and message rules', async () => {
   view(); await screen.findByText('MES质量推送');
   fireEvent.click(screen.getByRole('button', { name: '查看MES质量推送调用说明' }));
   const instructions = within(screen.getByRole('region', { name: '调用说明' }));
@@ -85,4 +87,41 @@ it('provides a copyable curl example with placeholder credentials and an unchang
   expect(command).toHaveTextContent('Idempotency-Key: example-message-001');
   expect(command).toHaveTextContent('Content-Type: application/json');
   expect(command).toHaveTextContent('--data-binary "@payload.json"');
+  const currentEndpoint = { ...endpoint(), returnReceipt: false, publicUrl: 'https://qms.example.test/api/v1/integrations/inbound/MES_QUALITY/messages' };
+  read.mockResolvedValueOnce({ endpoint: currentEndpoint, credentialId: '44444444-4444-4444-8444-444444444444', credentialName: 'IMS', authorization: 'Bearer fixture-id.ACTUAL-SECRET', expiresAt: null });
+  fireEvent.click(instructions.getByRole('button', { name: '复制对接配置' }));
+  await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1));
+  const copied = clipboard.mock.calls[0]![0];
+  for (const value of ['MES质量推送', currentEndpoint.publicUrl, 'POST', 'Content-Type: application/json', 'Authorization: Bearer fixture-id.ACTUAL-SECRET', 'Idempotency-Key', '每条新消息', '相同', '204']) expect(copied).toContain(value);
+  expect(copied).not.toContain('example-message-001'); expect(copied).not.toContain('<credentialId>');
+  expect(Object.values(localStorage).join('') + Object.values(sessionStorage).join('')).not.toContain('ACTUAL-SECRET');
+});
+
+it('does not offer secret-bearing copying without both management permissions', async () => {
+  mocks.context = context(['integration:read', 'integration:credentials:manage']); view(); await screen.findByText('MES质量推送');
+  fireEvent.click(screen.getByRole('button', { name: '查看MES质量推送调用说明' }));
+  expect(within(screen.getByRole('region', { name: '调用说明' })).queryByRole('button', { name: '复制对接配置' })).not.toBeInTheDocument();
+  expect(clipboard).not.toHaveBeenCalled();
+});
+
+it.each(['session ABA', 'closed instructions', 'lost permission'])('does not copy a late connection response after %s', async reason => {
+  const rendered = view(); await screen.findByText('MES质量推送');
+  fireEvent.click(screen.getByRole('button', { name: '查看MES质量推送调用说明' }));
+  let resolve!: (value: unknown) => void;
+  read.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  fireEvent.click(within(screen.getByRole('region', { name: '调用说明' })).getByRole('button', { name: '复制对接配置' }));
+  if (reason === 'session ABA') act(() => { useWorkTabsStore.getState().bindSession(`INTERNAL:${homeId}:other`); useWorkTabsStore.getState().bindSession(`INTERNAL:${homeId}:${actorId}`); });
+  else if (reason === 'closed instructions') fireEvent.click(screen.getByRole('button', { name: '关闭说明' }));
+  else { mocks.context = context(['integration:read']); rendered.update(); }
+  await act(async () => resolve({ endpoint: endpoint(), credentialId: '44444444-4444-4444-8444-444444444444', credentialName: 'IMS', authorization: 'Bearer fixture-id.LATE-SECRET', expiresAt: null }));
+  expect(clipboard).not.toHaveBeenCalled();
+});
+
+it('reports clipboard failure without claiming a successful copy', async () => {
+  view(); await screen.findByText('MES质量推送'); fireEvent.click(screen.getByRole('button', { name: '查看MES质量推送调用说明' }));
+  read.mockResolvedValueOnce({ endpoint: endpoint(), credentialId: '44444444-4444-4444-8444-444444444444', credentialName: 'IMS', authorization: 'Bearer fixture-id.FAILURE-SECRET', expiresAt: null });
+  clipboard.mockRejectedValueOnce(new Error('clipboard denied'));
+  fireEvent.click(within(screen.getByRole('region', { name: '调用说明' })).getByRole('button', { name: '复制对接配置' }));
+  expect(await screen.findByText('复制失败，请重试或允许浏览器访问剪贴板')).toBeVisible();
+  expect(screen.queryByText('已复制对接配置')).not.toBeInTheDocument();
 });

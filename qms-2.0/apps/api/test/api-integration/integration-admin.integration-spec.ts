@@ -52,7 +52,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     await prisma.session.updateMany({ where: { userId: user.id }, data: { reauthenticatedAt: new Date() } });
     return { organization, user, cookie: `qms_session=${token}; qms_csrf=fixture` };
   }
-  const input = () => ({ code: `API.${randomUUID()}`, name: 'ERP incoming', sourceCode: 'ERP', sourceName: 'Company ERP' });
+  const input = () => ({ code: `API:${randomUUID()}`, name: 'ERP incoming', sourceCode: 'ERP', sourceName: 'Company ERP' });
   const create = (cookie: string, body = input(), key = randomUUID()) => request(app.getHttpServer()).post(path).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send(body);
   const update = (cookie: string, id: string, body: object) => request(app.getHttpServer()).patch(`${path}/${id}`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', randomUUID()).send(body);
 
@@ -67,7 +67,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     const fixtureValue = await fixture(); const body = input();
     const response = await create(fixtureValue.cookie, body).expect(201);
     expect(response.body).toMatchObject({ organizationId: fixtureValue.organization.id, ...body, status: 'DRAFT', version: 1, returnReceipt: true, maxBodyBytes: 1048576, ratePerMinute: 60, bodyRetentionDays: 7, capacityBytes: 268435456, usedBodyBytes: 0, allowedIps: [] });
-    expect(response.body.publicUrl).toBe(`https://qms.example.test/api/v1/integrations/inbound/${response.body.id}/messages`);
+    expect(response.body.publicUrl).toBe(`https://qms.example.test/api/v1/integrations/inbound/${encodeURIComponent(body.code)}/messages`);
     expect((await request(app.getHttpServer()).get(path).set('Cookie', fixtureValue.cookie).expect(200)).body).toMatchObject({ total: 1, page: 1, limit: 20, items: [expect.objectContaining({ id: response.body.id })] });
   });
   it('replays creation without another endpoint and rejects a reused key with a different body', async () => {

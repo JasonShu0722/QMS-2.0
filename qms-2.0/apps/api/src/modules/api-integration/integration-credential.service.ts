@@ -3,19 +3,49 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication, assertRecentAuthentication } from '../../common/security/session-security.js';
+import { decryptSecret, encryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import type { CreateIntegrationCredentialDto, IntegrationCredentialDto, IntegrationCredentialPageDto, IntegrationPageQueryDto } from './integration-admin.dto.js';
-import { assertIntegrationOrganization, integrationError, integrationInteger, integrationScope, integrationText, lockIntegrationEndpoint } from './integration-types.js';
+import type { CreateIntegrationCredentialDto, IntegrationConnectionDto, IntegrationCredentialDto, IntegrationCredentialPageDto, IntegrationPageQueryDto } from './integration-admin.dto.js';
+import { assertIntegrationOrganization, integrationEndpointDto, integrationError, integrationInteger, integrationScope, integrationText, lockIntegrationEndpoint } from './integration-types.js';
 
-type CredentialRow = Omit<IntegrationCredentialDto, 'secret' | 'createdAt' | 'expiresAt' | 'revokedAt'> & { createdAt: Date; expiresAt: Date; revokedAt: Date | null };
+type CredentialRow = Omit<IntegrationCredentialDto, 'secret' | 'createdAt' | 'expiresAt' | 'revokedAt'> & { createdAt: Date; expiresAt: Date | null; revokedAt: Date | null };
+type CopyableCredentialRow = Pick<CredentialRow, 'id' | 'name' | 'expiresAt'> & { secretHash: string; secretCiphertext: string | null };
 const projection = Prisma.sql`id, organization_id AS "organizationId", endpoint_id AS "endpointId", created_by_id AS "createdById", name, expires_at AS "expiresAt", revoked_at AS "revokedAt", created_at AS "createdAt"`;
-const credentialDto = (row: CredentialRow): IntegrationCredentialDto => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString(), revokedAt: row.revokedAt?.toISOString() ?? null });
+const credentialDto = (row: CredentialRow): IntegrationCredentialDto => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt?.toISOString() ?? null, revokedAt: row.revokedAt?.toISOString() ?? null });
 const managePermissions = ['integration:manage', 'integration:credentials:manage'];
+const credentialContext = (organizationId: string, endpointId: string, credentialId: string) => `integration-credential:${organizationId.toLowerCase()}:${endpointId.toLowerCase()}:${credentialId}`;
+const activeCredential = Prisma.sql`revoked_at IS NULL AND (expires_at IS NULL OR expires_at > clock_timestamp())`;
 
 @Injectable()
 export class IntegrationCredentialService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService) {}
+
+  async connection(actor: AdminActor, endpointId: string, credentialId: string | undefined, traceId: string): Promise<IntegrationConnectionDto> {
+    const organizationId = integrationScope(actor);
+    return this.prisma.$transaction(async transaction => {
+      await assertAdminAccess(transaction, actor, organizationId, managePermissions);
+      await assertActiveAuthentication(transaction, actor);
+      const endpoint = await lockIntegrationEndpoint(transaction, organizationId, endpointId);
+      const selector = credentialId ? Prisma.sql`AND id = ${credentialId}::uuid` : Prisma.empty;
+      const rows = await transaction.$queryRaw<CopyableCredentialRow[]>(Prisma.sql`
+        SELECT id, name, expires_at AS "expiresAt", secret_hash AS "secretHash", secret_ciphertext AS "secretCiphertext"
+        FROM integration_credentials
+        WHERE organization_id = ${endpoint.organizationId}::uuid AND endpoint_id = ${endpoint.id}::uuid AND ${activeCredential} ${selector}
+        ORDER BY created_at DESC, id DESC FOR UPDATE`);
+      await assertActiveAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, endpoint.organizationId, managePermissions);
+      const [clock] = await transaction.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+      const active = rows.filter(row => !row.expiresAt || row.expiresAt > clock!.now);
+      if (!active.length) integrationError('INTEGRATION_CREDENTIAL_REQUIRED', 409);
+      const credential = active.find(row => row.secretCiphertext !== null);
+      if (!credential?.secretCiphertext) integrationError('INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE', 409);
+      const secret = decryptSecret(credential.secretCiphertext, credentialContext(endpoint.organizationId, endpoint.id, credential.id));
+      if (createHash('sha256').update(secret).digest('hex') !== credential.secretHash.trim()) integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
+      await this.audit.record({ organizationId: endpoint.organizationId, actorUserId: actor.id, action: 'INTEGRATION_CONNECTION_READ', resourceType: 'IntegrationCredential', resourceId: credential.id, outcome: 'SUCCESS', traceId, metadata: { endpointId: endpoint.id, credentialId: credential.id } }, transaction);
+      return { endpoint: integrationEndpointDto(endpoint), credentialId: credential.id, credentialName: credential.name, authorization: `Bearer ${credential.id}.${secret}`, expiresAt: credential.expiresAt?.toISOString() ?? null };
+    }, { isolationLevel: 'ReadCommitted' });
+  }
 
   async listCredentials(actor: AdminActor, endpointId: string, query: IntegrationPageQueryDto): Promise<IntegrationCredentialPageDto> {
     const organizationId = integrationScope(actor);
@@ -33,15 +63,16 @@ export class IntegrationCredentialService {
 
   async createCredential(actor: AdminActor, endpointId: string, input: CreateIntegrationCredentialDto, traceId: string, key?: string): Promise<IntegrationCredentialDto> {
     const organizationId = integrationScope(actor);
-    const data = { endpointId, name: integrationText(input.name, 120), validityDays: integrationInteger(input.validityDays ?? 90, 1, 365) };
+    const data = { endpointId, name: integrationText(input.name, 120), validityDays: input.validityDays === null ? null : integrationInteger(input.validityDays ?? 90, 1, 365) };
     let issuedSecret: string | undefined;
     const saved = await this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_CREDENTIAL_CREATED', payload: data, permission: managePermissions, isolationLevel: 'ReadCommitted' }, async transaction => {
-      const [active] = await transaction.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid AND revoked_at IS NULL AND expires_at > clock_timestamp()`;
+      const [active] = await transaction.$queryRaw<{ count: number }[]>(Prisma.sql`SELECT count(*)::int AS count FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid AND ${activeCredential}`);
       if ((active?.count ?? 0) >= 2) integrationError('INTEGRATION_CREDENTIAL_LIMIT', 409);
       const credentialId = randomUUID(), secret = randomBytes(32).toString('base64url');
       const secretHash = createHash('sha256').update(secret).digest('hex');
-      const [row] = await transaction.$queryRaw<CredentialRow[]>(Prisma.sql`INSERT INTO integration_credentials (id, organization_id, endpoint_id, created_by_id, name, secret_hash, expires_at)
-        VALUES (${credentialId}::uuid, ${organizationId}::uuid, ${endpointId}::uuid, ${actor.id}::uuid, ${data.name}, ${secretHash}, clock_timestamp() + (${data.validityDays} * INTERVAL '1 day')) RETURNING ${projection}`);
+      const secretCiphertext = encryptSecret(secret, credentialContext(organizationId, endpointId, credentialId));
+      const [row] = await transaction.$queryRaw<CredentialRow[]>(Prisma.sql`INSERT INTO integration_credentials (id, organization_id, endpoint_id, created_by_id, name, secret_hash, secret_ciphertext, expires_at)
+        VALUES (${credentialId}::uuid, ${organizationId}::uuid, ${endpointId}::uuid, ${actor.id}::uuid, ${data.name}, ${secretHash}, ${secretCiphertext}, clock_timestamp() + (${data.validityDays}::int * INTERVAL '1 day')) RETURNING ${projection}`);
       if (!row) integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_CREDENTIAL_CREATED', resourceType: 'IntegrationCredential', resourceId: credentialId, outcome: 'SUCCESS', traceId, metadata: { endpointId, credentialId } }, transaction);
       issuedSecret = `${credentialId}.${secret}`;

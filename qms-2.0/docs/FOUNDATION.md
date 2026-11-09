@@ -1,5 +1,24 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 便捷化 V0.0.41 本地验证（2026-11-09）
+
+在主线ce4a72f上接续a52519f文档归档，分支codex/req0036-api-convenience，复用Issue97。负责人明确三项便捷化：编码地址、复制含真实鉴权的对接配置、永久有效并能反复复制。新增144迁移允许expires_at为空并保存新凭据原文密文；旧URL及有限期凭据保持，旧hash不能反推原文。详细合同、分工及真实失败保留见[一期计划第14节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。生产当前仍ce4a72f，新范围未据本地结果宣称已发布。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 资源与运行时 | Node24.21.0/pnpm11.19.0；一次性PG18/55636、512MiB/1CPU/tmpfs，Node1GiB单worker串行；只在备份时启任务MinIO，未连接55440 |
+| 真实RED | A18项13FAIL/5PASS（null变90天、connection404、无密文）；B37项4FAIL/33PASS（编码401与UUID URL）；Web9FAIL/10PASS；轮换应5实际4。初次cmd参数拆分/过滤与shell拒绝未冒称RED |
+| 后端GREEN | 五完整PG/HTTP文件63/63、邻近四完整文件38/38、审计标签9/9，均0skip/exit0；覆盖组织隔离、永久/有限、最后锁后失效、审计失败、编码/UUID及去重 |
+| Web | 六完整文件首50PASS/1FAIL，唯一测试未等useWatch条件字段挂载；最小findByLabel等待后CredentialPanel完整3/3，原预算/POST30天/复制断言保持，六文件组合51项有效PASS |
+| 运维 | 原真实轮换完整5/5，去旧key仍可读新机器凭据；PG+MinIO备份恢复完整8/8，永久空日期/密文/哈希及旧有限期行均保持，所有原负例也通过；只证明小样本 |
+| 浏览器 | marker-only真实侧栏及2完整场景2/2（29.2s），实际剪贴板含鉴权且能编码路径收件、UUID重试同号、重新打开复制、撤销401；原回执/来源/纯文本/浅深窄屏断言保持 |
+| 构建与契约 | API/Web构建、contracts:generate及contracts:check exit0；Compose基础+扫描+生产config --quiet exit0 |
+| 治理与隔离 | check:governance PASS（38文档/490链接/20来源/161依赖、阶段覆盖1项）；check:archive-isolation PASS；diff --check无错误 |
+| 独立审查 | convenience_spec SPEC PASS后convenience_quality QUALITY PASS，覆盖A/B/C、公共接缝及浏览器改动；父逐份核完整日志 |
+| 清理 | 本任务两容器按ID/label/tmpfs核后仅删自有资源；API/Vite按PID和父命令核后停止，3136/5186空闲，Git外cleanup.json PASS |
+
+Git外原始日志与备份位于D:/WorkSpace/QMS-2.0-local/req0036-convenience-20261109。Vite大chunk、Node实验VM与NO_COLOR提示保留为非失败信息。完整全业务阶段验收、生产凭据发放/撤销及真实来源联调NOT_RUN；新head云端全量CI、Review和实际部署须分别接续。144后的永久凭据不支持直接运行旧镜像，回退须先停收件并按批准恢复路径处理，不自动删除迁移后数据。治理/归档结果与PR/发布在后续检查点追加。
+
 ## REQ0036 fix4/fix5发布与入口确认（2026-11-09）
 
 PR100候选e0ab78c与main/部署 `ce4a72f33f6c6261dbd7525e431c1db3655f0210` 整tree相同，PR CI42620866574及[main CI42622679109](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42622679109)各attempt1、各精确24/24 success，同候选Review clear。[自动deploy42624847559](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42624847559)/job129185860112同SHA来源门禁通过，13:35:48Z加密快照，143链无待迁移，三服务镜像同ce4a72f，13:36:16Z明确成功；Worker READY/HTTP/原子marker由同版强制成功出口支持，非独立SSH读回。

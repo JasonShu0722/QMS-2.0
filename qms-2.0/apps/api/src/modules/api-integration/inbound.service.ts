@@ -16,7 +16,7 @@ type Endpoint = {
   max_body_bytes: number; rate_per_minute: number; body_retention_days: number; capacity_bytes: number;
   used_body_bytes: bigint; allowed_ips: string[];
 };
-type Credential = { id: string; secret_hash: string; expires_at: Date; revoked_at: Date | null; now: Date };
+type Credential = { id: string; secret_hash: string; expires_at: Date | null; revoked_at: Date | null; now: Date };
 type Receipt = { id: string; message_id: string; body_digest: string; received_at: Date; metadata_expires_at: Date; payload_ciphertext: string | null; payload_bytes: number };
 type Transaction = Prisma.TransactionClient;
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -89,17 +89,18 @@ export class InboundService {
   async authenticate(request: Request): Promise<InboundIdentity> {
     const authorization = oneHeader(request, 'authorization', 'INTEGRATION_AUTH_INVALID', 401);
     const match = /^Bearer ([0-9a-f-]{36})\.([A-Za-z0-9_-]{43,128})$/i.exec(authorization);
-    const endpointId = request.params.endpointId;
-    if (!match || typeof endpointId !== 'string' || !isUUID(endpointId) || !isUUID(match[1])) reject('INTEGRATION_AUTH_INVALID', 401);
+    const endpoint = request.params.endpointId;
+    if (!match || !isUUID(match[1]) || typeof endpoint !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(endpoint)) return reject('INTEGRATION_AUTH_INVALID', 401);
     try {
-      const rows = await this.prisma.$queryRaw<(Credential & { organization_id: string; endpoint_id: string })[]>`SELECT id,organization_id,endpoint_id,secret_hash,expires_at,revoked_at,clock_timestamp() AS now
-        FROM integration_credentials WHERE id=${match![1]}::uuid AND endpoint_id=${endpointId}::uuid`;
-      const credential = rows[0];
-      const secretDigest = digest(match![2]!);
+      const [credential] = await this.prisma.$queryRaw<(Credential & { organization_id: string; endpoint_id: string; endpoint_code: string })[]>`SELECT c.id,c.organization_id,c.endpoint_id,c.secret_hash,c.expires_at,c.revoked_at,e.code AS endpoint_code,clock_timestamp() AS now
+        FROM integration_credentials c JOIN integration_endpoints e ON e.id=c.endpoint_id AND e.organization_id=c.organization_id
+        WHERE c.id=${match[1]}::uuid`;
+      const secretDigest = digest(match[2]!);
       const expected = credential?.secret_hash?.trim();
       if (!credential || !expected || !/^[a-f0-9]{64}$/.test(expected) || !timingSafeEqual(Buffer.from(secretDigest, 'hex'), Buffer.from(expected, 'hex'))
-        || credential.revoked_at || credential.expires_at <= credential.now) reject('INTEGRATION_AUTH_INVALID', 401);
-      return { organizationId: credential!.organization_id, endpointId: credential!.endpoint_id, credentialId: credential!.id, secretDigest };
+        || credential.revoked_at || (credential.expires_at !== null && credential.expires_at <= credential.now)
+        || (endpoint !== credential.endpoint_code && endpoint.toLowerCase() !== credential.endpoint_id)) return reject('INTEGRATION_AUTH_INVALID', 401);
+      return { organizationId: credential.organization_id, endpointId: credential.endpoint_id, credentialId: credential.id, secretDigest };
     } catch (error) { return this.failure(error); }
   }
 
@@ -111,10 +112,12 @@ export class InboundService {
     const endpoint = endpoints[0];
     if (endpoint) request[INBOUND_CONFIGURATION] = { version: endpoint.version, returnReceipt: endpoint.return_receipt };
     if (!endpoint || endpoint.status !== 'ENABLED' || !inboundIpAllowed(address, endpoint.allowed_ips)) reject('INTEGRATION_ACCESS_DENIED', 403);
-    const credentials = await tx.$queryRaw<Credential[]>`SELECT id,secret_hash,expires_at,revoked_at,clock_timestamp() AS now FROM integration_credentials
-      WHERE id=${identity.credentialId}::uuid AND organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid FOR UPDATE`;
-    const credential = credentials[0];
-    if (!credential || credential.revoked_at || credential.expires_at <= credential.now
+    // Take the expiry timestamp after the credential row lock is held.
+    const [credential] = await tx.$queryRaw<Credential[]>`WITH locked_credential AS (
+      SELECT id,secret_hash,expires_at,revoked_at FROM integration_credentials
+      WHERE id=${identity.credentialId}::uuid AND organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid FOR UPDATE
+    ) SELECT *,clock_timestamp() AS now FROM locked_credential`;
+    if (!credential || credential.revoked_at || (credential.expires_at !== null && credential.expires_at <= credential.now)
       || !timingSafeEqual(Buffer.from(credential.secret_hash.trim(), 'hex'), Buffer.from(identity.secretDigest, 'hex'))) reject('INTEGRATION_AUTH_INVALID', 401);
     return endpoint!;
   }

@@ -45,6 +45,7 @@ export function integrationError(cause: unknown): string {
     const messages: Record<string, string> = {
       INTEGRATION_CREDENTIAL_LIMIT: '请先撤销不再使用的接口凭据',
       INTEGRATION_CREDENTIAL_REQUIRED: '启用前需要有效的接口凭据',
+      INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE: '旧凭据无法复制，请创建一份新凭据；旧凭据仍可继续使用',
       INTEGRATION_CAPACITY_CONFLICT: '容量不能低于当前已用容量',
       INTEGRATION_PAYLOAD_EXPIRED: '接收正文已按保留期限清理',
     };

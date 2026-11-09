@@ -113,7 +113,8 @@ async function openIntegrations(page: Page) {
   return section;
 }
 
-test('real receiving configuration, one-time credentials, receipts and plain text', async ({ page }) => {
+test('real receiving configuration, permanent reusable connection copy, receipts and plain text', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   const section = await openIntegrations(page);
   await section.getByRole('button', { name: '新增接收接口', exact: true }).click();
   const editor = page.getByRole('dialog', { name: '新增接收接口', exact: true });
@@ -131,19 +132,28 @@ test('real receiving configuration, one-time credentials, receipts and plain tex
   try {
     await section.getByRole('button', { name: `管理${name}凭据`, exact: true }).click();
     const credentials = page.getByRole('dialog', { name: `${name}凭据`, exact: true });
+    await expect(credentials.getByRole('radio', { name: '永久有效', exact: true })).toBeChecked();
     await credentials.getByLabel('凭据名称', { exact: true }).fill(`技术凭据 ${suffix}`);
     const issuing = page.waitForResponse(response => new URL(response.url()).pathname === `${endpoints}/${endpoint.id}/credentials` && response.request().method() === 'POST');
     const [issued] = await Promise.all([issuing, credentials.getByRole('button', { name: '创建凭据', exact: true }).click()]);
     expect(issued.status()).toBe(201);
     const credential = await issued.json() as Schema['IntegrationCredentialDto'];
     credentialId = credential.id;
+    expect(credential.expiresAt).toBeNull();
     expect(typeof credential.secret === 'string' && credential.secret.length > 40).toBe(true);
-    await expect(credentials.getByText('请立即保存凭据原文，仅本次显示', { exact: true })).toBeVisible();
-    expect(await credentials.locator('.ant-alert code').textContent() === credential.secret).toBe(true);
+    await credentials.getByRole('button', { name: '复制对接配置', exact: true }).click();
+    await expect(credentials.getByText('已复制对接配置', { exact: true })).toBeVisible();
+    const initialCopy = await page.evaluate(() => navigator.clipboard.readText());
+    expect(initialCopy.includes(`Authorization: Bearer ${credential.secret}`)).toBe(true);
+    expect(initialCopy.includes(endpoint.publicUrl)).toBe(true);
+    expect(initialCopy.includes('每条新消息生成唯一编号')).toBe(true);
+    expect(initialCopy.includes('永久有效')).toBe(true);
     await credentials.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await section.getByRole('button', { name: `管理${name}凭据`, exact: true }).click();
-    await expect(page.getByRole('dialog').getByText('请立即保存凭据原文，仅本次显示', { exact: true })).toHaveCount(0);
+    await page.getByRole('dialog').getByRole('button', { name: `复制技术凭据 ${suffix}对接配置`, exact: true }).click();
+    await expect(page.getByRole('dialog').getByText('已复制对接配置', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText()) === initialCopy).toBe(true);
     const listed = await positionRead<Schema['IntegrationCredentialPageDto']>(page.request, `${endpoints}/${endpoint.id}/credentials?organizationId=${endpoint.organizationId}`);
     expect(listed.items.every(item => !Object.hasOwn(item, 'secret'))).toBe(true);
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
@@ -154,9 +164,17 @@ test('real receiving configuration, one-time credentials, receipts and plain tex
     await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: '启用' }).click();
     endpoint = await saveEndpoint(page, endpoint.id);
     expect(endpoint.status).toBe('ENABLED');
+    await section.getByRole('button', { name: `查看${name}调用说明`, exact: true }).click();
+    const instructions = section.getByRole('region', { name: '调用说明', exact: true });
+    await instructions.getByRole('button', { name: '复制对接配置', exact: true }).click();
+    await expect(instructions.getByText('已复制对接配置', { exact: true })).toBeVisible();
+    const activeCopy = await page.evaluate(() => navigator.clipboard.readText());
+    const copiedAuthorization = /^Authorization: Bearer (.+)$/m.exec(activeCopy)?.[1];
+    expect(copiedAuthorization === credential.secret).toBe(true);
+    expect(new URL(endpoint.publicUrl).pathname.endsWith(`/inbound/${encodeURIComponent(endpoint.code)}/messages`)).toBe(true);
     const messageId = `browser-${suffix}-receipt`;
     const body = JSON.stringify({ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' });
-    const received = await sendMessage(endpoint.id, credential.secret!, messageId, body);
+    const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, messageId, body);
     expect(received.status).toBe(201);
     const receipt = await received.json() as Schema['InboundReceiptDto'];
     expect(receipt.duplicate).toBe(false);
@@ -199,6 +217,9 @@ test('real receiving configuration, one-time credentials, receipts and plain tex
     expect(await page.evaluate(() => Object.hasOwn(window, '__qmsInboundExecuted'))).toBe(false);
     await detail.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    await positionWrite(page.request, `${endpoints}/${endpoint.id}/credentials/${credential.id}/revoke`, 'POST', { organizationId: endpoint.organizationId }, 201);
+    const revoked = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, `browser-${suffix}-revoked`, body);
+    expect(revoked.status).toBe(401);
 
   } finally {
     await page.goto('about:blank');

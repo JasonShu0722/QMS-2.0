@@ -67,6 +67,27 @@ async function rotate() {
       if (rows.length < 100) break;
       mailCursor = rows.at(-1)!.id;
     }
+    let credentialCursor: string | undefined;
+    while (true) {
+      const rows = await prisma.integrationCredential.findMany({
+        where: { secretCiphertext: { not: null }, ...(credentialCursor ? { id: { gt: credentialCursor } } : {}) },
+        select: { id: true, organizationId: true, endpointId: true }, orderBy: { id: 'asc' }, take: 100,
+      });
+      for (const row of rows) {
+        count += await prisma.$transaction(async transaction => {
+          await transaction.$queryRaw`SELECT id FROM organizations WHERE id=${row.organizationId}::uuid FOR UPDATE`;
+          await transaction.$queryRaw`SELECT id FROM integration_endpoints WHERE id=${row.endpointId}::uuid AND organization_id=${row.organizationId}::uuid FOR UPDATE`;
+          const [credential] = await transaction.$queryRaw<{ secret_ciphertext: string | null }[]>`SELECT secret_ciphertext FROM integration_credentials WHERE id=${row.id}::uuid AND organization_id=${row.organizationId}::uuid AND endpoint_id=${row.endpointId}::uuid FOR UPDATE`;
+          if (!credential?.secret_ciphertext) return 0;
+          const context = `integration-credential:${row.organizationId}:${row.endpointId}:${row.id}`;
+          const ciphertext = encryptSecret(decryptSecret(credential.secret_ciphertext, context), context);
+          await transaction.$executeRaw`UPDATE integration_credentials SET secret_ciphertext=${ciphertext} WHERE id=${row.id}::uuid`;
+          return 1;
+        });
+      }
+      if (rows.length < 100) break;
+      credentialCursor = rows.at(-1)!.id;
+    }
     let receiptCursor: string | undefined;
     while (true) {
       const rows = await prisma.integrationReceipt.findMany({

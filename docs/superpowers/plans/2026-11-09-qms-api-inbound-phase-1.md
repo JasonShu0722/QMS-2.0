@@ -14,14 +14,14 @@
 | --- | --- |
 | 最后核对与范围 | 2026-11-09，Asia/Taipei；负责人更新状态并明确“继续推进”，user 实时回读 rev363 开发中/P0，目标/五字段范围保持，提出人已由负责人改为舒子杰 |
 | 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
-| 本次追加范围 | 负责人截图反馈Admin无权限且菜单缺入口，明确要求Admin默认具备权限；修订五项integration权限纳入显式platform:admin的既有内部组织权限投影，菜单继续使用受控context显示；不按用户名特判、不批量改普通岗位、不放宽机器鉴权。逐接口returnReceipt原行为保持 |
+| 本次追加范围 | 负责人最新明确要求便捷化：接口编码替换公开URL的UUID段，复制完整真实对接配置，新增永久有效并支持重复复制；沿Issue97按第14节推进，不新增鉴权平台或额外审批。Admin默认权限及回执开关原行为保持 |
 | 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR100候选CI42620866574与main push CI42622679109各attempt1、各精确24/24全success，同候选Review clear，整tree一致。自动deploy42624847559/job129185860112同ce4a72f完成success，来源CI、迁移前加密快照、143链无待迁移、三服务同SHA及强制成功出口已核；13:38:09Z独立公开HTTP PASS。自动CUA策略中止后，负责人已确认Admin可看到，记入口/页面可见性MANUAL PASS，不扩为全部操作验收 |
+| 当前检查点 | 第14节便捷化A/B/C及公共接缝已实现，独立SPEC后QUALITY PASS；五完整PG/HTTP文件63项、邻近四文件38项、审计标签9项、Web六文件组合51项、轮换5项、真实备份恢复8项、真实浏览器2项均通过，API/Web构建及契约通过。V0.0.41待最终治理、提交PR及精确新head云端门禁，生产当前仍ce4a72f，不能用本地结果称已发布 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 当前Admin权限/入口返修已完成机器发布与入口可见性人工确认，主代理归档实际证据。不启用具体接口/分发凭据，不关闭Issue或写飞书；真实来源、匹配容量恢复及其他人工操作验收仍按原范围承接 |
+| 下一动作与负责人 | 主代理在codex/req0036-api-convenience沿Issue97完成剩余门禁，提交一个功能PR，再接续已授权的同范围合并部署；开放PR已核为空，提交前再核V0.0.41及远端main。保护用户原4处差异，索引只提交本任务三处来源复核。一次性PG/对象容器已核精确ID和标签后移除，浏览器服务已按PID/父命令核后停止。生产不自动生成或分发凭据、不撤旧凭据、不关闭Issue或写飞书 |
 
 ## 1. 交付单元、映射与范围
 
@@ -369,3 +369,41 @@ Git外fix4目录保留first-failed run/jobs/comments、web-ui完整日志、原R
 Git外fix4/release保留merge-tree、main-ci-verified、fix5-main/deploy-verified、public-final、资源及部署日志摘录。工具省略中段构建日志，不称完整日志已下载；已读取首尾关键证据。慢仓库请求、pnpm升级、Vite chunk及SSH提示未被当作产品失败或擅改全局设置的理由。
 
 权限修复已上线，Admin的有效platform marker无需额外逐项数据库grant，普通岗位仍显式授权。“基础数据与配置→API接口管理”已由负责人确认可见。Issue97保持开放，未启用生产端点、分发秘密或回填飞书；真实来源与其余未覆盖项继续承接，最新结果本地归档避免为记录重复触发部署。
+
+## 14. 便捷化交付单元：编码地址、完整复制及永久凭据
+
+本轮输入是负责人三项直接修改指令，不是重新盘点/接单，也无只策划或只本地限制。复用REQ0036/Issue97与现有一期设计第12节；不重复启动原A～D整套策划，不增加用户确认层。新旧地址及有限期凭据保留真实使用路径；旧校验值不能逆推出原文，新建可复制凭据即可使用新功能，旧凭据不自动撤销。预留版本V0.0.41（提交前核远端和开放预留），一个功能PR交付三项关联行为。
+
+### 合同及文件所有权
+
+| 任务 | 独占写集及实现要求 |
+| --- | --- |
+| A 永久凭据/受控复制API | integration-admin.dto.ts、integration-credential.service.ts、integration-admin.controller.ts；credential集成测试和新增connection集成测试。CreateIntegrationCredentialDto.validityDays允许null，省略仍90天；返回expiresAt可空。新增IntegrationConnectionQueryDto/Dto及GET :id/connection，按设计的权限/锁/审计/no-store返回真实授权信息。密文字段secret_ciphertext，AAD integration-credential:org:endpoint:credential |
+| B 编码接收地址 | integration-types.ts、inbound.service.ts、inbound.controller.ts及inbound相关真实PG/HTTP测试；publicUrl使用encodeURIComponent(endpoint.code)，原参数路由不变。Bearer先确定唯一接口，再按编码或UUID匹配，组织相同编码不串线；expires_at=null不算过期，锁后仍复核撤销/组织/当前配置 |
+| C 正式管理页 | ApiIntegrationsPage.tsx、CredentialPanel.tsx、integration-ui.ts及必要小型复制组件与对应Web测试；只从生成契约导入类型。有效期默认永久，可选1～365天；凭据名称给可编辑默认值。复制完整文字含真实Authorization，调用说明及凭据行都复用同一操作，保持作用域ABA/关闭/权限变更后的清敏与旧响应拒绝 |
+| 主代理公共整合 | schema.prisma及新增144链迁移、integration-admin.service.ts的空有效期启用判断/编码URL预检、错误码及审计中文标签、rotate-security-keys.ts、两份运维acceptance脚本、Swagger生成契约、浏览器验收和权威文档。旧历史迁移不修改，用户四处dirty不混入 |
+
+### 顺序与真实验证
+
+- [x] A/B各先写真实HTTP失败用例，父在143链一次性PG上串行取得RED：null有效期应永久但实际有限期、connection路由应200实际404、可读编码收件应成功实际401、公开URL应含编码但实际UUID。前置不可用按FAIL，不当功能RED；禁止代理自行运行重命令。
+- [x] 父新增integration_credentials.expires_at nullable与secret_ciphertext TEXT nullable迁移，旧行保有限期及null密文；更新Prisma模型。A/B在父RED后最小实现；父生成客户端，保持组织→接口→凭据锁序和最后资源锁后授权/到期复核。
+- [x] C先写永久选择、完整剪贴板文字、重新打开后仍可复制、无权不复制、旧身份响应不写剪贴板及失败不假报成功的RED，再接稳定生成类型实现。新复制查询不经过AdminMutation秘密缓存；创建幂等回放仍metadata，显式读取可以恢复新凭据。
+- [x] 父真实PG覆盖永久/有限期/旧无密文、两有效凭据计数、撤销/到期/停用/跨组织与最后锁后失效、无正文秘密进入列表/审计/幂等、审计故障不披露、编码/UUID/同编码跨组织/同号去重。沿用原bytes/raw parser/限流及当前回执开关语义。
+- [x] 接入既有keyring轮换，新增凭据密文逐行重加密并在去掉旧key后仍可复制；真实备份恢复同时证明永久空日期、密文及校验值保留、原有限期行保持。使用小样本，不宣称全容量恢复。
+- [x] contracts:generate、contracts:check、API/Web受影响完整测试和构建、Compose；浏览器从marker-only管理员真实页面创建永久凭据，复制出的token可实际按编码地址收件，重开再复制相同有效凭据，撤销后拒绝。并证明旧UUID地址仍可接收。治理/归档见最终提交前独立结果。
+- [x] 独立SPEC后QUALITY覆盖A/B/C及公共接缝，主代理核实际完整日志；修后只复验受影响不确定性或门禁。所有重命令单worker串行，Node默认堆1GiB，一次性PG512MiB/1CPU；仅对象恢复时启动本任务对象存储，不连55440。
+- [ ] 更新原Issue实际范围；提交/推送功能分支并建一个PR，最新head的CI/Review及main/部署分别核验。原范围集成发布授权接续，生产不自动创建新凭据或撤销旧凭据；更新后用户自己创建一份可复制永久凭据即可。关闭/飞书回填仍另核，实际PASS/FAIL/NOT_RUN记录FOUNDATION和本摘要。
+
+非目标：缩短或削弱秘密随机性、无鉴权公网接收、移除消息去重、自动业务字段校验/入库、发送功能、新短链/认证/密钥服务。已有公网URL漏配由负责人按指导补入持久env；后续页面能创建接口并生成正确公网地址是API侧配置生效的人工证据，不伪称读取了Worker实际环境。
+
+### 本地实际证据与失败保留
+
+Git外证据为 `D:/WorkSpace/QMS-2.0-local/req0036-convenience-20261109/`。恢复核Node24.21.0/pnpm11.19.0，空暂存及a52519f基线；首次准备前可用7.97GiB。A/B RED分别18项13FAIL/5PASS及37项4FAIL/33PASS，明确缺功能；最初含空格的cmd筛选参数被拆分导致37项名称过滤，随后含shell管道的命令被cmd拒绝，两次都不当作RED。父改完整文件执行取得真实红灯。旧库迁移143后只新增144，不改历史迁移。
+
+最终治理PASS：38文档/490链接/20来源复核/161依赖及阶段覆盖1项；归档隔离PASS。公开PR查重为空、远端main仍ce4a72f，最近发布最大V0.0.40-fix5，本功能确认采用V0.0.41。索引仅本任务DATA-PROTECTION与恢复验收三处来源摘要更新，消费者已核仍相容，不混用户CodeGraph来源改动。
+
+GREEN为五完整文件63/63（49.944s）、邻近四文件38/38（16.557s）、审计标签9/9。Web行为RED三文件9FAIL/10PASS；源实现后六文件50PASS/1FAIL，唯一是点击指定天数立即查字段早于useWatch重渲染；DOM已选中days，测试最小改为等待字段出现，原POST30天/复制断言及预算不变，受影响CredentialPanel完整3/3（27.70s）后六文件组合51项全通过。轮换先预期5实际4 RED，新增既有脚本credential循环后5/5；真实PG+MinIO备份恢复8/8，包括所有原负例，无环境跳过。
+
+一次性marker-only浏览器2/2（29.2s）从侧栏→默认永久创建→实际clipboard完整鉴权→重开复制相同有效凭据→编码路径201及UUID路径200同收件→204模式→来源/正文→撤销401；浅深及320/390/1440几何沿原第二完整场景通过。秘密仅布尔比较，无trace/video/secret截图。API/Web构建与生成/检查契约退出0，Compose基础+扫描+生产配置quiet通过。未跑完整阶段全业务验收或生产业务写入；全API/Web全集交给当前新head云端门禁，不能用旧head通过替代。
+
+convenience_credentials与convenience_address分别实施A/B，convenience_web实施C；convenience_spec对A/B后C/运维逐段SPEC PASS，convenience_quality独立QUALITY PASS及父浏览器差异限定PASS，均只读不竞争重命令。父负责迁移、公共计数/错误/审计、轮换/恢复、契约、实际测试及文档。资源清理核任务名称、ID、label及tmpfs；只移除本任务PG/对象容器，两个浏览器服务按PID/父命令停止，端口空闲，未触55440。

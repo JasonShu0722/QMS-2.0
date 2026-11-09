@@ -48,14 +48,14 @@ describe('inbound transactional concurrency', () => {
     return { organizationId: organization.id, endpointId, credentialId, token: `${credentialId}.${secret}`, path: `/api/v1/integrations/inbound/${endpointId}/messages` };
   }
   const send = (receiver: { token: string; path: string }, messageId: string, body = '{"value":1}') => request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`).set('Idempotency-Key', messageId).set('Content-Type', 'application/json').send(body);
-  async function waitingForOrganizationLock() {
+  async function waitingForRowLock(table: 'organizations' | 'integration_credentials') {
     const deadline = Date.now() + 3000;
     while (Date.now() < deadline) {
-      const rows = await prisma.$queryRaw<{ waiting: boolean }[]>`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%organizations%' AND query LIKE '%FOR UPDATE%') AS waiting`;
+      const rows = await prisma.$queryRaw<{ waiting: boolean }[]>`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE ${`%${table}%`} AND query LIKE '%FOR UPDATE%') AS waiting`;
       if (rows[0]!.waiting) return;
       await delay(10);
     }
-    throw new Error('Inbound request did not reach its real organization lock.');
+    throw new Error(`Inbound request did not reach the ${table} row lock.`);
   }
 
   it('receives one row and performs one required audit for eight simultaneous identical requests', async () => {
@@ -80,20 +80,20 @@ describe('inbound transactional concurrency', () => {
     try {
       await connection.query('BEGIN'); await connection.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [receiver.organizationId]);
       const pending = send(receiver, randomUUID()).then(response => response);
-      await waitingForOrganizationLock();
+      await waitingForRowLock('organizations');
       await connection.query('UPDATE integration_credentials SET revoked_at=clock_timestamp() WHERE id=$1', [receiver.credentialId]);
       await connection.query('COMMIT'); expect((await pending).status).toBe(401);
       expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 0 }]);
     } finally { await connection.query('ROLLBACK'); await connection.end(); }
   });
 
-  it('uses database wall-clock expiry rather than transaction-start time after a lock wait', async () => {
+  it('uses database wall-clock expiry after waiting for the credential row lock', async () => {
     const receiver = await fixture(), connection = new Client({ connectionString: process.env.DATABASE_URL }); await connection.connect();
     try {
       await prisma.$executeRaw`UPDATE integration_credentials SET expires_at=clock_timestamp()+interval '800 milliseconds' WHERE id=${receiver.credentialId}::uuid`;
-      await connection.query('BEGIN'); await connection.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [receiver.organizationId]);
+      await connection.query('BEGIN'); await connection.query('SELECT id FROM integration_credentials WHERE id=$1 FOR UPDATE', [receiver.credentialId]);
       const pending = send(receiver, randomUUID()).then(response => response);
-      await waitingForOrganizationLock(); await connection.query('SELECT pg_sleep(0.9)');
+      await waitingForRowLock('integration_credentials'); await connection.query('SELECT pg_sleep(0.9)');
       await connection.query('COMMIT'); expect((await pending).status).toBe(401);
     } finally { await connection.query('ROLLBACK'); await connection.end(); }
   });
@@ -103,7 +103,7 @@ describe('inbound transactional concurrency', () => {
     try {
       await connection.query('BEGIN'); await connection.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [receiver.organizationId]);
       const pending = send(receiver, randomUUID()).then(response => response);
-      await waitingForOrganizationLock(); await connection.query('UPDATE organizations SET status=\'DISABLED\' WHERE id=$1', [receiver.organizationId]);
+      await waitingForRowLock('organizations'); await connection.query('UPDATE organizations SET status=\'DISABLED\' WHERE id=$1', [receiver.organizationId]);
       await connection.query('COMMIT'); expect((await pending).status).toBe(403);
     } finally { await connection.query('ROLLBACK'); await connection.end(); }
   });
