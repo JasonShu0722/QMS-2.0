@@ -16,12 +16,12 @@
 | 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
 | 本次追加范围 | 负责人要求的逐接口 `returnReceipt` 已实现，默认开启；关闭成功返回 204 空正文，失败仍返回错误，内部收件与防重复保持；真实HTTP及浏览器主链已覆盖双向语义 |
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）已squash为main042f7d9dd947464369ec079747f92f4b27314882，整tree与审候选48d403d一致。main首轮门禁超时后，按流程从origin/main隔离codex/req0036-release-fix3，预留V0.0.40-fix3，另建关联修复PR；旧分支档案f5b00d8保留 |
+| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）→ PR99（V0.0.40-fix3）。最终main与部署均为0181a899eee277585eb38448ce956c147572d518，整tree与审候选8d761c02一致；旧main042首轮失败、旧分支档案f5b00d8及各修复证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR98最终head48d403d的CI42592556853严格24/24及同headReview clear已核；负责人授权后已合并042。main CI42597522794首轮22成功2失败，唯一实质为旧平台权限目录case超过5s，foundation派生；自动deploy42599373515 skipped、未部署。fix3只将首case全目录串行SQL改为等价批量查询，保原5s和所有断言，真实PG完整29/29与独立SPEC/QUALITY PASS，治理/新PR接续 |
+| 当前检查点 | PR99候选CI42604558840与main push CI42606383814各attempt1、各精确24/24 success，既有evaluateDeployJobs复核同head/run/attempt全集为full，同候选Review completed/无发现。自动deploy42607996737/job129128768750成功，日志明确source run42606383814、迁移前加密快照、两条新增迁移成功/143链及三服务镜像同SHA；Worker READY、HTTP及原子marker由同版脚本强制成功出口支持，未独立SSH读marker。公网最终核验PASS，详见第12节；旧main042失败/deploy skipped不覆盖 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 主代理按当前合并部署授权推进关联fix3 PR；新head门禁及审查通过后合并，逐版本核main完整CI和自动deploy，再取迁移前加密快照、143链、同SHA服务健康/Worker、公网目标证据。不以重跑刷绿/放宽timeout代修复。飞书token_missing未回读/代写，Issue97保持开放 |
+| 下一动作与负责人 | 当前合并部署与机器发布核验已完成，主代理归档最新事实；负责人后续承接生产岗位配权/凭据交付/接口启用、真实来源协议与样本联调及人工页面验收。未获准执行这些生产配置或关闭/回填，飞书token_missing未回读/代写，Issue97保持开放 |
 
 ## 1. 交付单元、映射与范围
 
@@ -301,3 +301,25 @@ main push [42597522794](https://github.com/JasonShu0722/QMS-2.0/actions/runs/425
 从origin/main042建立`codex/req0036-release-fix3`，用户4dirty原样携带且Git外保存diff，原feature分支档案保留；沿用Issue97，不在已合并PR98上继续推送。`release_parity_fix`独占一个测试文件；`release_fix3_spec`SPEC PASS后`release_fix3_quality`QUALITY PASS，无弱化/新缺陷。真实CI为RED；本地同原case基线1PASS/28按名称过滤，Jest4.376s，不冒称本地RED。改后原完整文件29/29 PASS/0skip，Jest10.264s，不将原单例与新全文件耗时相除声称加速。
 
 本地PowerShell一次CoreCLR/GC初始化失败，未诊断为确定内存或硬件故障；改用cmd与显式Node24.21轻量命令。实际可用内存核5.67GiB后，才建立仅本任务PG18/55636（label REQ0036-FIX3、512MiB/1CPU），143迁移/seed真实成功；Node1GiB单worker，未恢复全量服务/并发或修改系统配置。Git外Node launcher继承同任务配置并核版本/非55440，所有秘密仅进子进程环境不输出。修复后的新PR、精确新main、自动部署与公网验证仍待完成，不以PR旧绿或同树推断main已过。
+
+## 12. 最终机器发布核验（2026-11-09）
+
+本节接续第11节的待办，先前失败及当时未发布状态保持为历史事实。负责人“没问题了就继续合并部署”覆盖本期及其发布阻塞修复；未扩展为生产岗位配置、机器凭据发放/分发、接口启用、Issue关闭、飞书回填或人工业务验收。
+
+| 检查点 | 实际结果与证据 |
+| --- | --- |
+| 修复PR | [PR99](https://github.com/JasonShu0722/QMS-2.0/pull/99)候选8d761c02a7273a70c5010bb988fe02cbf39d62c8；[CI42604558840](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42604558840) attempt1精确24/24 success。同head Codex Review completed、has_any_findings=false、has_unresolved_findings=false；主代理独立重新读取并用既有evaluateDeployJobs核完整集合及来源为full |
+| 合并 | 合并前重新核open/非draft/mergeable、head/base与main一致，expected_head_sha约束squash为0181a899eee277585eb38448ce956c147572d518；GitHub git commit/tree独立核整树与候选一致。首次回读命中短缓存旧merged=false，随后加观测nonce回读明确true，不把缓存误作生产故障 |
+| 主分支门禁 | [CI42606383814](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42606383814) push/main/attempt1 completed/success，精确24/24全success、零skip/cancel/running；主代理独立核head/run/attempt及原全集，evaluateDeployJobs=full，不用PR绿或同树替代 |
+| 自动部署 | [deploy42607996737](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42607996737)/job129128768750 workflow_run/attempt1 completed/success，同0181a89；日志明确RUN_ID=42606383814、RUN_ATTEMPT=1、HEAD_SHA同版且Full validation scope，不是skipped或superseded |
+| 迁移前保护 | 11:27:46Z明确Pre-migration encrypted database snapshot verified，同SHA；为服务器本地加密数据库快照、独立密钥及加解密/目录校验，不等于全容量恢复或对象/异地灾备证明 |
+| 数据库 | 11:27:50Z实际应用20261109000000_api_inbound_phase_1与20261109000100_integration_provenance_and_cleanup，两条成功、143迁移链；未跳过迁移 |
+| 服务与出口 | compose日志与ps显示API/Worker/Web镜像标签均为0181a89，API healthy，Worker启动、Web可达；11:28:11Z明确Deployment successful。Worker稳定实例READY、公共HTTP200及原子deployed-sha是同版脚本的强制成功出口条件，未另SSH读marker，不补造直接读回证据 |
+| 独立公网 | 11:30:19Z，https://qms.bigshuaibee.cn 的login/OpenAPI、console/api-integrations SPA及JS/CSS均200；OpenAPI新机器接收契约含200/201/204。四受控管理GET匿名401 AUTH_SESSION_REQUIRED，无Bearer机器请求401 INTEGRATION_AUTH_INVALID且X-Request-Id与正文traceId一致；未写生产业务数据 |
+| 目标变化 | 发布前无接收契约；新index-B6Iqlx7U.js及index-3kA8cBHz.css与旧index-BpThNLlk.js/index-BlMtSdkC.css不同，新包含路由、凭据权限、returnReceipt及页面CSS标识，已保存实际指纹。不以资源名推断本地/Linux字节相同 |
+
+Git外最终证据：`D:/WorkSpace/QMS-2.0-local/req0036-20261109/release-fix3-final/`中的merge-tree、main-ci-verified、watch-deploy-jobs、public-final JSON、资源文件、deploy-log-evidence摘录及release-record。部署运行中首次取日志404/BlobNotFound，仅是当时证据未就绪；完成后取日志成功，但工具省略中段构建内容，不宣称完整日志已下载。保留慢仓库请求、Vite大chunk、punycode弃用及SSH非后量子提示，不因此擅改全局配置或依赖。
+
+本任务fix3临时PG已先核精确名称、REQ0036-FIX3标签及停止状态，只删该容器并回查为空；未做全局prune或操作55440。四处用户原修改与Git外原diff规范化换行后完全一致，独立断言通过。最终机器发布记录仅本地归档，不为无运行变化再推送触发发布；源码及权威能力规则已随PR98/99进入远端main。
+
+仍为NOT_RUN或待确认：生产岗位配权、真实凭据交付、接口启用、QMS_PUBLIC_BASE_URL实际生产值的独立读取、真实来源字段/协议/吞吐、匹配容量恢复、真实物理设备/人工视觉验收。已有一次性浏览器与样本恢复证据按原范围有效，不替代这些未覆盖项。Issue97保持开放；飞书令牌缺失未代写/回填，不以机器发布称整个需求已关闭。

@@ -1,6 +1,12 @@
 # 底座与阶段二平台验收记录
 
-## REQ-0036 API 接收一期（2026-11-09，本地候选）
+## REQ-0036 API 接收一期（2026-11-09，机器发布已核验）
+
+最终发布：PR98与修复PR99均已按负责人授权合并。PR99候选8d761c02与main `0181a899eee277585eb38448ce956c147572d518` 整Git树一致；PR CI42604558840及[main CI42606383814](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42606383814)各attempt1、各24项精确同源全部success，候选Codex Review completed且无发现。[自动deploy42607996737](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42607996737)/job129128768750 completed/success，日志明确来源CI42606383814、迁移前加密快照先于两条新增迁移，143链全部成功；API/Worker/Web镜像同0181a89，API healthy，Worker READY及原子deployed-sha由同版脚本强制成功出口支持，未另SSH读回。不是skipped或superseded。
+
+11:30:19Z独立公网核验：login/OpenAPI/管理页SPA及新JS/CSS均200，新接收契约含200/201/204；四个受控GET匿名401 AUTH_SESSION_REQUIRED，无Bearer机器请求401 INTEGRATION_AUTH_INVALID且响应头/体traceId一致。新资源index-B6Iqlx7U.js/index-3kA8cBHz.css与发布前不同，接收路由、凭据权限、回执开关和页面CSS标识均存在；不宣称Linux产物与本地字节一致。原始JSON、资源指纹和日志摘录在Git外 `req0036-20261109/release-fix3-final/`，完整覆盖及限制见[一期计划第12节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
+
+机器发布不代表生产岗位配权、凭据交付、接口启用、真实公司系统字段/协议/吞吐联调、全容量恢复或人工视觉验收已通过；这些尚未执行，Issue97保持开放、Base未代写。本任务fix3临时PG已核名称/label/停止状态后仅删该容器并回查为空；四处用户原有改动逐字差异一致。最新发布事实本地归档，避免为归档再次推送触发无运行变化的CI/部署；以下保留各历史检查点原事实。
 
 获准集成发布：负责人明确继续合并部署后，PR98已squash main042f7d9，与审候选48d403d整树相同。main42597522794 attempt1实际22成功/2失败，唯一实质为平台权限目录case超过5秒，foundation派生；自动deploy42599373515 skipped、未上线。fix3仅将该case完整目录逐条SQL往返改为等价单条查询，原全正反断言/5秒预算不变；原本地基线1PASS/28按名过滤不是RED，真实CI失败保留，改后真实PG原完整29/29与SPEC后QUALITY PASS。具体CI宿主慢因未证，按计划11节继续新修复PR/新main门禁，不重跑旧run刷绿。
 
