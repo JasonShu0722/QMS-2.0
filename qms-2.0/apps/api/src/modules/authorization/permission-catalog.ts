@@ -180,7 +180,7 @@ export const INTERNAL_PLATFORM_PERMISSION_CODES = PERMISSION_CATALOG
   .filter(group => group.status === 'active')
   .flatMap(group => group.modules.filter(module => module.status === 'active')
     // Observation reads require an explicit grant, including for existing platform marker holders.
-    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code) && !CONSOLE_OBSERVATION_READ_PERMISSIONS.includes(entry.code) && !INTEGRATION_PERMISSIONS.includes(entry.code)).map(entry => entry.code)));
+    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code) && !CONSOLE_OBSERVATION_READ_PERMISSIONS.includes(entry.code)).map(entry => entry.code)));
 
 export function userUpdatePermissions(fields: object): string[] {
   const submitted = fields as Record<string, unknown>;

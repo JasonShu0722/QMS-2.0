@@ -14,14 +14,14 @@
 | --- | --- |
 | 最后核对与范围 | 2026-11-09，Asia/Taipei；负责人更新状态并明确“继续推进”，user 实时回读 rev363 开发中/P0，目标/五字段范围保持，提出人已由负责人改为舒子杰 |
 | 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
-| 本次追加范围 | 负责人要求的逐接口 `returnReceipt` 已实现，默认开启；关闭成功返回 204 空正文，失败仍返回错误，内部收件与防重复保持；真实HTTP及浏览器主链已覆盖双向语义 |
+| 本次追加范围 | 负责人截图反馈Admin无权限且菜单缺入口，明确要求Admin默认具备权限；修订五项integration权限纳入显式platform:admin的既有内部组织权限投影，菜单继续使用受控context显示；不按用户名特判、不批量改普通岗位、不放宽机器鉴权。逐接口returnReceipt原行为保持 |
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）已squash为main042f7d9dd947464369ec079747f92f4b27314882，整tree与审候选48d403d一致。main首轮门禁超时后，按流程从origin/main隔离codex/req0036-release-fix3，预留V0.0.40-fix3，另建关联修复PR；旧分支档案f5b00d8保留 |
+| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）→ PR99（V0.0.40-fix3）。最终main与部署均为0181a899eee277585eb38448ce956c147572d518，整tree与审候选8d761c02一致；旧main042首轮失败、旧分支档案f5b00d8及各修复证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR98最终head48d403d的CI42592556853严格24/24及同headReview clear已核；负责人授权后已合并042。main CI42597522794首轮22成功2失败，唯一实质为旧平台权限目录case超过5s，foundation派生；自动deploy42599373515 skipped、未部署。fix3只将首case全目录串行SQL改为等价批量查询，保原5s和所有断言，真实PG完整29/29与独立SPEC/QUALITY PASS，治理/新PR接续 |
+| 当前检查点 | 生产仍为0181a89，第12节原机器发布有效；Admin默认权限返修PR100的head1d0b2cb首CI42617559662 attempt1实际22成功2失败，唯一实质为Web11正文存在但尚不可见的断言，foundation派生；同headReview clear。fix5仅补原断言等待，完整六文件44/44及限定SPEC后QUALITY PASS，继续同PR100更新候选，不rerun旧run刷绿 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 主代理按当前合并部署授权推进关联fix3 PR；新head门禁及审查通过后合并，逐版本核main完整CI和自动deploy，再取迁移前加密快照、143链、同SHA服务健康/Worker、公网目标证据。不以重跑刷绿/放宽timeout代修复。飞书token_missing未回读/代写，Issue97保持开放 |
+| 下一动作与负责人 | 原Admin一行修复的PG102/unit53/浏览器2/build/契约证据仍适用；fix5同PR100提交等待返修及六完整UI/导航44项证明，再核新head完整CI与Review，按原授权合并部署。生产CUA因网址识别安全策略中止，未绕过，负责人最终刷新确认Admin实页；不启用具体接口/分发凭据/关闭回填 |
 
 ## 1. 交付单元、映射与范围
 
@@ -301,3 +301,54 @@ main push [42597522794](https://github.com/JasonShu0722/QMS-2.0/actions/runs/425
 从origin/main042建立`codex/req0036-release-fix3`，用户4dirty原样携带且Git外保存diff，原feature分支档案保留；沿用Issue97，不在已合并PR98上继续推送。`release_parity_fix`独占一个测试文件；`release_fix3_spec`SPEC PASS后`release_fix3_quality`QUALITY PASS，无弱化/新缺陷。真实CI为RED；本地同原case基线1PASS/28按名称过滤，Jest4.376s，不冒称本地RED。改后原完整文件29/29 PASS/0skip，Jest10.264s，不将原单例与新全文件耗时相除声称加速。
 
 本地PowerShell一次CoreCLR/GC初始化失败，未诊断为确定内存或硬件故障；改用cmd与显式Node24.21轻量命令。实际可用内存核5.67GiB后，才建立仅本任务PG18/55636（label REQ0036-FIX3、512MiB/1CPU），143迁移/seed真实成功；Node1GiB单worker，未恢复全量服务/并发或修改系统配置。Git外Node launcher继承同任务配置并核版本/非55440，所有秘密仅进子进程环境不输出。修复后的新PR、精确新main、自动部署与公网验证仍待完成，不以PR旧绿或同树推断main已过。
+
+## 12. 最终机器发布核验（2026-11-09）
+
+本节接续第11节的待办，先前失败及当时未发布状态保持为历史事实。负责人“没问题了就继续合并部署”覆盖本期及其发布阻塞修复；未扩展为生产岗位配置、机器凭据发放/分发、接口启用、Issue关闭、飞书回填或人工业务验收。
+
+| 检查点 | 实际结果与证据 |
+| --- | --- |
+| 修复PR | [PR99](https://github.com/JasonShu0722/QMS-2.0/pull/99)候选8d761c02a7273a70c5010bb988fe02cbf39d62c8；[CI42604558840](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42604558840) attempt1精确24/24 success。同head Codex Review completed、has_any_findings=false、has_unresolved_findings=false；主代理独立重新读取并用既有evaluateDeployJobs核完整集合及来源为full |
+| 合并 | 合并前重新核open/非draft/mergeable、head/base与main一致，expected_head_sha约束squash为0181a899eee277585eb38448ce956c147572d518；GitHub git commit/tree独立核整树与候选一致。首次回读命中短缓存旧merged=false，随后加观测nonce回读明确true，不把缓存误作生产故障 |
+| 主分支门禁 | [CI42606383814](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42606383814) push/main/attempt1 completed/success，精确24/24全success、零skip/cancel/running；主代理独立核head/run/attempt及原全集，evaluateDeployJobs=full，不用PR绿或同树替代 |
+| 自动部署 | [deploy42607996737](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42607996737)/job129128768750 workflow_run/attempt1 completed/success，同0181a89；日志明确RUN_ID=42606383814、RUN_ATTEMPT=1、HEAD_SHA同版且Full validation scope，不是skipped或superseded |
+| 迁移前保护 | 11:27:46Z明确Pre-migration encrypted database snapshot verified，同SHA；为服务器本地加密数据库快照、独立密钥及加解密/目录校验，不等于全容量恢复或对象/异地灾备证明 |
+| 数据库 | 11:27:50Z实际应用20261109000000_api_inbound_phase_1与20261109000100_integration_provenance_and_cleanup，两条成功、143迁移链；未跳过迁移 |
+| 服务与出口 | compose日志与ps显示API/Worker/Web镜像标签均为0181a89，API healthy，Worker启动、Web可达；11:28:11Z明确Deployment successful。Worker稳定实例READY、公共HTTP200及原子deployed-sha是同版脚本的强制成功出口条件，未另SSH读marker，不补造直接读回证据 |
+| 独立公网 | 11:30:19Z，https://qms.bigshuaibee.cn 的login/OpenAPI、console/api-integrations SPA及JS/CSS均200；OpenAPI新机器接收契约含200/201/204。四受控管理GET匿名401 AUTH_SESSION_REQUIRED，无Bearer机器请求401 INTEGRATION_AUTH_INVALID且X-Request-Id与正文traceId一致；未写生产业务数据 |
+| 目标变化 | 发布前无接收契约；新index-B6Iqlx7U.js及index-3kA8cBHz.css与旧index-BpThNLlk.js/index-BlMtSdkC.css不同，新包含路由、凭据权限、returnReceipt及页面CSS标识，已保存实际指纹。不以资源名推断本地/Linux字节相同 |
+
+Git外最终证据：`D:/WorkSpace/QMS-2.0-local/req0036-20261109/release-fix3-final/`中的merge-tree、main-ci-verified、watch-deploy-jobs、public-final JSON、资源文件、deploy-log-evidence摘录及release-record。部署运行中首次取日志404/BlobNotFound，仅是当时证据未就绪；完成后取日志成功，但工具省略中段构建内容，不宣称完整日志已下载。保留慢仓库请求、Vite大chunk、punycode弃用及SSH非后量子提示，不因此擅改全局配置或依赖。
+
+本任务fix3临时PG已先核精确名称、REQ0036-FIX3标签及停止状态，只删该容器并回查为空；未做全局prune或操作55440。四处用户原修改与Git外原diff规范化换行后完全一致，独立断言通过。最终机器发布记录仅本地归档，不为无运行变化再推送触发发布；源码及权威能力规则已随PR98/99进入远端main。
+
+仍为NOT_RUN或待确认：生产岗位配权、真实凭据交付、接口启用、QMS_PUBLIC_BASE_URL实际生产值的独立读取、真实来源字段/协议/吞吐、匹配容量恢复、真实物理设备/人工视觉验收。已有一次性浏览器与样本恢复证据按原范围有效，不替代这些未覆盖项。Issue97保持开放；飞书令牌缺失未代写/回填，不以机器发布称整个需求已关闭。
+
+## 13. Admin默认权限与菜单入口返修（V0.0.40-fix4）
+
+负责人在0181a89上线后提供真实页面截图：直接进入API接口管理仅见“无权访问此管理模块”，菜单也没有入口，并明确要求Admin默认具备权限。源码确认五项INTEGRATION_PERMISSIONS在INTERNAL_PLATFORM_PERMISSION_CODES中被显式排除；既有平台管理员context因此无api-integrations模块，导航按同一context隐藏。截图可见的供应商账号和待配置管理使用同一平台身份链；不据用户名绕过身份或猜测普通岗位是平台管理员。
+
+本次明确要求覆盖先前“平台管理员不自动获得API权限”的设计：显式有效platform:admin来源按已有规则获得五项integration权限及活跃内部目标组织的API管理能力，普通账号仍须岗位授予；停用/待配置/供应商组织、失效来源、机器鉴权、近期认证、CSRF、幂等、正文审计保持。只移除目录的integration排除条件，不动观测权限例外、不修改历史迁移或按用户名创建特权。不新增生产角色赋权脚本或重复菜单。
+
+实施与完成条件：
+
+1. 全新实施代理只改权限目录及对应测试，先取得真实失败：平台标记账号能从context获得API模块、HTTP创建/读取接口与凭据，五项权限在ORM/SQL一致；普通无权、只读、供应商/停用目标仍拒绝。原“marker应拒绝”断言按负责人新规则改为精确允许，不删相邻拒绝覆盖。
+2. 导航测试使用实际返回形状的五项能力验证“基础数据与配置”下API接口管理菜单及路由允许；无读权继续隐藏。真实浏览器至少使用平台标记账号验证侧栏入口→页面配置可见，不把SPA200当作账号可用。
+3. 主代理同步设计、API-INTEGRATION与SECURITY政策，更新受控来源摘要；独立SPEC后QUALITY、真实PG完整受影响文件、Web导航、API构建/契约复用或复验、治理通过后沿Issue97提交fix4 PR。PR/main最新CI与部署分别核验，保持低负载单重命令。
+4. 延续合并部署授权完成同范围返修；不启用具体接收端点、不分发凭据、不关闭Issue或代写飞书。生产真实Admin页面由可用会话或负责人反馈单独确认，缺会话不得假称人工验收。
+
+版本及基线：远端main0181a89/PR99，旧范围最大fix3，本次预留V0.0.40-fix4；本地文档归档d17ece1已在新分支接续为202f3d0。四处用户既有CodeGraph改动保护并排除。
+
+实际TDD：生产未变时unit四完整文件1FAIL/52PASS，真实PG四完整文件1FAIL/101PASS；失败精确为平台目录缺integration:read及marker-only账号context缺api-integrations。原实现代理持续pending_init，父中断并收回其测试所有权后先写/运行RED；全新fix4_minimal_implementation在RED后只移除catalog一项排除，未扩展通用授权内核。父随后完整unit53/53、真实PG102/102（50.52s）、导航22/22与API build退出0，原预算/断言保持；fix4_spec独立SPEC PASS后fix4_quality独立QUALITY PASS，无P1/P2。
+
+真实浏览器两完整场景2/2 PASS、39.1s：测试角色仅追加platform marker并明确断言无integration直接grant，登录后从/console真实侧栏点击API接口管理；配置、一次性凭据、201/200/204、来源检索、正文审计纯文本与浅深/320/390/1440几何均通过。使用一次性PG与真实本地API、现有Vite同源代理，网关/TLS配置未改并按原有效证据复用，不冒称本轮重跑HTTPS或生产Admin已验。两个服务会话已停止，生产新版本仍待PR/main/部署门禁。
+
+### fix5：同PR100的正文可见态回归
+
+[PR100](https://github.com/JasonShu0722/QMS-2.0/pull/100)首候选1d0b2cb8512df53621ed4f7165046b32fe5ce4fc的[CI42617559662](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42617559662) attempt1全24任务已结束，22success/2failure，无skip/cancel。唯一实质失败Web11/job129161228883，ReceiptList.test.tsx:60的正文纯文本场景在pre节点已存在但不可见时立即toBeVisible失败；该片15文件166项1FAIL/165PASS。foundation/job129168221984明确web-tests must be success，是派生失败；API、四PG和另外15个Web均success。同head Codex Review completed、无发现/无未解决项，但不能代替失败CI门禁。
+
+全新fix4_receipt_visibility只改一行测试：复用已导入waitFor，在原dialog中等同一精确payload真正可见，随后保原PRE标签及无img/script子节点断言。与既有CredentialPanel等待方式一致；生产Modal、权限、fixture、动效、默认超时以及原8例均保持。真实RED来自本次CI，未声称本地复现或已确认具体云端调度/动画帧原因；永久缺失/隐藏仍须失败，不重跑旧run或放宽预算。
+
+父串行六个完整UI/导航文件44/44 PASS、0skip（138.22s），其中原ReceiptList全部8/8，失败场景4.250s；没有同环境原完整基线，不宣称性能改善。fix4_spec限定SPEC PASS后fix4_quality限定QUALITY PASS。父核生产源码与1d0b2cb保持，按范围复用原真实PG、API build、契约及浏览器证据；本次新增代码消耗V0.0.40-fix5，仍更新同PR100及原Issue97，不另建PR或扩大业务。
+
+Git外fix4目录保留first-failed run/jobs/comments、web-ui完整日志、原RED及修后证据；check:governance/暂存来源核验按当前提交再核。生产浏览器绑定因CUA无法可靠识别Windows浏览器URL而被安全策略中止，已停止且未用其他手段绕过；生产实页NOT_VERIFIED，不影响继续核云端/部署及公开HTTP。fix4临时PG已核精确ID/标签/端口/tmpfs后stop与rm --volumes，回读为空；3136/5186已空闲，没有恢复重服务或连接55440。
