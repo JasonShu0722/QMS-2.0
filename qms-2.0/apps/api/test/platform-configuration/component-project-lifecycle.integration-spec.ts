@@ -36,7 +36,7 @@ describe('component project lifecycle isolated real PostgreSQL (not full AppModu
     ] }).compile();
     registry = app.get(AdministrativeLifecycleRegistry);
     // Other domains are deliberately neutral: this only verifies configuration's registered effect.
-    for (const module of ['workflow', 'identity'] as const) {
+    for (const module of ['workflow', 'identity', 'api-integration'] as const) {
       registry.register({ module, async apply() { return { module, changed: 0, pendingConfiguration: 0 }; } });
     }
     registry.seal();

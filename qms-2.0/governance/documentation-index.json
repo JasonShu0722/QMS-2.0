@@ -82,6 +82,12 @@
   ],
   "documents": [
     {
+      "path": "docs/API-INTEGRATION.md",
+      "topic": "api-integration",
+      "canonical": true,
+      "status": "active"
+    },
+    {
       "path": ".agents/skills/qms-start-development/SKILL.md",
       "topic": "skill-start-development",
       "canonical": true,
@@ -210,7 +216,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "fd577b856431c3e8eabe567794f2d98485667d6bfc5394e21e498d4c0b3549dc"
+            "sha256": "f2464040129ee8e7b2b42287a27a8efe4dbf8b68ecdca0bc8bcd6ea557491fb9"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",
@@ -240,7 +246,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "349b981629f363973b0e716142508ef578f55aedef05198db4e6e0c4011580a1"
+            "sha256": "15e98eae546411e252ee8e7a83d29d0d002b02c344e1b28b362d389d460a1332"
           },
           {
             "path": "docs/OPERABILITY-READINESS.md",
@@ -248,7 +254,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "dab696137542865c3d6ab3062f12fb21ce44a24cebf117a8198c65c6140abc57"
+            "sha256": "131ad883290b74bb9ab61bbc62f3fd4e4da26a0c4f3f40ffc821cc00a7a79dd1"
           },
           {
             "path": "README.md",
@@ -588,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "571db50d019d855202926a13871acd70baf8647150775d1f05fc603d11f3e7a1"
+            "sha256": "e8a32bf2d46f1b346bcf5d9edb3dd5862f255cd8e2a1ca2c9fdbb1bcf13d9d07"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
@@ -1046,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "bfd3dc51ee60367a93866a755390d69889f073311f8fd9039bde13738fd87da6"
+            "sha256": "8453b98725aa394c5a4c1d698328c7cf18d330f65b0cc4a6be34def32a0c6e70"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1084,7 +1090,7 @@
           },
           {
             "path": "apps/api/test/operations/data-protection.acceptance.mjs",
-            "sha256": "0d21eeab6e1612fa09fd73cd4d6c5b82c8ddc1c77b545bad5bc7d9af7638eaf9"
+            "sha256": "801ac827b622bbc14ec846ba367d5d7d28b6e174be1d4696214f8f145405a10a"
           },
           {
             "path": "apps/api/test/operations/operations-alerts.acceptance.mjs",
@@ -1190,11 +1196,11 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "349b981629f363973b0e716142508ef578f55aedef05198db4e6e0c4011580a1"
+            "sha256": "15e98eae546411e252ee8e7a83d29d0d002b02c344e1b28b362d389d460a1332"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "fd577b856431c3e8eabe567794f2d98485667d6bfc5394e21e498d4c0b3549dc"
+            "sha256": "f2464040129ee8e7b2b42287a27a8efe4dbf8b68ecdca0bc8bcd6ea557491fb9"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",

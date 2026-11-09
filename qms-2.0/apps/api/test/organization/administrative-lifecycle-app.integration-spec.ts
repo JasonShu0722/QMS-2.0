@@ -15,7 +15,7 @@ if (process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !isDisposableLoopbackPostgr
   throw new Error('Requires leased disposable loopback PostgreSQL, never preview 55440.');
 }
 
-describe('REQ0031 actual App administrative lifecycle HTTP chains with all three real owners', () => {
+describe('REQ0031 actual App administrative lifecycle HTTP chains with all four real owners', () => {
   let app: INestApplication, db: PrismaService, sessions: SessionService;
   const csrf = randomUUID();
   const configuration = '/api/v1/admin/configuration';
@@ -106,11 +106,12 @@ describe('REQ0031 actual App administrative lifecycle HTTP chains with all three
     expect((await checked('CSRF guard rejects organization mutation', request(app.getHttpServer()).post(path)
       .set('Cookie', f.cookie).set('Idempotency-Key', randomUUID()).send(body), 403)).code).toBe('CSRF_INVALID');
     const key = randomUUID();
-    const result = await checked('confirmed organization deletion with three real effects', write(f.cookie, 'post', path, body, key), 201);
+    const result = await checked('confirmed organization deletion with four real effects', write(f.cookie, 'post', path, body, key), 201);
     expect(result.effects).toEqual([
       { module: 'workflow', changed: 0, pendingConfiguration: 0 },
       { module: 'platform-configuration', changed: expect.any(Number), pendingConfiguration: expect.any(Number) },
       { module: 'identity', changed: 1, pendingConfiguration: 1 },
+      { module: 'api-integration', changed: 0, pendingConfiguration: 0 },
     ]);
     expect(await checked('organization idempotent replay', write(f.cookie, 'post', path, body, key), 201)).toEqual(result);
     expect(await db.adminMutation.count({ where: { actorUserId: f.actor.id, key } })).toBe(1);
@@ -263,7 +264,7 @@ describe('REQ0031 actual App administrative lifecycle HTTP chains with all three
     expect(retained).toMatchObject({ status: 'DISABLED', deletedAt: expect.any(Date), version: deleted.version });
   }, 30_000);
 
-  it('force-deletes detached pending organizations and departments without reconfiguration through all three real owners', async () => {
+  it('force-deletes detached pending organizations and departments without reconfiguration through all four real owners', async () => {
     const f = await fixture(), member = await person(f.child.id);
     const fact = await db.problemIndex.create({ data: { organizationId: f.child.id, ownerId: member.user.id,
       reportNumber: randomUUID(), domainCode: 'process-quality', problemType: 'defect', sourceType: 'TEST', severity: 'NORMAL' } });
@@ -318,6 +319,7 @@ describe('REQ0031 actual App administrative lifecycle HTTP chains with all three
       { module: 'workflow', changed: 0, pendingConfiguration: 0 },
       { module: 'platform-configuration', changed: 0, pendingConfiguration: 0 },
       { module: 'identity', changed: 1, pendingConfiguration: 0 },
+      { module: 'api-integration', changed: 0, pendingConfiguration: 0 },
     ] });
     const deleted = await db.user.findUniqueOrThrow({ where: { id: member.user.id } });
     expect(deleted).toMatchObject({ organizationId: f.child.id, deletedAt: expect.any(Date), status: 'DISABLED',

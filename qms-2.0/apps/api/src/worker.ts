@@ -13,6 +13,7 @@ import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEig
 import { randomUUID } from 'node:crypto';
 import { ServiceOperationReceiptService } from './modules/task-notification/service-operation-receipt.service.js';
 import { DataExchangeObservationService } from './modules/system-management/data-exchange-observation.service.js';
+import { IntegrationRetentionService } from './modules/api-integration/integration-retention.service.js';
 
 async function bootstrap(): Promise<void> {
   const options = parseWorkerOptions(process.argv.slice(2), process.env);
@@ -50,6 +51,8 @@ async function bootstrap(): Promise<void> {
       if (mailEnabled) await app.get(RecoveryMailService).dispatchPending(options.batchSize);
       try { await app.get(DataExchangeObservationService).purgeExpired(); await receipts.purgeExpired(); }
       catch { console.warn('SERVICE_OBSERVATION_RETENTION_UNAVAILABLE'); }
+      try { await app.get(IntegrationRetentionService).purgeExpired(); }
+      catch { console.warn('INTEGRATION_RETENTION_UNAVAILABLE'); }
       nextMaintenance = Date.now() + 60000;
     }, async result => {
       lastCycle = result;

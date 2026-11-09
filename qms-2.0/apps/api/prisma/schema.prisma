@@ -7,6 +7,120 @@ datasource db {
   provider = "postgresql"
 }
 
+model IntegrationEndpoint {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  code String @db.VarChar(64)
+  name String @db.VarChar(120)
+  description String @default("") @db.VarChar(1000)
+  sourceCode String @map("source_code") @db.VarChar(64)
+  sourceName String @map("source_name") @db.VarChar(120)
+  status String @default("DRAFT") @db.VarChar(16)
+  version Int @default(1)
+  returnReceipt Boolean @default(true) @map("return_receipt")
+  maxBodyBytes Int @default(1048576) @map("max_body_bytes")
+  ratePerMinute Int @default(60) @map("rate_per_minute")
+  bodyRetentionDays Int @default(7) @map("body_retention_days")
+  capacityBytes Int @default(268435456) @map("capacity_bytes")
+  usedBodyBytes BigInt @default(0) @map("used_body_bytes")
+  allowedIps String[] @default([]) @map("allowed_ips")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  credentials IntegrationCredential[]
+  receipts IntegrationReceipt[]
+  rateWindows IntegrationRateWindow[]
+  requestAttempts IntegrationRequestAttempt[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt, id], map: "integration_endpoints_scope_created_idx")
+  @@map("integration_endpoints")
+}
+
+model IntegrationCredential {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  endpointId String @map("endpoint_id") @db.Uuid
+  name String @db.VarChar(120)
+  createdById String? @map("created_by_id") @db.Uuid
+  secretHash String @map("secret_hash") @db.Char(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  endpoint IntegrationEndpoint @relation(fields: [organizationId, endpointId], references: [organizationId, id], onDelete: Restrict)
+  receipts IntegrationReceipt[]
+
+  @@index([organizationId, endpointId, createdAt, id], map: "integration_credentials_scope_endpoint_idx")
+  @@map("integration_credentials")
+}
+
+model IntegrationReceipt {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  endpointId String @map("endpoint_id") @db.Uuid
+  credentialId String @map("credential_id") @db.Uuid
+  messageId String @map("message_id") @db.VarChar(128)
+  bodyDigest String @map("body_digest") @db.Char(64)
+  configurationVersion Int @map("configuration_version")
+  configurationSnapshot Json @map("configuration_snapshot")
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+  bodyExpiresAt DateTime @map("body_expires_at") @db.Timestamptz(3)
+  metadataExpiresAt DateTime @map("metadata_expires_at") @db.Timestamptz(3)
+  payloadCiphertext String? @map("payload_ciphertext")
+  payloadBytes Int @map("payload_bytes")
+  endpoint IntegrationEndpoint @relation(fields: [organizationId, endpointId], references: [organizationId, id], onDelete: Restrict)
+  credential IntegrationCredential @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, endpointId, messageId])
+  @@index([organizationId, receivedAt(sort: Desc), id(sort: Desc)], map: "integration_receipts_scope_time_idx")
+  @@index([organizationId, endpointId, receivedAt(sort: Desc), id(sort: Desc)], map: "integration_receipts_endpoint_time_idx")
+  @@index([metadataExpiresAt, id], map: "integration_receipts_metadata_expiry_idx")
+  @@map("integration_receipts")
+}
+
+model IntegrationRateWindow {
+  endpointId String @map("endpoint_id") @db.Uuid
+  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(3)
+  requests Int
+  endpoint IntegrationEndpoint @relation(fields: [endpointId], references: [id], onDelete: Restrict)
+
+  @@id([endpointId, windowStartedAt])
+  @@map("integration_rate_windows")
+}
+
+model IntegrationScopeCapacity {
+  organizationId String @id @map("organization_id") @db.Uuid
+  usedBodyBytes BigInt @default(0) @map("used_body_bytes")
+  receiptCount Int @default(0) @map("receipt_count")
+  lastCleanupSucceededAt DateTime? @map("last_cleanup_succeeded_at") @db.Timestamptz(3)
+  lastCleanupFailedAt DateTime? @map("last_cleanup_failed_at") @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("integration_scope_capacities")
+}
+
+model IntegrationRequestAttempt {
+  id String @id @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  endpointId String @map("endpoint_id") @db.Uuid
+  credentialId String @map("credential_id") @db.Uuid
+  messageId String? @map("message_id") @db.VarChar(128)
+  receiptId String? @map("receipt_id") @db.Uuid
+  configurationVersion Int @map("configuration_version")
+  returnReceipt Boolean @map("return_receipt")
+  statusCode Int @map("status_code")
+  outcome String @db.VarChar(24)
+  reasonCode String? @map("reason_code") @db.VarChar(64)
+  durationMs Int @map("duration_ms")
+  observedAt DateTime @default(now()) @map("observed_at") @db.Timestamptz(3)
+  endpoint IntegrationEndpoint @relation(fields: [organizationId, endpointId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, observedAt(sort: Desc), id(sort: Desc)], map: "integration_attempts_scope_time_idx")
+  @@index([organizationId, messageId, observedAt(sort: Desc)], map: "integration_attempts_message_idx")
+  @@map("integration_request_attempts")
+}
+
 enum AccountType {
   INTERNAL
   SUPPLIER
@@ -92,6 +206,8 @@ enum NotificationStatus {
 }
 
 model Organization {
+  integrationEndpoints IntegrationEndpoint[]
+  integrationCapacity IntegrationScopeCapacity?
   userIdentityHistory UserOrganizationHistory[]
   accountBatches AccountBatch[]
   id          String           @id @default(uuid()) @db.Uuid

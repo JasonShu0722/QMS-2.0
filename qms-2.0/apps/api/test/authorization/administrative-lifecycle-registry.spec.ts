@@ -14,10 +14,12 @@ describe('administrative lifecycle effects registration', () => {
     expect(() => registry.register(effect('identity'))).toThrow('ADMIN_LIFECYCLE_EFFECT_DUPLICATE');
     registry.register(effect('platform-configuration'));
     registry.register(effect('workflow'));
+    expect(() => registry.seal()).toThrow('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
+    registry.register(effect('api-integration'));
     registry.seal();
     expect(() => registry.register(effect('workflow'))).toThrow('ADMIN_LIFECYCLE_EFFECTS_FROZEN');
     const results = await registry.apply({} as never, {} as never, {} as never);
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration']);
     expect(results).toEqual(calls.map(module => ({ module, changed: 1, pendingConfiguration: 2 })));
   });
 });

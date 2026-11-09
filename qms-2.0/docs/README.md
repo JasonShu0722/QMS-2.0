@@ -6,6 +6,7 @@
 
 | 文档 | 用途 |
 | --- | --- |
+| [API 接入管理一期](API-INTEGRATION.md) | 内部系统经公网 HTTPS 推送的接口配置、鉴权、可靠接收和检索策划；包含设计与实施计划入口，本轮未实施或启用 |
 | [表单、台账与清单统一设计](../../docs/superpowers/specs/2026-10-31-qms-business-pages-design.md) | REQ-0034：四类模式、列宽/列序/显隐/固定、本地隔离和每页条数；沿用业务语义与现有保存视图 |
 | [统一业务页面实施计划](../../docs/superpowers/plans/2026-10-31-qms-business-pages.md) | V0.0.39 / Issue89；正式调用方分类、TDD与独立双审、分页拥有者、联合验证及交付检查点；第6节保留暂停交接，第7节恢复收尾，未发布 |
 | [前端文案、标题与导航专项设计](../../docs/superpowers/specs/2026-10-31-qms-ui-content-navigation-design.md) | REQ-0033：文案纪律、关联排版、单列两级折叠菜单、管理分类图标与标题去重；各自主题及业务边界保持 |

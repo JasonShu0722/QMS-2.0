@@ -42,6 +42,7 @@ const configurationTextLimits: Readonly<Record<string, number>> = {
   productSubcategory: 100, previousProductSubcategory: 100,
 };
 const configurationIdKeys = new Set([
+  'endpointId', 'credentialId', 'receiptId',
   'originalOrganizationId',
   'componentProjectId', 'projectRecordId', 'previousProjectRecordId',
   'customerEngineerAssignmentId', 'previousCustomerEngineerAssignmentId',
@@ -55,6 +56,7 @@ const SAFE_METADATA_KEYS = new Set([
   'componentProjectStage', 'previousComponentProjectStage', 'previousStatus',
   ...configurationDateKeys, 'responsibility', 'bindingVersion', 'previousResourceVersion',
   'contentType',
+  'returnReceipt',
   'eventKey',
   'fileId',
   'organizationId',
@@ -114,6 +116,7 @@ export class AuditLogService {
   }
 
   private isSafeConfigurationValue(key: string, value: Prisma.InputJsonValue | null | undefined): boolean {
+    if (key === 'returnReceipt') return typeof value === 'boolean';
     if (Object.hasOwn(configurationTextLimits, key)) {
       if (value === null && ['productCategory', 'previousProductCategory', 'productSubcategory', 'previousProductSubcategory', 'componentName', 'previousComponentName'].includes(key)) return true;
       return typeof value === 'string' && value === value.trim() && value.length > 0 && [...value].length <= configurationTextLimits[key]!;

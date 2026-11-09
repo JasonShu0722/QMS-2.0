@@ -58,6 +58,9 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
       if (rejectConfiguration) throw new Error('TEST_CONFIGURATION_ROLLBACK');
       return { module: 'platform-configuration', changed: 0, pendingConfiguration: 0 };
     } });
+    registry.register({ module: 'api-integration', async apply() {
+      return { module: 'api-integration', changed: 0, pendingConfiguration: 0 };
+    } });
     app = (await Test.createTestingModule({
       controllers: [AdminUserLifecycleController],
       providers: [PrismaService, AuditLogService, AdminMutationService, ESignatureService, AdminUserLifecycleService, SessionService,
@@ -166,7 +169,7 @@ describe('REQ0031 unit D: real identity lifecycle, HTTP and PostgreSQL with neut
     const signedBefore = await prisma.$queryRaw`SELECT * FROM approval_signatures WHERE id = ${approvalId}::uuid`;
     const key = randomUUID();
     const response = await remove(f, target, key).expect(200);
-    expect(response.body).toMatchObject({ userId: target.id, deleted: true, effects: [{ module: 'workflow' }, { module: 'platform-configuration' }, { module: 'identity', changed: 1, pendingConfiguration: 0 }] });
+    expect(response.body).toMatchObject({ userId: target.id, deleted: true, effects: [{ module: 'workflow' }, { module: 'platform-configuration' }, { module: 'identity', changed: 1, pendingConfiguration: 0 }, { module: 'api-integration', changed: 0, pendingConfiguration: 0 }] });
     const deleted = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
     expect(deleted).toMatchObject({ username: `deleted.${target.id.replaceAll('-', '')}`, email: null, fullName: target.fullName, organizationId: target.organizationId, status: 'DISABLED', configurationRequired: false, securityVersion: target.securityVersion + 1, credentialVersion: target.credentialVersion + 1, mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null });
     expect(deleted.deletedAt).toBeInstanceOf(Date);

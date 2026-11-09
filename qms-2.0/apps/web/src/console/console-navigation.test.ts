@@ -47,6 +47,17 @@ it('allows an explicitly assigned service specialist without exposing queue mana
   expect(consoleRoute('/console/services', value).status).toBe('allowed');
   expect(consoleRoute('/console/outbox', value).status).toBe('forbidden');
 });
+it.each(['integration:read', 'integration:receipts:read'])('allows the receiving console for the explicit %s permission', permission => {
+  const value = context(module('api-integrations', [permission]));
+  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/api-integrations']);
+  expect(consoleRoute('/console/api-integrations', value)).toMatchObject({ status: 'allowed', module: value.modules[0] });
+  expect(consoleRoute('/console/users', value).status).toBe('forbidden');
+});
+it('does not expose the receiving page without a read capability', () => {
+  const value = context(module('api-integrations', ['integration:manage']));
+  expect(consoleNavigation(value)).toEqual([]);
+  expect(consoleRoute('/console/api-integrations', value).status).toBe('forbidden');
+});
 it('filters every master-data child using its own concrete permission', () => {
   const value = context(module('master-data', ['material-master:write']));
   expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/master-data/materials']);

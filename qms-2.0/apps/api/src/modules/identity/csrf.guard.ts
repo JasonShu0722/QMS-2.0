@@ -1,5 +1,7 @@
 import { CanActivate, ExecutionContext, HttpException, Injectable } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
+import { Reflector } from '@nestjs/core';
+import { GUARDS_METADATA } from '@nestjs/common/constants.js';
 import type { Request } from 'express';
 import { CSRF_COOKIE, parseCookie } from './session.service.js';
 
@@ -7,9 +9,14 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector = new Reflector()) {}
+
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
+    const machineGuard = this.reflector.get<unknown>('qms:inbound-machine-auth', context.getHandler());
+    const guards = this.reflector.get<unknown[]>(GUARDS_METADATA, context.getHandler()) ?? [];
+    if (typeof machineGuard === 'function' && guards.includes(machineGuard)) return true;
 
     const cookieToken = parseCookie(request.headers.cookie, CSRF_COOKIE);
     const submitted = request.headers['x-csrf-token'];

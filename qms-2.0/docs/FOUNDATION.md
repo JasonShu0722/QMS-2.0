@@ -1,5 +1,19 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0036 API 接收一期（2026-11-09，本地候选）
+
+关联 Issue97 / `codex/req0036-api-inbound` / 预留 V0.0.40，源码基线 `c198b8b6dfe6506cc6588884cbc2a59b8e96ff68`，143 条迁移链。独立 A/B/C/D 规格后质量及最终公共接缝限定复审已通过。完整命令、失败和最终覆盖见[一期计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)；本节不代表完整阶段验收、发布或真实公司系统联调。
+
+本地 Node24.21.0 / pnpm11.19.0；一次性 PostgreSQL18 在 loopback55636，受保护对象演练使用本任务 MinIO55637；API/Worker、Nginx HTTP5186/HTTPS5187、外部临时证书及 Chromium 均为本任务资源，不连接55440。重测试/构建串行、单worker、Node堆上限1GiB；未修改Windows/WSL配置。
+
+- 已核原始日志：配置/凭据27、接收/竞争20、检索/保留25、Web与导航43、密钥轮换5项完整通过，零skip。旧 red、夹具首FAIL、锁等待返修、SQL日期类型推断和清理批量返修均保留，不用最新绿色覆盖历史。
+- 数据保护完整脚本8项通过，实际恢复加密正文、接口及回执配置、凭据校验/创建人和容量。首负例因错误容器名得到UNAVAILABLE而非MISMATCH，修为本任务真实非PG容器后完整复验；小样本不是256MiB/1GiB全库容量证明。
+- 网关混合大小写可绕专用规则的P2已取得真实配置RED，改两模板为不区分大小写regex并复审通过；实际HTTP/HTTPS均401、两种大小写超限413、混合大小写突发429，临时CA验证及HTTP308保路径/端口成立，未关闭TLS验证。
+- 邻近回归首7文件102项98PASS/4FAIL为旧fixture缺第四生命周期owner/完整effects快照；同步五个直接调用fixture、保留完整数组和原断言后，四文件通过；余一真实对象PUT因原bucket未初始化失败，真实init-storage后该完整文件及真实Worker进程两文件40项通过。没有放宽生产registry或Mock对象存储。
+- 最终接收模块八完整文件76/76 PASS，53.884s；真实浏览器两完整场景2PASS/21.7s，包括配置、一次性凭据、201/200/204、重试、来源检索、XSS纯文本及320/390/1440浅深几何。初即刻布局判断FAIL后改为默认预算轮询原无溢出条件，未改CSS/动效/预算；不把局部表格横滚当全页溢出。截图已生成但本机二次读取无法解码，未人工目视审图，物理设备/人工视觉仍待验。
+
+Git外原始证据位于 `D:/WorkSpace/QMS-2.0-local/req0036-20261109/`。PR检查、生产部署、生产配权/启用、真实来源协议及吞吐、匹配容量恢复、真实物理设备/人工验收分别待核；飞书最终回读因user令牌缺失失败，没有代写状态或回填。
+
 ## REQ0035固定Logo追加机器发布（2026-11-06，待实页复验）
 
 [PR96](https://github.com/JasonShu0722/QMS-2.0/pull/96)候选4f96ba7与mainbadd14b08275d29b361e596e2184d74e649b5acf整树相同，负责人明确继续合并部署；run42200502252与main42205932537各attempt1、各24同源success，各16份JSON234文件3296项全PASS无漏重/skip/pending/runtimeErrors。首42186914067真实integration2无序快照FAIL/派生FAIL与Web绿色区别、fix8真实PG17PASS及额外全spec346旧诊断FAIL均保留，不rerun刷绿或修业务授权。
