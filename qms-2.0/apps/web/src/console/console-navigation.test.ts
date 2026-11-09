@@ -58,6 +58,12 @@ it('does not expose the receiving page without a read capability', () => {
   expect(consoleNavigation(value)).toEqual([]);
   expect(consoleRoute('/console/api-integrations', value).status).toBe('forbidden');
 });
+it('shows API integration management for the projected platform administrator capability', () => {
+  const value = { ...context(module('api-integrations', ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read'])), hasPlatformAdministrator: true };
+  expect(consoleNavigation(value).find(item => item.path === '/console/api-integrations')).toMatchObject({ label: 'API接口管理', group: 'configuration', module: 'api-integrations' });
+  expect(consoleRoute('/console/api-integrations', value)).toMatchObject({ status: 'allowed', module: value.modules[0] });
+  expect(consoleRoute('/console/api-integrations', { ...context(), hasPlatformAdministrator: true }).status).toBe('forbidden');
+});
 it('filters every master-data child using its own concrete permission', () => {
   const value = context(module('master-data', ['material-master:write']));
   expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/master-data/materials']);

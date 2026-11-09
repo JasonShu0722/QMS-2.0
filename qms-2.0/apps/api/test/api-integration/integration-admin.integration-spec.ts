@@ -81,8 +81,39 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     await create(fixtureValue.cookie, body).expect(201); await create(fixtureValue.cookie, body).expect(409);
     const other = await fixture(); await create(other.cookie, body).expect(201);
   });
-  it('does not grant integration management from a marker or an unrelated permission', async () => {
-    for (const fixtureValue of [await fixture([]), await fixture(['platform:admin']), await fixture(['integration:read']), await fixture(permissions, 'SUPPLIER')]) await create(fixtureValue.cookie).expect(403);
+  it('does not grant integration management to ordinary unprivileged, read-only or supplier accounts', async () => {
+    for (const fixtureValue of [await fixture([]), await fixture(['integration:read']), await fixture(permissions, 'SUPPLIER')]) await create(fixtureValue.cookie).expect(403);
+  });
+  it('provides console access and endpoint and credential management from the platform marker alone', async () => {
+    const administrator = await fixture(['platform:admin']);
+    const assigned = await prisma.userRole.findMany({ where: { userId: administrator.user.id }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    expect(assigned.flatMap(entry => entry.role.permissions.map(({ permission }) => permission.code))).toEqual(['platform:admin']);
+    const capabilities = ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read'];
+    const context = (await request(app.getHttpServer()).get('/api/v1/admin/console/context').set('Cookie', administrator.cookie).expect(200)).body;
+    expect(context.hasPlatformAdministrator).toBe(true);
+    expect(context.modules.find((item: { key: string }) => item.key === 'api-integrations')).toEqual({
+      key: 'api-integrations', organizationId: administrator.organization.id, scope: 'TARGET', coverage: 'ORGANIZATION', permissions: [...capabilities].sort(),
+    });
+    const endpoint = (await create(administrator.cookie).expect(201)).body;
+    await request(app.getHttpServer()).get(`${path}/${endpoint.id}`).set('Cookie', administrator.cookie).expect(200);
+    const credentialPath = `${path}/${endpoint.id}/credentials`;
+    const credential = (await request(app.getHttpServer()).post(credentialPath).set('Cookie', administrator.cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', randomUUID()).send({ name: 'Default administrator credential' }).expect(201)).body;
+    const credentials = (await request(app.getHttpServer()).get(credentialPath).set('Cookie', administrator.cookie).expect(200)).body;
+    expect(credentials.items).toEqual([expect.objectContaining({ id: credential.id })]);
+    expect(credentials.items.every((item: object) => !Object.hasOwn(item, 'secret'))).toBe(true);
+    await request(app.getHttpServer()).post(`${credentialPath}/${credential.id}/revoke`).set('Cookie', administrator.cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', randomUUID()).send({}).expect(201);
+    await request(app.getHttpServer()).get('/api/v1/admin/integrations/receipts').set('Cookie', administrator.cookie).expect(200);
+    const target = await fixture([]);
+    const body = { ...input(), organizationId: target.organization.id };
+    const targetEndpoint = (await create(administrator.cookie, body).expect(201)).body;
+    expect(targetEndpoint.organizationId).toBe(target.organization.id);
+    const supplier = await fixture([], 'SUPPLIER');
+    await request(app.getHttpServer()).get('/api/v1/admin/console/context').query({ organizationId: supplier.organization.id }).set('Cookie', administrator.cookie).expect(403);
+    await create(administrator.cookie, { ...input(), organizationId: supplier.organization.id } as typeof body).expect(403);
+    await prisma.organization.update({ where: { id: target.organization.id }, data: { status: 'DISABLED' } });
+    const disabledContext = (await request(app.getHttpServer()).get('/api/v1/admin/console/context').query({ organizationId: target.organization.id }).set('Cookie', administrator.cookie).expect(200)).body;
+    expect(disabledContext.modules.some((item: { key: string }) => item.key === 'api-integrations')).toBe(false);
+    await create(administrator.cookie, body).expect(403);
   });
   it('denies cross-organization reads and writes even with a valid resource identifier', async () => {
     const first = await fixture(); const second = await fixture();

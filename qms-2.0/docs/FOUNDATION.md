@@ -1,5 +1,11 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 fix4 Admin默认权限与入口（2026-11-09，本地验证）
+
+负责人提供0181a89上线后的真实截图并明确要求Admin默认可用。根因是五项integration权限被平台管理员投影显式排除，导致context无模块、侧栏隐藏；本次修订为有效platform:admin沿现有内部组织投影获得五权。生产仅移除catalog一项排除，普通岗位仍显式授权，不按用户名特判；观测权限例外、供应商/停用/失效来源、机器认证及人员CSRF/近期认证/审计保持。政策同步设计、API-INTEGRATION与SECURITY，见[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
+
+真实RED为unit1FAIL/52PASS及PG1FAIL/101PASS，均精确对应缺API能力；最小修复后四完整unit53/53、四完整真实PG102/102、导航22/22、API build退出0。平台marker-only浏览器两完整场景2/2 PASS、39.1s，明确无integration直接grant并从真实侧栏进入，完成配置/凭据/收件和主题几何。独立SPEC后QUALITY均PASS；本地真实API/Vite代理不替代本轮未重跑的HTTPS与生产Admin实页，网关及DTO未改。原始日志在Git外 `req0036-20261109/fix4/`。新PR/main及部署尚待核验，下方0181a89发布事实保留，不当作fix4已上线。
+
 ## REQ-0036 API 接收一期（2026-11-09，机器发布已核验）
 
 最终发布：PR98与修复PR99均已按负责人授权合并。PR99候选8d761c02与main `0181a899eee277585eb38448ce956c147572d518` 整Git树一致；PR CI42604558840及[main CI42606383814](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42606383814)各attempt1、各24项精确同源全部success，候选Codex Review completed且无发现。[自动deploy42607996737](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42607996737)/job129128768750 completed/success，日志明确来源CI42606383814、迁移前加密快照先于两条新增迁移，143链全部成功；API/Worker/Web镜像同0181a89，API healthy，Worker READY及原子deployed-sha由同版脚本强制成功出口支持，未另SSH读回。不是skipped或superseded。

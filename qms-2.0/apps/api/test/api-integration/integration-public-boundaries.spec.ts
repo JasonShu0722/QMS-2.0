@@ -19,10 +19,10 @@ class RawReceiver {
   ordinary(@Body() body: unknown) { return body; }
 }
 
-it('requires explicit integration grants and never extends existing platform grants', () => {
+it('includes integration capabilities in explicit platform administrator projections', () => {
   for (const code of ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read']) {
     expect(ACTIVE_PERMISSION_CODES).toContain(code);
-    expect(INTERNAL_PLATFORM_PERMISSION_CODES).not.toContain(code);
+    expect(INTERNAL_PLATFORM_PERMISSION_CODES).toContain(code);
   }
 });
 

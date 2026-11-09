@@ -52,12 +52,12 @@ test.beforeAll(async () => {
   fixtureRoleId = assignment.roleId;
   const catalog = await prisma.permission.findMany({ where: { code: { in: permissions } } });
   expect(catalog).toHaveLength(permissions.length);
-  for (const permission of catalog) {
-    const where = { roleId_permissionId: { roleId: fixtureRoleId, permissionId: permission.id } };
-    if (!await prisma.rolePermission.findUnique({ where })) {
-      await prisma.rolePermission.create({ data: where.roleId_permissionId });
-      addedPermissionIds.push(permission.id);
-    }
+  expect(await prisma.rolePermission.count({ where: { roleId: fixtureRoleId, permission: { code: { in: permissions } } } })).toBe(0);
+  const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+  const where = { roleId_permissionId: { roleId: fixtureRoleId, permissionId: marker.id } };
+  if (!await prisma.rolePermission.findUnique({ where })) {
+    await prisma.rolePermission.create({ data: where.roleId_permissionId });
+    addedPermissionIds.push(marker.id);
   }
 });
 
@@ -103,7 +103,11 @@ async function openIntegrations(page: Page) {
   const [authenticated] = await Promise.all([login, page.getByRole('button', { name: '登录', exact: true }).click()]);
   await completeMfa(page.request, authenticated, 'local.internal', page);
   await expect(page).toHaveURL(/\/app\/workbench$/);
-  await page.goto('/console/api-integrations');
+  await page.goto('/console');
+  const entry = page.getByRole('link', { name: 'API接口管理', exact: true });
+  await expect(entry).toBeVisible();
+  await entry.click();
+  await expect(page).toHaveURL(/\/console\/api-integrations(?:\?|$)/);
   const section = page.getByRole('region', { name: 'API接口管理', exact: true });
   await expect(section).toBeVisible();
   return section;
