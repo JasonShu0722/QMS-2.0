@@ -2,6 +2,8 @@
 
 ## REQ-0036 API 接收一期（2026-11-09，本地候选）
 
+获准集成发布：负责人明确继续合并部署后，PR98已squash main042f7d9，与审候选48d403d整树相同。main42597522794 attempt1实际22成功/2失败，唯一实质为平台权限目录case超过5秒，foundation派生；自动deploy42599373515 skipped、未上线。fix3仅将该case完整目录逐条SQL往返改为等价单条查询，原全正反断言/5秒预算不变；原本地基线1PASS/28按名过滤不是RED，真实CI失败保留，改后真实PG原完整29/29与SPEC后QUALITY PASS。具体CI宿主慢因未证，按计划11节继续新修复PR/新main门禁，不重跑旧run刷绿。
+
 fix2接续：负责人要求补查并指出新Review，实时确认6ef另有组织私表P1和90天分页P2，补查同时发现协议等价表示与失败配置追溯P2。前述24绿只覆盖6ef，不能据此忽略Review。已改为组织公开事务读取模型、保固定分页区间并按当前保留策略过滤、统一raw参数路由/UTF8和identity等价头，以及实际评估配置快照。真实RED后接收模块9完整文件101/101 PASS、原parser/错误邻近两完整文件23/23 PASS，独立SPEC后QUALITY PASS；API lint/build及契约check通过，当前V0.0.40-fix2准备更新同PR98，新head CI及Review均待单独核验。
 
 PR98 / dfc7ba79首轮CI42580718216实际24任务20成功/4失败：api-unit六新审计动作缺中文标签及旧Response夹具缺setHeader，integration1/4缺QMS_PUBLIC_BASE_URL导致23项创建503，foundation为派生失败；Web16分片均成功。Codex Review另发现大写收件UUID拼AAD导致解密503。V0.0.40-fix1已最小返修，unit五完整文件106PASS、PG三完整文件37PASS、SPEC后QUALITY PASS；新head完整CI待推送核验，不能用本地或首轮Web绿称PR通过。详细失败/根因/资源限制见计划第9节。

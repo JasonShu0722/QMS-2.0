@@ -83,9 +83,18 @@ describe('REQ0030 explicit platform administrator on PostgreSQL', () => {
   it('keeps ORM/SQL parity for the entire unified directory and future organizations without adding memberships', async () => {
     const registered = await prisma.permission.findMany({ where: { code: { in: INTERNAL_PLATFORM_PERMISSION_CODES } } });
     expect(await ormCodes()).toEqual(registered.map(p => p.code).sort());
-    for (const permission of await prisma.permission.findMany()) {
-      expect(await feature(permission.code)).toBe(INTERNAL_PLATFORM_PERMISSION_CODES.includes(permission.code));
-    }
+    const directory = await prisma.permission.findMany();
+    const expected = directory.map(permission => ({
+      code: permission.code,
+      allowed: INTERNAL_PLATFORM_PERMISSION_CODES.includes(permission.code),
+    }));
+    const actual = await prisma.$queryRaw<{ code: string; allowed: boolean }[]>(Prisma.sql`
+      SELECT directory_permission.code,
+        ${featurePredicate(Prisma.sql`${f.user.id}::uuid`, Prisma.sql`${f.target.id}::uuid`, Prisma.sql`directory_permission.code`)} AS allowed
+      FROM permissions directory_permission
+    `);
+    expect(actual.sort((left, right) => left.code.localeCompare(right.code)))
+      .toEqual(expected.sort((left, right) => left.code.localeCompare(right.code)));
     for (const code of ['workbench:read', 'quality-data:metrics:read', 'supplier-quality:responses:write', 'not:registered']) expect(await feature(code)).toBe(false);
     const future = await f.organization();
     expect(await feature('workflow:act', future.id)).toBe(true);

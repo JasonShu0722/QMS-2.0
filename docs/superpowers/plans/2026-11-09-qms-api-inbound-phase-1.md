@@ -13,15 +13,15 @@
 | 摘要项 | 当前事实 |
 | --- | --- |
 | 最后核对与范围 | 2026-11-09，Asia/Taipei；负责人更新状态并明确“继续推进”，user 实时回读 rev363 开发中/P0，目标/五字段范围保持，提出人已由负责人改为舒子杰 |
-| 批准与动作授权 | 当前聊天对一期的直接批准及状态更新接续，覆盖实现、验证、独立审查及按持续流程建Issue/验证后PR；不含合并发布、生产配权/凭据分发/接口启用。阶段/提出人/优先级本轮不代改 |
+| 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
 | 本次追加范围 | 负责人要求的逐接口 `returnReceipt` 已实现，默认开启；关闭成功返回 204 空正文，失败仍返回错误，内部收件与防重复保持；真实HTTP及浏览器主链已覆盖双向语义 |
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98) / `codex/req0036-api-inbound`。V0.0.40首提交dfc7ba79、fix1的6efba74已推送；本地88dbf3e仅CI档案，运行树同6ef。main仍badd14b；本次同范围补查及Review返修预留V0.0.40-fix2，沿用同PR |
+| 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）已squash为main042f7d9dd947464369ec079747f92f4b27314882，整tree与审候选48d403d一致。main首轮门禁超时后，按流程从origin/main隔离codex/req0036-release-fix3，预留V0.0.40-fix3，另建关联修复PR；旧分支档案f5b00d8保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 6ef的CI42584067733严格24/24成功仍是该版本事实，但最新Codex Review另有组织私表P1与90天分页P2，补查还确认协议等价路径/头部与失败配置追溯问题，不能以旧CI放行。本批fix2已最小实现，真实RED后完整接收模块9文件101/101 PASS，独立SPEC后QUALITY PASS；API类型/构建/契约及治理复验接续，尚未提交新head |
+| 当前检查点 | PR98最终head48d403d的CI42592556853严格24/24及同headReview clear已核；负责人授权后已合并042。main CI42597522794首轮22成功2失败，唯一实质为旧平台权限目录case超过5s，foundation派生；自动deploy42599373515 skipped、未部署。fix3只将首case全目录串行SQL改为等价批量查询，保原5s和所有断言，真实PG完整29/29与独立SPEC/QUALITY PASS，治理/新PR接续 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 主代理完成fix2门禁后更新同PR98，等待并核对最新head的完整CI及Codex Review，二者分别结论；不再只核CI漏核新Review。没有合并发布/生产配权或启用授权；飞书token_missing未回读/代写，Issue97保持开放 |
+| 下一动作与负责人 | 主代理按当前合并部署授权推进关联fix3 PR；新head门禁及审查通过后合并，逐版本核main完整CI和自动deploy，再取迁移前加密快照、143链、同SHA服务健康/Worker、公网目标证据。不以重跑刷绿/放宽timeout代修复。飞书token_missing未回读/代写，Issue97保持开放 |
 
 ## 1. 交付单元、映射与范围
 
@@ -289,3 +289,15 @@ PR说明已写入四项修复、真实首FAIL、最新HEAD和限制，Codex Revi
 真实RED：`fix2-owner-red.log`静态源所有权5FAIL/11PASS，明确不代PG；`fix2-boundaries-red.log`三文件定向6FAIL/1PASS/21按名称过滤，包含老快照400、encoded rawfalse、v1错误记v2和三种合法头415，非法charset/gzip负例原本PASS。随后`fix2-integration-green.log`9个完整文件101/101 PASS、0skip、54.076s；含原锁等待/撤销/停用/强删/清理竞争、编码首收与原路径同号重试、原字节摘要、跨页固定参数和实际到期行排除。
 
 重新建立一次性PG18/55636容器`qms-req0036-fix2-pg`，label=REQ0036-FIX2、512MiB/1CPU，143迁移/seed成功；没有恢复扫描/对象/邮件或连接55440。API源码仅内部port、参数处理及私有Symbol/查询校验变化，无DTO/迁移/Web/网关/备份语义变化；对应旧证据按影响复用，最新头全量CI另核。真实来源与人工/物理设备、生产启用仍未执行。
+
+## 11. 获准合并部署与 main 门禁 fix3（2026-11-09）
+
+负责人明确“没问题了就继续合并部署”。合并前实时回读PR98仍open/mergeable、head48d403d/base badd14b/标题V0.0.40正确，CI42592556853 completed/success，bot同head completed/has_any_findings=false/has_unresolved_findings=false；沿用未变化的精确24任务及本地SPEC/QUALITY证据。以expected_head_sha约束squash为`042f7d9dd947464369ec079747f92f4b27314882`，GitHub原始git commit/tree独立比对整树相同（`release-042f7d9/merge-tree-verified.json`）。没有合并本地仅档案f5b00d8或用户4dirty。
+
+main push [42597522794](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42597522794) attempt1精确24任务全部结束：22success/2failure，API及16个Web均成功、PG2/3/4成功。唯一实质FAIL：PG1 job129093809666，`platform-administrator.integration-spec.ts:83` 的全权限目录ORM/SQL parity case超过默认5000ms；54 suites中1FAIL/53PASS、777项1FAIL/776PASS，未发现API收件断言失败。foundation129099637727短日志明确`integration must be success`，为派生失败。自动deploy42599373515/job129099811950 skipped，未执行SSH/部署。原始状态存`release-042f7d9/main-attempt1-final.json`，失败摘要同目录；插件长日志中段截断，未称完整原始日志已下载。
+
+源码确认该case逐个permission串行await真实SQL，往返次数随完整目录大小增加，本期目录增加5项后此路径仍须完整覆盖。具体CI宿主为什么迟缓未证实，不定性为偶发，也不声称新增5项是唯一原因。最小技术修复仅该测试首case：独立ORM全目录构建`{code,allowed}`期望，一条真实SQL对完整permissions表逐行调用原featurePredicate；使用无冲突外层alias，双方同JS排序后完整深比较，保留数量/每个code/每个正负结果。原registered/ormCodes、四项否定探针、未来组织、无新增membership、sources/platformScope及其余28case、所有超时预算不变；不改生产鉴权、CI或API。
+
+从origin/main042建立`codex/req0036-release-fix3`，用户4dirty原样携带且Git外保存diff，原feature分支档案保留；沿用Issue97，不在已合并PR98上继续推送。`release_parity_fix`独占一个测试文件；`release_fix3_spec`SPEC PASS后`release_fix3_quality`QUALITY PASS，无弱化/新缺陷。真实CI为RED；本地同原case基线1PASS/28按名称过滤，Jest4.376s，不冒称本地RED。改后原完整文件29/29 PASS/0skip，Jest10.264s，不将原单例与新全文件耗时相除声称加速。
+
+本地PowerShell一次CoreCLR/GC初始化失败，未诊断为确定内存或硬件故障；改用cmd与显式Node24.21轻量命令。实际可用内存核5.67GiB后，才建立仅本任务PG18/55636（label REQ0036-FIX3、512MiB/1CPU），143迁移/seed真实成功；Node1GiB单worker，未恢复全量服务/并发或修改系统配置。Git外Node launcher继承同任务配置并核版本/非55440，所有秘密仅进子进程环境不输出。修复后的新PR、精确新main、自动部署与公网验证仍待完成，不以PR旧绿或同树推断main已过。
