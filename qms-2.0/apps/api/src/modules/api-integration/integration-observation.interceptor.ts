@@ -8,7 +8,7 @@ import { PLATFORM_ERROR_CODES } from '../../common/contracts/platform-error.js';
 import { DataExchangeRegistryService, type DataExchangeSourceHandle } from '../system-management/data-exchange-registry.service.js';
 import { DataExchangeObservationService } from '../system-management/data-exchange-observation.service.js';
 import { INBOUND_IDENTITY, INBOUND_MACHINE_AUTH, type InboundRequest } from './inbound.guard.js';
-import { INBOUND_RESULT } from './inbound.dto.js';
+import { INBOUND_CONFIGURATION, INBOUND_RESULT, type InboundConfigurationContext } from './inbound.dto.js';
 import { IntegrationReceiptService, type IntegrationAttemptInput } from './integration-receipt.service.js';
 
 @Injectable()
@@ -36,7 +36,7 @@ export class IntegrationObservationInterceptor implements NestInterceptor {
     );
   }
 
-  private async capture(request: InboundRequest, elapsed: number, error?: unknown): Promise<void> {
+  private async capture(request: InboundRequest & InboundConfigurationContext, elapsed: number, error?: unknown): Promise<void> {
     const identity = request[INBOUND_IDENTITY];
     if (!identity) return;
     try {
@@ -45,13 +45,13 @@ export class IntegrationObservationInterceptor implements NestInterceptor {
       const reportedCode = response && typeof response === 'object' && 'code' in response ? response.code : undefined;
       const statusCode = result?.statusCode ?? (error instanceof HttpException ? error.getStatus() : 503);
       const reasonCode = !result ? statusCode>=500 ? 'INTERNAL_ERROR' : typeof reportedCode === 'string' && PLATFORM_ERROR_CODES.includes(reportedCode as never) ? reportedCode : `HTTP_${statusCode}` : undefined;
-      const endpoint = result ? undefined : (await this.prisma.$queryRaw<{ version: number; return_receipt: boolean }[]>`SELECT version,return_receipt FROM integration_endpoints WHERE id=${identity.endpointId}::uuid AND organization_id=${identity.organizationId}::uuid`)[0];
-      if (!result && !endpoint) throw new Error('INTEGRATION_ATTEMPT_SCOPE_UNAVAILABLE');
+      const configuration = request[INBOUND_CONFIGURATION] ?? (result ? undefined : (await this.prisma.$queryRaw<{ version: number; returnReceipt: boolean }[]>`SELECT version,return_receipt AS "returnReceipt" FROM integration_endpoints WHERE id=${identity.endpointId}::uuid AND organization_id=${identity.organizationId}::uuid`)[0]);
+      if (!result && !configuration) throw new Error('INTEGRATION_ATTEMPT_SCOPE_UNAVAILABLE');
       const header = request.headers['idempotency-key'];
       const messageId = result?.receipt.messageId ?? (typeof header==='string' && /^[A-Za-z0-9._:-]{8,128}$/.test(header) ? header : undefined);
       const attempt: IntegrationAttemptInput = { traceId: requestTraceId(request), organizationId: identity.organizationId, endpointId: identity.endpointId, credentialId: identity.credentialId,
-        ...(messageId ? { messageId } : {}), ...(result ? { receiptId: result.receipt.receiptId } : {}), configurationVersion: result?.configurationVersion ?? endpoint!.version,
-        returnReceipt: result?.returnReceipt ?? endpoint!.return_receipt, statusCode, outcome: result ? result.receipt.duplicate ? 'DUPLICATE' : 'RECEIVED' : statusCode>=500 ? 'UNKNOWN' : 'REJECTED',
+        ...(messageId ? { messageId } : {}), ...(result ? { receiptId: result.receipt.receiptId } : {}), configurationVersion: result?.configurationVersion ?? configuration!.version,
+        returnReceipt: result?.returnReceipt ?? configuration!.returnReceipt, statusCode, outcome: result ? result.receipt.duplicate ? 'DUPLICATE' : 'RECEIVED' : statusCode>=500 ? 'UNKNOWN' : 'REJECTED',
         ...(reasonCode ? { reasonCode } : {}), durationMs: Math.min(86400000,Math.max(0,Math.round(elapsed))) };
       await this.receipts.recordAttempt(attempt);
       const scope = await this.registry.bindScope(this.handle, identity.organizationId);

@@ -137,6 +137,29 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     await request(app.getHttpServer()).get(`${base}/receipts`).query({ from: new Date(Date.now() - 91 * 86400000).toISOString() }).set('Cookie', item.cookie).expect(400);
     await request(app.getHttpServer()).get(`${base}/receipts`).query({ traceId: 'not-a-uuid' }).set('Cookie', item.cookie).expect(400);
   });
+  it('keeps an aged ninety-day query stable across pages while hiding expired records', async () => {
+    const item = await fixture();
+    const [clock] = await prisma.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+    const now = clock!.now.getTime(), to = new Date(now - 120000).toISOString();
+    const from = new Date(new Date(to).getTime() - 90 * 86400000 + 60000).toISOString();
+    await prisma.integrationReceipt.update({ where: { id: item.receipt.id }, data: { receivedAt: new Date(now - 180000) } });
+    const secondReceiptId = randomUUID(), expiredReceiptId = randomUUID();
+    await prisma.integrationReceipt.createMany({ data: [
+      { id: secondReceiptId, receivedAt: new Date(now - 240000), bodyExpiresAt: new Date(now + 86400000), metadataExpiresAt: new Date(now + 90 * 86400000) },
+      { id: expiredReceiptId, receivedAt: new Date(new Date(from).getTime() + 30000), bodyExpiresAt: new Date(now - 83 * 86400000), metadataExpiresAt: new Date(now - 30000) },
+    ].map(receipt => ({ ...receipt, organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, messageId: randomUUID(), bodyDigest: 'd'.repeat(64), configurationVersion: 1, configurationSnapshot: {}, payloadBytes: 0 })) });
+    const attemptIds = [randomUUID(), randomUUID(), randomUUID()];
+    await prisma.integrationRequestAttempt.createMany({ data: [180000, 240000, 8 * 86400000].map((offset, index) => ({ id: attemptIds[index]!, organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, configurationVersion: 1, returnReceipt: true, statusCode: 201, outcome: 'RECEIVED', durationMs: 1, observedAt: new Date(now - offset) })) });
+    for (const view of ['receipts', 'attempts']) {
+      const expectedIds = view === 'receipts' ? [item.receipt.id, secondReceiptId] : attemptIds.slice(0, 2);
+      for (const page of [1, 2]) {
+        const response = await request(app.getHttpServer()).get(`${base}/${view}`).query({ from, to, page, limit: 1 }).set('Cookie', item.cookie).expect(200);
+        expect(response.body).toMatchObject({ total: 2, page, limit: 1, from, to, items: [{ id: expectedIds[page - 1] }] });
+      }
+    }
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(3);
+    expect(await prisma.integrationRequestAttempt.count({ where: { organizationId: item.organization.id } })).toBe(3);
+  });
   it('does not disclose plaintext when the required audit write fails', async () => {
     const item = await fixture();
     const original = app.get(AuditLogService).record.bind(app.get(AuditLogService));

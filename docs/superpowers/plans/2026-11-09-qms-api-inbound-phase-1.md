@@ -16,12 +16,12 @@
 | 批准与动作授权 | 当前聊天对一期的直接批准及状态更新接续，覆盖实现、验证、独立审查及按持续流程建Issue/验证后PR；不含合并发布、生产配权/凭据分发/接口启用。阶段/提出人/优先级本轮不代改 |
 | 本次追加范围 | 负责人要求的逐接口 `returnReceipt` 已实现，默认开启；关闭成功返回 204 空正文，失败仍返回错误，内部收件与防重复保持；真实HTTP及浏览器主链已覆盖双向语义 |
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98) / `codex/req0036-api-inbound`。V0.0.40首提交dfc7ba79已推送，main仍badd14b，携纯文档归档c198b8b；同范围CI/审查返修沿用V0.0.40-fix1，不新建PR |
+| 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98) / `codex/req0036-api-inbound`。V0.0.40首提交dfc7ba79、fix1的6efba74已推送；本地88dbf3e仅CI档案，运行树同6ef。main仍badd14b；本次同范围补查及Review返修预留V0.0.40-fix2，沿用同PR |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR98最新代码head6efba7485621403aa57a5b4cbc95a8d1c638c350 / CI42584067733 attempt1已24/24全success；主代理用现有evaluateDeployJobs精确核head/run/attempt判full。API163套2381项、四PG分片、独立Worker及Web16分片均通过。fix1本地106unit/37PG与SPEC后QUALITY通过，Codex大写UUID发现已修。首CI20成功4失败真实保留；尚未合并发布/真实来源启用 |
+| 当前检查点 | 6ef的CI42584067733严格24/24成功仍是该版本事实，但最新Codex Review另有组织私表P1与90天分页P2，补查还确认协议等价路径/头部与失败配置追溯问题，不能以旧CI放行。本批fix2已最小实现，真实RED后完整接收模块9文件101/101 PASS，独立SPEC后QUALITY PASS；API类型/构建/契约及治理复验接续，尚未提交新head |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 当前到已获准的PR检查点，负责人决定合并发布后再接续main全量CI、迁移快照/同SHA健康及部署验收；不自动合并、配权或启用来源。最新CI结果仅本地文档归档，避免为记录再次触发同一PR全量CI；交付代码已推送，档案同步状态单列。飞书token_missing未回读/代写，Issue97保持开放 |
+| 下一动作与负责人 | 主代理完成fix2门禁后更新同PR98，等待并核对最新head的完整CI及Codex Review，二者分别结论；不再只核CI漏核新Review。没有合并发布/生产配权或启用授权；飞书token_missing未回读/代写，Issue97保持开放 |
 
 ## 1. 交付单元、映射与范围
 
@@ -272,3 +272,20 @@ A实现者 `/root/implement_config`，B `/root/implement_inbound`，C `/root/imp
 新API单测日志实际163 suites/2381 tests全PASS；PG2为53 suites/547 tests、PG3为53/675、PG4为53/749全PASS，PG1 job成功但主测试总计处于插件长日志中部截断，保持NOT_VISIBLE、不猜总数；该job额外真实compiled Worker为1suite/8tests PASS。16个Web任务均success，本轮未逐份汇总16份JSON的测试总数，不虚报全站case计数。前述本地1GiB完整unit OOM不抹去，也不再阻断由云端完整单测已证明的相同代码。
 
 PR说明已写入四项修复、真实首FAIL、最新HEAD和限制，Codex Review大写UUID问题由真实RED→GREEN与独立SPEC/QUALITY承接，不把本地审查称为GitHub人工批准。源代码已推送；本条CI核验结果作为本地文档归档，不再为无运行变化重新推送触发相同PR全量门禁。用户原四dirty仍保留；本机API、测试/构建及一次性服务均已停下，后续仅销毁已确认本任务资源。合并发布、线上/真实来源/人工验收及Issue关闭/飞书回填均未执行。
+
+## 10. fix2 补查与新 Review（2026-11-09）
+
+负责人要求“看下是否还有别的问题”，并指出Codex Review又有新条目。实时回读确认其针对6efba74：组织私表访问P1与90天分页P2，首轮大写UUID评论已outdated。本轮按既有批准规格与有效证据定向补查，没有重新启动完整设计或扩展业务范围。上轮收尾只核了CI，漏核新提交的Review；本轮必须分别核最新head的CI和Review后才能报告检查点成立。
+
+| 发现 | 证据与实际影响 | 最小修复 |
+| --- | --- | --- |
+| [组织域所有权P1](https://github.com/JasonShu0722/QMS-2.0/pull/98#discussion_r4510668938) | types/inbound及维护/采集/生命周期共5文件直接查锁organizations，违反API AGENTS公开服务/读取模型规则 | 在组织域新增transaction-aware公开readOrganizationRuntime纯读取模型，返回canonical5字段或null；FOR UPDATE由owner执行，各调用方维持原管理/机器错误码和组织→接口→凭据/收件顺序，维护不强求ACTIVE；治理登记依赖 |
+| [90天固定查询翻页P2](https://github.com/JasonShu0722/QMS-2.0/pull/98#discussion_r4510668943) | Web固定from/to，过一分钟from落到滚动DBnow-90d之前，首分页应200实际400 | 仅删除服务端滚动from下界，保日期/顺序/90天跨度/未来上界/分页；Web固定快照不变，metadata到期和请求7天过滤仍按当前DB时间执行 |
+| HTTP等价表示P2 | percent-encoded endpoint UUID被路由解码成同一UUID，却跳过raw parser，实际raw=false；合法quoted UTF8/Identity大小写首收应201实415 | raw挂同Controller参数路径，Guard仍验UUID；保原1MiB、禁解压、普通100k；仅支持JSON UTF8/identity的等价表示，不加依赖/其他charset或压缩 |
+| 失败记录配置追溯P2 | 真实receive按v1拒413后管理员改v2/false，事后采集错误记v2/false，应为v1/true | 请求私有Symbol保存每次锁内实际读取的version/returnReceipt，成功result优先，失败用实际快照；完全没读到接口时才保原fallback上下文，无新表/公有DTO/秘密 |
+
+实现者`fix2_owner_boundary`、`fix2_query_snapshot`、`fix2_wire_and_capture`分配独立文件；主代理最后接inbound/recordAttempt公共owner调用及治理，重命令冻结源码后单worker串行。`fix2_spec`SPEC PASS后`fix2_quality`QUALITY PASS，限定14文件，无新增P1/P2；用户4dirty排除，未顺手修改common security或平台轮换脚本的既有权限内核。
+
+真实RED：`fix2-owner-red.log`静态源所有权5FAIL/11PASS，明确不代PG；`fix2-boundaries-red.log`三文件定向6FAIL/1PASS/21按名称过滤，包含老快照400、encoded rawfalse、v1错误记v2和三种合法头415，非法charset/gzip负例原本PASS。随后`fix2-integration-green.log`9个完整文件101/101 PASS、0skip、54.076s；含原锁等待/撤销/停用/强删/清理竞争、编码首收与原路径同号重试、原字节摘要、跨页固定参数和实际到期行排除。
+
+重新建立一次性PG18/55636容器`qms-req0036-fix2-pg`，label=REQ0036-FIX2、512MiB/1CPU，143迁移/seed成功；没有恢复扫描/对象/邮件或连接55440。API源码仅内部port、参数处理及私有Symbol/查询校验变化，无DTO/迁移/Web/网关/备份语义变化；对应旧证据按影响复用，最新头全量CI另核。真实来源与人工/物理设备、生产启用仍未执行。

@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { BlockList, isIP } from 'node:net';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { AdminActor, AdminTransaction } from '../../common/security/admin-mutation.service.js';
+import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import type { IntegrationEndpointDto } from './integration-admin.dto.js';
 
 export type IntegrationEndpointRow = Omit<IntegrationEndpointDto, 'createdAt' | 'updatedAt' | 'publicUrl'> & { createdAt: Date; updatedAt: Date };
@@ -13,8 +14,7 @@ export function integrationScope(actor: AdminActor): string {
   return actor.scopeOrganizationId ?? actor.organizationId;
 }
 export async function assertIntegrationOrganization(transaction: AdminTransaction, organizationId: string, lock = false): Promise<void> {
-  if (lock) await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR UPDATE`;
-  const organization = await transaction.organization.findUnique({ where: { id: organizationId }, select: { type: true, status: true, deletedAt: true, configurationRequired: true } });
+  const organization = await readOrganizationRuntime(transaction, organizationId, lock);
   if (organization?.type !== 'INTERNAL') integrationError('ORGANIZATION_SCOPE_DENIED', 403);
   if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired) integrationError('ORGANIZATION_DISABLED', 403);
 }

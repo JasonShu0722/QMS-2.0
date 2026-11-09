@@ -2,6 +2,8 @@
 
 ## REQ-0036 API 接收一期（2026-11-09，本地候选）
 
+fix2接续：负责人要求补查并指出新Review，实时确认6ef另有组织私表P1和90天分页P2，补查同时发现协议等价表示与失败配置追溯P2。前述24绿只覆盖6ef，不能据此忽略Review。已改为组织公开事务读取模型、保固定分页区间并按当前保留策略过滤、统一raw参数路由/UTF8和identity等价头，以及实际评估配置快照。真实RED后接收模块9完整文件101/101 PASS、原parser/错误邻近两完整文件23/23 PASS，独立SPEC后QUALITY PASS；API lint/build及契约check通过，当前V0.0.40-fix2准备更新同PR98，新head CI及Review均待单独核验。
+
 PR98 / dfc7ba79首轮CI42580718216实际24任务20成功/4失败：api-unit六新审计动作缺中文标签及旧Response夹具缺setHeader，integration1/4缺QMS_PUBLIC_BASE_URL导致23项创建503，foundation为派生失败；Web16分片均成功。Codex Review另发现大写收件UUID拼AAD导致解密503。V0.0.40-fix1已最小返修，unit五完整文件106PASS、PG三完整文件37PASS、SPEC后QUALITY PASS；新head完整CI待推送核验，不能用本地或首轮Web绿称PR通过。详细失败/根因/资源限制见计划第9节。
 
 最新代码 `6efba7485621403aa57a5b4cbc95a8d1c638c350` 已推送同PR98，[CI42584067733](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42584067733) attempt1实际24/24全success，主代理以原始Actions JSON及既有evaluateDeployJobs核精确SHA/run/attempt/任务集得到full。API163套2381项全PASS，四PG分片、真实Worker和Web16分片均success。原“待核验”句保留提交时点，不代表当前仍失败；首FAIL、局部红绿、本地完整unit OOM均如实保留。最新结果本地归档、不触发无代码变化的再次CI；当前未合并发布、生产启用、人工/真实来源验收或关闭回填。

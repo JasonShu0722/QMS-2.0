@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 
 type RetentionCandidate = { id: string; organization_id: string; endpoint_id: string };
 type LockedReceipt = RetentionCandidate & { payload_ciphertext: string | null; payload_bytes: number; metadata_expired: boolean; body_expired: boolean };
@@ -25,7 +26,7 @@ export class IntegrationRetentionService {
           const purged = await this.prisma.$transaction(async transaction => {
             const endpointIds = [...new Set(candidates.map(candidate => candidate.endpoint_id))].sort();
             const receiptIds = candidates.map(candidate => candidate.id).sort();
-            await transaction.$queryRaw`SELECT id FROM organizations WHERE id=${organizationId}::uuid FOR UPDATE`;
+            await readOrganizationRuntime(transaction, organizationId, true);
             await transaction.$queryRaw(Prisma.sql`SELECT id FROM integration_endpoints WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(endpointIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
             const locked = await transaction.$queryRaw<LockedReceipt[]>(Prisma.sql`SELECT id,organization_id,endpoint_id,payload_ciphertext,payload_bytes,metadata_expires_at<=clock_timestamp() AS metadata_expired,body_expires_at<=clock_timestamp() AS body_expired FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
             const expired = locked.filter(receipt => receipt.metadata_expired || receipt.payload_ciphertext !== null && receipt.body_expired);

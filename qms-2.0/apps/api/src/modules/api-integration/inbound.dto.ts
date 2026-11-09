@@ -18,3 +18,5 @@ export type InboundResult = Omit<InboundIdentity, 'secretDigest'> & {
 };
 
 export const INBOUND_RESULT = Symbol('INBOUND_RESULT');
+export const INBOUND_CONFIGURATION = Symbol('INBOUND_CONFIGURATION');
+export type InboundConfigurationContext = { [INBOUND_CONFIGURATION]?: { version: number; returnReceipt: boolean } };

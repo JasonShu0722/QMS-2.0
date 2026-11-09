@@ -10,6 +10,7 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { configureHttpBodyParser } from '../../src/http-body-parser.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { IntegrationReceiptService } from '../../src/modules/api-integration/integration-receipt.service.js';
+import { InboundService } from '../../src/modules/api-integration/inbound.service.js';
 import { DataExchangeObservationService } from '../../src/modules/system-management/data-exchange-observation.service.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
@@ -53,6 +54,16 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     expect(exchange).toHaveLength(2); expect(exchange.every(row=>row.correlationId.length===36)).toBe(true);
     expect(exchange.every(row=>(row.stages as {processing:{outcome:string}}).processing.outcome==='NOT_REPORTED')).toBe(true);
   });
+  it('receives raw bytes through an encoded endpoint UUID and retries the original path',async()=> {
+    const item=await fixture(),messageId=randomUUID(),payload=JSON.stringify({private:'界'.repeat(40000)});
+    const encoded=`%${item.endpoint.id.charCodeAt(0).toString(16)}${item.endpoint.id.slice(1)}`;
+    const first=await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(201);
+    const duplicate=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(200);
+    expect(duplicate.body).toEqual({...first.body,duplicate:true});
+    const receipts=await prisma.integrationReceipt.findMany({where:{organizationId:item.organization.id}});
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({id:first.body.receiptId,bodyDigest:createHash('sha256').update(payload).digest('hex')});
+  });
   it('stores authenticated failure metadata but never failed plaintext or untrusted identity',async()=> {
     const item=await fixture(false),messageId=randomUUID();
     await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send('{"private-broken":').expect(400);
@@ -62,6 +73,43 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     expect(JSON.stringify(attempt)).not.toMatch(/private-broken|secretDigest|Bearer/);
     await request(app.getHttpServer()).post(item.path).set('Authorization','Bearer invalid').set('Idempotency-Key',randomUUID()).send({organizationId:item.organization.id}).expect(401);
     expect(await prisma.integrationRequestAttempt.count({where:{organizationId:item.organization.id}})).toBe(1);
+  });
+  it('records the evaluated failure configuration when an endpoint changes before observation',async()=> {
+    const item=await fixture();
+    await prisma.integrationEndpoint.update({where:{id:item.endpoint.id},data:{maxBodyBytes:4}});
+    const inbound=app.get(InboundService),receive=inbound.receive.bind(inbound);
+    jest.spyOn(inbound,'receive').mockImplementation(async (incoming,identity)=> {
+      try { return await receive(incoming,identity); }
+      catch (error) {
+        await prisma.integrationEndpoint.update({where:{id:item.endpoint.id},data:{version:2,maxBodyBytes:1024,returnReceipt:false}});
+        throw error;
+      }
+    });
+    const messageId=randomUUID();
+    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'too large for version one'}).expect(413);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({where:{id:item.endpoint.id}})).toMatchObject({version:2,maxBodyBytes:1024,returnReceipt:false});
+    const attempt=await prisma.integrationRequestAttempt.findFirstOrThrow({where:{organizationId:item.organization.id}});
+    expect(attempt).toMatchObject({messageId,statusCode:413,outcome:'REJECTED',reasonCode:'INTEGRATION_BODY_TOO_LARGE',configurationVersion:1,returnReceipt:true});
+    expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(0);
+  });
+  it.each([
+    ['quoted UTF-8','application/json; charset="utf-8"',undefined],
+    ['Identity casing','application/json','Identity'],
+    ['quoted UTF-8 and Identity casing','application/json; charset="utf-8"','Identity'],
+  ])('accepts equivalent JSON headers for first delivery and retry: %s',async (_label,contentType,contentEncoding)=> {
+    const item=await fixture(),messageId=randomUUID(),payload='{"private":"equivalent headers"}';
+    for (const status of [201,200]) {
+      const outgoing=request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type',contentType!);
+      if (contentEncoding) outgoing.set('Content-Encoding',contentEncoding);
+      await outgoing.send(payload).expect(status);
+    }
+    expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(1);
+  });
+  it('keeps rejecting non-UTF-8 charsets and compressed bodies',async()=> {
+    const item=await fixture();
+    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).set('Content-Type','application/json; charset="iso-8859-1"').send('{"private":"unsupported charset"}').expect(415);
+    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).set('Content-Type','application/json').set('Content-Encoding','gzip').send(Buffer.from('private compressed input')).expect(415);
+    expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(0);
   });
   it.each([400,403,409,503])('does not reverse committed 201 or 204 when an auxiliary writer fails with %s',async status=> {
     for (const returnReceipt of [true,false]) {

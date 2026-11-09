@@ -35,6 +35,8 @@
 
 `POST /api/v1/integrations/inbound/{endpointId}/messages`，正文为未压缩、有效 UTF-8 的 JSON 对象。调用说明提供当前地址和占位凭据示例：
 
+支持可选 UTF-8 charset（包括双引号形式），`Content-Encoding: identity`不区分大小写；其他编码和压缩仍拒绝。合法UUID的百分号编码路径与原路径使用相同原始字节、防重复和正文上限。
+
 ```powershell
 curl --request POST "https://<qms-host>/api/v1/integrations/inbound/<endpointId>/messages" --header "Authorization: Bearer <credentialId>.<secret>" --header "Idempotency-Key: example-message-001" --header "Content-Type: application/json" --data-binary "@payload.json"
 ```
@@ -56,6 +58,7 @@ curl --request POST "https://<qms-host>/api/v1/integrations/inbound/<endpointId>
 - 正文默认保留 7 天，可设 1～30 天；到期即不可读，Worker 每轮最多清理 1000 份。按实际密文字节计账，接口默认 256 MiB、范围 16～1024 MiB；组织合计 1 GiB、100000 份元数据。应用上限不表示已有备份工具能支撑同等生产容量。
 - 元数据及去重键保留 90 天；正文到期后、元数据到期前重试仍按原回执处理，不恢复正文。90 天键到期后允许重新接收。
 - 已收数据及请求结果支持来源编码精确匹配、接口、消息编号、接收编号、追踪号和时间筛选。列表不含正文；正文分权、审计后解密并纯文本显示；受控 GET 均 `Cache-Control: no-store`。
+- 分页固定同一查询时间区间，单次跨度最多90天；查询快照变旧不导致格式拒绝，到期收件及七天外请求结果仍按数据库当前时间排除。失败记录在已实际读取接口配置时保存其评估版本和回执开关，避免被失败后才生效的修改覆盖。
 - 请求结果仅保存已验证身份的受控元数据，保留 7 天、每组织最多 10000 条，超限有界淘汰。未认证请求不归入 URL 或正文声称的组织。采集故障不反转已提交成功响应；数据库不可用、进程终止等可能造成明细缺失，不能据无记录认定没有发生请求。
 - 停用接口/组织、撤销或过期凭据后，历史回执不能绕过鉴权。组织强制删除使用 tombstone，同事务停接口撤凭据，保留历史归属和收件。
 

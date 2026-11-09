@@ -14,6 +14,9 @@ import { GlobalExceptionFilter } from '../../src/common/contracts/global-excepti
 class RawReceiver {
   @Post(':endpointId/messages')
   receive(@Body() body: unknown) { return { raw: Buffer.isBuffer(body), bytes: Buffer.isBuffer(body) ? body.length : 0 }; }
+
+  @Post('ordinary-json')
+  ordinary(@Body() body: unknown) { return body; }
 }
 
 it('requires explicit integration grants and never extends existing platform grants', () => {
@@ -60,4 +63,27 @@ it('bounds the public receiving path in both gateway configurations', () => {
     expect(receiver).toContain('proxy_read_timeout 20s;');
     expect(receiver).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
   }
+});
+
+it('preserves raw bytes for percent-encoded endpoint UUIDs without widening ordinary JSON limits', async () => {
+  const app = (await Test.createTestingModule({ controllers: [RawReceiver] }).compile()).createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
+  configureHttpBodyParser(app);
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  await app.init();
+  try {
+    const endpointId = '2b15bf72-fc50-4ca2-8e42-33a07be072dc';
+    const encoded = `%32${endpointId.slice(1)}`;
+    for (const length of [8, 150000]) {
+      const payload = JSON.stringify({ value: 'x'.repeat(length) });
+      for (const path of [
+        `/api/v1/integrations/inbound/${encoded}/messages`,
+        `/api/v1/Integrations/Inbound/${encoded.toUpperCase()}/Messages/`,
+      ]) {
+        const response = await request(app.getHttpServer()).post(path).set('Content-Type', 'application/json').send(payload).expect(201);
+        expect(response.body).toEqual({ raw: true, bytes: Buffer.byteLength(payload) });
+      }
+    }
+    await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Content-Type', 'application/json').send('x'.repeat(1048577)).expect(413);
+    await request(app.getHttpServer()).post('/api/v1/integrations/inbound/ordinary-json').send({ value: 'x'.repeat(150000) }).expect(413);
+  } finally { await app.close(); }
 });

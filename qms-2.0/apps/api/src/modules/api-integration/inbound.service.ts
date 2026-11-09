@@ -8,7 +8,8 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { encryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import type { InboundIdentity, InboundReceiptDto, InboundResult } from './inbound.dto.js';
+import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
+import { INBOUND_CONFIGURATION, type InboundConfigurationContext, type InboundIdentity, type InboundReceiptDto, type InboundResult } from './inbound.dto.js';
 
 type Endpoint = {
   id: string; organization_id: string; status: string; version: number; return_receipt: boolean;
@@ -57,8 +58,9 @@ function oneHeader(request: Request, name: string, code: string, status: number)
 
 function validBody(request: Request, maximum: number): { bytes: Buffer; text: string } {
   const contentType = request.headers['content-type'];
-  if (typeof contentType !== 'string' || !/^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?\s*$/i.test(contentType)
-    || request.headers['content-encoding'] && request.headers['content-encoding'] !== 'identity') reject('INTEGRATION_CONTENT_TYPE_UNSUPPORTED', 415);
+  const contentEncoding = request.headers['content-encoding'];
+  if (typeof contentType !== 'string' || !/^application\/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i.test(contentType)
+    || contentEncoding && (typeof contentEncoding !== 'string' || contentEncoding.toLowerCase() !== 'identity')) reject('INTEGRATION_CONTENT_TYPE_UNSUPPORTED', 415);
   if (!Buffer.isBuffer(request.body)) reject('INTEGRATION_MESSAGE_INVALID', 400);
   const bytes = request.body as Buffer;
   if (bytes.length > maximum || bytes.length > 1048576) reject('INTEGRATION_BODY_TOO_LARGE', 413);
@@ -101,13 +103,13 @@ export class InboundService {
     } catch (error) { return this.failure(error); }
   }
 
-  private async lockedEndpoint(tx: Transaction, identity: InboundIdentity, address: string): Promise<Endpoint> {
-    const organizations = await tx.$queryRaw<{ status: string; type: string; deleted_at: Date | null; configuration_required: boolean }[]>`SELECT status,type,deleted_at,configuration_required FROM organizations WHERE id=${identity.organizationId}::uuid FOR UPDATE`;
-    const organization = organizations[0];
-    if (!organization || organization.status !== 'ACTIVE' || organization.type !== 'INTERNAL' || organization.deleted_at || organization.configuration_required) reject('INTEGRATION_ACCESS_DENIED', 403);
+  private async lockedEndpoint(tx: Transaction, identity: InboundIdentity, address: string, request: InboundConfigurationContext): Promise<Endpoint> {
+    const organization = await readOrganizationRuntime(tx, identity.organizationId, true);
+    if (!organization || organization.status !== 'ACTIVE' || organization.type !== 'INTERNAL' || organization.deletedAt || organization.configurationRequired) reject('INTEGRATION_ACCESS_DENIED', 403);
     const endpoints = await tx.$queryRaw<Endpoint[]>`SELECT id,organization_id,status,version,return_receipt,max_body_bytes,rate_per_minute,body_retention_days,capacity_bytes,used_body_bytes,allowed_ips
       FROM integration_endpoints WHERE organization_id=${identity.organizationId}::uuid AND id=${identity.endpointId}::uuid FOR UPDATE`;
     const endpoint = endpoints[0];
+    if (endpoint) request[INBOUND_CONFIGURATION] = { version: endpoint.version, returnReceipt: endpoint.return_receipt };
     if (!endpoint || endpoint.status !== 'ENABLED' || !inboundIpAllowed(address, endpoint.allowed_ips)) reject('INTEGRATION_ACCESS_DENIED', 403);
     const credentials = await tx.$queryRaw<Credential[]>`SELECT id,secret_hash,expires_at,revoked_at,clock_timestamp() AS now FROM integration_credentials
       WHERE id=${identity.credentialId}::uuid AND organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid FOR UPDATE`;
@@ -117,11 +119,11 @@ export class InboundService {
     return endpoint!;
   }
 
-  async receive(request: Request, identity: InboundIdentity): Promise<InboundResult> {
+  async receive(request: Request & InboundConfigurationContext, identity: InboundIdentity): Promise<InboundResult> {
     const address = request.ip ?? request.socket.remoteAddress ?? '';
     try {
       const initial = await this.prisma.$transaction(async tx => {
-        const endpoint = await this.lockedEndpoint(tx, identity, address);
+        const endpoint = await this.lockedEndpoint(tx, identity, address, request);
         const windows = await tx.$queryRaw<{ requests: number; retry_after: number }[]>`INSERT INTO integration_rate_windows(endpoint_id,window_started_at,requests)
           VALUES(${identity.endpointId}::uuid,date_trunc('minute',clock_timestamp()),1)
           ON CONFLICT(endpoint_id,window_started_at) DO UPDATE SET requests=integration_rate_windows.requests+1
@@ -137,7 +139,7 @@ export class InboundService {
       if (!/^[A-Za-z0-9._:-]{8,128}$/.test(messageId)) reject('INTEGRATION_MESSAGE_INVALID', 400);
       const body = validBody(request, initial.max_body_bytes), bodyDigest = digest(body.bytes), traceId = requestTraceId(request);
       return await this.prisma.$transaction(async tx => {
-        const endpoint = await this.lockedEndpoint(tx, identity, address);
+        const endpoint = await this.lockedEndpoint(tx, identity, address, request);
         if (body.bytes.length > endpoint.max_body_bytes) reject('INTEGRATION_BODY_TOO_LARGE', 413);
         const times = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
         const now = times[0]!.now;

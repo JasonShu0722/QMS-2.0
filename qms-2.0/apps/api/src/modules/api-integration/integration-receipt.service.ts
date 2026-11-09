@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { assertIntegrationOrganization, integrationError, integrationInteger, integrationScope, lockIntegrationEndpoint } from './integration-types.js';
 import type { IntegrationAttemptDto, IntegrationAttemptPageDto, IntegrationOperationDto, IntegrationPayloadDto, IntegrationReceiptDto, IntegrationReceiptPageDto, IntegrationReceiptQueryDto } from './integration-receipt.dto.js';
 
@@ -35,7 +36,7 @@ export class IntegrationReceiptService {
     const now = clock!.now;
     const to = query.to ? new Date(query.to) : now;
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - days * 86400000);
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to || to.getTime() - from.getTime() > 90 * 86400000 || from.getTime() < now.getTime() - 90 * 86400000 || to.getTime() > now.getTime() + 60000) integrationError('INTEGRATION_INPUT_INVALID', 400);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to || to.getTime() - from.getTime() > 90 * 86400000 || to.getTime() > now.getTime() + 60000) integrationError('INTEGRATION_INPUT_INVALID', 400);
     return { from, to, now, page: integrationInteger(query.page ?? 1, 1, 10000), limit: integrationInteger(query.limit ?? 20, 1, 100) };
   }
 
@@ -109,7 +110,7 @@ export class IntegrationReceiptService {
   async recordAttempt(input: IntegrationAttemptInput): Promise<void> {
     if (![input.traceId,input.organizationId,input.endpointId,input.credentialId].every(value => isUUID(value)) || input.receiptId !== undefined && !isUUID(input.receiptId) || input.messageId !== undefined && !/^[A-Za-z0-9._:-]{8,128}$/.test(input.messageId) || !['RECEIVED','DUPLICATE','REJECTED','FAILED','UNKNOWN'].includes(input.outcome) || !Number.isSafeInteger(input.durationMs) || input.durationMs<0 || input.durationMs>86400000 || !Number.isInteger(input.statusCode) || input.statusCode<100 || input.statusCode>599 || !Number.isInteger(input.configurationVersion) || input.configurationVersion<1) throw new HttpException('Invalid internal request result',400);
     await this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM organizations WHERE id=${input.organizationId}::uuid FOR UPDATE`;
+      await readOrganizationRuntime(tx, input.organizationId, true);
       const [owner] = await tx.$queryRaw<{ id: string }[]>`SELECT e.id FROM integration_endpoints e JOIN integration_credentials c ON c.endpoint_id=e.id AND c.organization_id=e.organization_id WHERE e.organization_id=${input.organizationId}::uuid AND e.id=${input.endpointId}::uuid AND c.id=${input.credentialId}::uuid FOR UPDATE OF e`;
       if (!owner) throw new HttpException('Invalid request result scope',403);
       await tx.$executeRaw`DELETE FROM integration_request_attempts WHERE id IN (SELECT id FROM integration_request_attempts WHERE organization_id=${input.organizationId}::uuid AND observed_at<=clock_timestamp()-INTERVAL '7 days' ORDER BY observed_at,id LIMIT 100)`;
