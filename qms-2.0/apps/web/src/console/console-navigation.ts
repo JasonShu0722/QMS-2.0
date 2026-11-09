@@ -1,11 +1,12 @@
 import type { components } from '@qms/contracts';
-import { Activity, ArrowLeftRight, Building2, ClipboardList, ContactRound, Factory, GitBranch, History, KeyRound, LayoutDashboard, Link2, ListRestart, Package, Server, Settings, Users, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowLeftRight, Building2, ClipboardList, ContactRound, Factory, GitBranch, History, KeyRound, LayoutDashboard, Link2, ListRestart, Package, Plug, Server, Settings, Users, type LucideIcon } from 'lucide-react';
 
 export type ConsoleContext = components['schemas']['ConsoleContextDto'];
 export type ConsoleModule = components['schemas']['ConsoleModuleDto'];
 export type ConsoleNavigationItem = { path: string; label: string; english: string; group: string; icon: LucideIcon; module?: ConsoleModule['key'] };
 const home: ConsoleNavigationItem = { path: '/console', label: '管理首页', english: 'Management home', group: 'workspace', icon: LayoutDashboard };
 const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
+  { path: '/console/api-integrations', label: 'API接口管理', english: 'API integrations', group: 'configuration', icon: Plug, module: 'api-integrations', permissions: ['integration:read', 'integration:receipts:read'] },
   { path: '/console/users', label: '用户与任职', english: 'Users & appointments', group: 'administration', icon: Users, module: 'users' },
   { path: '/console/organizations', label: '组织与岗位', english: 'Organizations & positions', group: 'administration', icon: Building2, module: 'organizations' },
   { path: '/console/supplier-accounts', label: '供应商账号', english: 'Supplier accounts', group: 'administration', icon: KeyRound, module: 'supplier-accounts' },

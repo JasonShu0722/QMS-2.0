@@ -11,11 +11,14 @@ const errors = [
 
 it.each(errors)('preserves the safe status and registered report code for %s, hiding all 5xx details', (suffix, status) => {
   let actualStatus: number | undefined, body: any;
-  const response = { status(value: number) { actualStatus = value; return this; }, json(value: unknown) { body = value; } };
+  const headers = new Map<string, string>();
+  const response = { setHeader(name: string, value: string) { headers.set(name.toLowerCase(), value); return this; }, status(value: number) { actualStatus = value; return this; }, json(value: unknown) { body = value; } };
   const host = { switchToHttp: () => ({ getResponse: () => response, getRequest: () => ({ headers: {} }) }) } as unknown as ArgumentsHost;
   const code = `SUPPLIER_EIGHT_D_REPORT_${suffix}`;
   new GlobalExceptionFilter().catch(new HttpException({ code, message: 'PRIVATE_RAW_SNAPSHOT_OR_STORAGE_DETAILS' }, status), host);
   expect(actualStatus).toBe(status);
+  expect(body.traceId).toEqual(expect.any(String));
+  expect(headers.get('x-request-id')).toBe(body.traceId);
   expect(body.code).toBe(status >= 500 ? 'INTERNAL_ERROR' : code);
   expect(body.message).not.toBe('请求无法处理');
   expect(JSON.stringify(body)).not.toContain('PRIVATE_RAW_SNAPSHOT_OR_STORAGE_DETAILS');

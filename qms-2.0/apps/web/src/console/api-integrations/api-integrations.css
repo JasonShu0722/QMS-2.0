@@ -1,0 +1,20 @@
+.qms-integration-page, .qms-integration-section { min-width: 0; }
+.qms-integration-section { display: grid; gap: 12px; }
+.qms-integration-section small { display: block; color: var(--qms-muted); margin-top: 3px; overflow-wrap: anywhere; }
+.qms-integration-section strong, .qms-integration-instructions code { overflow-wrap: anywhere; }
+.qms-integration-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+.qms-integration-form-grid .ant-input-number { width: 100%; }
+.qms-integration-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+.qms-integration-facts { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--qms-muted); font-size: 12px; }
+.qms-integration-capacity-warning { color: var(--qms-warning); font-weight: 600; }
+.qms-integration-instructions { border-top: 1px solid var(--qms-border); padding-top: 12px; min-width: 0; }
+.qms-integration-instructions pre, .qms-integration-payload { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--qms-surface); padding: 12px; border: 1px solid var(--qms-border); border-radius: 6px; max-height: 420px; overflow: auto; }
+.qms-integration-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.qms-integration-filters label { display: grid; gap: 4px; min-width: 0; }
+.qms-integration-filters .ant-select { width: 100%; }
+.qms-integration-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.qms-integration-detail dt { color: var(--qms-muted); }
+.qms-integration-detail dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .qms-integration-form-grid, .qms-integration-filters, .qms-integration-detail { grid-template-columns: minmax(0, 1fr); }
+}

@@ -15,7 +15,7 @@ export class AdministrativeLifecycleRegistry {
   }
 
   seal() {
-    if (['workflow', 'platform-configuration', 'identity'].some(module => !this.effects.has(module))) {
+    if (['workflow', 'platform-configuration', 'identity', 'api-integration'].some(module => !this.effects.has(module))) {
       throw new Error('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
     }
     this.frozen = true;
@@ -25,7 +25,7 @@ export class AdministrativeLifecycleRegistry {
     if (!this.frozen) throw new Error('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
     const results = [];
     // Cancel pending responsibilities before revoking the identities used to authorize their snapshots.
-    for (const module of ['workflow', 'platform-configuration', 'identity']) results.push(await this.effects.get(module)!.apply(tx, actor, impact));
+    for (const module of ['workflow', 'platform-configuration', 'identity', 'api-integration']) results.push(await this.effects.get(module)!.apply(tx, actor, impact));
     return results;
   }
 }

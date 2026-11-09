@@ -1,5 +1,11 @@
 # 维护、发布与故障处理手册
 
+## API 接收一期运维（REQ-0036，本地候选）
+
+接口管理入口 `/console/api-integrations`；公网地址由 `QMS_PUBLIC_BASE_URL` 配置，新增表/迁移不自动创建接口或赋权。异常时先核 `X-Request-Id`、当前接口状态/凭据有效期、来源 IP、频率和容量，再查接收记录及请求结果；辅助明细可能缺失，不能据缺记录判定未提交。调用方以原消息编号及完全相同字节重试；容量满时拒绝新收件，不能覆盖旧消息释放空间。
+
+泄露时撤销对应机器凭据，必要时停用接口；不要删除历史收件或密钥。Worker 每轮有界清理，管理页显示最近成功/失败事实；故障后核实际正文及接口/组织计账，再恢复流量。轮换及隔离恢复遵循[数据保护](DATA-PROTECTION.md)，恢复后先停用接口，未核对凭据/到期和容量前不对来源开放。调用说明、限制及生产启用清单见[API 接入管理](API-INTEGRATION.md)。
+
 ## REQ-0034 统一业务页面发布（2026-11-01）
 
 V0.0.39含fix3已发布`588089438d1eb2017a938e7844b747faddfb883f`，[PR91](https://github.com/JasonShu0722/QMS-2.0/pull/91)及main各24CI/各231文件3261项Web通过，[部署41245832801](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41245832801)前置加密快照→141链无待执行→同SHA API/Worker/Web健康→成功出口与公网新JS/CSS已分别核实，builder回收1.502GB。Worker READY及deployed-sha由同版脚本强制成功出口支持，未另取SSH marker/原Worker stdout；不是异地灾备或人工业务验收。

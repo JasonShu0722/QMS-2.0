@@ -31,19 +31,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
     const isHttp = exception instanceof HttpException;
     const isOversizedBody = typeof exception === 'object' && exception !== null && 'type' in exception && exception.type === 'entity.too.large' && 'status' in exception && exception.status === 413;
+    const isUnsupportedEncoding = typeof exception === 'object' && exception !== null && 'type' in exception && exception.type === 'encoding.unsupported' && 'status' in exception && exception.status === 415;
     const status = isHttp
       ? exception.getStatus()
-      : isOversizedBody ? HttpStatus.PAYLOAD_TOO_LARGE : HttpStatus.INTERNAL_SERVER_ERROR;
+      : isOversizedBody ? HttpStatus.PAYLOAD_TOO_LARGE : isUnsupportedEncoding ? HttpStatus.UNSUPPORTED_MEDIA_TYPE : HttpStatus.INTERNAL_SERVER_ERROR;
     const code = isHttp && status < 500 ? safeErrorCode(exception) : undefined;
     const message = status >= 500 ? '服务暂时不可用'
       : code ? PLATFORM_ERROR_MESSAGES[code] : '请求无法处理';
+    const traceId = requestTraceId(host.switchToHttp().getRequest?.());
+    response.setHeader('X-Request-Id', traceId);
 
     response.status(status).json(
       toErrorResponse({
         code: status >= 500 ? 'INTERNAL_ERROR' : (code ?? `HTTP_${status}`),
         message,
         fields: status === HttpStatus.BAD_REQUEST && code && exception instanceof ControlledValidationException ? exception.fields : undefined,
-        traceId: requestTraceId(host.switchToHttp().getRequest?.()),
+        traceId,
         cause: exception,
       }),
     );

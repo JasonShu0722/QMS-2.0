@@ -14,6 +14,8 @@ docker compose -f deployment/docker-compose.foundation.yml -f deployment/docker-
 
 ## 应用密钥轮换
 
+REQ-0036 的接收正文也由同一 keyring 保护，AAD 为 `integration:<organizationId>:<endpointId>:<receiptId>`。轮换器按组织→接口→收件顺序锁定，锁后复读密文，已被清理则跳过；到期读取限制和清理由查询服务及 Worker 负责。更新密文时按实际新旧信封字节差调整接口/组织容量，不能只更新正文而留下旧计账。API Key 保存校验值，不作为可解密秘密参与轮换。
+
 `QMS_SECURITY_KEYRING` 是 key id 到 base64 编码 32 字节密钥的 JSON 映射；`QMS_SECURITY_CURRENT_KEY_ID` 指定新写入密钥。配置不进入数据库、源码或日志。MFA 当前/待确认秘密、导出内容、待发送邮件使用 AES-256-GCM，并绑定各自资源上下文作为 AAD。
 
 1. 给所有 API/Worker/运维进程提供新旧密钥，切换 current id，新写入开始使用新密钥。
@@ -54,6 +56,8 @@ pnpm --filter @qms/api data:protect restore D:/QmsProtected/backup.qmsb
 - P3备份包为QMSB2/AES-GCM，包含固定版本与完整生命周期引用。历史QMSB1文件原样保留，新工具明确拒绝旧格式；恢复旧包须使用其匹配的历史工具在隔离环境恢复，再执行P3迁移及真实复核，不能将旧“AVAILABLE”直接视为已扫描。
 
 ## 可复跑验收
+
+REQ-0036 扩展既有真实轮换及备份恢复脚本，核对恢复后的接口/回执开关、凭据校验值/创建人、消息编号、加密正文和容量。恢复库在开放流量前必须先停用接收接口，核对密钥、凭据及到期状态后再批准启用。当前 dump256 MiB/包512 MiB 上限保持；小样本恢复成功不证明接口默认256 MiB或组织1 GiB容量可恢复，生产容量需对应实际全库恢复证据。完整运行结果见[实施计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
 
 从 `apps/api` 执行 `node --test test/operations/data-protection-objects.test.mjs`、`data-protection.acceptance.mjs`、`key-rotation.acceptance.mjs`、`tls.acceptance.mjs`。对象与密钥轮换演练要求 `QMS_ACCEPTANCE_DISPOSABLE_DATABASE=true`、临时loopback PostgreSQL（拒绝55440）；对象演练还要求匹配容器、本任务MinIO、外部 `QMS_ACCEPTANCE_ARTIFACT_DIRECTORY` 和备份配置。主目录使用55448，密钥轮换在该实例中新建并清理随机数据库。TLS演练要求 `QMS_ACCEPTANCE_TLS_URL`、`QMS_ACCEPTANCE_TLS_HTTP_URL`、`QMS_ACCEPTANCE_TLS_CA` 及供应商seed密码。证书/凭据缺失明确失败。
 

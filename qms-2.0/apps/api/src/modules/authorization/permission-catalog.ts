@@ -1,5 +1,6 @@
 export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
 export const CONSOLE_OBSERVATION_READ_PERMISSIONS = ['console:api:read', 'console:exchanges:read', 'console:services:read'];
+export const INTEGRATION_PERMISSIONS = ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read'];
 export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
   'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
 ];
@@ -23,6 +24,11 @@ const planned = (key: string, name: string, names: string[]): Group => ({ key, n
 
 export const PERMISSION_CATALOG: Group[] = [
   { key: 'platform', name: '平台功能', status: 'active', modules: [
+    { key: 'api-integration', name: 'API接入管理', status: 'active', operations: [
+      operation('integration:read', '查看API接口配置'), operation('integration:manage', '管理API接收接口'),
+      operation('integration:credentials:manage', '管理API机器凭据'), operation('integration:receipts:read', '查询API接收记录'),
+      operation('integration:payload:read', '查看API接收正文'),
+    ] },
     { key: 'workbench', name: '工作台', status: 'active', operations: [operation('workbench:read', '查看工作台（预留标识）', 'reserved')] },
     { key: 'problem-index', name: '问题查询', status: 'active', operations: [operation('problem-index:read', '查看问题索引')] },
     { key: 'tasks', name: '我的任务', status: 'active', operations: [operation('task:read', '查看授权任务'), operation('task:claim', '领取和释放任务'), operation('task:transfer', '批量转派任务')] },
@@ -174,7 +180,7 @@ export const INTERNAL_PLATFORM_PERMISSION_CODES = PERMISSION_CATALOG
   .filter(group => group.status === 'active')
   .flatMap(group => group.modules.filter(module => module.status === 'active')
     // Observation reads require an explicit grant, including for existing platform marker holders.
-    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code) && !CONSOLE_OBSERVATION_READ_PERMISSIONS.includes(entry.code)).map(entry => entry.code)));
+    .flatMap(module => module.operations.filter(entry => entry.enforcement === 'guarded' && !SUPPLIER_ONLY_PERMISSION_CODES.has(entry.code) && !CONSOLE_OBSERVATION_READ_PERMISSIONS.includes(entry.code) && !INTEGRATION_PERMISSIONS.includes(entry.code)).map(entry => entry.code)));
 
 export function userUpdatePermissions(fields: object): string[] {
   const submitted = fields as Record<string, unknown>;

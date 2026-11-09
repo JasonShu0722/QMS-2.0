@@ -1,6 +1,8 @@
 # 前端设计实施与参考代码
 
-## REQ0035固定Logo与首页入口追加（2026-11-06，实施中）
+## REQ0035固定Logo与首页入口追加（2026-11-06，已发布待实页复验）
+
+当前：[PR96](https://github.com/JasonShu0722/QMS-2.0/pull/96) / V0.0.39-fix7（含fix8测试返修）已发布badd14b08275d29b361e596e2184d74e649b5acf，精确PR4f96ba7与main各24CI/各16JSON234文件3296项全PASS。[deploy42207748552](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42207748552)加密快照先141链无待迁移、同SHA健康三服务/强制成功出口及1.511GB cleanup均核验；公网新index-BpThNLlk.js/index-BlMtSdkC.css有固定品牌分区/menu/home链接标识、fixture排除、目标匿名401。规范1.8/实现已远端main回读，最新发布事实本地归档避免索引JSON重复无运行变化部署；真实角色/物理设备与人工复验另列，Issue不自动关闭/回填。下文首FAIL/候选段保留当时时点，不代表当前未发布。
 
 PR96首轮670c41e的Web16片/234文件3296项已全通过，但整体CI42186914067因旧后端legacy-role测试快照嵌套数组顺序比较失败而FAIL，foundation为派生失败，未合并/发布。负责人反馈后按计划9.4最小返修该测试的嵌套排序，保完整深相等、原权限/审计断言及真实PG，不改运行权限代码或前端实现；新HEAD全门禁通过才可报告PR通过，原Web绿色不代整体成功。
 

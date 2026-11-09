@@ -1,6 +1,10 @@
 {
   "version": 1,
   "allowedModuleDependencies": [
+    "api-integration -> authorization",
+    "api-integration -> audit-log",
+    "api-integration -> organization",
+    "api-integration -> system-management",
     "system-management -> authorization",
     "system-management -> identity",
     "system-management -> organization",

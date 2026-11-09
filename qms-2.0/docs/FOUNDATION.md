@@ -1,5 +1,33 @@
 # 底座与阶段二平台验收记录
 
+## REQ-0036 API 接收一期（2026-11-09，本地候选）
+
+fix2接续：负责人要求补查并指出新Review，实时确认6ef另有组织私表P1和90天分页P2，补查同时发现协议等价表示与失败配置追溯P2。前述24绿只覆盖6ef，不能据此忽略Review。已改为组织公开事务读取模型、保固定分页区间并按当前保留策略过滤、统一raw参数路由/UTF8和identity等价头，以及实际评估配置快照。真实RED后接收模块9完整文件101/101 PASS、原parser/错误邻近两完整文件23/23 PASS，独立SPEC后QUALITY PASS；API lint/build及契约check通过，当前V0.0.40-fix2准备更新同PR98，新head CI及Review均待单独核验。
+
+PR98 / dfc7ba79首轮CI42580718216实际24任务20成功/4失败：api-unit六新审计动作缺中文标签及旧Response夹具缺setHeader，integration1/4缺QMS_PUBLIC_BASE_URL导致23项创建503，foundation为派生失败；Web16分片均成功。Codex Review另发现大写收件UUID拼AAD导致解密503。V0.0.40-fix1已最小返修，unit五完整文件106PASS、PG三完整文件37PASS、SPEC后QUALITY PASS；新head完整CI待推送核验，不能用本地或首轮Web绿称PR通过。详细失败/根因/资源限制见计划第9节。
+
+最新代码 `6efba7485621403aa57a5b4cbc95a8d1c638c350` 已推送同PR98，[CI42584067733](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42584067733) attempt1实际24/24全success，主代理以原始Actions JSON及既有evaluateDeployJobs核精确SHA/run/attempt/任务集得到full。API163套2381项全PASS，四PG分片、真实Worker和Web16分片均success。原“待核验”句保留提交时点，不代表当前仍失败；首FAIL、局部红绿、本地完整unit OOM均如实保留。最新结果本地归档、不触发无代码变化的再次CI；当前未合并发布、生产启用、人工/真实来源验收或关闭回填。
+
+关联 Issue97 / `codex/req0036-api-inbound` / 预留 V0.0.40，源码基线 `c198b8b6dfe6506cc6588884cbc2a59b8e96ff68`，143 条迁移链。独立 A/B/C/D 规格后质量及最终公共接缝限定复审已通过。完整命令、失败和最终覆盖见[一期计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)；本节不代表完整阶段验收、发布或真实公司系统联调。
+
+本地 Node24.21.0 / pnpm11.19.0；一次性 PostgreSQL18 在 loopback55636，受保护对象演练使用本任务 MinIO55637；API/Worker、Nginx HTTP5186/HTTPS5187、外部临时证书及 Chromium 均为本任务资源，不连接55440。重测试/构建串行、单worker、Node堆上限1GiB；未修改Windows/WSL配置。
+
+- 已核原始日志：配置/凭据27、接收/竞争20、检索/保留25、Web与导航43、密钥轮换5项完整通过，零skip。旧 red、夹具首FAIL、锁等待返修、SQL日期类型推断和清理批量返修均保留，不用最新绿色覆盖历史。
+- 数据保护完整脚本8项通过，实际恢复加密正文、接口及回执配置、凭据校验/创建人和容量。首负例因错误容器名得到UNAVAILABLE而非MISMATCH，修为本任务真实非PG容器后完整复验；小样本不是256MiB/1GiB全库容量证明。
+- 网关混合大小写可绕专用规则的P2已取得真实配置RED，改两模板为不区分大小写regex并复审通过；实际HTTP/HTTPS均401、两种大小写超限413、混合大小写突发429，临时CA验证及HTTP308保路径/端口成立，未关闭TLS验证。
+- 邻近回归首7文件102项98PASS/4FAIL为旧fixture缺第四生命周期owner/完整effects快照；同步五个直接调用fixture、保留完整数组和原断言后，四文件通过；余一真实对象PUT因原bucket未初始化失败，真实init-storage后该完整文件及真实Worker进程两文件40项通过。没有放宽生产registry或Mock对象存储。
+- 最终接收模块八完整文件76/76 PASS，53.884s；真实浏览器两完整场景2PASS/21.7s，包括配置、一次性凭据、201/200/204、重试、来源检索、XSS纯文本及320/390/1440浅深几何。初即刻布局判断FAIL后改为默认预算轮询原无溢出条件，未改CSS/动效/预算；不把局部表格横滚当全页溢出。截图已生成但本机二次读取无法解码，未人工目视审图，物理设备/人工视觉仍待验。
+
+Git外原始证据位于 `D:/WorkSpace/QMS-2.0-local/req0036-20261109/`。PR检查、生产部署、生产配权/启用、真实来源协议及吞吐、匹配容量恢复、真实物理设备/人工验收分别待核；飞书最终回读因user令牌缺失失败，没有代写状态或回填。
+
+## REQ0035固定Logo追加机器发布（2026-11-06，待实页复验）
+
+[PR96](https://github.com/JasonShu0722/QMS-2.0/pull/96)候选4f96ba7与mainbadd14b08275d29b361e596e2184d74e649b5acf整树相同，负责人明确继续合并部署；run42200502252与main42205932537各attempt1、各24同源success，各16份JSON234文件3296项全PASS无漏重/skip/pending/runtimeErrors。首42186914067真实integration2无序快照FAIL/派生FAIL与Web绿色区别、fix8真实PG17PASS及额外全spec346旧诊断FAIL均保留，不rerun刷绿或修业务授权。
+
+[自动deploy42207748552](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42207748552) job127858517785完整日志690行快照先696行141链/699无待迁移，三服务镜像同badd14b均Healthy，753行强制成功出口、builder1.511GB；Worker READY/原子marker由同版脚本成功出口支持，非独立SSH读回。公网login/OpenAPI/两首页SPA和新index-BpThNLlk.js/index-BlMtSdkC.css均200，固定品牌/menu/home标识及fixture排除、四目标匿名401实际核验。首公网证据脚本只读HOME变量错误保留，改变量名后核验，不是生产变更。
+
+规范1.8/实现已远端main实际回读，完整证据Git外`layout-sidebar-20261105/fix7-machine-release-verification.json`及分项JSON/原日志；最新发布事实本地归档暂不推索引JSON触发重复部署，区分本地/远端。机器发布不代生产真实角色/物理设备/最终人工验收，Issue93开放、Base未代写、不恢复heartbeat；下文候选/未发布句子保留历史时点。
+
 ## REQ0035固定Logo追加fix7（2026-11-06，本地验证）
 
 PR96首CI42186914067 attempt1：全部24job完成，22success；integration2旧legacy-role-http测试:153完整快照深比较FAIL，foundation派生FAIL。16份Web JSON逐项核234文件3296项全PASS，零漏重/skip/pending/runtimeErrors；integration2实际52套件中1失败、484项中1失败/483通过。独立只读diff支持同roleId的permissions数组仅22个ID重排、集合相同，没有权限增删差异证据，但不能据此忽略真实gate失败。负责人反馈“PR没通过”后按计划9.4最小修测试snapshot嵌套orderBy、真实一次性PG/HTTP完整文件及独立审查；不改生产授权规则或弱化原断言，不rerun旧任务刷绿，未合并/发布。

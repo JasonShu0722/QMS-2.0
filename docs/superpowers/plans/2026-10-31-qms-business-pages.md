@@ -6,22 +6,20 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| fix8门禁接续（2026-11-06） | PR96/670c41e首CI42186914067 attempt1真实整体FAIL：integration2的旧legacy-role快照嵌套permissions无序，foundation派生失败；其余22job成功，16Web234文件3296项全PASS不代PR通过。负责人反馈“PR没通过”后接续仅测试快照显式排序、真实一次性PG与独立双审，保持完整权限断言/原门禁，继续同PR96，不rerun旧run刷绿；见9.4。当前尚未合并发布 |
-| fix8当前进展 | 一行测试快照排序完成，真实PG18/55517完整17/17、0skip，原代表1PASS/16过滤非红；独立SPEC后QUALITY、配置API lint与治理通过，任务容器核ID/label清理为空。额外全spec类型检查既有346诊断前后完全相同并保留，不修无关测试或冒称PASS。暂存源核验后提交fix8更新同PR96，新HEAD/run结果在Git外fix7-checkpoint.json接续，旧首FAIL不抹去 |
-| 2026-11-06 Logo追加接续 | 负责人反馈滚动不含顶部Logo/管理Logo应可回首页，明确在当前需求追加并“继续调整”。已先user补REQ0035五字段并回读rev358、14无关字段不变，开发中/P0；Issue93同样追加，不新建。基于8c90c84与本地发布归档6b055d6建`codex/req0035-logo-fix7`，预留V0.0.39-fix7，方案/验收见9.3；本追加未发布，不以fix6已发布代通过 |
-| fix7实际进展 | 固定品牌/菜单分区和管理Logo链接本地完成，准确3FAIL/7filtered→最终4完整45项分次PASS，首新英文fixture15/16失败保留。8个模拟外壳浏览器场景、父类型/build27.37秒与治理通过，最终独立SPEC后QUALITY限定PASS；暂存源核验后主动同分支PR，实时HEAD/PR/CI记Git外fix7-checkpoint.json，不为进度反复推送；本追加尚未发布，不重跑已过文件或旧版全量 |
-| 核对时间与范围 | 2026-11-06 Asia/Taipei；REQ0035治理页面撑宽/双端侧栏回顶已机器发布，真实角色页面待负责人复验，不改业务模型 |
-| 当前版本与映射 | REQ-0035 / `reczz28W1w4YTodF` → [Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93) → [PR94](https://github.com/JasonShu0722/QMS-2.0/pull/94) / [PR95](https://github.com/JasonShu0722/QMS-2.0/pull/95) → V0.0.39-fix6 / `8c90c84cc52dce85d2c1ed98e44996dcbbe170d2` |
-| 授权与外部状态 | 负责人更新开发中/P0并继续开发，后在全绿PR/待合并发布上下文明确继续，已执行本次合并发布。最近user需求回读rev357仍开发中/P0，未代写Base或关闭Issue；不含生产赋权/业务删除、关闭回填或代人工验收，旧heartbeat不恢复 |
+| 核对时间与范围 | 2026-11-06 Asia/Taipei；REQ0035固定两端品牌/只滚菜单/管理Logo首页已机器发布，保原治理收缩与侧栏滚动记忆，不改业务模型 |
+| 当前版本与映射 | REQ-0035 / `reczz28W1w4YTodF` → [Issue93](https://github.com/JasonShu0722/QMS-2.0/issues/93) → [PR96](https://github.com/JasonShu0722/QMS-2.0/pull/96) → V0.0.39-fix7（含fix8测试返修历史） / `badd14b08275d29b361e596e2184d74e649b5acf`；旧PR94/95发布保留在9.1/9.2 |
+| 授权与外部状态 | 先原需求五字段追加回读rev358开发中/P0、用户继续调整；PR全绿后负责人明确“继续合并部署”，本次已执行。不含生产赋权/删除、关闭回填或代人工验收；最近user仍rev358开发中/P0，未写Base完成/PR字段或关闭Issue，不恢复heartbeat |
+| fix7本地证据 | 真实品牌/menu分区、Router首页保target与原guard；准确RED3FAIL/7filtered及新英文fixture失败保留，4完整45项/8模拟外壳browser/最终SPEC后QUALITY/父类型build治理通过。新menu切叶像素恢复未另browser复测但真Auth数值恢复断言保持，真实角色/物理设备另待 |
+| fix8门禁历史 | 首run42186914067的integration2权限快照无序FAIL/聚合FAIL、Web3296绿区别仍保留；测试仅一行嵌套排序，真实PG17PASS、独立双审与配置API lint/治理通过。额外全spec346旧诊断前后相同且该命令FAIL，不改写首失败或重跑刷绿 |
 | 本地与审查 | 最小布局/会话内侧栏UI，8完整63项分次及正式组件/外壳浏览器通过，逐单元最终SPEC后QUALITY；后续fix6仅原测试等待可见态，完整12项、独立SPEC后QUALITY、父类型/治理及暂存192来源通过，运行源未变证据复用，原FAIL/filtered保留 |
-| 精确CI与合并 | PR95 b4044e0 / run42077424051 attempt1与main8c90c84 / run42080092505 attempt1各24同源job success，各16JSON234文件3290项全PASS，无漏重/skip/pending/runtimeErrors；合并整树与审候选相同。旧PR94的main单例FAIL及正确跳过deploy见9.1，不rerun刷绿 |
-| 发布事实 | [deploy42082353182](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42082353182)完整日志核快照725行先141链731行/无待迁移734行；API/Worker/Web同SHA健康、788行强制成功出口与1.524GB builder回收。公网新JS/CSS及sidebar-session/minmax标识、登录/契约200和四匿名401均实际核验，见9.2 |
-| 文档与Git状态 | 规范1.7、实现及fix6指南/测试约定已远端main实际git show复核。本次最新发布事实集中本地归档于`codex/req0035-release-record`，不推来源索引JSON触发无运行变化full CI/重复部署；本地归档提交SHA见Git外checkpoint，区分远端规范与本地发布记录 |
-| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；本地归档基于正式发布8c90c84，用户CodeGraph四项dirty保留并排除暂存，不重写diverged本地main/历史分支 |
+| 精确CI与合并 | PR96 HEAD4f96ba7 / run42200502252 attempt1、mainbadd14b / run42205932537 attempt1各24同源success，各16JSON234文件3296项全PASS、零漏重/skip/pending/runtimeErrors；squash整树与审候选相同，旧FAIL不抹去 |
+| 发布事实 | [deploy42207748552](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42207748552)完整日志690行快照先696行141链/699无待迁移，同SHA三服务健康、753成功与1.511GB builder清理；公网新index-BpThNLlk.js/index-BlMtSdkC.css含menu/固定品牌/管理home标识、登录/契约200和四匿名401已实际核验，见9.5 |
+| 文档与Git状态 | 规范1.8、品牌/menu实现和fix8测试约定已远端main实际git show复核，旧6b055d6发布归档已随PR96同步。本次最新发布事实集中本地`codex/req0035-logo-release-record`归档不推索引JSON触发无业务变化重复CI/部署；本地commit/远端同步状态在Git外fix7-checkpoint区分 |
+| 基线与隔离 | 活动`D:/WorkSpace/QMS-2.0/qms-2.0`；本地最终归档基于正式发布badd14b，用户CodeGraph四项dirty保留/排除暂存，不重写diverged本地main/历史分支 |
 | 运行时 | 加载Git外Enter-Qms.ps1：Node v24.21.0 / pnpm11.19.0；不是业务验证 |
 | 历史关联 | 原REQ0034/Issue89已验收关闭，不因旧未勾选项重开。初始补登顺序漏项、原main失败、模拟输入错误、未复现持续增长均保留，不改写成全程首轮通过 |
 | 工程证据 | Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`含本次原视频抽帧、红绿/单例失败、作者/审查/父验证、PR/main完整jobs与16JSON、发布日志/公网/当前checkpoint；旧REQ0034两证据目录仍保留。模拟数据/机器发布不代生产角色或物理设备验收 |
-| 下一动作 | 负责人刷新真实组织与岗位/平台配置和两端侧栏，复验持续拉伸及点击后滚动；失败同Issue93接续，确认后按另获授权关闭/回填。当前不重复开发/CI/部署、不新建heartbeat或自动接其他需求 |
+| 下一动作 | 负责人刷新两端真实页面，滚菜单核Logo顶部可见、菜单末项可达、管理Logo点击/Enter回home，复验dirty/busy及原滚动记忆。失败同Issue93接续；确认后按单独授权关闭/回填，不重复部署/恢复heartbeat或自动接其他需求 |
 
 **目标：** 将已认可样式及列/分页体验落到真实正式页面，保持现有业务和安全边界。
 
@@ -338,8 +336,8 @@
 - [x] 新实现代理`fix7_logo_implementation`单一写集：InternalNavigation提取现有品牌Heading至固定区，Console品牌Link与真实menu滚动分离，原ref/scroll绑定menu；CSS只internal/专用Drawer，不改Supplier共用旧规则或sidebarState。准确RED3FAIL/7filtered；新增中英键盘/品牌结构/同目标首页/Logo dirtybusy及原ABA/恢复断言保留。首15/16新英文fixture误写旧locale key，精准改为现有key后未放宽英文名或业务断言。
 - [x] 单一窗口4完整文件45项分次PASS：sidebar13+state3为27.47秒，Internal9为21.05秒，Console20为17.34秒。未变session-window16/console-window5与Auth/store及后端来源核对后复用，不重复旧63项/全量。8个浏览器场景：1440/1024/390两端品牌y恒定、菜单滚至末项/Enter回home，管理英文collapsed点击保target，390 Console Logo dirtycancel/busy阻离。旧真实生产登录/物理设备不由合成身份替代；Console390初始x=-276是Drawer进场帧，断言只核y不宣称横向before/after相同，最终x12可达。中断恢复时作者进程已退出，root读取原日志/JSON保留有效证据，未重复跑。
 - [x] 最终独立`fix7_final_spec` SPEC后`fix7_final_quality` QUALITY限定PASS，主代理实际读diff/完整日志及浏览器JSON/7源规范化hash吻合。父类型/lint与build27.37秒exit0，新index-JA7UiUCn.js/index-CKKqSqU4.css有独立menu/home标识且fixture排除；治理37文档/474链接/20来源/157依赖及阶段覆盖通过。未变后端/契约/部署/安全源已核，复用有效证据，不重复真实服务/本地全量。新菜单切叶后的像素恢复未另browser复测，原真Auth数值恢复单测完整保留；生产角色/物理设备仍未覆。
-- [ ] 规范1.8/指南/能力/本地验收/计划与来源索引已同步，用户原CodeGraph摘要选择性排除，暂存树核验后主动提交推送一个fix7 PR关联Issue93，不向已合并PR95推送冒充交付。精确新CI覆盖按实际清单，不沿旧234/3290冒充新增测试已覆盖。
-- [ ] 获准合并发布才接续main/自动deploy/同SHA快照健康公网目标，实际人工反馈再按授权关闭回填；不自动执行生产角色配置、删除/外发。
+- [x] 规范1.8/指南/能力/本地验收/计划与来源索引同步，用户CodeGraph摘要排除且暂存197来源吻合；PR96含fix7及同PR fix8，精确新PR/main各24/16JSON234文件3296项成功，不沿旧3290代覆盖。
+- [x] 负责人明确继续合并部署后已执行，squash同树badd14b、main门禁/自动deploy/同SHA快照健康公网目标均核验见9.5；人工复验/关闭回填仍另取，不生产赋权/删除/外发。
 
 本次证据继续Git外`layout-sidebar-20261105/`前缀`fix7-logo-*`，需求与Issue追加证据前缀`logo-requirement-*`/`logo-issue-*`。旧fix6发布与失败历史原样保留，不把Logo新增要求追写为原版本已实现。
 
@@ -350,12 +348,21 @@
 - 负责人反馈“PR没通过”，本轮明确接续该CI阻塞，不再仅交付前端通过结果。范围限定测试快照关系显式`orderBy:permissionId asc`，仍比较所有记录/字段/数量，不改生产权限代码、读写规则/DTO/迁移/依赖/CI；不使用弱化集合断言、加超时/motion或Mock/Skip替代真实PG。版本预留V0.0.39-fix8，原分支/PR96继续，不另建需求或PR，不扩大合并发布/关闭回填授权。
 - [x] 原`fix8_snapshot_order`代理在工具会话刷新后不再出现在live列表，实际检查无本轮源码/产物/容器，主代理明确交接全新`fix8_snapshot_execute`而非把静默算完成。新作者只改该测试一行include.permissions排序，原完整deepEqual/403/audit/receipt/securityVersion/120000保全。真实PG/HTTP基线1PASS/16按-t过滤，Jest28.207秒/命令32.147秒不是RED；修后完整17/17 PASS、0skip，Jest14.036秒/命令16.164秒，不据分次时长称性能收益。
 - [x] `fix8_order_spec` SPEC后独立`fix8_order_quality` QUALITY限定PASS，当前LF SHA13b888baa4ec8de93d598f4e4aa957c6a033763c418051e27f4cbe3661e382e6，内存仅还原该一行即baseline d79c8fe83db9ae2f97068a990e174912164b2436c75f8fe86a7f9837c3435c65。父配置的API lint/type exit0；未改运行源，复用有效Web45/browser/build/其他后端证据。任务PostgreSQL18.6 loopback55517、独立随机label/tmpfs无宿主卷；141迁移/seed0，精确核ID/label stop/rm0及最终空回读，未连55440、不globalprune。
-- [ ] 验证后提交fix8推送更新同PR96及Issue93，精确新HEAD的全24门禁/16JSON实际成功才报告PR通过；旧FAIL/未发布事实保留，不重跑旧run刷绿。后续合并发布/人工验收/关闭回填按有效授权分别接续。
+- [x] fix8提交4f96ba7推送更新同PR96及Issue93；精确run42200502252 attempt1全24/16JSON234文件3296项成功后才报告PR通过。负责人再明确合并部署，按授权核新main及自动deploy见9.5；原首FAIL/停点未发布事实保留，不重跑旧run刷绿，不代人工验收/关闭回填。
 
 证据目录继续Git外`layout-sidebar-20261105/`，首失败`fix7-ci-{integration2,foundation}-failure.log`/`fix7-ci-final-inventory-verified.json`及`fix8-*`。此前“待决定是否处理”是原停点历史，本轮已明确接续最小门禁修复，不扩大业务范围。
 
 额外类型检查边界：主代理尝试`tsc --project tsconfig.spec.json --noEmit`覆盖全API测试，实际FAIL（既有测试类型/@jest/globals解析错误），不是项目已配置lint/CI门禁，不删除日志或顺手修无关测试。正常`@qms/api lint`使用现配置生成/生产tsc实际PASS；该一行通过真实PG/HTTP原完整文件，所有新HEAD严格CI仍需实际成功，不用局部绿抹去失败。全spec前后同配置内存还原该一行的诊断对照证据另存`fix8-parent-test-types-baseline.json`，若未完成不得引用为已确认。
 
 父收口：配置API lint、治理37文档/474链接/20来源/157依赖及阶段覆盖、diff已PASS；正确API cwd/configFilePath下全spec内存还原前后各346条诊断完全相同，目标文件仅既有@jest/globals解析诊断，无新类型回归。初TypeScript API探针曾误用根cwd/漏configFilePath得15946诊断，不当CLI对照，该方法失配事实同证据保留并以正确346对照为准。仅测试排序加文档/索引，无运行源码/依赖/契约/CI变化，旧Web45及首精确3296项、browser/build按源复用，新HEAD完整CI仍实际核验。
+
+### 9.5 固定Logo追加最终机器发布（2026-11-06）
+
+- 负责人明确“继续合并部署”，先回读PR96/current4f96ba7/base8c90c84及run42200502252 attempt1同源24成功，原16artifact证据不变、无GitHub request-changes；GitHub提交式review0不冒称人工批准。squash为badd14b08275d29b361e596e2184d74e649b5acf，git实际比较整树与审候选一致；没有新实现或旧任务重跑。
+- main run42205932537 attempt1也24同源success，16JSON逐项核实际234文件3296项全PASS、零漏重/skip/pending/runtimeErrors，`fix7-main-coverage-verified.json`；不是用PR代main。自动deploy42207748552的校验来源及pinned SSH步骤均success，不是skip/superseded，没有手动重复触发或发布前推仅进度文档。
+- 完整deploy job127858517785日志690行加密snapshot verified先696行141迁移链、699行无待迁移；738/742/743行API/Web/Worker镜像同badd14b，三容器均出现Healthy，753行Deployment successful，builder回收1.511GB，无cleanup失败。Worker READY及原子deployed-sha由同版deploy.sh强制成功出口支持，未独立SSH读marker/原Worker stdout，不代灾备恢复。
+- 独立公网/login、OpenAPI、新index-BpThNLlk.js/index-BlMtSdkC.css与/app/workbench、/console均200，新资源区别发布前index-CRHXM3Qr.js/index-CEYAWm_B.css。CSS有internal纵向分区/独立menu滚动，JS有管理home双语链接标识，fixture排除；console/context、organization/tree、configuration/settings、process/defects四目标匿名401。第一次证据脚本在下载/HTTP后误用PowerShell只读HOME变量中止，只更名完成核验，无生产修复；真实失败与局限在JSON保留，不称首次脚本通过。
+- 规范1.8与品牌/menu/fix8代码及旧6b055d6归档已远端main实际git show回读；最新最终发布事实集中本地归档不推索引JSON造成无运行变化重复部署。证据`fix7-merge-tree-verified.json`、`fix8-pr-final-coverage-verified.json`、`fix7-main-coverage-verified.json`、`fix7-deploy-log-verified.json`、`fix7-public-verification.json`和总`fix7-machine-release-verification.json`均Git外。
+- 当前机器发布完成，真实账号/物理设备及新menu切叶像素恢复仍按既有未覆范围等待负责人实页复验；本地数值恢复/模拟浏览器不代人工通过。Issue93开放、Base最近rev358开发中/P0，本次未代写阶段/完成/PR字段，不关闭回填、不恢复heartbeat，不自动接其他需求。
 
 证据：Git外`D:/WorkSpace/QMS-2.0-local/layout-sidebar-20261105/`。录屏抽帧、最小grid A/B、准确红绿、六链连续几何及18窄屏场景已保存；旧连续无界增长仍未复现，不把稳定溢出写成增长反馈根因。初次fetch因用户`http.postBuffer=524288000`分配失败保留，后仅该命令临时`-c http.postBuffer=1048576 fetch origin`成功，未改用户配置，远端仍7660314。

@@ -20,6 +20,6 @@ export type AdministrativeLifecycleEffectResult = { module: string; changed: num
 
 // Only server-constructed impacts may enter this port, after target locks and authorization.
 export interface AdministrativeLifecycleEffect {
-  readonly module: 'identity' | 'workflow' | 'platform-configuration';
+  readonly module: 'identity' | 'workflow' | 'platform-configuration' | 'api-integration';
   apply(tx: Prisma.TransactionClient, actor: AdminActor, impact: AdministrativeLifecycleImpact): Promise<AdministrativeLifecycleEffectResult>;
 }

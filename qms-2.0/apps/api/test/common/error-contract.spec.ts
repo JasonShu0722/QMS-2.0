@@ -8,16 +8,17 @@ import { GlobalExceptionFilter } from '../../src/common/contracts/global-excepti
 describe('error response contract', () => {
   it.each([400, 401, 500, 503])('does not echo exception details for HTTP %s', (status) => {
     let actual: unknown;
-    const response = { status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
+    let traceHeader: string | undefined;
+    const response = { setHeader: (_name: string, value: string) => { traceHeader = value; }, status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
     const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;
     new GlobalExceptionFilter().catch(new HttpException({ message: 'password=secret SELECT C:\\private', token: 'secret' }, status), host);
     expect(JSON.stringify(actual)).not.toMatch(/secret|SELECT|private|password/);
-    expect(actual).toMatchObject({ code: status >= 500 ? 'INTERNAL_ERROR' : `HTTP_${status}`, fields: {} });
+    expect(actual).toMatchObject({ code: status >= 500 ? 'INTERNAL_ERROR' : `HTTP_${status}`, fields: {}, traceId: traceHeader });
   });
 
   it('maps an unknown downstream error code to the safe HTTP contract', () => {
     let actual: unknown;
-    const response = { status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
+    const response = { setHeader: (_name: string, _value: string) => undefined, status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
     const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;
     new GlobalExceptionFilter().catch(
       new HttpException({ code: 'DATABASE_PASSWORD_LEAK', message: 'SELECT password FROM users', fields: { secret: ['x'] } }, 400),
@@ -30,7 +31,7 @@ describe('error response contract', () => {
 
   it('does not trust generic HTTP error payload messages or fields', () => {
     let actual: unknown;
-    const response = { status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
+    const response = { setHeader: (_name: string, _value: string) => undefined, status: (_value: number) => response, json: (body: unknown) => { actual = body; } };
     const host = { switchToHttp: () => ({ getResponse: () => response }) } as unknown as ArgumentsHost;
     new GlobalExceptionFilter().catch(
       new HttpException({ code: 'HTTP_400', message: 'SELECT token FROM sessions', fields: { token: ['secret'] } }, 400),

@@ -67,6 +67,33 @@ async function rotate() {
       if (rows.length < 100) break;
       mailCursor = rows.at(-1)!.id;
     }
+    let receiptCursor: string | undefined;
+    while (true) {
+      const rows = await prisma.integrationReceipt.findMany({
+        where: { payloadCiphertext: { not: null }, ...(receiptCursor ? { id: { gt: receiptCursor } } : {}) },
+        select: { id: true, organizationId: true, endpointId: true }, orderBy: { id: 'asc' }, take: 100,
+      });
+      for (const row of rows) {
+        count += await prisma.$transaction(async transaction => {
+          await transaction.$queryRaw`SELECT id FROM organizations WHERE id=${row.organizationId}::uuid FOR UPDATE`;
+          const [endpoint] = await transaction.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: number }[]>`SELECT used_body_bytes,capacity_bytes FROM integration_endpoints WHERE id=${row.endpointId}::uuid AND organization_id=${row.organizationId}::uuid FOR UPDATE`;
+          const [receipt] = await transaction.$queryRaw<{ payload_ciphertext: string | null; payload_bytes: number }[]>`SELECT payload_ciphertext,payload_bytes FROM integration_receipts WHERE id=${row.id}::uuid AND organization_id=${row.organizationId}::uuid AND endpoint_id=${row.endpointId}::uuid FOR UPDATE`;
+          if (!receipt?.payload_ciphertext) return 0;
+          const [capacity] = await transaction.$queryRaw<{ used_body_bytes: bigint }[]>`SELECT used_body_bytes FROM integration_scope_capacities WHERE organization_id=${row.organizationId}::uuid FOR UPDATE`;
+          if (!endpoint || !capacity) throw new Error('INTEGRATION_CAPACITY_UNAVAILABLE');
+          const context = `integration:${row.organizationId}:${row.endpointId}:${row.id}`;
+          const ciphertext = encryptSecret(decryptSecret(receipt.payload_ciphertext, context), context);
+          const bytes = Buffer.byteLength(ciphertext), difference = bytes - receipt.payload_bytes;
+          if (endpoint.used_body_bytes + BigInt(difference) > BigInt(endpoint.capacity_bytes) || capacity.used_body_bytes + BigInt(difference) > 1073741824n) throw new Error('INTEGRATION_CAPACITY_UNAVAILABLE');
+          await transaction.$executeRaw`UPDATE integration_receipts SET payload_ciphertext=${ciphertext},payload_bytes=${bytes} WHERE id=${row.id}::uuid`;
+          await transaction.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes+${difference} WHERE id=${row.endpointId}::uuid`;
+          await transaction.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes+${difference} WHERE organization_id=${row.organizationId}::uuid`;
+          return 1;
+        });
+      }
+      if (rows.length < 100) break;
+      receiptCursor = rows.at(-1)!.id;
+    }
     await prisma.auditEvent.create({ data: { action: 'SECURITY_KEYS_REENCRYPTED', resourceType: 'SecurityKeyring', outcome: 'SUCCESS', traceId: process.env.QMS_SECURITY_CURRENT_KEY_ID, metadata: { status: 'COMPLETE' } } });
     console.info(`KEY_ROTATION_REENCRYPTED ${count}`);
   } finally { await prisma.$disconnect(); }

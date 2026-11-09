@@ -11,6 +11,17 @@ describe('audit action label coverage (source contract, not PostgreSQL evidence)
     expect(auditActionLabel(action)).toBe(label);
   });
 
+  it.each([
+    ['INTEGRATION_CREDENTIAL_CREATED', '创建接口凭据'],
+    ['INTEGRATION_CREDENTIAL_REVOKED', '撤销接口凭据'],
+    ['INTEGRATION_ENDPOINT_CREATED', '创建接收接口'],
+    ['INTEGRATION_ENDPOINT_UPDATED', '更新接收接口'],
+    ['INTEGRATION_MESSAGE_RECEIVED', '接收接口消息'],
+    ['INTEGRATION_PAYLOAD_READ', '读取接收正文'],
+  ])('explains API integration action %s', (action, label) => {
+    expect(auditActionLabel(action)).toBe(label);
+  });
+
   it('explains literal actions emitted by audit writers and their local forwarding methods', () => {
     const root = resolve('src');
     const actions = new Set<string>();

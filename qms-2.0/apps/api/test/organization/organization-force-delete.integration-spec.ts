@@ -43,7 +43,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
       throw new Error('Requires disposable loopback PostgreSQL and explicit QMS_DISPOSABLE_TEST_DB=true; remote databases and preview 55440 are forbidden.');
     }
     registry = new AdministrativeLifecycleRegistry();
-    for (const module of ['workflow', 'platform-configuration', 'identity'] as const) registry.register({ module, async apply(_tx, _actor, impact) {
+    for (const module of ['workflow', 'platform-configuration', 'identity', 'api-integration'] as const) registry.register({ module, async apply(_tx, _actor, impact) {
       calls.push(module);
       if (module === 'workflow') impacts.push(impact);
       if (module === 'platform-configuration' && failEffect) throw new Error('TEST_EFFECT_ROLLBACK');
@@ -139,7 +139,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     expect(refreshed.body.previewToken).not.toBe(preview.body.previewToken);
     await request(app.getHttpServer()).post(path(f.target.id, dep.id)).set('Cookie', f.admin.cookie)
       .set('x-csrf-token', 'command-csrf').set('Idempotency-Key', key).send({ ...body, previewToken: refreshed.body.previewToken }).expect(201);
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration']);
   });
 
   it.each(['department', 'position', 'user-security', 'assignment', 'binding', 'minister'] as const)('binds existing %s reference versions/values privately even when counts stay equal', async change => {
@@ -196,7 +196,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
       .rejects.toMatchObject({ status: 409, response: { code: 'IDEMPOTENCY_REPLAY' } });
     await expect(commands.forceDeleteOrganization(f.admin.actor, f.target.id, { ...confirmed, previewToken: scoped.previewToken }, trace(), key))
       .rejects.toMatchObject({ status: 409, response: { code: 'IDEMPOTENCY_REPLAY' } });
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration']);
     expect(await db.$queryRaw`SELECT id FROM administrative_deletions WHERE entity_id = ${f.target.id}::uuid`).toHaveLength(1);
   });
 
@@ -263,11 +263,11 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     const response = await request(app.getHttpServer()).post(path(f.target.id)).set('Cookie', f.admin.cookie)
       .set('x-csrf-token', 'command-csrf').set('Idempotency-Key', key).send(confirmed).expect(201);
     expect(response.body).toMatchObject({ ...preview.body, version: 2, deletedAt: expect.any(String) });
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration']);
     expect(impacts[0]).toMatchObject({ entityId: f.target.id, organizationId: f.target.id, receiptOrganizationId: f.home.id });
     expect(await db.adminMutation.findFirst({ where: { key } })).toMatchObject({ actorUserId: f.admin.user.id, organizationId: f.home.id, response: { value: response.body } });
     expect(await commands.forceDeleteOrganization(f.admin.actor, f.target.id, confirmed, trace(), key)).toEqual(response.body);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     await expect(f.remove(randomUUID())).rejects.toMatchObject({ status: 404 });
   });
 
@@ -339,7 +339,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     expect(await db.$queryRaw`SELECT original_organization_id, original_identity FROM administrative_deletions WHERE entity_id = ${child.id}::uuid`)
       .toEqual([{ original_organization_id: child.id, original_identity: { code: child.code, name: child.name, parentId: null, type: 'INTERNAL' } }]);
     expect(await db.organization.findUnique({ where: { id: f.home.id } })).toEqual(f.home);
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration', 'workflow', 'platform-configuration', 'identity', 'api-integration']);
   });
 
   it('previews and deletes a surviving pending department in its deleted internal organization without restoring or moving history', async () => {
@@ -382,7 +382,7 @@ describe('REQ0031 C organization command: real HTTP/PostgreSQL, neutral sibling 
     expect(await db.organization.findUnique({ where: { id: f.target.id } })).toEqual(deletedOrg);
     expect(await db.$queryRaw`SELECT original_organization_id, original_identity FROM administrative_deletions WHERE entity_id = ${dep.id}::uuid`)
       .toEqual([{ original_organization_id: f.target.id, original_identity: { code: dep.code, name: dep.name, parentId: null, organizationId: f.target.id } }]);
-    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'workflow', 'platform-configuration', 'identity']);
+    expect(calls).toEqual(['workflow', 'platform-configuration', 'identity', 'api-integration', 'workflow', 'platform-configuration', 'identity', 'api-integration']);
   });
 
   it('deletes only the department, ends only direct-position appointments and disables only related management bindings/scopes', async () => {

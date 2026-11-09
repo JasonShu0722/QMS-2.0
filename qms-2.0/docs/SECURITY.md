@@ -1,5 +1,11 @@
 # 底座安全边界
 
+## REQ-0036 API 接收一期（本地候选）
+
+机器接收只在明确标记并实际附加机器 Guard 的处理器免人员 CSRF，仍须接口绑定 Bearer 凭据；普通人员写操作保持原校验。五项 `integration:*` 权限显式授予，不从平台管理员标记派生。正文加密、受控读取审计、无缓存、生命周期撤销与请求结果采集边界见[API 接入管理](API-INTEGRATION.md)。当前未生产配权、启用接口或分发凭据；真实来源联调另行验收。
+
+接入域通过组织域公开的事务读取模型获取组织状态及行锁，不直接读取组织私表。管理与机器分别保留原拒绝协议，保留清理、采集及强删历史路径只需组织锁，不将ACTIVE校验施加到tombstone历史维护。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
