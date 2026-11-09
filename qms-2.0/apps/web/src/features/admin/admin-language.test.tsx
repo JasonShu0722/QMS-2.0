@@ -39,18 +39,23 @@ it('translates and searches the registered permission catalog while preserving c
 
 it('switches existing user, role and matrix controls without translating customer data', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('permission-catalog') ? catalog : path.includes('/users?') ? [] : [role])));
-  render(<LanguageProvider><LanguageSwitcher /><UserAdministration organization={organization} organizations={[organization]} /><RoleAdministration organization={organization} /><PermissionMatrix organization={organization} /></LanguageProvider>);
-  await screen.findByRole('button', { name: '编辑角色' });
-  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
-  await userEvent.click(screen.getByRole('menuitemradio', { name: 'English' }));
-  expect(screen.getByRole('button', { name: 'Create user' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Create role' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Save permissions' })).toBeInTheDocument();
+  render(<LanguageProvider><div data-testid="language-controls"><LanguageSwitcher /></div><div data-testid="user-controls"><UserAdministration organization={organization} organizations={[organization]} /></div><div data-testid="role-controls"><RoleAdministration organization={organization} /></div><div data-testid="matrix-controls"><PermissionMatrix organization={organization} /></div></LanguageProvider>);
+  const language = within(screen.getByTestId('language-controls'));
+  const users = within(screen.getByTestId('user-controls'));
+  const roles = within(screen.getByTestId('role-controls'));
+  const matrix = within(screen.getByTestId('matrix-controls'));
+  await roles.findByRole('button', { name: '编辑角色' });
+  const languageTrigger = language.getByRole('button', { name: 'Language / 语言' });
+  await userEvent.click(languageTrigger);
+  await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitemradio', { name: 'English' }));
+  expect(users.getByRole('button', { name: 'Create user' })).toBeInTheDocument();
+  expect(roles.getByRole('button', { name: 'Create role' })).toBeInTheDocument();
+  expect(matrix.getByRole('button', { name: 'Save permissions' })).toBeInTheDocument();
   expect(screen.getAllByText(role.name).length).toBeGreaterThan(0);
-  await userEvent.click(screen.getByRole('button', { name: 'Language / 语言' }));
-  await userEvent.click(screen.getByRole('menuitemradio', { name: '简体中文' }));
-  expect(screen.getByRole('button', { name: '创建用户' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '保存权限' })).toBeInTheDocument();
+  await userEvent.click(languageTrigger);
+  await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitemradio', { name: '简体中文' }));
+  expect(users.getByRole('button', { name: '创建用户' })).toBeInTheDocument();
+  expect(matrix.getByRole('button', { name: '保存权限' })).toBeInTheDocument();
 });
 
 it('shows a translated role security failure and trace inside its editor', async () => {

@@ -2,6 +2,8 @@
 
 ## REQ0036 便捷化 V0.0.41 本地验证（2026-11-09）
 
+PR101首候选33e4fea实际CI42650559416 attempt1为22success/2failure：唯一Web15原admin-language联合语言case31083ms超30000，foundation派生；16份JSON239文件3329项3328PASS/1FAIL，0pending。完整日志已下载，Review clear仍未合并。V0.0.41-fix1仅该test case定向within查询及缓存真实语言按钮，保同case三真实组件联合zh/en/zh、所有原断言和30秒预算；原本地完整6PASS目标26463ms非RED，改后6PASS目标16003ms，真实RED来自CI。具体云端迟缓原因未证，不加超时或重跑旧run。API/Web产品/迁移/契约/部署与33e4fea一致，以下本地业务证据按范围继续有效；新head CI/Review及发布待核。细节见计划14节fix1。
+
 在主线ce4a72f上接续a52519f文档归档，分支codex/req0036-api-convenience，复用Issue97。负责人明确三项便捷化：编码地址、复制含真实鉴权的对接配置、永久有效并能反复复制。新增144迁移允许expires_at为空并保存新凭据原文密文；旧URL及有限期凭据保持，旧hash不能反推原文。详细合同、分工及真实失败保留见[一期计划第14节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。生产当前仍ce4a72f，新范围未据本地结果宣称已发布。
 
 | 检查 | 实际结果 |
