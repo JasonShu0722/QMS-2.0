@@ -18,10 +18,10 @@
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
 | 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98) / `codex/req0036-api-inbound`。V0.0.40首提交dfc7ba79已推送，main仍badd14b，携纯文档归档c198b8b；同范围CI/审查返修沿用V0.0.40-fix1，不新建PR |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 首提交本地76 API/43 Web/2 browser及保护门禁均通过，但PR98首CI42580718216实际20成功/4失败，未合并发布。fix1补审计标签、旧Response夹具、CI公开地址及Codex大写UUID正文解密；五完整unit106PASS、三完整PG37PASS，独立SPEC后QUALITY PASS。新head CI尚待推送验证，不能沿用首轮Web绿色代整体通过 |
+| 当前检查点 | PR98最新代码head6efba7485621403aa57a5b4cbc95a8d1c638c350 / CI42584067733 attempt1已24/24全success；主代理用现有evaluateDeployJobs精确核head/run/attempt判full。API163套2381项、四PG分片、独立Worker及Web16分片均通过。fix1本地106unit/37PG与SPEC后QUALITY通过，Codex大写UUID发现已修。首CI20成功4失败真实保留；尚未合并发布/真实来源启用 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 主代理完成fix1类型/构建/CI配置和治理复验后推送同PR，核新head完整24任务及审查发现处置，不重跑旧run刷绿；合并发布仍另核授权。飞书最终回读因user token_missing失败，沿用聊天直接批准及先前快照，不伪造回读、不代写台账 |
+| 下一动作与负责人 | 当前到已获准的PR检查点，负责人决定合并发布后再接续main全量CI、迁移快照/同SHA健康及部署验收；不自动合并、配权或启用来源。最新CI结果仅本地文档归档，避免为记录再次触发同一PR全量CI；交付代码已推送，档案同步状态单列。飞书token_missing未回读/代写，Issue97保持开放 |
 
 ## 1. 交付单元、映射与范围
 
@@ -264,3 +264,11 @@ A实现者 `/root/implement_config`，B `/root/implement_inbound`，C `/root/imp
 本地尝试完整API unit在1GiB堆上限触发Node heap OOM、exit134，未得到完整测试结论（`fix1-api-unit-full.log`）；这是受限本地验证资源失败，不是CI业务失败，也不以部分运行称PASS。不增加本机内存预算或恢复并发，改为串行相关完整文件，全部API单测由新head云端完整CI证明。API lint/build及CI配置/分片/结果门禁19项均已exit0，Web/DTO/迁移/网关及原浏览器源码未变，按影响范围复用既有有效证据；不据旧CI或本地绿色放行新head。
 
 当前按持续授权提交 `V0.0.40-fix1` 并更新同PR98；新head完整CI与Review处置仍待核验。未合并发布、生产配权/分发凭据/启用、关闭Issue或写飞书。用户原CodeGraph四项修改继续保留并排除提交。
+
+### fix1 最新代码检查点（2026-11-09，未合并）
+
+上述“待核验”为提交时点，当前已推送 `6efba7485621403aa57a5b4cbc95a8d1c638c350`。[新CI42584067733](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42584067733) attempt1全24任务completed/success，零failure/skip/cancel/running；scope、checks、api-unit、四integration、16个web-tests和foundation全部成立。独立只读跟踪后主代理读取Actions原始JSON，复用`evaluateDeployJobs`核同head/run/attempt及精确任务集合，返回`full`，Git外`fix1-ci-verified.json`保存实际原始run/jobs。没有用首run、不同head或只看Web绿色代替。
+
+新API单测日志实际163 suites/2381 tests全PASS；PG2为53 suites/547 tests、PG3为53/675、PG4为53/749全PASS，PG1 job成功但主测试总计处于插件长日志中部截断，保持NOT_VISIBLE、不猜总数；该job额外真实compiled Worker为1suite/8tests PASS。16个Web任务均success，本轮未逐份汇总16份JSON的测试总数，不虚报全站case计数。前述本地1GiB完整unit OOM不抹去，也不再阻断由云端完整单测已证明的相同代码。
+
+PR说明已写入四项修复、真实首FAIL、最新HEAD和限制，Codex Review大写UUID问题由真实RED→GREEN与独立SPEC/QUALITY承接，不把本地审查称为GitHub人工批准。源代码已推送；本条CI核验结果作为本地文档归档，不再为无运行变化重新推送触发相同PR全量门禁。用户原四dirty仍保留；本机API、测试/构建及一次性服务均已停下，后续仅销毁已确认本任务资源。合并发布、线上/真实来源/人工验收及Issue关闭/飞书回填均未执行。
