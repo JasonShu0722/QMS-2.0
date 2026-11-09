@@ -72,12 +72,12 @@ export class IntegrationReceiptService {
       if (!identity) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
       await lockIntegrationEndpoint(tx, organizationId, identity.endpoint_id);
       await this.authorize(tx, actor, true);
-      const [row] = await tx.$queryRaw<{ payload_ciphertext: string | null; body_expires_at: Date; metadata_expires_at: Date; now: Date }[]>`SELECT payload_ciphertext,body_expires_at,metadata_expires_at,clock_timestamp() AS now FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
+      const [row] = await tx.$queryRaw<{ id: string; organization_id: string; endpoint_id: string; payload_ciphertext: string | null; body_expires_at: Date; metadata_expires_at: Date; now: Date }[]>`SELECT id,organization_id,endpoint_id,payload_ciphertext,body_expires_at,metadata_expires_at,clock_timestamp() AS now FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
       if (!row || row.metadata_expires_at <= row.now) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
       if (!row.payload_ciphertext || row.body_expires_at <= row.now) integrationError('INTEGRATION_PAYLOAD_EXPIRED', 410);
-      const text = decryptSecret(row.payload_ciphertext, `integration:${organizationId}:${identity.endpoint_id}:${id}`);
-      await this.audit.record({ actorUserId: actor.id, organizationId, action: 'INTEGRATION_PAYLOAD_READ', resourceType: 'IntegrationReceipt', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { endpointId: identity.endpoint_id, receiptId: id } }, tx);
-      return { id, text, bodyExpiresAt: row.body_expires_at.toISOString() };
+      const text = decryptSecret(row.payload_ciphertext, `integration:${row.organization_id}:${row.endpoint_id}:${row.id}`);
+      await this.audit.record({ actorUserId: actor.id, organizationId: row.organization_id, action: 'INTEGRATION_PAYLOAD_READ', resourceType: 'IntegrationReceipt', resourceId: row.id, outcome: 'SUCCESS', traceId, metadata: { endpointId: row.endpoint_id, receiptId: row.id } }, tx);
+      return { id: row.id, text, bodyExpiresAt: row.body_expires_at.toISOString() };
     }, { isolationLevel: 'ReadCommitted' });
   }
 

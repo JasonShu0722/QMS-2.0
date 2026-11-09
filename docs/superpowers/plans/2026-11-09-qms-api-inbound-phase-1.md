@@ -16,12 +16,12 @@
 | 批准与动作授权 | 当前聊天对一期的直接批准及状态更新接续，覆盖实现、验证、独立审查及按持续流程建Issue/验证后PR；不含合并发布、生产配权/凭据分发/接口启用。阶段/提出人/优先级本轮不代改 |
 | 本次追加范围 | 负责人要求的逐接口 `returnReceipt` 已实现，默认开启；关闭成功返回 204 空正文，失败仍返回错误，内部收件与防重复保持；真实HTTP及浏览器主链已覆盖双向语义 |
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
-| 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → `codex/req0036-api-inbound`；PR未创建。远端main核badd14b，本地携归档c198b8b；本地/远端与同版本Issue查重后预留V0.0.40，提交前再核 |
+| 定位与版本 | [REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / `reczz28XQpffP57y` → [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) → [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98) / `codex/req0036-api-inbound`。V0.0.40首提交dfc7ba79已推送，main仍badd14b，携纯文档归档c198b8b；同范围CI/审查返修沿用V0.0.40-fix1，不新建PR |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | A/B/C/D及公共接缝SPEC/QUALITY均PASS；最终API接收八文件76/76 PASS、Web六文件43/43 PASS、真实浏览器完整两例21.7s PASS。HTTP/HTTPS 401/413/429及CA/308、轮换5项、完整恢复8项、真实Worker及邻近回归已通过。契约check、两端lint/构建、归档、两Compose配置及最终治理38文档/485链接/160依赖PASS；当前进入暂存来源核验及推送PR，未合并发布 |
+| 当前检查点 | 首提交本地76 API/43 Web/2 browser及保护门禁均通过，但PR98首CI42580718216实际20成功/4失败，未合并发布。fix1补审计标签、旧Response夹具、CI公开地址及Codex大写UUID正文解密；五完整unit106PASS、三完整PG37PASS，独立SPEC后QUALITY PASS。新head CI尚待推送验证，不能沿用首轮Web绿色代整体通过 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 主代理按持续授权核对暂存来源后提交推送并建PR，实际PR链接以当前聊天及GitHub对应分支为准；云端最新head完整门禁另核，不提前合并发布。飞书最终回读因user token_missing失败，保留先前rev363与当前聊天直接批准，不伪造最新表状态、不代写台账 |
+| 下一动作与负责人 | 主代理完成fix1类型/构建/CI配置和治理复验后推送同PR，核新head完整24任务及审查发现处置，不重跑旧run刷绿；合并发布仍另核授权。飞书最终回读因user token_missing失败，沿用聊天直接批准及先前快照，不伪造回读、不代写台账 |
 
 ## 1. 交付单元、映射与范围
 
@@ -244,3 +244,23 @@ A实现者 `/root/implement_config`，B `/root/implement_inbound`，C `/root/imp
 - A独立SPEC创建人P2已修复并复核通过；QUALITY发现锁等待跨过近期认证/任职到期后未重新授权的P1，追加8场景回归尚未取得完整结果，源码仍未补锁后auth/access。该项明确未解决，不能沿用原19项PASS称A质量通过。
 - 最近一次契约生成会话已丢失，当前生成类型未含C的IntegrationReceiptDto；本次生成记中断/结果未证，不称构建或契约通过。Web交互复验、C补充强删/限批/并发、密钥轮换和备份、独立B/C/D审查、最终门禁/PR仍未完成。
 - 本任务Git外入口将Node默认堆上限收紧到1024 MiB；本地同时最多一个测试/构建进程、测试单worker，资源紧张时先源码/文档工作。数据库如需重启仅启动本任务PostgreSQL并限制512 MiB/1CPU；不恢复ClamAV、全量服务或并发分片，不因资源不足Mock/Skip或伪造PASS。
+
+## 9. PR98 首轮失败与 fix1 接续
+
+首提交 `dfc7ba79be0d9579dcdacc813edf4976e0ec9e1b` 已推送并创建 [PR98](https://github.com/JasonShu0722/QMS-2.0/pull/98)，base `badd14b08275d29b361e596e2184d74e649b5acf`。首 [CI42580718216](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42580718216) attempt1 的合成合并SHA为 `6b8fdda5a068fc2c16707aafbe6e2f28c9651aaa`；最终24/24任务完成，20success/4failure，无取消/跳过/运行中任务。Web16分片全部成功，integration2/3成功。失败逐项如下，不能只修第一条或重跑旧run：
+
+| 失败/发现 | 实际根因 | 最小修复与证据 |
+| --- | --- | --- |
+| api-unit / job129038878523，163 suites中2FAIL、2375项18FAIL/2357PASS | 六新审计动作未登记中文标签；供应商报告17错误例的旧Response夹具缺新增setHeader | 既有审计目录补六标签/精确样例并保AST源扫描；夹具补setHeader及头体trace一致，保状态/code/5xx脱敏，生产filter不降级。原两完整文件本地RED18FAIL2PASS，`fix1-api-unit-red.log`；修后五完整邻近文件106PASS，`fix1-unit-green.log` |
+| integration1 / job129038878450，777项7FAIL/770PASS | CI未配置QMS_PUBLIC_BASE_URL，创建接口在配置校验处503 | `.github/workflows/qms-2-foundation.yml`仅在真实PG integration step显式配置`https://qms.example.test`，与原测试断言相同，不提供生产默认值或放宽校验 |
+| integration4 / job129038878540，749项16FAIL/733PASS | 同上，接口配置完整文件创建503 | 与credentials文件合计两完整文件27项，及返修后的receipts完整10项共同37PASS、0skip/49.084s，`fix1-postgres-green.log` |
+| foundation / job129043853007 | 聚合依赖失败，短日志明确`api-unit must be success` | 派生失败，没有新业务根因；由新head完整必需检查解决，不绕过门禁 |
+| [Codex Review P2](https://github.com/JasonShu0722/QMS-2.0/pull/98#discussion_r4510412232) | 大写合法receipt UUID能被PG匹配，但AAD用原路由字符串，大小写改变认证数据，解密503 | 锁定行复读canonical `id/organization_id/endpoint_id`，用于AAD/审计/响应；锁、双授权、到期和事务内审计保持。新增真实HTTP小/大写同正文、规范ID/两条审计/no-store；fixture强制含字母。真实RED期望200实503（`fix1-uppercase-red.log`），完整10例已随37项GREEN |
+
+`diagnose_ci_integration` 已核最终全部失败并归档 `ci-first-integration-diagnosis.md`。GitHub插件长日志中部截断，公开下载403且本机无gh，未称完整原始日志已下载；job尾部总计、失败文件和源码缺配置调用链已实际核对，foundation短日志完整，未据截断内容虚报额外成功范围。
+
+独立实现者 `fix_api_unit`、`fix_receipt_uuid` 分别只改分配文件；主代理串行处理CI环境和公共记录。独立 `fix1_spec_review` SPEC PASS后 `fix1_quality_review` QUALITY PASS，六文件限定审查无P1/P2，原断言及安全控制保留。`GlobalExceptionFilter.catch`直接测试调用方共四处，除已修夹具外其余三处已具备setHeader；integration其他加/解密AAD均来自DB canonical身份，没有扩展全局UUID兼容层。
+
+本地尝试完整API unit在1GiB堆上限触发Node heap OOM、exit134，未得到完整测试结论（`fix1-api-unit-full.log`）；这是受限本地验证资源失败，不是CI业务失败，也不以部分运行称PASS。不增加本机内存预算或恢复并发，改为串行相关完整文件，全部API单测由新head云端完整CI证明。API lint/build及CI配置/分片/结果门禁19项均已exit0，Web/DTO/迁移/网关及原浏览器源码未变，按影响范围复用既有有效证据；不据旧CI或本地绿色放行新head。
+
+当前按持续授权提交 `V0.0.40-fix1` 并更新同PR98；新head完整CI与Review处置仍待核验。未合并发布、生产配权/分发凭据/启用、关闭Issue或写飞书。用户原CodeGraph四项修改继续保留并排除提交。

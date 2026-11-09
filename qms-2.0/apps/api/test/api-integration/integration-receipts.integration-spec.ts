@@ -51,7 +51,7 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     const cookie = `qms_session=${await sessions.create(user.id, prisma, { mfaVerified: true })}`;
     const endpoint = await prisma.integrationEndpoint.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Private endpoint', sourceCode, sourceName: 'Internal platform', status: 'ENABLED' } });
     const credential = await prisma.integrationCredential.create({ data: { organizationId: organization.id, endpointId: endpoint.id, name: 'Read fixture', secretHash: 'a'.repeat(64), expiresAt: new Date(Date.now() + 86400000) } });
-    const receiptId = randomUUID(), text = '{"private":"<script>not executed</script>"}';
+    const receiptId = `a${randomUUID().slice(1)}`, text = '{"private":"<script>not executed</script>"}';
     const ciphertext = encryptSecret(text, `integration:${organization.id}:${endpoint.id}:${receiptId}`);
     const receipt = await prisma.integrationReceipt.create({ data: { id: receiptId, organizationId: organization.id, endpointId: endpoint.id, credentialId: credential.id, messageId: randomUUID(), bodyDigest: 'b'.repeat(64), configurationVersion: 1, configurationSnapshot: { returnReceipt: true }, bodyExpiresAt: new Date(Date.now() + 86400000), metadataExpiresAt: new Date(Date.now() + 90 * 86400000), payloadCiphertext: ciphertext, payloadBytes: Buffer.byteLength(ciphertext) } });
     return { organization, user, cookie, endpoint, credential, receipt, text };
@@ -75,6 +75,19 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     const payload = await request(app.getHttpServer()).get(`${base}/receipts/${item.receipt.id}/payload`).set('Cookie', item.cookie).expect(200);
     expect(payload.body.text).toBe(item.text);
     expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_PAYLOAD_READ', resourceId: item.receipt.id } })).toBe(1);
+  });
+  it('reads the same audited plaintext with an uppercase receipt UUID and returns canonical IDs', async () => {
+    const item = await fixture();
+    const uppercaseId = item.receipt.id.toUpperCase();
+    expect(uppercaseId).not.toBe(item.receipt.id);
+    const canonical = await request(app.getHttpServer()).get(`${base}/receipts/${item.receipt.id}/payload`).set('Cookie', item.cookie).expect(200);
+    const uppercase = await request(app.getHttpServer()).get(`${base}/receipts/${uppercaseId}/payload`).set('Cookie', item.cookie).expect(200);
+    expect(uppercase.body).toEqual(canonical.body);
+    expect(uppercase.body).toMatchObject({ id: item.receipt.id, text: item.text });
+    expect(uppercase.headers['cache-control']).toBe('no-store');
+    const audits = await prisma.auditEvent.findMany({ where: { organizationId: item.organization.id, action: 'INTEGRATION_PAYLOAD_READ' } });
+    expect(audits).toHaveLength(2);
+    for (const audit of audits) expect(audit).toMatchObject({ resourceId: item.receipt.id, outcome: 'SUCCESS', metadata: { endpointId: item.endpoint.id, receiptId: item.receipt.id } });
   });
   it('does not imply payload disclosure or integration configuration access from receipt read', async () => {
     const item = await fixture(['integration:receipts:read']);

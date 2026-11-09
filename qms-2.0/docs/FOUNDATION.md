@@ -2,6 +2,8 @@
 
 ## REQ-0036 API 接收一期（2026-11-09，本地候选）
 
+PR98 / dfc7ba79首轮CI42580718216实际24任务20成功/4失败：api-unit六新审计动作缺中文标签及旧Response夹具缺setHeader，integration1/4缺QMS_PUBLIC_BASE_URL导致23项创建503，foundation为派生失败；Web16分片均成功。Codex Review另发现大写收件UUID拼AAD导致解密503。V0.0.40-fix1已最小返修，unit五完整文件106PASS、PG三完整文件37PASS、SPEC后QUALITY PASS；新head完整CI待推送核验，不能用本地或首轮Web绿称PR通过。详细失败/根因/资源限制见计划第9节。
+
 关联 Issue97 / `codex/req0036-api-inbound` / 预留 V0.0.40，源码基线 `c198b8b6dfe6506cc6588884cbc2a59b8e96ff68`，143 条迁移链。独立 A/B/C/D 规格后质量及最终公共接缝限定复审已通过。完整命令、失败和最终覆盖见[一期计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)；本节不代表完整阶段验收、发布或真实公司系统联调。
 
 本地 Node24.21.0 / pnpm11.19.0；一次性 PostgreSQL18 在 loopback55636，受保护对象演练使用本任务 MinIO55637；API/Worker、Nginx HTTP5186/HTTPS5187、外部临时证书及 Chromium 均为本任务资源，不连接55440。重测试/构建串行、单worker、Node堆上限1GiB；未修改Windows/WSL配置。
