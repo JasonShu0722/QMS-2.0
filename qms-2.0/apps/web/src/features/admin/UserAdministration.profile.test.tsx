@@ -75,9 +75,11 @@ it.each(['whitespace', 'matching remote'] as const)('normalizes admin rebase cha
   await waitFor(() => expect(dialog.getByLabelText('姓名')).toBeEnabled());
   expect(dialog.getByLabelText('姓名')).toHaveValue(' Draft ');
   expect(dialog.getByLabelText('电话')).toHaveValue(remote.phone);
-  const unload = new Event('beforeunload', { cancelable: true });
-  window.dispatchEvent(unload);
-  expect(unload.defaultPrevented).toBe(scenario !== 'matching remote');
+  await waitFor(() => {
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(scenario !== 'matching remote');
+  });
 }, 30000);
 
 it.each(['save', 'reload'] as const)('blocks admin input and all modal dismissal while %s is pending', async operation => {

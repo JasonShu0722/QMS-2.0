@@ -4,6 +4,10 @@
 
 PR101首候选33e4fea实际CI42650559416 attempt1为22success/2failure：唯一Web15原admin-language联合语言case31083ms超30000，foundation派生；16份JSON239文件3329项3328PASS/1FAIL，0pending。完整日志已下载，Review clear仍未合并。V0.0.41-fix1仅该test case定向within查询及缓存真实语言按钮，保同case三真实组件联合zh/en/zh、所有原断言和30秒预算；原本地完整6PASS目标26463ms非RED，改后6PASS目标16003ms，真实RED来自CI。具体云端迟缓原因未证，不加超时或重跑旧run。API/Web产品/迁移/契约/部署与33e4fea一致，以下本地业务证据按范围继续有效；新head CI/Review及发布待核。细节见计划14节fix1。
 
+第二候选f0dae09的CI42654844976 attempt1，Web6/job129290571446原UserAdministration.profile.test.tsx matching remote的beforeunload原精确false实际true（该片1FAIL/72PASS）。源码dirty归一化正确，保护Set依useEffect更新，输入enabled不是保护效果同步证据；最小fix2仅等待实际beforeunload出口，每次创建fresh Event，保whitespace=true/matching=false、原字段/30秒/其他六项。父原完整8PASS非本地RED，真实RED为CI；未改生产。全部CI终态、修后完整复验和限定双审在计划14节接续，不能提前称新候选绿。
+
+第二CI已全部结束22success/2failure/0pending，foundation129299065569原日志明确web-tests must be success；其他15Web/API/四PG均成功，前轮语言失败片本轮成功。修后profile完整8/8、限定SPEC后QUALITY与治理PASS，三文件fix2更新同PR。第二轮完整日志/ZIP下载遭Azure blob连接超时，已读连接器实际两失败日志及保存完整run/jobs，未冒称16artifact成功下载；不为取日志而重跑CI。产品/协议/迁移与33e4fea未变，新head检查仍须实际核验。
+
 在主线ce4a72f上接续a52519f文档归档，分支codex/req0036-api-convenience，复用Issue97。负责人明确三项便捷化：编码地址、复制含真实鉴权的对接配置、永久有效并能反复复制。新增144迁移允许expires_at为空并保存新凭据原文密文；旧URL及有限期凭据保持，旧hash不能反推原文。详细合同、分工及真实失败保留见[一期计划第14节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。生产当前仍ce4a72f，新范围未据本地结果宣称已发布。
 
 | 检查 | 实际结果 |
