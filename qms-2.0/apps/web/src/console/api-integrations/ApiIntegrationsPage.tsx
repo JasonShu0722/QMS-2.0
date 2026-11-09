@@ -12,6 +12,7 @@ import { useConsoleContext } from '../ConsoleLayout';
 import type { ConsoleContext } from '../console-navigation';
 import { EndpointEditor } from './EndpointEditor';
 import { CredentialPanel } from './CredentialPanel';
+import { ConnectionCopy } from './ConnectionCopy';
 import { ReceiptList } from './ReceiptList';
 import { integrationError, integrationPath, isAborted, useScopedIntegrationRequests, type Endpoint, type EndpointPage, type IntegrationScope } from './integration-ui';
 import './api-integrations.css';
@@ -101,20 +102,21 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
         onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
     {editing && <EndpointEditor scope={scope} endpoint={editing.endpoint} close={() => setEditing(undefined)} saved={() => { setEditing(undefined); reload(); }} />}
     {credentials && <CredentialPanel scope={scope} endpoint={credentials} close={() => setCredentials(undefined)} changed={reload} />}
-    {instructions && <Instructions endpoint={instructions} close={() => setInstructions(undefined)} />}
+    {instructions && <Instructions key={instructions.id} scope={scope} endpoint={instructions} close={() => setInstructions(undefined)} />}
   </div>;
 }
 
-function Instructions({ endpoint, close }: { endpoint: Endpoint; close: () => void }) {
+function Instructions({ scope, endpoint, close }: { scope: IntegrationScope; endpoint: Endpoint; close: () => void }) {
   const { locale } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
   const example = `curl --request POST "${endpoint.publicUrl}" --header "Authorization: Bearer <credentialId>.<secret>" --header "Idempotency-Key: example-message-001" --header "Content-Type: application/json" --data-binary "@payload.json"`;
   return <div className="qms-integration-instructions" role="region" aria-label={text('调用说明', 'Calling instructions')}>
     <Space wrap><strong>{endpoint.name}</strong><Button onClick={close}>{text('关闭说明', 'Close instructions')}</Button></Space>
-    <Typography.Paragraph copyable={{ text: endpoint.publicUrl }}><code>{endpoint.publicUrl}</code></Typography.Paragraph>
+    <Typography.Paragraph><code>{endpoint.publicUrl}</code></Typography.Paragraph>
+    <ConnectionCopy scope={scope} endpoint={endpoint} />
     <p>{text('POST · application/json · JSON对象', 'POST · application/json · JSON object')}</p>
     <pre>{`Authorization: Bearer <credentialId>.<secret>\nIdempotency-Key: <unique-message-id>\nContent-Type: application/json`}</pre>
-    <Typography.Paragraph copyable={{ text: example }}><pre aria-label={text('调用示例', 'Request example')}>{example}</pre></Typography.Paragraph>
+    <pre aria-label={text('调用示例', 'Request example')}>{example}</pre>
     <p>{text(endpoint.returnReceipt ? '成功首次返回201，重复返回200及原接收编号。' : '成功首次及重复均返回204空正文。', endpoint.returnReceipt ? 'First success: 201. Duplicate: 200 with the original receipt.' : 'First success and duplicates: 204 with an empty body.')}</p>
     <p>{text('网络中断或5xx后用原消息编号和完全相同的正文字节退避重试；409表示编号与内容冲突。', 'After network failure or 5xx, back off and retry with the original message ID and identical payload bytes. 409 indicates conflicting content.')}</p>
     <p>{text('消息编号为8～128位字母、数字及 . _ : -，防重复窗口90天；请求追踪号用于排查，网关错误可能没有JSON正文。', 'Use an 8–128 character message ID with letters, numbers and . _ : -. Deduplication lasts 90 days. Request IDs support investigation; gateway errors may not contain JSON.')}</p>

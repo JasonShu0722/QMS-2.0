@@ -3,10 +3,10 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { raw } from 'express';
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import { PrismaService } from '../../src/database/prisma.service.js';
+import { configureHttpBodyParser } from '../../src/http-body-parser.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
@@ -28,7 +28,7 @@ describe('API inbound durable reception', () => {
   beforeAll(async () => {
     app = (await Test.createTestingModule({ controllers: [InboundController], providers: [PrismaService, AuditLogService, InboundGuard, InboundService] }).compile())
       .createNestApplication<NestExpressApplication>({ bodyParser: false });
-    app.use(raw({ type: () => true, limit: '1mb', inflate: false }));
+    configureHttpBodyParser(app);
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.listen(0, '127.0.0.1'); prisma = app.get(PrismaService); audit = app.get(AuditLogService);
   });
@@ -46,11 +46,11 @@ describe('API inbound durable reception', () => {
     await app?.close();
   });
 
-  async function fixture() {
+  async function fixture(code = randomUUID()) {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Inbound technical fixture', type: 'INTERNAL' } }); organizations.push(organization.id);
     const endpointId = randomUUID(), credentialId = randomUUID(), secret = randomBytes(32).toString('base64url');
     await prisma.$executeRaw`INSERT INTO integration_endpoints(id,organization_id,code,name,source_code,source_name,status)
-      VALUES(${endpointId}::uuid,${organization.id}::uuid,${randomUUID()},'Technical receiver','TECHNICAL','Technical source','ENABLED')`;
+      VALUES(${endpointId}::uuid,${organization.id}::uuid,${code},'Technical receiver','TECHNICAL','Technical source','ENABLED')`;
     await prisma.$executeRaw`INSERT INTO integration_credentials(id,organization_id,endpoint_id,name,secret_hash,expires_at)
       VALUES(${credentialId}::uuid,${organization.id}::uuid,${endpointId}::uuid,'Test credential',${createHash('sha256').update(secret).digest('hex')},CURRENT_TIMESTAMP+interval '1 day')`;
     return { organizationId: organization.id, endpointId, credentialId, token: `${credentialId}.${secret}`, path: `/api/v1/integrations/inbound/${endpointId}/messages` };
@@ -58,6 +58,7 @@ describe('API inbound durable reception', () => {
   function send(receiver: { path: string; token: string }, messageId = randomUUID(), body: string | Buffer = '{"reading":1}') {
     return request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`).set('Idempotency-Key', messageId).set('Content-Type', 'application/json').send(body);
   }
+  const codePath = (code: string) => `/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`;
 
   it('has receipt, rate and scope capacity constraints in real PostgreSQL', async () => {
     expect(await prisma.$queryRaw`SELECT to_regclass('public.integration_receipts')::text AS receipts,
@@ -72,6 +73,57 @@ describe('API inbound durable reception', () => {
     await send({ ...receiver, token: `${randomUUID()}.${randomBytes(32).toString('base64url')}` }).expect(401);
     const another = await fixture(); await send({ ...receiver, token: another.token }).expect(401);
     await request(app.getHttpServer()).post(receiver.path).set('Authorization', [`Bearer ${receiver.token}`, `Bearer ${receiver.token}`]).send({}).expect(401);
+  });
+
+  it('uses one receipt identity across an encoded interface code and the legacy UUID', async () => {
+    const code = 'Erp:inbound', receiver = await fixture(code), messageId = randomUUID();
+    const first = await send({ ...receiver, path: codePath(code) }, messageId).expect(201);
+    const retry = await send({ ...receiver, path: codePath(receiver.endpointId.toUpperCase()) }, messageId).expect(200);
+    expect(retry.body).toEqual({ ...first.body, duplicate: true });
+    expect(retry.headers['x-request-id']).not.toBe(first.headers['x-request-id']);
+    await send({ ...receiver, path: codePath(code.toLowerCase()) }).expect(401);
+    await send({ ...receiver, path: codePath('A'.repeat(65)) }).expect(401);
+    expect(await prisma.$queryRaw`SELECT id,organization_id,endpoint_id,credential_id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`)
+      .toEqual([{ id: first.body.receiptId, organization_id: receiver.organizationId, endpoint_id: receiver.endpointId, credential_id: receiver.credentialId }]);
+  });
+
+  it('binds a shared interface code to each credential’s own organization', async () => {
+    const code = 'test', first = await fixture(code), second = await fixture(code), other = await fixture('different-code');
+    const path = codePath(code), messageId = randomUUID();
+    await send({ ...other, path }, messageId).expect(401);
+    await send({ ...first, path: second.path }, messageId).expect(401);
+    const accepted = await send({ ...first, path }, messageId).expect(201);
+    const separate = await send({ ...second, path }, messageId).expect(201);
+    const receipts = await prisma.$queryRaw<unknown[]>`SELECT id,organization_id,endpoint_id FROM integration_receipts WHERE message_id=${messageId}`;
+    expect(receipts).toHaveLength(2);
+    expect(receipts).toEqual(expect.arrayContaining([
+      { id: accepted.body.receiptId, organization_id: first.organizationId, endpoint_id: first.endpointId },
+      { id: separate.body.receiptId, organization_id: second.organizationId, endpoint_id: second.endpointId },
+    ]));
+  });
+
+  it('matches a UUID-shaped interface code against the endpoint bound to the credential', async () => {
+    const original = await fixture(), alias = await fixture(original.endpointId);
+    const messageId = randomUUID();
+    const first = await send(original, messageId).expect(201);
+    const second = await send({ ...alias, path: original.path }, messageId).expect(201);
+    const retry = await send(alias, messageId).expect(200);
+    expect(retry.body.receiptId).toBe(second.body.receiptId);
+    expect(second.body.receiptId).not.toBe(first.body.receiptId);
+  });
+
+  it('accepts a permanent credential on the code address until it is revoked', async () => {
+    const code = 'permanent', receiver = await fixture(code), messageId = randomUUID();
+    await prisma.$executeRaw`UPDATE integration_credentials SET expires_at=NULL WHERE id=${receiver.credentialId}::uuid`;
+    await prisma.$executeRaw`UPDATE integration_endpoints SET return_receipt=false WHERE id=${receiver.endpointId}::uuid`;
+    const coded = { ...receiver, path: codePath(code) };
+    const accepted = await send(coded, messageId).expect(204);
+    expect(accepted.text).toBe('');
+    await send(receiver, messageId).expect(204);
+    await prisma.$executeRaw`UPDATE integration_credentials SET revoked_at=clock_timestamp() WHERE id=${receiver.credentialId}::uuid`;
+    await send(coded).expect(401);
+    expect(await prisma.$queryRaw`SELECT message_id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`)
+      .toEqual([{ message_id: messageId }]);
   });
 
   it('encrypts one durable record and returns the same receipt for byte-identical retries', async () => {

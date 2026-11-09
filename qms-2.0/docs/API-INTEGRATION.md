@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-2026-11-09：[REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) 已获负责人批准开发。公司内部系统或集成平台经现有公网 HTTPS 推送 JSON；配置、机器鉴权、可靠收件及检索已在本地实现，尚未合并发布或启用生产接口。登记时“待评估”为历史状态，开发回读为“开发中”；后续验证和交付状态以实施计划顶部摘要为准。
+2026-11-09：[REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) 一期已随 ce4a72f 上线，Admin 入口可见已由负责人确认。公司内部系统或集成平台经公网 HTTPS 推送 JSON；本轮按负责人要求补充编码地址、完整对接配置复制及永久凭据，当前开发与发布证据以实施计划顶部摘要为准。
 
 - [一期设计](../../docs/superpowers/specs/2026-11-09-qms-api-inbound-phase-1-design.md)：独立管理页、API Key、可靠收件、记录检索、正文保护、限流及保留；技术参数为建议基线。
 - [一期实施计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)：写集、任务、TDD/独立审查、验收与交付闭环及当前授权。
@@ -27,18 +27,18 @@
 | `integration:receipts:read` | 查询已收数据、请求结果和运行事实 |
 | `integration:payload:read` | 配合收件读权读取正文，必须写入访问审计 |
 
-按负责人对 Admin 默认可用性的明确要求，有效 `platform:admin` 身份沿现有内部组织权限投影获得上述五项权限，管理菜单据受控 context 显示“API接口管理”。普通账号仍须通过岗位明确授予，不按用户名或岗位名称推断平台身份，也不批量修改存量岗位。仅正常启用的内部组织可使用。管理写操作保留 CSRF、幂等键和近期认证；机器凭据独立于人员会话，绑定唯一组织及接口，最多同时两个有效凭据，默认有效 90 天、可设 1～365 天，创建人由服务端保存。
+按负责人对 Admin 默认可用性的明确要求，有效 `platform:admin` 身份沿现有内部组织权限投影获得上述五项权限，管理菜单据受控 context 显示“API接口管理”。普通账号仍须通过岗位明确授予，不按用户名或岗位名称推断平台身份，也不批量修改存量岗位。仅正常启用的内部组织可使用。管理写操作保留 CSRF、幂等键和近期认证；机器凭据绑定唯一组织及接口，最多同时两个有效凭据。页面默认永久有效，也可设 1～365 天；API 显式 `validityDays: null` 表示永久，省略该字段仍为 90 天。创建人由服务端保存，永久凭据仍可随时撤销。
 
-完整 Bearer 值仅在首次成功响应显示，列表、审计和幂等回放不恢复秘密。丢失首次响应后撤销对应凭据并重新发放，不能查询原文；凭据不得贴入聊天、台账或 Issue。
+调用说明和有效凭据行的“复制对接配置”提供实际 URL、POST、Content-Type、完整 Authorization、消息编号及重试规则和当前回执模式。再次打开页面也可复制。读取 `/admin/integrations/endpoints/:id/connection` 同时要求接口管理与凭据管理权限，使用无缓存响应，并在事务内解密、校验及记录审计；失败不披露秘密。新凭据原文通过既有 keyring 加密保存，普通列表、审计和创建幂等回放不含秘密或密文。历史凭据只有校验值，无法恢复原文；创建一份新凭据即可使用复制功能，旧凭据仍按原规则有效，不会自动撤销。含鉴权信息的复制文字须通过受控渠道交付接口方，不贴入台账或 Issue。
 
 ## 调用协议
 
-`POST /api/v1/integrations/inbound/{endpointId}/messages`，正文为未压缩、有效 UTF-8 的 JSON 对象。调用说明提供当前地址和占位凭据示例：
+`POST /api/v1/integrations/inbound/{接口编码}/messages`，例如编码 `test` 对应 `/api/v1/integrations/inbound/test/messages`。编码区分大小写，特殊字符由页面 URL 编码。既有 UUID 地址继续有效；组织之间相同编码由凭据绑定的接口区分，不靠 URL 猜测组织。正文为未压缩、有效 UTF-8 的 JSON 对象。页面提供完整复制操作和请求示例：
 
 支持可选 UTF-8 charset（包括双引号形式），`Content-Encoding: identity`不区分大小写；其他编码和压缩仍拒绝。合法UUID的百分号编码路径与原路径使用相同原始字节、防重复和正文上限。
 
 ```powershell
-curl --request POST "https://<qms-host>/api/v1/integrations/inbound/<endpointId>/messages" --header "Authorization: Bearer <credentialId>.<secret>" --header "Idempotency-Key: example-message-001" --header "Content-Type: application/json" --data-binary "@payload.json"
+curl --request POST "https://<qms-host>/api/v1/integrations/inbound/test/messages" --header "Authorization: Bearer <credentialId>.<secret>" --header "Idempotency-Key: example-message-001" --header "Content-Type: application/json" --data-binary "@payload.json"
 ```
 
 消息编号为 8～128 位字母、数字及 `._:-`，同一接口 90 天内唯一。重试须使用原编号和完全相同的正文字节；改变空格也视为内容冲突。收件、必要审计和容量计账在同一个事务提交后才响应成功。
@@ -66,4 +66,4 @@ curl --request POST "https://<qms-host>/api/v1/integrations/inbound/<endpointId>
 
 上线前设置真实 `QMS_PUBLIC_BASE_URL`，核对 TLS、可信代理层数、来源出口 IP、协议、原字节重试、201/200/204 和非 JSON 错误识别、敏感样本、吞吐及秘密交付渠道。生产配权、发放凭据和启用接口分别需要相应授权。
 
-正文复用 keyring 加密，轮换须保留新旧密钥并完成重加密和实际读取核验。完整备份包含配置、凭据校验值、密文、去重键和容量计账；恢复后先停用接收接口，再核对密钥、到期/凭据状态和计账后授权启用。参见[数据保护](DATA-PROTECTION.md)；小样本恢复成功不能替代批准容量的完整恢复门禁。
+正文及新凭据原文复用 keyring 加密，轮换须保留新旧密钥并完成重加密和实际读取核验。完整备份包含配置、凭据校验值及原文密文、永久空有效期、收件密文、去重键和容量计账；恢复后先停用接收接口，再核对密钥、到期/凭据状态和计账后授权启用。144 迁移允许空有效期，旧镜像不识别永久凭据，不能直接回退旧镜像；优先向前修复，确需快照恢复时先停止接收并核对迁移后新增数据。参见[数据保护](DATA-PROTECTION.md)；小样本恢复成功不能替代批准容量的完整恢复门禁。

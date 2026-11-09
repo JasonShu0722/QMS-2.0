@@ -5,6 +5,9 @@ import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Is
 export class IntegrationScopeDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
 }
+export class IntegrationConnectionQueryDto extends IntegrationScopeDto {
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() credentialId?: string;
+}
 export class IntegrationPageQueryDto extends IntegrationScopeDto {
   @ApiPropertyOptional({ minimum: 1, default: 1, maximum: 10000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10000) page?: number;
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
@@ -36,7 +39,7 @@ export class UpdateIntegrationEndpointDto extends IntegrationScopeDto {
 }
 export class CreateIntegrationCredentialDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
-  @ApiPropertyOptional({ minimum: 1, maximum: 365, default: 90 }) @IsOptional() @IsInt() @Min(1) @Max(365) validityDays?: number;
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1, maximum: 365, default: 90, description: 'null 表示永久有效。' }) @IsOptional() @IsInt() @Min(1) @Max(365) validityDays?: number | null;
 }
 export class IntegrationEndpointDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
@@ -65,16 +68,23 @@ export class IntegrationEndpointPageDto {
   @ApiProperty() page!: number;
   @ApiProperty() limit!: number;
 }
+export class IntegrationConnectionDto {
+  @ApiProperty({ type: IntegrationEndpointDto }) endpoint!: IntegrationEndpointDto;
+  @ApiProperty({ format: 'uuid' }) credentialId!: string;
+  @ApiProperty() credentialName!: string;
+  @ApiProperty() authorization!: string;
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' }) expiresAt!: string | null;
+}
 export class IntegrationCredentialDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ format: 'uuid' }) endpointId!: string;
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) createdById!: string | null;
   @ApiProperty() name!: string;
-  @ApiProperty({ format: 'date-time' }) expiresAt!: string;
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' }) expiresAt!: string | null;
   @ApiProperty({ type: String, nullable: true, format: 'date-time' }) revokedAt!: string | null;
   @ApiProperty({ format: 'date-time' }) createdAt!: string;
-  @ApiPropertyOptional({ description: '仅首次成功创建时展示的完整 Bearer 凭据；幂等重试无法恢复。' }) secret?: string;
+  @ApiPropertyOptional({ description: '首次创建响应中的凭据值，幂等回放不包含此字段。' }) secret?: string;
 }
 export class IntegrationCredentialPageDto {
   @ApiProperty({ type: [IntegrationCredentialDto] }) items!: IntegrationCredentialDto[];

@@ -1,5 +1,5 @@
 import { Controller, Post, Req, Res } from '@nestjs/common';
-import { ApiBody, ApiHeader, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiHeader, ApiParam, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { InboundReceiptDto, INBOUND_RESULT } from './inbound.dto.js';
@@ -12,6 +12,7 @@ export class InboundController {
 
   @Post(':endpointId/messages')
   @RequireInboundMachine()
+  @ApiParam({ name: 'endpointId', required: true, description: '接口编码（区分大小写），或原有接口 UUID。', schema: { type: 'string', maxLength: 64 } })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiBody({ schema: { type: 'object', additionalProperties: true } })

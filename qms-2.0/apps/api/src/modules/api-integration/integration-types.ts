@@ -48,14 +48,14 @@ export function integrationAllowedIps(value: unknown): string[] {
   }
   return [...new Set(value as string[])];
 }
-export function integrationPublicUrl(endpointId: string): string {
+export function integrationPublicUrl(code: string): string {
   try {
     const base = new URL(process.env.QMS_PUBLIC_BASE_URL ?? '');
     const developmentLoopback = process.env.NODE_ENV !== 'production' && base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname);
     if (base.protocol !== 'https:' && !developmentLoopback || base.username || base.password || base.search || base.hash || base.pathname !== '/') throw new Error();
-    return new URL(`/api/v1/integrations/inbound/${endpointId}/messages`, base).toString();
+    return new URL(`/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`, base).toString();
   } catch { integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503); }
 }
 export function integrationEndpointDto(row: IntegrationEndpointRow): IntegrationEndpointDto {
-  return { ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), publicUrl: integrationPublicUrl(row.id) };
+  return { ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), publicUrl: integrationPublicUrl(row.code) };
 }

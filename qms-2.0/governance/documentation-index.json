@@ -216,7 +216,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "f2464040129ee8e7b2b42287a27a8efe4dbf8b68ecdca0bc8bcd6ea557491fb9"
+            "sha256": "f3f3b158df80d6f5a9023ae33668bde84b19de81329454a7a544bdea4998c133"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",
@@ -1090,7 +1090,7 @@
           },
           {
             "path": "apps/api/test/operations/data-protection.acceptance.mjs",
-            "sha256": "801ac827b622bbc14ec846ba367d5d7d28b6e174be1d4696214f8f145405a10a"
+            "sha256": "638eebf595e1d38eb4f158633b6450eac75b210b91eef2453943d27130f9a204"
           },
           {
             "path": "apps/api/test/operations/operations-alerts.acceptance.mjs",
@@ -1200,7 +1200,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "f2464040129ee8e7b2b42287a27a8efe4dbf8b68ecdca0bc8bcd6ea557491fb9"
+            "sha256": "f3f3b158df80d6f5a9023ae33668bde84b19de81329454a7a544bdea4998c133"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",

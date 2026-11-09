@@ -13,6 +13,7 @@ import type { Credential, Endpoint, IntegrationScope } from './integration-ui';
 const mocks = vi.hoisted(() => ({ mutate: vi.fn() }));
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn(() => mocks.mutate) }));
 const read = vi.mocked(apiRequest);
+const clipboard = vi.fn(async (_value: string) => {});
 const organizationId = '22222222-2222-4222-8222-222222222222';
 const endpointId = '33333333-3333-4333-8333-333333333333';
 const actorId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -29,24 +30,50 @@ function view() {
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); read.mockReset(); mocks.mutate.mockReset(); localStorage.clear();
   read.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   const session = `INTERNAL:${organizationId}:${actorId}`; useWorkTabsStore.getState().bindSession(session);
   scope = { organizationId, session, epoch: getLedgerSessionEpoch(), permissions: ['integration:read', 'integration:manage', 'integration:credentials:manage'], deny: vi.fn() };
 });
 afterEach(() => { vi.unstubAllEnvs(); localStorage.clear(); });
 
-it('shows a newly created credential only in the current dialog and never stores it locally', async () => {
-  const rendered = view(); const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
+it('defaults new credentials to permanent validity with an editable useful name', async () => {
+  view(); const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
   await waitFor(() => expect(element).toBeVisible()); const panel = within(element);
-  mocks.mutate.mockResolvedValue({ ...credential, secret: 'credential-id.ONE-TIME-SECRET' });
-  fireEvent.change(panel.getByLabelText('凭据名称'), { target: { value: '集成平台' } }); fireEvent.click(panel.getByRole('button', { name: '创建凭据' }));
-  const secret = await panel.findByText('credential-id.ONE-TIME-SECRET'); await waitFor(() => expect(secret).toBeVisible());
-  expect(Object.values(localStorage).join('')).not.toContain('ONE-TIME-SECRET');
-  rendered.unmount(); expect(screen.queryByText('credential-id.ONE-TIME-SECRET')).not.toBeInTheDocument();
+  expect(panel.getByLabelText('凭据名称')).toHaveValue('制造系统对接凭据');
+  expect(panel.getByRole('radio', { name: '永久有效' })).toBeChecked();
+  mocks.mutate.mockResolvedValue({ ...credential, expiresAt: null });
+  fireEvent.change(panel.getByLabelText('凭据名称'), { target: { value: '集成平台' } });
+  fireEvent.click(panel.getByRole('button', { name: '创建凭据' }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(`/api/v1/admin/integrations/endpoints/${endpointId}/credentials`, 'POST', { organizationId, name: '集成平台', validityDays: null }, expect.any(AbortSignal)));
 });
 
-it('explains an unrecoverable one-time secret after an idempotent credential retry', async () => {
+it('allows finite validity and offers connection copying after a metadata-only credential retry', async () => {
   mocks.mutate.mockResolvedValue(credential); view(); const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
   await waitFor(() => expect(element).toBeVisible()); const panel = within(element);
+  fireEvent.click(panel.getByRole('radio', { name: '指定天数' }));
+  fireEvent.change(await panel.findByLabelText('有效天数'), { target: { value: '30' } });
   fireEvent.change(panel.getByLabelText('凭据名称'), { target: { value: '原请求' } }); fireEvent.click(panel.getByRole('button', { name: '创建凭据' }));
-  const lost = await panel.findByText(/原文无法恢复/); await waitFor(() => expect(lost).toBeVisible()); expect(panel.getByText(credential.id)).toBeVisible();
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(`/api/v1/admin/integrations/endpoints/${endpointId}/credentials`, 'POST', { organizationId, name: '原请求', validityDays: 30 }, expect.any(AbortSignal)));
+  const copy = await panel.findByRole('button', { name: '复制对接配置' });
+  await waitFor(() => expect(copy).toBeVisible());
+  expect(panel.queryByText(/原文无法恢复|仅本次显示/)).not.toBeInTheDocument();
+});
+
+it('copies a selected permanent credential again after reopening without storing the secret', async () => {
+  const result = { endpoint, credentialId: credential.id, credentialName: credential.name, authorization: 'Bearer fixture-id.REPEATABLE-SECRET', expiresAt: null };
+  read.mockImplementation(async path => String(path).includes('/connection?') ? result : { items: [{ ...credential, expiresAt: null }], total: 1, page: 1, limit: 20 });
+  for (let opening = 0; opening < 2; opening++) {
+    const rendered = view();
+    const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
+    await waitFor(() => expect(element).toBeVisible()); const panel = within(element);
+    const copy = await panel.findByRole('button', { name: '复制集成平台对接配置' });
+    fireEvent.click(copy);
+    await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(opening + 1));
+    const query = new URL(read.mock.calls.filter(([path]) => String(path).includes('/connection?')).at(-1)![0], 'http://localhost').searchParams;
+    expect(query.get('organizationId')).toBe(organizationId); expect(query.get('credentialId')).toBe(credential.id);
+    expect(clipboard.mock.calls.at(-1)![0]).toContain(result.authorization);
+    expect(clipboard.mock.calls.at(-1)![0]).toContain('永久有效');
+    expect(Object.values(localStorage).join('') + Object.values(sessionStorage).join('')).not.toContain('REPEATABLE-SECRET');
+    rendered.unmount();
+  }
 });

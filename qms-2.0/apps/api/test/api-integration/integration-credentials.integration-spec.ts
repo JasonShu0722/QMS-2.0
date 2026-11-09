@@ -52,32 +52,47 @@ describe('Integration machine credential lifecycle with real sessions and Postgr
   const create = (cookie: string, endpointId: string, key = randomUUID(), input: object = { name: 'ERP primary' }) => request(app.getHttpServer()).post(`${path}/${endpointId}/credentials`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send(input);
   const revoke = (cookie: string, endpointId: string, credentialId: string, key = randomUUID()) => request(app.getHttpServer()).post(`${path}/${endpointId}/credentials/${credentialId}/revoke`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send({});
 
-  it('returns a 256-bit secret once and never stores it in credentials, receipts or audits', async () => {
+  it('returns a 256-bit secret on creation and stores only its hash and ciphertext', async () => {
     const fixtureValue = await fixture(); const key = randomUUID();
     const created = await create(fixtureValue.cookie, fixtureValue.endpointId, key).expect(201);
     expect(created.headers['cache-control']).toBe('no-store');
     expect(created.body.createdById).toBe(fixtureValue.user.id);
     const [credentialId, secret] = (created.body.secret as string).split('.');
     expect(credentialId).toBe(created.body.id); expect(Buffer.from(secret!, 'base64url')).toHaveLength(32);
-    const [stored] = await prisma.$queryRaw<{ secretHash: string }[]>`SELECT secret_hash AS "secretHash" FROM integration_credentials WHERE id = ${credentialId}::uuid`;
+    const [stored] = await prisma.$queryRaw<{ secretHash: string; encrypted: boolean; hasPlaintext: boolean }[]>`SELECT secret_hash AS "secretHash", (to_jsonb(c)->>'secret_ciphertext') IS NOT NULL AS encrypted, strpos(to_jsonb(c)::text, ${secret!}) > 0 AS "hasPlaintext" FROM integration_credentials c WHERE id = ${credentialId}::uuid`;
     expect(stored?.secretHash).toBe(createHash('sha256').update(secret!).digest('hex'));
+    expect(stored?.encrypted).toBe(true); expect(stored?.hasPlaintext).toBe(false);
     const mutation = await prisma.adminMutation.findFirstOrThrow({ where: { actorUserId: fixtureValue.user.id, key } });
     expect(mutation.response).toMatchObject({ value: { createdById: fixtureValue.user.id } });
-    expect(JSON.stringify(mutation.response)).not.toContain(secret!); expect(JSON.stringify(mutation.response)).not.toContain('secretHash');
+    expect(JSON.stringify(mutation.response).includes(secret!)).toBe(false);
+    expect(mutation.response).toMatchObject({ value: { id: credentialId } });
+    expect(Object.keys((mutation.response as { value: object }).value).sort()).toEqual(['createdAt', 'createdById', 'endpointId', 'expiresAt', 'id', 'name', 'organizationId', 'revokedAt']);
     const audits = await prisma.auditEvent.findMany({ where: { organizationId: fixtureValue.organization.id, action: 'INTEGRATION_CREDENTIAL_CREATED' } });
     expect(audits).toHaveLength(1); expect(audits[0]?.metadata).toMatchObject({ endpointId: fixtureValue.endpointId, credentialId });
-    expect(JSON.stringify(audits)).not.toContain(secret!);
+    expect(JSON.stringify(audits).includes(secret!)).toBe(false);
     const listed = await request(app.getHttpServer()).get(`${path}/${fixtureValue.endpointId}/credentials`).set('Cookie', fixtureValue.cookie).expect(200);
     expect(listed.body).toMatchObject({ total: 1, page: 1, limit: 20 });
     expect(listed.body.items[0].createdById).toBe(fixtureValue.user.id);
-    expect(listed.body.items[0].secret).toBeUndefined(); expect(listed.body.items[0].secretHash).toBeUndefined();
+    expect(Object.keys(listed.body.items[0]).sort()).toEqual(['createdAt', 'createdById', 'endpointId', 'expiresAt', 'id', 'name', 'organizationId', 'revokedAt']);
     const days = (Date.parse(created.body.expiresAt) - Date.now()) / 86400000;
     expect(days).toBeGreaterThan(89); expect(days).toBeLessThanOrEqual(90);
     await prisma.$executeRaw`UPDATE integration_credentials SET created_by_id = NULL WHERE id = ${credentialId}::uuid`;
     const legacy = await request(app.getHttpServer()).get(`${path}/${fixtureValue.endpointId}/credentials`).set('Cookie', fixtureValue.cookie).expect(200);
     expect(legacy.body.items[0].createdById).toBeNull();
   });
-  it('replays a lost response without a recoverable secret or a second credential', async () => {
+  it('issues a permanent credential for explicit null and preserves explicit finite validity', async () => {
+    const item = await fixture();
+    const permanent = await create(item.cookie, item.endpointId, randomUUID(), { name: 'Permanent', validityDays: null }).expect(201);
+    expect(permanent.body.expiresAt).toBeNull();
+    const finite = await create(item.cookie, item.endpointId, randomUUID(), { name: 'Finite', validityDays: 1 }).expect(201);
+    const [dates] = await prisma.$queryRaw<{ permanent: boolean; finite: boolean }[]>`SELECT
+      (SELECT expires_at IS NULL FROM integration_credentials WHERE id = ${permanent.body.id}::uuid) AS permanent,
+      (SELECT expires_at BETWEEN created_at + INTERVAL '1 day' - INTERVAL '1 second' AND created_at + INTERVAL '1 day' + INTERVAL '1 second' FROM integration_credentials WHERE id = ${finite.body.id}::uuid) AS finite`;
+    expect(dates).toEqual({ permanent: true, finite: true });
+    const listed = await request(app.getHttpServer()).get(`${path}/${item.endpointId}/credentials`).set('Cookie', item.cookie).expect(200);
+    expect(listed.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: permanent.body.id, expiresAt: null }), expect.objectContaining({ id: finite.body.id, expiresAt: finite.body.expiresAt })]));
+  });
+  it('replays a lost response without disclosing the secret or creating a second credential', async () => {
     const fixtureValue = await fixture(); const key = randomUUID();
     const created = await create(fixtureValue.cookie, fixtureValue.endpointId, key).expect(201);
     const replay = await create(fixtureValue.cookie, fixtureValue.endpointId, key).expect(201);
@@ -89,7 +104,8 @@ describe('Integration machine credential lifecycle with real sessions and Postgr
   });
   it('limits active credentials to two and releases the slot after revocation', async () => {
     const fixtureValue = await fixture();
-    const first = await create(fixtureValue.cookie, fixtureValue.endpointId).expect(201);
+    const first = await create(fixtureValue.cookie, fixtureValue.endpointId, randomUUID(), { name: 'Permanent', validityDays: null }).expect(201);
+    expect(first.body.expiresAt).toBeNull();
     await create(fixtureValue.cookie, fixtureValue.endpointId).expect(201);
     await create(fixtureValue.cookie, fixtureValue.endpointId).expect(409);
     const key = randomUUID(); const revoked = await revoke(fixtureValue.cookie, fixtureValue.endpointId, first.body.id, key).expect(201);

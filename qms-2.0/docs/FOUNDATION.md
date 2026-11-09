@@ -1,6 +1,35 @@
 # 底座与阶段二平台验收记录
 
-## REQ0036 fix5正文可见态回归（2026-11-09，待新候选门禁）
+## REQ0036 便捷化 V0.0.41 本地验证（2026-11-09）
+
+PR101首候选33e4fea实际CI42650559416 attempt1为22success/2failure：唯一Web15原admin-language联合语言case31083ms超30000，foundation派生；16份JSON239文件3329项3328PASS/1FAIL，0pending。完整日志已下载，Review clear仍未合并。V0.0.41-fix1仅该test case定向within查询及缓存真实语言按钮，保同case三真实组件联合zh/en/zh、所有原断言和30秒预算；原本地完整6PASS目标26463ms非RED，改后6PASS目标16003ms，真实RED来自CI。具体云端迟缓原因未证，不加超时或重跑旧run。API/Web产品/迁移/契约/部署与33e4fea一致，以下本地业务证据按范围继续有效；新head CI/Review及发布待核。细节见计划14节fix1。
+
+第二候选f0dae09的CI42654844976 attempt1，Web6/job129290571446原UserAdministration.profile.test.tsx matching remote的beforeunload原精确false实际true（该片1FAIL/72PASS）。源码dirty归一化正确，保护Set依useEffect更新，输入enabled不是保护效果同步证据；最小fix2仅等待实际beforeunload出口，每次创建fresh Event，保whitespace=true/matching=false、原字段/30秒/其他六项。父原完整8PASS非本地RED，真实RED为CI；未改生产。全部CI终态、修后完整复验和限定双审在计划14节接续，不能提前称新候选绿。
+
+第二CI已全部结束22success/2failure/0pending，foundation129299065569原日志明确web-tests must be success；其他15Web/API/四PG均成功，前轮语言失败片本轮成功。修后profile完整8/8、限定SPEC后QUALITY与治理PASS，三文件fix2更新同PR。第二轮完整日志/ZIP下载遭Azure blob连接超时，已读连接器实际两失败日志及保存完整run/jobs，未冒称16artifact成功下载；不为取日志而重跑CI。产品/协议/迁移与33e4fea未变，新head检查仍须实际核验。
+
+在主线ce4a72f上接续a52519f文档归档，分支codex/req0036-api-convenience，复用Issue97。负责人明确三项便捷化：编码地址、复制含真实鉴权的对接配置、永久有效并能反复复制。新增144迁移允许expires_at为空并保存新凭据原文密文；旧URL及有限期凭据保持，旧hash不能反推原文。详细合同、分工及真实失败保留见[一期计划第14节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。生产当前仍ce4a72f，新范围未据本地结果宣称已发布。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 资源与运行时 | Node24.21.0/pnpm11.19.0；一次性PG18/55636、512MiB/1CPU/tmpfs，Node1GiB单worker串行；只在备份时启任务MinIO，未连接55440 |
+| 真实RED | A18项13FAIL/5PASS（null变90天、connection404、无密文）；B37项4FAIL/33PASS（编码401与UUID URL）；Web9FAIL/10PASS；轮换应5实际4。初次cmd参数拆分/过滤与shell拒绝未冒称RED |
+| 后端GREEN | 五完整PG/HTTP文件63/63、邻近四完整文件38/38、审计标签9/9，均0skip/exit0；覆盖组织隔离、永久/有限、最后锁后失效、审计失败、编码/UUID及去重 |
+| Web | 六完整文件首50PASS/1FAIL，唯一测试未等useWatch条件字段挂载；最小findByLabel等待后CredentialPanel完整3/3，原预算/POST30天/复制断言保持，六文件组合51项有效PASS |
+| 运维 | 原真实轮换完整5/5，去旧key仍可读新机器凭据；PG+MinIO备份恢复完整8/8，永久空日期/密文/哈希及旧有限期行均保持，所有原负例也通过；只证明小样本 |
+| 浏览器 | marker-only真实侧栏及2完整场景2/2（29.2s），实际剪贴板含鉴权且能编码路径收件、UUID重试同号、重新打开复制、撤销401；原回执/来源/纯文本/浅深窄屏断言保持 |
+| 构建与契约 | API/Web构建、contracts:generate及contracts:check exit0；Compose基础+扫描+生产config --quiet exit0 |
+| 治理与隔离 | check:governance PASS（38文档/490链接/20来源/161依赖、阶段覆盖1项）；check:archive-isolation PASS；diff --check无错误 |
+| 独立审查 | convenience_spec SPEC PASS后convenience_quality QUALITY PASS，覆盖A/B/C、公共接缝及浏览器改动；父逐份核完整日志 |
+| 清理 | 本任务两容器按ID/label/tmpfs核后仅删自有资源；API/Vite按PID和父命令核后停止，3136/5186空闲，Git外cleanup.json PASS |
+
+Git外原始日志与备份位于D:/WorkSpace/QMS-2.0-local/req0036-convenience-20261109。Vite大chunk、Node实验VM与NO_COLOR提示保留为非失败信息。完整全业务阶段验收、生产凭据发放/撤销及真实来源联调NOT_RUN；新head云端全量CI、Review和实际部署须分别接续。144后的永久凭据不支持直接运行旧镜像，回退须先停收件并按批准恢复路径处理，不自动删除迁移后数据。治理/归档结果与PR/发布在后续检查点追加。
+
+## REQ0036 fix4/fix5发布与入口确认（2026-11-09）
+
+PR100候选e0ab78c与main/部署 `ce4a72f33f6c6261dbd7525e431c1db3655f0210` 整tree相同，PR CI42620866574及[main CI42622679109](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42622679109)各attempt1、各精确24/24 success，同候选Review clear。[自动deploy42624847559](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42624847559)/job129185860112同SHA来源门禁通过，13:35:48Z加密快照，143链无待迁移，三服务镜像同ce4a72f，13:36:16Z明确成功；Worker READY/HTTP/原子marker由同版强制成功出口支持，非独立SSH读回。
+
+13:38:09Z公开HTTP独立PASS：login/OpenAPI/管理页及资源200，四受控GET匿名401，机器无Bearer401且trace头体一致。JS/CSS与0181a89相同符合Web生产源未变，变化来自API默认权限投影。CUA生产窗口曾因URL识别策略中止且未绕过；随后负责人直接确认已可看到，绑定本版记Admin入口/页面可见性MANUAL PASS，不扩为全部操作验收，不要求重复截图。一次性marker-only浏览器2例已核配置/凭据/收件；Issue97开放、Base未写、具体接收接口未启用/凭据未分发。证据Git外fix4/release及[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)，最新结果本地归档。本段为当前事实，下文首失败及待门禁语句保留历史时点。
 
 PR100首head1d0b2cb的CI42617559662 attempt1全24实际22success/2failure：仅Web11 ReceiptList正文安全场景的pre已存在但不可见时立即断言失败，15文件166项1FAIL165PASS；foundation明确web-tests must be success，派生失败。API/四PG及其余15Web成功，同headReview clear，仍不得合并。fix5仅一行改为waitFor等待同一正文可见，保PRE/noimgscript、原8例及预算/动效；六完整UI/导航文件44/44 PASS、138.22s，限定独立SPEC后QUALITY PASS。原Admin生产一行及API/契约/迁移/浏览器源未变，按范围复用先前证据；新head完整门禁、main与部署另核，详见[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
 

@@ -53,7 +53,7 @@ export class IntegrationAdminService {
     const code = integrationText(input.code, 64), sourceCode = integrationText(input.sourceCode, 64);
     if (![code, sourceCode].every(value => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(value))) integrationError('INTEGRATION_INPUT_INVALID', 400);
     const data = { code, sourceCode, name: integrationText(input.name, 120), sourceName: integrationText(input.sourceName, 120), ...settings(input) };
-    integrationPublicUrl(randomUUID());
+    integrationPublicUrl(code);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_ENDPOINT_CREATED', payload: data, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async transaction => {
       const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`INSERT INTO integration_endpoints
         (id, organization_id, code, name, description, source_code, source_name, return_receipt, max_body_bytes, rate_per_minute, body_retention_days, capacity_bytes, allowed_ips)
@@ -80,7 +80,7 @@ export class IntegrationAdminService {
       const data = { ...settings(input, current), name: input.name === undefined ? current.name : integrationText(input.name, 120), status: input.status ?? current.status };
       if (data.capacityBytes < current.usedBodyBytes) integrationError('INTEGRATION_CAPACITY_CONFLICT', 409);
       if (data.status === 'ENABLED') {
-        const [valid] = await transaction.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid AND revoked_at IS NULL AND expires_at > clock_timestamp()`;
+        const [valid] = await transaction.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > clock_timestamp())`;
         if (!valid?.count) integrationError('INTEGRATION_CREDENTIAL_REQUIRED', 409);
       }
       const [row] = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`UPDATE integration_endpoints SET
