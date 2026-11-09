@@ -1,5 +1,9 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 fix5正文可见态回归（2026-11-09，待新候选门禁）
+
+PR100首head1d0b2cb的CI42617559662 attempt1全24实际22success/2failure：仅Web11 ReceiptList正文安全场景的pre已存在但不可见时立即断言失败，15文件166项1FAIL165PASS；foundation明确web-tests must be success，派生失败。API/四PG及其余15Web成功，同headReview clear，仍不得合并。fix5仅一行改为waitFor等待同一正文可见，保PRE/noimgscript、原8例及预算/动效；六完整UI/导航文件44/44 PASS、138.22s，限定独立SPEC后QUALITY PASS。原Admin生产一行及API/契约/迁移/浏览器源未变，按范围复用先前证据；新head完整门禁、main与部署另核，详见[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
+
 ## REQ0036 fix4 Admin默认权限与入口（2026-11-09，本地验证）
 
 负责人提供0181a89上线后的真实截图并明确要求Admin默认可用。根因是五项integration权限被平台管理员投影显式排除，导致context无模块、侧栏隐藏；本次修订为有效platform:admin沿现有内部组织投影获得五权。生产仅移除catalog一项排除，普通岗位仍显式授权，不按用户名特判；观测权限例外、供应商/停用/失效来源、机器认证及人员CSRF/近期认证/审计保持。政策同步设计、API-INTEGRATION与SECURITY，见[一期计划第13节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。

@@ -18,10 +18,10 @@
 | 整体复核 | 独立策划复核六项缺口已纳入设计/任务；现进入实现、逐项SPEC/QUALITY与真实验证，历史“仅策划”段保留阶段边界，不代表当前未实施 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（V0.0.40含fix1/fix2）→ PR99（V0.0.40-fix3）。最终main与部署均为0181a899eee277585eb38448ce956c147572d518，整tree与审候选8d761c02一致；旧main042首轮失败、旧分支档案f5b00d8及各修复证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR99候选CI42604558840与main push CI42606383814各attempt1、各精确24/24 success，既有evaluateDeployJobs复核同head/run/attempt全集为full，同候选Review completed/无发现。自动deploy42607996737/job129128768750成功，日志明确source run42606383814、迁移前加密快照、两条新增迁移成功/143链及三服务镜像同SHA；Worker READY、HTTP及原子marker由同版脚本强制成功出口支持，未独立SSH读marker。公网最终核验PASS，详见第12节；旧main042失败/deploy skipped不覆盖 |
+| 当前检查点 | 生产仍为0181a89，第12节原机器发布有效；Admin默认权限返修PR100的head1d0b2cb首CI42617559662 attempt1实际22成功2失败，唯一实质为Web11正文存在但尚不可见的断言，foundation派生；同headReview clear。fix5仅补原断言等待，完整六文件44/44及限定SPEC后QUALITY PASS，继续同PR100更新候选，不rerun旧run刷绿 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | fix4（第13节）已取得真实RED→一行修复→完整PG102、unit53、导航22、API build及两项真实浏览器PASS，独立SPEC后QUALITY均PASS；沿Issue97与codex/req0036-admin-access-fix4提交独立返修PR，接续同范围合并发布授权。旧归档及用户四处改动保留，凭据分发/接口启用/关闭回填仍不执行 |
+| 下一动作与负责人 | 原Admin一行修复的PG102/unit53/浏览器2/build/契约证据仍适用；fix5同PR100提交等待返修及六完整UI/导航44项证明，再核新head完整CI与Review，按原授权合并部署。生产CUA因网址识别安全策略中止，未绕过，负责人最终刷新确认Admin实页；不启用具体接口/分发凭据/关闭回填 |
 
 ## 1. 交付单元、映射与范围
 
@@ -342,3 +342,13 @@ Git外最终证据：`D:/WorkSpace/QMS-2.0-local/req0036-20261109/release-fix3-f
 实际TDD：生产未变时unit四完整文件1FAIL/52PASS，真实PG四完整文件1FAIL/101PASS；失败精确为平台目录缺integration:read及marker-only账号context缺api-integrations。原实现代理持续pending_init，父中断并收回其测试所有权后先写/运行RED；全新fix4_minimal_implementation在RED后只移除catalog一项排除，未扩展通用授权内核。父随后完整unit53/53、真实PG102/102（50.52s）、导航22/22与API build退出0，原预算/断言保持；fix4_spec独立SPEC PASS后fix4_quality独立QUALITY PASS，无P1/P2。
 
 真实浏览器两完整场景2/2 PASS、39.1s：测试角色仅追加platform marker并明确断言无integration直接grant，登录后从/console真实侧栏点击API接口管理；配置、一次性凭据、201/200/204、来源检索、正文审计纯文本与浅深/320/390/1440几何均通过。使用一次性PG与真实本地API、现有Vite同源代理，网关/TLS配置未改并按原有效证据复用，不冒称本轮重跑HTTPS或生产Admin已验。两个服务会话已停止，生产新版本仍待PR/main/部署门禁。
+
+### fix5：同PR100的正文可见态回归
+
+[PR100](https://github.com/JasonShu0722/QMS-2.0/pull/100)首候选1d0b2cb8512df53621ed4f7165046b32fe5ce4fc的[CI42617559662](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42617559662) attempt1全24任务已结束，22success/2failure，无skip/cancel。唯一实质失败Web11/job129161228883，ReceiptList.test.tsx:60的正文纯文本场景在pre节点已存在但不可见时立即toBeVisible失败；该片15文件166项1FAIL/165PASS。foundation/job129168221984明确web-tests must be success，是派生失败；API、四PG和另外15个Web均success。同head Codex Review completed、无发现/无未解决项，但不能代替失败CI门禁。
+
+全新fix4_receipt_visibility只改一行测试：复用已导入waitFor，在原dialog中等同一精确payload真正可见，随后保原PRE标签及无img/script子节点断言。与既有CredentialPanel等待方式一致；生产Modal、权限、fixture、动效、默认超时以及原8例均保持。真实RED来自本次CI，未声称本地复现或已确认具体云端调度/动画帧原因；永久缺失/隐藏仍须失败，不重跑旧run或放宽预算。
+
+父串行六个完整UI/导航文件44/44 PASS、0skip（138.22s），其中原ReceiptList全部8/8，失败场景4.250s；没有同环境原完整基线，不宣称性能改善。fix4_spec限定SPEC PASS后fix4_quality限定QUALITY PASS。父核生产源码与1d0b2cb保持，按范围复用原真实PG、API build、契约及浏览器证据；本次新增代码消耗V0.0.40-fix5，仍更新同PR100及原Issue97，不另建PR或扩大业务。
+
+Git外fix4目录保留first-failed run/jobs/comments、web-ui完整日志、原RED及修后证据；check:governance/暂存来源核验按当前提交再核。生产浏览器绑定因CUA无法可靠识别Windows浏览器URL而被安全策略中止，已停止且未用其他手段绕过；生产实页NOT_VERIFIED，不影响继续核云端/部署及公开HTTP。fix4临时PG已核精确ID/标签/端口/tmpfs后stop与rm --volumes，回读为空；3136/5186已空闲，没有恢复重服务或连接55440。

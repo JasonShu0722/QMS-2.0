@@ -57,7 +57,7 @@ it('renders an authorized payload as text rather than executing markup', async (
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
   const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
   fireEvent.click(dialog.getByRole('button', { name: '查看接收正文' }));
-  expect(await dialog.findByText(payload)).toBeVisible();
+  await waitFor(() => expect(dialog.getByText(payload)).toBeVisible());
   const body = dialog.getByLabelText('接收正文'); expect(body.tagName).toBe('PRE'); expect(body.querySelector('img,script')).toBeNull();
 });
 
