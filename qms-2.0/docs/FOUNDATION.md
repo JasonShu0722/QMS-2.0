@@ -1,5 +1,15 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 便捷化最终实际发布（2026-11-10）
+
+[PR102](https://github.com/JasonShu0722/QMS-2.0/pull/102)候选3419360的CI42663249821 attempt1精确24/24与同head Review clear后squash main/生产9fe60f48a7f5db0344553d85fdc049e05c6336d3，完整tree一致。新[main CI42665525682](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42665525682)独立24/24 success；PR/main各16份实际JSON与Git清单核239文件3329项全PASS，无漏重/skip/pending/runtimeError。
+
+[自动deploy42667918837](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42667918837)/job129336426234 attempt1实际success非skip，完整日志下载并核来源CI/head：17:53:53Z迁移前加密数据库快照验证→17:53:57Z实际144链新增integration_connection_convenience迁移成功→API/Worker/Web镜像同9fe且Healthy→17:54:30Z Deployment successful。稳定Worker READY/HTTP及原子marker由同版强制出口支持，未另SSH读marker；不把本地DB快照说成全容量或异地灾备。
+
+17:55:34Z独立公网验证PASS：login/OpenAPI/页面与资源200、新connection契约及永久nullable存在，受控匿名GET/connection401，编码机器路径无凭据401且追踪号头体同值；JS变index-DBEs0LhS.js，包含实际复制/永久标识，CSS未变符合无样式改动。未在生产读秘密或写业务；真实clipboard→收件/重开/撤销已由原一次性marker-only浏览器2例证明，线上账号最终使用由负责人确认。
+
+本轮开发与上线部署目标完成，[Issue97实际结果追加](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6747441181)已回读；Issue仍open、未写飞书。完整失败/修复/发布和真实限制见[计划15节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。资源已精确清理，用户四处原差异按hunk核一致；最终事实仅本地归档避免重复触发无代码变化发布，Git外final-release-record与完整部署日志/公网/Web inventory保留。旧hash凭据仍有效但无法恢复原文，新建默认永久凭据后可反复复制；未自动撤销/发放/分发或启用生产接口，真实来源联调/全容量恢复/人工设备验收未覆盖。
+
 ## REQ0036 V0.0.41 main发布门禁接续（2026-11-10）
 
 PR101最终2e9aeb3的CI42657970565 attempt1精确24/24及同head Review clear通过，16份真实JSON与Git清单核239文件3329项全PASS/无漏重/skip；父再次独立核验后squash main8a6a8bc88e239b3d7c91e93529627e71c1d80704，完整tree相同。新mainCI42660282110 Web1/job129309842910原MasterDataImport.authentication.test.tsx:64提示节点存在但不可见（该片1FAIL232PASS），尚未放行自动部署，生产仍ce4a72f。
