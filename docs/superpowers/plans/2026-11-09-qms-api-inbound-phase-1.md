@@ -18,7 +18,7 @@
 | 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 便捷化PR101首33e4fea及fix1 f0dae09两轮CI各22success/2failure，分别为旧联合语言测试超时及旧profile保护效果时序，foundation均明确派生。原语言测试第二轮已云端PASS；fix2仅等profile实际出口，原完整8/8、限定SPEC后QUALITY及治理PASS，准备同PR新head；生产仍ce4a72f，未合并发布 |
+| 当前检查点 | PR101最终2e9aeb3经CI42657970565 attempt1精确24/24及同head Review clear后squash为main8a6a8bc，整Git tree相同；16JSON239文件3329项全PASS。新main CI42660282110出现Web1原导入可见态测试FAIL，部署未放行；fix3仅该原断言一行等待，完整5/5与限定SPEC PASS，继续修复PR及实际发布；生产仍ce4a72f |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
 | 下一动作与负责人 | 主代理在codex/req0036-api-convenience沿Issue97完成剩余门禁，提交一个功能PR，再接续已授权的同范围合并部署；开放PR已核为空，提交前再核V0.0.41及远端main。保护用户原4处差异，索引只提交本任务三处来源复核。一次性PG/对象容器已核精确ID和标签后移除，浏览器服务已按PID/父命令核后停止。生产不自动生成或分发凭据、不撤旧凭据、不关闭Issue或写飞书 |
@@ -423,3 +423,13 @@ PR101候选33e4feaf05704e5f06cc3b62dfde88c501277ff2的CI42650559416 attempt1精�
 源码归一化计算正确：remote姓名Draft与保留输入` Draft `经trim一致、电话已采用remote，setDirty(false)。输入enabled仅证明busy对应DOM更新，useUnsavedChanges及useNavigationBusy向Provider Set的同步在useEffect，测试立即派发事件不能证明两effect已完成。父原完整8/8本地通过、matching7483ms（总69.64s），未本地复现，不伪造RED；真实RED来自本次CI。convenience_web仅原beforeunload出口包waitFor，每次回调创建fresh事件、派发并保原精确预期。保两场景whitespace=true/matching=false、原字段断言、其他六项及30000ms，未改产品或全局配置。限定SPEC PASS，修后完整及QUALITY由本检查点接续。
 
 第二轮全部24终态最终22success/2failure/0pending，foundation/job129299065569经原日志确认web-tests must be success派生；其余API/四PG/十五Web均success，包含已修语言Web15。profile修后原完整8/8（66.44s）与限定QUALITY PASS，治理38/490/20/161及阶段覆盖PASS；未用本地等待掩盖永久错误，matching若仍阻止会明确失败。第二轮完整日志/16artifact下载的Azure blob连接超时，已从连接器读取具体Web6与foundation原日志及保存完整run/jobs；不声称下载成功，首轮完整16JSON证据保持。fix2只三文件test+两记录，业务源与33e4fea相同，继续同PR新head全量门禁。
+
+### V0.0.41-fix3：main发布阻塞的原导入可见态测试（2026-11-10）
+
+负责人再次明确要求持续推进至上线部署。PR101最终2e9aeb314dc0d518ecc30333ba88b331ece9532a的CI42657970565 attempt1精确24/24 success，原evaluateDeployJobs=full，同head Review completed/无发现；16真实JSON与Git测试清单逐一核239文件3329项全PASS、无重复遗漏/skip/pending/runtimeErrors。父独立premerge复核head/base/main后squash8a6a8bc88e239b3d7c91e93529627e71c1d80704，GitHub整tree与候选相同，未以同树替代新main检查。
+
+新mainCI42660282110 attempt1的Web1/job129309842910实质FAIL：MasterDataImport.authentication.test.tsx:64的request without callback，完整未知批次提示节点已存在但notvisible；该片15文件233项1FAIL232PASS。源码onImported在finally执行，不证明Modal中的Alert可见，组件setUnknown(true)存在且无持续隐藏证据。真实RED来自本次CI；父原本地完整5/5（11.39s）未复现，不能冒称RED或具体云端调度慢因。
+
+新release_import_visibility实施代理仅一行复用waitFor等待原完整提示可见，保原回调边界、API/CSRF次数、全部5case/预算/既有motion:false和产品代码；父修后完整5/5（11.38s）通过，限定SPEC PASS。父由origin/main8a6隔离codex/req0036-convenience-release-fix3，旧V0.0.40同名分支保留未动，用户四dirty原样携带。源功能自33e4fea保持，本地业务/轮换/恢复/浏览器证据按范围有效；只发布阻塞测试返修另开PR接续原Issue97，不能再向已合并PR101推送。main全部终态/自动部署跳过、限定QUALITY、治理及新PR/main/部署按本检查点接续。
+
+main全部24终态实际22success/2failure，foundation129317756113明确web-tests must be success派生；其余15Web/API/四PG均success。自动deploy42662648311/job129317943127 completed/skipped，没有执行SSH或生产迁移。fix3限定QUALITY PASS、完整5/5、归档隔离范围不变；治理首因新test来源摘要未同步FAIL，复核前端指南的鉴权回调边界与本次test语义不变后仅更新该一来源摘要，复验38文档/491链接/20来源/161依赖及阶段覆盖PASS。失败记录不删除、不rerun旧run，新修复PR继续同范围授权直到真实上线。

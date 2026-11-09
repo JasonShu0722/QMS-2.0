@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 V0.0.41 main发布门禁接续（2026-11-10）
+
+PR101最终2e9aeb3的CI42657970565 attempt1精确24/24及同head Review clear通过，16份真实JSON与Git清单核239文件3329项全PASS/无漏重/skip；父再次独立核验后squash main8a6a8bc88e239b3d7c91e93529627e71c1d80704，完整tree相同。新mainCI42660282110 Web1/job129309842910原MasterDataImport.authentication.test.tsx:64提示节点存在但不可见（该片1FAIL232PASS），尚未放行自动部署，生产仍ce4a72f。
+
+V0.0.41-fix3仅该原提示可见断言一行waitFor，保回调/API次数、5case、预算及既有motion:false；新实施代理release_import_visibility在真实CIRED后最小编辑，父baseline完整5PASS非本地RED，修后5/5，限定SPEC PASS。产品代码与main8a6保持，原便捷化真实PG/轮换/恢复/浏览器证据有效；全CI终态、QUALITY和新修复PR/发布继续按[计划14节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)核验。不得以PR绿或同tree声称main/生产已通过。
+
+main终态22success/2failure，foundation129317756113实际web-tests must be success派生；deploy42662648311/job129317943127 completed/skipped，未执行生产迁移/SSH。fix3限定QUALITY PASS，治理首次因test来源摘要未更新FAIL，复核并仅同步该来源后38/491/20/161及阶段覆盖PASS；用户CodeGraph来源差异保持排除。原所有失败保留，新PR/main/自动部署继续独立核验。
+
 ## REQ0036 便捷化 V0.0.41 本地验证（2026-11-09）
 
 PR101首候选33e4fea实际CI42650559416 attempt1为22success/2failure：唯一Web15原admin-language联合语言case31083ms超30000，foundation派生；16份JSON239文件3329项3328PASS/1FAIL，0pending。完整日志已下载，Review clear仍未合并。V0.0.41-fix1仅该test case定向within查询及缓存真实语言按钮，保同case三真实组件联合zh/en/zh、所有原断言和30秒预算；原本地完整6PASS目标26463ms非RED，改后6PASS目标16003ms，真实RED来自CI。具体云端迟缓原因未证，不加超时或重跑旧run。API/Web产品/迁移/契约/部署与33e4fea一致，以下本地业务证据按范围继续有效；新head CI/Review及发布待核。细节见计划14节fix1。
