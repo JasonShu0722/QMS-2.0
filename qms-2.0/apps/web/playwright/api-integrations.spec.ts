@@ -129,6 +129,7 @@ test('real receiving configuration, permanent reusable connection copy, receipts
   expect(endpoint.status).toBe('DRAFT');
   expect(endpoint.returnReceipt).toBe(true);
   let credentialId: string | undefined;
+  let deleted = false;
   try {
     await section.getByRole('button', { name: `管理${name}凭据`, exact: true }).click();
     const credentials = page.getByRole('dialog', { name: `${name}凭据`, exact: true });
@@ -220,12 +221,29 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     await positionWrite(page.request, `${endpoints}/${endpoint.id}/credentials/${credential.id}/revoke`, 'POST', { organizationId: endpoint.organizationId }, 201);
     const revoked = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, `browser-${suffix}-revoked`, body);
     expect(revoked.status).toBe(401);
+    const deletionCredential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `${endpoints}/${endpoint.id}/credentials`, 'POST', { organizationId: endpoint.organizationId, name: 'Deletion fixture', validityDays: null }, 201);
+    await section.getByRole('tab', { name: '接收接口', exact: true }).click();
+    await section.getByRole('button', { name: `删除${name}`, exact: true }).click();
+    const confirmation = page.getByRole('tooltip');
+    await expect(confirmation).toContainText('历史');
+    const removing = page.waitForResponse(response => new URL(response.url()).pathname === `${endpoints}/${endpoint.id}` && response.request().method() === 'DELETE');
+    const [removed] = await Promise.all([removing, confirmation.getByRole('button', { name: '确认删除', exact: true }).click()]);
+    expect(removed.status()).toBe(204); deleted = true;
+    await expect(section.getByRole('button', { name: `删除${name}`, exact: true })).toHaveCount(0);
+    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, `browser-${suffix}-deleted`, body)).status).toBe(401);
+    const preserved = await positionRead<Schema['IntegrationPayloadDto']>(page.request, `/api/v1/admin/integrations/receipts/${receipt.receiptId}/payload?organizationId=${endpoint.organizationId}`);
+    expect(preserved.text === body).toBe(true);
+    const replacement = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, endpoints, 'POST', { organizationId: endpoint.organizationId, code: endpoint.code, name: `${name}替代`, sourceCode, sourceName: `技术来源 ${suffix}` }, 201);
+    expect(replacement.id).not.toBe(endpoint.id);
+    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, `browser-${suffix}-replacement`, body)).status).toBe(401);
 
   } finally {
     await page.goto('about:blank');
-    const current = await positionRead<Schema['IntegrationEndpointDto']>(page.request, `${endpoints}/${endpoint.id}?organizationId=${endpoint.organizationId}`);
-    await positionWrite(page.request, `${endpoints}/${endpoint.id}`, 'PATCH', { organizationId: endpoint.organizationId, expectedVersion: current.version, status: 'DISABLED' });
-    if (credentialId) await positionWrite(page.request, `${endpoints}/${endpoint.id}/credentials/${credentialId}/revoke`, 'POST', { organizationId: endpoint.organizationId }, 201);
+    if (!deleted) {
+      const current = await positionRead<Schema['IntegrationEndpointDto']>(page.request, `${endpoints}/${endpoint.id}?organizationId=${endpoint.organizationId}`);
+      await positionWrite(page.request, `${endpoints}/${endpoint.id}`, 'PATCH', { organizationId: endpoint.organizationId, expectedVersion: current.version, status: 'DISABLED' });
+      if (credentialId) await positionWrite(page.request, `${endpoints}/${endpoint.id}/credentials/${credentialId}/revoke`, 'POST', { organizationId: endpoint.organizationId }, 201);
+    }
   }
 });
 

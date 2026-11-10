@@ -36,7 +36,7 @@ export function useScopedIntegrationRequests(scope: IntegrationScope) {
     } finally { controllers.current.delete(controller); }
   }, [current, scope.deny]);
   const read = useCallback(<Result,>(path: string, query: Record<string, string> = {}) => run<Result>(signal => apiRequest<Result>(`${path}?${new URLSearchParams({ organizationId: scope.organizationId, ...query })}`, { signal })), [scope.organizationId, run]);
-  const write = useCallback(<Result,>(path: string, method: 'POST' | 'PATCH', body: Parameters<ReturnType<typeof createAdminMutation>>[2]) => run<Result>(signal => mutation.current<Result>(path, method, body, signal)), [run]);
+  const write = useCallback(<Result,>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body: Parameters<ReturnType<typeof createAdminMutation>>[2]) => run<Result>(signal => mutation.current<Result>(path, method, body, signal)), [run]);
   return { read, write, current };
 }
 

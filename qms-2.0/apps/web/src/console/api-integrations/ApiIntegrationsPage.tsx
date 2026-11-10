@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Empty, Space, Tabs, Tag, Typography, type TableProps } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Button, Empty, Popconfirm, Space, Tabs, Tag, Typography, type TableProps } from 'antd';
 import { RefreshCw } from 'lucide-react';
+import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
 import { subscribeSessionSignals } from '../../features/auth/session-invalidation';
 import { useLanguage } from '../../i18n/Language';
-import { useNavigationGuard } from '../../layouts/UnsavedChanges';
+import { useNavigationBusy, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -68,9 +69,14 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
   const [editing, setEditing] = useState<{ endpoint?: Endpoint }>();
   const [credentials, setCredentials] = useState<Endpoint>();
   const [instructions, setInstructions] = useState<Endpoint>();
-  const { read, current } = useScopedIntegrationRequests(scope);
+  const [deleting, setDeleting] = useState<{ endpoint: Endpoint; unknown: boolean }>();
+  const [deleteError, setDeleteError] = useState<unknown>();
+  const deletePending = useRef(false);
+  const { read, write, current } = useScopedIntegrationRequests(scope);
   const canManage = scope.permissions.includes('integration:manage');
   const canCredentials = scope.permissions.includes('integration:credentials:manage');
+  const deleteBusy = !!deleting;
+  useNavigationBusy(deleteBusy);
   useEffect(() => {
     let active = true; setLoading(true); setData(undefined); setError(undefined);
     void read<EndpointPage>(integrationPath, { page: String(page), limit: String(pageSize) }).then(result => {
@@ -81,6 +87,23 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
     return () => { active = false; };
   }, [scope.organizationId, page, pageSize, revision, read, current]);
   const reload = () => setRevision(value => value + 1);
+  async function remove(endpoint: Endpoint) {
+    if (deletePending.current || deleting && deleting.endpoint !== endpoint || editing || credentials || !canManage || !current()) return;
+    deletePending.current = true; setDeleting({ endpoint, unknown: false }); setDeleteError(undefined);
+    try {
+      const body: components['schemas']['DeleteIntegrationEndpointDto'] = { organizationId: scope.organizationId, expectedVersion: endpoint.version };
+      await write<void>(`${integrationPath}/${endpoint.id}`, 'DELETE', body);
+      if (!current()) return;
+      setDeleting(undefined); setEditing(value => value?.endpoint?.id === endpoint.id ? undefined : value);
+      setCredentials(value => value?.id === endpoint.id ? undefined : value);
+      setInstructions(value => value?.id === endpoint.id ? undefined : value); reload();
+    } catch (cause) {
+      if (!current() || isAborted(cause)) return;
+      const knownClientFailure = cause instanceof ApiError && cause.status !== undefined && cause.status >= 400 && cause.status < 500;
+      if (knownClientFailure) { setDeleting(undefined); setDeleteError(cause); }
+      else { setDeleting({ endpoint, unknown: true }); setDeleteError(cause); }
+    } finally { if (current()) deletePending.current = false; }
+  }
   const status = (value: Endpoint['status']) => value === 'ENABLED' ? text('启用', 'Enabled') : value === 'DISABLED' ? text('停用', 'Disabled') : text('草稿', 'Draft');
   const columns: TableProps<Endpoint>['columns'] = [
     { key: 'identity', title: text('接收接口', 'Receiving interface'), width: 210, render: (_, item) => <><strong>{item.name}</strong><small>{item.code}</small></> },
@@ -88,21 +111,28 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
     { key: 'status', title: text('状态', 'Status'), width: 100, render: (_, item) => <Tag color={item.status === 'ENABLED' ? 'success' : undefined}>{status(item.status)}</Tag> },
     { key: 'receipt', title: text('接收回执', 'Receipt'), width: 115, render: (_, item) => item.returnReceipt ? text('返回回执', 'Return receipt') : text('空响应204', 'Empty response 204') },
     { key: 'capacity', title: text('正文容量', 'Payload capacity'), width: 170, render: (_, item) => <span className={item.usedBodyBytes >= item.capacityBytes * .8 ? 'qms-integration-capacity-warning' : undefined}>{(item.usedBodyBytes / 1048576).toFixed(1)} / {(item.capacityBytes / 1048576).toFixed(0)} MiB</span> },
-    { key: 'actions', title: text('操作', 'Actions'), width: 260, render: (_, item) => <Space wrap size="small">
-      <Button size="small" aria-label={text(`查看${item.name}调用说明`, `View ${item.name} instructions`)} onClick={() => setInstructions(item)}>{text('调用说明', 'Instructions')}</Button>
-      {canManage && <Button size="small" aria-label={text(`编辑${item.name}`, `Edit ${item.name}`)} onClick={() => setEditing({ endpoint: item })}>{text('编辑', 'Edit')}</Button>}
-      {canCredentials && <Button size="small" aria-label={text(`管理${item.name}凭据`, `Manage ${item.name} credentials`)} onClick={() => setCredentials(item)}>{text('凭据', 'Credentials')}</Button>}
+    { key: 'actions', title: text('操作', 'Actions'), width: 330, render: (_, item) => <Space wrap size="small">
+      <Button size="small" disabled={deleteBusy} aria-label={text(`查看${item.name}调用说明`, `View ${item.name} instructions`)} onClick={() => setInstructions(item)}>{text('调用说明', 'Instructions')}</Button>
+      {canManage && <Button size="small" disabled={deleteBusy} aria-label={text(`编辑${item.name}`, `Edit ${item.name}`)} onClick={() => setEditing({ endpoint: item })}>{text('编辑', 'Edit')}</Button>}
+      {canCredentials && <Button size="small" disabled={deleteBusy} aria-label={text(`管理${item.name}凭据`, `Manage ${item.name} credentials`)} onClick={() => setCredentials(item)}>{text('凭据', 'Credentials')}</Button>}
+      {canManage && (deleting?.endpoint.id === item.id && deleting.unknown
+        ? <Button danger size="small" disabled={deletePending.current} aria-label={text(`重试删除${item.name}`, `Retry deleting ${item.name}`)} onClick={() => void remove(deleting.endpoint)}>{text('重试删除', 'Retry delete')}</Button>
+        : <Popconfirm title={text('删除后将停止接收、撤销全部凭据并保留历史，确认删除？', 'Deletion stops receiving, revokes all credentials, and preserves history. Continue?')} okText={text('确认删除', 'Confirm deletion')} cancelText={text('取消', 'Cancel')} cancelButtonProps={{ 'aria-label': text('取消', 'Cancel') }} okButtonProps={{ danger: true, loading: deleting?.endpoint.id === item.id }} onConfirm={() => remove(item)}>
+          <Button danger size="small" disabled={deleteBusy || !!editing || !!credentials} aria-label={text(`删除${item.name}`, `Delete ${item.name}`)}>{text('删除', 'Delete')}</Button>
+        </Popconfirm>)}
     </Space> },
   ];
   return <div className="qms-integration-section">
-    <Space wrap><Button icon={<RefreshCw size={15} />} onClick={reload} loading={loading}>{text('刷新接口', 'Refresh interfaces')}</Button>{canManage && <Button type="primary" onClick={() => setEditing({})}>{text('新增接收接口', 'New receiving interface')}</Button>}</Space>
+    <Space wrap><Button icon={<RefreshCw size={15} />} disabled={deleteBusy} onClick={reload} loading={loading}>{text('刷新接口', 'Refresh interfaces')}</Button>{canManage && <Button type="primary" disabled={deleteBusy} onClick={() => setEditing({})}>{text('新增接收接口', 'New receiving interface')}</Button>}</Space>
     {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to read interfaces. Retry.')} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
+    {deleteError && !deleting?.unknown ? <Alert role="alert" showIcon type="error" title={text(integrationError(deleteError), 'Unable to delete this interface. Retry after refreshing.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} /> : null}
+    {deleting?.unknown && <Alert role="alert" showIcon type="error" title={text('删除结果未确认，请使用原请求重试；期间请勿进行其他维护操作或离开页面。', 'Deletion result is unknown. Retry the original request; do not perform other maintenance or leave this page.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} />}
     <LedgerTable<Endpoint> ledgerId="console-integration-endpoints" organizationId={scope.organizationId} requiredColumnKeys={['identity', 'actions']} rowKey="id" loading={loading}
-      dataSource={data?.items ?? []} columns={columns} scroll={{ x: 1020 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100],
-        onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
+      dataSource={data?.items ?? []} columns={columns} scroll={{ x: 1090 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, disabled: deleteBusy, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100],
+        onChange: (next, size) => { if (!deleteBusy) { setPage(size === pageSize ? next : 1); setPageSize(size); } } }} />
     {editing && <EndpointEditor scope={scope} endpoint={editing.endpoint} close={() => setEditing(undefined)} saved={() => { setEditing(undefined); reload(); }} />}
     {credentials && <CredentialPanel scope={scope} endpoint={credentials} close={() => setCredentials(undefined)} changed={reload} />}
-    {instructions && <Instructions key={instructions.id} scope={scope} endpoint={instructions} close={() => setInstructions(undefined)} />}
+    {instructions && !deleteBusy && <Instructions key={instructions.id} scope={scope} endpoint={instructions} close={() => setInstructions(undefined)} />}
   </div>;
 }
 

@@ -53,7 +53,7 @@ export class IntegrationCredentialService {
     return this.prisma.$transaction(async transaction => {
       await assertAdminAccess(transaction, actor, organizationId, 'integration:credentials:manage');
       await assertIntegrationOrganization(transaction, organizationId);
-      const [endpoint] = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM integration_endpoints WHERE id = ${endpointId}::uuid AND organization_id = ${organizationId}::uuid`;
+      const [endpoint] = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM integration_endpoints WHERE id = ${endpointId}::uuid AND organization_id = ${organizationId}::uuid AND deleted_at IS NULL`;
       if (!endpoint) integrationError('INTEGRATION_ENDPOINT_NOT_FOUND', 404);
       const rows = await transaction.$queryRaw<CredentialRow[]>(Prisma.sql`SELECT ${projection} FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid ORDER BY created_at DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
       const [count] = await transaction.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid`;

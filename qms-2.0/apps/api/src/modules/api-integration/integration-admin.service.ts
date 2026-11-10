@@ -5,7 +5,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import type { CreateIntegrationEndpointDto, IntegrationEndpointDto, IntegrationEndpointPageDto, IntegrationPageQueryDto, UpdateIntegrationEndpointDto } from './integration-admin.dto.js';
+import type { CreateIntegrationEndpointDto, DeleteIntegrationEndpointDto, IntegrationEndpointDto, IntegrationEndpointPageDto, IntegrationPageQueryDto, UpdateIntegrationEndpointDto } from './integration-admin.dto.js';
 import { assertIntegrationOrganization, integrationAllowedIps, integrationEndpointDto, integrationEndpointProjection, integrationError, integrationInteger, integrationPublicUrl, integrationScope, integrationText, lockIntegrationEndpoint, type IntegrationEndpointRow } from './integration-types.js';
 
 function settings(input: Partial<CreateIntegrationEndpointDto>, current?: IntegrationEndpointRow) {
@@ -31,8 +31,8 @@ export class IntegrationAdminService {
     return this.prisma.$transaction(async transaction => {
       await assertAdminAccess(transaction, actor, organizationId, 'integration:read');
       await assertIntegrationOrganization(transaction, organizationId);
-      const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`SELECT ${integrationEndpointProjection} FROM integration_endpoints WHERE organization_id = ${organizationId}::uuid ORDER BY created_at DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
-      const [count] = await transaction.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_endpoints WHERE organization_id = ${organizationId}::uuid`;
+      const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`SELECT ${integrationEndpointProjection} FROM integration_endpoints WHERE organization_id = ${organizationId}::uuid AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
+      const [count] = await transaction.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_endpoints WHERE organization_id = ${organizationId}::uuid AND deleted_at IS NULL`;
       return { items: rows.map(integrationEndpointDto), total: count!.total, page, limit };
     }, { isolationLevel: 'RepeatableRead' });
   }
@@ -42,7 +42,7 @@ export class IntegrationAdminService {
     return this.prisma.$transaction(async transaction => {
       await assertAdminAccess(transaction, actor, organizationId, 'integration:read');
       await assertIntegrationOrganization(transaction, organizationId);
-      const [row] = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`SELECT ${integrationEndpointProjection} FROM integration_endpoints WHERE id = ${endpointId}::uuid AND organization_id = ${organizationId}::uuid`);
+      const [row] = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`SELECT ${integrationEndpointProjection} FROM integration_endpoints WHERE id = ${endpointId}::uuid AND organization_id = ${organizationId}::uuid AND deleted_at IS NULL`);
       if (!row) integrationError('INTEGRATION_ENDPOINT_NOT_FOUND', 404);
       return integrationEndpointDto(row);
     });
@@ -58,7 +58,7 @@ export class IntegrationAdminService {
       const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`INSERT INTO integration_endpoints
         (id, organization_id, code, name, description, source_code, source_name, return_receipt, max_body_bytes, rate_per_minute, body_retention_days, capacity_bytes, allowed_ips)
         VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${data.code}, ${data.name}, ${data.description}, ${data.sourceCode}, ${data.sourceName}, ${data.returnReceipt}, ${data.maxBodyBytes}, ${data.ratePerMinute}, ${data.bodyRetentionDays}, ${data.capacityBytes}, ${data.allowedIps}::text[])
-        ON CONFLICT (organization_id, code) DO NOTHING RETURNING ${integrationEndpointProjection}`);
+        ON CONFLICT (organization_id, code) WHERE deleted_at IS NULL DO NOTHING RETURNING ${integrationEndpointProjection}`);
       if (!rows[0]) integrationError('CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_ENDPOINT_CREATED', resourceType: 'IntegrationEndpoint', resourceId: rows[0].id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1, returnReceipt: data.returnReceipt } }, transaction);
       return integrationEndpointDto(rows[0]);
@@ -91,6 +91,25 @@ export class IntegrationAdminService {
       return integrationEndpointDto(row);
     }, async transaction => {
       current = await lockIntegrationEndpoint(transaction, organizationId, endpointId);
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, 'integration:manage');
+    });
+  }
+
+  async deleteEndpoint(actor: AdminActor, endpointId: string, input: DeleteIntegrationEndpointDto, traceId: string, key?: string): Promise<void> {
+    const organizationId = integrationScope(actor);
+    integrationInteger(input.expectedVersion, 1, 2147483647);
+    let current: IntegrationEndpointRow;
+    await this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_ENDPOINT_DELETED', payload: { endpointId, ...input }, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async transaction => {
+      if (current.deletedAt) return;
+      if (current.version !== input.expectedVersion) integrationError('CONCURRENCY_CONFLICT', 409);
+      const [row] = await transaction.$queryRaw<{ version: number }[]>`UPDATE integration_endpoints SET status='DISABLED',version=version+1,deleted_at=clock_timestamp(),updated_at=clock_timestamp() WHERE organization_id=${organizationId}::uuid AND id=${endpointId}::uuid AND version=${input.expectedVersion} AND deleted_at IS NULL RETURNING version`;
+      if (!row) integrationError('CONCURRENCY_CONFLICT', 409);
+      await transaction.$executeRaw`UPDATE integration_credentials SET revoked_at=clock_timestamp() WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid AND revoked_at IS NULL`;
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_ENDPOINT_DELETED', resourceType: 'IntegrationEndpoint', resourceId: endpointId, outcome: 'SUCCESS', traceId, metadata: { endpointId, resourceVersion: row.version, status: 'DISABLED' } }, transaction);
+    }, async transaction => {
+      current = await lockIntegrationEndpoint(transaction, organizationId, endpointId, true);
+      await transaction.$queryRaw`SELECT id FROM integration_credentials WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid ORDER BY id FOR UPDATE`;
       await assertRecentAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'integration:manage');
     });

@@ -2033,7 +2033,7 @@ export interface paths {
         get: operations["IntegrationAdminController_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["IntegrationAdminController_remove"];
         options?: never;
         head?: never;
         patch: operations["IntegrationAdminController_update"];
@@ -10454,6 +10454,11 @@ export interface components {
             bodyRetentionDays?: number;
             capacityBytes?: number;
             allowedIps?: string[];
+        };
+        DeleteIntegrationEndpointDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            expectedVersion: number;
         };
         IntegrationConnectionDto: {
             endpoint: components["schemas"]["IntegrationEndpointDto"];
@@ -22179,6 +22184,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["IntegrationEndpointDto"];
                 };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    IntegrationAdminController_remove: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteIntegrationEndpointDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: {
                 headers: {

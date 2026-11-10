@@ -5,8 +5,8 @@ import type { AdminActor, AdminTransaction } from '../../common/security/admin-m
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import type { IntegrationEndpointDto } from './integration-admin.dto.js';
 
-export type IntegrationEndpointRow = Omit<IntegrationEndpointDto, 'createdAt' | 'updatedAt' | 'publicUrl'> & { createdAt: Date; updatedAt: Date };
-export const integrationEndpointProjection = Prisma.sql`id, organization_id AS "organizationId", code, name, description, source_code AS "sourceCode", source_name AS "sourceName", status, version, return_receipt AS "returnReceipt", max_body_bytes AS "maxBodyBytes", rate_per_minute AS "ratePerMinute", body_retention_days AS "bodyRetentionDays", capacity_bytes AS "capacityBytes", used_body_bytes::float8 AS "usedBodyBytes", allowed_ips AS "allowedIps", created_at AS "createdAt", updated_at AS "updatedAt"`;
+export type IntegrationEndpointRow = Omit<IntegrationEndpointDto, 'createdAt' | 'updatedAt' | 'publicUrl'> & { createdAt: Date; updatedAt: Date; deletedAt: Date | null };
+export const integrationEndpointProjection = Prisma.sql`id, organization_id AS "organizationId", code, name, description, source_code AS "sourceCode", source_name AS "sourceName", status, version, return_receipt AS "returnReceipt", max_body_bytes AS "maxBodyBytes", rate_per_minute AS "ratePerMinute", body_retention_days AS "bodyRetentionDays", capacity_bytes AS "capacityBytes", used_body_bytes::float8 AS "usedBodyBytes", allowed_ips AS "allowedIps", created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"`;
 
 export function integrationError(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
 export function integrationScope(actor: AdminActor): string {
@@ -18,10 +18,10 @@ export async function assertIntegrationOrganization(transaction: AdminTransactio
   if (organization?.type !== 'INTERNAL') integrationError('ORGANIZATION_SCOPE_DENIED', 403);
   if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired) integrationError('ORGANIZATION_DISABLED', 403);
 }
-export async function lockIntegrationEndpoint(transaction: AdminTransaction, organizationId: string, endpointId: string): Promise<IntegrationEndpointRow> {
+export async function lockIntegrationEndpoint(transaction: AdminTransaction, organizationId: string, endpointId: string, includeDeleted = false): Promise<IntegrationEndpointRow> {
   await assertIntegrationOrganization(transaction, organizationId, true);
   const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`SELECT ${integrationEndpointProjection} FROM integration_endpoints WHERE organization_id = ${organizationId}::uuid AND id = ${endpointId}::uuid FOR UPDATE`);
-  if (!rows[0]) integrationError('INTEGRATION_ENDPOINT_NOT_FOUND', 404);
+  if (!rows[0] || !includeDeleted && rows[0].deletedAt) integrationError('INTEGRATION_ENDPOINT_NOT_FOUND', 404);
   return rows[0];
 }
 export function integrationText(value: unknown, maximum: number, optional = false): string {
@@ -57,5 +57,6 @@ export function integrationPublicUrl(code: string): string {
   } catch { integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503); }
 }
 export function integrationEndpointDto(row: IntegrationEndpointRow): IntegrationEndpointDto {
-  return { ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), publicUrl: integrationPublicUrl(row.code) };
+  const { deletedAt: _deletedAt, ...endpoint } = row;
+  return { ...endpoint, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), publicUrl: integrationPublicUrl(row.code) };
 }

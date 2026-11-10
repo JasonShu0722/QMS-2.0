@@ -12,7 +12,7 @@ import { readOrganizationRuntime } from '../organization/organization-runtime.re
 import { INBOUND_CONFIGURATION, type InboundConfigurationContext, type InboundIdentity, type InboundReceiptDto, type InboundResult } from './inbound.dto.js';
 
 type Endpoint = {
-  id: string; organization_id: string; status: string; version: number; return_receipt: boolean;
+  id: string; organization_id: string; status: string; deleted_at: Date | null; version: number; return_receipt: boolean;
   max_body_bytes: number; rate_per_minute: number; body_retention_days: number; capacity_bytes: number;
   used_body_bytes: bigint; allowed_ips: string[];
 };
@@ -94,7 +94,7 @@ export class InboundService {
     try {
       const [credential] = await this.prisma.$queryRaw<(Credential & { organization_id: string; endpoint_id: string; endpoint_code: string })[]>`SELECT c.id,c.organization_id,c.endpoint_id,c.secret_hash,c.expires_at,c.revoked_at,e.code AS endpoint_code,clock_timestamp() AS now
         FROM integration_credentials c JOIN integration_endpoints e ON e.id=c.endpoint_id AND e.organization_id=c.organization_id
-        WHERE c.id=${match[1]}::uuid`;
+        WHERE c.id=${match[1]}::uuid AND e.deleted_at IS NULL`;
       const secretDigest = digest(match[2]!);
       const expected = credential?.secret_hash?.trim();
       if (!credential || !expected || !/^[a-f0-9]{64}$/.test(expected) || !timingSafeEqual(Buffer.from(secretDigest, 'hex'), Buffer.from(expected, 'hex'))
@@ -107,9 +107,10 @@ export class InboundService {
   private async lockedEndpoint(tx: Transaction, identity: InboundIdentity, address: string, request: InboundConfigurationContext): Promise<Endpoint> {
     const organization = await readOrganizationRuntime(tx, identity.organizationId, true);
     if (!organization || organization.status !== 'ACTIVE' || organization.type !== 'INTERNAL' || organization.deletedAt || organization.configurationRequired) reject('INTEGRATION_ACCESS_DENIED', 403);
-    const endpoints = await tx.$queryRaw<Endpoint[]>`SELECT id,organization_id,status,version,return_receipt,max_body_bytes,rate_per_minute,body_retention_days,capacity_bytes,used_body_bytes,allowed_ips
+    const endpoints = await tx.$queryRaw<Endpoint[]>`SELECT id,organization_id,status,deleted_at,version,return_receipt,max_body_bytes,rate_per_minute,body_retention_days,capacity_bytes,used_body_bytes,allowed_ips
       FROM integration_endpoints WHERE organization_id=${identity.organizationId}::uuid AND id=${identity.endpointId}::uuid FOR UPDATE`;
     const endpoint = endpoints[0];
+    if (endpoint?.deleted_at) reject('INTEGRATION_AUTH_INVALID', 401);
     if (endpoint) request[INBOUND_CONFIGURATION] = { version: endpoint.version, returnReceipt: endpoint.return_receipt };
     if (!endpoint || endpoint.status !== 'ENABLED' || !inboundIpAllowed(address, endpoint.allowed_ips)) reject('INTEGRATION_ACCESS_DENIED', 403);
     // Take the expiry timestamp after the credential row lock is held.

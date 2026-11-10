@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Header, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
-import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiNoContentResponse, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
-import { CreateIntegrationCredentialDto, CreateIntegrationEndpointDto, IntegrationConnectionDto, IntegrationConnectionQueryDto, IntegrationCredentialDto, IntegrationCredentialPageDto, IntegrationEndpointDto, IntegrationEndpointPageDto, IntegrationPageQueryDto, IntegrationScopeDto, UpdateIntegrationEndpointDto } from './integration-admin.dto.js';
+import { CreateIntegrationCredentialDto, CreateIntegrationEndpointDto, DeleteIntegrationEndpointDto, IntegrationConnectionDto, IntegrationConnectionQueryDto, IntegrationCredentialDto, IntegrationCredentialPageDto, IntegrationEndpointDto, IntegrationEndpointPageDto, IntegrationPageQueryDto, IntegrationScopeDto, UpdateIntegrationEndpointDto } from './integration-admin.dto.js';
 import { IntegrationAdminService } from './integration-admin.service.js';
 import { IntegrationCredentialService } from './integration-credential.service.js';
 
@@ -39,6 +39,10 @@ export class IntegrationAdminController {
   @Patch(':id') @Header('Cache-Control', 'no-store') @ApiOkResponse({ type: IntegrationEndpointDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'integration:manage', organizationScope: bodyScope })
   update(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() input: UpdateIntegrationEndpointDto) { return this.service.updateEndpoint(actor(request), id, input, requestTraceId(request), request.get('Idempotency-Key')); }
+
+  @Delete(':id') @HttpCode(204) @Header('Cache-Control', 'no-store') @ApiNoContentResponse() @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'integration:manage', organizationScope: bodyScope })
+  remove(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() input: DeleteIntegrationEndpointDto) { return this.service.deleteEndpoint(actor(request), id, input, requestTraceId(request), request.get('Idempotency-Key')); }
 
   @Get(':id/connection') @Header('Cache-Control', 'no-store') @ApiOkResponse({ type: IntegrationConnectionDto })
   @RequireAccess({ featurePermission: 'integration:credentials:manage', featurePermissions: credentialPermissions, organizationScope: queryScope })

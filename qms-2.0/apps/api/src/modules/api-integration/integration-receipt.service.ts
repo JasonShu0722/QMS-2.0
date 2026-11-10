@@ -71,7 +71,7 @@ export class IntegrationReceiptService {
       const organizationId = await this.authorize(tx, actor, true);
       const [identity] = await tx.$queryRaw<{ endpoint_id: string }[]>`SELECT endpoint_id FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid`;
       if (!identity) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
-      await lockIntegrationEndpoint(tx, organizationId, identity.endpoint_id);
+      await lockIntegrationEndpoint(tx, organizationId, identity.endpoint_id, true);
       await this.authorize(tx, actor, true);
       const [row] = await tx.$queryRaw<{ id: string; organization_id: string; endpoint_id: string; payload_ciphertext: string | null; body_expires_at: Date; metadata_expires_at: Date; now: Date }[]>`SELECT id,organization_id,endpoint_id,payload_ciphertext,body_expires_at,metadata_expires_at,clock_timestamp() AS now FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
       if (!row || row.metadata_expires_at <= row.now) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
