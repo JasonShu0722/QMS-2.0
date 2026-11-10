@@ -10,6 +10,7 @@ import { ConsoleLayout, useConsoleContext } from './ConsoleLayout';
 import { getConsoleContext } from './console-api';
 import type { ConsoleContext } from './console-navigation';
 import { useLedgerPageSize } from '../ui/ledger';
+import { FEEDBACK_FORM_URL } from '../features/feedback/feedback-config';
 
 vi.mock('./console-api', () => ({ getConsoleContext: vi.fn() }));
 const getContext = vi.mocked(getConsoleContext);
@@ -26,6 +27,25 @@ function LedgerPreferenceProbe() {
   const [pageSize, setPageSize] = useLedgerPageSize('scope-probe');
   return <button onClick={() => setPageSize(50)}>记住页长 {pageSize}</button>;
 }
+it.each(['/console', '/console/users?organizationId=b'])('provides one shared feedback entry on %s without leaving the console draft', async path => {
+  getContext.mockResolvedValue(context(path.includes('organizationId=b') ? 'b' : 'a'));
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  try {
+    render(<MemoryRouter initialEntries={[path]}><ConsoleLayout><Page dirty /><input aria-label="feedback draft" defaultValue="unsaved" /></ConsoleLayout></MemoryRouter>);
+    const draft = await screen.findByRole('textbox', { name: 'feedback draft' });
+    fireEvent.change(draft, { target: { value: 'keep this draft' } });
+    const buttons = screen.getAllByRole('button', { name: '需求反馈' });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.closest('.qms-console-theme')).toHaveAttribute('data-console-theme', 'light');
+    fireEvent.click(buttons[0]!);
+    expect(open).toHaveBeenCalledExactlyOnceWith(FEEDBACK_FORM_URL, '_blank', 'noopener,noreferrer');
+    expect(screen.getByLabelText('path')).toHaveTextContent(path);
+    expect(screen.getByRole('textbox', { name: 'feedback draft' })).toBe(draft);
+    expect(draft).toHaveValue('keep this draft');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(useWorkTabsStore.getState().tabs).toEqual([]);
+  } finally { open.mockRestore(); }
+});
 it('silently resumes an unchanged console draft without resetting focus or menu scroll', async () => {
   let finish!: (value: ConsoleContext) => void;
   getContext.mockResolvedValueOnce(context()).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
