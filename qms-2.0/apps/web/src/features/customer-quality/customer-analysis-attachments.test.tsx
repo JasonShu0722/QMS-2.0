@@ -49,7 +49,10 @@ it('runs the real shared upload/complete/CLEAN lifecycle against the stable anal
   expect(screen.getByText('未解析')).toBeVisible();
   const initialize = vi.mocked(apiRequest).mock.calls.find(([path]) => path === '/api/v1/files/uploads')!;
   expect(JSON.parse(String(initialize[1]?.body))).toMatchObject(resource);
-  clean = true; fireEvent.click(screen.getByRole('button', { name: '刷新附件' }));
+  const refresh = screen.getByRole('button', { name: '刷新附件' });
+  await waitFor(() => expect(refresh).toBeEnabled());
+  clean = true;
+  fireEvent.click(refresh);
   await screen.findByText('扫描通过，可作为证据');
   await waitFor(() => expect(screen.getByRole('button', { name: '保存 FAE 解析' })).toBeEnabled());
   expect(screen.getByText('未解析')).toBeVisible();

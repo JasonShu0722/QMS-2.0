@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 V0.0.42-fix1发布阻塞接续（2026-11-10）
+
+PR103候选89aa847的CI42730202802 attempt1精确24/24及同head Review clear后合并main9a22cb63306444969e537852435825d7afe34389，父独立核整tree相同；16份真实JSON对Git清单核240文件3337Web全PASS。新mainCI42732103400全部终态22success/2failure：唯一Web3原customer-analysis-attachments首case未找到CLEAN文本，片1FAIL296PASS，foundation129558167346明确web-tests must be success派生；自动deploy42733879410/job129558341683 completed/skipped，未实际部署。
+
+fix1只原test首case等待“刷新附件”真实enabled后再click，complete的PENDING文本可能先于readEffect loading结束，不能把文本出现当按钮可用；原mock/motion/timeout及全部上传/扫描/资源/PUT/解析断言保持。CI DOM截断不称捕获当帧，父原完整5PASS非本地RED，真实RED来自main。新实施代理delete_release_fix1独占测试，分支codex/req0036-delete-release-fix1基于9a22；产品删除实现、145迁移及契约保持，原真实PG/恢复/浏览器证据按范围有效。修后完整、限定双审/治理及修复PR/main/部署待续，原失败不删除不rerun刷绿。详细见[计划16节fix1](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
+
+修后原完整5/5 PASS32.38s，限定SPEC后独立QUALITY PASS；治理38/494/20/161及阶段覆盖PASS，产品源与main9a22不变，原验收证据按范围有效。提交仅test+两记录，不混用户四dirty，新精确head云端门禁与实际上线继续核验。
+
 ## REQ0036 接口删除 V0.0.42 本地验证（2026-11-10）
 
 负责人明确增加接口删除，采用一次确认停收件/全key撤销/移出列表保历史，覆盖原无删除决定。分支codex/req0036-endpoint-delete基于main9fe60f4并接续归档b4461a0，沿Issue97，生产尚未部署本追加。145迁移新增内部deleted_at、活动编码partial unique和deleted必须DISABLED约束；同码重建新UUID，旧key不转绑。详细分工、失败和边界见[计划16节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。

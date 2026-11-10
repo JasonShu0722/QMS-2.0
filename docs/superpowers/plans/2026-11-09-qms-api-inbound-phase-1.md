@@ -18,7 +18,7 @@
 | 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 删除范围本地已实现：真实PG新14项+邻近110项、Web新8+原51项、恢复8项、真实浏览器2项均PASS；独立SPEC后QUALITY PASS，API/Web构建与生成通过，契约检查及治理等最后门禁后提交新PR。生产仍9fe60f4便捷化版，删除尚未上线，详第16节 |
+| 当前检查点 | 删除PR103候选89aa847经CI42730202802 attempt1精确24/24及同head Review clear后合并main9a22cb6，整tree相同，240文件3337Web全PASS。新mainCI42732103400最终22success/2failure，原客诉附件测试刷新时序FAIL及foundation派生，自动deploy42733879410 skipped；fix1仅该测试等待实际刷新enabled，产品删除源不变，修复PR/main/部署接续。生产仍9fe60f4 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
 | 下一动作与负责人 | 新分支codex/req0036-endpoint-delete基于origin/main9fe60f4，接续本地归档为b4461a0；先新增真实删除RED及WebRED，再最小实现/双审/契约/构建/浏览器/治理，提交PR并按既有上线授权持续完成。原四dirty保留，预留V0.0.42待远端查重；不实际删除生产接口、不关闭Issue或写飞书 |
@@ -479,3 +479,15 @@ Web新8项RED7FAIL/1PASS，明确缺删除按钮。首GREEN3PASS5FAIL为取消�
 API/Web build、contracts:generate exit0；新head全量CI/Review、合并及新main/部署分别待核。本地API/Vite已按PID/父命令核后停，MinIO仅恢复期间启动并已按ID/label删除，PG待最终门禁结束再精确清理。Git外证据D:/WorkSpace/QMS-2.0-local/req0036-delete-20261110；[Issue97追加已保存回读](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6755169621)。不代删生产接口，不将本地PASS当上线，具体业务/真实来源限制保持。
 
 最终contracts:check明确OpenAPI PASS；Compose基础+扫描+生产config quiet、归档隔离、diff检查均通过。治理38文档/493链接/20来源/161依赖及阶段覆盖PASS，索引只同步DATA-PROTECTION/现有client及恢复验收四处源摘要，消费者复核不改变原协议。PG按精确ID/标签/tmpfs删除回查为空，3136/5186空闲。delete_quality独立读取各实际JSON/完整日志核exit0和上述组合范围，最终QUALITY PASS。远端main仍9fe60f4，开放PR查重为空，当前版本最大V0.0.41-fix3，采用V0.0.42；暂存只本任务写集及源摘要，不混用户四处CodeGraph差异。
+
+### V0.0.42-fix1 发布阻塞的原客诉附件测试（2026-11-10）
+
+PR103候选89aa8471f3b1963dd5546f5451baef3ce3fdedaf经CI42730202802 attempt1精确24/24及同head Review completed/无发现，父独立再核head/base/main后expected-head约束squash为9a22cb63306444969e537852435825d7afe34389，GitHub整tree相同。16份真实artifact JSON与Git清单逐一核240文件3337项全PASS、无漏重/skip/pending/runtimeErrors，原ZIP和inventory保存。未以同tree代main门禁。
+
+新mainCI42732103400 attempt1全部24终态22success/2failure，唯一实质Web3/job129552486252：旧customer-analysis-attachments.test.tsx首case在line53等“扫描通过，可作为证据”缺失，该片15文件297项1FAIL296PASS。foundation129558167346完整日志明确web-tests must be success派生；四PG/API/另外15Web均success。自动deploy42733879410/job129558341683 completed/skipped，未执行生产SSH/145迁移，生产仍旧9fe60f4。
+
+源码可达竞态为AttachmentPanel.complete先observe(PENDING)，upload finally触发refresh；readEffect还会setLoading(true)再Promise.allSettled后false。PENDING文本出现不代表“刷新附件”已enabled，原test立即fireEvent.click可能被disabled忽略，默认findByText等待1秒早于自动poll2秒。实际CI DOM截断未捕获点击当帧，不冒称已本地复现或确定宿主慢因；父原完整5/5（43.34s，首case4192ms）不是RED，真实RED来自mainCI。新实施代理delete_release_fix1只首case缓存真实refresh按钮并waitFor enabled后设置clean和click，保原CLEAN/保存可用/资源/PUT/解析前后全部断言、原mock/motion/timeout，未改产品或CI。
+
+父从origin/main9a22隔离codex/req0036-delete-release-fix1，用户四dirty携带且旧功能分支保持。修后原完整和限定SPEC→QUALITY、治理及新PR/head/main/部署继续本检查点，不rerun旧失败刷绿，不向已合并PR103推送。原删除实现/迁移/契约/浏览器/恢复证据在源码保持时复用。
+
+修后原完整5/5 PASS（32.38s，首case3414ms）及限定SPEC后QUALITY PASS，父核产品API/Prisma/生成契约/删除页面/部署与main9a22相同；治理38文档/494链接/20来源/161依赖及阶段覆盖PASS，diff检查无错误。只本测试+计划/FOUNDATION三文件提交fix1，用户CodeGraph四dirty排除；新PR/head全量CI及Review、main和自动部署实际核验仍待执行。
