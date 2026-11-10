@@ -84,7 +84,7 @@ it('copies a complete current connection configuration with actual authorization
   expect(command).toHaveTextContent('curl --request POST');
   expect(command).toHaveTextContent(endpoint().publicUrl);
   expect(command).toHaveTextContent('Authorization: Bearer <credentialId>.<secret>');
-  expect(command).toHaveTextContent('Idempotency-Key: example-message-001');
+  expect(command).not.toHaveTextContent('Idempotency-Key');
   expect(command).toHaveTextContent('Content-Type: application/json');
   expect(command).toHaveTextContent('--data-binary "@payload.json"');
   const currentEndpoint = { ...endpoint(), returnReceipt: false, publicUrl: 'https://qms.example.test/api/v1/integrations/inbound/MES_QUALITY/messages' };
@@ -92,7 +92,8 @@ it('copies a complete current connection configuration with actual authorization
   fireEvent.click(instructions.getByRole('button', { name: '复制对接配置' }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1));
   const copied = clipboard.mock.calls[0]![0];
-  for (const value of ['MES质量推送', currentEndpoint.publicUrl, 'POST', 'Content-Type: application/json', 'Authorization: Bearer fixture-id.ACTUAL-SECRET', 'Idempotency-Key', '每条新消息', '相同', '204']) expect(copied).toContain(value);
+  for (const value of ['MES质量推送', currentEndpoint.publicUrl, 'POST', 'Content-Type: application/json', 'Authorization: Bearer fixture-id.ACTUAL-SECRET', '每次请求独立保存', '重试可能新增记录', '204']) expect(copied).toContain(value);
+  for (const value of ['Idempotency-Key', '防重复', '409', '重复返回200']) expect(copied).not.toContain(value);
   expect(copied).not.toContain('example-message-001'); expect(copied).not.toContain('<credentialId>');
   expect(Object.values(localStorage).join('') + Object.values(sessionStorage).join('')).not.toContain('ACTUAL-SECRET');
 });

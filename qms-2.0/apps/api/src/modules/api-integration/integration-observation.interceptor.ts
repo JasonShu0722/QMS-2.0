@@ -47,16 +47,15 @@ export class IntegrationObservationInterceptor implements NestInterceptor {
       const reasonCode = !result ? statusCode>=500 ? 'INTERNAL_ERROR' : typeof reportedCode === 'string' && PLATFORM_ERROR_CODES.includes(reportedCode as never) ? reportedCode : `HTTP_${statusCode}` : undefined;
       const configuration = request[INBOUND_CONFIGURATION] ?? (result ? undefined : (await this.prisma.$queryRaw<{ version: number; returnReceipt: boolean }[]>`SELECT version,return_receipt AS "returnReceipt" FROM integration_endpoints WHERE id=${identity.endpointId}::uuid AND organization_id=${identity.organizationId}::uuid`)[0]);
       if (!result && !configuration) throw new Error('INTEGRATION_ATTEMPT_SCOPE_UNAVAILABLE');
-      const header = request.headers['idempotency-key'];
-      const messageId = result?.receipt.messageId ?? (typeof header==='string' && /^[A-Za-z0-9._:-]{8,128}$/.test(header) ? header : undefined);
+      const messageId = result?.receipt.messageId;
       const attempt: IntegrationAttemptInput = { traceId: requestTraceId(request), organizationId: identity.organizationId, endpointId: identity.endpointId, credentialId: identity.credentialId,
         ...(messageId ? { messageId } : {}), ...(result ? { receiptId: result.receipt.receiptId } : {}), configurationVersion: result?.configurationVersion ?? configuration!.version,
-        returnReceipt: result?.returnReceipt ?? configuration!.returnReceipt, statusCode, outcome: result ? result.receipt.duplicate ? 'DUPLICATE' : 'RECEIVED' : statusCode>=500 ? 'UNKNOWN' : 'REJECTED',
+        returnReceipt: result?.returnReceipt ?? configuration!.returnReceipt, statusCode, outcome: result ? 'RECEIVED' : statusCode>=500 ? 'UNKNOWN' : 'REJECTED',
         ...(reasonCode ? { reasonCode } : {}), durationMs: Math.min(86400000,Math.max(0,Math.round(elapsed))) };
       await this.receipts.recordAttempt(attempt);
       const scope = await this.registry.bindScope(this.handle, identity.organizationId);
       await this.exchanges.recordStageResult(this.handle, scope, { direction: 'INBOUND', objectType: 'JSON_MESSAGE', level: 'BATCH', batchId: identity.endpointId, correlationId: attempt.traceId, attemptNumber: 1,
-        eventKey: attempt.traceId, idempotencyKey: attempt.traceId, stage: 'transfer', outcome: result ? 'SUCCEEDED' : statusCode>=500 ? 'UNKNOWN' : 'FAILED', observedCount: result && !result.receipt.duplicate ? 1 : 0, ...(!result && statusCode<500 ? { errorCode: 'TRANSFER_FAILED' as const } : {}) });
+        eventKey: attempt.traceId, idempotencyKey: attempt.traceId, stage: 'transfer', outcome: result ? 'SUCCEEDED' : statusCode>=500 ? 'UNKNOWN' : 'FAILED', observedCount: result ? 1 : 0, ...(!result && statusCode<500 ? { errorCode: 'TRANSFER_FAILED' as const } : {}) });
     } catch {
       this.receipts.collectionFailed(identity.organizationId);
       console.warn('INTEGRATION_OBSERVATION_UNAVAILABLE');

@@ -17,7 +17,7 @@ type Endpoint = {
   used_body_bytes: bigint; allowed_ips: string[];
 };
 type Credential = { id: string; secret_hash: string; expires_at: Date | null; revoked_at: Date | null; now: Date };
-type Receipt = { id: string; message_id: string; body_digest: string; received_at: Date; metadata_expires_at: Date; payload_ciphertext: string | null; payload_bytes: number };
+type Receipt = { id: string; message_id: string; received_at: Date };
 type Transaction = Prisma.TransactionClient;
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 const reject = (code: string, status: number): never => { throw new HttpException({ code, message: '接口请求无法处理' }, status); };
@@ -139,28 +139,13 @@ export class InboundService {
         }
         return endpoint;
       }, { isolationLevel: 'ReadCommitted' });
-      const messageId = oneHeader(request, 'idempotency-key', 'INTEGRATION_MESSAGE_INVALID', 400);
-      if (!/^[A-Za-z0-9._:-]{8,128}$/.test(messageId)) reject('INTEGRATION_MESSAGE_INVALID', 400);
-      const body = validBody(request, initial.max_body_bytes), bodyDigest = digest(body.bytes), traceId = requestTraceId(request);
+      const body = validBody(request, initial.max_body_bytes), traceId = requestTraceId(request);
       return await this.prisma.$transaction(async tx => {
         const endpoint = await this.lockedEndpoint(tx, identity, address, request);
         if (body.bytes.length > endpoint.max_body_bytes) reject('INTEGRATION_BODY_TOO_LARGE', 413);
         const times = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
         const now = times[0]!.now;
-        const previous = (await tx.$queryRaw<Receipt[]>`SELECT id,message_id,body_digest,received_at,metadata_expires_at,payload_ciphertext,payload_bytes FROM integration_receipts
-          WHERE organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid AND message_id=${messageId} FOR UPDATE`)[0];
-        if (previous && previous.metadata_expires_at > now) {
-          if (previous.body_digest !== bodyDigest) reject('INTEGRATION_MESSAGE_CONFLICT', 409);
-          return this.result(identity, endpoint, previous, true, traceId);
-        }
         await tx.$executeRaw`INSERT INTO integration_scope_capacities(organization_id) VALUES(${identity.organizationId}::uuid) ON CONFLICT DO NOTHING`;
-        if (previous) {
-          await tx.$executeRaw`DELETE FROM integration_receipts WHERE id=${previous.id}::uuid`;
-          const released = previous.payload_ciphertext ? previous.payload_bytes : 0;
-          await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes-${released} WHERE id=${identity.endpointId}::uuid`;
-          await tx.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes-${released},receipt_count=receipt_count-1 WHERE organization_id=${identity.organizationId}::uuid`;
-          endpoint.used_body_bytes -= BigInt(released);
-        }
         const capacities = await tx.$queryRaw<{ used_body_bytes: bigint; receipt_count: number }[]>`SELECT used_body_bytes,receipt_count FROM integration_scope_capacities WHERE organization_id=${identity.organizationId}::uuid FOR UPDATE`;
         const capacity = capacities[0]!, receiptId = randomUUID();
         const ciphertext = encryptSecret(body.text, `integration:${identity.organizationId}:${identity.endpointId}:${receiptId}`);
@@ -168,21 +153,21 @@ export class InboundService {
         if (Number(endpoint.used_body_bytes) + payloadBytes > endpoint.capacity_bytes || Number(capacity.used_body_bytes) + payloadBytes > 1073741824 || capacity.receipt_count >= 100000) reject('INTEGRATION_CAPACITY_UNAVAILABLE', 503);
         const snapshot = { version: endpoint.version, returnReceipt: endpoint.return_receipt, maxBodyBytes: endpoint.max_body_bytes, bodyRetentionDays: endpoint.body_retention_days };
         const bodyExpiresAt = new Date(now.getTime() + endpoint.body_retention_days * 86400000), metadataExpiresAt = new Date(now.getTime() + 90 * 86400000);
-        await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,body_digest,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes)
-          VALUES(${receiptId}::uuid,${identity.organizationId}::uuid,${identity.endpointId}::uuid,${identity.credentialId}::uuid,${messageId},${bodyDigest},${endpoint.version},${JSON.stringify(snapshot)}::jsonb,${now},${bodyExpiresAt},${metadataExpiresAt},${ciphertext},${payloadBytes})`;
+        await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes)
+          VALUES(${receiptId}::uuid,${identity.organizationId}::uuid,${identity.endpointId}::uuid,${identity.credentialId}::uuid,${receiptId},${endpoint.version},${JSON.stringify(snapshot)}::jsonb,${now},${bodyExpiresAt},${metadataExpiresAt},${ciphertext},${payloadBytes})`;
         await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes+${payloadBytes} WHERE id=${identity.endpointId}::uuid`;
         await tx.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes+${payloadBytes},receipt_count=receipt_count+1 WHERE organization_id=${identity.organizationId}::uuid`;
         await this.audit.record({ actorUserId: null, organizationId: identity.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED', resourceType: 'IntegrationReceipt', resourceId: receiptId, outcome: 'SUCCESS', traceId,
           metadata: { endpointId: identity.endpointId, credentialId: identity.credentialId, receiptId, resourceVersion: endpoint.version, returnReceipt: endpoint.return_receipt } }, tx);
-        return this.result(identity, endpoint, { id: receiptId, message_id: messageId, received_at: now }, false, traceId);
+        return this.result(identity, endpoint, { id: receiptId, message_id: receiptId, received_at: now }, traceId);
       }, { isolationLevel: 'ReadCommitted' });
     } catch (error) { return this.failure(error); }
   }
 
-  private result(identity: InboundIdentity, endpoint: Endpoint, receipt: Pick<Receipt, 'id' | 'message_id' | 'received_at'>, duplicate: boolean, traceId: string): InboundResult {
-    const dto: InboundReceiptDto = { receiptId: receipt.id, messageId: receipt.message_id, receivedAt: receipt.received_at.toISOString(), status: 'RECEIVED', duplicate };
+  private result(identity: InboundIdentity, endpoint: Endpoint, receipt: Receipt, traceId: string): InboundResult {
+    const dto: InboundReceiptDto = { receiptId: receipt.id, messageId: receipt.message_id, receivedAt: receipt.received_at.toISOString(), status: 'RECEIVED' };
     return { organizationId: identity.organizationId, endpointId: identity.endpointId, credentialId: identity.credentialId,
-      statusCode: endpoint.return_receipt ? duplicate ? 200 : 201 : 204, receipt: dto, traceId, configurationVersion: endpoint.version, returnReceipt: endpoint.return_receipt };
+      statusCode: endpoint.return_receipt ? 201 : 204, receipt: dto, traceId, configurationVersion: endpoint.version, returnReceipt: endpoint.return_receipt };
   }
 
   private failure(error: unknown): never {

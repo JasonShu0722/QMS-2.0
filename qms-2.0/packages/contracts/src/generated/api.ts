@@ -10511,12 +10511,15 @@ export interface components {
         InboundReceiptDto: {
             /** Format: uuid */
             receiptId: string;
+            /**
+             * Format: uuid
+             * @description 服务端分配的本次接收检索编号。
+             */
             messageId: string;
             /** Format: date-time */
             receivedAt: string;
             /** @enum {string} */
             status: "RECEIVED";
-            duplicate: boolean;
         };
         IntegrationReceiptDto: {
             /** Format: uuid */
@@ -22407,7 +22410,6 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
                 Authorization: string;
             };
             path: {
@@ -22424,14 +22426,6 @@ export interface operations {
             };
         };
         responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InboundReceiptDto"];
-                };
-            };
             201: {
                 headers: {
                     [name: string]: unknown;
