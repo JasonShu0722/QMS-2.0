@@ -14,14 +14,14 @@
 | --- | --- |
 | 最后核对与范围 | 2026-11-09，Asia/Taipei；负责人更新状态并明确“继续推进”，user 实时回读 rev363 开发中/P0，目标/五字段范围保持，提出人已由负责人改为舒子杰 |
 | 批准与动作授权 | 负责人最新明确“没问题了就继续合并部署”，本轮已获PR98及同范围发布阻塞修复的集成发布授权；原开发/Issue/PR授权继续。生产岗位配权、凭据分发、接口启用、关闭Issue/台账写入及人工验收不自动扩大；阶段/提出人/优先级不代改 |
-| 本次追加范围 | 负责人最新明确要求便捷化：接口编码替换公开URL的UUID段，复制完整真实对接配置，新增永久有效并支持重复复制；沿Issue97按第14节推进，不新增鉴权平台或额外审批。Admin默认权限及回执开关原行为保持 |
+| 本次追加范围 | 2026-11-10负责人明确增加接口删除，批准已展示的“一次确认、停止接收撤凭据、移出列表、保留历史”方案，覆盖原不提供删除决定。沿Issue97/设计13/计划16推进到上线，原便捷化/默认Admin权保持，不代删生产具体接口 |
 | 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | PR102候选3419360经CI42663249821 attempt1精确24/24及同head Review clear后合并main9fe60f48a7f5db0344553d85fdc049e05c6336d3，整tree一致；mainCI42665525682独立24/24通过。deploy42667918837/job129336426234实际success，快照→144迁移→同SHA三服务健康→成功出口及公网新契约/JS均核验，便捷化已上线，详第15节 |
+| 当前检查点 | 删除范围本地已实现：真实PG新14项+邻近110项、Web新8+原51项、恢复8项、真实浏览器2项均PASS；独立SPEC后QUALITY PASS，API/Web构建与生成通过，契约检查及治理等最后门禁后提交新PR。生产仍9fe60f4便捷化版，删除尚未上线，详第16节 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 本轮工程及上线部署目标完成。负责人刷新页面后可新建永久凭据并复制完整配置；线上账号实际操作与真实来源联调保持人工/业务验收，不据匿名HTTP冒称通过。最终结果已追加Issue97并回读，Issue不关闭、不写飞书；文档最终事实仅本地归档，避免无运行变化再次发布。用户四处原修改按hunk核一致并保留，临时资源已清理 |
+| 下一动作与负责人 | 新分支codex/req0036-endpoint-delete基于origin/main9fe60f4，接续本地归档为b4461a0；先新增真实删除RED及WebRED，再最小实现/双审/契约/构建/浏览器/治理，提交PR并按既有上线授权持续完成。原四dirty保留，预留V0.0.42待远端查重；不实际删除生产接口、不关闭Issue或写飞书 |
 
 ## 1. 交付单元、映射与范围
 
@@ -452,3 +452,30 @@ main全部24终态实际22success/2failure，foundation129317756113明确web-tes
 最终证据Git外req0036-convenience-20261109的final-release-record、main-gates-verified、deployment-log-verified、完整deploy日志、public-final及assets、两轮Web inventory。旧main8a6失败及部署skipped、首两PR失败、真实RED/修后完整结果保留。最终记录只本地归档，不再为无代码变化推送触发部署。
 
 本轮目标完成的是三项便捷能力及实际上线。已存在接口会显示编码URL，旧UUID与旧有限期凭据仍有效；旧hash不可反推原文，需要负责人在页面新建一份默认永久凭据使用反复复制。未代发/分发/撤销生产凭据、启用接口或关闭Issue；当前真实来源协议/业务字段/吞吐、匹配全容量恢复及生产物理设备/人工操作验收保持未覆盖。迁移前本机数据库快照不等于异地/对象灾备，144空日期仍不支持直接回退旧镜像。
+
+## 16. 接口删除交付单元（V0.0.42）
+
+负责人明确增加，复用Issue97与本会话持续集成上线授权，不重复飞书接单或审批。采用设计13节最小逻辑删除，允许复用编码，保留历史与现有配额清理。一个功能PR，独立SPEC后QUALITY，主代理串行真实验证；不实际操作生产删除。
+
+| 任务/写集 | 完成条件 |
+| --- | --- |
+| A后端实施代理 | integration-admin.dto/controller/service、integration-types、integration-credential.service、inbound.service、新integration-delete.integration-spec.ts；先旧144链HTTP DELETE期待204实际404 RED，随后实现CAS/幂等/事务撤key审计、隐藏所有管理读写/复制入口，历史仍检索，锁等待与同码新建旧key拒绝 |
+| B前端实施代理 | ApiIntegrationsPage.tsx/test与integration-ui.ts；先按钮/确认/DELETE原body/失败重试RED，待稳定DTO及生成契约实现。管理权才显示，单确认、pending阻离/双击/其他操作、未知同key重试、scope旧结果隔离，不加新页面或审批 |
+| 父公共整合 | 145迁移及Prisma deletedAt、活动接口编码partial unique及INSERT冲突目标、审计label、AdminBody新增生成DTO、生成契约、真实浏览器、文档/API-INTEGRATION及FOUNDATION；旧历史迁移不改。现有唯一不破坏时先做RED，再迁移 |
+| 审查/验证/交付 | A/B独立SPEC→QUALITY，真实一次性PG完整API模块及公共parser/审计、Web6完整、真实浏览器删除前后/历史/同码/旧token、构建/契约/归档/Compose/治理。旧有效轮换/恢复按影响复用，新增schema历史兼容/恢复需实际验证；单worker/Node1GiB/PG512MiB，不连55440。提交PR精确head CI/Review→授权合并→新main→真实部署/公网核验，Issue保持开放、结果追加回读，不写飞书或代删生产数据 |
+
+删除字段是内部生命周期事实，公开IntegrationEndpointDto不扩无消费者的deletedAt；删除返回204。旧镜像无法过滤已删接口，不直接回退，优先向前修复；已有删除状态/撤销保留，不通过清空表回退。
+
+### 本地实际验证与失败保留
+
+实现代理delete_backend独占API/新测试，delete_web独占页面/作用域writer/新Web测试；父负责迁移、历史正文helper、审计label、AdminBody/契约、浏览器、备份恢复及文档。delete_spec对后端及Web/公共接缝SPEC PASS，delete_quality独立QUALITY PASS；最后取消可访问名称及测试定位返修亦限定双审PASS。所有重命令父串行，代理未运行服务/测试/build/Git。首次代理路径消息写错导致无效workdir，已明确纠正为活动D路径；误创建的一份测试立即Move到正确路径，未在其它checkout开发，错误过程保留。
+
+Node24.21.0/pnpm11.19.0，准备前可用5.59GiB，一次性PG18/55636、512MiB/1CPU/tmpfs；先144链真实RED：DELETE预期204实际404，1FAIL/13名称过滤，不以新DTO编译错误当RED。随后145迁移/客户端生成成功。新文件首12PASS2FAIL为夹具：匿名请求先被CSRF403(补合法CSRF但无session隔离401)、等待计数只查直接blocker遗漏队列软阻塞(改递归pg_blocking_pids，保2事务/3秒断言)。最终原完整14/14 PASS（15.051s）；邻近10完整文件110/110 PASS（76.5s），含旧管理/凭据/连接复制/接收/并发/检索/清理/观测/parser/审计标签，无skip。
+
+Web新8项RED7FAIL/1PASS，明确缺删除按钮。首GREEN3PASS5FAIL为取消双字可访问名及大DOM查询成本，给取消补aria-label、测试定向既有label/text，不改timeout/motion。次7PASS1FAIL为确认浮层离场后重新查询按钮，缓存首次可见真实节点仍做双击只1DELETE；后续分页英文title不存在、innerbutton无native disabled各次失败如实保留。核安装rc-pagination以根ant-pagination-disabled及handleChange(!disabled)为真实禁用协议，测试断言根禁用后实际点击仍0新增GET，未放宽行为要求。最后新完整8/8 PASS（47.86s），前七文件运行其它六完整51项PASS，组合59项有效。pending fixture finally真实释放，避免失败未决请求影响后case。
+
+恢复演练完整8/8（29.189s）含原负例，证明deleted时间/DISABLED/version、主key撤销及密文、旧收件/计账及同码新接口原样恢复；只证明小样本，旧轮换脚本未改且遍历保留对象，复用原密钥轮换证据。真实marker-only浏览器两完整场景2/2（31s）保原永久复制/编码及UUID重试/204/来源/正文，追加真实操作栏单确认DELETE204、列表移除、未先撤的旧key401、历史payload同文、同码新UUID旧key仍401。浅深与320/390/1440几何沿原第二场景通过，未开trace/video或输出真实秘密。
+
+API/Web build、contracts:generate exit0；新head全量CI/Review、合并及新main/部署分别待核。本地API/Vite已按PID/父命令核后停，MinIO仅恢复期间启动并已按ID/label删除，PG待最终门禁结束再精确清理。Git外证据D:/WorkSpace/QMS-2.0-local/req0036-delete-20261110；[Issue97追加已保存回读](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6755169621)。不代删生产接口，不将本地PASS当上线，具体业务/真实来源限制保持。
+
+最终contracts:check明确OpenAPI PASS；Compose基础+扫描+生产config quiet、归档隔离、diff检查均通过。治理38文档/493链接/20来源/161依赖及阶段覆盖PASS，索引只同步DATA-PROTECTION/现有client及恢复验收四处源摘要，消费者复核不改变原协议。PG按精确ID/标签/tmpfs删除回查为空，3136/5186空闲。delete_quality独立读取各实际JSON/完整日志核exit0和上述组合范围，最终QUALITY PASS。远端main仍9fe60f4，开放PR查重为空，当前版本最大V0.0.41-fix3，采用V0.0.42；暂存只本任务写集及源摘要，不混用户四处CodeGraph差异。

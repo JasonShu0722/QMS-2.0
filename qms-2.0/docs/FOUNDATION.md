@@ -1,5 +1,24 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 接口删除 V0.0.42 本地验证（2026-11-10）
+
+负责人明确增加接口删除，采用一次确认停收件/全key撤销/移出列表保历史，覆盖原无删除决定。分支codex/req0036-endpoint-delete基于main9fe60f4并接续归档b4461a0，沿Issue97，生产尚未部署本追加。145迁移新增内部deleted_at、活动编码partial unique和deleted必须DISABLED约束；同码重建新UUID，旧key不转绑。详细分工、失败和边界见[计划16节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| 运行时/资源 | Node24.21.0/pnpm11.19.0，一次性PG18/55636，512MiB/1CPU/tmpfs，Node1GiB单worker串行，不连55440 |
+| 新删除PG/HTTP | 旧144链204期待404实际RED；145后首12PASS2fixtureFAIL（CSRF先拒/直接阻塞计数），合法CSRF无session及递归阻塞树后原完整14/14 PASS，保预算 |
+| 邻近回归 | 10完整文件110/110 PASS、0skip，覆盖原管理/凭据/复制/收件/并发/检索/清理/观测/parser/审计标签 |
+| Web | 新8RED7FAIL1PASS；取消名/定位成本/离场确认节点/分页真实禁用表达失败均保留并最小修，原预算与motion不变；最后8/8及原六完整51项组合59PASS |
+| 真实恢复 | 原完整8/8、0skip，删除状态/撤销/旧密文和配额/同码新接口恢复正确；小样本不等于生产全容量 |
+| 真实浏览器 | marker-only两完整场景2/2（31s），新增DELETE204单确认/移除、旧未撤key401、历史正文保持、同码新UUID旧key仍401，保原复制/回执/来源/纯文本与浅深窄屏几何 |
+| 构建/契约 | API/Web build、contracts:generate exit0；contracts:check和治理等最终结果接续 |
+| 审查 | delete_spec后端/Web及接缝SPEC PASS，delete_quality独立QUALITY PASS，最后测试定位/取消名称限定双审PASS；静态结论不代运行证据 |
+
+本地API/Vite按PID/父命令核后停止，任务MinIO恢复后精确ID/标签清理，PG在最终门禁后再清理；Git外原始日志/备份位于req0036-delete-20261110。[Issue追加已回读](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6755169621)。生产删除/凭据分发、真实来源联调、全容量恢复及人工设备验收NOT_RUN。旧镜像不识别删除过滤，不能直接回退；优先向前修复不删历史。PR/main/自动部署必须精确新head分别通过，不用旧版CI代替。
+
+最终contracts:check、Compose基础+扫描+生产quiet、归档隔离、diff均PASS；治理38文档/493链接/20来源/161依赖及阶段覆盖PASS。任务PG亦核ID/标签/tmpfs后删除并回查为空，API/Vite端口空闲。独立QUALITY读取实际日志/JSON核124后端与组合59Web、恢复8/浏览器2等范围和exit0，未将组合称单次全绿。V0.0.42提交前远端main与开放PR再次核对，用户既有四dirty排除；精确新head云端门禁及发布尚待。
+
 ## REQ0036 便捷化最终实际发布（2026-11-10）
 
 [PR102](https://github.com/JasonShu0722/QMS-2.0/pull/102)候选3419360的CI42663249821 attempt1精确24/24与同head Review clear后squash main/生产9fe60f48a7f5db0344553d85fdc049e05c6336d3，完整tree一致。新[main CI42665525682](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42665525682)独立24/24 success；PR/main各16份实际JSON与Git清单核239文件3329项全PASS，无漏重/skip/pending/runtimeError。

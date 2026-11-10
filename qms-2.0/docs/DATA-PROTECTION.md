@@ -57,6 +57,8 @@ pnpm --filter @qms/api data:protect restore D:/QmsProtected/backup.qmsb
 
 ## 可复跑验收
 
+145接口删除迁移引入内部删除时间及未删除编码唯一索引。恢复演练同时保留删除时间、DISABLED状态、凭据撤销、旧收件及配额和同编码新接口；不能恢复成已删接口可接收，也不能直接退回不识别删除标记的旧镜像。逻辑删除不提前释放仍保留的正文容量，Worker依原期限清理。
+
 REQ-0036 扩展既有真实轮换及备份恢复脚本，核对恢复后的接口/回执开关、凭据校验值/创建人、消息编号、加密正文和容量。便捷化进一步覆盖永久空有效期及新凭据原文密文；轮换在组织→接口→凭据锁内重加密，移除旧 key 后核验实际读取，历史有限期且无原文密文的行保持。恢复库在开放流量前必须先停用接收接口，核对密钥、凭据及到期状态后再批准启用；144 迁移后的永久凭据不能直接运行不支持空日期的旧镜像。当前 dump256 MiB/包512 MiB 上限保持；小样本恢复成功不证明接口默认256 MiB或组织1 GiB容量可恢复，生产容量需对应实际全库恢复证据。完整运行结果见[实施计划](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)。
 
 从 `apps/api` 执行 `node --test test/operations/data-protection-objects.test.mjs`、`data-protection.acceptance.mjs`、`key-rotation.acceptance.mjs`、`tls.acceptance.mjs`。对象与密钥轮换演练要求 `QMS_ACCEPTANCE_DISPOSABLE_DATABASE=true`、临时loopback PostgreSQL（拒绝55440）；对象演练还要求匹配容器、本任务MinIO、外部 `QMS_ACCEPTANCE_ARTIFACT_DIRECTORY` 和备份配置。主目录使用55448，密钥轮换在该实例中新建并清理随机数据库。TLS演练要求 `QMS_ACCEPTANCE_TLS_URL`、`QMS_ACCEPTANCE_TLS_HTTP_URL`、`QMS_ACCEPTANCE_TLS_CA` 及供应商seed密码。证书/凭据缺失明确失败。

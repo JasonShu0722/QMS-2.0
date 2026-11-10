@@ -26,13 +26,13 @@ model IntegrationEndpoint {
   allowedIps String[] @default([]) @map("allowed_ips")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   credentials IntegrationCredential[]
   receipts IntegrationReceipt[]
   rateWindows IntegrationRateWindow[]
   requestAttempts IntegrationRequestAttempt[]
 
-  @@unique([organizationId, code])
   @@unique([organizationId, id])
   @@index([organizationId, createdAt, id], map: "integration_endpoints_scope_created_idx")
   @@map("integration_endpoints")

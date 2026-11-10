@@ -37,6 +37,9 @@ export class UpdateIntegrationEndpointDto extends IntegrationScopeDto {
   @ApiPropertyOptional({ minimum: 16777216, maximum: 1073741824 }) @IsOptional() @IsInt() @Min(16777216) @Max(1073741824) capacityBytes?: number;
   @ApiPropertyOptional({ type: [String], maxItems: 32 }) @IsOptional() @IsArray() @ArrayMaxSize(32) @IsString({ each: true }) @MaxLength(64, { each: true }) allowedIps?: string[];
 }
+export class DeleteIntegrationEndpointDto extends IntegrationScopeDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
+}
 export class CreateIntegrationCredentialDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1, maximum: 365, default: 90, description: 'null 表示永久有效。' }) @IsOptional() @IsInt() @Min(1) @Max(365) validityDays?: number | null;
