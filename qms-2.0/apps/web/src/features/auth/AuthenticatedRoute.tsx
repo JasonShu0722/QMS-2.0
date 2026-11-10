@@ -7,7 +7,7 @@ import { ApiError, apiRequest, getSession, type AccountType, type LoginResponse,
 import { useLanguage } from '../../i18n/Language';
 import { readReturnTo } from './return-to';
 import { SessionVerificationGate } from './SessionVerificationGate';
-import { publishSessionSignal, subscribeSessionSignals } from './session-invalidation';
+import { publishSessionSignal, subscribeSessionSignals, subscribeWindowResume } from './session-invalidation';
 
 type AuthenticatedRouteProps = {
   accountType: AccountType;
@@ -19,8 +19,10 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
   const location = useLocation();
   const [retryCount, setRetryCount] = useState(0);
   const scope = useMemo(() => Symbol('authenticated-route'), [location.pathname]);
+  const currentScope = useRef(scope); currentScope.current = scope;
   const [verified, setVerified] = useState<{ scope: symbol; session: SessionView }>();
-  const active = useRef<{ generation: number; controller?: AbortController }>({ generation: 0 });
+  const active = useRef<{ generation: number; controller?: AbortController; pending?: boolean }>({ generation: 0 });
+  const [resumeError, setResumeError] = useState<{ scope: symbol; traceId?: string }>();
   const binding = useRef(false);
   const bindTabs = useCallback((session?: SessionView) => {
     binding.current = true;
@@ -40,6 +42,7 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
   const restart = useCallback((clear = false) => {
     active.current.controller?.abort();
     active.current.generation++;
+    setResumeError(undefined);
     if (clear) { setVerified(undefined); bindTabs(); }
     setState({ status: 'loading' });
     setRetryCount(count => count + 1);
@@ -51,13 +54,16 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
     if (!binding.current && next.sessionScope !== previous.sessionScope) restart(true);
   }), [restart]);
 
-  useEffect(() => {
+  const verify = useCallback((background = false) => {
+    if (background && active.current.pending) return;
     const controller = new AbortController();
     const generation = ++active.current.generation;
     active.current.controller = controller;
-    const current = () => !controller.signal.aborted && active.current.generation === generation;
-    setState({ status: 'loading' });
-    getSession(controller.signal)
+    active.current.pending = true;
+    const current = () => !controller.signal.aborted && currentScope.current === scope && active.current.generation === generation;
+    if (!background) setState({ status: 'loading' });
+    setResumeError(undefined);
+    void getSession(controller.signal)
       .then((session) => {
         if (!current()) return;
         const previous = useWorkTabsStore.getState().sessionScope;
@@ -81,13 +87,18 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
         } else if (error instanceof ApiError && error.status === 403) {
           setVerified(undefined); bindTabs(); setState({ status: 'denied' });
         } else {
-          setState({ status: 'error', traceId: error instanceof ApiError ? error.traceId : undefined });
+          if (background) setResumeError({ scope, traceId: error instanceof ApiError ? error.traceId : undefined });
+          else setState({ status: 'error', traceId: error instanceof ApiError ? error.traceId : undefined });
         }
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [scope, retryCount, bindTabs]);
+      }).finally(() => { if (current()) active.current.pending = false; });
+  }, [scope, bindTabs]);
+  useEffect(() => {
+    verify();
+    return () => active.current.controller?.abort();
+  }, [verify, retryCount]);
+  useEffect(() => subscribeWindowResume(() => {
+    if (state.status === 'authenticated' && verified?.scope === scope) verify(true);
+  }), [scope, state.status, verified, verify]);
 
   let status: ReactNode;
   if (state.status === 'loading') {
@@ -128,6 +139,7 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
   if (!session || session.accountType !== accountType) return status;
   return <>
     <SessionVerificationGate open={state.status !== 'authenticated'} onUnavailable={discardPreserved}>{status}</SessionVerificationGate>
+    {state.status === 'authenticated' && resumeError?.scope === scope && <Alert className="qms-session-resume-error" role="alert" type="warning" showIcon title={t('暂时无法验证登录状态')} description={resumeError.traceId && <span>{t('追踪标识')}: <code>{resumeError.traceId}</code></span>} action={<Button onClick={() => verify(true)}>{t('重试')}</Button>} />}
     <div key={`${session.accountType}:${session.organizationId}:${session.userId}`}>{children}</div>
   </>;
 }

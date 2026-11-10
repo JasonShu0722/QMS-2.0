@@ -26,11 +26,11 @@ function application(strict = false, modal = false) {
 beforeEach(() => { mounts = 0; useWorkTabsStore.getState().reset(); vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function (this: HTMLDialogElement) { this.setAttribute('open', ''); }); vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function (this: HTMLDialogElement) { this.removeAttribute('open'); }); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-it('revalidates on focus, blocks while pending, and preserves an unchanged business draft', async () => {
+it('blocks an explicit revalidation while pending and preserves an unchanged business draft', async () => {
   let finish!: (value: Response) => void;
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(session())).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })));
   application(); fireEvent.change(await screen.findByRole('textbox', { name: 'draft' }), { target: { value: 'unsaved' } });
-  fireEvent.focus(window);
+  act(() => publishSessionSignal('revalidate'));
   await waitFor(() => expect(finish).toBeDefined());
   expect(screen.getByRole('dialog', { name: '会话安全验证' })).toHaveAttribute('open');
   expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
@@ -38,14 +38,62 @@ it('revalidates on focus, blocks while pending, and preserves an unchanged busin
   expect(await screen.findByRole('textbox', { name: 'draft' })).toHaveValue('unsaved'); expect(mounts).toBe(1);
 });
 
-it('keeps a network-failed revalidation blocked and retries without losing its draft', async () => {
+it('keeps a network-failed explicit revalidation blocked and retries without losing its draft', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(session())).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response(session())));
   application(); fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'unsaved' } });
-  fireEvent.focus(window);
+  act(() => publishSessionSignal('revalidate'));
   expect(await screen.findByText('暂时无法验证登录状态')).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: '会话安全验证' })).toHaveAttribute('open');
   fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
   expect(await screen.findByRole('textbox')).toHaveValue('unsaved'); expect(mounts).toBe(1);
+});
+
+it('silently resumes a modal draft without a security dialog and coalesces focus with visible', async () => {
+  let finish!: (value: Response) => void;
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(session())).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })));
+  application(false, true);
+  const draft = await screen.findByRole('textbox', { name: 'draft' });
+  fireEvent.change(draft, { target: { value: 'private modal draft' } }); draft.focus();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  act(() => { window.dispatchEvent(new Event('focus')); document.dispatchEvent(new Event('visibilitychange')); });
+  await waitFor(() => expect(finish).toBeDefined());
+  expect(screen.queryByRole('dialog', { name: '会话安全验证' })).not.toBeInTheDocument();
+  expect(HTMLDialogElement.prototype.showModal).not.toHaveBeenCalled();
+  expect(draft).toHaveFocus(); expect(draft).toHaveValue('private modal draft');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  fireEvent.change(draft, { target: { value: 'continued typing' } });
+  await act(async () => finish(response(session())));
+  expect(screen.getByRole('textbox', { name: 'draft' })).toBe(draft);
+  expect(draft).toHaveFocus(); expect(draft).toHaveValue('continued typing'); expect(mounts).toBe(1);
+});
+
+it('silently resumes after a network failure with a light alert and preserves the retry draft', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(session())).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response(session())));
+  application(); const draft = await screen.findByRole('textbox');
+  fireEvent.change(draft, { target: { value: 'unsaved' } }); draft.focus();
+  fireEvent.focus(window);
+  expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法验证登录状态');
+  expect(screen.queryByRole('dialog', { name: '会话安全验证' })).not.toBeInTheDocument();
+  expect(draft).toHaveFocus(); expect(draft).toHaveValue('unsaved');
+  expect(document.querySelector('.route-error')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByRole('textbox')).toBe(draft); expect(mounts).toBe(1);
+});
+
+it('merges later resumes into the current session check without aborting it', async () => {
+  let finish!: (value: Response) => void;
+  const requests = vi.fn().mockResolvedValueOnce(response(session())).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  vi.stubGlobal('fetch', requests); application(); await screen.findByRole('textbox');
+  vi.useFakeTimers();
+  try {
+    act(() => { window.dispatchEvent(new Event('focus')); vi.advanceTimersByTime(50); });
+    expect(requests).toHaveBeenCalledTimes(2);
+    const signal = requests.mock.calls[1]![1].signal as AbortSignal;
+    act(() => { window.dispatchEvent(new Event('focus')); vi.advanceTimersByTime(50); });
+    expect(requests).toHaveBeenCalledTimes(2); expect(signal.aborted).toBe(false);
+    await act(async () => finish(response(session())));
+  } finally { vi.useRealTimers(); }
 });
 
 it('clears drafts on an invalidation signal and never treats the signal as proof of a session', async () => {
@@ -63,9 +111,8 @@ it('does not restore a late session check over a newer invalidation in StrictMod
   application(true); await screen.findByRole('textbox'); delayed = true;
   fireEvent.focus(window); await waitFor(() => expect(finish).toBeDefined());
   const old = finish;
-  act(() => publishSessionSignal('invalidate'));
   vi.stubGlobal('fetch', vi.fn(async () => response({ code: 'AUTH_SESSION_REQUIRED' }, 401)));
-  fireEvent.focus(window);
+  act(() => publishSessionSignal('invalidate'));
   expect(await screen.findByText('login destination')).toBeInTheDocument();
   await act(async () => old(response(session())));
   expect(screen.queryByLabelText('draft')).not.toBeInTheDocument();
@@ -85,12 +132,12 @@ it('quarantines a real body Modal portal through pending and failed checks, pres
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(session())).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response(session())).mockResolvedValue(response({ code: 'AUTH_SESSION_REQUIRED' }, 401)));
   application(false, true);
   fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'private modal draft' } });
-  fireEvent.focus(window); await waitFor(() => expect(finish).toBeDefined());
+  act(() => publishSessionSignal('revalidate')); await waitFor(() => expect(finish).toBeDefined());
   expect(screen.getByRole('dialog', { name: '会话安全验证' })).toHaveAttribute('open');
   expect(screen.getByLabelText('draft')).toHaveValue('private modal draft');
   await act(async () => finish(response(session())));
   expect(await screen.findByRole('textbox')).toHaveValue('private modal draft');
-  fireEvent.focus(window);
+  act(() => publishSessionSignal('revalidate'));
   expect(await screen.findByText('暂时无法验证登录状态')).toBeVisible();
   expect(screen.getByRole('dialog', { name: '会话安全验证' })).toHaveAttribute('open');
   fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));

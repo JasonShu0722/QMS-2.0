@@ -1,11 +1,14 @@
 export type SessionSignal = 'invalidate' | 'revalidate';
 const storageKey = 'qms:session-signal:v1';
 const listeners = new Set<(signal: SessionSignal) => void>();
+const resumeListeners = new Set<() => void>();
+let resumeTimer: ReturnType<typeof setTimeout> | undefined;
 let channel: BroadcastChannel | undefined;
 let version = 0;
 export const sessionSignalVersion = () => version;
 const isSignal = (value: unknown): value is SessionSignal => value === 'invalidate' || value === 'revalidate';
 function receive(signal: SessionSignal) {
+  cancelResume();
   if (signal === 'invalidate') version++;
   listeners.forEach(listener => listener(signal));
 }
@@ -19,7 +22,11 @@ function storage(event: StorageEvent) {
     if (isSignal(value?.signal) && typeof value.nonce === 'string' && value.nonce.length <= 100 && Object.keys(value).length === 2) receive(value.signal);
   } catch { /* Malformed notifications are not authorization evidence. */ }
 }
-function focus() { receive('revalidate'); }
+function cancelResume() { if (resumeTimer !== undefined) { clearTimeout(resumeTimer); resumeTimer = undefined; } }
+function focus() {
+  if (resumeTimer !== undefined) return;
+  resumeTimer = setTimeout(() => { resumeTimer = undefined; resumeListeners.forEach(listener => listener()); }, 50);
+}
 function visibility() { if (document.visibilityState === 'visible') focus(); }
 
 export function publishSessionSignal(signal: SessionSignal): void {
@@ -37,8 +44,6 @@ export function subscribeSessionSignals(listener: (signal: SessionSignal) => voi
     channel = openChannel();
     if (channel) channel.onmessage = event => { if (isSignal(event.data)) receive(event.data); };
     window.addEventListener('storage', storage);
-    window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', visibility);
   }
   listeners.add(listener);
   return () => {
@@ -46,6 +51,19 @@ export function subscribeSessionSignals(listener: (signal: SessionSignal) => voi
     if (listeners.size) return;
     if (channel) { channel.onmessage = null; try { channel.close(); } catch { /* Continue removing listeners if the platform is unavailable. */ } channel = undefined; }
     window.removeEventListener('storage', storage);
+  };
+}
+
+export function subscribeWindowResume(listener: () => void): () => void {
+  if (!resumeListeners.size) {
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
+  }
+  resumeListeners.add(listener);
+  return () => {
+    resumeListeners.delete(listener);
+    if (resumeListeners.size) return;
+    cancelResume();
     window.removeEventListener('focus', focus);
     document.removeEventListener('visibilitychange', visibility);
   };

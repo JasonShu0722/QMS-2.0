@@ -1,5 +1,25 @@
 # 底座与阶段二平台验收记录
 
+## Issue105 窗口切回静默验证本地验收（2026-11-10）
+
+负责人明确修复切回窗口时的闪白/整页验证。分支codex/focus-revalidation基于生产/maind9d2a92接续本地归档971d2ee，Issue105预留V0.0.43。实现只涉及Web本地resume订阅及三个消费者，普通恢复后台合并检查、保页面Modal草稿焦点，网络错误轻提示重试；明确安全重验/真正拒绝/身份能力变化保原清敏与迟到响应保护，不新增授权缓存或协议。详细范围和证据见[专项计划](../../docs/superpowers/plans/2026-11-10-qms-focus-revalidation.md)。
+
+真实行为RED5FAIL；核心首完整7文件116PASS/2FAIL（按钮可访问名称及测试未等前次明确重验结束），最小返修后受影响两完整文件34PASS，与未改五文件84PASS形成118项有效组合。六完整下游104PASS；独立SPEC后QUALITY均PASS。Web生产构建PASS。API/DTO/迁移/部署脚本均未改，未把旧后端全量或阶段验收重写成本轮PASS。
+
+一次性PG18/55636真实145迁移+seed、API3136/Vite5186及真实登录/MFA下，两个Playwright场景2PASS/22.7秒：延迟真实session/context时Modal草稿/输入/焦点滚动保持，重复恢复合并且不重读接口列表，网络失败后轻提示及真实context重试200，真实服务端注销后跳登录并移除入口。触发使用浏览器显式focus/visibility事件，未宣称物理窗口/生产角色人工验收；不读生产凭据或改生产数据。Node24.21.0/pnpm11.19.0、Node1GiB单worker，PG512MiB/1CPU/tmpfs；API/Vite及PG均按身份精确清理，未连55440。Git外focus-revalidation-20261110保留原始失败和全输出。API页/client/Gate五完整文件另36PASS，18完整文件累计258项有效组合。治理及PR/main/自动发布在本节写入时尚待，未称线上已修复。
+
+治理38文档/499链接/20来源/161依赖及阶段覆盖1项PASS，归档隔离与diff检查PASS；仅更新本次frontend review及两实际来源摘要，既有用户CodeGraph修改不混入。后端/DTO/契约/迁移未变，本地未重复无关全阶段验收，云端PR和main须分别核当前提交，Issue仍open。
+
+## REQ0036 接口删除最终实际发布（2026-11-10）
+
+[PR104](https://github.com/JasonShu0722/QMS-2.0/pull/104)候选4815315经CI42734768669 attempt1精确24/24及同head Review clear后合并main/生产d9d2a920f2a79cde20313767c233b753956ba833，父独立核整tree相同。新[mainCI42736298039](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42736298039)独立24/24 success，PR104/main各16份实际JSON对Git清单核240文件3337Web全PASS，无漏重/skip/pending/runtimeError。
+
+[自动部署42737916279](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42737916279)/job129571581957 attempt1实际success非skip；完整原日志核来源CI/head及full门禁、台北09:52:27加密DB快照验证、09:52:31真实145删除迁移、三服务同SHA且Healthy、09:52:53 Deployment successful。稳定Worker READY/HTTP/原子marker由同版强制成功出口支持，未单独SSH读marker，不将DB本地快照称异地/全容量灾备。
+
+09:55:13台北独立公网PASS：login/OpenAPI/console页与资源200，新DELETE契约/expectedVersion/204存在、管理匿名401；新index-ChNX2RB_.js含删除及重试标识，旧JS已替换、CSS未变符合无样式修改。未执行生产DELETE或读取秘密；一次性marker-only真实浏览器已验证删除204/移除/旧key401/历史保留/同码新建，公网匿名结果不冒充生产角色人工操作验收。
+
+接口删除开发与上线目标完成，[Issue97结果追加](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6756738463)已回读，Issue保持open、不写飞书、不代删具体接口。完整失败/修复/发布见[计划17节](../../docs/superpowers/plans/2026-11-09-qms-api-inbound-phase-1.md)及Git外req0036-delete-20261110的完整部署日志/快照/契约及Web inventory。自有资源已精确清理，用户原四dirty保留；最终事实仅本地归档避免重复发布。真实来源联调/全容量恢复/人工设备验收未覆盖，145不能直接回退不识别deleted的旧镜像。
+
 ## REQ0036 V0.0.42-fix1发布阻塞接续（2026-11-10）
 
 PR103候选89aa847的CI42730202802 attempt1精确24/24及同head Review clear后合并main9a22cb63306444969e537852435825d7afe34389，父独立核整tree相同；16份真实JSON对Git清单核240文件3337Web全PASS。新mainCI42732103400全部终态22success/2failure：唯一Web3原customer-analysis-attachments首case未找到CLEAN文本，片1FAIL296PASS，foundation129558167346明确web-tests must be success派生；自动deploy42733879410/job129558341683 completed/skipped，未实际部署。

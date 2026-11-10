@@ -26,6 +26,49 @@ function LedgerPreferenceProbe() {
   const [pageSize, setPageSize] = useLedgerPageSize('scope-probe');
   return <button onClick={() => setPageSize(50)}>记住页长 {pageSize}</button>;
 }
+it('silently resumes an unchanged console draft without resetting focus or menu scroll', async () => {
+  let finish!: (value: ConsoleContext) => void;
+  getContext.mockResolvedValueOnce(context()).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  render(<MemoryRouter initialEntries={['/console/users']}><ConsoleLayout><input aria-label="console draft" defaultValue="unsaved" /></ConsoleLayout></MemoryRouter>);
+  const draft = await screen.findByRole('textbox', { name: 'console draft' });
+  const menu = screen.getByRole('navigation', { name: '管理导航' });
+  menu.scrollTop = 123; fireEvent.scroll(menu); draft.focus();
+  fireEvent.focus(window);
+  await waitFor(() => expect(getContext).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole('dialog', { name: '会话安全验证' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'console draft' })).toBe(draft);
+  expect(draft).toHaveFocus(); expect(menu.scrollTop).toBe(123);
+  await act(async () => finish(context()));
+  expect(screen.getByRole('textbox', { name: 'console draft' })).toBe(draft);
+  expect(draft).toHaveFocus(); expect(menu.scrollTop).toBe(123);
+});
+
+it('silently resumes a console network failure with an inline retry alert', async () => {
+  getContext.mockResolvedValueOnce(context()).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(context());
+  render(<MemoryRouter initialEntries={['/console/users']}><ConsoleLayout><input aria-label="console draft" defaultValue="unsaved" /></ConsoleLayout></MemoryRouter>);
+  const draft = await screen.findByRole('textbox', { name: 'console draft' }); draft.focus();
+  fireEvent.focus(window);
+  expect(await screen.findByRole('alert')).toHaveTextContent('无法验证管理权限，请重试');
+  expect(screen.queryByRole('dialog', { name: '会话安全验证' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'console draft' })).toBe(draft); expect(draft).toHaveFocus();
+  expect(screen.getByRole('alert').closest('.qms-console-state')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '重试' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByRole('textbox', { name: 'console draft' })).toBe(draft); expect(draft).toHaveFocus();
+});
+it('merges later resumes into the current console check without aborting it', async () => {
+  let finish!: (value: ConsoleContext) => void;
+  getContext.mockResolvedValueOnce(context()).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  renderLayout(); await screen.findByText('受保护内容'); vi.useFakeTimers();
+  try {
+    act(() => { window.dispatchEvent(new Event('focus')); vi.advanceTimersByTime(50); });
+    expect(getContext).toHaveBeenCalledTimes(2);
+    const signal = getContext.mock.calls[1]![1]!;
+    act(() => { window.dispatchEvent(new Event('focus')); vi.advanceTimersByTime(50); });
+    expect(getContext).toHaveBeenCalledTimes(2); expect(signal.aborted).toBe(false);
+    await act(async () => finish(context()));
+  } finally { vi.useRealTimers(); }
+});
 it('scopes ledger preferences to the verified console target rather than the actor home organization', async () => {
   getContext.mockResolvedValue(context('b'));
   render(<MemoryRouter initialEntries={['/console/users?organizationId=b']}><ConsoleLayout><LedgerPreferenceProbe /></ConsoleLayout></MemoryRouter>);
