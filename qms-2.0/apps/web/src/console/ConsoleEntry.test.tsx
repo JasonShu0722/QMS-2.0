@@ -167,12 +167,28 @@ it.each(['focus', 'visible', 'signal'] as const)('rechecks naturally expired ent
   if (trigger === 'focus') fireEvent.focus(window);
   else if (trigger === 'visible') { vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible'); fireEvent(document, new Event('visibilitychange')); }
   else act(() => publishSessionSignal('revalidate'));
-  expect(getContext).toHaveBeenCalledTimes(2);
-  expect(screen.queryByRole('link', { name: '管理控制台' })).not.toBeInTheDocument();
+  await waitFor(() => expect(getContext).toHaveBeenCalledTimes(2));
+  if (trigger === 'signal') expect(screen.queryByRole('link', { name: '管理控制台' })).not.toBeInTheDocument();
+  else expect(screen.getByRole('link', { name: '管理控制台' })).toBeVisible();
   expect(screen.getByLabelText('account setting draft')).toHaveValue('unsaved setting');
   await act(async () => pending.resolve({ ...context(), modules: [] }));
   expect(screen.queryByRole('link', { name: '管理控制台' })).not.toBeInTheDocument();
   expect(screen.getByLabelText('account setting draft')).toHaveValue('unsaved setting');
+});
+
+it('silently resumes the same entry node through a network failure and retry', async () => {
+  getContext.mockResolvedValueOnce(context()).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(context());
+  render(<><input aria-label="account setting draft" defaultValue="unsaved setting" /><ConsoleEntry profile={profile} /></>);
+  const entry = await screen.findByRole('link', { name: '管理控制台' });
+  const draft = screen.getByLabelText('account setting draft'); draft.focus();
+  fireEvent.focus(window);
+  await screen.findByRole('alert');
+  expect(screen.getByRole('link', { name: '管理控制台' })).toBe(entry);
+  expect(draft).toHaveFocus(); expect(draft).toHaveValue('unsaved setting');
+  fireEvent.click(screen.getByRole('button', { name: '重试' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByRole('link', { name: '管理控制台' })).toBe(entry);
+  expect(draft).toHaveFocus();
 });
 
 it('does not let an old entry response undo a newer hard-invalidation refusal', async () => {
@@ -180,6 +196,7 @@ it('does not let an old entry response undo a newer hard-invalidation refusal', 
   getContext.mockResolvedValueOnce(context()).mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise);
   render(<ConsoleEntry profile={profile} />); await screen.findByRole('link', { name: '管理控制台' });
   fireEvent.focus(window);
+  await waitFor(() => expect(getContext).toHaveBeenCalledTimes(2));
   act(() => publishSessionSignal('invalidate'));
   expect(getContext).toHaveBeenCalledTimes(3);
   await act(async () => fresh.reject(new ApiError({ code: 'DENIED', message: 'denied' }, 403)));

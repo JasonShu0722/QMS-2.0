@@ -11,7 +11,7 @@ import { getConsoleContext } from './console-api';
 import { consoleNavigation, consoleRoute, type ConsoleContext as Context, type ConsoleNavigationItem } from './console-navigation';
 import { ConsoleTheme, useConsoleAppearance } from './ConsoleTheme';
 import { SessionVerificationGate } from '../features/auth/SessionVerificationGate';
-import { subscribeSessionSignals } from '../features/auth/session-invalidation';
+import { subscribeSessionSignals, subscribeWindowResume } from '../features/auth/session-invalidation';
 import { LedgerScopeProvider } from '../ui/ledger';
 import { useSidebarState } from '../layouts/sidebarState';
 
@@ -38,19 +38,22 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<{ key: symbol; context?: Context; error?: 'denied' | 'network' }>();
   const [preserved, setPreserved] = useState<{ scope: symbol; context: Context }>();
+  const [resumeError, setResumeError] = useState<symbol>();
   const verified = useRef<{ scope: symbol; context: Context }>(undefined);
   const sidebar = useSidebarState('console');
   const navigationElement = useRef<HTMLElement>(null);
   const [collapsed, setCollapsed] = useState(sidebar.value.collapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  const activeRequest = useRef<{ key: symbol; controller: AbortController } | null>(null);
+  const activeRequest = useRef<{ key: symbol; controller: AbortController; pending: boolean } | null>(null);
   const { mode, setMode } = useConsoleAppearance();
   // Returning to the same URL is a new verification, never a reusable authorization cache key.
   const scope = useMemo(() => Symbol('console-scope'), [sessionScope, organizationId, location.pathname]);
   const key = useMemo(() => Symbol('console-verification'), [scope, revision]);
+  const currentKey = useRef(key); currentKey.current = key;
   const restart = useCallback((keepDraft = false) => {
     activeRequest.current?.controller.abort(); activeRequest.current = null;
+    setResumeError(undefined);
     setPreserved(keepDraft ? verified.current : undefined);
     if (!keepDraft) verified.current = undefined;
     setResult(undefined); setRevision(value => value + 1);
@@ -67,25 +70,37 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
     // Abort synchronously, including a batched A -> B -> A identity transition.
     if (next.sessionScope !== previous.sessionScope) restart();
   }), [restart]);
-  useEffect(() => {
+  const verify = useCallback((background = false) => {
     if (!sessionScope) return;
+    if (background && activeRequest.current?.pending) return;
     const controller = new AbortController();
-    activeRequest.current = { key, controller };
+    const request = { key, controller, pending: true };
+    activeRequest.current = request;
+    setResumeError(undefined);
     void getConsoleContext(organizationId, controller.signal).then(context => {
-      if (controller.signal.aborted || activeRequest.current?.key !== key || useWorkTabsStore.getState().sessionScope !== sessionScope) return;
+      if (controller.signal.aborted || currentKey.current !== key || activeRequest.current !== request || useWorkTabsStore.getState().sessionScope !== sessionScope) return;
       const matchesSession = sessionScope === `INTERNAL:${context.actor.homeOrganization.id}:${context.actor.id}`;
       if (matchesSession && (organizationId === undefined || context.targetOrganization.id === organizationId)) {
+        // Preserve equal context references so child reads and menu restoration do not restart on resume.
+        if (background && verified.current?.scope === scope && JSON.stringify(verified.current.context) === JSON.stringify(context)) context = verified.current.context;
         verified.current = { scope, context }; setPreserved(undefined); setResult({ key, context });
       } else { discardPreserved(); setResult({ key, error: 'denied' }); }
     }).catch(error => {
-      if (!controller.signal.aborted && activeRequest.current?.key === key && useWorkTabsStore.getState().sessionScope === sessionScope) {
+      if (!controller.signal.aborted && currentKey.current === key && activeRequest.current === request && useWorkTabsStore.getState().sessionScope === sessionScope) {
         const denied = error instanceof ApiError && (error.status === 401 || error.status === 403);
         if (denied) discardPreserved();
-        setResult({ key, error: denied ? 'denied' : 'network' });
+        if (background && !denied) setResumeError(scope);
+        else setResult({ key, error: denied ? 'denied' : 'network' });
       }
-    });
-    return () => controller.abort();
+    }).finally(() => { if (activeRequest.current === request) request.pending = false; });
   }, [sessionScope, organizationId, key, scope, discardPreserved]);
+  useEffect(() => {
+    verify();
+    return () => activeRequest.current?.controller.abort();
+  }, [verify]);
+  useEffect(() => subscribeWindowResume(() => {
+    if (result?.key === key && result.context) verify(true);
+  }), [result, key, verify]);
   useEffect(() => { setMobileOpen(false); }, [location.pathname, location.search]);
 
   const value = result?.key === key ? result : undefined;
@@ -142,6 +157,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
         {!sessionScope || value?.error && !context ? <div className="qms-console-state"><Alert type="error" showIcon title={!sessionScope || value?.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
           : !context ? <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>
             : <>
+              {resumeError === scope && <Alert className="qms-session-resume-error qms-console-resume-error" role="alert" type="warning" showIcon title={text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} action={<Button aria-label={text('重试', 'Retry')} onClick={() => verify(true)}>{text('重试', 'Retry')}</Button>} />}
               <div className="qms-console-page-heading"><h1 ref={heading} tabIndex={-1}>{route?.item ? label(route.item) : text('管理页面', 'Management page')}</h1>
                 {fixedHome ? <div className="qms-console-fixed-scope"><strong>{text('所属组织', 'Organization')}</strong><span>{resourceOrganization?.name} ({resourceOrganization?.code})</span></div>
                   : <label className="qms-console-target">{text('管理目标组织', 'Management target organization')}<select aria-label={text('管理目标组织', 'Management target organization')} value={context.targetOrganization.id} onChange={event => {
