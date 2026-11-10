@@ -176,7 +176,8 @@ it('bypasses ordinary dirty navigation confirmation after server session refusal
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.endsWith('/auth/session') && ++sessionReads === 1 ? response(session()) : response({ code: 'AUTH_SESSION_REQUIRED' }, 401)));
   const router = createMemoryRouter([{ path: '/app/*', element: <AuthenticatedRoute accountType="INTERNAL"><UnsavedChangesProvider><Dirty /></UnsavedChangesProvider></AuthenticatedRoute> }, { path: '/login', element: <p>login destination</p> }], { initialEntries: ['/app/workbench'] });
   try {
-    render(<RouterProvider router={router} />); await screen.findByRole('textbox');
+    await act(async () => { render(<RouterProvider router={router} />); });
+    await screen.findByRole('textbox');
     fireEvent.focus(window);
     expect(await screen.findByText('login destination')).toBeInTheDocument();
     expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();

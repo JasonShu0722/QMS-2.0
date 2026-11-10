@@ -2,6 +2,8 @@
 
 ## REQ0036 V0.0.44-fix1发布门禁接续（2026-11-10）
 
+fix3：PR108 head20c1467新CI42785247397最终22success/2failure，Web1 job129724797961原session refusal测试未观察login目标（252PASS1FAIL），foundation129729904824派生。旧Form uncaught已消失，未沿旧归因；CI无request断点，仅能结合源码确定初次textbox DOM早于resume订阅切换完成的可达夹具时序。仅该case初次render包async act再唯一focus，全部login/version+1/reads3/dirty否定/finally保持，不改生产/sleep/预算。父原完整baseline20PASS不是RED，修后完整20PASS/17.96秒、限定SPEC PASS，QUALITY待；同PR108接续fix3，新head全门禁再验。
+
 PR108首候选d9b5fdb的CI42782944144 attempt1又有独立清理FAIL：Web1 job129717227796 16文件252断言全过但2uncaught发生环境销毁后，rc useDelayState ms timeout调用react时window已不存在，归属session-window.test.tsx；foundation129722368902派生，最终22success/2failure。未合并/发布，不以Review无发现覆盖失败。实际依赖定位Form errors/warnings的0/10ms debounce无unmount cleanup，与栈一致但不猜具体字段；Button boolean loading排除。复用原password-submission清理模式，局部cleanup→act精确10ms→unstub，新增真实Form自检父RED剩3timer后修到0，原19case不变。父旧完整19PASS非本地RED；修后session20+password10完整30PASS/48.17秒、无uncaught。独立SPEC PASS后QUALITY待，fix2沿同PR108更新，原生产/146/契约不动，详见计划。
 
 PR107候选d8cda2f精确CI42778770683 attempt1 24/24及Review无发现后合并main434afa1，父核整Git tree相同。新mainCI42780611795 attempt1终态22success/2failure：Web6 job129709557049原SupplierPcnPage pending审批保护case超10000ms（片1FAIL76PASS），foundation129714632718仅`web-tests must be success`派生。其余API/PG及15Web片成功，自动deploy42782230464/job129714769457 completed/skipped，无SSH/发布。不能把PR绿写成已上线。

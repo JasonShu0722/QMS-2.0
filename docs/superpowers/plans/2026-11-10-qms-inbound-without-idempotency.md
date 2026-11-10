@@ -10,9 +10,9 @@
 | 范围 | 外部收件不要求/读取该头，每次独立记录；回执201/204；调用说明/复制/Swagger/观测/测试一致，JSON对象要求保持 |
 | 映射 | REQ0036/Issue97追加，branch codex/inbound-without-idempotency，base/main/生产4aff557；预留V0.0.44，2026-11-10远端无开放PR、未见版本冲突，提交前再核 |
 | 授权 | 指定本地开发、沿常规Issue/PR及本会话明确持续上线目标接续；不操作生产凭据/数据，不关闭Issue或写飞书 |
-| 状态 | PR107已合并main434afa1，候选CI/Review及整tree核对成立；新mainCI42780611795 Web6 PCN pending测试超时FAIL，部署被阻；V0.0.44-fix1定向返修中 |
+| 状态 | PR107已合并main434afa1但旧main门禁FAIL/deploy skipped；PR108两项测试修复已本地GREEN/双审，最新20c1467的CI42785247397 attempt1与Review运行中，未上线 |
 | 工作区 | 活动D盘，起点clean；前期用户CodeGraph及发布归档在codex/local-archive-20261110保留，不混入；Node24.21/pnpm11.19/1GiB单worker重命令串行，禁止55440 |
-| 下一步 | 原PCN完整baseline真实RED后最小查询/时序修复→原11完整GREEN/限定双审→fix1 PR/mainCI→自动部署及公网；原发布失败保留，不rerun刷绿 |
+| 下一步 | 核PR108最新20c1467完整CI/Review→独立premerge→main新CI/自动部署及公网；原失败保留，不rerun刷绿，最终状态仅本地归档 |
 
 ## 实施与写集
 
@@ -61,3 +61,11 @@ fix1候选d9b5fdb已推[PR108](https://github.com/JasonShu0722/QMS-2.0/pull/108)
 准确根因范围：实际AntD Form的errors/warnings各useDebounce，空数组10ms/非空0ms；底层useDelayState没有卸载清理，符合CI栈，日志不能确定具体哪个字段。Button默认boolean loading不走ms，已排除最初猜测。仓库password-submission已有cleanup后act等待源码10ms的先例。新实施代理session_teardown_fix2只session-window本地helper/afterEach及真实Form自检，原19case不变、无全局clear/吞异常/改依赖/production/timeout/motion。
 
 父原完整baseline19PASS无uncaught，只CI是真异常RED；新增真实Form计时器自检取得1FAIL/19按名称过滤，helper仅cleanup后剩3timer期待0；加精确10ms settling后session-window20+password-submission10两个完整文件30/30PASS/48.17秒，无uncaught。独立限定SPEC PASS，QUALITY接续；[fix2登记](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6762877023)已回读，沿PR108提交fix2不另开重复PR。
+
+fix2独立QUALITY读diff/原依赖及完整GREEN后PASS，治理38文档/503链接/20来源/161依赖及阶段覆盖1PASS、diff通过；来源review无新过时项。提交20c1467f3a76cc8877bca7d66fc2c8572197fda5已推并改PR108主题为完整两测试修复，最新CI42785247397 attempt1和Review运行中；原d9b5fdb失败不可放行。未改变任何产品实现/146/依赖/CI设置，原API/browser/恢复和构建证据继续有效。
+
+### V0.0.44-fix3 初次验证完成后再触发恢复（仍PR108）
+
+CI42785247397 attempt1最终22success/2failure：Web1 job129724797961为session-window原`bypasses ordinary dirty navigation confirmation after server session refusal`找不到login destination（片252PASS1FAIL），foundation129729904824仅web-tests派生。上一轮Form teardown uncaught已消失，不能继续沿它归因；其余作业成功，Review无发现仍不放行。CI DOM为初始空draft/关闭gate，无request计数断点，不能声称捕获具体丢帧。
+
+代码存在可达测试时序：textbox出现只证明首次状态DOM提交，不保证authenticated的resume订阅passive effect及初始pending finally完成；此时唯一focus排队可能在订阅替换cleanup取消或pending合并。新修复只目标case将真实首次render放async act中，首响应/effects先落地再唯一focus；不加sleep/timeout/重复focus，不改生产，原login、无dirty确认、version+1、reads=3和finally均保持。父旧完整20PASS/18.13秒为baseline非RED，修后原完整20/20 PASS/17.96秒、无uncaught。限定SPEC PASS后QUALITY接续，[Issue记录](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6763260210)已回读。
