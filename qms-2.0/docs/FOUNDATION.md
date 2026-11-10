@@ -1,6 +1,14 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 V0.0.44-fix1发布门禁接续（2026-11-10）
+
+PR107候选d8cda2f精确CI42778770683 attempt1 24/24及Review无发现后合并main434afa1，父核整Git tree相同。新mainCI42780611795 attempt1终态22success/2failure：Web6 job129709557049原SupplierPcnPage pending审批保护case超10000ms（片1FAIL76PASS），foundation129714632718仅`web-tests must be success`派生。其余API/PG及15Web片成功，自动deploy42782230464/job129714769457 completed/skipped，无SSH/发布。不能把PR绿写成已上线。
+
+父原完整本地baseline亦10PASS1FAIL同case12765ms，确认真实超时非只CI推断；新pcn_release_fix1仅收窄此case正向ledger/Drawer查询、等真实可见并核同节点，POST/pending拒关闭/全document无丢弃入口及finally保持。生产/timeout/motion/CI未改，修后完整11/11 PASS/61.04秒、目标8978ms；限定SPEC PASS后QUALITY接续，新fix1 PR/main/部署仍待。原无头API/146及真实恢复/browser证据依未改源复用，原失败和限制见[计划](../../docs/superpowers/plans/2026-11-10-qms-inbound-without-idempotency.md)，不rerun刷绿。
+
 ## REQ0036 取消外部消息头幂等卡控本地验证（2026-11-10）
+
+上节fix1后续：限定QUALITY核真实baseline/green后PASS，治理测试来源摘要FAIL保留并定向复核后通过38文档/503链接/20来源/161依赖及阶段覆盖1PASS。生产源码/契约/迁移未变，不重复无关运行测试；新精确head云端检查与发布接续。
 
 负责人明确要求移除Idempotency-Key设计与卡控；沿Issue97，branch codex/inbound-without-idempotency，base生产4aff557，预留V0.0.44。每次有效外部收件独立保存，以服务端receipt UUID作为messageId；不读该头/去重/冲突/200/duplicate，回执201或204。管理幂等、鉴权/组织隔离/锁后复核/限流/容量/审计/JSON对象要求保持。146迁移只让body_digest nullable保历史，新记录不生成正文摘要。公开契约和copy/curl/当前文档同步。范围与完整证据见[追加计划](../../docs/superpowers/plans/2026-11-10-qms-inbound-without-idempotency.md)。
 

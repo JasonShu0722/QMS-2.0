@@ -93,15 +93,17 @@ it('does not offer to discard the PCN while approval is pending', async () => {
   const pending = new Promise<never>((resolve) => { finish = () => resolve(row as never); });
   vi.mocked(apiRequest).mockImplementation(async (path, init) => init?.method === 'POST' ? pending : String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage /></UnsavedChangesProvider></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
-  const drawer = await screen.findByRole('dialog', { name: '待审批变更' });
-  fireEvent.change(await screen.findByLabelText('审批意见'), { target: { value: '资料已核验' } });
+  const ledger = within(screen.getByRole('region', { name: 'PCN 变更台账' }));
+  fireEvent.click(await ledger.findByRole('button', { name: '待审批变更' }));
+  const drawer = await screen.findByLabelText('待审批变更', { selector: '[role="dialog"]' });
+  await waitFor(() => expect(drawer).toBeVisible());
+  fireEvent.change(await within(drawer).findByLabelText('审批意见'), { target: { value: '资料已核验' } });
   fireEvent.click(within(drawer).getByRole('button', { name: '审批通过' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/review', expect.objectContaining({ method: 'POST' })));
   try {
     const close = within(drawer).queryByRole('button', { name: '关闭' });
     if (close) fireEvent.click(close);
-    expect(screen.getByRole('dialog', { name: '待审批变更' })).toBeVisible();
+    expect(drawer).toBeVisible();
     for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('放弃修改并关闭');
   } finally { await act(async () => { finish(); await pending; }); }
 });
