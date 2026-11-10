@@ -83,11 +83,11 @@ async function saveEndpoint(page: Page, endpointId?: string) {
   return await response.json() as Schema['IntegrationEndpointDto'];
 }
 
-async function sendMessage(endpointId: string, credential: string, messageId: string, body: string) {
+async function sendMessage(endpointId: string, credential: string, body: string) {
   try {
     return await fetch(new URL(`/api/v1/integrations/inbound/${endpointId}/messages`, baseURL), {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
-      headers: { Authorization: `Bearer ${credential}`, 'Idempotency-Key': messageId, 'Content-Type': 'application/json' }, body,
+      headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' }, body,
     });
   } catch {
     throw new Error('Disposable machine HTTP request failed; authentication details redacted.');
@@ -147,7 +147,9 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     const initialCopy = await page.evaluate(() => navigator.clipboard.readText());
     expect(initialCopy.includes(`Authorization: Bearer ${credential.secret}`)).toBe(true);
     expect(initialCopy.includes(endpoint.publicUrl)).toBe(true);
-    expect(initialCopy.includes('每条新消息生成唯一编号')).toBe(true);
+    expect(initialCopy.includes('每次请求独立保存')).toBe(true);
+    expect(initialCopy.includes('重试可能新增记录')).toBe(true);
+    expect(initialCopy.includes('Idempotency-Key')).toBe(false);
     expect(initialCopy.includes('永久有效')).toBe(true);
     await credentials.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -173,28 +175,32 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     const copiedAuthorization = /^Authorization: Bearer (.+)$/m.exec(activeCopy)?.[1];
     expect(copiedAuthorization === credential.secret).toBe(true);
     expect(new URL(endpoint.publicUrl).pathname.endsWith(`/inbound/${encodeURIComponent(endpoint.code)}/messages`)).toBe(true);
-    const messageId = `browser-${suffix}-receipt`;
     const body = JSON.stringify({ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' });
-    const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, messageId, body);
+    const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, body);
     expect(received.status).toBe(201);
     const receipt = await received.json() as Schema['InboundReceiptDto'];
-    expect(receipt.duplicate).toBe(false);
-    const repeated = await sendMessage(endpoint.id, credential.secret!, messageId, body);
-    expect(repeated.status).toBe(200);
-    const duplicate = await repeated.json() as Schema['InboundReceiptDto'];
-    expect(duplicate.receiptId).toBe(receipt.receiptId);
-    expect(duplicate.duplicate).toBe(true);
+    expect(Object.hasOwn(receipt, 'duplicate')).toBe(false);
+    expect(receipt.messageId).toBe(receipt.receiptId);
+    const messageId = receipt.messageId;
+    const repeated = await sendMessage(endpoint.id, credential.secret!, body);
+    expect(repeated.status).toBe(201);
+    const repeatedReceipt = await repeated.json() as Schema['InboundReceiptDto'];
+    expect(repeatedReceipt.receiptId).not.toBe(receipt.receiptId);
+    expect(repeatedReceipt.messageId).toBe(repeatedReceipt.receiptId);
 
     await section.getByRole('button', { name: `编辑${name}`, exact: true }).click();
     await page.getByRole('dialog').getByRole('switch', { name: '返回接收回执', exact: true }).uncheck();
     endpoint = await saveEndpoint(page, endpoint.id);
     expect(endpoint.returnReceipt).toBe(false);
-    const silentMessageId = `browser-${suffix}-silent`;
-    for (const identifier of [silentMessageId, silentMessageId, messageId]) {
-      const response = await sendMessage(endpoint.id, credential.secret!, identifier, body);
+    for (let sending = 0; sending < 3; sending++) {
+      const response = await sendMessage(endpoint.id, credential.secret!, body);
       expect(response.status).toBe(204);
       expect((await response.arrayBuffer()).byteLength).toBe(0);
     }
+    const stored = await prisma.integrationReceipt.findMany({ where: { endpointId: endpoint.id } });
+    expect(stored).toHaveLength(5);
+    expect(stored.every(item => item.messageId === item.id && item.bodyDigest === null)).toBe(true);
+    const silentMessageId = stored.find(item => item.id !== receipt.receiptId && item.id !== repeatedReceipt.receiptId)!.messageId;
 
     await section.getByRole('tab', { name: '接收记录', exact: true }).click();
     const filters = section.getByRole('form', { name: '接收记录筛选', exact: true });
@@ -219,7 +225,7 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     await detail.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await positionWrite(page.request, `${endpoints}/${endpoint.id}/credentials/${credential.id}/revoke`, 'POST', { organizationId: endpoint.organizationId }, 201);
-    const revoked = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, `browser-${suffix}-revoked`, body);
+    const revoked = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, body);
     expect(revoked.status).toBe(401);
     const deletionCredential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `${endpoints}/${endpoint.id}/credentials`, 'POST', { organizationId: endpoint.organizationId, name: 'Deletion fixture', validityDays: null }, 201);
     await section.getByRole('tab', { name: '接收接口', exact: true }).click();
@@ -230,12 +236,12 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     const [removed] = await Promise.all([removing, confirmation.getByRole('button', { name: '确认删除', exact: true }).click()]);
     expect(removed.status()).toBe(204); deleted = true;
     await expect(section.getByRole('button', { name: `删除${name}`, exact: true })).toHaveCount(0);
-    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, `browser-${suffix}-deleted`, body)).status).toBe(401);
+    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, body)).status).toBe(401);
     const preserved = await positionRead<Schema['IntegrationPayloadDto']>(page.request, `/api/v1/admin/integrations/receipts/${receipt.receiptId}/payload?organizationId=${endpoint.organizationId}`);
     expect(preserved.text === body).toBe(true);
     const replacement = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, endpoints, 'POST', { organizationId: endpoint.organizationId, code: endpoint.code, name: `${name}替代`, sourceCode, sourceName: `技术来源 ${suffix}` }, 201);
     expect(replacement.id).not.toBe(endpoint.id);
-    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, `browser-${suffix}-replacement`, body)).status).toBe(401);
+    expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, body)).status).toBe(401);
 
   } finally {
     await page.goto('about:blank');

@@ -62,7 +62,7 @@ model IntegrationReceipt {
   endpointId String @map("endpoint_id") @db.Uuid
   credentialId String @map("credential_id") @db.Uuid
   messageId String @map("message_id") @db.VarChar(128)
-  bodyDigest String @map("body_digest") @db.Char(64)
+  bodyDigest String? @map("body_digest") @db.Char(64)
   configurationVersion Int @map("configuration_version")
   configurationSnapshot Json @map("configuration_snapshot")
   receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)

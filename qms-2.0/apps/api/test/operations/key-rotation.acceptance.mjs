@@ -57,7 +57,7 @@ await test('real database encryption rotation and idempotent replay', async (sui
     const receiptId = randomUUID(), receiptContext = `integration:${organization.id}:${endpoint.id}:${receiptId}`;
     const payloadCiphertext = encryptSecret('private-machine-payload', receiptContext);
     const payloadBytes = Buffer.byteLength(payloadCiphertext);
-    await prisma.integrationReceipt.create({ data: { id: receiptId, organizationId: organization.id, endpointId: endpoint.id, credentialId: machineCredential.id, messageId: 'rotation.receipt', bodyDigest: '0'.repeat(64), configurationVersion: 1, configurationSnapshot: {}, bodyExpiresAt: new Date(Date.now() + 3600000), metadataExpiresAt: new Date(Date.now() + 90 * 86400000), payloadCiphertext, payloadBytes } });
+    await prisma.integrationReceipt.create({ data: { id: receiptId, organizationId: organization.id, endpointId: endpoint.id, credentialId: machineCredential.id, messageId: receiptId, configurationVersion: 1, configurationSnapshot: {}, bodyExpiresAt: new Date(Date.now() + 3600000), metadataExpiresAt: new Date(Date.now() + 90 * 86400000), payloadCiphertext, payloadBytes } });
     await prisma.integrationEndpoint.update({ where: { id: endpoint.id }, data: { usedBodyBytes: payloadBytes } });
     await prisma.integrationScopeCapacity.create({ data: { organizationId: organization.id, usedBodyBytes: payloadBytes, receiptCount: 1 } });
     const mutation = new AdminMutationService(prisma, new AuditLogService(prisma));
@@ -84,6 +84,7 @@ await test('real database encryption rotation and idempotent replay', async (sui
       assert.equal(delivery.keyId, 'new'); assert.equal(decryptSecret(delivery.encryptedPayload, mailContext), 'private-mail-payload');
       const receipt = await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: receiptId } });
       assert.equal(decryptSecret(receipt.payloadCiphertext, receiptContext), 'private-machine-payload');
+      assert.equal(receipt.bodyDigest, null); assert.equal(receipt.messageId, receiptId);
       const machine = await prisma.integrationCredential.findUniqueOrThrow({ where: { id: machineId } });
       assert.equal(machine.expiresAt, null);
       assert.equal(decryptSecret(machine.secretCiphertext, machineContext), machineSecret);

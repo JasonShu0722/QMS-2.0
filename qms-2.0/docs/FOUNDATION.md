@@ -1,5 +1,15 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 取消外部消息头幂等卡控本地验证（2026-11-10）
+
+负责人明确要求移除Idempotency-Key设计与卡控；沿Issue97，branch codex/inbound-without-idempotency，base生产4aff557，预留V0.0.44。每次有效外部收件独立保存，以服务端receipt UUID作为messageId；不读该头/去重/冲突/200/duplicate，回执201或204。管理幂等、鉴权/组织隔离/锁后复核/限流/容量/审计/JSON对象要求保持。146迁移只让body_digest nullable保历史，新记录不生成正文摘要。公开契约和copy/curl/当前文档同步。范围与完整证据见[追加计划](../../docs/superpowers/plans/2026-11-10-qms-inbound-without-idempotency.md)。
+
+真实API RED2FAIL（无头400/旧key异内容409）及Web RED1FAIL（复制仍有旧头）后最小实现。直接PG/HTTP3完整文件39PASS，邻近管理/凭据/删除/检索清理六完整73PASS，公共parser/error/audit四完整287PASS；邻近命令曾把public-boundaries路径写到common导致ENOENT整体exit1，修正后4文件真实PASS，不抹去原结果。Web5完整39PASS，管理幂等断言保持。独立SPEC后QUALITY PASS。API/Web build及Swagger生成通过，最终check/治理等接续。
+
+真实一次性PG146+私有MinIO恢复8/8 PASS，新NULL摘要/编号恢复及密文/容量/撤销删除状态保持；轮换5/5 PASS，实际key退休后解密及计账正确。真实登录/MFA浏览器2/2 PASS/35.7秒，无头复制和调用、同正文多次独立201/204/五条记录、server编号检索/纯文本、撤销删除/同码重建及原浅深窄屏保持；不使用生产凭据。Node24.21/pnpm11.19、Node1GiB单worker、PG/MinIO各512MiB/1CPU/tmpfs，全部父串行；自有API/Vite按PID、容器按ID/label清理，端口空闲且未连55440。原日志Git外inbound-without-idempotency-20261110；小样本恢复不等于全容量灾备，PR/main/部署及真实调用方验收尚待。
+
+最终contracts:check、Compose基础/扫描/生产quiet、归档隔离通过。治理来源摘要链三轮FAIL保留，逐消费者核对运维新重试说明/数据保护NULL场景并同步真实摘要后PASS：38文档/502链接/20来源/161依赖及阶段覆盖1PASS；MAINT003保持open与原期限，未据局部恢复称持续告警交付。提交前远端main4aff557/无开放PR、V0.0.44无冲突，精确新head云端门禁仍待。
+
 ## Issue105 窗口切回静默验证本地验收（2026-11-10）
 
 负责人明确修复切回窗口时的闪白/整页验证。分支codex/focus-revalidation基于生产/maind9d2a92接续本地归档971d2ee，Issue105预留V0.0.43。实现只涉及Web本地resume订阅及三个消费者，普通恢复后台合并检查、保页面Modal草稿焦点，网络错误轻提示重试；明确安全重验/真正拒绝/身份能力变化保原清敏与迟到响应保护，不新增授权缓存或协议。详细范围和证据见[专项计划](../../docs/superpowers/plans/2026-11-10-qms-focus-revalidation.md)。

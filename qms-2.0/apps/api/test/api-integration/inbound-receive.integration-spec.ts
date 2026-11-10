@@ -60,6 +60,23 @@ describe('API inbound durable reception', () => {
   }
   const codePath = (code: string) => `/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`;
 
+  it('accepts messages without a caller idempotency key and assigns a server message identity', async () => {
+    const receiver = await fixture();
+    const accepted = await request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`)
+      .set('Content-Type', 'application/json').send('{"reading":1}').expect(201);
+    expect(accepted.body.messageId).toBe(accepted.body.receiptId);
+    expect(accepted.body.receiptId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(accepted.body).not.toHaveProperty('duplicate');
+  });
+
+  it('stores each request independently when an old caller key is reused with different content', async () => {
+    const receiver = await fixture(), oldKey = randomUUID();
+    const first = await send(receiver, oldKey, '{"reading":1}').expect(201);
+    const second = await send(receiver, oldKey, '{"reading":2}').expect(201);
+    expect(second.body.receiptId).not.toBe(first.body.receiptId);
+    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
+  });
+
   it('has receipt, rate and scope capacity constraints in real PostgreSQL', async () => {
     expect(await prisma.$queryRaw`SELECT to_regclass('public.integration_receipts')::text AS receipts,
       to_regclass('public.integration_rate_windows')::text AS windows,
@@ -75,16 +92,16 @@ describe('API inbound durable reception', () => {
     await request(app.getHttpServer()).post(receiver.path).set('Authorization', [`Bearer ${receiver.token}`, `Bearer ${receiver.token}`]).send({}).expect(401);
   });
 
-  it('uses one receipt identity across an encoded interface code and the legacy UUID', async () => {
+  it('uses the same endpoint across an encoded interface code and the legacy UUID with independent receipts', async () => {
     const code = 'Erp:inbound', receiver = await fixture(code), messageId = randomUUID();
     const first = await send({ ...receiver, path: codePath(code) }, messageId).expect(201);
-    const retry = await send({ ...receiver, path: codePath(receiver.endpointId.toUpperCase()) }, messageId).expect(200);
-    expect(retry.body).toEqual({ ...first.body, duplicate: true });
+    const retry = await send({ ...receiver, path: codePath(receiver.endpointId.toUpperCase()) }, messageId).expect(201);
+    expect(retry.body.receiptId).not.toBe(first.body.receiptId);
     expect(retry.headers['x-request-id']).not.toBe(first.headers['x-request-id']);
     await send({ ...receiver, path: codePath(code.toLowerCase()) }).expect(401);
     await send({ ...receiver, path: codePath('A'.repeat(65)) }).expect(401);
     expect(await prisma.$queryRaw`SELECT id,organization_id,endpoint_id,credential_id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`)
-      .toEqual([{ id: first.body.receiptId, organization_id: receiver.organizationId, endpoint_id: receiver.endpointId, credential_id: receiver.credentialId }]);
+      .toEqual(expect.arrayContaining([first, retry].map(response => ({ id: response.body.receiptId, organization_id: receiver.organizationId, endpoint_id: receiver.endpointId, credential_id: receiver.credentialId }))));
   });
 
   it('binds a shared interface code to each credential’s own organization', async () => {
@@ -94,7 +111,7 @@ describe('API inbound durable reception', () => {
     await send({ ...first, path: second.path }, messageId).expect(401);
     const accepted = await send({ ...first, path }, messageId).expect(201);
     const separate = await send({ ...second, path }, messageId).expect(201);
-    const receipts = await prisma.$queryRaw<unknown[]>`SELECT id,organization_id,endpoint_id FROM integration_receipts WHERE message_id=${messageId}`;
+    const receipts = await prisma.$queryRaw<unknown[]>`SELECT id,organization_id,endpoint_id FROM integration_receipts WHERE id IN (${accepted.body.receiptId}::uuid,${separate.body.receiptId}::uuid)`;
     expect(receipts).toHaveLength(2);
     expect(receipts).toEqual(expect.arrayContaining([
       { id: accepted.body.receiptId, organization_id: first.organizationId, endpoint_id: first.endpointId },
@@ -107,8 +124,8 @@ describe('API inbound durable reception', () => {
     const messageId = randomUUID();
     const first = await send(original, messageId).expect(201);
     const second = await send({ ...alias, path: original.path }, messageId).expect(201);
-    const retry = await send(alias, messageId).expect(200);
-    expect(retry.body.receiptId).toBe(second.body.receiptId);
+    const retry = await send(alias, messageId).expect(201);
+    expect(retry.body.receiptId).not.toBe(second.body.receiptId);
     expect(second.body.receiptId).not.toBe(first.body.receiptId);
   });
 
@@ -122,23 +139,28 @@ describe('API inbound durable reception', () => {
     await send(receiver, messageId).expect(204);
     await prisma.$executeRaw`UPDATE integration_credentials SET revoked_at=clock_timestamp() WHERE id=${receiver.credentialId}::uuid`;
     await send(coded).expect(401);
-    expect(await prisma.$queryRaw`SELECT message_id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`)
-      .toEqual([{ message_id: messageId }]);
+    const records = await prisma.$queryRaw<{ id: string; message_id: string }[]>`SELECT id,message_id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
+    expect(records).toHaveLength(2); expect(records.every(row => row.message_id === row.id)).toBe(true);
   });
 
-  it('encrypts one durable record and returns the same receipt for byte-identical retries', async () => {
+  it('encrypts separate durable records and accounts for every byte-identical retry', async () => {
     const receiver = await fixture(), messageId = randomUUID(), body = '{"reading":"confidential fixture value"}';
     const first = await send(receiver, messageId, body).expect(201);
-    const duplicate = await send(receiver, messageId, body).expect(200);
-    expect(first.body).toMatchObject({ messageId, status: 'RECEIVED', duplicate: false });
-    expect(duplicate.body).toEqual({ ...first.body, duplicate: true });
+    const repeated = await send(receiver, messageId, body).expect(201);
+    expect(first.body).toMatchObject({ messageId: first.body.receiptId, status: 'RECEIVED' });
+    expect(repeated.body.receiptId).not.toBe(first.body.receiptId);
+    expect(first.body).not.toHaveProperty('duplicate');
     expect(first.headers['x-request-id']).toMatch(/^[a-f0-9-]{36}$/);
     const rows = await prisma.$queryRaw<{ id: string; ciphertext: string; bytes: number; version: number }[]>`SELECT id,payload_ciphertext AS ciphertext,payload_bytes AS bytes,configuration_version AS version FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
-    expect(rows).toHaveLength(1); expect(rows[0]!.ciphertext).not.toContain('confidential fixture value'); expect(rows[0]!.version).toBe(1);
-    expect(decryptSecret(rows[0]!.ciphertext, `integration:${receiver.organizationId}:${receiver.endpointId}:${rows[0]!.id}`)).toBe(body);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.ciphertext).not.toContain('confidential fixture value'); expect(row.version).toBe(1);
+      expect(decryptSecret(row.ciphertext, `integration:${receiver.organizationId}:${receiver.endpointId}:${row.id}`)).toBe(body);
+    }
+    expect(await prisma.$queryRaw`SELECT body_digest FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ body_digest: null }, { body_digest: null }]);
     const counters = await prisma.$queryRaw<{ requests: number; used: number; receipts: number }[]>`SELECT w.requests,c.used_body_bytes::float8 AS used,c.receipt_count AS receipts
       FROM integration_rate_windows w JOIN integration_endpoints e ON e.id=w.endpoint_id JOIN integration_scope_capacities c ON c.organization_id=e.organization_id WHERE e.id=${receiver.endpointId}::uuid`;
-    expect(counters).toEqual([{ requests: 2, used: rows[0]!.bytes, receipts: 1 }]);
+    expect(counters).toEqual([{ requests: 2, used: rows.reduce((total, row) => total + row.bytes, 0), receipts: 2 }]);
   });
 
   it('uses the current returnReceipt switch, always preserving internal receipt identity', async () => {
@@ -148,18 +170,18 @@ describe('API inbound durable reception', () => {
     expect(Object.keys(first.headers)).not.toContain('x-receipt-id');
     const second = await send(receiver, messageId).expect(204); expect(second.text).toBe('');
     await prisma.$executeRaw`UPDATE integration_endpoints SET return_receipt=true,version=version+1 WHERE id=${receiver.endpointId}::uuid`;
-    const restored = await send(receiver, messageId).expect(200); expect(restored.body.duplicate).toBe(true);
+    const restored = await send(receiver, messageId).expect(201); expect(restored.body).not.toHaveProperty('duplicate');
     const records = await prisma.$queryRaw<{ id: string; version: number }[]>`SELECT id,configuration_version AS version FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
-    expect(records).toEqual([{ id: restored.body.receiptId, version: 1 }]);
+    expect(records).toHaveLength(3); expect(records).toEqual(expect.arrayContaining([{ id: restored.body.receiptId, version: 2 }]));
+    expect(records.filter(row => row.version === 1)).toHaveLength(2);
     await prisma.$executeRaw`UPDATE integration_endpoints SET return_receipt=false WHERE id=${receiver.endpointId}::uuid`;
-    await send(receiver, messageId, '{"reading":2}').expect(409);
+    await send(receiver, messageId, '{"reading":2}').expect(204);
   });
 
-  it('rejects conflicting bytes, invalid messages and excessive bodies without saving them', async () => {
+  it('accepts changed bytes but rejects invalid JSON and excessive bodies without saving them', async () => {
     const receiver = await fixture(), messageId = randomUUID(); await send(receiver, messageId).expect(201);
-    await send(receiver, messageId, '{ "reading":1}').expect(409);
+    await send(receiver, messageId, '{ "reading":1}').expect(201);
     for (const body of ['[]', 'null', '{', '[{}]', '{"x":' + '['.repeat(33) + '0' + ']'.repeat(33) + '}']) await send(receiver, randomUUID(), body).expect(400);
-    await send(receiver, 'short').expect(400);
     const base = await app.getUrl();
     const invalidUtf8Status = await new Promise<number>((resolve, reject) => {
       const bytesRequest = httpRequest(`${base}${receiver.path}`, { method: 'POST', headers: { Authorization: `Bearer ${receiver.token}`, 'Idempotency-Key': randomUUID(), 'Content-Type': 'application/json' } }, response => {
@@ -172,7 +194,7 @@ describe('API inbound durable reception', () => {
     await prisma.$executeRaw`UPDATE integration_endpoints SET max_body_bytes=4 WHERE id=${receiver.endpointId}::uuid`;
     await send(receiver).expect(413);
     const count = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
-    expect(count).toEqual([{ count: 1 }]);
+    expect(count).toEqual([{ count: 2 }]);
   });
 
   it('revalidates expired, revoked, disabled and unconfigured organizations', async () => {
@@ -185,10 +207,10 @@ describe('API inbound durable reception', () => {
     await prisma.organization.update({ where: { id: receiver.organizationId }, data: { configurationRequired: true, status: 'DISABLED' } }); await send(receiver).expect(403);
   });
 
-  it('persists per-minute limits in PostgreSQL and counts duplicate attempts', async () => {
+  it('persists per-minute limits in PostgreSQL and counts every repeated request', async () => {
     const receiver = await fixture(), messageId = randomUUID();
     await prisma.$executeRaw`UPDATE integration_endpoints SET rate_per_minute=2 WHERE id=${receiver.endpointId}::uuid`;
-    await send(receiver, messageId).expect(201); await send(receiver, messageId).expect(200);
+    await send(receiver, messageId).expect(201); await send(receiver, messageId).expect(201);
     const limited = await send(receiver, messageId).expect(429);
     expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
     const windows = await prisma.$queryRaw<{ requests: number }[]>`SELECT requests FROM integration_rate_windows WHERE endpoint_id=${receiver.endpointId}::uuid`;
@@ -211,13 +233,14 @@ describe('API inbound durable reception', () => {
     expect(await prisma.$queryRaw`SELECT used_body_bytes::float8 AS used,receipt_count AS receipts FROM integration_scope_capacities WHERE organization_id=${receiver.organizationId}::uuid`).toEqual([]);
   });
 
-  it('serves an existing receipt when storage is full but rejects new messages', async () => {
+  it('rejects every new request when storage is full even when an old key is reused', async () => {
     const receiver = await fixture(), messageId = randomUUID(); await send(receiver, messageId).expect(201);
     await prisma.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=1073741824 WHERE organization_id=${receiver.organizationId}::uuid`;
-    await send(receiver, messageId).expect(200); await send(receiver).expect(503);
+    await send(receiver, messageId).expect(503); await send(receiver).expect(503);
+    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 1 }]);
   });
 
-  it('resolves an unknown commit acknowledgement by retrying the original message identity', async () => {
+  it('preserves an unknown committed receipt and saves a retry as another receipt', async () => {
     const receiver = await fixture(), messageId = randomUUID(), transaction = prisma.$transaction.bind(prisma);
     let transactions = 0;
     jest.spyOn(prisma, '$transaction').mockImplementation(async (work, options) => {
@@ -227,20 +250,27 @@ describe('API inbound durable reception', () => {
     });
     await send(receiver, messageId).expect(503);
     jest.restoreAllMocks();
-    const retry = await send(receiver, messageId).expect(200); expect(retry.body.duplicate).toBe(true);
-    expect(await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ id: retry.body.receiptId }]);
-    expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(1);
+    const retry = await send(receiver, messageId).expect(201);
+    const rows = await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
+    expect(rows).toHaveLength(2); expect(rows).toEqual(expect.arrayContaining([{ id: retry.body.receiptId }]));
+    expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(2);
   });
 
-  it('accepts a 128-byte message identifier without truncating its identity', async () => {
-    const receiver = await fixture(), messageId = 'message_'.padEnd(128, 'x');
-    const accepted = await send(receiver, messageId).expect(201); expect(accepted.body.messageId).toBe(messageId);
-    const retry = await send(receiver, messageId).expect(200); expect(retry.body.receiptId).toBe(accepted.body.receiptId);
+  it('ignores malformed and repeated legacy key headers instead of using them as message identity', async () => {
+    const receiver = await fixture();
+    for (const key of ['short', 'x'.repeat(129), 'not a message id']) {
+      const accepted = await send(receiver, key).expect(201);
+      expect(accepted.body.messageId).toBe(accepted.body.receiptId); expect(accepted.body.messageId).not.toBe(key);
+    }
+    const repeatedHeader = await request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`)
+      .set('Idempotency-Key', ['legacy-one', 'legacy-two']).set('Content-Type', 'application/json').send('{}').expect(201);
+    expect(repeatedHeader.body.messageId).toBe(repeatedHeader.body.receiptId);
   });
-  it('allows an expired message key to be reused before the cleanup worker has run', async () => {
+  it('leaves expired historical metadata for cleanup while accepting an independent new receipt', async () => {
     const receiver = await fixture(), messageId = randomUUID(); const first = await send(receiver, messageId).expect(201);
     await prisma.$executeRaw`UPDATE integration_receipts SET metadata_expires_at=CURRENT_TIMESTAMP-interval '1 second' WHERE id=${first.body.receiptId}::uuid`;
     const next = await send(receiver, messageId, '{"reading":2}').expect(201); expect(next.body.receiptId).not.toBe(first.body.receiptId);
-    expect(await prisma.$queryRaw`SELECT receipt_count AS count FROM integration_scope_capacities WHERE organization_id=${receiver.organizationId}::uuid`).toEqual([{ count: 1 }]);
+    expect(await prisma.$queryRaw`SELECT receipt_count AS count FROM integration_scope_capacities WHERE organization_id=${receiver.organizationId}::uuid`).toEqual([{ count: 2 }]);
+    expect(await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE id=${first.body.receiptId}::uuid`).toEqual([{ id: first.body.receiptId }]);
   });
 });

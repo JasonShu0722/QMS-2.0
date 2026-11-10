@@ -58,21 +58,25 @@ describe('inbound transactional concurrency', () => {
     throw new Error(`Inbound request did not reach the ${table} row lock.`);
   }
 
-  it('receives one row and performs one required audit for eight simultaneous identical requests', async () => {
+  it('receives eight rows and required audits for eight simultaneous identical requests', async () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all(Array.from({ length: 8 }, () => send(receiver, messageId)));
-    expect(responses.map(response => response.status).sort()).toEqual([200, 200, 200, 200, 200, 200, 200, 201]);
-    expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(1);
-    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 1 }]);
-    expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(1);
-    expect(await prisma.$queryRaw`SELECT receipt_count AS count FROM integration_scope_capacities WHERE organization_id=${receiver.organizationId}::uuid`).toEqual([{ count: 1 }]);
+    expect(responses.map(response => response.status)).toEqual(Array(8).fill(201));
+    expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(8);
+    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 8 }]);
+    expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(8);
+    const [capacity] = await prisma.$queryRaw<{ count: number; used: number; actual: number }[]>`SELECT receipt_count AS count,c.used_body_bytes::int AS used,
+      (SELECT sum(payload_bytes)::int FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid) AS actual
+      FROM integration_scope_capacities c WHERE organization_id=${receiver.organizationId}::uuid`;
+    expect(capacity!.count).toBe(8); expect(capacity!.used).toBe(capacity!.actual);
   });
 
-  it('does not overwrite whichever different payload wins the same message identity', async () => {
+  it('stores both different payloads even when callers send the same legacy key concurrently', async () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all([send(receiver, messageId, '{"value":1}'), send(receiver, messageId, '{"value":2}')]);
-    expect(responses.map(response => response.status).sort()).toEqual([201, 409]);
-    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 1 }]);
+    expect(responses.map(response => response.status)).toEqual([201, 201]);
+    expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(2);
+    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
   });
 
   it('rechecks revocation after waiting for a real organization row lock', async () => {
@@ -108,7 +112,7 @@ describe('inbound transactional concurrency', () => {
     } finally { await connection.query('ROLLBACK'); await connection.end(); }
   });
 
-  it('returns the original receipt when the first response body is lost after commit', async () => {
+  it('keeps both receipts when a request is retried after its first response body is lost', async () => {
     const receiver = await fixture(), messageId = randomUUID(), base = await app.getUrl();
     await new Promise<void>((resolve, reject) => {
       const outgoing = httpRequest(`${base}${receiver.path}`, { method: 'POST', headers: { Authorization: `Bearer ${receiver.token}`, 'Idempotency-Key': messageId, 'Content-Type': 'application/json' } }, response => {
@@ -116,8 +120,9 @@ describe('inbound transactional concurrency', () => {
       });
       outgoing.once('error', reject); outgoing.end('{"value":1}');
     });
-    const retry = await send(receiver, messageId).expect(200); expect(retry.body.duplicate).toBe(true);
-    expect(await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ id: retry.body.receiptId }]);
+    const retry = await send(receiver, messageId).expect(201);
+    const receipts = await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
+    expect(receipts).toHaveLength(2); expect(receipts).toEqual(expect.arrayContaining([{ id: retry.body.receiptId }]));
   });
 
   it('matches IPv6 subnets and IPv4-mapped peers without accepting malformed allowlists', () => {

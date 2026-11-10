@@ -76,7 +76,7 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
     await source.query('UPDATE integration_credentials SET revoked_at=$2 WHERE endpoint_id=$1', [endpointId, deletedAt]);
     const replacementId = randomUUID();
     await source.query("INSERT INTO integration_endpoints(id,organization_id,code,name,source_code,source_name) VALUES($1,$2,'backup-receiver','Replacement receiver','BACKUP','Backup source')", [replacementId, organizationId]);
-    await source.query("INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,body_digest,configuration_version,configuration_snapshot,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) VALUES($1,$2,$3,$4,'backup.message.001',$5,1,'{}'::jsonb,NOW()+INTERVAL '1 day',NOW()+INTERVAL '90 days',$6,$7)", [receiptId, organizationId, endpointId, credentialId, createHash('sha256').update(messageText).digest('hex'), receiptCiphertext, receiptBytes]);
+    await source.query("INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,body_digest,configuration_version,configuration_snapshot,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) VALUES($1,$2,$3,$4,$5,NULL,1,'{}'::jsonb,NOW()+INTERVAL '1 day',NOW()+INTERVAL '90 days',$6,$7)", [receiptId, organizationId, endpointId, credentialId, receiptId, receiptCiphertext, receiptBytes]);
     await source.query('INSERT INTO integration_scope_capacities(organization_id,used_body_bytes,receipt_count) VALUES($1,$2,1)', [organizationId, receiptBytes]);
     await source.query("INSERT INTO file_objects(id,organization_id,object_key,original_name,content_type,size_bytes,sha256,status,uploaded_by_id,updated_at,object_version_id,verified_sha256,verified_size_bytes,verified_content_type,scan_status,scanned_at,scanner_engine,upload_completed_at,upload_expires_at,retain_until,resource_type,resource_id,resource_version) VALUES($1,$2,$3,$4,$5,$6,$7,'AVAILABLE',$8,NOW(),$9,$7,$6,$5,'CLEAN',NOW(),'backup-integrity-fixture',NOW(),NOW()+INTERVAL '15 minutes',NOW()+INTERVAL '7 days','backup-integrity-test',$1::uuid::text,1)", [fileId, organizationId, key, 'fixture.pdf', 'application/pdf', bytes.length, sha256, userId, pinnedVersion]);
     await source.query("INSERT INTO file_objects(id,organization_id,object_key,original_name,content_type,size_bytes,sha256,status,uploaded_by_id,updated_at,scan_status,upload_expires_at,retain_until) VALUES($1,$2,$3,'pending.txt','text/plain',10,$4,'QUARANTINED',$5,NOW(),'WAITING_UPLOAD',NOW()+INTERVAL '15 minutes',NOW()+INTERVAL '7 days')", [pendingId, organizationId, randomUUID(), '0'.repeat(64), userId]);
@@ -135,10 +135,10 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
         assert.equal(Buffer.from(await latest.Body.transformToByteArray()).toString(), 'newer unscanned bytes');
         assert.deepEqual(restoredFiles.find((file) => file.id === pendingId), { id: pendingId, status: 'QUARANTINED', scan_status: 'WAITING_UPLOAD', object_version_id: null });
         assert.equal(restoredFiles.find((file) => file.id === rejectedId).scan_status, 'REJECTED');
-        const restoredReceipt = (await restoredDatabase.query('SELECT organization_id,endpoint_id,credential_id,message_id,payload_ciphertext,payload_bytes FROM integration_receipts WHERE id=$1', [receiptId])).rows[0];
+        const restoredReceipt = (await restoredDatabase.query('SELECT organization_id,endpoint_id,credential_id,message_id,body_digest,payload_ciphertext,payload_bytes FROM integration_receipts WHERE id=$1', [receiptId])).rows[0];
         assert.equal(restoredReceipt.organization_id, organizationId);
         assert.equal(restoredReceipt.endpoint_id, endpointId); assert.equal(restoredReceipt.credential_id, credentialId);
-        assert.equal(restoredReceipt.message_id, 'backup.message.001');
+        assert.equal(restoredReceipt.message_id, receiptId); assert.equal(restoredReceipt.body_digest, null);
         assert.equal(restoredReceipt.payload_ciphertext, receiptCiphertext);
         assert.equal(decryptSecret(restoredReceipt.payload_ciphertext, receiptContext), messageText);
         assert.equal(restoredReceipt.payload_bytes, receiptBytes);

@@ -71,7 +71,7 @@
       "sources": [
         {
           "path": "docs/OPERATIONS-RUNBOOK.md",
-          "sha256": "15e98eae546411e252ee8e7a83d29d0d002b02c344e1b28b362d389d460a1332"
+          "sha256": "5b8fe66fce240baa9bbce342a2320c721138b39ec6b987c3b223c25b7b259259"
         },
         {
           "path": "docs/OPERABILITY-READINESS.md",

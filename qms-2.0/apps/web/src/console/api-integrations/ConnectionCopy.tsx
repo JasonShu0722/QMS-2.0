@@ -32,9 +32,9 @@ export function ConnectionCopy({ scope, endpoint, credentialId, credentialName, 
         `${text('凭据名称', 'Credential')}: ${result.credentialName}`,
         `${text('有效期', 'Validity')}: ${result.expiresAt ?? text('永久有效', 'Permanent')}`,
         text('正文：JSON对象。', 'Body: a JSON object.'),
-        text('Idempotency-Key：调用方为每条新消息生成唯一编号，8～128位字母、数字及 . _ : -；防重复窗口90天。', 'Idempotency-Key: generate a unique ID for every new message, 8–128 letters, digits or . _ : -. Deduplication lasts 90 days.'),
-        text(result.endpoint.returnReceipt ? '成功首次返回201，重复返回200及原接收编号。' : '成功首次及重复均返回204空正文。', result.endpoint.returnReceipt ? 'First success: 201. Duplicate: 200 with the original receipt.' : 'First success and duplicates: 204 with an empty body.'),
-        text('网络中断或5xx后使用原消息编号和完全相同的正文字节退避重试；409表示编号与内容冲突。', 'After network failure or 5xx, back off and retry with the original message ID and identical payload bytes. 409 indicates conflicting content.'),
+        text('消息编号由系统分配。', 'Message IDs are assigned by the server.'),
+        text(result.endpoint.returnReceipt ? '接收成功返回201及本次接收编号。' : '接收成功返回204空正文。', result.endpoint.returnReceipt ? 'Success: 201 with this receipt ID.' : 'Success: 204 with an empty body.'),
+        text('每次请求独立保存，重试可能新增记录；网络中断或5xx后先检索接收记录再决定重试。', 'Each request is saved independently. Retrying may create another record; after network failure or 5xx, check received records before retrying.'),
       ].join('\n');
       if (!current()) return;
       clipboardStarted = true;

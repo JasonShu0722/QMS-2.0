@@ -41,35 +41,36 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     const credential=await prisma.integrationCredential.create({data:{organizationId:organization.id,endpointId:endpoint.id,name:'Private machine',secretHash:createHash('sha256').update(secret).digest('hex'),expiresAt:new Date(Date.now()+86400000)}});
     return {organization,endpoint,credential,secret,authorization:`Bearer ${credential.id}.${secret}`,path:`/api/v1/integrations/inbound/${endpoint.id}/messages`};
   }
-  it('records distinct UUID attempts for a 128-byte message and its successful retry',async()=> {
+  it('records independent received attempts and server message IDs when the legacy header is repeated',async()=> {
     const item=await fixture(),messageId='A'.repeat(128);
     const first=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'retained'}).expect(201);
-    const duplicate=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'retained'}).expect(200);
-    expect(first.headers['x-request-id']).not.toBe(duplicate.headers['x-request-id']);
+    const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'retained'}).expect(201);
+    expect(first.headers['x-request-id']).not.toBe(repeated.headers['x-request-id']);
     const attempts=await prisma.integrationRequestAttempt.findMany({where:{organizationId:item.organization.id},orderBy:{observedAt:'asc'}});
-    expect(attempts).toHaveLength(2); expect(attempts.map(row=>row.outcome)).toEqual(['RECEIVED','DUPLICATE']);
-    expect(attempts.map(row=>row.messageId)).toEqual([messageId,messageId]);
+    expect(attempts).toHaveLength(2); expect(attempts.map(row=>row.outcome)).toEqual(['RECEIVED','RECEIVED']);
+    expect(attempts.map(row=>row.messageId)).toEqual([first.body.receiptId,repeated.body.receiptId]);
+    expect(new Set(attempts.map(row=>row.receiptId)).size).toBe(2);
     expect(JSON.stringify(attempts)).not.toContain(item.secret);
     const exchange=await prisma.dataExchangeAttempt.findMany({where:{scopeKey:item.organization.id}});
     expect(exchange).toHaveLength(2); expect(exchange.every(row=>row.correlationId.length===36)).toBe(true);
     expect(exchange.every(row=>(row.stages as {processing:{outcome:string}}).processing.outcome==='NOT_REPORTED')).toBe(true);
   });
-  it('receives raw bytes through an encoded endpoint UUID and retries the original path',async()=> {
+  it('receives raw bytes independently through encoded and original endpoint UUID paths',async()=> {
     const item=await fixture(),messageId=randomUUID(),payload=JSON.stringify({private:'界'.repeat(40000)});
     const encoded=`%${item.endpoint.id.charCodeAt(0).toString(16)}${item.endpoint.id.slice(1)}`;
     const first=await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(201);
-    const duplicate=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(200);
-    expect(duplicate.body).toEqual({...first.body,duplicate:true});
+    const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(201);
+    expect(repeated.body.receiptId).not.toBe(first.body.receiptId);
     const receipts=await prisma.integrationReceipt.findMany({where:{organizationId:item.organization.id}});
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]).toMatchObject({id:first.body.receiptId,bodyDigest:createHash('sha256').update(payload).digest('hex')});
+    expect(receipts).toHaveLength(2);
+    expect(receipts).toEqual(expect.arrayContaining([first,repeated].map(response=>expect.objectContaining({id:response.body.receiptId,messageId:response.body.receiptId,bodyDigest:null}))));
   });
   it('stores authenticated failure metadata but never failed plaintext or untrusted identity',async()=> {
     const item=await fixture(false),messageId=randomUUID();
     await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send('{"private-broken":').expect(400);
     expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(0);
     const attempt=await prisma.integrationRequestAttempt.findFirstOrThrow({where:{organizationId:item.organization.id}});
-    expect(attempt).toMatchObject({messageId,statusCode:400,outcome:'REJECTED',reasonCode:'INTEGRATION_MESSAGE_INVALID'});
+    expect(attempt).toMatchObject({messageId:null,statusCode:400,outcome:'REJECTED',reasonCode:'INTEGRATION_MESSAGE_INVALID'});
     expect(JSON.stringify(attempt)).not.toMatch(/private-broken|secretDigest|Bearer/);
     await request(app.getHttpServer()).post(item.path).set('Authorization','Bearer invalid').set('Idempotency-Key',randomUUID()).send({organizationId:item.organization.id}).expect(401);
     expect(await prisma.integrationRequestAttempt.count({where:{organizationId:item.organization.id}})).toBe(1);
@@ -89,7 +90,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'too large for version one'}).expect(413);
     expect(await prisma.integrationEndpoint.findUniqueOrThrow({where:{id:item.endpoint.id}})).toMatchObject({version:2,maxBodyBytes:1024,returnReceipt:false});
     const attempt=await prisma.integrationRequestAttempt.findFirstOrThrow({where:{organizationId:item.organization.id}});
-    expect(attempt).toMatchObject({messageId,statusCode:413,outcome:'REJECTED',reasonCode:'INTEGRATION_BODY_TOO_LARGE',configurationVersion:1,returnReceipt:true});
+    expect(attempt).toMatchObject({messageId:null,statusCode:413,outcome:'REJECTED',reasonCode:'INTEGRATION_BODY_TOO_LARGE',configurationVersion:1,returnReceipt:true});
     expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(0);
   });
   it.each([
@@ -98,12 +99,12 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     ['quoted UTF-8 and Identity casing','application/json; charset="utf-8"','Identity'],
   ])('accepts equivalent JSON headers for first delivery and retry: %s',async (_label,contentType,contentEncoding)=> {
     const item=await fixture(),messageId=randomUUID(),payload='{"private":"equivalent headers"}';
-    for (const status of [201,200]) {
+    for (const status of [201,201]) {
       const outgoing=request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type',contentType!);
       if (contentEncoding) outgoing.set('Content-Encoding',contentEncoding);
       await outgoing.send(payload).expect(status);
     }
-    expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(1);
+    expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(2);
   });
   it('keeps rejecting non-UTF-8 charsets and compressed bodies',async()=> {
     const item=await fixture();

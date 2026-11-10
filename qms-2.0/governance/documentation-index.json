@@ -216,7 +216,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "f88c4014e7076c96ff1d3b7b93b3780b013844230b36ac0dd70134269db7fdd5"
+            "sha256": "72ed08c17b1e07533e0f1a95cad66ff332bc12670d9ec640bd6ec0ba389db195"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",
@@ -246,7 +246,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "15e98eae546411e252ee8e7a83d29d0d002b02c344e1b28b362d389d460a1332"
+            "sha256": "5b8fe66fce240baa9bbce342a2320c721138b39ec6b987c3b223c25b7b259259"
           },
           {
             "path": "docs/OPERABILITY-READINESS.md",
@@ -1052,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "8453b98725aa394c5a4c1d698328c7cf18d330f65b0cc4a6be34def32a0c6e70"
+            "sha256": "355d77709d891eee3e154e7f2fcec8afd234ca6ad891553b7611330edc8183b4"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1076,9 +1076,9 @@
       "status": "active",
       "review": {
         "owner": "QMS 工程维护者（本轮 Codex 核对）",
-        "reviewedOn": "2026-10-19",
+        "reviewedOn": "2026-11-10",
         "maxAgeDays": 90,
-        "reason": "复核 E1 报告新增依赖后 operations 脚本入口未变；MAINT-003 仍限定只读采样、告警判定、一次性演练与备份恢复，生产告警尚未交付。",
+        "reason": "复核 E1 报告新增依赖后 operations 脚本入口未变；MAINT-003 仍限定只读采样、告警判定、一次性演练与备份恢复，生产告警尚未交付。2026-11-10定向复核REQ0036取消外部幂等后备份夹具使用服务端编号及NULL摘要，真实PG/MinIO恢复8项及密钥轮换5项通过；仅小样本技术证据，不扩大生产容量、异地灾备或持续告警结论。",
         "sources": [
           {
             "path": "apps/api/package.json",
@@ -1090,7 +1090,7 @@
           },
           {
             "path": "apps/api/test/operations/data-protection.acceptance.mjs",
-            "sha256": "5ffcaea7bf59fb3c6052dfc6c1b9e25b951fd14b41ada22dfbc123dd870b58c8"
+            "sha256": "04ba32a2c384f92894a380059fb81822991a7df7d56b2075d198e22e7adc550f"
           },
           {
             "path": "apps/api/test/operations/operations-alerts.acceptance.mjs",
@@ -1196,11 +1196,11 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "15e98eae546411e252ee8e7a83d29d0d002b02c344e1b28b362d389d460a1332"
+            "sha256": "5b8fe66fce240baa9bbce342a2320c721138b39ec6b987c3b223c25b7b259259"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "f88c4014e7076c96ff1d3b7b93b3780b013844230b36ac0dd70134269db7fdd5"
+            "sha256": "72ed08c17b1e07533e0f1a95cad66ff332bc12670d9ec640bd6ec0ba389db195"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",

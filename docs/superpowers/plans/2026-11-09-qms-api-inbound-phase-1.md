@@ -1,5 +1,7 @@
 # API 接入管理一期实施计划
 
+2026-11-10接续：负责人取消外部收件Idempotency-Key设计与卡控，沿Issue97推进V0.0.44；当前范围/授权/状态与真实证据以[取消幂等卡控计划](2026-11-10-qms-inbound-without-idempotency.md)为准。原阶段记录保留，不把历史去重验收写成新语义。
+
 > **面向 AI 代理的工作者：** 使用项目 `qms-superpowers-zh` 路由 `superpowers-zh:subagent-driven-development`，逐任务 TDD、规格审查、质量审查及主代理独立验证。负责人已批准实施；本地重命令按资源约束串行执行，降低负载不等于暂停开发。
 
 **目标：** 公司内部系统经现有公网 HTTPS 向 QMS 推送 JSON，在管理端完成接口配置、机器鉴权、可靠接收和记录检索。

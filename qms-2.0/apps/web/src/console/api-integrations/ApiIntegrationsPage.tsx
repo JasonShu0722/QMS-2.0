@@ -139,16 +139,16 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
 function Instructions({ scope, endpoint, close }: { scope: IntegrationScope; endpoint: Endpoint; close: () => void }) {
   const { locale } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
-  const example = `curl --request POST "${endpoint.publicUrl}" --header "Authorization: Bearer <credentialId>.<secret>" --header "Idempotency-Key: example-message-001" --header "Content-Type: application/json" --data-binary "@payload.json"`;
+  const example = `curl --request POST "${endpoint.publicUrl}" --header "Authorization: Bearer <credentialId>.<secret>" --header "Content-Type: application/json" --data-binary "@payload.json"`;
   return <div className="qms-integration-instructions" role="region" aria-label={text('调用说明', 'Calling instructions')}>
     <Space wrap><strong>{endpoint.name}</strong><Button onClick={close}>{text('关闭说明', 'Close instructions')}</Button></Space>
     <Typography.Paragraph><code>{endpoint.publicUrl}</code></Typography.Paragraph>
     <ConnectionCopy scope={scope} endpoint={endpoint} />
     <p>{text('POST · application/json · JSON对象', 'POST · application/json · JSON object')}</p>
-    <pre>{`Authorization: Bearer <credentialId>.<secret>\nIdempotency-Key: <unique-message-id>\nContent-Type: application/json`}</pre>
+    <pre>{`Authorization: Bearer <credentialId>.<secret>\nContent-Type: application/json`}</pre>
     <pre aria-label={text('调用示例', 'Request example')}>{example}</pre>
-    <p>{text(endpoint.returnReceipt ? '成功首次返回201，重复返回200及原接收编号。' : '成功首次及重复均返回204空正文。', endpoint.returnReceipt ? 'First success: 201. Duplicate: 200 with the original receipt.' : 'First success and duplicates: 204 with an empty body.')}</p>
-    <p>{text('网络中断或5xx后用原消息编号和完全相同的正文字节退避重试；409表示编号与内容冲突。', 'After network failure or 5xx, back off and retry with the original message ID and identical payload bytes. 409 indicates conflicting content.')}</p>
-    <p>{text('消息编号为8～128位字母、数字及 . _ : -，防重复窗口90天；请求追踪号用于排查，网关错误可能没有JSON正文。', 'Use an 8–128 character message ID with letters, numbers and . _ : -. Deduplication lasts 90 days. Request IDs support investigation; gateway errors may not contain JSON.')}</p>
+    <p>{text(endpoint.returnReceipt ? '接收成功返回201及本次接收编号。' : '接收成功返回204空正文。', endpoint.returnReceipt ? 'Success: 201 with this receipt ID.' : 'Success: 204 with an empty body.')}</p>
+    <p>{text('每次请求独立保存，重试可能新增记录；网络中断或5xx后先检索接收记录再决定重试。', 'Each request is saved independently. Retrying may create another record; after network failure or 5xx, check received records before retrying.')}</p>
+    <p>{text('消息编号由系统分配；请求追踪号用于排查，网关错误可能没有JSON正文。', 'Message IDs are assigned by the server. Request IDs support investigation; gateway errors may not contain JSON.')}</p>
   </div>;
 }
