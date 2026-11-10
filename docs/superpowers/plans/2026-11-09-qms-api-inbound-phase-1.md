@@ -18,10 +18,10 @@
 | 整体复核 | 一期A/B/C/D及公共接缝独立SPEC后QUALITY已通过；Admin默认权限与正文可见态等待返修也分别通过独立SPEC后QUALITY。机器发布已核，生产Admin实页/真实来源验收仍另列，历史阶段语句不代当前结果 |
 | 定位与版本 | REQ0036 / reczz28XQpffP57y → Issue97 → PR98（含fix1/fix2）→ PR99（fix3）→ PR100（fix4/fix5）。最终main及部署为ce4a72f33f6c6261dbd7525e431c1db3655f0210，整tree与审候选e0ab78c一致；旧main042及PR100首候选1d0b2cb失败、旧分支档案及原始证据保留 |
 | 源码与工作区 | 主代理已串行新建功能分支；活动checkout原地隔离分支，遵循项目唯一活动位置，不另建E/C回退worktree。原有 `.gitignore`、`AGENTS.md`、`docs/ENGINEERING-TOOLS.md` 及索引来源摘要改动保留，不纳入本期提交 |
-| 当前检查点 | 删除PR103候选89aa847经CI42730202802 attempt1精确24/24及同head Review clear后合并main9a22cb6，整tree相同，240文件3337Web全PASS。新mainCI42732103400最终22success/2failure，原客诉附件测试刷新时序FAIL及foundation派生，自动deploy42733879410 skipped；fix1仅该测试等待实际刷新enabled，产品删除源不变，修复PR/main/部署接续。生产仍9fe60f4 |
+| 当前检查点 | 删除功能已随最终main/生产d9d2a920f2a79cde20313767c233b753956ba833上线；PR104 CI42734768669与mainCI42736298039各精确24/24，候选Review clear，整tree一致；deploy42737916279真实success，快照→145迁移→同SHA健康→公网DELETE契约/新JS均核验，详第17节 |
 | 重启后资源约束 | 恢复初查约21.8 GiB内存/4.3 GiB可用；负责人再次明确继续开发，降低负载不应停工。重测试/构建同一时刻只一项、单worker、Node默认堆上限1024 MiB；仅按需启动本任务PG并限512 MiB/1CPU，未恢复扫描/对象/邮件服务，不降低门禁。只读审查及独立源码编辑可继续，禁止代理自行启动重命令 |
 | 证据与限制 | 已核对实际接缝；Node v24.21.0 / pnpm 11.19.0，治理检查 exit 0；技术参数为建议基线，真实来源样本/吞吐未知；详细文档验证见第 8 节 |
-| 下一动作与负责人 | 新分支codex/req0036-endpoint-delete基于origin/main9fe60f4，接续本地归档为b4461a0；先新增真实删除RED及WebRED，再最小实现/双审/契约/构建/浏览器/治理，提交PR并按既有上线授权持续完成。原四dirty保留，预留V0.0.42待远端查重；不实际删除生产接口、不关闭Issue或写飞书 |
+| 下一动作与负责人 | 本次接口删除开发及上线目标完成。负责人刷新API管理即可单次确认删除，Admin默认可用；未代删具体生产接口，真实账号人工操作/真实来源联调及容量验收仍另列。Issue97结果追加已回读仍open、不写飞书，最终事实仅本地归档避免无代码变化重复部署。原四dirty保留，自有资源已清理 |
 
 ## 1. 交付单元、映射与范围
 
@@ -491,3 +491,22 @@ PR103候选89aa8471f3b1963dd5546f5451baef3ce3fdedaf经CI42730202802 attempt1精�
 父从origin/main9a22隔离codex/req0036-delete-release-fix1，用户四dirty携带且旧功能分支保持。修后原完整和限定SPEC→QUALITY、治理及新PR/head/main/部署继续本检查点，不rerun旧失败刷绿，不向已合并PR103推送。原删除实现/迁移/契约/浏览器/恢复证据在源码保持时复用。
 
 修后原完整5/5 PASS（32.38s，首case3414ms）及限定SPEC后QUALITY PASS，父核产品API/Prisma/生成契约/删除页面/部署与main9a22相同；治理38文档/494链接/20来源/161依赖及阶段覆盖PASS，diff检查无错误。只本测试+计划/FOUNDATION三文件提交fix1，用户CodeGraph四dirty排除；新PR/head全量CI及Review、main和自动部署实际核验仍待执行。
+
+## 17. 接口删除 V0.0.42-fix1 最终实际发布（2026-11-10）
+
+| 检查点 | 实际结果 |
+| --- | --- |
+| 修复PR | [PR104](https://github.com/JasonShu0722/QMS-2.0/pull/104)候选4815315087b7a195af9d27f28acbf574bb4f7752，[CI42734768669](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42734768669) attempt1精确24/24 success，同head Review completed/无发现；父premerge独立核head/base/main/mergeable与full集合，不依赖代理口头结论 |
+| 合并与树 | expected_head_sha约束squash main d9d2a920f2a79cde20313767c233b753956ba833；GitHub整Git tree与候选独立比较一致，非只比较单文件 |
+| 新main | [CI42736298039](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42736298039) push/main/attempt1独立精确24/24 success，原evaluateDeployJobs=full；原Web3失败片本轮success |
+| 完整Web | PR104和新main各16份实际artifact ZIP/JSON，逐文件核当前Git测试清单240文件3337项全PASS，无漏重/skip/pending/runtimeError；原PR103同样独立核240/3337 |
+| 自动部署 | [deploy42737916279](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42737916279)/job129571581957 attempt1 completed/success、非skip；完整日志已下载，明确RUN_ID42736298039、HEAD_SHA同d9、Full validation scope |
+| 快照与迁移 | 台北09:52:27迁移前加密DB快照验证；09:52:31明确145链并实际应用20261110000000_integration_endpoint_delete，All migrations successfully applied。未修改历史迁移或生产数据测试 |
+| 服务与出口 | API/Worker同qms2-foundation-api:d9，Web为qms2-foundation-web:d9，日志三服务Healthy；09:52:53 Deployment successful同SHA。稳定Worker READY/公共HTTP/原子deployed-sha由同版强制成功出口支持，未单独SSH读marker |
+| 公网独立核验 | 09:55:13台北，login/OpenAPI/console页面及新资源200，DELETE契约/expectedVersion/204存在，管理匿名401；新JS index-ChNX2RB_.js含删除/重试标识，旧index-DBEs0LhS.js已替换，CSS保持符合无样式变更。保存实际SHA，不声称本地/Linux字节相同 |
+| 行为/边界 | 真实单确认删除204/列表消失/旧key401/历史payload同文/同码新UUID已由一次性marker-only浏览器证明；公网不执行DELETE、不读取真实秘密，不把匿名读代生产账号人工验收 |
+| 记录 | [Issue97发布追加](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6756738463)已保存回读，保持open、不写Base。最终事实只本地归档，不为无产品变化再推送触发CI/部署 |
+
+Git外req0036-delete-20261110保留pr104-premerge/tree、d9-main/deploy-verified、完整job日志及deployment-log-verified、public-final与新旧资源、各次Web inventory、本地RED/夹具失败/最终完整日志及cleanup。旧main9a22的22success/2failure、自动deploy skipped及修复依据保持真实历史；未重跑旧run或增加预算刷绿。旧四dirty按hunk核验保留，自有PG/MinIO与本地API/Vite已精确清理，不连接55440。
+
+本轮接口删除开发及实际部署目标完成；负责人刷新页面即可操作，Admin不需额外授新权限。删除仍保留历史正文至原期限，容量不提前释放；需物理清空或回收站恢复另立范围。真实来源字段/协议/吞吐、匹配生产全容量恢复、生产物理设备和人工操作验收未覆盖。145旧镜像不识别删除过滤，不能直接回退，优先向前修复保历史。
