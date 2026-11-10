@@ -53,3 +53,11 @@
 旧main最终24项22success/2failure：唯一Web6 PCN超时，foundation129714632718为`web-tests must be success`派生；其余API/4PG/15Web片通过。[自动deploy42782230464](https://github.com/JasonShu0722/QMS-2.0/actions/runs/42782230464)/job129714769457 completed/skipped，未SSH或实际上线。修后原完整11/11 PASS/61.04秒，目标case8978ms仍原10000预算；独立no_key_spec限定SPEC PASS，QUALITY接续。没有修改API/Web生产或迁移，原有效证据复用。
 
 fix1独立QUALITY读实际baseline/green日志后PASS，治理先报告该测试来源摘要未同步，限定复核FRONTEND来源后更新准确摘要，最终38文档/503链接/20来源/161依赖及阶段覆盖1PASS。提交前main434afa1、无开放PR、fix1未被占用；修复仅测试+两记录+一来源摘要，不重新执行无变API/browser/build。
+
+### V0.0.44-fix2 测试清理接续（仍PR108）
+
+fix1候选d9b5fdb已推[PR108](https://github.com/JasonShu0722/QMS-2.0/pull/108)，[Issue登记](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6762705503)回读。首CI42782944144 attempt1全部终态22success/2failure：Web1 job129717227796的16文件252断言全PASS，但2个环境销毁后uncaught `window is not defined`，栈指rc useDelayState的ms timeout，归属session-window.test.tsx；foundation129722368902仅web-tests派生。PCN所在片已过、其余API/PG及15Web片过；Review无发现不覆盖CI失败，未合并/部署，也不rerun。
+
+准确根因范围：实际AntD Form的errors/warnings各useDebounce，空数组10ms/非空0ms；底层useDelayState没有卸载清理，符合CI栈，日志不能确定具体哪个字段。Button默认boolean loading不走ms，已排除最初猜测。仓库password-submission已有cleanup后act等待源码10ms的先例。新实施代理session_teardown_fix2只session-window本地helper/afterEach及真实Form自检，原19case不变、无全局clear/吞异常/改依赖/production/timeout/motion。
+
+父原完整baseline19PASS无uncaught，只CI是真异常RED；新增真实Form计时器自检取得1FAIL/19按名称过滤，helper仅cleanup后剩3timer期待0；加精确10ms settling后session-window20+password-submission10两个完整文件30/30PASS/48.17秒，无uncaught。独立限定SPEC PASS，QUALITY接续；[fix2登记](https://github.com/JasonShu0722/QMS-2.0/issues/97#issuecomment-6762877023)已回读，沿PR108提交fix2不另开重复PR。

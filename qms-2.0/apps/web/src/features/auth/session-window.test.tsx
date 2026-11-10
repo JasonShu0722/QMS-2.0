@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from 'react';
-import { Modal } from 'antd';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Form, Input, Modal } from 'antd';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes, useNavigate } from 'react-router-dom';
 import { transferableAbortController } from 'node:util';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -24,7 +24,27 @@ function application(strict = false, modal = false) {
   return render(strict ? <StrictMode>{view}</StrictMode> : view);
 }
 beforeEach(() => { mounts = 0; useWorkTabsStore.getState().reset(); vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function (this: HTMLDialogElement) { this.setAttribute('open', ''); }); vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function (this: HTMLDialogElement) { this.removeAttribute('open'); }); });
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(async () => { await cleanupSessionWindow(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+async function cleanupSessionWindow() {
+  cleanup();
+  // AntD Form retains 0/10ms error and warning debounce callbacks after unmount.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+}
+
+it('settles the real form error and warning debounce callbacks before environment teardown', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true, advanceTimeDelta: 1 });
+  try {
+    render(<Form><Form.Item name="code" label="Debounce fixture"><Input /></Form.Item></Form>);
+    expect(screen.getByLabelText('Debounce fixture')).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBeGreaterThanOrEqual(2);
+    await cleanupSessionWindow();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    vi.useRealTimers();
+  }
+});
 
 it('blocks an explicit revalidation while pending and preserves an unchanged business draft', async () => {
   let finish!: (value: Response) => void;
