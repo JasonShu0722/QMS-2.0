@@ -730,7 +730,7 @@
           },
           {
             "path": "apps/web/src/console/ConsoleLayout.tsx",
-            "sha256": "c086a4e33ba859b09f77e7f313a90958c1ffd09b3c0c41ac9b56de158a873a02"
+            "sha256": "73c636c6c68763e5841bd509e41be81ffb2bcb2a073c28d6511ab064123858fd"
           },
           {
             "path": "apps/web/src/styles/global.css",

@@ -14,6 +14,7 @@ import { SessionVerificationGate } from '../features/auth/SessionVerificationGat
 import { subscribeSessionSignals, subscribeWindowResume } from '../features/auth/session-invalidation';
 import { LedgerScopeProvider } from '../ui/ledger';
 import { useSidebarState } from '../layouts/sidebarState';
+import { FeedbackButton } from '../features/feedback/FeedbackButton';
 
 const Context = createContext<{ context: Context; refresh: () => void; invalidate: () => void } | null>(null);
 export function useConsoleContext() {
@@ -176,5 +177,6 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
       </main>
     </div>
     <Drawer title={text('管理导航', 'Management navigation')} open={mobileOpen} onClose={() => setMobileOpen(false)} placement="left" size={288} className="qms-console-mobile-drawer"><div id="qms-console-mobile-navigation">{brand}{navigation(true)}</div></Drawer>
+    <FeedbackButton />
   </div></>;
 }
