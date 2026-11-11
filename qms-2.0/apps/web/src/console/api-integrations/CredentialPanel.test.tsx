@@ -64,11 +64,12 @@ it('copies a selected permanent credential again after reopening without storing
   read.mockImplementation(async path => String(path).includes('/connection?') ? result : { items: [{ ...credential, expiresAt: null }], total: 1, page: 1, limit: 20 });
   for (let opening = 0; opening < 2; opening++) {
     const rendered = view();
-    const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
+    const element = await screen.findByLabelText('MES质量推送凭据', { selector: '[role="dialog"]' });
     await waitFor(() => expect(element).toBeVisible()); const panel = within(element);
-    const copy = await panel.findByRole('button', { name: '复制集成平台对接配置' });
+    const copy = await panel.findByLabelText('复制集成平台对接配置', { selector: 'button' });
     fireEvent.click(copy);
     await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(opening + 1));
+    expect(await panel.findByText('已复制对接配置')).toBeVisible();
     const query = new URL(read.mock.calls.filter(([path]) => String(path).includes('/connection?')).at(-1)![0], 'http://localhost').searchParams;
     expect(query.get('organizationId')).toBe(organizationId); expect(query.get('credentialId')).toBe(credential.id);
     expect(clipboard.mock.calls.at(-1)![0]).toContain(result.authorization);

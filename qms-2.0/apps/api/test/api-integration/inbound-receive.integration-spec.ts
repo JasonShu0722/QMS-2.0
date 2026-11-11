@@ -55,15 +55,34 @@ describe('API inbound durable reception', () => {
       VALUES(${credentialId}::uuid,${organization.id}::uuid,${endpointId}::uuid,'Test credential',${createHash('sha256').update(secret).digest('hex')},CURRENT_TIMESTAMP+interval '1 day')`;
     return { organizationId: organization.id, endpointId, credentialId, token: `${credentialId}.${secret}`, path: `/api/v1/integrations/inbound/${endpointId}/messages` };
   }
-  function send(receiver: { path: string; token: string }, messageId = randomUUID(), body: string | Buffer = '{"reading":1}') {
+  function send(receiver: { path: string; token: string }, messageId = randomUUID(), body: string | Buffer = '[{"reading":1}]') {
     return request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`).set('Idempotency-Key', messageId).set('Content-Type', 'application/json').send(body);
   }
   const codePath = (code: string) => `/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`;
 
+  it('accepts object arrays as one raw receipt including empty and multiple items', async () => {
+    const receiver = await fixture();
+    for (const body of ['[]', '[{}]', '[ {"reading":1}, {"reading":2,"nested":{"values":[1,null]}} ]']) {
+      const accepted = await send(receiver, randomUUID(), body).expect(201);
+      const stored = await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: accepted.body.receiptId } });
+      expect(decryptSecret(stored.payloadCiphertext!, `integration:${receiver.organizationId}:${receiver.endpointId}:${stored.id}`)).toBe(body);
+      expect(stored.messageId).toBe(stored.id);
+    }
+    expect(await prisma.integrationReceipt.count({ where: { endpointId: receiver.endpointId } })).toBe(3);
+  });
+
+  it('rejects a root object and non-object array items without persisting a receipt', async () => {
+    const receiver = await fixture();
+    for (const body of ['{}', '{"reading":1}', 'null', 'true', '1', '"text"', '[null]', '[1]', '["text"]', '[true]', '[[]]', '[{},null]']) {
+      await send(receiver, randomUUID(), body).expect(400);
+    }
+    expect(await prisma.integrationReceipt.count({ where: { endpointId: receiver.endpointId } })).toBe(0);
+  });
+
   it('accepts messages without a caller idempotency key and assigns a server message identity', async () => {
     const receiver = await fixture();
     const accepted = await request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`)
-      .set('Content-Type', 'application/json').send('{"reading":1}').expect(201);
+      .set('Content-Type', 'application/json').send('[{"reading":1}]').expect(201);
     expect(accepted.body.messageId).toBe(accepted.body.receiptId);
     expect(accepted.body.receiptId).toMatch(/^[a-f0-9-]{36}$/);
     expect(accepted.body).not.toHaveProperty('duplicate');
@@ -71,8 +90,8 @@ describe('API inbound durable reception', () => {
 
   it('stores each request independently when an old caller key is reused with different content', async () => {
     const receiver = await fixture(), oldKey = randomUUID();
-    const first = await send(receiver, oldKey, '{"reading":1}').expect(201);
-    const second = await send(receiver, oldKey, '{"reading":2}').expect(201);
+    const first = await send(receiver, oldKey, '[{"reading":1}]').expect(201);
+    const second = await send(receiver, oldKey, '[{"reading":2}]').expect(201);
     expect(second.body.receiptId).not.toBe(first.body.receiptId);
     expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
   });
@@ -144,7 +163,7 @@ describe('API inbound durable reception', () => {
   });
 
   it('encrypts separate durable records and accounts for every byte-identical retry', async () => {
-    const receiver = await fixture(), messageId = randomUUID(), body = '{"reading":"confidential fixture value"}';
+    const receiver = await fixture(), messageId = randomUUID(), body = '[{"reading":"confidential fixture value"}]';
     const first = await send(receiver, messageId, body).expect(201);
     const repeated = await send(receiver, messageId, body).expect(201);
     expect(first.body).toMatchObject({ messageId: first.body.receiptId, status: 'RECEIVED' });
@@ -175,13 +194,13 @@ describe('API inbound durable reception', () => {
     expect(records).toHaveLength(3); expect(records).toEqual(expect.arrayContaining([{ id: restored.body.receiptId, version: 2 }]));
     expect(records.filter(row => row.version === 1)).toHaveLength(2);
     await prisma.$executeRaw`UPDATE integration_endpoints SET return_receipt=false WHERE id=${receiver.endpointId}::uuid`;
-    await send(receiver, messageId, '{"reading":2}').expect(204);
+    await send(receiver, messageId, '[{"reading":2}]').expect(204);
   });
 
   it('accepts changed bytes but rejects invalid JSON and excessive bodies without saving them', async () => {
     const receiver = await fixture(), messageId = randomUUID(); await send(receiver, messageId).expect(201);
-    await send(receiver, messageId, '{ "reading":1}').expect(201);
-    for (const body of ['[]', 'null', '{', '[{}]', '{"x":' + '['.repeat(33) + '0' + ']'.repeat(33) + '}']) await send(receiver, randomUUID(), body).expect(400);
+    await send(receiver, messageId, '[{ "reading":1}]').expect(201);
+    for (const body of ['null', '{', '[', '[{}', '[{"x":' + '['.repeat(32) + '0' + ']'.repeat(32) + '}]']) await send(receiver, randomUUID(), body).expect(400);
     const base = await app.getUrl();
     const invalidUtf8Status = await new Promise<number>((resolve, reject) => {
       const bytesRequest = httpRequest(`${base}${receiver.path}`, { method: 'POST', headers: { Authorization: `Bearer ${receiver.token}`, 'Idempotency-Key': randomUUID(), 'Content-Type': 'application/json' } }, response => {
@@ -263,13 +282,13 @@ describe('API inbound durable reception', () => {
       expect(accepted.body.messageId).toBe(accepted.body.receiptId); expect(accepted.body.messageId).not.toBe(key);
     }
     const repeatedHeader = await request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`)
-      .set('Idempotency-Key', ['legacy-one', 'legacy-two']).set('Content-Type', 'application/json').send('{}').expect(201);
+      .set('Idempotency-Key', ['legacy-one', 'legacy-two']).set('Content-Type', 'application/json').send('[{}]').expect(201);
     expect(repeatedHeader.body.messageId).toBe(repeatedHeader.body.receiptId);
   });
   it('leaves expired historical metadata for cleanup while accepting an independent new receipt', async () => {
     const receiver = await fixture(), messageId = randomUUID(); const first = await send(receiver, messageId).expect(201);
     await prisma.$executeRaw`UPDATE integration_receipts SET metadata_expires_at=CURRENT_TIMESTAMP-interval '1 second' WHERE id=${first.body.receiptId}::uuid`;
-    const next = await send(receiver, messageId, '{"reading":2}').expect(201); expect(next.body.receiptId).not.toBe(first.body.receiptId);
+    const next = await send(receiver, messageId, '[{"reading":2}]').expect(201); expect(next.body.receiptId).not.toBe(first.body.receiptId);
     expect(await prisma.$queryRaw`SELECT receipt_count AS count FROM integration_scope_capacities WHERE organization_id=${receiver.organizationId}::uuid`).toEqual([{ count: 2 }]);
     expect(await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE id=${first.body.receiptId}::uuid`).toEqual([{ id: first.body.receiptId }]);
   });

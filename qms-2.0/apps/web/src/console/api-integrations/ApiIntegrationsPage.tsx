@@ -144,9 +144,10 @@ function Instructions({ scope, endpoint, close }: { scope: IntegrationScope; end
     <Space wrap><strong>{endpoint.name}</strong><Button onClick={close}>{text('关闭说明', 'Close instructions')}</Button></Space>
     <Typography.Paragraph><code>{endpoint.publicUrl}</code></Typography.Paragraph>
     <ConnectionCopy scope={scope} endpoint={endpoint} />
-    <p>{text('POST · application/json · JSON对象', 'POST · application/json · JSON object')}</p>
+    <p>{text('POST · application/json · JSON对象数组', 'POST · application/json · JSON object array')}</p>
     <pre>{`Authorization: Bearer <credentialId>.<secret>\nContent-Type: application/json`}</pre>
     <pre aria-label={text('调用示例', 'Request example')}>{example}</pre>
+    <pre aria-label={text('正文示例', 'Body example')}>{'[{"example":true}]'}</pre>
     <p>{text(endpoint.returnReceipt ? '接收成功返回201及本次接收编号。' : '接收成功返回204空正文。', endpoint.returnReceipt ? 'Success: 201 with this receipt ID.' : 'Success: 204 with an empty body.')}</p>
     <p>{text('每次请求独立保存，重试可能新增记录；网络中断或5xx后先检索接收记录再决定重试。', 'Each request is saved independently. Retrying may create another record; after network failure or 5xx, check received records before retrying.')}</p>
     <p>{text('消息编号由系统分配；请求追踪号用于排查，网关错误可能没有JSON正文。', 'Message IDs are assigned by the server. Request IDs support investigation; gateway errors may not contain JSON.')}</p>

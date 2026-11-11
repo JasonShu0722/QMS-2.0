@@ -1,5 +1,7 @@
 # API 接入管理
 
+2026-11-11通用规则更新：所有外部接收接口的新正文统一为JSON对象数组，如`[{"example":true},{"example":false}]`，空数组`[]`允许。数组每项须为非null对象，不接受根对象、标量或数组中的null/标量/数组；对象内字段仍不做业务映射。一次HTTP请求的整段原始数组保存为一份收件，201/204及无Idempotency-Key保持；历史对象正文继续可查。设计和实际发布状态见[对象数组计划](../../docs/superpowers/plans/2026-11-11-qms-inbound-array.md)。本节覆盖下文历史对象限制，发布前不据文档认定生产已生效。
+
 ## 当前范围
 
 2026-11-09：[REQ-0036](https://larkcommunity.feishu.cn/record/E126rHft6eSfvQc69Fcc2sl4nQh) / [Issue97](https://github.com/JasonShu0722/QMS-2.0/issues/97) 一期已随 ce4a72f 上线，Admin 入口可见已由负责人确认。公司内部系统或集成平台经公网 HTTPS 推送 JSON；本轮按负责人要求补充编码地址、完整对接配置复制及永久凭据，当前开发与发布证据以实施计划顶部摘要为准。
@@ -37,12 +39,18 @@
 
 ## 调用协议
 
-`POST /api/v1/integrations/inbound/{接口编码}/messages`，例如编码 `test` 对应 `/api/v1/integrations/inbound/test/messages`。编码区分大小写，特殊字符由页面 URL 编码。既有 UUID 地址继续有效；组织之间相同编码由凭据绑定的接口区分，不靠 URL 猜测组织。正文为未压缩、有效 UTF-8 的 JSON 对象。页面提供完整复制操作和请求示例：
+`POST /api/v1/integrations/inbound/{接口编码}/messages`，例如编码 `test` 对应 `/api/v1/integrations/inbound/test/messages`。编码区分大小写，特殊字符由页面 URL 编码。既有 UUID 地址继续有效；组织之间相同编码由凭据绑定的接口区分，不靠 URL 猜测组织。正文为未压缩、有效UTF-8的JSON对象数组。页面提供完整复制操作和请求示例：
 
 支持可选 UTF-8 charset（包括双引号形式），`Content-Encoding: identity`不区分大小写；其他编码和压缩仍拒绝。合法UUID的百分号编码路径与原路径使用相同原始字节处理和正文上限。
 
 ```powershell
 curl --request POST "https://<qms-host>/api/v1/integrations/inbound/test/messages" --header "Authorization: Bearer <credentialId>.<secret>" --header "Content-Type: application/json" --data-binary "@payload.json"
+```
+
+`payload.json`示例：
+
+```json
+[{"example":true},{"example":false}]
 ```
 
 无需发送 `Idempotency-Key`，即使仍携带旧请求头也忽略其值，不执行去重或内容冲突校验。每次请求独立保存，服务端自动生成UUID检索编号，成功回执的messageId与receiptId相同。收件、必要审计和容量计账在同一个事务提交后才响应成功。

@@ -47,7 +47,7 @@ describe('inbound transactional concurrency', () => {
       VALUES(${credentialId}::uuid,${organization.id}::uuid,${endpointId}::uuid,'Concurrent credential',${createHash('sha256').update(secret).digest('hex')},clock_timestamp()+interval '1 day')`;
     return { organizationId: organization.id, endpointId, credentialId, token: `${credentialId}.${secret}`, path: `/api/v1/integrations/inbound/${endpointId}/messages` };
   }
-  const send = (receiver: { token: string; path: string }, messageId: string, body = '{"value":1}') => request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`).set('Idempotency-Key', messageId).set('Content-Type', 'application/json').send(body);
+  const send = (receiver: { token: string; path: string }, messageId: string, body = '[{"value":1}]') => request(app.getHttpServer()).post(receiver.path).set('Authorization', `Bearer ${receiver.token}`).set('Idempotency-Key', messageId).set('Content-Type', 'application/json').send(body);
   async function waitingForRowLock(table: 'organizations' | 'integration_credentials') {
     const deadline = Date.now() + 3000;
     while (Date.now() < deadline) {
@@ -73,7 +73,7 @@ describe('inbound transactional concurrency', () => {
 
   it('stores both different payloads even when callers send the same legacy key concurrently', async () => {
     const receiver = await fixture(), messageId = randomUUID();
-    const responses = await Promise.all([send(receiver, messageId, '{"value":1}'), send(receiver, messageId, '{"value":2}')]);
+    const responses = await Promise.all([send(receiver, messageId, '[{"value":1}]'), send(receiver, messageId, '[{"value":2}]')]);
     expect(responses.map(response => response.status)).toEqual([201, 201]);
     expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(2);
     expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
@@ -118,7 +118,7 @@ describe('inbound transactional concurrency', () => {
       const outgoing = httpRequest(`${base}${receiver.path}`, { method: 'POST', headers: { Authorization: `Bearer ${receiver.token}`, 'Idempotency-Key': messageId, 'Content-Type': 'application/json' } }, response => {
         expect(response.statusCode).toBe(201); response.destroy(); resolve();
       });
-      outgoing.once('error', reject); outgoing.end('{"value":1}');
+      outgoing.once('error', reject); outgoing.end('[{"value":1}]');
     });
     const retry = await send(receiver, messageId).expect(201);
     const receipts = await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;

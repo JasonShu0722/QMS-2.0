@@ -1,5 +1,13 @@
 # 底座与阶段二平台验收记录
 
+## REQ0036 外部接收对象数组规则本地验收（2026-11-11）
+
+负责人要求外部接收正文统一为JSON对象数组`[{},{},{}]`：根数组允许空，每项必须非null对象且非数组；整段一次收件，不拆项；历史对象正文仅继续读取。认证、无Idempotency-Key、限流/容量/审计、201/204和服务端编号保持，无迁移。范围见[数组计划](../../docs/superpowers/plans/2026-11-11-qms-inbound-array.md)。
+
+API真实RED（数组原400/对象原201）后，六完整PG/API文件69/69 PASS；Swagger契约、API build、Web build及相关Web回归通过。真实一次性PG146/API/Vite浏览器2/2 PASS/38.3秒，数组复制说明、无头多对象发送、201/204、检索/纯文本/撤销删除保持。CredentialPanel原有第三用例先两次超10秒，查询范围收窄后3/3 PASS；其原因是既有Modal/Ledger可访问树查询成本，不能归因数组。
+
+独立SPEC/QUALITY均PASS；资源已清理，未连55440/生产凭据。治理/PR/main/部署、真实发送方联调与全容量恢复尚待；本节不声明上线。
+
 ## REQ0036 V0.0.44-fix1发布门禁接续（2026-11-10）
 
 fix3：PR108 head20c1467新CI42785247397最终22success/2failure，Web1 job129724797961原session refusal测试未观察login目标（252PASS1FAIL），foundation129729904824派生。旧Form uncaught已消失，未沿旧归因；CI无request断点，仅能结合源码确定初次textbox DOM早于resume订阅切换完成的可达夹具时序。仅该case初次render包async act再唯一focus，全部login/version+1/reads3/dirty否定/finally保持，不改生产/sleep/预算。父原完整baseline20PASS不是RED，修后完整20PASS/17.96秒、限定SPEC PASS，QUALITY待；同PR108接续fix3，新head全门禁再验。

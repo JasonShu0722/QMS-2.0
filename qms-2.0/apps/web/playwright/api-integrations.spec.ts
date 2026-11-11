@@ -150,6 +150,8 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     expect(initialCopy.includes('每次请求独立保存')).toBe(true);
     expect(initialCopy.includes('重试可能新增记录')).toBe(true);
     expect(initialCopy.includes('Idempotency-Key')).toBe(false);
+    expect(initialCopy.includes('JSON对象数组')).toBe(true);
+    expect(initialCopy.includes('[{"example":true}]')).toBe(true);
     expect(initialCopy.includes('永久有效')).toBe(true);
     await credentials.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -175,7 +177,7 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     const copiedAuthorization = /^Authorization: Bearer (.+)$/m.exec(activeCopy)?.[1];
     expect(copiedAuthorization === credential.secret).toBe(true);
     expect(new URL(endpoint.publicUrl).pathname.endsWith(`/inbound/${encodeURIComponent(endpoint.code)}/messages`)).toBe(true);
-    const body = JSON.stringify({ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' });
+    const body = JSON.stringify([{ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' }, { technicalAcceptance: true, item: 2 }]);
     const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, body);
     expect(received.status).toBe(201);
     const receipt = await received.json() as Schema['InboundReceiptDto'];

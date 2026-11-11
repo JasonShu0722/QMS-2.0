@@ -43,8 +43,8 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
   }
   it('records independent received attempts and server message IDs when the legacy header is repeated',async()=> {
     const item=await fixture(),messageId='A'.repeat(128);
-    const first=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'retained'}).expect(201);
-    const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'retained'}).expect(201);
+    const first=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send([{private:'retained'}]).expect(201);
+    const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send([{private:'retained'}]).expect(201);
     expect(first.headers['x-request-id']).not.toBe(repeated.headers['x-request-id']);
     const attempts=await prisma.integrationRequestAttempt.findMany({where:{organizationId:item.organization.id},orderBy:{observedAt:'asc'}});
     expect(attempts).toHaveLength(2); expect(attempts.map(row=>row.outcome)).toEqual(['RECEIVED','RECEIVED']);
@@ -56,7 +56,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     expect(exchange.every(row=>(row.stages as {processing:{outcome:string}}).processing.outcome==='NOT_REPORTED')).toBe(true);
   });
   it('receives raw bytes independently through encoded and original endpoint UUID paths',async()=> {
-    const item=await fixture(),messageId=randomUUID(),payload=JSON.stringify({private:'界'.repeat(40000)});
+    const item=await fixture(),messageId=randomUUID(),payload=JSON.stringify([{private:'界'.repeat(40000)}]);
     const encoded=`%${item.endpoint.id.charCodeAt(0).toString(16)}${item.endpoint.id.slice(1)}`;
     const first=await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(201);
     const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(201);
@@ -87,7 +87,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
       }
     });
     const messageId=randomUUID();
-    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send({private:'too large for version one'}).expect(413);
+    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).send([{private:'too large for version one'}]).expect(413);
     expect(await prisma.integrationEndpoint.findUniqueOrThrow({where:{id:item.endpoint.id}})).toMatchObject({version:2,maxBodyBytes:1024,returnReceipt:false});
     const attempt=await prisma.integrationRequestAttempt.findFirstOrThrow({where:{organizationId:item.organization.id}});
     expect(attempt).toMatchObject({messageId:null,statusCode:413,outcome:'REJECTED',reasonCode:'INTEGRATION_BODY_TOO_LARGE',configurationVersion:1,returnReceipt:true});
@@ -98,7 +98,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     ['Identity casing','application/json','Identity'],
     ['quoted UTF-8 and Identity casing','application/json; charset="utf-8"','Identity'],
   ])('accepts equivalent JSON headers for first delivery and retry: %s',async (_label,contentType,contentEncoding)=> {
-    const item=await fixture(),messageId=randomUUID(),payload='{"private":"equivalent headers"}';
+    const item=await fixture(),messageId=randomUUID(),payload='[{"private":"equivalent headers"}]';
     for (const status of [201,201]) {
       const outgoing=request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type',contentType!);
       if (contentEncoding) outgoing.set('Content-Encoding',contentEncoding);
@@ -116,7 +116,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     for (const returnReceipt of [true,false]) {
       const item=await fixture(returnReceipt);
       const spy=jest.spyOn(app.get(IntegrationReceiptService),'recordAttempt').mockRejectedValue(new HttpException('auxiliary failure',status));
-      const response=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).send({private:'successful'}).expect(returnReceipt?201:204);
+      const response=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).send([{private:'successful'}]).expect(returnReceipt?201:204);
       expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(1);
       expect(app.get(IntegrationReceiptService).collectionStatus(item.organization.id)).toBe('UNAVAILABLE');
       if (!returnReceipt) expect(response.text).toBe('');
@@ -126,7 +126,7 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
   it('isolates an exchange conflict after the receipt and request metadata were saved',async()=> {
     const item=await fixture();
     jest.spyOn(app.get(DataExchangeObservationService),'recordStageResult').mockRejectedValue(new HttpException('observation conflict',409));
-    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).send({private:'successful'}).expect(201);
+    await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',randomUUID()).send([{private:'successful'}]).expect(201);
     expect(await prisma.integrationReceipt.count({where:{organizationId:item.organization.id}})).toBe(1);
     expect(await prisma.integrationRequestAttempt.count({where:{organizationId:item.organization.id}})).toBe(1);
     expect(app.get(IntegrationReceiptService).collectionStatus(item.organization.id)).toBe('UNAVAILABLE');
