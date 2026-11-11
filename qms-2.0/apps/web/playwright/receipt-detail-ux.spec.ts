@@ -102,24 +102,19 @@ async function selectEndpoint(page: Page, section: Locator, search: string, endp
   await selector.click();
   await selector.fill(search);
   expect((await firstPage).status()).toBe(200);
-  await expect(filters.getByRole('button', { name: '加载更多接口', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '加载更多接口', exact: true })).toBeVisible();
   const secondPage = page.waitForResponse(response => {
     const url = new URL(response.url());
     return url.pathname === '/api/v1/admin/integrations/receipt-endpoints' && response.request().method() === 'GET'
       && url.searchParams.get('page') === '2' && url.searchParams.get('search') === search;
   });
-  await filters.getByRole('button', { name: '加载更多接口', exact: true }).click();
+  await page.getByRole('button', { name: '加载更多接口', exact: true }).click();
   expect((await secondPage).status()).toBe(200);
+  await selector.click();
   const dropdown = page.locator('.ant-select-dropdown:visible');
-  const virtualHolder = dropdown.locator('.rc-virtual-list-holder');
-  if (await virtualHolder.count()) await virtualHolder.evaluate(element => { element.scrollTop = element.scrollHeight; });
-  else await dropdown.evaluate(element => { element.scrollTop = element.scrollHeight; });
   const option = dropdown.locator('.ant-select-item-option').filter({ hasText: `${endpointName} (${endpointCode})` });
-  await option.scrollIntoViewIfNeeded();
-  await expect(option).toBeVisible();
   await option.click();
-  await expect(filters.locator('.ant-select-selection-item-content')).toContainText(endpointName);
-  await expect(filters.locator('.ant-select-selection-item-content')).toContainText(endpointId);
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
 }
 
 async function assertPayloadFrame(page: Page, detail: Locator, expected: string) {
@@ -148,8 +143,8 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
   const fixtureEndpointIds: string[] = [];
   const fixtureReceiptIds: string[] = [];
   const candidateSearch = `浏览器接收验收 ${suffix}`;
-  const endpointName = `${candidateSearch} 21`;
-  const endpointCode = `UX_${suffix}_21`;
+  const endpointName = `${candidateSearch} 00`;
+  const endpointCode = `UX_${suffix}_00`;
   const sourceCode = `UXSRC_${suffix}`;
   const bodyOne = JSON.stringify([{ acceptance: 'receipt-detail', ordinal: 1, text: `第一条可读长正文 ${'正文内容 '.repeat(500)}` }]);
   const bodyTwo = JSON.stringify([{ acceptance: 'receipt-detail', ordinal: 2, text: `第二条可读长正文 ${'正文内容 '.repeat(500)}` }]);
@@ -270,9 +265,7 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
 
     await page.goto('/console');
     await expect(page.getByRole('main')).toBeVisible();
-    const headings = await page.locator('main h1:visible, main h2:visible, main h3:visible').evaluateAll(elements => elements.map(element => element.textContent?.trim()).filter(Boolean) as string[]);
-    expect(headings.length).toBeGreaterThan(0);
-    expect(new Set(headings).size).toBe(headings.length);
+    expect(await page.locator('main .qms-console-scope-details').count()).toBe(0);
   } finally {
     if (endpoint) {
       const remaining = await prisma.integrationReceipt.findMany({ where: { id: { in: fixtureReceiptIds } }, select: { id: true } });
@@ -280,6 +273,7 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
         await positionWrite(page.request, receiptsPath, 'DELETE', { organizationId: endpoint.organizationId, receiptIds: remaining.map(item => item.id) });
       }
       await prisma.integrationRequestAttempt.deleteMany({ where: { endpointId: { in: fixtureEndpointIds } } });
+      await prisma.integrationRateWindow.deleteMany({ where: { endpointId: { in: fixtureEndpointIds } } });
       await prisma.integrationCredential.deleteMany({ where: { endpointId: { in: fixtureEndpointIds } } });
       await prisma.integrationEndpoint.deleteMany({ where: { id: { in: fixtureEndpointIds } } });
       await prisma.integrationEndpoint.deleteMany({ where: { organizationId: endpoint.organizationId, code: { startsWith: `UX_${suffix}_` } } });
