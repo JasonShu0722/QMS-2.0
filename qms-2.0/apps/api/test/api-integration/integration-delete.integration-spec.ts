@@ -62,7 +62,7 @@ describe('integration endpoint deletion through real HTTP and PostgreSQL', () =>
   const remove = (cookie: string, endpointId: string, expectedVersion = 1, key = randomUUID()) => request(app.getHttpServer()).delete(`${path}/${endpointId}`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send({ expectedVersion });
   const write = (cookie: string, suffix: string, body: object, key = randomUUID()) => request(app.getHttpServer()).post(`${path}/${suffix}`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send(body);
   const patch = (cookie: string, endpointId: string, body: object) => request(app.getHttpServer()).patch(`${path}/${endpointId}`).set('Cookie', cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', randomUUID()).send(body);
-  const send = (code: string, token: string, key = randomUUID()) => request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`).set('Authorization', `Bearer ${token}`).set('Idempotency-Key', key).set('Content-Type', 'application/json').send('{"value":1}');
+  const send = (code: string, token: string, key = randomUUID()) => request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encodeURIComponent(code)}/messages`).set('Authorization', `Bearer ${token}`).set('Idempotency-Key', key).set('Content-Type', 'application/json').send('[{"value":1}]');
   async function credential(item: Awaited<ReturnType<typeof fixture>>, name = 'Delete credential') {
     return (await write(item.cookie, `${item.endpoint.id}/credentials`, { name }).expect(201)).body as { id: string; secret: string };
   }

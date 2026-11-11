@@ -110,7 +110,7 @@ describe('real integration retention, bounded results and administrative lifecyc
       }
       expect(firstWaiting).toBe(true);
       incoming = request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${item.endpoint.id}/messages`).set('Authorization', item.authorization)
-        .set('Content-Type', 'application/json').set('Idempotency-Key', randomUUID()).send('{"concurrent":true}').then(response => response);
+        .set('Content-Type', 'application/json').set('Idempotency-Key', randomUUID()).send('[{"concurrent":true}]').then(response => response);
       const secondDeadline = Date.now() + 5000;
       let bothWaiting = false;
       while (Date.now() < secondDeadline && !bothWaiting) {

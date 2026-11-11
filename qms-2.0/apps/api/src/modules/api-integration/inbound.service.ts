@@ -77,7 +77,7 @@ function validBody(request: Request, maximum: number): { bytes: Buffer; text: st
       else if (character === '}' || character === ']') depth--;
     }
     const value: unknown = JSON.parse(text);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
+    if (!Array.isArray(value) || value.some(item => !item || typeof item !== 'object' || Array.isArray(item))) throw new Error();
     return { bytes, text };
   } catch { return reject('INTEGRATION_MESSAGE_INVALID', 400); }
 }

@@ -14,7 +14,7 @@ export class InboundController {
   @RequireInboundMachine()
   @ApiParam({ name: 'endpointId', required: true, description: '接口编码（区分大小写），或原有接口 UUID。', schema: { type: 'string', maxLength: 64 } })
   @ApiHeader({ name: 'Authorization', required: true })
-  @ApiBody({ schema: { type: 'object', additionalProperties: true } })
+  @ApiBody({ schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
   @ApiResponse({ status: 201, type: InboundReceiptDto })
   @ApiResponse({ status: 204, description: '接收成功，接口配置关闭回执正文。' })
   @ApiResponse({ status: 'default', type: ErrorResponse })

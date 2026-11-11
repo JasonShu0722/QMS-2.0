@@ -39,7 +39,7 @@ it('bounds machine raw bodies independently of ordinary JSON writes', async () =
   app.useGlobalFilters(new GlobalExceptionFilter());
   await app.init();
   try {
-    const payload = JSON.stringify({ value: 'x'.repeat(150000) });
+    const payload = JSON.stringify([{ value: 'x'.repeat(150000) }]);
     const response = await request(app.getHttpServer()).post('/api/v1/integrations/inbound/2b15bf72-fc50-4ca2-8e42-33a07be072dc/messages').set('Content-Type', 'application/json').send(payload).expect(201);
     expect(response.body).toEqual({ raw: true, bytes: Buffer.byteLength(payload) });
     const mixedCase = await request(app.getHttpServer()).post('/api/v1/Integrations/Inbound/2b15bf72-fc50-4ca2-8e42-33a07be072dc/Messages').set('Content-Type', 'application/json').send(payload).expect(201);
@@ -74,7 +74,7 @@ it('preserves raw bytes for percent-encoded endpoint UUIDs without widening ordi
     const endpointId = '2b15bf72-fc50-4ca2-8e42-33a07be072dc';
     const encoded = `%32${endpointId.slice(1)}`;
     for (const length of [8, 150000]) {
-      const payload = JSON.stringify({ value: 'x'.repeat(length) });
+      const payload = JSON.stringify([{ value: 'x'.repeat(length) }]);
       for (const path of [
         `/api/v1/integrations/inbound/${encoded}/messages`,
         `/api/v1/Integrations/Inbound/${encoded.toUpperCase()}/Messages/`,
@@ -84,6 +84,6 @@ it('preserves raw bytes for percent-encoded endpoint UUIDs without widening ordi
       }
     }
     await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Content-Type', 'application/json').send('x'.repeat(1048577)).expect(413);
-    await request(app.getHttpServer()).post('/api/v1/integrations/inbound/ordinary-json').send({ value: 'x'.repeat(150000) }).expect(413);
+    await request(app.getHttpServer()).post('/api/v1/integrations/inbound/ordinary-json').send([{ value: 'x'.repeat(150000) }]).expect(413);
   } finally { await app.close(); }
 });
