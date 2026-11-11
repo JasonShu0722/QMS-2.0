@@ -93,7 +93,7 @@ it('clears old console grants on identity change and ignores a late old response
   expect(await screen.findByText('无权访问此管理模块')).toBeVisible();
   await act(async () => resolveOld(context()));
   expect(screen.queryByText('Sensitive workflow')).not.toBeInTheDocument();
-  expect(screen.getByLabelText('当前身份')).toHaveTextContent('new-actor');
+  expect(screen.queryByLabelText('当前身份')).not.toBeInTheDocument();
 });
 
 it('updates the business menu, header and work tab when language changes', async () => {

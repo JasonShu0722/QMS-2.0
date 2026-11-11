@@ -2113,6 +2113,22 @@ export interface paths {
         get: operations["IntegrationReceiptController_receipts"];
         put?: never;
         post?: never;
+        delete: operations["IntegrationReceiptController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/integrations/receipt-endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IntegrationReceiptController_endpoints"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10528,6 +10544,8 @@ export interface components {
             organizationId: string;
             /** Format: uuid */
             endpointId: string;
+            endpointName: string;
+            endpointCode: string;
             /** Format: uuid */
             credentialId: string;
             messageId: string;
@@ -10553,6 +10571,27 @@ export interface components {
             /** Format: date-time */
             to: string;
         };
+        DeleteIntegrationReceiptsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            receiptIds: string[];
+        };
+        IntegrationReceiptDeleteResultDto: {
+            deletedCount: number;
+            receiptIds: string[];
+        };
+        IntegrationReceiptEndpointDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            code: string;
+        };
+        IntegrationReceiptEndpointPageDto: {
+            items: components["schemas"]["IntegrationReceiptEndpointDto"][];
+            total: number;
+            page: number;
+            limit: number;
+        };
         IntegrationAttemptDto: {
             /** Format: uuid */
             id: string;
@@ -10562,6 +10601,8 @@ export interface components {
             organizationId: string;
             /** Format: uuid */
             endpointId: string;
+            endpointName: string;
+            endpointCode: string;
             /** Format: uuid */
             credentialId: string;
             messageId?: string;
@@ -22478,6 +22519,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationReceiptPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    IntegrationReceiptController_remove: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteIntegrationReceiptsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationReceiptDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    IntegrationReceiptController_endpoints: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationReceiptEndpointPageDto"];
                 };
             };
             default: {

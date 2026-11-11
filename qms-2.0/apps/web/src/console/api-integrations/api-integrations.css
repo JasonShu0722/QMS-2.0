@@ -9,6 +9,14 @@
 .qms-integration-capacity-warning { color: var(--qms-warning); font-weight: 600; }
 .qms-integration-instructions { border-top: 1px solid var(--qms-border); padding-top: 12px; min-width: 0; }
 .qms-integration-instructions pre, .qms-integration-payload { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--qms-surface); padding: 12px; border: 1px solid var(--qms-border); border-radius: 6px; max-height: 420px; overflow: auto; }
+.qms-integration-detail-modal { padding-bottom: 16px; }
+.qms-integration-detail-modal .ant-modal-container, .qms-integration-detail-modal .ant-modal-content { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.qms-integration-detail-modal .ant-modal-body { min-height: 0; overflow: auto; }
+.qms-integration-payload-frame { position: relative; min-height: 0; padding-top: 4px; }
+.qms-integration-payload-frame .qms-integration-payload { max-height: min(52dvh, 420px); padding-top: 38px; }
+.qms-integration-payload-copy { position: absolute; z-index: 1; top: 14px; right: 10px; }
+.qms-integration-copy-feedback { display: block; margin-top: 4px; color: var(--qms-success); font-size: 12px; }
+.qms-integration-copy-error { color: var(--qms-danger); }
 .qms-integration-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .qms-integration-filters label { display: grid; gap: 4px; min-width: 0; }
 .qms-integration-filters .ant-select { width: 100%; }

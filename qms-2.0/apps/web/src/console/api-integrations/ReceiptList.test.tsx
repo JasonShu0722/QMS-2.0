@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { apiRequest } from '../../api/client';
+import { ApiError, apiRequest } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { getLedgerSessionEpoch } from '../../ui/ledger/preferences';
@@ -10,24 +11,33 @@ import { ConsoleTheme } from '../ConsoleTheme';
 import { ReceiptList } from './ReceiptList';
 import type { IntegrationScope } from './integration-ui';
 
-vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn() }));
+const mutate = vi.hoisted(() => vi.fn());
+vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: () => mutate }));
 const read = vi.mocked(apiRequest);
+const clipboard = vi.fn(async (_value: string) => {});
 const organizationId = '22222222-2222-4222-8222-222222222222';
 const receiptId = '44444444-4444-4444-8444-444444444444';
 const endpointId = '33333333-3333-4333-8333-333333333333';
 const traceId = '55555555-5555-4555-8555-555555555555';
-const receipt = { id: receiptId, organizationId, endpointId, credentialId: traceId, messageId: 'message-001', sourceCode: 'MES', sourceName: '制造来源', configurationVersion: 2,
+const receipt = { id: receiptId, organizationId, endpointId, endpointName: '物料成品信息', endpointCode: 'part', credentialId: traceId, messageId: 'message-001', sourceCode: 'MES', sourceName: '制造来源', configurationVersion: 2,
   receivedAt: '2026-11-09T03:00:00.000Z', bodyExpiresAt: '2026-11-16T03:00:00.000Z', metadataExpiresAt: '2027-02-07T03:00:00.000Z', bodyAvailable: true, payloadBytes: 20 };
+const secondReceipt = { ...receipt, id: '66666666-6666-4666-8666-666666666666', messageId: 'message-002' };
 let scope: IntegrationScope;
 function page(path: string) {
   const query = new URL(path, 'http://localhost').searchParams;
+  if (path.includes('/receipt-endpoints?')) return { items: [{ id: endpointId, name: receipt.endpointName, code: receipt.endpointCode }], total: 1, page: 1, limit: 20 };
   return { items: [receipt], total: 1, page: Number(query.get('page') ?? 1), limit: Number(query.get('limit') ?? 20), from: query.get('from'), to: query.get('to') };
 }
 function view() {
   return render(<LanguageProvider><ConsoleTheme><MemoryRouter><UnsavedChangesProvider><ReceiptList scope={scope} /></UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider>);
 }
+function openFilters() {
+  fireEvent.click(screen.getByRole('button', { name: '筛选条件' }));
+}
 beforeEach(() => {
-  vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); read.mockReset(); localStorage.clear();
+  vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); read.mockReset(); mutate.mockReset(); clipboard.mockReset(); localStorage.clear();
+  clipboard.mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboard } });
   const session = `INTERNAL:${organizationId}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`; useWorkTabsStore.getState().bindSession(session);
   scope = { organizationId, session, epoch: getLedgerSessionEpoch(), permissions: ['integration:receipts:read', 'integration:payload:read'], deny: vi.fn() };
   read.mockImplementation(async path => path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
@@ -40,6 +50,15 @@ it('reads receipt metadata in the verified organization without requiring config
   const query = new URL(read.mock.calls.find(([path]) => path.includes('/receipts?'))![0], 'http://localhost').searchParams;
   expect(query.get('organizationId')).toBe(organizationId); expect(query.get('limit')).toBe('20');
   expect(read.mock.calls.some(([path]) => path.includes('/endpoints'))).toBe(false);
+});
+
+it('keeps receipt filters collapsed until the operator opens them', async () => {
+  view(); await screen.findByText('message-001');
+  expect(screen.getByRole('button', { name: '筛选条件' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('combobox', { name: '接口名称或编码' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '筛选条件' }));
+  expect(screen.getByRole('button', { name: '筛选条件' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('combobox', { name: '接口名称或编码' })).toBeVisible();
 });
 
 it('does not disclose a payload or provide a payload action without its separate permission', async () => {
@@ -56,9 +75,22 @@ it('renders an authorized payload as text rather than executing markup', async (
     : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
   const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
-  fireEvent.click(dialog.getByRole('button', { name: '查看接收正文' }));
   await waitFor(() => expect(dialog.getByText(payload)).toBeVisible());
   const body = dialog.getByLabelText('接收正文'); expect(body.tagName).toBe('PRE'); expect(body.querySelector('img,script')).toBeNull();
+});
+
+it('loads an authorized payload automatically and keeps it in a scrollable frame with copy action', async () => {
+  const payload = '[{"MTRL_ID":"M20261109001"}]';
+  read.mockImplementation(async path => path.includes('/payload') ? { id: receiptId, text: payload, bodyExpiresAt: receipt.bodyExpiresAt }
+    : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
+  const body = await dialog.findByLabelText('接收正文');
+  expect(body).toHaveTextContent(payload); expect(body).toHaveClass('qms-integration-payload');
+  await waitFor(() => expect(dialog.getByRole('button', { name: '复制接收正文' })).toBeVisible());
+  fireEvent.click(dialog.getByRole('button', { name: '复制接收正文' }));
+  await waitFor(() => expect(clipboard).toHaveBeenCalledWith(payload));
+  expect(await dialog.findByText('已复制接收正文')).toBeVisible();
 });
 
 it('does not reopen a closed payload detail when its response arrives late', async () => {
@@ -66,7 +98,7 @@ it('does not reopen a closed payload detail when its response arrives late', asy
   read.mockImplementation(async path => path.includes('/payload') ? new Promise(done => { resolve = done; })
     : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
-  const dialog = within(await screen.findByRole('dialog', { name: '接收详情' })); fireEvent.click(dialog.getByRole('button', { name: '查看接收正文' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
   fireEvent.click(dialog.getByRole('button', { name: '关闭' }));
   await act(async () => resolve({ id: receiptId, text: 'OLD_PRIVATE_PAYLOAD', bodyExpiresAt: receipt.bodyExpiresAt }));
   expect(screen.queryByText('OLD_PRIVATE_PAYLOAD')).not.toBeInTheDocument();
@@ -82,7 +114,7 @@ it('queries request outcomes by their server trace ID and exposes collection gap
   read.mockImplementation(async path => path.includes('/attempts') ? { ...page(path), collectionStatus: 'UNAVAILABLE', items: [{ id: traceId, traceId, organizationId, endpointId, credentialId: receiptId,
     messageId: 'message-001', configurationVersion: 2, returnReceipt: false, statusCode: 409, outcome: 'REJECTED', reasonCode: 'INTEGRATION_MESSAGE_CONFLICT', durationMs: 4, observedAt: receipt.receivedAt }] }
     : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNAVAILABLE' } : page(path));
-  view(); await screen.findByText('message-001');
+  view(); await screen.findByText('message-001'); openFilters();
   fireEvent.mouseDown(screen.getByLabelText('记录视图', { selector: 'input' })); fireEvent.click(await screen.findByText('请求结果', { selector: '.ant-select-item-option-content' }));
   expect(await screen.findByText('INTEGRATION_MESSAGE_CONFLICT')).toBeVisible(); expect(screen.getByText('请求明细采集不可用，部分请求可能没有记录')).toBeVisible();
   fireEvent.change(screen.getByLabelText('请求追踪号', { selector: 'input' }), { target: { value: traceId } }); fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
@@ -92,7 +124,7 @@ it('queries request outcomes by their server trace ID and exposes collection gap
 it('filters both receiving views by a trimmed source code and resets it when switching views', async () => {
   read.mockImplementation(async path => path.includes('/attempts') ? { ...page(path), items: [], total: 0, collectionStatus: 'UNKNOWN' }
     : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
-  view(); await screen.findByText('message-001');
+  view(); await screen.findByText('message-001'); openFilters();
   fireEvent.change(screen.getByLabelText('来源系统编码', { selector: 'input' }), { target: { value: ' MES ' } });
   fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
   await waitFor(() => expect(read.mock.calls.some(([path]) => path.includes('/receipts?') && new URL(path, 'http://localhost').searchParams.get('sourceCode') === 'MES')).toBe(true));
@@ -105,7 +137,7 @@ it('filters both receiving views by a trimmed source code and resets it when swi
 });
 
 it('rejects malformed or oversized source codes without requesting records', async () => {
-  view(); await screen.findByText('message-001');
+  view(); await screen.findByText('message-001'); openFilters();
   const callsBeforeInvalidInput = read.mock.calls.length;
   for (const sourceCode of ['invalid source', 'A'.repeat(65)]) {
     fireEvent.change(screen.getByLabelText('来源系统编码', { selector: 'input' }), { target: { value: sourceCode } });
@@ -113,4 +145,175 @@ it('rejects malformed or oversized source codes without requesting records', asy
     expect(screen.getByRole('alert')).toBeVisible();
     expect(read.mock.calls).toHaveLength(callsBeforeInvalidInput);
   }
+});
+
+it('supports selecting the current page and confirming a bulk receipt deletion', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  read.mockImplementation(async path => path.includes('/status')
+    ? { usedBodyBytes: 40, capacityBytes: 1073741824, receiptCount: 2, receiptLimit: 100000, requestCollection: 'UNKNOWN' }
+    : { ...page(path), items: [receipt, secondReceipt], total: 2 });
+  view(); await screen.findByText('message-002');
+  const selectPage = screen.getByRole('checkbox', { name: '选择当前页' });
+  expect(selectPage).not.toBeChecked();
+  fireEvent.click(selectPage);
+  expect(screen.getByText('已选择 2 条')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
+  const confirm = await screen.findByRole('dialog');
+  expect(confirm).toHaveTextContent('确认删除选中的 2 条接收记录');
+  await waitFor(() => expect(within(confirm).getByRole('button', { name: '删除' })).toBeVisible());
+});
+
+it('offers single receipt deletion only to integration managers', async () => {
+  scope.permissions = ['integration:receipts:read'];
+  view(); await screen.findByText('message-001');
+  expect(screen.queryByRole('button', { name: '删除消息message-001' })).not.toBeInTheDocument();
+});
+
+it('deletes the confirmed IDs through the scoped writer and refreshes records and capacity', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  mutate.mockResolvedValue({ deletedCount: 1, receiptIds: [receiptId] });
+  view(); await screen.findByText('message-001');
+  const recordReads = read.mock.calls.filter(([path]) => path.includes('/receipts?')).length;
+  const statusReads = read.mock.calls.filter(([path]) => path.includes('/status?')).length;
+  fireEvent.click(screen.getByRole('button', { name: '删除消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除接收记录' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledWith('/api/v1/admin/integrations/receipts', 'DELETE', { organizationId, receiptIds: [receiptId] }, expect.any(AbortSignal)));
+  await waitFor(() => expect(read.mock.calls.filter(([path]) => path.includes('/receipts?')).length).toBeGreaterThan(recordReads));
+  expect(read.mock.calls.filter(([path]) => path.includes('/status?')).length).toBeGreaterThan(statusReads);
+  expect(screen.queryByRole('dialog', { name: '删除接收记录' })).not.toBeInTheDocument();
+});
+
+it('removes its delete confirmation when the receiving page unmounts', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  const mounted = view(); await screen.findByText('message-001');
+  fireEvent.click(screen.getByRole('button', { name: '删除消息message-001' }));
+  await screen.findByRole('dialog', { name: '删除接收记录' });
+  mounted.unmount();
+  expect(screen.queryByRole('dialog', { name: '删除接收记录' })).not.toBeInTheDocument();
+  expect(mutate).not.toHaveBeenCalled();
+});
+
+it('searches interface names and codes with receipt-read access and submits the selected UUID', async () => {
+  scope.permissions = ['integration:receipts:read'];
+  view(); await screen.findByText('message-001'); openFilters();
+  const selector = screen.getByRole('combobox', { name: '接口名称或编码' });
+  fireEvent.change(selector, { target: { value: '物料' } });
+  await waitFor(() => expect(read.mock.calls.some(([path]) => path.includes('/receipt-endpoints?') && new URL(path, 'http://localhost').searchParams.get('search') === '物料')).toBe(true));
+  fireEvent.mouseDown(selector);
+  fireEvent.click(await screen.findByText(/物料成品信息 \(part\)/, { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
+  await waitFor(() => expect(read.mock.calls.some(([path]) => path.includes('/receipts?') && new URL(path, 'http://localhost').searchParams.get('endpointId') === endpointId)).toBe(true));
+  expect(read.mock.calls.some(([path]) => path.includes('/endpoints?'))).toBe(false);
+});
+
+it('loads all 21 matching endpoints despite a retained selection and retries a failed second page', async () => {
+  const candidates = Array.from({ length: 21 }, (_, index) => ({
+    id: `${String(index + 1).padStart(8, '0')}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+    name: `B接口${String(index + 1).padStart(2, '0')}`, code: `B${index + 1}`,
+  }));
+  const candidateRequests: Array<{ search: string; page: number }> = [];
+  let rejectSecondPage!: (cause: Error) => void;
+  let secondPageAttempts = 0;
+  read.mockImplementation(async path => {
+    if (path.includes('/receipt-endpoints?')) {
+      const query = new URL(path, 'http://localhost').searchParams;
+      const search = query.get('search') ?? '';
+      const candidatePage = Number(query.get('page'));
+      candidateRequests.push({ search, page: candidatePage });
+      if (search === 'A') return { items: [{ id: endpointId, name: 'A旧接口', code: 'A' }], total: 1, page: 1, limit: 20 };
+      if (search === 'B' && candidatePage === 2 && ++secondPageAttempts === 1) {
+        return new Promise((_resolve, reject) => { rejectSecondPage = reject; });
+      }
+      return { items: candidates.slice((candidatePage - 1) * 20, candidatePage * 20), total: 21, page: candidatePage, limit: 20 };
+    }
+    return path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path);
+  });
+  view(); await screen.findByText('message-001'); openFilters();
+  const selector = screen.getByRole('combobox', { name: '接口名称或编码' });
+  fireEvent.change(selector, { target: { value: 'A' } });
+  fireEvent.mouseDown(selector);
+  const oldOption = await screen.findByText(`A旧接口 (A) · ${endpointId}`, { selector: '.ant-select-item-option-content' });
+  await waitFor(() => expect(oldOption).toBeVisible());
+  fireEvent.click(oldOption);
+  fireEvent.change(selector, { target: { value: 'B' } });
+  fireEvent.mouseDown(selector);
+  const firstMatch = await screen.findByText(`B接口01 (B1) · ${candidates[0]!.id}`, { selector: '.ant-select-item-option-content' });
+  await waitFor(() => expect(firstMatch).toBeVisible());
+  const loadMore = await screen.findByRole('button', { name: '加载更多接口' });
+  await waitFor(() => expect(loadMore).toBeEnabled());
+  expect(loadMore).toHaveAttribute('type', 'button');
+  const recordReads = read.mock.calls.filter(([path]) => path.includes('/receipts?')).length;
+  fireEvent.click(loadMore);
+  await waitFor(() => expect(candidateRequests.filter(request => request.search === 'B' && request.page === 2)).toHaveLength(1));
+  expect(loadMore).toBeDisabled();
+  await act(async () => rejectSecondPage(new Error('candidate page unavailable')));
+  const failure = await screen.findByRole('alert');
+  expect(failure).toHaveTextContent('接口候选加载失败，请重试');
+  expect(firstMatch).toBeVisible();
+  expect(screen.getByText(`A旧接口 (A) · ${endpointId}`, { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+  const retry = within(failure).getByRole('button');
+  await waitFor(() => expect(retry).toBeEnabled());
+  fireEvent.click(retry);
+  await waitFor(() => expect(candidateRequests.filter(request => request.search === 'B' && request.page === 2)).toHaveLength(2));
+  expect(candidateRequests.at(-1)).toEqual({ search: 'B', page: 2 });
+  await waitFor(() => expect(screen.queryByRole('button', { name: '加载更多接口' })).not.toBeInTheDocument());
+  expect(candidateRequests.filter(request => request.search === 'B' && request.page === 2)).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: '加载更多接口' })).not.toBeInTheDocument();
+  expect(read.mock.calls.filter(([path]) => path.includes('/receipts?'))).toHaveLength(recordReads);
+});
+
+it('reports clipboard failure without claiming that the payload was copied', async () => {
+  clipboard.mockRejectedValue(new Error('clipboard denied'));
+  read.mockImplementation(async path => path.includes('/payload') ? { id: receiptId, text: '[{}]', bodyExpiresAt: receipt.bodyExpiresAt }
+    : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
+  fireEvent.click(await dialog.findByRole('button', { name: '复制接收正文' }));
+  expect(await dialog.findByRole('alert')).toHaveTextContent('复制失败，请重试');
+  expect(dialog.queryByText('已复制接收正文')).not.toBeInTheDocument();
+});
+
+it('ignores the first StrictMode payload request and renders only the second response', async () => {
+  const resolvers: Array<(value: unknown) => void> = [];
+  read.mockImplementation(async (path) => path.includes('/payload')
+    ? new Promise(resolve => { resolvers.push(resolve); })
+    : path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path));
+  render(<StrictMode><LanguageProvider><ConsoleTheme><MemoryRouter><UnsavedChangesProvider><ReceiptList scope={scope} /></UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider></StrictMode>);
+  await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
+  await waitFor(() => expect(resolvers.length).toBe(2));
+  const currentResolver = resolvers.at(-1)!;
+  await act(async () => currentResolver({ id: receiptId, text: 'CURRENT_PAYLOAD', bodyExpiresAt: receipt.bodyExpiresAt }));
+  await waitFor(() => expect(dialog.getByText('CURRENT_PAYLOAD')).toBeVisible());
+  await act(async () => resolvers[0]!({ id: receiptId, text: 'OLD_PAYLOAD', bodyExpiresAt: receipt.bodyExpiresAt }));
+  expect(dialog.queryByText('OLD_PAYLOAD')).not.toBeInTheDocument();
+});
+
+it('keeps a known delete failure visible after refreshing the record list', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  mutate.mockRejectedValue(new ApiError({ code: 'INTEGRATION_RECEIPT_NOT_FOUND', message: 'missing' }, 404));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '删除消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除接收记录' })); fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('删除未完成，请检查后重试');
+  const refresh = await screen.findByRole('button', { name: '刷新记录' });
+  await waitFor(() => expect(refresh).toBeEnabled());
+  fireEvent.click(refresh);
+  expect(await screen.findByRole('alert')).toHaveTextContent('删除未完成，请检查后重试');
+});
+
+it.each([408, 500])('keeps the original delete request and navigation busy for an unknown %s result', async status => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  mutate.mockRejectedValue(new ApiError({ code: `HTTP_${status}`, message: 'unknown' }, status));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '删除消息message-001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除接收记录' })); fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await waitFor(() => expect(screen.getAllByRole('alert').every(alert => alert.textContent?.includes('删除结果未确认'))).toBe(true));
+  expect(await dialog.findByRole('button', { name: '重试删除' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新记录' })).toBeDisabled();
+  expect(dialog.getByRole('button', { name: '取消' })).toBeDisabled();
+  const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload);
+  expect(unload.defaultPrevented).toBe(true);
+  fireEvent.click(dialog.getByRole('button', { name: '重试删除' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2));
+  expect(mutate.mock.calls[1]![2]).toEqual(mutate.mock.calls[0]![2]);
 });

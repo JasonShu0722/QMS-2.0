@@ -21,7 +21,7 @@ function context(target: string = a.id): ConsoleContext { return { actor: { id: 
   { key: 'workflows', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', organizationId: a.id, permissions: ['workflow:manage'] },
 ] }; }
 beforeEach(() => { getContext.mockReset(); useWorkTabsStore.getState().bindSession('INTERNAL:a:actor'); localStorage.clear(); });
-function Page({ dirty = false }: { dirty?: boolean }) { const location = useLocation(); useUnsavedChanges(dirty); return <div>受保护内容<output aria-label="path">{location.pathname}{location.search}</output></div>; }
+function Page({ dirty = false }: { dirty?: boolean }) { const location = useLocation(); const { context } = useConsoleContext(); useUnsavedChanges(dirty); return <div>受保护内容<output aria-label="verified actor">{context.actor.id}</output><output aria-label="verified home">{context.actor.homeOrganization.name}</output><output aria-label="path">{location.pathname}{location.search}</output></div>; }
 function renderLayout(path = '/console/users', dirty = false) { return render(<MemoryRouter initialEntries={[path]}><ConsoleLayout><Page dirty={dirty} /></ConsoleLayout></MemoryRouter>); }
 function LedgerPreferenceProbe() {
   const [pageSize, setPageSize] = useLedgerPageSize('scope-probe');
@@ -103,7 +103,7 @@ it('scopes session-home console ledger preferences to the real resource organiza
   fireEvent.click(await screen.findByRole('button', { name: '记住页长 20' }));
   expect(Object.keys(localStorage).filter(key => key.startsWith('qms:ledger:v1:'))).toEqual(['qms:ledger:v1:["INTERNAL:a:actor","a","console","scope-probe","pageSize"]']);
 });
-it('keeps one focused home heading and the target selector while disclosing identity and resource facts on demand', async () => {
+it('keeps one semantic focused home heading and the compact target selector without redundant identity facts', async () => {
   getContext.mockResolvedValue(context());
   renderLayout('/console');
   await screen.findByText('受保护内容');
@@ -112,23 +112,33 @@ it('keeps one focused home heading and the target selector while disclosing iden
   await waitFor(() => expect(heading).toHaveFocus());
   expect(screen.queryByRole('navigation', { name: '面包屑' })).not.toBeInTheDocument();
   expect(within(main).queryByText('QMS / 管理工作空间')).not.toBeInTheDocument();
-  const target = within(main).getByRole('combobox', { name: '管理目标组织' });
+  const target = within(screen.getByRole('banner')).getByRole('combobox', { name: '管理目标组织' });
   expect(target).toHaveValue('a');
-  const identity = screen.getByLabelText('当前身份');
-  const details = identity.closest('details');
-  expect(details).not.toBeNull();
-  expect(details).not.toHaveAttribute('open');
-  expect(identity).not.toBeVisible();
-  fireEvent.click(within(details!).getByText(/身份与资源范围/));
-  expect(identity).toBeVisible();
-  expect(identity).toHaveTextContent('actor');
-  expect(screen.getByLabelText('会话所属组织')).toHaveTextContent('组织A (A)');
-  expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('组织A · 组织范围');
+  expect(screen.queryByLabelText('当前身份')).not.toBeInTheDocument();
+  expect(screen.queryByText(/身份与资源范围/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText('verified actor')).toHaveTextContent('actor');
+  expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
   getContext.mockResolvedValue(context('b'));
   fireEvent.change(target, { target: { value: 'b' } });
   await waitFor(() => expect(screen.getByLabelText('path')).toHaveTextContent('organizationId=b'));
   await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '管理首页' })).toHaveFocus());
   expect(screen.getByRole('combobox', { name: '管理目标组织' })).toHaveValue('b');
+});
+
+it('removes the redundant identity block and keeps the target selector in the topbar', async () => {
+  getContext.mockResolvedValue(context());
+  renderLayout('/console');
+  await screen.findByText('受保护内容');
+  expect(screen.queryByText('身份与资源范围')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('banner')).getByRole('combobox', { name: '管理目标组织' })).toHaveValue('a');
+  expect(within(screen.getByRole('main')).queryByRole('combobox', { name: '管理目标组织' })).not.toBeInTheDocument();
+});
+
+it('does not show a target organization selector for a session-home route', async () => {
+  getContext.mockResolvedValue(context());
+  renderLayout('/console/workflows');
+  await screen.findByText('受保护内容');
+  expect(screen.getByRole('banner').querySelector('[aria-label="管理目标组织"]')).toBeNull();
 });
 it('retains a real return link and heading focus on a deep workflow route', async () => {
   getContext.mockResolvedValue(context('b'));
@@ -137,7 +147,7 @@ it('retains a real return link and heading focus on a deep workflow route', asyn
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
   await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus());
-  expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
+  expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
   const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
@@ -163,8 +173,8 @@ it('verifies scope before rendering real children and navigates without writing 
   expect(screen.queryByText('受保护内容')).not.toBeInTheDocument();
   await act(async () => resolve(context()));
   expect(await screen.findByText('受保护内容')).toBeInTheDocument();
-  expect(screen.getByLabelText('当前身份')).toHaveTextContent('actor');
-  expect(screen.getByLabelText('会话所属组织')).toHaveTextContent('组织A');
+  expect(screen.getByLabelText('verified actor')).toHaveTextContent('actor');
+  expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
   getContext.mockResolvedValue(context());
   fireEvent.click(screen.getByRole('link', { name: '流程管理' }));
   expect(await screen.findByLabelText('path')).toHaveTextContent('/console/workflows');
@@ -185,7 +195,7 @@ it('verifies an uppercase target UUID against the same canonical context without
   await act(async () => resolve(result));
   expect(getContext).toHaveBeenCalledWith(target.id, expect.any(AbortSignal));
   expect(screen.getByText('受保护内容')).toBeInTheDocument();
-  expect(screen.getByLabelText('当前身份')).toHaveTextContent(actor.id);
+  expect(screen.getByLabelText('verified actor')).toHaveTextContent(actor.id);
   expect(screen.getByRole('combobox', { name: '管理目标组织' })).toHaveValue(target.id);
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
 });
@@ -202,9 +212,8 @@ it('fixes session-home pages to their true organization, not the selected target
   getContext.mockResolvedValue(context('b'));
   renderLayout('/console/workflows?organizationId=b');
   await screen.findByText('受保护内容');
-  expect(screen.getByLabelText('模块资源范围')).toHaveTextContent('组织A');
   expect(screen.queryByRole('combobox', { name: '管理目标组织' })).not.toBeInTheDocument();
-  expect(screen.getByText('所属组织').parentElement).toHaveTextContent('组织A (A)');
+  expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
   expect(getContext).toHaveBeenCalledWith('b', expect.any(AbortSignal));
 });
 it('clears sensitive context on explicit target 403, and retries a network failure without home fallback', async () => {
@@ -225,7 +234,7 @@ it('discards late responses after identity changes, including aborted requests t
   await act(async () => useWorkTabsStore.getState().bindSession('INTERNAL:a:new-actor'));
   await screen.findByText('受保护内容');
   await act(async () => old(context()));
-  expect(screen.getByLabelText('当前身份')).toHaveTextContent('new-actor');
+  expect(screen.getByLabelText('verified actor')).toHaveTextContent('new-actor');
 });
 it('uses the existing unsaved guard for organization switching', async () => {
   getContext.mockImplementation(async target => context(target));
@@ -245,8 +254,8 @@ it('clears and rejects an old request across a batched A to B to A session trans
   act(() => { useWorkTabsStore.getState().bindSession('INTERNAL:a:other'); useWorkTabsStore.getState().bindSession('INTERNAL:a:actor'); });
   await act(async () => old({ ...context(), actor: { ...context().actor, id: 'stale-sensitive-actor' } }));
   await screen.findByText('受保护内容');
-  expect(screen.getByLabelText('当前身份')).toHaveTextContent('actor');
-  expect(screen.getByLabelText('当前身份')).not.toHaveTextContent('stale-sensitive-actor');
+  expect(screen.getByLabelText('verified actor')).toHaveTextContent('actor');
+  expect(screen.getByLabelText('verified actor')).not.toHaveTextContent('stale-sensitive-actor');
 });
 it('refuses a response for a different actor than the bound session', async () => {
   getContext.mockResolvedValue({ ...context(), actor: { ...context().actor, id: 'another' } });

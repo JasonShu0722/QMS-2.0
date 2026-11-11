@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 import { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
 export const INTEGRATION_ATTEMPT_OUTCOMES = ['RECEIVED', 'DUPLICATE', 'REJECTED', 'FAILED', 'UNKNOWN'] as const;
@@ -13,10 +13,34 @@ export class IntegrationReceiptQueryDto extends IntegrationPageQueryDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() traceId?: string;
   @ApiPropertyOptional({ enum: INTEGRATION_ATTEMPT_OUTCOMES }) @IsOptional() @IsIn(INTEGRATION_ATTEMPT_OUTCOMES) outcome?: (typeof INTEGRATION_ATTEMPT_OUTCOMES)[number];
 }
+export class DeleteIntegrationReceiptsDto {
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
+  @ApiProperty({ type: [String], minItems: 1, maxItems: 100, format: 'uuid' }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsUUID('all', { each: true }) receiptIds!: string[];
+}
+export class IntegrationReceiptDeleteResultDto {
+  @ApiProperty() deletedCount!: number;
+  @ApiProperty({ type: [String], format: 'uuid' }) receiptIds!: string[];
+}
+export class IntegrationReceiptEndpointQueryDto extends IntegrationPageQueryDto {
+  @ApiPropertyOptional({ maxLength: 120 }) @IsOptional() @IsString() @MaxLength(120) search?: string;
+}
+export class IntegrationReceiptEndpointDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() code!: string;
+}
+export class IntegrationReceiptEndpointPageDto {
+  @ApiProperty({ type: [IntegrationReceiptEndpointDto] }) items!: IntegrationReceiptEndpointDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() limit!: number;
+}
 export class IntegrationReceiptDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ format: 'uuid' }) endpointId!: string;
+  @ApiProperty() endpointName!: string;
+  @ApiProperty() endpointCode!: string;
   @ApiProperty({ format: 'uuid' }) credentialId!: string;
   @ApiProperty() messageId!: string;
   @ApiProperty() sourceCode!: string;
@@ -41,6 +65,8 @@ export class IntegrationAttemptDto {
   @ApiProperty({ format: 'uuid' }) traceId!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ format: 'uuid' }) endpointId!: string;
+  @ApiProperty() endpointName!: string;
+  @ApiProperty() endpointCode!: string;
   @ApiProperty({ format: 'uuid' }) credentialId!: string;
   @ApiPropertyOptional() messageId?: string;
   @ApiPropertyOptional({ format: 'uuid' }) receiptId?: string;
