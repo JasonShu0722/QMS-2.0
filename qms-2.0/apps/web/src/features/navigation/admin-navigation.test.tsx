@@ -84,7 +84,8 @@ it.each(['users', 'audit', 'workflow'] as const)('canonicalizes a legacy upperca
   render(<App />);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/admin/console/context?organizationId=${canonicalId}`, expect.anything()));
   expect(new URLSearchParams(window.location.search).get('organizationId')).toBe(canonicalId);
-  expect(await screen.findByLabelText('模块资源范围')).toHaveTextContent(organization.name);
+  if (kind === 'workflow') expect(screen.queryByRole('combobox', { name: '管理目标组织' })).not.toBeInTheDocument();
+  else expect(await screen.findByRole('combobox', { name: '管理目标组织' })).toHaveValue(canonicalId);
   expect(screen.queryByText('管理访问已失效或无权限')).not.toBeInTheDocument();
   if (kind === 'workflow') expect(await screen.findByRole('heading', { name: '真实受控流程' })).toBeVisible();
   else expect(await screen.findByRole('table')).toBeVisible();

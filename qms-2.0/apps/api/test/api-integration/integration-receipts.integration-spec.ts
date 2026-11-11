@@ -11,6 +11,7 @@ import { encryptSecret } from '../../src/common/security/security-keyring.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { jest } from '@jest/globals';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
+import { IntegrationRetentionService } from '../../src/modules/api-integration/integration-retention.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Receipt tests require disposable PostgreSQL.');
 
@@ -34,7 +35,7 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
       await prisma.integrationCredential.deleteMany({ where: scope });
       await prisma.integrationScopeCapacity.deleteMany({ where: scope });
       await prisma.integrationEndpoint.deleteMany({ where: scope });
-      await prisma.auditEvent.deleteMany({ where: scope }); await prisma.userRole.deleteMany({ where: scope });
+      await prisma.auditEvent.deleteMany({ where: scope }); await prisma.adminMutation.deleteMany({ where: scope }); await prisma.userRole.deleteMany({ where: scope });
       await prisma.user.deleteMany({ where: scope }); await prisma.role.deleteMany({ where: scope });
       await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
     }
@@ -48,7 +49,7 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
       const role = await prisma.role.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Receipt permissions', permissions: { create: permissions.map(permission => ({ permissionId: permission.id })) } } });
       await prisma.userRole.create({ data: { organizationId: organization.id, userId: user.id, roleId: role.id } });
     }
-    const cookie = `qms_session=${await sessions.create(user.id, prisma, { mfaVerified: true })}`;
+    const cookie = `qms_session=${await sessions.create(user.id, prisma, { mfaVerified: true, reauthenticated: true })}; qms_csrf=fixture-csrf`;
     const endpoint = await prisma.integrationEndpoint.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Private endpoint', sourceCode, sourceName: 'Internal platform', status: 'ENABLED' } });
     const credential = await prisma.integrationCredential.create({ data: { organizationId: organization.id, endpointId: endpoint.id, name: 'Read fixture', secretHash: 'a'.repeat(64), expiresAt: new Date(Date.now() + 86400000) } });
     const receiptId = `a${randomUUID().slice(1)}`, text = '{"private":"<script>not executed</script>"}';
@@ -75,6 +76,138 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     const payload = await request(app.getHttpServer()).get(`${base}/receipts/${item.receipt.id}/payload`).set('Cookie', item.cookie).expect(200);
     expect(payload.body.text).toBe(item.text);
     expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_PAYLOAD_READ', resourceId: item.receipt.id } })).toBe(1);
+  });
+  it('deletes selected receipts, releases stored bytes, keeps attempts, and records audit', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:payload:read', 'integration:manage']);
+    const secondId = randomUUID();
+    const secondText = '{"private":"second"}';
+    const secondCiphertext = encryptSecret(secondText, `integration:${item.organization.id}:${item.endpoint.id}:${secondId}`);
+    const second = await prisma.integrationReceipt.create({ data: { id: secondId, organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, messageId: randomUUID(), bodyDigest: 'c'.repeat(64), configurationVersion: 1, configurationSnapshot: { returnReceipt: true }, bodyExpiresAt: new Date(Date.now() + 86400000), metadataExpiresAt: new Date(Date.now() + 90 * 86400000), payloadCiphertext: secondCiphertext, payloadBytes: Buffer.byteLength(secondCiphertext) } });
+    const releasedBytes = item.receipt.payloadBytes + second.payloadBytes;
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: releasedBytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: releasedBytes, receiptCount: 2 } });
+    await prisma.integrationRequestAttempt.create({ data: { id: randomUUID(), organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, messageId: item.receipt.messageId, receiptId: item.receipt.id, configurationVersion: 1, returnReceipt: true, statusCode: 201, outcome: 'RECEIVED', durationMs: 1 } });
+    const response = await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds: [item.receipt.id, second.id] }).expect(200);
+    expect(response.body).toEqual({ deletedCount: 2, receiptIds: [item.receipt.id, second.id].sort() });
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(0);
+    expect(await prisma.integrationRequestAttempt.count({ where: { organizationId: item.organization.id, receiptId: item.receipt.id } })).toBe(1);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(0) });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(0), receiptCount: 0 });
+    expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(2);
+  });
+  it('requires session, CSRF, recent authentication and management permission, and rolls back mixed organization IDs', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const foreign = await fixture(['integration:receipts:read', 'integration:manage']);
+    const body = { organizationId: item.organization.id, receiptIds: [item.receipt.id] };
+    const remove = (candidate: typeof item, requestBody = body, key = randomUUID()) => request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', candidate.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', key).send(requestBody);
+    await request(app.getHttpServer()).delete(`${base}/receipts`).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send(body).expect(403);
+    await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('Idempotency-Key', randomUUID()).send(body).expect(403);
+    const readOnly = await fixture(['integration:receipts:read']);
+    await remove(readOnly).expect(403);
+    await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 600000) } });
+    await remove(item).expect(403);
+    await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date() } });
+    const endpointBefore = await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } });
+    const mixed = await remove(item, { organizationId: item.organization.id, receiptIds: [item.receipt.id, foreign.receipt.id] });
+    expect(mixed.status).toBe(404);
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id, id: item.receipt.id } })).toBe(1);
+    expect((await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).usedBodyBytes).toBe(endpointBefore.usedBodyBytes);
+    await remove(foreign, { organizationId: foreign.organization.id, receiptIds: [item.receipt.id] }).expect(404);
+  });
+  it.each([
+    { label: 'empty', receiptIds: [] },
+    { label: 'duplicate', receiptIds: ['RECEIPT', 'RECEIPT'] },
+    { label: 'case duplicate', receiptIds: ['Abcdef01-2345-4678-9abc-def012345678', 'abcdef01-2345-4678-9abc-def012345678'] },
+    { label: 'non UUID', receiptIds: ['not-a-uuid'] },
+    { label: 'too many', receiptIds: Array.from({ length: 101 }, () => randomUUID()) },
+  ])('rejects $label receipt deletion input without changing data', async ({ receiptIds }) => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const before = await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } });
+    await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds }).expect(400);
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(before);
+  });
+  it('replays the same deletion result without decrementing capacity or adding audit rows', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const bytes = item.receipt.payloadBytes;
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: bytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: bytes, receiptCount: 1 } });
+    const key = randomUUID(), body = { organizationId: item.organization.id, receiptIds: [item.receipt.id] };
+    const send = () => request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', key).send(body);
+    const first = await send().expect(200);
+    const second = await send().expect(200);
+    expect(second.body).toEqual(first.body);
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(0);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(0) });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(0), receiptCount: 0 });
+    expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(1);
+  });
+  it('deletes a payload-cleared receipt without decrementing bytes', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    await prisma.integrationReceipt.update({ where: { id: item.receipt.id }, data: { payloadCiphertext: null } });
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: 0 } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: 0, receiptCount: 1 } });
+    await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds: [item.receipt.id] }).expect(200);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(0) });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(0), receiptCount: 0 });
+  });
+  it('rolls back receipt deletion and capacity when its required audit write fails', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const bytes = item.receipt.payloadBytes;
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: bytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: bytes, receiptCount: 1 } });
+    const audit = app.get(AuditLogService), original = audit.record.bind(audit);
+    const injected = jest.spyOn(audit, 'record').mockImplementation(async (input, transaction) => {
+      if (input.action === 'INTEGRATION_RECEIPTS_DELETED') throw new Error('injected receipt delete audit failure');
+      return original(input, transaction);
+    });
+    try {
+      await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds: [item.receipt.id] }).expect(500);
+    } finally { injected.mockRestore(); }
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id, id: item.receipt.id } })).toBe(1);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(bytes) });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(bytes), receiptCount: 1 });
+  });
+  it('serializes concurrent deletion and retention without double releasing capacity', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const bytes = item.receipt.payloadBytes;
+    await prisma.integrationReceipt.update({ where: { id: item.receipt.id }, data: { bodyExpiresAt: new Date(Date.now() - 1000) } });
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: bytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: bytes, receiptCount: 1 } });
+    const deletion = request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds: [item.receipt.id] });
+    const retention = app.get(IntegrationRetentionService).purgeExpired();
+    const [response] = await Promise.all([deletion, retention]);
+    expect([200, 404]).toContain(response.status);
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id, id: item.receipt.id } })).toBe(0);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(0) });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(0), receiptCount: 0 });
+  });
+  it('projects actual endpoint names and codes for receipts and attempts including deleted history', async () => {
+    const item = await fixture(['integration:receipts:read']);
+    await prisma.integrationRequestAttempt.create({ data: { id: randomUUID(), organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, receiptId: item.receipt.id, configurationVersion: 1, returnReceipt: true, statusCode: 201, outcome: 'RECEIVED', durationMs: 1 } });
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { deletedAt: new Date(), status: 'DISABLED' } });
+    for (const suffix of ['receipts', 'attempts', `receipts/${item.receipt.id}`]) {
+      const response = await request(app.getHttpServer()).get(`${base}/${suffix}`).set('Cookie', item.cookie).expect(200);
+      const row = suffix.includes('/') ? response.body : response.body.items[0];
+      expect(row).toMatchObject({ endpointId: item.endpoint.id, endpointName: item.endpoint.name, endpointCode: item.endpoint.code });
+    }
+  });
+  it('offers paginated endpoint candidates to receipt readers with organization isolation and deleted history', async () => {
+    const item = await fixture(['integration:receipts:read']), foreign = await fixture();
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { name: 'Search Alpha', code: 'candidate-alpha', deletedAt: new Date(), status: 'DISABLED' } });
+    const second = await prisma.integrationEndpoint.create({ data: { organizationId: item.organization.id, code: 'candidate-beta', name: 'Search Beta', sourceCode: 'COMPANY', sourceName: 'Internal platform' } });
+    const response = await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ search: ' Search ', page: 1, limit: 1 }).set('Cookie', item.cookie).expect(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.body).toMatchObject({ total: 2, page: 1, limit: 1, items: [{ id: item.endpoint.id, name: 'Search Alpha', code: 'candidate-alpha' }] });
+    const next = await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ search: 'candidate-', page: 2, limit: 1 }).set('Cookie', item.cookie).expect(200);
+    expect(next.body).toMatchObject({ total: 2, page: 2, items: [{ id: second.id }] });
+    const missing = await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ search: foreign.endpoint.code }).set('Cookie', item.cookie).expect(200);
+    expect(missing.body).toMatchObject({ total: 0, items: [] });
+    await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ organizationId: foreign.organization.id }).set('Cookie', item.cookie).expect(403);
+    await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ search: 'x'.repeat(121) }).set('Cookie', item.cookie).expect(400);
+    await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).query({ limit: 101 }).set('Cookie', item.cookie).expect(400);
+    await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).expect(401);
+    const ungranted = await fixture([]);
+    await request(app.getHttpServer()).get(`${base}/receipt-endpoints`).set('Cookie', ungranted.cookie).expect(403);
   });
   it('reads the same audited plaintext with an uppercase receipt UUID and returns canonical IDs', async () => {
     const item = await fixture();

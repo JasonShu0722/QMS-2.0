@@ -2,24 +2,26 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
-import { assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
+import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
+import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import { decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { assertIntegrationOrganization, integrationError, integrationInteger, integrationScope, lockIntegrationEndpoint } from './integration-types.js';
-import type { IntegrationAttemptDto, IntegrationAttemptPageDto, IntegrationOperationDto, IntegrationPayloadDto, IntegrationReceiptDto, IntegrationReceiptPageDto, IntegrationReceiptQueryDto } from './integration-receipt.dto.js';
+import type { DeleteIntegrationReceiptsDto, IntegrationAttemptDto, IntegrationAttemptPageDto, IntegrationOperationDto, IntegrationPayloadDto, IntegrationReceiptDeleteResultDto, IntegrationReceiptDto, IntegrationReceiptEndpointDto, IntegrationReceiptEndpointPageDto, IntegrationReceiptEndpointQueryDto, IntegrationReceiptPageDto, IntegrationReceiptQueryDto } from './integration-receipt.dto.js';
 
 type ReceiptRow = Omit<IntegrationReceiptDto, 'receivedAt' | 'bodyExpiresAt' | 'metadataExpiresAt'> & { receivedAt: Date; bodyExpiresAt: Date; metadataExpiresAt: Date };
 type AttemptRow = Omit<IntegrationAttemptDto, 'observedAt'> & { observedAt: Date };
-export type IntegrationAttemptInput = Omit<IntegrationAttemptDto, 'id' | 'observedAt'>;
-const receiptProjection = Prisma.sql`r.id,r.organization_id AS "organizationId",r.endpoint_id AS "endpointId",r.credential_id AS "credentialId",r.message_id AS "messageId",e.source_code AS "sourceCode",e.source_name AS "sourceName",r.configuration_version AS "configurationVersion",r.received_at AS "receivedAt",r.body_expires_at AS "bodyExpiresAt",r.metadata_expires_at AS "metadataExpiresAt",(r.payload_ciphertext IS NOT NULL AND r.body_expires_at>clock_timestamp()) AS "bodyAvailable",r.payload_bytes AS "payloadBytes"`;
+export type IntegrationAttemptInput = Omit<IntegrationAttemptDto, 'id' | 'observedAt' | 'endpointName' | 'endpointCode'>;
+type DeleteReceiptRow = { id: string; endpoint_id: string; released_bytes: number; metadata_expires_at: Date; now: Date };
+const receiptProjection = Prisma.sql`r.id,r.organization_id AS "organizationId",r.endpoint_id AS "endpointId",e.name AS "endpointName",e.code AS "endpointCode",r.credential_id AS "credentialId",r.message_id AS "messageId",e.source_code AS "sourceCode",e.source_name AS "sourceName",r.configuration_version AS "configurationVersion",r.received_at AS "receivedAt",r.body_expires_at AS "bodyExpiresAt",r.metadata_expires_at AS "metadataExpiresAt",(r.payload_ciphertext IS NOT NULL AND r.body_expires_at>clock_timestamp()) AS "bodyAvailable",r.payload_bytes AS "payloadBytes"`;
 const receiptDto = (row: ReceiptRow): IntegrationReceiptDto => ({ ...row, receivedAt: row.receivedAt.toISOString(), bodyExpiresAt: row.bodyExpiresAt.toISOString(), metadataExpiresAt: row.metadataExpiresAt.toISOString() });
 const attemptDto = (row: AttemptRow): IntegrationAttemptDto => ({ ...row, observedAt: row.observedAt.toISOString() });
 
 @Injectable()
 export class IntegrationReceiptService {
   private readonly unavailable = new Set<string>();
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, private readonly mutations: AdminMutationService) {}
 
   collectionStatus(organizationId: string): 'UNKNOWN' | 'UNAVAILABLE' { return this.unavailable.has(organizationId) ? 'UNAVAILABLE' : 'UNKNOWN'; }
   collectionFailed(organizationId: string): void { if (this.unavailable.size < 256) this.unavailable.add(organizationId); }
@@ -38,6 +40,51 @@ export class IntegrationReceiptService {
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - days * 86400000);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to || to.getTime() - from.getTime() > 90 * 86400000 || to.getTime() > now.getTime() + 60000) integrationError('INTEGRATION_INPUT_INVALID', 400);
     return { from, to, now, page: integrationInteger(query.page ?? 1, 1, 10000), limit: integrationInteger(query.limit ?? 20, 1, 100) };
+  }
+
+  async listReceiptEndpoints(actor: AdminActor, query: IntegrationReceiptEndpointQueryDto): Promise<IntegrationReceiptEndpointPageDto> {
+    const page = integrationInteger(query.page ?? 1, 1, 10000), limit = integrationInteger(query.limit ?? 20, 1, 100);
+    const search = query.search?.trim() ?? '';
+    if (search.length > 120) integrationError('INTEGRATION_INPUT_INVALID', 400);
+    return this.prisma.$transaction(async tx => {
+      const organizationId = await this.authorize(tx, actor);
+      const where = Prisma.sql`organization_id=${organizationId}::uuid AND (${search}='' OR strpos(lower(name),lower(${search}))>0 OR strpos(lower(code),lower(${search}))>0)`;
+      const items = await tx.$queryRaw<IntegrationReceiptEndpointDto[]>(Prisma.sql`SELECT id,name,code FROM integration_endpoints WHERE ${where} ORDER BY name,code,id LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
+      const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM integration_endpoints WHERE ${where}`);
+      return { items, total: count!.total, page, limit };
+    }, { isolationLevel: 'RepeatableRead' });
+  }
+
+  async deleteReceipts(actor: AdminActor, input: DeleteIntegrationReceiptsDto, traceId: string, key?: string): Promise<IntegrationReceiptDeleteResultDto> {
+    const organizationId = integrationScope(actor);
+    if (!Array.isArray(input.receiptIds) || input.receiptIds.length < 1 || input.receiptIds.length > 100 || input.receiptIds.some(id => typeof id !== 'string' || !isUUID(id))) integrationError('INTEGRATION_INPUT_INVALID', 400);
+    const receiptIds = input.receiptIds.map(id => id.toLowerCase()).sort();
+    if (new Set(receiptIds).size !== receiptIds.length) integrationError('INTEGRATION_INPUT_INVALID', 400);
+    let rows: DeleteReceiptRow[] = [];
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_RECEIPTS_DELETED', payload: { receiptIds }, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async tx => {
+      if (rows.length !== receiptIds.length || rows.some(row => row.metadata_expires_at <= row.now)) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
+      const released = new Map<string, bigint>();
+      for (const row of rows) released.set(row.endpoint_id, (released.get(row.endpoint_id) ?? 0n) + BigInt(row.released_bytes));
+      let total = 0n;
+      for (const [endpointId, bytes] of released) {
+        total += bytes;
+        const changed = await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes-${bytes} WHERE organization_id=${organizationId}::uuid AND id=${endpointId}::uuid AND used_body_bytes>=${bytes}`;
+        if (changed !== 1) integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
+      }
+      const capacity = await tx.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes-${total},receipt_count=receipt_count-${rows.length} WHERE organization_id=${organizationId}::uuid AND used_body_bytes>=${total} AND receipt_count>=${rows.length}`;
+      if (capacity !== 1) integrationError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
+      await tx.$executeRaw(Prisma.sql`DELETE FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))})`);
+      for (const row of rows) await this.audit.record({ actorUserId: actor.id, organizationId, action: 'INTEGRATION_RECEIPTS_DELETED', resourceType: 'IntegrationReceipt', resourceId: row.id, outcome: 'SUCCESS', traceId, metadata: { endpointId: row.endpoint_id, receiptId: row.id } }, tx);
+      return { deletedCount: rows.length, receiptIds: rows.map(row => row.id) };
+    }, async tx => {
+      await assertIntegrationOrganization(tx, organizationId, true);
+      const identities = await tx.$queryRaw<{ endpoint_id: string }[]>(Prisma.sql`SELECT DISTINCT endpoint_id FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY endpoint_id`);
+      for (const identity of identities) await tx.$queryRaw`SELECT id FROM integration_endpoints WHERE organization_id=${organizationId}::uuid AND id=${identity.endpoint_id}::uuid FOR UPDATE`;
+      rows = await tx.$queryRaw<DeleteReceiptRow[]>(Prisma.sql`SELECT id,endpoint_id,CASE WHEN payload_ciphertext IS NULL THEN 0 ELSE payload_bytes END AS released_bytes,metadata_expires_at,clock_timestamp() AS now FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
+      await tx.$queryRaw`SELECT organization_id FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid FOR UPDATE`;
+      await assertRecentAuthentication(tx, actor);
+      await assertAdminAccess(tx, actor, organizationId, 'integration:manage');
+    });
   }
 
   async listReceipts(actor: AdminActor, query: IntegrationReceiptQueryDto): Promise<IntegrationReceiptPageDto> {
@@ -85,16 +132,16 @@ export class IntegrationReceiptService {
   async listAttempts(actor: AdminActor, query: IntegrationReceiptQueryDto): Promise<IntegrationAttemptPageDto> {
     return this.prisma.$transaction(async tx => {
       const organizationId = await this.authorize(tx, actor), range = await this.range(tx, query, 7);
-      const conditions = [Prisma.sql`organization_id=${organizationId}::uuid`, Prisma.sql`observed_at>=${range.from} AND observed_at<=${range.to} AND observed_at>${range.now}::timestamptz - INTERVAL '7 days'`];
-      if (query.endpointId) conditions.push(Prisma.sql`endpoint_id=${query.endpointId}::uuid`);
-      if (query.sourceCode) conditions.push(Prisma.sql`endpoint_id IN (SELECT id FROM integration_endpoints WHERE organization_id=${organizationId}::uuid AND source_code=${query.sourceCode})`);
-      if (query.messageId) conditions.push(Prisma.sql`message_id=${query.messageId}`);
-      if (query.receiptId) conditions.push(Prisma.sql`receipt_id=${query.receiptId}::uuid`);
-      if (query.traceId) conditions.push(Prisma.sql`id=${query.traceId}::uuid`);
-      if (query.outcome) conditions.push(Prisma.sql`outcome=${query.outcome}`);
+      const conditions = [Prisma.sql`a.organization_id=${organizationId}::uuid`, Prisma.sql`a.observed_at>=${range.from} AND a.observed_at<=${range.to} AND a.observed_at>${range.now}::timestamptz - INTERVAL '7 days'`];
+      if (query.endpointId) conditions.push(Prisma.sql`a.endpoint_id=${query.endpointId}::uuid`);
+      if (query.sourceCode) conditions.push(Prisma.sql`e.source_code=${query.sourceCode}`);
+      if (query.messageId) conditions.push(Prisma.sql`a.message_id=${query.messageId}`);
+      if (query.receiptId) conditions.push(Prisma.sql`a.receipt_id=${query.receiptId}::uuid`);
+      if (query.traceId) conditions.push(Prisma.sql`a.id=${query.traceId}::uuid`);
+      if (query.outcome) conditions.push(Prisma.sql`a.outcome=${query.outcome}`);
       const where = Prisma.join(conditions, ' AND ');
-      const rows = await tx.$queryRaw<AttemptRow[]>(Prisma.sql`SELECT id,id AS "traceId",organization_id AS "organizationId",endpoint_id AS "endpointId",credential_id AS "credentialId",message_id AS "messageId",receipt_id AS "receiptId",configuration_version AS "configurationVersion",return_receipt AS "returnReceipt",status_code AS "statusCode",outcome,reason_code AS "reasonCode",duration_ms AS "durationMs",observed_at AS "observedAt" FROM integration_request_attempts WHERE ${where} ORDER BY observed_at DESC,id DESC LIMIT ${range.limit} OFFSET ${(range.page-1)*range.limit}`);
-      const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM integration_request_attempts WHERE ${where}`);
+      const rows = await tx.$queryRaw<AttemptRow[]>(Prisma.sql`SELECT a.id,a.id AS "traceId",a.organization_id AS "organizationId",a.endpoint_id AS "endpointId",e.name AS "endpointName",e.code AS "endpointCode",a.credential_id AS "credentialId",a.message_id AS "messageId",a.receipt_id AS "receiptId",a.configuration_version AS "configurationVersion",a.return_receipt AS "returnReceipt",a.status_code AS "statusCode",a.outcome,a.reason_code AS "reasonCode",a.duration_ms AS "durationMs",a.observed_at AS "observedAt" FROM integration_request_attempts a JOIN integration_endpoints e ON e.id=a.endpoint_id AND e.organization_id=a.organization_id WHERE ${where} ORDER BY a.observed_at DESC,a.id DESC LIMIT ${range.limit} OFFSET ${(range.page-1)*range.limit}`);
+      const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM integration_request_attempts a JOIN integration_endpoints e ON e.id=a.endpoint_id AND e.organization_id=a.organization_id WHERE ${where}`);
       return { items: rows.map(row => attemptDto({ ...row, ...(row.messageId === null ? { messageId: undefined } : {}), ...(row.receiptId === null ? { receiptId: undefined } : {}), ...(row.reasonCode === null ? { reasonCode: undefined } : {}) })), total: count!.total, page: range.page, limit: range.limit, from: range.from.toISOString(), to: range.to.toISOString(), collectionStatus: this.collectionStatus(organizationId) };
     }, { isolationLevel: 'RepeatableRead' });
   }

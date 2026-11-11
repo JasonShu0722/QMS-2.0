@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "87b1f414edbb2073c2a5dc9d95e64d56b3757baf0d0ef3040663b48437126366"
+            "sha256": "e7f6e4559683fac656df942968a0862e602dd79284adefc152ca3803cd9459d1"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
@@ -730,7 +730,7 @@
           },
           {
             "path": "apps/web/src/console/ConsoleLayout.tsx",
-            "sha256": "73c636c6c68763e5841bd509e41be81ffb2bcb2a073c28d6511ab064123858fd"
+            "sha256": "36a63220eb2df2c4222fc0e0394205159133063856d15243e117d8828746c389"
           },
           {
             "path": "apps/web/src/styles/global.css",
@@ -770,7 +770,7 @@
           },
           {
             "path": "apps/web/src/console/console.css",
-            "sha256": "f9cebc6ba1c90895c1c9e7506641209a950b79f2d6b17212af7dce7d3fab689b"
+            "sha256": "0dfa774165a6e20bf6dad6baca4b5b1f554a10e8d3a9ed2ff987f0c886d90a31"
           },
           {
             "path": "apps/web/playwright/sidebar-regression-fixture.tsx",

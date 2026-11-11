@@ -18,6 +18,7 @@ describe('audit action label coverage (source contract, not PostgreSQL evidence)
     ['INTEGRATION_ENDPOINT_UPDATED', '更新接收接口'],
     ['INTEGRATION_MESSAGE_RECEIVED', '接收接口消息'],
     ['INTEGRATION_PAYLOAD_READ', '读取接收正文'],
+    ['INTEGRATION_RECEIPTS_DELETED', '删除接收记录'],
   ])('explains API integration action %s', (action, label) => {
     expect(auditActionLabel(action)).toBe(label);
   });
