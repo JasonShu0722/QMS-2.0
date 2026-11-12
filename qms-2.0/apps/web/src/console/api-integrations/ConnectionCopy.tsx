@@ -34,7 +34,7 @@ export function ConnectionCopy({ scope, endpoint, credentialId, credentialName, 
         text('正文：JSON对象数组，每项为对象，允许空数组。', 'Body: a JSON object array; each item is an object. An empty array is allowed.'),
         text('正文示例：[{"example":true}]', 'Body example: [{"example":true}]'),
         text('消息编号由系统分配。', 'Message IDs are assigned by the server.'),
-        text(result.endpoint.returnReceipt ? '接收成功返回201及本次接收编号。' : '接收成功返回204空正文。', result.endpoint.returnReceipt ? 'Success: 201 with this receipt ID.' : 'Success: 204 with an empty body.'),
+        text(result.endpoint.returnReceipt ? '接收成功返回200及本次接收编号。' : '接收成功返回200空正文。', result.endpoint.returnReceipt ? 'Success: 200 with this receipt ID.' : 'Success: 200 with an empty body.'),
         text('每次请求独立保存，重试可能新增记录；网络中断或5xx后先检索接收记录再决定重试。', 'Each request is saved independently. Retrying may create another record; after network failure or 5xx, check received records before retrying.'),
       ].join('\n');
       if (!current()) return;

@@ -21,7 +21,7 @@ model IntegrationEndpoint {
   maxBodyBytes Int @default(1048576) @map("max_body_bytes")
   ratePerMinute Int @default(60) @map("rate_per_minute")
   bodyRetentionDays Int @default(7) @map("body_retention_days")
-  capacityBytes Int @default(268435456) @map("capacity_bytes")
+  capacityBytes BigInt @default(268435456) @map("capacity_bytes")
   usedBodyBytes BigInt @default(0) @map("used_body_bytes")
   allowedIps String[] @default([]) @map("allowed_ips")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -93,6 +93,7 @@ model IntegrationRateWindow {
 model IntegrationScopeCapacity {
   organizationId String @id @map("organization_id") @db.Uuid
   usedBodyBytes BigInt @default(0) @map("used_body_bytes")
+  capacityBytes BigInt @default(1073741824) @map("capacity_bytes")
   receiptCount Int @default(0) @map("receipt_count")
   lastCleanupSucceededAt DateTime? @map("last_cleanup_succeeded_at") @db.Timestamptz(3)
   lastCleanupFailedAt DateTime? @map("last_cleanup_failed_at") @db.Timestamptz(3)

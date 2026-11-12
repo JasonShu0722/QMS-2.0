@@ -109,6 +109,7 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
   components['schemas']['CreateIntegrationEndpointDto'] | components['schemas']['UpdateIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationReceiptsDto'] |
+  components['schemas']['UpdateIntegrationCapacityDto'] |
   components['schemas']['CreateIntegrationCredentialDto'] | components['schemas']['IntegrationScopeDto'] |
   components['schemas']['DeleteAdminUserDto'] | components['schemas']['OrganizationForceDeleteDto'] |
   components['schemas']['AdministrativeReconfigurationDto'] |

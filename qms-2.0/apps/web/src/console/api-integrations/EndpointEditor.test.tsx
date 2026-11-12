@@ -43,6 +43,12 @@ it('defaults the per-interface receipt switch on and sends its chosen value with
   expect(createAdminMutation).toHaveBeenCalled();
 });
 
+it('allows a five GiB per-interface capacity and describes empty success as HTTP 200', () => {
+  view(); const dialog = within(screen.getByRole('dialog', { name: '新增接收接口' }));
+  expect(dialog.getByText('关闭后成功返回200空正文，接收记录仍保留')).toBeInTheDocument();
+  expect(dialog.getByRole('spinbutton', { name: '正文容量（MiB）' })).toBeInTheDocument();
+});
+
 it('preserves an edited draft after a version conflict and locks its source and code', async () => {
   view(endpoint); const dialog = within(screen.getByRole('dialog', { name: '编辑接收接口' }));
   expect(dialog.getByLabelText('接口编码')).toBeDisabled(); expect(dialog.getByLabelText('来源系统编码')).toBeDisabled();

@@ -146,11 +146,11 @@ export class InboundService {
         const times = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
         const now = times[0]!.now;
         await tx.$executeRaw`INSERT INTO integration_scope_capacities(organization_id) VALUES(${identity.organizationId}::uuid) ON CONFLICT DO NOTHING`;
-        const capacities = await tx.$queryRaw<{ used_body_bytes: bigint; receipt_count: number }[]>`SELECT used_body_bytes,receipt_count FROM integration_scope_capacities WHERE organization_id=${identity.organizationId}::uuid FOR UPDATE`;
+        const capacities = await tx.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: bigint; receipt_count: number }[]>`SELECT used_body_bytes,capacity_bytes,receipt_count FROM integration_scope_capacities WHERE organization_id=${identity.organizationId}::uuid FOR UPDATE`;
         const capacity = capacities[0]!, receiptId = randomUUID();
         const ciphertext = encryptSecret(body.text, `integration:${identity.organizationId}:${identity.endpointId}:${receiptId}`);
         const payloadBytes = Buffer.byteLength(ciphertext, 'utf8');
-        if (Number(endpoint.used_body_bytes) + payloadBytes > endpoint.capacity_bytes || Number(capacity.used_body_bytes) + payloadBytes > 1073741824 || capacity.receipt_count >= 100000) reject('INTEGRATION_CAPACITY_UNAVAILABLE', 503);
+        if (Number(endpoint.used_body_bytes) + payloadBytes > endpoint.capacity_bytes || Number(capacity.used_body_bytes) + payloadBytes > Number(capacity.capacity_bytes) || capacity.receipt_count >= 100000) reject('INTEGRATION_CAPACITY_UNAVAILABLE', 503);
         const snapshot = { version: endpoint.version, returnReceipt: endpoint.return_receipt, maxBodyBytes: endpoint.max_body_bytes, bodyRetentionDays: endpoint.body_retention_days };
         const bodyExpiresAt = new Date(now.getTime() + endpoint.body_retention_days * 86400000), metadataExpiresAt = new Date(now.getTime() + 90 * 86400000);
         await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes)
@@ -167,7 +167,7 @@ export class InboundService {
   private result(identity: InboundIdentity, endpoint: Endpoint, receipt: Receipt, traceId: string): InboundResult {
     const dto: InboundReceiptDto = { receiptId: receipt.id, messageId: receipt.message_id, receivedAt: receipt.received_at.toISOString(), status: 'RECEIVED' };
     return { organizationId: identity.organizationId, endpointId: identity.endpointId, credentialId: identity.credentialId,
-      statusCode: endpoint.return_receipt ? 201 : 204, receipt: dto, traceId, configurationVersion: endpoint.version, returnReceipt: endpoint.return_receipt };
+      statusCode: 200, receipt: dto, traceId, configurationVersion: endpoint.version, returnReceipt: endpoint.return_receipt };
   }
 
   private failure(error: unknown): never {

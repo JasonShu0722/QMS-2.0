@@ -179,13 +179,13 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     expect(new URL(endpoint.publicUrl).pathname.endsWith(`/inbound/${encodeURIComponent(endpoint.code)}/messages`)).toBe(true);
     const body = JSON.stringify([{ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' }, { technicalAcceptance: true, item: 2 }]);
     const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, body);
-    expect(received.status).toBe(201);
+    expect(received.status).toBe(200);
     const receipt = await received.json() as Schema['InboundReceiptDto'];
     expect(Object.hasOwn(receipt, 'duplicate')).toBe(false);
     expect(receipt.messageId).toBe(receipt.receiptId);
     const messageId = receipt.messageId;
     const repeated = await sendMessage(endpoint.id, credential.secret!, body);
-    expect(repeated.status).toBe(201);
+    expect(repeated.status).toBe(200);
     const repeatedReceipt = await repeated.json() as Schema['InboundReceiptDto'];
     expect(repeatedReceipt.receiptId).not.toBe(receipt.receiptId);
     expect(repeatedReceipt.messageId).toBe(repeatedReceipt.receiptId);

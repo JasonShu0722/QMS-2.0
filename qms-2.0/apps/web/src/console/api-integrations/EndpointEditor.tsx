@@ -57,11 +57,11 @@ export function EndpointEditor({ scope, endpoint, close, saved }: { scope: Integ
         {endpoint && <Form.Item label={text('接口状态', 'Interface status')} name="status"><Select options={[
           { value: 'DRAFT', label: text('草稿', 'Draft') }, { value: 'ENABLED', label: text('启用', 'Enabled') }, { value: 'DISABLED', label: text('停用', 'Disabled') },
         ]} /></Form.Item>}
-        <Form.Item label={text('返回接收回执', 'Return receipt')} name="returnReceipt" valuePropName="checked" extra={text('关闭后成功返回204，接收记录仍保留', 'When off, success returns 204 and records remain available')}><Switch aria-label={text('返回接收回执', 'Return receipt')} /></Form.Item>
+        <Form.Item label={text('返回接收回执', 'Return receipt')} name="returnReceipt" valuePropName="checked" extra={text('关闭后成功返回200空正文，接收记录仍保留', 'When off, success returns 200 with an empty body and records remain available')}><Switch aria-label={text('返回接收回执', 'Return receipt')} /></Form.Item>
         <Form.Item label={text('单次请求上限（字节）', 'Maximum request size (bytes)')} name="maxBodyBytes" rules={[{ required: true }]}><InputNumber min={1} max={mebibyte} precision={0} /></Form.Item>
         <Form.Item label={text('每分钟请求上限', 'Requests per minute')} name="ratePerMinute" rules={[{ required: true }]}><InputNumber min={1} max={300} precision={0} /></Form.Item>
         <Form.Item label={text('正文保留天数', 'Payload retention (days)')} name="bodyRetentionDays" rules={[{ required: true }]}><InputNumber min={1} max={30} precision={0} /></Form.Item>
-        <Form.Item label={text('正文容量（MiB）', 'Payload capacity (MiB)')} name="capacityMiB" rules={[{ required: true }]}><InputNumber min={16} max={1024} precision={0} /></Form.Item>
+        <Form.Item label={text('正文容量（MiB）', 'Payload capacity (MiB)')} name="capacityMiB" rules={[{ required: true }, { type: 'integer', min: 16, max: 5120 }]}><InputNumber min={16} max={5120} precision={0} /></Form.Item>
       </div>
       <Form.Item label={text('允许来源IP / CIDR', 'Allowed source IP / CIDR')} name="allowedIpsText" extra={text('每行一个；留空不按来源IP限制', 'One per line; leave empty for no source IP restriction')}><Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} maxLength={4096} /></Form.Item>
       {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to save. Check the current configuration and retry.')} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} /> : null}

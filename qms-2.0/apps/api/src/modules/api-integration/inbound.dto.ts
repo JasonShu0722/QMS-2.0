@@ -9,7 +9,7 @@ export class InboundReceiptDto {
 
 export type InboundIdentity = { organizationId: string; endpointId: string; credentialId: string; secretDigest: string };
 export type InboundResult = Omit<InboundIdentity, 'secretDigest'> & {
-  statusCode: 201 | 204;
+  statusCode: 200;
   receipt: InboundReceiptDto;
   traceId: string;
   configurationVersion: number;

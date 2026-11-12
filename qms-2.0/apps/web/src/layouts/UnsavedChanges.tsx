@@ -95,6 +95,6 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   return <UnsavedContext.Provider value={{ register, registerBusy, requestLeave, completeSessionNavigation }}>
     {dataRouter && <NavigationBlocker shouldBlock={shouldBlock} onBlocked={onBlocked} />}
     <div className="qms-guard-boundary" onClickCapture={protectLink}>{children}</div>
-    <Modal title={t('当前草稿尚未保存，继续将放弃修改。')} open={!!pending && !busy.current.size} okText={t(pending?.closing ? '放弃修改并关闭' : '放弃修改')} cancelText={t('继续编辑')} okButtonProps={{ danger: true }} onCancel={() => { const next = pendingRef.current; updatePending(); next?.cancel?.(); }} onOk={() => { if (pendingRef.current && !busy.current.size) runConfirmed(pendingRef.current); }} />
+    <Modal zIndex={2000} title={t('当前草稿尚未保存，继续将放弃修改。')} open={!!pending && !busy.current.size} okText={t(pending?.closing ? '放弃修改并关闭' : '放弃修改')} cancelText={t('继续编辑')} okButtonProps={{ danger: true }} onCancel={() => { const next = pendingRef.current; updatePending(); next?.cancel?.(); }} onOk={() => { if (pendingRef.current && !busy.current.size) runConfirmed(pendingRef.current); }} />
   </UnsavedContext.Provider>;
 }

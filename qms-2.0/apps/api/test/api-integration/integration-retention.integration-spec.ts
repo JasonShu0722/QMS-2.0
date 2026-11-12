@@ -127,7 +127,7 @@ describe('real integration retention, bounded results and administrative lifecyc
       await blocker.query('COMMIT');
       await cleanup;
       const response = await incoming;
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       const received = await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: response.body.receiptId } });
       expect(received.payloadCiphertext).not.toBeNull();
       expect((await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: item.receipt.id } })).payloadCiphertext).toBeNull();

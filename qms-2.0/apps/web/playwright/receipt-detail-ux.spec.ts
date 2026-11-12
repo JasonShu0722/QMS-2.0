@@ -87,7 +87,7 @@ async function sendMessage(endpointCode: string, credential: string, body: strin
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' }, body,
   });
-  expect(response.status).toBe(201);
+  expect(response.status).toBe(200);
   return await response.json() as Schema['InboundReceiptDto'];
 }
 

@@ -13,7 +13,7 @@ import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Integration administration requires disposable PostgreSQL.');
 
 const path = '/api/v1/admin/integrations/endpoints';
-const permissions = ['integration:read', 'integration:manage', 'integration:credentials:manage'];
+const permissions = ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read'];
 
 describe('API integration administration through real HTTP and PostgreSQL', () => {
   let app: INestApplication;
@@ -32,6 +32,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     if (prisma && organizations.length) {
       await prisma.$executeRaw`DELETE FROM integration_credentials WHERE organization_id = ANY(${organizations}::uuid[])`;
       await prisma.$executeRaw`DELETE FROM integration_endpoints WHERE organization_id = ANY(${organizations}::uuid[])`;
+      await prisma.$executeRaw`DELETE FROM integration_scope_capacities WHERE organization_id = ANY(${organizations}::uuid[])`;
       const where = { organizationId: { in: organizations } };
       await prisma.auditEvent.deleteMany({ where }); await prisma.adminMutation.deleteMany({ where });
       await prisma.userRole.deleteMany({ where }); await prisma.user.deleteMany({ where }); await prisma.role.deleteMany({ where });
@@ -63,12 +64,27 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     expect(await prisma.$queryRaw`SELECT to_regclass('public.integration_endpoints')::text AS endpoints, to_regclass('public.integration_credentials')::text AS credentials`)
       .toEqual([{ endpoints: 'integration_endpoints', credentials: 'integration_credentials' }]);
   });
+  it('has a configurable organization capacity with a ten GiB ceiling', async () => {
+    expect(await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name='integration_scope_capacities' AND column_name='capacity_bytes'`)
+      .toEqual([{ column_name: 'capacity_bytes' }]);
+    const fixtureValue = await fixture();
+    const status = await request(app.getHttpServer()).get('/api/v1/admin/integrations/status').set('Cookie', fixtureValue.cookie).expect(200);
+    expect(status.body.capacityBytes).toBe(1073741824);
+    await request(app.getHttpServer()).patch('/api/v1/admin/integrations/status').set('Cookie', fixtureValue.cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', randomUUID())
+      .send({ organizationId: fixtureValue.organization.id, capacityBytes: 10737418240 }).expect(200);
+    expect((await request(app.getHttpServer()).get('/api/v1/admin/integrations/status').set('Cookie', fixtureValue.cookie).expect(200)).body.capacityBytes).toBe(10737418240);
+  });
   it('creates a draft with bounded defaults and an enabled receipt switch', async () => {
     const fixtureValue = await fixture(); const body = input();
     const response = await create(fixtureValue.cookie, body).expect(201);
     expect(response.body).toMatchObject({ organizationId: fixtureValue.organization.id, ...body, status: 'DRAFT', version: 1, returnReceipt: true, maxBodyBytes: 1048576, ratePerMinute: 60, bodyRetentionDays: 7, capacityBytes: 268435456, usedBodyBytes: 0, allowedIps: [] });
     expect(response.body.publicUrl).toBe(`https://qms.example.test/api/v1/integrations/inbound/${encodeURIComponent(body.code)}/messages`);
     expect((await request(app.getHttpServer()).get(path).set('Cookie', fixtureValue.cookie).expect(200)).body).toMatchObject({ total: 1, page: 1, limit: 20, items: [expect.objectContaining({ id: response.body.id })] });
+  });
+  it('accepts a five GiB per-interface capacity ceiling', async () => {
+    const fixtureValue = await fixture(); const response = await create(fixtureValue.cookie, { ...input(), capacityBytes: 5368709120 }).expect(201);
+    expect(response.body.capacityBytes).toBe(5368709120);
+    await create(fixtureValue.cookie, { ...input(), capacityBytes: 5368709121 }).expect(400);
   });
   it('replays creation without another endpoint and rejects a reused key with a different body', async () => {
     const fixtureValue = await fixture(); const body = input(); const key = randomUUID();

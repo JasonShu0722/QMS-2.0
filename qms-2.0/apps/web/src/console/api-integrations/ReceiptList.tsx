@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Input, Modal, Popover, Select, Space, Tag, type TableProps } from 'antd';
+import { Alert, Button, Input, InputNumber, Modal, Popover, Select, Space, Tag, type TableProps } from 'antd';
 import { Copy } from 'lucide-react';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
@@ -53,10 +53,20 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
   const [deleteError, setDeleteError] = useState<unknown>();
   const [deleteNotice, setDeleteNotice] = useState<unknown>();
   const [deleteUnknown, setDeleteUnknown] = useState(false);
+  const [capacityOpen, setCapacityOpen] = useState(false);
+  const [capacityGiB, setCapacityGiB] = useState<number>();
+  const [capacitySaving, setCapacitySaving] = useState(false);
+  const [capacityError, setCapacityError] = useState<unknown>();
+  const [capacityUnknown, setCapacityUnknown] = useState(false);
+  const capacityPending = useRef(false);
+  const capacityRequest = useRef<components['schemas']['UpdateIntegrationCapacityDto'] | undefined>(undefined);
   const deletePending = useRef(false);
   const deleteBusy = deleting || deleteUnknown;
-  useNavigationBusy(deleteBusy);
+  const capacityBusy = capacitySaving || capacityUnknown;
+  useNavigationBusy(deleteBusy || capacityBusy);
   const { read, write, current } = useScopedIntegrationRequests(scope);
+  const capacityRequests = useScopedIntegrationRequests(scope);
+  const canManageCapacity = scope.permissions.includes('integration:manage');
   const range = useMemo(() => {
     const now = Date.now();
     return { from: new Date(now - filters.period * 86400000 + 60000).toISOString(), to: new Date(now).toISOString() };
@@ -83,6 +93,23 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
     }).catch(cause => { if (active && current() && !isAborted(cause)) setOperationFailed(true); });
     return () => { active = false; };
   }, [read, current, revision]);
+  async function saveCapacity() {
+    if (!canManageCapacity || deleteBusy || capacityPending.current || !current() || !Number.isInteger(capacityGiB) || capacityGiB! < 1 || capacityGiB! > 10) return;
+    if (!capacityUnknown) capacityRequest.current = { organizationId: scope.organizationId, capacityBytes: capacityGiB! * 1073741824 };
+    const body = capacityRequest.current;
+    if (!body) return;
+    capacityPending.current = true;
+    setCapacitySaving(true); setCapacityError(undefined);
+    try {
+      await capacityRequests.write<Operation>(`${root}/status`, 'PATCH', body);
+      if (current()) { setCapacityUnknown(false); capacityRequest.current = undefined; setCapacityOpen(false); setRevision(value => value + 1); }
+    } catch (cause) {
+      if (current() && !isAborted(cause)) {
+        const known = cause instanceof ApiError && (cause.code === 'CLIENT_REAUTHENTICATION_COMPLETED' || cause.status !== undefined && cause.status >= 400 && cause.status < 500 && cause.status !== 408 && cause.status !== 425);
+        setCapacityError(cause); setCapacityUnknown(!known);
+      }
+    } finally { capacityPending.current = false; if (current()) setCapacitySaving(false); }
+  }
   useEffect(() => {
     let active = true;
     const search = endpointSearch.trim();
@@ -113,7 +140,7 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
     columnTitle: <input type="checkbox" disabled={deleteBusy} aria-label={text('选择当前页', 'Select current page')} checked={allPageSelected} ref={node => { if (node) node.indeterminate = selectedIds.length > 0 && !allPageSelected; }} onChange={event => setSelectedIds(event.target.checked ? Array.from(new Set([...selectedIds, ...pageIds])) : selectedIds.filter(id => !pageIds.includes(id)))} />,
     getCheckboxProps: () => ({ disabled: deleteBusy }),
   } : undefined;
-  function confirmDelete(ids: string[]) { if (canDelete && !deleteBusy && ids.length > 0) { setDeleteError(undefined); setDeleteNotice(undefined); setDeleteUnknown(false); setDeleteIds([...ids]); } }
+  function confirmDelete(ids: string[]) { if (canDelete && !deleteBusy && !capacityBusy && ids.length > 0) { setDeleteError(undefined); setDeleteNotice(undefined); setDeleteUnknown(false); setDeleteIds([...ids]); } }
   async function executeDelete() {
     const ids = deleteIds;
     if (!ids || !canDelete || deletePending.current || !current()) return;
@@ -151,7 +178,7 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
     <Space wrap><Select disabled={deleteBusy} aria-label={text('记录视图', 'Record view')} value={mode} options={[{ value: 'receipts', label: text('已收数据', 'Received data') }, { value: 'attempts', label: text('请求结果', 'Request results') }]} onChange={value => { setMode(value); setPage(1); setFilters(defaults); setDraft(defaults); setEndpointSearch(''); setEndpointOptions([]); setEndpointLoadedPage(0); }} />
       <Button disabled={deleteBusy} loading={loading} onClick={() => setRevision(value => value + 1)}>{text('刷新记录', 'Refresh records')}</Button>
       <Button disabled={deleteBusy} aria-expanded={filtersOpen} aria-controls="qms-integration-record-filters" onClick={() => setFiltersOpen(value => !value)}>{text('筛选条件', 'Filters')}</Button></Space>
-    {operation && <div className="qms-integration-facts"><span className={operation.usedBodyBytes >= operation.capacityBytes * .8 ? 'qms-integration-capacity-warning' : undefined}>{text('组织正文容量', 'Organization payload capacity')} {(operation.usedBodyBytes / 1048576).toFixed(1)} / {(operation.capacityBytes / 1048576).toFixed(0)} MiB</span>
+    {operation && <div className="qms-integration-facts"><button type="button" className={`qms-integration-capacity-button${operation.usedBodyBytes >= operation.capacityBytes * .8 ? ' qms-integration-capacity-warning' : ''}`} disabled={!canManageCapacity || deleteBusy} onClick={() => { setCapacityGiB(Math.max(1, Math.min(10, Math.round(operation.capacityBytes / 1073741824)))); setCapacityError(undefined); setCapacityUnknown(false); setCapacityOpen(true); }} aria-label={text('设置组织正文容量', 'Set organization payload capacity')}>{text('组织正文容量', 'Organization payload capacity')} {(operation.usedBodyBytes / 1048576).toFixed(1)} / {(operation.capacityBytes / 1048576).toFixed(0)} MiB</button>
       <span>{text('最近清理成功', 'Last successful cleanup')}：{operation.lastCleanupSucceededAt ? clock(operation.lastCleanupSucceededAt) : text('暂无记录', 'No record')}</span>
       {operation.lastCleanupFailedAt && <span>{text('最近清理失败', 'Last failed cleanup')}：{clock(operation.lastCleanupFailedAt)}</span>}</div>}
     {operationFailed && <Alert type="warning" showIcon title={text('运行事实暂不可读取', 'Operation facts are unavailable')} />}
@@ -172,6 +199,13 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
     </form>}
     {validation && <Alert role="alert" type="warning" title={text('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', 'Check ID formats. Source system codes allow up to 64 characters; message IDs require 8–128 characters.')} />}
     {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to read records. Retry.')} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
+    <Modal open={capacityOpen} title={text('设置组织正文容量', 'Set organization payload capacity')} onCancel={() => { if (!capacityBusy) setCapacityOpen(false); }} maskClosable={!capacityBusy} keyboard={!capacityBusy} closable={!capacityBusy} onOk={() => void saveCapacity()} okText={text(capacityUnknown ? '重试保存' : '保存', capacityUnknown ? 'Retry save' : 'Save')} cancelText={text('取消', 'Cancel')} okButtonProps={{ loading: capacitySaving, disabled: !Number.isInteger(capacityGiB) || capacityGiB! < 1 || capacityGiB! > 10 }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
+        <span>{text('容量范围：1～10 GiB；不能小于当前已使用容量。', 'Capacity: 1–10 GiB; it cannot be lower than current usage.')}</span>
+        <InputNumber aria-label={text('组织容量GiB', 'Organization capacity GiB')} disabled={capacityBusy} min={1} max={10} precision={0} value={capacityGiB} onChange={value => setCapacityGiB(value ?? undefined)} addonAfter="GiB" style={{ width: '100%' }} />
+        {capacityError ? <Alert role="alert" type="error" showIcon title={text(integrationError(capacityError), 'Unable to update organization capacity. Retry.')} description={capacityError instanceof ApiError ? capacityError.traceId : undefined} /> : null}
+      </Space>
+    </Modal>
     <LedgerTable<Row> ledgerId={`console-integration-${mode}`} organizationId={scope.organizationId} rowKey="id" dataSource={data?.items ?? []} columns={columns} requiredColumnKeys={['messageId', 'actions']} rowSelection={rowSelection} resizableSelection className={canDelete ? 'qms-integration-receipt-table--selection' : undefined} loading={loading} scroll={{ x: canDelete ? 'max-content' : 860 }}
       pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
     {selected && <ReceiptDetail key={selected.id} scope={scope} row={selected} close={() => setSelected(undefined)} />}

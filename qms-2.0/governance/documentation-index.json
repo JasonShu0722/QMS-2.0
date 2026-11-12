@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "e7f6e4559683fac656df942968a0862e602dd79284adefc152ca3803cd9459d1"
+            "sha256": "31bcbc19c948f9594c32066b9212a9dfcbd7f0998f558297940b003ca87f9b22"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",

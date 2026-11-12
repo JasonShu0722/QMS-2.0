@@ -16,7 +16,7 @@ function settings(input: Partial<CreateIntegrationEndpointDto>, current?: Integr
     maxBodyBytes: integrationInteger(input.maxBodyBytes ?? current?.maxBodyBytes ?? 1048576, 1, 1048576),
     ratePerMinute: integrationInteger(input.ratePerMinute ?? current?.ratePerMinute ?? 60, 1, 300),
     bodyRetentionDays: integrationInteger(input.bodyRetentionDays ?? current?.bodyRetentionDays ?? 7, 1, 30),
-    capacityBytes: integrationInteger(input.capacityBytes ?? current?.capacityBytes ?? 268435456, 16777216, 1073741824),
+    capacityBytes: integrationInteger(input.capacityBytes ?? current?.capacityBytes ?? 268435456, 16777216, 5368709120),
     allowedIps: integrationAllowedIps(input.allowedIps ?? current?.allowedIps ?? []),
   };
 }
@@ -57,7 +57,7 @@ export class IntegrationAdminService {
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_ENDPOINT_CREATED', payload: data, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async transaction => {
       const rows = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`INSERT INTO integration_endpoints
         (id, organization_id, code, name, description, source_code, source_name, return_receipt, max_body_bytes, rate_per_minute, body_retention_days, capacity_bytes, allowed_ips)
-        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${data.code}, ${data.name}, ${data.description}, ${data.sourceCode}, ${data.sourceName}, ${data.returnReceipt}, ${data.maxBodyBytes}, ${data.ratePerMinute}, ${data.bodyRetentionDays}, ${data.capacityBytes}, ${data.allowedIps}::text[])
+        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${data.code}, ${data.name}, ${data.description}, ${data.sourceCode}, ${data.sourceName}, ${data.returnReceipt}, ${data.maxBodyBytes}, ${data.ratePerMinute}, ${data.bodyRetentionDays}, ${BigInt(data.capacityBytes)}, ${data.allowedIps}::text[])
         ON CONFLICT (organization_id, code) WHERE deleted_at IS NULL DO NOTHING RETURNING ${integrationEndpointProjection}`);
       if (!rows[0]) integrationError('CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_ENDPOINT_CREATED', resourceType: 'IntegrationEndpoint', resourceId: rows[0].id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1, returnReceipt: data.returnReceipt } }, transaction);
@@ -84,7 +84,7 @@ export class IntegrationAdminService {
         if (!valid?.count) integrationError('INTEGRATION_CREDENTIAL_REQUIRED', 409);
       }
       const [row] = await transaction.$queryRaw<IntegrationEndpointRow[]>(Prisma.sql`UPDATE integration_endpoints SET
-        name = ${data.name}, description = ${data.description}, status = ${data.status}, return_receipt = ${data.returnReceipt}, max_body_bytes = ${data.maxBodyBytes}, rate_per_minute = ${data.ratePerMinute}, body_retention_days = ${data.bodyRetentionDays}, capacity_bytes = ${data.capacityBytes}, allowed_ips = ${data.allowedIps}::text[], version = version + 1, updated_at = CURRENT_TIMESTAMP
+        name = ${data.name}, description = ${data.description}, status = ${data.status}, return_receipt = ${data.returnReceipt}, max_body_bytes = ${data.maxBodyBytes}, rate_per_minute = ${data.ratePerMinute}, body_retention_days = ${data.bodyRetentionDays}, capacity_bytes = ${BigInt(data.capacityBytes)}, allowed_ips = ${data.allowedIps}::text[], version = version + 1, updated_at = CURRENT_TIMESTAMP
         WHERE organization_id = ${organizationId}::uuid AND id = ${endpointId}::uuid AND version = ${input.expectedVersion} RETURNING ${integrationEndpointProjection}`);
       if (!row) integrationError('CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_ENDPOINT_UPDATED', resourceType: 'IntegrationEndpoint', resourceId: endpointId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: row.version, returnReceipt: row.returnReceipt, status: row.status } }, transaction);
