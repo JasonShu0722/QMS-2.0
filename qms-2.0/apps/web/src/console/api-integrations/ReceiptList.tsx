@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Input, Modal, Select, Space, Tag, type TableProps } from 'antd';
+import { Alert, Button, Input, Modal, Popover, Select, Space, Tag, type TableProps } from 'antd';
+import { Copy } from 'lucide-react';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -171,7 +172,7 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
     </form>}
     {validation && <Alert role="alert" type="warning" title={text('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', 'Check ID formats. Source system codes allow up to 64 characters; message IDs require 8–128 characters.')} />}
     {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to read records. Retry.')} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
-    <LedgerTable<Row> ledgerId={`console-integration-${mode}`} organizationId={scope.organizationId} rowKey="id" dataSource={data?.items ?? []} columns={columns} requiredColumnKeys={['messageId', 'actions']} rowSelection={rowSelection} loading={loading} scroll={{ x: 860 }}
+    <LedgerTable<Row> ledgerId={`console-integration-${mode}`} organizationId={scope.organizationId} rowKey="id" dataSource={data?.items ?? []} columns={columns} requiredColumnKeys={['messageId', 'actions']} rowSelection={rowSelection} resizableSelection className={canDelete ? 'qms-integration-receipt-table--selection' : undefined} loading={loading} scroll={{ x: canDelete ? 'max-content' : 860 }}
       pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
     {selected && <ReceiptDetail key={selected.id} scope={scope} row={selected} close={() => setSelected(undefined)} />}
     <Modal open={deleteIds !== undefined && current()} title={text('删除接收记录', 'Delete receiving records')} onCancel={() => { if (!deleteBusy) setDeleteIds(undefined); }} maskClosable={!deleteBusy} keyboard={!deleteBusy} closable={!deleteBusy} okButtonProps={{ danger: true, loading: deleting, 'aria-label': text(deleteUnknown ? '重试删除' : '删除', deleteUnknown ? 'Retry delete' : 'Delete') }} cancelButtonProps={{ disabled: deleteBusy, 'aria-label': text('取消', 'Cancel') }} onOk={() => void executeDelete()} okText={text(deleteUnknown ? '重试删除' : '删除', deleteUnknown ? 'Retry delete' : 'Delete')} cancelText={text('取消', 'Cancel')}>
@@ -221,11 +222,16 @@ function ReceiptDetail({ scope, row, close }: { scope: IntegrationScope; row: Ro
     [text('请求追踪号', 'Request ID'), row.traceId], [text('消息编号', 'Message ID'), row.messageId ?? '—'], [text('接收编号', 'Receipt ID'), row.receiptId ?? '—'], [text('接口', 'Interface'), 'endpointName' in row && row.endpointName ? row.endpointName : row.endpointId],
     [text('HTTP状态', 'HTTP status'), row.statusCode], [text('错误分类', 'Reason'), row.reasonCode ?? '—'], [text('耗时（毫秒）', 'Duration (ms)'), row.durationMs],
   ];
-  return <Modal open centered title={text('接收详情', 'Receiving details')} footer={<Button onClick={close}>{text('关闭', 'Close')}</Button>} onCancel={close} destroyOnHidden width={760} className="qms-integration-detail-modal" styles={{ body: { minHeight: 0, overflow: 'auto' }, header: { flexShrink: 0 }, footer: { flexShrink: 0 } }}>
-    <dl className="qms-integration-detail">{entries.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+  const detailValue = (label: unknown, value: unknown) => {
+    const fullValue = String(value);
+    if (fullValue.length < 24) return <span>{fullValue}</span>;
+    return <Popover trigger="click" placement="topLeft" content={<div className="qms-integration-detail-value-popover">{fullValue}</div>}><button type="button" className="qms-integration-detail-value" aria-label={`${String(label)}：${fullValue}`} title={fullValue}>{fullValue}</button></Popover>;
+  };
+  return <Modal open centered title={text('接收详情', 'Receiving details')} footer={<Button onClick={close}>{text('关闭', 'Close')}</Button>} onCancel={close} destroyOnHidden width={760} className="qms-integration-detail-modal" classNames={{ body: 'qms-integration-detail-body' }} styles={{ wrapper: { overflow: 'hidden' }, container: { display: 'flex', flexDirection: 'column', maxHeight: 'calc(100dvh - 32px)', padding: '12px 16px' }, header: { flexShrink: 0 }, footer: { flexShrink: 0 } }}>
+    <dl className="qms-integration-detail">{entries.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{detailValue(label, value)}</dd></div>)}</dl>
     {'bodyAvailable' in row && !row.bodyAvailable && <Alert type="info" title={text('正文已按保留期限清理', 'The payload has been removed under its retention policy')} />}
     {error ? <Alert role="alert" type="error" title={text(integrationError(error), 'Unable to read the payload. Retry.')} action={<Button aria-label={text('重试读取正文', 'Retry payload read')} onClick={() => void loadPayload()}>{text('重试', 'Retry')}</Button>} /> : null}
     {loading && !payload && <Alert type="info" title={text('正在读取接收正文', 'Reading payload')} />}
-    {payload && <div className="qms-integration-payload-frame"><Button className="qms-integration-payload-copy" size="small" aria-label={text('复制接收正文', 'Copy payload')} onClick={() => void copyPayload()}>{text('复制', 'Copy')}</Button><pre className="qms-integration-payload" aria-label={text('接收正文', 'Payload')}>{payload.text}</pre>{copyState === 'success' && <span role="status" className="qms-integration-copy-feedback">{text('已复制接收正文', 'Payload copied')}</span>}{copyState === 'error' && <span role="alert" className="qms-integration-copy-feedback qms-integration-copy-error">{text('复制失败，请重试', 'Copy failed. Retry.')}</span>}</div>}
+    {payload && <div className="qms-integration-payload-frame"><Button className="qms-integration-payload-copy" size="small" type="text" icon={<Copy size={15} aria-hidden="true" />} aria-label={text('复制接收正文', 'Copy payload')} onClick={() => void copyPayload()} /><pre className="qms-integration-payload" aria-label={text('接收正文', 'Payload')} tabIndex={0}>{payload.text}</pre>{copyState === 'success' && <span role="status" className="qms-integration-copy-feedback">{text('已复制接收正文', 'Payload copied')}</span>}{copyState === 'error' && <span role="alert" className="qms-integration-copy-feedback qms-integration-copy-error">{text('复制失败，请重试', 'Copy failed. Retry.')}</span>}</div>}
   </Modal>;
 }

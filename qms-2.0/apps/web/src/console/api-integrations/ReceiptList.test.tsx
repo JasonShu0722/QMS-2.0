@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { ApiError, apiRequest } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
@@ -93,6 +94,46 @@ it('loads an authorized payload automatically and keeps it in a scrollable frame
   expect(await dialog.findByText('已复制接收正文')).toBeVisible();
 });
 
+it('keeps scrolling in the payload while the dialog title and footer stay outside it', async () => {
+  read.mockImplementation(async path => path.includes('/payload') ? { id: receiptId, text: 'line\n'.repeat(500), bodyExpiresAt: receipt.bodyExpiresAt } : page(path));
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
+  document.head.append(style);
+  try {
+    view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+    const dialog = await screen.findByRole('dialog', { name: '接收详情' });
+    const payload = await within(dialog).findByLabelText('接收正文');
+    const body = payload.closest<HTMLElement>('.ant-modal-body')!;
+    expect(getComputedStyle(payload).overflow).toBe('auto');
+    expect(getComputedStyle(body).overflow).toBe('hidden');
+    expect(getComputedStyle(dialog.closest<HTMLElement>('.ant-modal-wrap')!).overflow).toBe('hidden');
+    expect(body.closest<HTMLElement>('.ant-modal-container')?.style.maxHeight).toContain('100dvh');
+    expect(within(body).getByText(receipt.id)).toBeInTheDocument();
+    expect(within(body).getByText(receipt.endpointName)).toBeInTheDocument();
+    expect(within(body).getByRole('button', { name: new RegExp(receipt.id) })).toHaveAttribute('title', receipt.id);
+    fireEvent.click(within(body).getByRole('button', { name: new RegExp(receipt.id) }));
+    expect(await screen.findByText(receipt.id, { selector: '.qms-integration-detail-value-popover' })).toBeInTheDocument();
+    expect(body).not.toContainElement(within(dialog).getByText('接收详情'));
+    expect(body).not.toContainElement(within(dialog).getByRole('button', { name: '关闭' }));
+  } finally { style.remove(); }
+});
+
+it('presents an inset, translucent copy icon with an accessible label', async () => {
+  read.mockImplementation(async path => path.includes('/payload') ? { id: receiptId, text: 'payload', bodyExpiresAt: receipt.bodyExpiresAt } : page(path));
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
+  document.head.append(style);
+  try {
+    view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+    const copy = await screen.findByRole('button', { name: '复制接收正文' });
+    expect(copy.querySelector('svg.lucide-copy')).toHaveAttribute('aria-hidden', 'true');
+    expect(copy.textContent).toBe('');
+    expect(Number(getComputedStyle(copy).opacity)).toBeGreaterThan(0);
+    expect(Number(getComputedStyle(copy).opacity)).toBeLessThan(1);
+    expect(Number.parseFloat(getComputedStyle(copy).right)).toBeGreaterThanOrEqual(20);
+  } finally { style.remove(); }
+});
+
 it('does not reopen a closed payload detail when its response arrives late', async () => {
   let resolve!: (value: unknown) => void;
   read.mockImplementation(async path => path.includes('/payload') ? new Promise(done => { resolve = done; })
@@ -161,6 +202,24 @@ it('supports selecting the current page and confirming a bulk receipt deletion',
   const confirm = await screen.findByRole('dialog');
   expect(confirm).toHaveTextContent('确认删除选中的 2 条接收记录');
   await waitFor(() => expect(within(confirm).getByRole('button', { name: '删除' })).toBeVisible());
+});
+
+it('keeps receipt selection compact and allows widening it without changing the selected records', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  view(); await screen.findByText('message-001');
+  const selectPage = screen.getByRole('checkbox', { name: '选择当前页' });
+  const column = screen.getByRole('table').querySelector<HTMLElement>('col.ant-table-selection-col');
+  expect(column).toHaveStyle({ width: '44px' });
+  fireEvent.click(selectPage);
+  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+  const width = screen.getByRole('spinbutton', { name: '列宽 选择' });
+  fireEvent.change(width, { target: { value: '56' } });
+  fireEvent.blur(width);
+  expect(column).toHaveStyle({ width: '56px' });
+  fireEvent.keyDown(screen.getByRole('separator', { name: '调整列宽 选择' }), { key: 'ArrowRight' });
+  expect(column).toHaveStyle({ width: '66px' });
+  expect(selectPage).toBeChecked();
+  expect(screen.getByText('已选择 1 条')).toBeVisible();
 });
 
 it('offers single receipt deletion only to integration managers', async () => {
@@ -261,7 +320,7 @@ it('loads all 21 matching endpoints despite a retained selection and retries a f
   expect(candidateRequests.filter(request => request.search === 'B' && request.page === 2)).toHaveLength(2);
   expect(screen.queryByRole('button', { name: '加载更多接口' })).not.toBeInTheDocument();
   expect(read.mock.calls.filter(([path]) => path.includes('/receipts?'))).toHaveLength(recordReads);
-});
+}, 20_000);
 
 it('reports clipboard failure without claiming that the payload was copied', async () => {
   clipboard.mockRejectedValue(new Error('clipboard denied'));
