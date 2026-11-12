@@ -319,12 +319,31 @@ describe('LedgerTable', () => {
     const onChange = vi.fn();
     render(<LedgerTable ledgerId="basic" columns={columns} dataSource={data} requiredColumnKeys={['action']} pagination={false} rowSelection={{ selectedRowKeys: ['one'], onChange }} />);
     settings();
+    expect(screen.queryByRole('spinbutton', { name: '列宽 选择' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: '显示 名称' }));
     expect(screen.queryByRole('columnheader', { name: /名称/ })).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '显示 操作' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
     expect(within(screen.getByRole('table')).getAllByRole('checkbox').at(-1)).toBeChecked();
+  });
+  it('persists an opt-in selection width after dragging without treating it as a business column', () => {
+    const onChange = vi.fn();
+    const props = { ledgerId: 'resize-selection', columns, dataSource: data, pagination: false as const, rowSelection: { selectedRowKeys: ['one'], onChange }, resizableSelection: true };
+    const { unmount } = render(<LedgerTable {...props} />);
+    const selection = screen.getByRole('separator', { name: '调整列宽 选择' });
+    fireEvent.pointerDown(selection, { clientX: 40, pointerId: 1 });
+    fireEvent.pointerMove(selection, { clientX: 54, pointerId: 1 });
+    fireEvent.pointerUp(selection, { clientX: 54, pointerId: 1 });
+    expect(selection).toHaveAttribute('aria-valuenow', '58');
+    expect(onChange).not.toHaveBeenCalled();
+    unmount();
+    render(<LedgerTable {...props} />);
+    expect(screen.getByRole('separator', { name: '调整列宽 选择' })).toHaveAttribute('aria-valuenow', '58');
+    settings();
+    expect(screen.queryByRole('checkbox', { name: '显示 选择' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '恢复全部列' }));
+    expect(screen.getByRole('separator', { name: '调整列宽 选择' })).toHaveAttribute('aria-valuenow', '44');
   });
   it('supports numeric width, pinning, moving, single and all resets without touching page size', () => {
     render(<LedgerTable ledgerId="controls" columns={columns} dataSource={data} pagination={false} />);

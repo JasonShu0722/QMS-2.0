@@ -4,6 +4,8 @@ export type Scope = { sessionScope?: string; organizationId?: string; portal?: '
 export const MIN_WIDTH = 64;
 export const MAX_WIDTH = 800;
 export const DEFAULT_WIDTH = 180;
+export const SELECTION_WIDTH_KEY = '\u0000selection';
+export const MIN_SELECTION_WIDTH = 40;
 const validKey = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 200 && !/[\u0000-\u001f]/.test(value) && !['__proto__', 'constructor', 'prototype'].includes(value);
 export function columnKey(column: { key?: unknown; dataIndex?: unknown; title?: unknown }): string | undefined {
   if (typeof column.key === 'number' && Number.isFinite(column.key)) return String(column.key);
@@ -27,7 +29,7 @@ export function boundedWidth(value: unknown, fallback = DEFAULT_WIDTH, minimum =
   return Math.max(minimum, Math.min(MAX_WIDTH, Math.round(width)));
 }
 const objectValue = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
-export function normalizePreferences(input: unknown, keys: string[]): Preferences {
+export function normalizePreferences(input: unknown, keys: string[], resizableSelection = false): Preferences {
   const allowed = [...new Set(keys.filter(validKey))].slice(0, 200);
   const value = objectValue(input);
   const list = (candidate: unknown) => Array.isArray(candidate) ? [...new Set(candidate.slice(0, 200).filter((key): key is string => typeof key === 'string' && allowed.includes(key)))] : [];
@@ -38,7 +40,7 @@ export function normalizePreferences(input: unknown, keys: string[]): Preference
   const fixed = objectValue(value.fixed);
   return {
     order, visible,
-    widths: Object.fromEntries(allowed.filter(key => typeof widths[key] === 'number' && Number.isFinite(widths[key])).map(key => [key, boundedWidth(widths[key])])),
+    widths: Object.fromEntries((resizableSelection ? [...allowed, SELECTION_WIDTH_KEY] : allowed).filter(key => typeof widths[key] === 'number' && Number.isFinite(widths[key])).map(key => [key, boundedWidth(widths[key], DEFAULT_WIDTH, key === SELECTION_WIDTH_KEY ? MIN_SELECTION_WIDTH : MIN_WIDTH)])),
     fixed: Object.fromEntries(allowed.filter(key => ['left', 'right', false].includes(fixed[key] as Fixed)).map(key => [key, fixed[key] as Fixed])),
   };
 }

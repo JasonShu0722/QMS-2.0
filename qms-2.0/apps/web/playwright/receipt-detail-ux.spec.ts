@@ -120,6 +120,9 @@ async function selectEndpoint(page: Page, section: Locator, search: string, endp
 async function assertPayloadFrame(page: Page, detail: Locator, expected: string) {
   await expect(detail.getByText('接收详情', { exact: true })).toBeVisible();
   await expect(detail.getByRole('button', { name: '关闭', exact: true })).toBeVisible();
+  const longValue = detail.getByRole('button', { name: /接收编号：/ }).first();
+  await longValue.click();
+  await expect(page.locator('.qms-integration-detail-value-popover:visible')).toBeVisible();
   const payload = detail.getByLabel('接收正文', { exact: true });
   await expect(payload).toHaveText(expected);
   const copy = detail.getByRole('button', { name: '复制接收正文', exact: true });
@@ -133,6 +136,27 @@ async function assertPayloadFrame(page: Page, detail: Locator, expected: string)
   });
   expect(metrics.overflow).toBe('auto');
   expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  const geometry = await detail.evaluate(dialog => {
+    const body = dialog.querySelector<HTMLElement>('.ant-modal-body')!;
+    const pre = dialog.querySelector<HTMLElement>('pre')!;
+    const button = dialog.querySelector<HTMLElement>('.qms-integration-payload-copy')!;
+    const container = dialog.querySelector<HTMLElement>('.ant-modal-container')!;
+    const title = dialog.querySelector<HTMLElement>('.ant-modal-header')!;
+    const footer = dialog.querySelector<HTMLElement>('.ant-modal-footer')!;
+    const payloadRect = pre.getBoundingClientRect(), copyRect = button.getBoundingClientRect();
+    const before = { title: title.getBoundingClientRect().top, footer: footer.getBoundingClientRect().bottom };
+    pre.scrollTop = pre.scrollHeight;
+    return { overflow: getComputedStyle(body).overflow, bodyScrolls: body.scrollHeight > body.clientHeight + 1 && ['auto', 'scroll'].includes(getComputedStyle(body).overflowY), top: container.getBoundingClientRect().top, bottom: container.getBoundingClientRect().bottom, viewport: innerHeight, before, after: { title: title.getBoundingClientRect().top, footer: footer.getBoundingClientRect().bottom }, copyRight: copyRect.right, payloadContentRight: payloadRect.left + pre.clientLeft + pre.clientWidth, icon: !!button.querySelector('svg'), text: button.textContent, opacity: Number(getComputedStyle(button).opacity), payloadHeight: pre.clientHeight, tailVisible: pre.scrollTop + pre.clientHeight >= pre.scrollHeight };
+  });
+  expect(geometry.bodyScrolls).toBe(false);
+  expect(geometry.payloadHeight).toBeGreaterThanOrEqual(50);
+  expect(geometry.tailVisible).toBe(true);
+  expect(geometry.top).toBeGreaterThanOrEqual(0);
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewport);
+  expect(geometry.before).toEqual(geometry.after);
+  expect(geometry.copyRight).toBeLessThan(geometry.payloadContentRight - 3);
+  expect(geometry.icon).toBe(true); expect(geometry.text).toBe('');
+  expect(geometry.opacity).toBeGreaterThan(0);
 }
 
 test('real receipt detail UX, candidate pagination, scoped deletion and retained attempts', async ({ page }) => {
@@ -155,7 +179,7 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
   let thirdPayloadBytes = 0;
   try {
     endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, endpoints, 'POST', {
-      code: endpointCode, name: endpointName, sourceCode, sourceName: `浏览器接收来源 ${suffix}`, returnReceipt: true,
+      code: endpointCode, name: endpointName, sourceCode, sourceName: `${'长来源名称'.repeat(18)} ${suffix}`.slice(0, 120), returnReceipt: true,
     }, 201);
     fixtureEndpointIds.push(endpoint.id);
     credential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `${endpoints}/${endpoint.id}/credentials`, 'POST', {
@@ -202,17 +226,26 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
     await expect(section.getByRole('button', { name: `查看消息${second.messageId}`, exact: true })).toBeVisible();
     await expect(section.getByRole('button', { name: `查看消息${third.messageId}`, exact: true })).toBeVisible();
 
-    await page.setViewportSize({ width: 390, height: 700 });
-    await section.getByRole('button', { name: `查看消息${first.messageId}`, exact: true }).click();
-    let detail = page.getByRole('dialog', { name: '接收详情', exact: true });
-    await expect(detail).toBeVisible();
-    await assertPayloadFrame(page, detail, bodyOne);
-    await detail.getByRole('button', { name: '关闭', exact: true }).click();
-    await expect(detail).toHaveCount(0);
+    const selectPage = section.getByRole('checkbox', { name: '选择当前页', exact: true });
+    const selectionHeader = selectPage.locator('xpath=ancestor::th');
+    expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(45, 0);
+    await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowRight');
+    expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(54, 0);
+    await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowLeft');
+
+    for (const viewport of [{ width: 390, height: 700 }, { width: 390, height: 500 }, { width: 667, height: 320 }, { width: 1024, height: 400 }]) {
+      await page.setViewportSize(viewport);
+      await section.getByRole('button', { name: `查看消息${first.messageId}`, exact: true }).click();
+      const detail = page.getByRole('dialog', { name: '接收详情', exact: true });
+      await expect(detail).toBeVisible();
+      await assertPayloadFrame(page, detail, bodyOne);
+      await detail.getByRole('button', { name: '关闭', exact: true }).click();
+      await expect(detail).toHaveCount(0);
+    }
 
     await page.setViewportSize({ width: 1440, height: 800 });
     await section.getByRole('button', { name: `查看消息${second.messageId}`, exact: true }).click();
-    detail = page.getByRole('dialog', { name: '接收详情', exact: true });
+    const detail = page.getByRole('dialog', { name: '接收详情', exact: true });
     await assertPayloadFrame(page, detail, bodyTwo);
     await detail.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(detail).toHaveCount(0);
