@@ -7,9 +7,9 @@
 | 批准范围 | 负责人要求立即补齐点击组织正文容量文字设置容量，组织最高10GiB、单接口最高5GiB，外部接收成功统一200；继续按本会话交付流程实现及上线 |
 | 映射 | REQ0036 / Issue97；codex/integration-capacity-200，从生产801cbf0隔离，预留V0.0.48，提交前远端查重 |
 | 目标 | 累计存储额度可调；回执开关只控制200响应正文；单次HTTP仍1MiB，不改数组协议或引入二期业务映射 |
-| 状态 | API/数据库与Web初稿已落；真实PG/API相关回归45项、并发/收件31项、Web36项、EndpointEditor3项、API lint/build/contracts/governance均通过；独立QUALITY、浏览器、PR和部署尚未完成 |
+| 状态 | API/数据库与Web初稿已落；补齐统一200旧断言与未保存确认框浮层层级，真实PG受影响回归36/36、ReceiptList32/32、UnsavedChanges19/19、EndpointEditor3/3、Web lint/build均通过；独立QUALITY、浏览器、PR和部署尚未完成 |
 | 授权 | 复用负责人明确继续实现及本会话PR后部署授权；不自动调整生产容量、不发放凭据、不关闭Issue或写飞书 |
-| 下一步 | 补齐容量管理/并发/审计与Web入口用例，使用149迁移链完成一次性真实验证，独立SPEC/QUALITY后提交V0.0.48 PR、精确CI/Review、mainCI与自动部署核验 |
+| 下一步 | 提交本轮测试与未保存弹窗层级修复，等待精确PR CI/Review，随后执行mainCI、自动部署和公网核验 |
 
 ## 实现边界
 

@@ -1,7 +1,7 @@
 import { transferableAbortController } from 'node:util';
 import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Drawer } from 'antd';
 import { createMemoryRouter, MemoryRouter, Link, RouterProvider, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { UnsavedChangesProvider, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from './UnsavedChanges';
@@ -27,6 +27,15 @@ it('keeps edits when leaving is cancelled and leaves only after discard', async 
   fireEvent.click(screen.getByRole('link', { name: '下一页' }));
   fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
   expect(screen.getByLabelText('path')).toHaveTextContent('/app/next');
+});
+it('keeps the unsaved confirmation above an open drawer', async () => {
+  const router = dataView();
+  fireEvent.click(screen.getByRole('button', { name: 'open drawer' }));
+  fireEvent.click(screen.getByRole('button', { name: 'confirmed navigation' }));
+  const dialog = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
+  expect(dialog.closest('.ant-modal-wrap')).toHaveStyle({ zIndex: '2000' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  expect(router.state.location.pathname).toBe('/app/edit');
 });
 it('closing an inactive page does not navigate away from an unsaved active editor', () => {
   const store = useWorkTabsStore.getState();
@@ -58,6 +67,7 @@ function DataEditor() {
   const [local, setLocal] = useState(0);
   const [dirty, setDirty] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   useUnsavedChanges(dirty);
   useNavigationBusy(busy);
   return <>
@@ -66,6 +76,8 @@ function DataEditor() {
     <output aria-label="local actions">{local}</output>
     <Link to="/app/first">first target</Link><Link to="/app/second">second target</Link>
     <button onClick={() => requestLeave(() => navigate('/app/first'))}>confirmed navigation</button>
+    <button onClick={() => setDrawerOpen(true)}>open drawer</button>
+    <Drawer open={drawerOpen} title="Draft drawer" onClose={() => requestLeave(() => setDrawerOpen(false), true)}>Draft editor</Drawer>
     <button onClick={() => requestLeave(() => { navigate('/app/first'); navigate('/app/second'); })}>two synchronous navigations</button>
     <button onClick={() => requestLeave(() => { void Promise.resolve().then(() => navigate('/app/first')); })}>asynchronous navigation</button>
     <button onClick={() => requestLeave(() => setLocal(value => value + 1))}>local action</button>

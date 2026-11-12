@@ -111,7 +111,7 @@ describe('integration endpoint deletion through real HTTP and PostgreSQL', () =>
   it('revokes every credential, hides all management entrances and preserves queryable history', async () => {
     const item = await fixture(), first = await credential(item), second = await credential(item, 'Second credential');
     await patch(item.cookie, item.endpoint.id, { expectedVersion: 1, status: 'ENABLED' }).expect(200);
-    const received = await send(item.endpoint.code, first.secret).expect(201);
+    const received = await send(item.endpoint.code, first.secret).expect(200);
     await remove(item.cookie, item.endpoint.id, 2).expect(204);
     expect(await prisma.integrationCredential.count({ where: { endpointId: item.endpoint.id, revokedAt: null } })).toBe(0);
     expect(await prisma.integrationCredential.count({ where: { endpointId: item.endpoint.id } })).toBe(2);

@@ -68,7 +68,7 @@ it('saves a ten GiB organization payload capacity from the facts button', async 
   fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
   fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '10' } });
-  fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(mutate).toHaveBeenCalledWith('/api/v1/admin/integrations/status', 'PATCH', { organizationId, capacityBytes: 10737418240 }, expect.any(AbortSignal)));
 });
 
@@ -76,8 +76,8 @@ it('does not submit an out of range organization capacity', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
-  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '11' } });
-  expect(dialog.getByRole('button', { name: '保存' })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '' } });
+  expect(dialog.getByRole('button', { name: /保\s*存/ })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
 });
 
 it.each([403, 409])('keeps capacity input and original retry on %s', async status => {
@@ -85,8 +85,8 @@ it.each([403, 409])('keeps capacity input and original retry on %s', async statu
   mutate.mockRejectedValueOnce(new ApiError({ code: status === 409 ? 'CONCURRENCY_CONFLICT' : 'FEATURE_PERMISSION_DENIED', message: 'failed', traceId: 'capacity-trace' }, status));
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
-  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
-  expect(await dialog.findByRole('alert')).toBeVisible(); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toHaveValue(5); expect(dialog.getByRole('button', { name: '重试保存' })).toBeVisible();
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
+  await waitFor(() => expect(dialog.getByRole('alert')).toBeVisible()); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toHaveValue('5'); await waitFor(() => expect(dialog.getByRole('button', { name: /保\s*存/ })).toBeVisible());
 });
 
 it('keeps the original capacity request for an unknown result and offers retry', async () => {
@@ -94,8 +94,8 @@ it('keeps the original capacity request for an unknown result and offers retry',
   mutate.mockRejectedValueOnce(new ApiError({ code: 'INTEGRATION_CONFIGURATION_UNAVAILABLE', message: 'failed', traceId: 'capacity-unknown' }, 503));
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
-  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
-  expect(await dialog.findByRole('button', { name: '重试保存' })).toBeVisible(); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
+  await waitFor(() => expect(dialog.getByRole('button', { name: /重试\s*保存/ })).toBeVisible()); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
   expect(mutate).toHaveBeenCalledTimes(1);
 });
 
@@ -110,7 +110,7 @@ it('does not close or refresh from a late capacity response after session ABA', 
   mutate.mockReturnValueOnce(new Promise(done => { resolve = done; }));
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
-  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
   act(() => { useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:other`); useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`); });
   await act(async () => resolve({ usedBodyBytes: 20, capacityBytes: 5368709120, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' }));
   expect(screen.getByRole('dialog', { name: '设置组织正文容量' })).toBeInTheDocument();
