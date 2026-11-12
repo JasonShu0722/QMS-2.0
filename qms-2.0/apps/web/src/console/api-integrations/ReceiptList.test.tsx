@@ -62,6 +62,60 @@ it('keeps receipt filters collapsed until the operator opens them', async () => 
   expect(screen.getByRole('combobox', { name: '接口名称或编码' })).toBeVisible();
 });
 
+it('saves a ten GiB organization payload capacity from the facts button', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  view(); await screen.findByText('message-001');
+  fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '10' } });
+  fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledWith('/api/v1/admin/integrations/status', 'PATCH', { organizationId, capacityBytes: 10737418240 }, expect.any(AbortSignal)));
+});
+
+it('does not submit an out of range organization capacity', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '11' } });
+  expect(dialog.getByRole('button', { name: '保存' })).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
+});
+
+it.each([403, 409])('keeps capacity input and original retry on %s', async status => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  mutate.mockRejectedValueOnce(new ApiError({ code: status === 409 ? 'CONCURRENCY_CONFLICT' : 'FEATURE_PERMISSION_DENIED', message: 'failed', traceId: 'capacity-trace' }, status));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  expect(await dialog.findByRole('alert')).toBeVisible(); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toHaveValue(5); expect(dialog.getByRole('button', { name: '重试保存' })).toBeVisible();
+});
+
+it('keeps the original capacity request for an unknown result and offers retry', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  mutate.mockRejectedValueOnce(new ApiError({ code: 'INTEGRATION_CONFIGURATION_UNAVAILABLE', message: 'failed', traceId: 'capacity-unknown' }, 503));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  expect(await dialog.findByRole('button', { name: '重试保存' })).toBeVisible(); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
+  expect(mutate).toHaveBeenCalledTimes(1);
+});
+
+it('does not offer organization capacity editing without integration management', async () => {
+  scope.permissions = ['integration:receipts:read']; view(); await screen.findByText('message-001');
+  expect(screen.getByRole('button', { name: '设置组织正文容量' })).toBeDisabled();
+});
+
+it('does not close or refresh from a late capacity response after session ABA', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  let resolve!: (value: unknown) => void;
+  mutate.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: '保存' }));
+  act(() => { useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:other`); useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`); });
+  await act(async () => resolve({ usedBodyBytes: 20, capacityBytes: 5368709120, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' }));
+  expect(screen.getByRole('dialog', { name: '设置组织正文容量' })).toBeInTheDocument();
+});
+
 it('does not disclose a payload or provide a payload action without its separate permission', async () => {
   scope.permissions = ['integration:receipts:read']; view(); await screen.findByText('message-001');
   fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));

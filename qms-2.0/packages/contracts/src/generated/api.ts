@@ -2164,7 +2164,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["IntegrationReceiptController_updateStatus"];
         trace?: never;
     };
     "/api/v1/admin/integrations/receipts/{id}": {
@@ -10641,6 +10641,11 @@ export interface components {
             lastCleanupSucceededAt?: string;
             /** Format: date-time */
             lastCleanupFailedAt?: string;
+        };
+        UpdateIntegrationCapacityDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            capacityBytes: number;
         };
         IntegrationPayloadDto: {
             /** Format: uuid */
@@ -22467,20 +22472,14 @@ export interface operations {
             };
         };
         responses: {
-            201: {
+            /** @description 接收成功；关闭回执正文时仍返回200但无正文。 */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["InboundReceiptDto"];
                 };
-            };
-            /** @description 接收成功，接口配置关闭回执正文。 */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             default: {
                 headers: {
@@ -22645,6 +22644,40 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationOperationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    IntegrationReceiptController_updateStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIntegrationCapacityDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

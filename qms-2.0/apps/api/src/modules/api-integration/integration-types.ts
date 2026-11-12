@@ -6,7 +6,7 @@ import { readOrganizationRuntime } from '../organization/organization-runtime.re
 import type { IntegrationEndpointDto } from './integration-admin.dto.js';
 
 export type IntegrationEndpointRow = Omit<IntegrationEndpointDto, 'createdAt' | 'updatedAt' | 'publicUrl'> & { createdAt: Date; updatedAt: Date; deletedAt: Date | null };
-export const integrationEndpointProjection = Prisma.sql`id, organization_id AS "organizationId", code, name, description, source_code AS "sourceCode", source_name AS "sourceName", status, version, return_receipt AS "returnReceipt", max_body_bytes AS "maxBodyBytes", rate_per_minute AS "ratePerMinute", body_retention_days AS "bodyRetentionDays", capacity_bytes AS "capacityBytes", used_body_bytes::float8 AS "usedBodyBytes", allowed_ips AS "allowedIps", created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"`;
+export const integrationEndpointProjection = Prisma.sql`id, organization_id AS "organizationId", code, name, description, source_code AS "sourceCode", source_name AS "sourceName", status, version, return_receipt AS "returnReceipt", max_body_bytes AS "maxBodyBytes", rate_per_minute AS "ratePerMinute", body_retention_days AS "bodyRetentionDays", capacity_bytes::float8 AS "capacityBytes", used_body_bytes::float8 AS "usedBodyBytes", allowed_ips AS "allowedIps", created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"`;
 
 export function integrationError(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
 export function integrationScope(actor: AdminActor): string {

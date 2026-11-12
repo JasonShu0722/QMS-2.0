@@ -61,7 +61,7 @@ describe('inbound transactional concurrency', () => {
   it('receives eight rows and required audits for eight simultaneous identical requests', async () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all(Array.from({ length: 8 }, () => send(receiver, messageId)));
-    expect(responses.map(response => response.status)).toEqual(Array(8).fill(201));
+    expect(responses.map(response => response.status)).toEqual(Array(8).fill(200));
     expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(8);
     expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 8 }]);
     expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(8);
@@ -74,7 +74,7 @@ describe('inbound transactional concurrency', () => {
   it('stores both different payloads even when callers send the same legacy key concurrently', async () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all([send(receiver, messageId, '[{"value":1}]'), send(receiver, messageId, '[{"value":2}]')]);
-    expect(responses.map(response => response.status)).toEqual([201, 201]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
     expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(2);
     expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
   });
@@ -116,11 +116,11 @@ describe('inbound transactional concurrency', () => {
     const receiver = await fixture(), messageId = randomUUID(), base = await app.getUrl();
     await new Promise<void>((resolve, reject) => {
       const outgoing = httpRequest(`${base}${receiver.path}`, { method: 'POST', headers: { Authorization: `Bearer ${receiver.token}`, 'Idempotency-Key': messageId, 'Content-Type': 'application/json' } }, response => {
-        expect(response.statusCode).toBe(201); response.destroy(); resolve();
+        expect(response.statusCode).toBe(200); response.destroy(); resolve();
       });
       outgoing.once('error', reject); outgoing.end('[{"value":1}]');
     });
-    const retry = await send(receiver, messageId).expect(201);
+    const retry = await send(receiver, messageId).expect(200);
     const receipts = await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
     expect(receipts).toHaveLength(2); expect(receipts).toEqual(expect.arrayContaining([{ id: retry.body.receiptId }]));
   });

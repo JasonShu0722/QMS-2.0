@@ -109,7 +109,7 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
     { key: 'identity', title: text('接收接口', 'Receiving interface'), width: 210, render: (_, item) => <><strong>{item.name}</strong><small>{item.code}</small></> },
     { key: 'source', title: text('来源系统', 'Source system'), width: 170, render: (_, item) => <>{item.sourceName}<small>{item.sourceCode}</small></> },
     { key: 'status', title: text('状态', 'Status'), width: 100, render: (_, item) => <Tag color={item.status === 'ENABLED' ? 'success' : undefined}>{status(item.status)}</Tag> },
-    { key: 'receipt', title: text('接收回执', 'Receipt'), width: 115, render: (_, item) => item.returnReceipt ? text('返回回执', 'Return receipt') : text('空响应204', 'Empty response 204') },
+    { key: 'receipt', title: text('接收回执', 'Receipt'), width: 115, render: (_, item) => item.returnReceipt ? text('返回回执', 'Return receipt') : text('空响应200', 'Empty response 200') },
     { key: 'capacity', title: text('正文容量', 'Payload capacity'), width: 170, render: (_, item) => <span className={item.usedBodyBytes >= item.capacityBytes * .8 ? 'qms-integration-capacity-warning' : undefined}>{(item.usedBodyBytes / 1048576).toFixed(1)} / {(item.capacityBytes / 1048576).toFixed(0)} MiB</span> },
     { key: 'actions', title: text('操作', 'Actions'), width: 330, render: (_, item) => <Space wrap size="small">
       <Button size="small" disabled={deleteBusy} aria-label={text(`查看${item.name}调用说明`, `View ${item.name} instructions`)} onClick={() => setInstructions(item)}>{text('调用说明', 'Instructions')}</Button>
@@ -148,7 +148,7 @@ function Instructions({ scope, endpoint, close }: { scope: IntegrationScope; end
     <pre>{`Authorization: Bearer <credentialId>.<secret>\nContent-Type: application/json`}</pre>
     <pre aria-label={text('调用示例', 'Request example')}>{example}</pre>
     <pre aria-label={text('正文示例', 'Body example')}>{'[{"example":true}]'}</pre>
-    <p>{text(endpoint.returnReceipt ? '接收成功返回201及本次接收编号。' : '接收成功返回204空正文。', endpoint.returnReceipt ? 'Success: 201 with this receipt ID.' : 'Success: 204 with an empty body.')}</p>
+    <p>{text(endpoint.returnReceipt ? '接收成功返回200及本次接收编号。' : '接收成功返回200空正文。', endpoint.returnReceipt ? 'Success: 200 with this receipt ID.' : 'Success: 200 with an empty body.')}</p>
     <p>{text('每次请求独立保存，重试可能新增记录；网络中断或5xx后先检索接收记录再决定重试。', 'Each request is saved independently. Retrying may create another record; after network failure or 5xx, check received records before retrying.')}</p>
     <p>{text('消息编号由系统分配；请求追踪号用于排查，网关错误可能没有JSON正文。', 'Message IDs are assigned by the server. Request IDs support investigation; gateway errors may not contain JSON.')}</p>
   </div>;

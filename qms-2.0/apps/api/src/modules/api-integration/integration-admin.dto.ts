@@ -22,7 +22,7 @@ export class CreateIntegrationEndpointDto extends IntegrationScopeDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 1048576, default: 1048576 }) @IsOptional() @IsInt() @Min(1) @Max(1048576) maxBodyBytes?: number;
   @ApiPropertyOptional({ minimum: 1, maximum: 300, default: 60 }) @IsOptional() @IsInt() @Min(1) @Max(300) ratePerMinute?: number;
   @ApiPropertyOptional({ minimum: 1, maximum: 30, default: 7 }) @IsOptional() @IsInt() @Min(1) @Max(30) bodyRetentionDays?: number;
-  @ApiPropertyOptional({ minimum: 16777216, maximum: 1073741824, default: 268435456 }) @IsOptional() @IsInt() @Min(16777216) @Max(1073741824) capacityBytes?: number;
+  @ApiPropertyOptional({ minimum: 16777216, maximum: 5368709120, default: 268435456 }) @IsOptional() @IsInt() @Min(16777216) @Max(5368709120) capacityBytes?: number;
   @ApiPropertyOptional({ type: [String], maxItems: 32 }) @IsOptional() @IsArray() @ArrayMaxSize(32) @IsString({ each: true }) @MaxLength(64, { each: true }) allowedIps?: string[];
 }
 export class UpdateIntegrationEndpointDto extends IntegrationScopeDto {
@@ -34,7 +34,7 @@ export class UpdateIntegrationEndpointDto extends IntegrationScopeDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 1048576 }) @IsOptional() @IsInt() @Min(1) @Max(1048576) maxBodyBytes?: number;
   @ApiPropertyOptional({ minimum: 1, maximum: 300 }) @IsOptional() @IsInt() @Min(1) @Max(300) ratePerMinute?: number;
   @ApiPropertyOptional({ minimum: 1, maximum: 30 }) @IsOptional() @IsInt() @Min(1) @Max(30) bodyRetentionDays?: number;
-  @ApiPropertyOptional({ minimum: 16777216, maximum: 1073741824 }) @IsOptional() @IsInt() @Min(16777216) @Max(1073741824) capacityBytes?: number;
+  @ApiPropertyOptional({ minimum: 16777216, maximum: 5368709120 }) @IsOptional() @IsInt() @Min(16777216) @Max(5368709120) capacityBytes?: number;
   @ApiPropertyOptional({ type: [String], maxItems: 32 }) @IsOptional() @IsArray() @ArrayMaxSize(32) @IsString({ each: true }) @MaxLength(64, { each: true }) allowedIps?: string[];
 }
 export class DeleteIntegrationEndpointDto extends IntegrationScopeDto {

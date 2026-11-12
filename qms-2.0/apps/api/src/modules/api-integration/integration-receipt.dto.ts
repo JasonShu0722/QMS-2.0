@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
 export const INTEGRATION_ATTEMPT_OUTCOMES = ['RECEIVED', 'DUPLICATE', 'REJECTED', 'FAILED', 'UNKNOWN'] as const;
@@ -100,4 +100,9 @@ export class IntegrationOperationDto {
   @ApiProperty({ enum: ['UNKNOWN', 'UNAVAILABLE'] }) requestCollection!: 'UNKNOWN' | 'UNAVAILABLE';
   @ApiPropertyOptional({ format: 'date-time' }) lastCleanupSucceededAt?: string;
   @ApiPropertyOptional({ format: 'date-time' }) lastCleanupFailedAt?: string;
+}
+
+export class UpdateIntegrationCapacityDto {
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
+  @ApiProperty({ minimum: 16777216, maximum: 10737418240 }) @IsInt() @Min(16777216) @Max(10737418240) capacityBytes!: number;
 }

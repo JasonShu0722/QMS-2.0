@@ -57,6 +57,8 @@ const SAFE_METADATA_KEYS = new Set([
   ...configurationDateKeys, 'responsibility', 'bindingVersion', 'previousResourceVersion',
   'contentType',
   'returnReceipt',
+  'capacityBytes',
+  'previousCapacityBytes',
   'eventKey',
   'fileId',
   'organizationId',

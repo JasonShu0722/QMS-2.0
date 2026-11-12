@@ -8,7 +8,7 @@ import { decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { assertIntegrationOrganization, integrationError, integrationInteger, integrationScope, lockIntegrationEndpoint } from './integration-types.js';
-import type { DeleteIntegrationReceiptsDto, IntegrationAttemptDto, IntegrationAttemptPageDto, IntegrationOperationDto, IntegrationPayloadDto, IntegrationReceiptDeleteResultDto, IntegrationReceiptDto, IntegrationReceiptEndpointDto, IntegrationReceiptEndpointPageDto, IntegrationReceiptEndpointQueryDto, IntegrationReceiptPageDto, IntegrationReceiptQueryDto } from './integration-receipt.dto.js';
+import type { DeleteIntegrationReceiptsDto, IntegrationAttemptDto, IntegrationAttemptPageDto, IntegrationOperationDto, IntegrationPayloadDto, IntegrationReceiptDeleteResultDto, IntegrationReceiptDto, IntegrationReceiptEndpointDto, IntegrationReceiptEndpointPageDto, IntegrationReceiptEndpointQueryDto, IntegrationReceiptPageDto, IntegrationReceiptQueryDto, UpdateIntegrationCapacityDto } from './integration-receipt.dto.js';
 
 type ReceiptRow = Omit<IntegrationReceiptDto, 'receivedAt' | 'bodyExpiresAt' | 'metadataExpiresAt'> & { receivedAt: Date; bodyExpiresAt: Date; metadataExpiresAt: Date };
 type AttemptRow = Omit<IntegrationAttemptDto, 'observedAt'> & { observedAt: Date };
@@ -149,9 +149,22 @@ export class IntegrationReceiptService {
   async operations(actor: AdminActor): Promise<IntegrationOperationDto> {
     return this.prisma.$transaction(async tx => {
       const organizationId = await this.authorize(tx, actor);
-      const [row] = await tx.$queryRaw<{ used_body_bytes: bigint; receipt_count: number; last_cleanup_succeeded_at: Date | null; last_cleanup_failed_at: Date | null }[]>`SELECT used_body_bytes,receipt_count,last_cleanup_succeeded_at,last_cleanup_failed_at FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid`;
-      return { usedBodyBytes: Number(row?.used_body_bytes ?? 0), capacityBytes: 1073741824, receiptCount: row?.receipt_count ?? 0, receiptLimit: 100000, requestCollection: this.collectionStatus(organizationId), ...(row?.last_cleanup_succeeded_at ? { lastCleanupSucceededAt: row.last_cleanup_succeeded_at.toISOString() } : {}), ...(row?.last_cleanup_failed_at ? { lastCleanupFailedAt: row.last_cleanup_failed_at.toISOString() } : {}) };
+      const [row] = await tx.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: bigint; receipt_count: number; last_cleanup_succeeded_at: Date | null; last_cleanup_failed_at: Date | null }[]>`SELECT used_body_bytes,capacity_bytes,receipt_count,last_cleanup_succeeded_at,last_cleanup_failed_at FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid`;
+      return { usedBodyBytes: Number(row?.used_body_bytes ?? 0), capacityBytes: Number(row?.capacity_bytes ?? 1073741824), receiptCount: row?.receipt_count ?? 0, receiptLimit: 100000, requestCollection: this.collectionStatus(organizationId), ...(row?.last_cleanup_succeeded_at ? { lastCleanupSucceededAt: row.last_cleanup_succeeded_at.toISOString() } : {}), ...(row?.last_cleanup_failed_at ? { lastCleanupFailedAt: row.last_cleanup_failed_at.toISOString() } : {}) };
     });
+  }
+
+  async updateCapacity(actor: AdminActor, input: UpdateIntegrationCapacityDto, traceId: string, key?: string): Promise<IntegrationOperationDto> {
+    const organizationId = integrationScope(actor), capacityBytes = integrationInteger(input.capacityBytes, 16777216, 10737418240);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_SCOPE_CAPACITY_UPDATED', payload: { organizationId, capacityBytes }, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async tx => {
+      await tx.$executeRaw`INSERT INTO integration_scope_capacities(organization_id) VALUES(${organizationId}::uuid) ON CONFLICT DO NOTHING`;
+      const [current] = await tx.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: bigint }[]>`SELECT used_body_bytes,capacity_bytes FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid FOR UPDATE`;
+      if (capacityBytes < Number(current?.used_body_bytes ?? 0)) integrationError('INTEGRATION_CAPACITY_CONFLICT', 409);
+      await tx.$executeRaw`UPDATE integration_scope_capacities SET capacity_bytes=${capacityBytes} WHERE organization_id=${organizationId}::uuid`;
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_SCOPE_CAPACITY_UPDATED', resourceType: 'IntegrationScopeCapacity', resourceId: organizationId, outcome: 'SUCCESS', traceId, metadata: { capacityBytes, previousCapacityBytes: Number(current?.capacity_bytes ?? 1073741824) } }, tx);
+      const [row] = await tx.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: bigint; receipt_count: number; last_cleanup_succeeded_at: Date | null; last_cleanup_failed_at: Date | null }[]>`SELECT used_body_bytes,capacity_bytes,receipt_count,last_cleanup_succeeded_at,last_cleanup_failed_at FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid`;
+      return { usedBodyBytes: Number(row!.used_body_bytes), capacityBytes: Number(row!.capacity_bytes), receiptCount: row!.receipt_count, receiptLimit: 100000, requestCollection: this.collectionStatus(organizationId), ...(row!.last_cleanup_succeeded_at ? { lastCleanupSucceededAt: row!.last_cleanup_succeeded_at.toISOString() } : {}), ...(row!.last_cleanup_failed_at ? { lastCleanupFailedAt: row!.last_cleanup_failed_at.toISOString() } : {}) };
+    }, async tx => { await assertIntegrationOrganization(tx, organizationId, true); await assertRecentAuthentication(tx, actor); await assertAdminAccess(tx, actor, organizationId, 'integration:manage'); });
   }
 
   async recordAttempt(input: IntegrationAttemptInput): Promise<void> {

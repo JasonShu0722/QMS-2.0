@@ -15,15 +15,14 @@ export class InboundController {
   @ApiParam({ name: 'endpointId', required: true, description: '接口编码（区分大小写），或原有接口 UUID。', schema: { type: 'string', maxLength: 64 } })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiBody({ schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
-  @ApiResponse({ status: 201, type: InboundReceiptDto })
-  @ApiResponse({ status: 204, description: '接收成功，接口配置关闭回执正文。' })
+  @ApiResponse({ status: 200, type: InboundReceiptDto, description: '接收成功；关闭回执正文时仍返回200但无正文。' })
   @ApiResponse({ status: 'default', type: ErrorResponse })
   async receive(@Req() request: InboundRequest, @Res({ passthrough: true }) response: Response): Promise<InboundReceiptDto | undefined> {
     response.setHeader('Cache-Control', 'no-store');
     try {
       const result = await this.inbound.receive(request, request[INBOUND_IDENTITY]!);
       request[INBOUND_RESULT] = result;
-      response.status(result.statusCode);
+      response.status(200);
       return result.returnReceipt ? result.receipt : undefined;
     } catch (error) {
       if (error instanceof InboundRateLimitException) response.setHeader('Retry-After', String(error.retryAfter));

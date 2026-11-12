@@ -94,7 +94,7 @@ it('copies a complete current connection configuration with actual authorization
   fireEvent.click(instructions.getByRole('button', { name: '复制对接配置' }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledTimes(1));
   const copied = clipboard.mock.calls[0]![0];
-  for (const value of ['MES质量推送', currentEndpoint.publicUrl, 'POST', 'Content-Type: application/json', 'Authorization: Bearer fixture-id.ACTUAL-SECRET', 'JSON对象数组', '[{"example":true}]', '每次请求独立保存', '重试可能新增记录', '204']) expect(copied).toContain(value);
+  for (const value of ['MES质量推送', currentEndpoint.publicUrl, 'POST', 'Content-Type: application/json', 'Authorization: Bearer fixture-id.ACTUAL-SECRET', 'JSON对象数组', '[{"example":true}]', '每次请求独立保存', '重试可能新增记录', '200']) expect(copied).toContain(value);
   for (const value of ['Idempotency-Key', '防重复', '409', '重复返回200']) expect(copied).not.toContain(value);
   expect(copied).not.toContain('example-message-001'); expect(copied).not.toContain('<credentialId>');
   expect(Object.values(localStorage).join('') + Object.values(sessionStorage).join('')).not.toContain('ACTUAL-SECRET');

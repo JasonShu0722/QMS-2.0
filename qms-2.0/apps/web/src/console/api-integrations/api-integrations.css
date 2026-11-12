@@ -1,6 +1,9 @@
 .qms-integration-page, .qms-integration-section { min-width: 0; }
 .qms-integration-section { display: grid; gap: 12px; }
 .qms-integration-section small { display: block; color: var(--qms-muted); margin-top: 3px; overflow-wrap: anywhere; }
+.qms-integration-capacity-button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: start; }
+.qms-integration-capacity-button:disabled { cursor: default; }
+.qms-integration-capacity-button:not(:disabled):hover, .qms-integration-capacity-button:not(:disabled):focus-visible { text-decoration: underline; }
 .qms-integration-receipt-table--selection .ant-table :is(th, td).ant-table-selection-column { padding-inline: 6px; }
 .qms-integration-section strong, .qms-integration-instructions code { overflow-wrap: anywhere; }
 .qms-integration-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
