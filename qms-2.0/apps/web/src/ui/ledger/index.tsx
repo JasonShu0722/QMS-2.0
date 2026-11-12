@@ -68,6 +68,10 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const minimumFor = (key: string) => key === SELECTION_WIDTH_KEY ? MIN_SELECTION_WIDTH : boundedWidth(getColumn(key)?.minWidth, MIN_WIDTH);
   const clampWidth = (key: string, value: unknown, fallback = DEFAULT_WIDTH) => boundedWidth(value, fallback, minimumFor(key));
   const widthFor = (key: string) => preview && preview.epoch === sessionEpoch && preview.scope === stateKey && preview.key === key ? preview.width : clampWidth(key, saved.widths[key], key === SELECTION_WIDTH_KEY ? clampWidth(key, rowSelection?.columnWidth, 44) : boundedWidth(getColumn(key)?.width, DEFAULT_WIDTH));
+  const businessWidth = keys.filter(key => visible.includes(key) || required.includes(key)).reduce((total, key) => total + widthFor(key), 0);
+  const fitSelection = Boolean(rowSelection && resizableSelection && businessWidth);
+  const selectionWidth = widthFor(SELECTION_WIDTH_KEY);
+  const columnWidth = (key: string) => fitSelection ? `${widthFor(key) / businessWidth * 100}%` : widthFor(key);
   function commit(next: Preferences) { save(normalize({ ...next, fixed: resolveFixed(next.fixed, columnOrder ?? next.order) })); }
   function setWidth(key: string, width: number) { commit({ ...saved, widths: { ...saved.widths, [key]: clampWidth(key, width) } }); }
   function setOrder(next: string[]) {
@@ -133,7 +137,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
         const ariaLabel = original['aria-label'] ?? (typeof title === 'string' && original['aria-labelledby'] == null ? title : undefined);
         return { ...original, 'aria-label': ariaLabel, ledgerAriaLabel: ariaLabel, className: [original.className, 'qms-ledger__header-cell'].filter(Boolean).join(' '), ledgerResize: resizeHandle(key, name) };
       };
-      return { ...column, key: column.key ?? key, onHeaderCell, hidden: !visible.includes(key) && !required.includes(key), width: widthFor(key), fixed: fixed[key], title: (titleProps: Parameters<Exclude<typeof title, ReactNode>>[0]) => <div className={`qms-ledger__heading${dropTarget && dropTarget.epoch === sessionEpoch && dropTarget.scope === stateKey && dropTarget.key === key ? ' qms-ledger__heading--drop' : ''}`} data-ledger-column={key}>
+      return { ...column, key: column.key ?? key, onHeaderCell, hidden: !visible.includes(key) && !required.includes(key), width: columnWidth(key), fixed: fixed[key], title: (titleProps: Parameters<Exclude<typeof title, ReactNode>>[0]) => <div className={`qms-ledger__heading${dropTarget && dropTarget.epoch === sessionEpoch && dropTarget.scope === stateKey && dropTarget.key === key ? ' qms-ledger__heading--drop' : ''}`} data-ledger-column={key}>
         {!required.includes(key) ? <button type="button" className="qms-ledger__grip" aria-label={`${text('移动列', 'Move column')} ${name}`} onClick={event => event.stopPropagation()} onPointerDown={event => begin(event, key, 'order')} onPointerMove={update} onPointerUp={event => end(event, false)} onPointerCancel={event => end(event, true)} onLostPointerCapture={event => end(event, true)} onKeyDown={event => { event.stopPropagation(); const index = order.indexOf(key); if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); const target = order[index + (event.key === 'ArrowLeft' ? -1 : 1)]; if (target) move(key, target); } }}><GripVertical size={12} aria-hidden="true" /></button> : null}
         <span className="qms-ledger__title">{typeof title === 'function' ? title(titleProps) : title}</span>
       </div> };
@@ -175,6 +179,6 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const expansion = expandable?.expandedRowRender ? { ...expandable, columnTitle: expandable.columnTitle === undefined ? text('明细', 'Details') : expandable.columnTitle, columnWidth: expandable.columnWidth ?? 64, showExpandColumn: expandable.showExpandColumn ?? (tableProps.dataSource?.some(record => !expandable.rowExpandable || expandable.rowExpandable(record)) ?? false) } : expandable;
   return <div className="qms-ledger">
     <div className="qms-ledger__tools"><Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
-    <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={{ x: 'max-content', ...scroll }} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
+    <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} tableLayout={fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={{ x: 'max-content', ...scroll, ...(fitSelection ? { x: `max(100%, ${businessWidth + selectionWidth}px)` } : {}) }} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
   </div>;
 }

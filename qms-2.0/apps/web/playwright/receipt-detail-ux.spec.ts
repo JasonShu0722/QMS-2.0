@@ -231,16 +231,33 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
     const tableContent = section.locator('.ant-table-content');
     const table = tableContent.locator('table');
     expect((await table.boundingBox())!.width).toBeGreaterThanOrEqual((await tableContent.boundingBox())!.width - 2);
+    await expect(table.locator('thead th')).toHaveCount(6);
+    await expect(table.locator('thead th').last()).toHaveText('详情');
     const selectionHeader = selectPage.locator('xpath=ancestor::th');
-    expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(45, 0);
+    expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(44, 0);
     await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowRight');
     expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(54, 0);
     await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowLeft');
-    const actionHeader = section.getByRole('columnheader', { name: '详情', exact: true });
-    const actionWidth = (await actionHeader.boundingBox())!.width;
-    await section.getByRole('separator', { name: '调整列宽 详情', exact: true }).press('ArrowRight');
-    expect((await actionHeader.boundingBox())!.width).toBeCloseTo(actionWidth + 10, 0);
-    await section.getByRole('separator', { name: '调整列宽 详情', exact: true }).press('ArrowLeft');
+    for (const name of ['消息编号', '来源 / 接口', '接收结果', '时间', '详情']) {
+      const header = section.getByRole('columnheader', { name, exact: true });
+      const widthBefore = (await header.boundingBox())!.width;
+      await section.getByRole('separator', { name: `调整列宽 ${name}`, exact: true }).press('ArrowRight');
+      await expect.poll(async () => (await header.boundingBox())!.width).toBeGreaterThan(widthBefore + 1);
+      await section.getByRole('separator', { name: `调整列宽 ${name}`, exact: true }).press('ArrowLeft');
+      await expect.poll(async () => (await header.boundingBox())!.width).toBeCloseTo(widthBefore, 0);
+    }
+    const lastHeader = (await table.locator('thead th').last().boundingBox())!;
+    expect(lastHeader.x + lastHeader.width).toBeCloseTo((await table.boundingBox())!.x + (await table.boundingBox())!.width, 0);
+    if (process.env.QMS_RECEIPT_VISUAL_SCREENSHOT) await page.screenshot({ path: process.env.QMS_RECEIPT_VISUAL_SCREENSHOT });
+    await section.getByRole('button', { name: '列设置', exact: true }).click();
+    const resultVisibility = page.getByRole('checkbox', { name: '显示 接收结果', exact: true });
+    await resultVisibility.uncheck();
+    await expect(table.locator('thead th')).toHaveCount(5);
+    expect((await table.boundingBox())!.width).toBeGreaterThanOrEqual((await tableContent.boundingBox())!.width - 2);
+    expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(44, 0);
+    await resultVisibility.check();
+    await expect(table.locator('thead th')).toHaveCount(6);
+    await section.getByRole('button', { name: '列设置', exact: true }).click();
 
     await page.setViewportSize({ width: 390, height: 700 });
     expect(await tableContent.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
