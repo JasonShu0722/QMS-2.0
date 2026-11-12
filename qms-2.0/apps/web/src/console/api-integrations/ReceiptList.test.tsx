@@ -231,18 +231,21 @@ it('keeps receipt selection compact and allows widening it without changing the 
   expect(screen.getByText('已选择 1 条')).toBeVisible();
 });
 
-it('lets an empty trailing column absorb spare space without overriding table or business-column widths', async () => {
+it('distributes spare space among business columns without adding an empty trailing column', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   view(); await screen.findByText('message-001');
   const table = screen.getByRole('table');
   expect(table).toHaveStyle({ minWidth: '100%' });
-  expect(table.querySelector('thead tr')?.lastElementChild).toHaveClass('qms-integration-table-fill');
-  expect(table.querySelector('thead tr')?.lastElementChild).toHaveAttribute('aria-hidden', 'true');
-  expect(table.querySelector('thead tr')?.lastElementChild?.querySelector('[role="separator"]')).toBeNull();
+  expect(table.querySelectorAll('thead th')).toHaveLength(6);
+  expect(table.querySelector('thead tr')?.lastElementChild).toHaveTextContent('详情');
+  expect(table.querySelector('.qms-integration-table-fill')).toBeNull();
   const actionColumn = table.querySelectorAll('col')[5];
-  expect(actionColumn).toHaveStyle({ width: '170px' });
+  expect(actionColumn?.getAttribute('style')).toContain('%');
+  expect(screen.getByRole('separator', { name: '调整列宽 详情' })).toHaveAttribute('aria-valuenow', '170');
+  const previousWidth = actionColumn?.getAttribute('style');
   fireEvent.keyDown(screen.getByRole('separator', { name: '调整列宽 详情' }), { key: 'ArrowRight' });
-  expect(actionColumn).toHaveStyle({ width: '180px' });
+  expect(screen.getByRole('separator', { name: '调整列宽 详情' })).toHaveAttribute('aria-valuenow', '180');
+  expect(actionColumn?.getAttribute('style')).not.toEqual(previousWidth);
   const css = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
   expect(css).not.toMatch(/min-width:\s*0\s*!important/);
   expect(css).not.toMatch(/col:last-child/);

@@ -345,6 +345,25 @@ describe('LedgerTable', () => {
     fireEvent.click(screen.getByRole('button', { name: '恢复全部列' }));
     expect(screen.getByRole('separator', { name: '调整列宽 选择' })).toHaveAttribute('aria-valuenow', '44');
   });
+  it('fills selection tables with proportional business columns and recomputes only visible widths', () => {
+    const equalColumns = [{ ...columns[0], width: 180 }, { ...columns[1], width: 180 }];
+    const props = { ledgerId: 'selection-fill', columns: equalColumns, dataSource: data, pagination: false as const, rowSelection: {}, resizableSelection: true };
+    const { rerender } = render(<LedgerTable {...props} />);
+    const table = screen.getByRole('table');
+    expect(table).toHaveStyle({ width: 'max(100%, 404px)', tableLayout: 'fixed' });
+    expect(table.querySelectorAll('col')).toHaveLength(3);
+    expect(table.querySelector('col')).toHaveStyle({ width: '44px' });
+    expect(table.querySelectorAll('col')[1]).toHaveStyle({ width: '50%' });
+    expect(table.querySelectorAll('col')[2]).toHaveStyle({ width: '50%' });
+    settings();
+    fireEvent.click(screen.getByRole('checkbox', { name: '显示 名称' }));
+    expect(table.querySelectorAll('col')).toHaveLength(2);
+    expect(table.querySelectorAll('col')[1]).toHaveStyle({ width: '100%' });
+    expect(table).toHaveStyle({ width: 'max(100%, 224px)' });
+    rerender(<LedgerTable {...props} rowSelection={undefined} />);
+    expect(table.querySelectorAll('col')[0]).toHaveStyle({ width: '180px' });
+    expect(table).not.toHaveStyle({ tableLayout: 'fixed' });
+  });
   it('supports numeric width, pinning, moving, single and all resets without touching page size', () => {
     render(<LedgerTable ledgerId="controls" columns={columns} dataSource={data} pagination={false} />);
     settings();
