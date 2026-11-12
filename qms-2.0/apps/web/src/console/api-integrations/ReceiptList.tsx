@@ -59,7 +59,7 @@ export function ReceiptList({ scope }: { scope: IntegrationScope }) {
   const [capacityError, setCapacityError] = useState<unknown>();
   const [capacityUnknown, setCapacityUnknown] = useState(false);
   const capacityPending = useRef(false);
-  const capacityRequest = useRef<components['schemas']['UpdateIntegrationCapacityDto']>();
+  const capacityRequest = useRef<components['schemas']['UpdateIntegrationCapacityDto'] | undefined>(undefined);
   const deletePending = useRef(false);
   const deleteBusy = deleting || deleteUnknown;
   const capacityBusy = capacitySaving || capacityUnknown;
