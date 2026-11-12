@@ -227,11 +227,23 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
     await expect(section.getByRole('button', { name: `查看消息${third.messageId}`, exact: true })).toBeVisible();
 
     const selectPage = section.getByRole('checkbox', { name: '选择当前页', exact: true });
+    await page.setViewportSize({ width: 1920, height: 900 });
+    const tableContent = section.locator('.ant-table-content');
+    const table = tableContent.locator('table');
+    expect((await table.boundingBox())!.width).toBeGreaterThanOrEqual((await tableContent.boundingBox())!.width - 2);
     const selectionHeader = selectPage.locator('xpath=ancestor::th');
     expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(45, 0);
     await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowRight');
     expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(54, 0);
     await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowLeft');
+    const actionHeader = section.getByRole('columnheader', { name: '详情', exact: true });
+    const actionWidth = (await actionHeader.boundingBox())!.width;
+    await section.getByRole('separator', { name: '调整列宽 详情', exact: true }).press('ArrowRight');
+    expect((await actionHeader.boundingBox())!.width).toBeCloseTo(actionWidth + 10, 0);
+    await section.getByRole('separator', { name: '调整列宽 详情', exact: true }).press('ArrowLeft');
+
+    await page.setViewportSize({ width: 390, height: 700 });
+    expect(await tableContent.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 
     for (const viewport of [{ width: 390, height: 700 }, { width: 390, height: 500 }, { width: 667, height: 320 }, { width: 1024, height: 400 }]) {
       await page.setViewportSize(viewport);

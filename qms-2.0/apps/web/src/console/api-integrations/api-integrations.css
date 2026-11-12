@@ -1,8 +1,8 @@
 .qms-integration-page, .qms-integration-section { min-width: 0; }
 .qms-integration-section { display: grid; gap: 12px; }
 .qms-integration-section small { display: block; color: var(--qms-muted); margin-top: 3px; overflow-wrap: anywhere; }
-.qms-integration-receipt-table--selection .ant-table-content > table { min-width: 0 !important; }
-.qms-integration-receipt-table--selection .ant-table :is(th, td).ant-table-selection-column { padding-inline: 8px; }
+.qms-integration-receipt-table--selection .ant-table :is(th, td).ant-table-selection-column { padding-inline: 6px; }
+.qms-integration-receipt-table--selection .ant-table :is(th, td).qms-integration-table-fill { padding: 0; }
 .qms-integration-section strong, .qms-integration-instructions code { overflow-wrap: anywhere; }
 .qms-integration-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
 .qms-integration-form-grid .ant-input-number { width: 100%; }

@@ -88,8 +88,10 @@ it('loads an authorized payload automatically and keeps it in a scrollable frame
   const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
   const body = await dialog.findByLabelText('接收正文');
   expect(body).toHaveTextContent(payload); expect(body).toHaveClass('qms-integration-payload');
-  await waitFor(() => expect(dialog.getByRole('button', { name: '复制接收正文' })).toBeVisible());
-  fireEvent.click(dialog.getByRole('button', { name: '复制接收正文' }));
+  const copy = await dialog.findByLabelText('复制接收正文');
+  expect(copy).toHaveRole('button'); expect(copy).toHaveAccessibleName('复制接收正文');
+  await waitFor(() => expect(copy).toBeVisible());
+  fireEvent.click(copy);
   await waitFor(() => expect(clipboard).toHaveBeenCalledWith(payload));
   expect(await dialog.findByText('已复制接收正文')).toBeVisible();
 });
@@ -100,7 +102,7 @@ it('keeps scrolling in the payload while the dialog title and footer stay outsid
   style.textContent = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
   document.head.append(style);
   try {
-    view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
+    view(); await screen.findByText('message-001'); fireEvent.click(await screen.findByLabelText('查看消息message-001'));
     const dialog = await screen.findByRole('dialog', { name: '接收详情' });
     const payload = await within(dialog).findByLabelText('接收正文');
     const body = payload.closest<HTMLElement>('.ant-modal-body')!;
@@ -110,8 +112,11 @@ it('keeps scrolling in the payload while the dialog title and footer stay outsid
     expect(body.closest<HTMLElement>('.ant-modal-container')?.style.maxHeight).toContain('100dvh');
     expect(within(body).getByText(receipt.id)).toBeInTheDocument();
     expect(within(body).getByText(receipt.endpointName)).toBeInTheDocument();
-    expect(within(body).getByRole('button', { name: new RegExp(receipt.id) })).toHaveAttribute('title', receipt.id);
-    fireEvent.click(within(body).getByRole('button', { name: new RegExp(receipt.id) }));
+    const fullReceiptId = within(body).getByLabelText(`接收编号：${receipt.id}`);
+    expect(fullReceiptId).toHaveRole('button');
+    expect(fullReceiptId).toHaveAccessibleName(`接收编号：${receipt.id}`);
+    expect(fullReceiptId).toHaveAttribute('title', receipt.id);
+    fireEvent.click(fullReceiptId);
     expect(await screen.findByText(receipt.id, { selector: '.qms-integration-detail-value-popover' })).toBeInTheDocument();
     expect(body).not.toContainElement(within(dialog).getByText('接收详情'));
     expect(body).not.toContainElement(within(dialog).getByRole('button', { name: '关闭' }));
@@ -124,13 +129,17 @@ it('presents an inset, translucent copy icon with an accessible label', async ()
   style.textContent = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
   document.head.append(style);
   try {
-    view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '查看消息message-001' }));
-    const copy = await screen.findByRole('button', { name: '复制接收正文' });
+    view(); await screen.findByText('message-001'); fireEvent.click(await screen.findByLabelText('查看消息message-001'));
+    const dialog = within(await screen.findByRole('dialog', { name: '接收详情' }));
+    const copy = await dialog.findByLabelText('复制接收正文');
+    expect(copy).toHaveRole('button'); expect(copy).toHaveAccessibleName('复制接收正文');
+    await waitFor(() => expect(copy).toBeVisible());
     expect(copy.querySelector('svg.lucide-copy')).toHaveAttribute('aria-hidden', 'true');
     expect(copy.textContent).toBe('');
-    expect(Number(getComputedStyle(copy).opacity)).toBeGreaterThan(0);
-    expect(Number(getComputedStyle(copy).opacity)).toBeLessThan(1);
-    expect(Number.parseFloat(getComputedStyle(copy).right)).toBeGreaterThanOrEqual(20);
+    const copyStyle = getComputedStyle(copy);
+    expect(Number(copyStyle.opacity)).toBeGreaterThan(0);
+    expect(Number(copyStyle.opacity)).toBeLessThan(1);
+    expect(Number.parseFloat(copyStyle.right)).toBeGreaterThanOrEqual(20);
   } finally { style.remove(); }
 });
 
@@ -220,6 +229,23 @@ it('keeps receipt selection compact and allows widening it without changing the 
   expect(column).toHaveStyle({ width: '66px' });
   expect(selectPage).toBeChecked();
   expect(screen.getByText('已选择 1 条')).toBeVisible();
+});
+
+it('lets an empty trailing column absorb spare space without overriding table or business-column widths', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  view(); await screen.findByText('message-001');
+  const table = screen.getByRole('table');
+  expect(table).toHaveStyle({ minWidth: '100%' });
+  expect(table.querySelector('thead tr')?.lastElementChild).toHaveClass('qms-integration-table-fill');
+  expect(table.querySelector('thead tr')?.lastElementChild).toHaveAttribute('aria-hidden', 'true');
+  expect(table.querySelector('thead tr')?.lastElementChild?.querySelector('[role="separator"]')).toBeNull();
+  const actionColumn = table.querySelectorAll('col')[5];
+  expect(actionColumn).toHaveStyle({ width: '170px' });
+  fireEvent.keyDown(screen.getByRole('separator', { name: '调整列宽 详情' }), { key: 'ArrowRight' });
+  expect(actionColumn).toHaveStyle({ width: '180px' });
+  const css = readFileSync('src/console/api-integrations/api-integrations.css', 'utf8');
+  expect(css).not.toMatch(/min-width:\s*0\s*!important/);
+  expect(css).not.toMatch(/col:last-child/);
 });
 
 it('offers single receipt deletion only to integration managers', async () => {
