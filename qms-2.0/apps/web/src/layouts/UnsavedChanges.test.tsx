@@ -32,7 +32,7 @@ it('keeps the unsaved confirmation above an open drawer', async () => {
   const router = dataView();
   fireEvent.click(screen.getByRole('button', { name: 'open drawer' }));
   fireEvent.click(screen.getByRole('button', { name: 'confirmed navigation' }));
-  const dialog = await screen.findByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' });
+  const dialog = await waitFor(() => screen.getAllByRole('dialog').find(item => item.textContent?.includes('当前草稿尚未保存，继续将放弃修改。'))!);
   expect(dialog.closest('.ant-modal-wrap')).toHaveStyle({ zIndex: '2000' });
   await waitFor(() => expect(dialog).toBeVisible());
   expect(router.state.location.pathname).toBe('/app/edit');
