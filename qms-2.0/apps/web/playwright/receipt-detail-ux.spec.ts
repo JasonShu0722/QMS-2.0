@@ -88,7 +88,8 @@ async function sendMessage(endpointCode: string, credential: string, body: strin
     headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' }, body,
   });
   expect(response.status).toBe(200);
-  return await response.json() as Schema['InboundReceiptDto'];
+  expect(await response.json()).toBe(true);
+  return response;
 }
 
 async function selectEndpoint(page: Page, section: Locator, search: string, endpointName: string, endpointCode: string, endpointId: string) {
@@ -196,15 +197,18 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
       } });
     }));
 
-    const first = await sendMessage(endpoint.code, credential.secret!, bodyOne);
-    const second = await sendMessage(endpoint.code, credential.secret!, bodyTwo);
-    const third = await sendMessage(endpoint.code, credential.secret!, bodyThree);
-    fixtureReceiptIds.push(first.receiptId, second.receiptId, third.receiptId);
+    await sendMessage(endpoint.code, credential.secret!, bodyOne);
+    const first = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id }, orderBy: { receivedAt: 'desc' } });
+    await sendMessage(endpoint.code, credential.secret!, bodyTwo);
+    const second = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id, id: { not: first.id } }, orderBy: { receivedAt: 'desc' } });
+    await sendMessage(endpoint.code, credential.secret!, bodyThree);
+    const third = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id, id: { notIn: [first.id, second.id] } }, orderBy: { receivedAt: 'desc' } });
+    fixtureReceiptIds.push(first.id, second.id, third.id);
     const stored = await prisma.integrationReceipt.findMany({ where: { id: { in: fixtureReceiptIds } }, orderBy: { receivedAt: 'asc' } });
     expect(stored).toHaveLength(3);
-    firstPayloadBytes = stored.find(item => item.id === first.receiptId)!.payloadBytes;
-    secondPayloadBytes = stored.find(item => item.id === second.receiptId)!.payloadBytes;
-    thirdPayloadBytes = stored.find(item => item.id === third.receiptId)!.payloadBytes;
+    firstPayloadBytes = stored.find(item => item.id === first.id)!.payloadBytes;
+    secondPayloadBytes = stored.find(item => item.id === second.id)!.payloadBytes;
+    thirdPayloadBytes = stored.find(item => item.id === third.id)!.payloadBytes;
     const attemptsBefore = await prisma.integrationRequestAttempt.count({ where: { endpointId: endpoint.id, receiptId: { in: fixtureReceiptIds } } });
     expect(attemptsBefore).toBe(3);
     capacityBefore = (await positionRead<Schema['IntegrationOperationDto']>(page.request, `/api/v1/admin/integrations/status?organizationId=${endpoint.organizationId}`)).usedBodyBytes;

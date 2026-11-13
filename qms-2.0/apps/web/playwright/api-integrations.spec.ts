@@ -180,15 +180,14 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     const body = JSON.stringify([{ technicalAcceptance: true, text: '<img src=x onerror="window.__qmsInboundExecuted=true"><script>window.__qmsInboundExecuted=true</script>' }, { technicalAcceptance: true, item: 2 }]);
     const received = await sendMessage(encodeURIComponent(endpoint.code), copiedAuthorization!, body);
     expect(received.status).toBe(200);
-    const receipt = await received.json() as Schema['InboundReceiptDto'];
-    expect(Object.hasOwn(receipt, 'duplicate')).toBe(false);
-    expect(receipt.messageId).toBe(receipt.receiptId);
+    expect(await received.json()).toBe(true);
+    const receipt = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id }, orderBy: { receivedAt: 'desc' } });
     const messageId = receipt.messageId;
     const repeated = await sendMessage(endpoint.id, credential.secret!, body);
     expect(repeated.status).toBe(200);
-    const repeatedReceipt = await repeated.json() as Schema['InboundReceiptDto'];
-    expect(repeatedReceipt.receiptId).not.toBe(receipt.receiptId);
-    expect(repeatedReceipt.messageId).toBe(repeatedReceipt.receiptId);
+    expect(await repeated.json()).toBe(true);
+    const repeatedReceipt = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id, id: { not: receipt.id } }, orderBy: { receivedAt: 'desc' } });
+    expect(repeatedReceipt.id).not.toBe(receipt.id);
 
     await section.getByRole('button', { name: `编辑${name}`, exact: true }).click();
     await page.getByRole('dialog').getByRole('switch', { name: '返回接收回执', exact: true }).uncheck();
@@ -196,13 +195,13 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     expect(endpoint.returnReceipt).toBe(false);
     for (let sending = 0; sending < 3; sending++) {
       const response = await sendMessage(endpoint.id, credential.secret!, body);
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
       expect((await response.arrayBuffer()).byteLength).toBe(0);
     }
     const stored = await prisma.integrationReceipt.findMany({ where: { endpointId: endpoint.id } });
     expect(stored).toHaveLength(5);
     expect(stored.every(item => item.messageId === item.id && item.bodyDigest === null)).toBe(true);
-    const silentMessageId = stored.find(item => item.id !== receipt.receiptId && item.id !== repeatedReceipt.receiptId)!.messageId;
+    const silentMessageId = stored.find(item => item.id !== receipt.id && item.id !== repeatedReceipt.id)!.messageId;
 
     await section.getByRole('tab', { name: '接收记录', exact: true }).click();
     const filters = section.getByRole('form', { name: '接收记录筛选', exact: true });
@@ -239,7 +238,7 @@ test('real receiving configuration, permanent reusable connection copy, receipts
     expect(removed.status()).toBe(204); deleted = true;
     await expect(section.getByRole('button', { name: `删除${name}`, exact: true })).toHaveCount(0);
     expect((await sendMessage(encodeURIComponent(endpoint.code), deletionCredential.secret!, body)).status).toBe(401);
-    const preserved = await positionRead<Schema['IntegrationPayloadDto']>(page.request, `/api/v1/admin/integrations/receipts/${receipt.receiptId}/payload?organizationId=${endpoint.organizationId}`);
+    const preserved = await positionRead<Schema['IntegrationPayloadDto']>(page.request, `/api/v1/admin/integrations/receipts/${receipt.id}/payload?organizationId=${endpoint.organizationId}`);
     expect(preserved.text === body).toBe(true);
     const replacement = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, endpoints, 'POST', { organizationId: endpoint.organizationId, code: endpoint.code, name: `${name}替代`, sourceCode, sourceName: `技术来源 ${suffix}` }, 201);
     expect(replacement.id).not.toBe(endpoint.id);
