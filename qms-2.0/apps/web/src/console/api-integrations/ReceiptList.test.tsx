@@ -53,6 +53,133 @@ it('reads receipt metadata in the verified organization without requiring config
   expect(read.mock.calls.some(([path]) => path.includes('/endpoints'))).toBe(false);
 });
 
+it('compact receiving controls combine capacity and actions and keep all six page sizes beside columns above the table', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  read.mockImplementation(async path => path.includes('/status')
+    ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN', lastCleanupSucceededAt: receipt.receivedAt, lastCleanupFailedAt: receipt.receivedAt }
+    : { ...page(path), total: 1200 });
+  const mounted = view(); await screen.findByText('message-001');
+  const toolbar = screen.getByRole('toolbar', { name: '接收记录操作' });
+  expect(within(toolbar).getByRole('button', { name: '设置组织正文容量' })).toBeEnabled();
+  expect(within(toolbar).getByRole('combobox', { name: '记录视图' })).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button', { name: '刷新记录' })).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button', { name: '筛选条件' })).toBeInTheDocument();
+  expect(screen.queryByText(/最近清理(成功|失败)/)).not.toBeInTheDocument();
+  const pagination = screen.getByRole('navigation', { name: '接收记录分页' });
+  expect(pagination.parentElement).toContainElement(screen.getByRole('button', { name: '列设置' }));
+  expect(pagination.compareDocumentPosition(screen.getByRole('table')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getAllByRole('navigation', { name: '接收记录分页' })).toHaveLength(1);
+  const sizes = within(pagination).getByRole('combobox', { name: '每页条数' });
+  expect(sizes).toHaveValue('20');
+  expect(within(sizes).getAllByRole('option').map(option => option.getAttribute('value'))).toEqual(['10', '20', '50', '100', '500', '1000']);
+  expect(pagination).toHaveTextContent('共 1200 条');
+  expect(pagination).toHaveTextContent('1 / 60');
+  for (const size of [10, 20, 50, 100, 500, 1000]) {
+    fireEvent.change(sizes, { target: { value: String(size) } });
+    await waitFor(() => expect(new URL(read.mock.calls.filter(([path]) => path.includes('/receipts?')).at(-1)![0], 'http://localhost').searchParams.get('limit')).toBe(String(size)));
+    await screen.findByText('message-001');
+  }
+  expect(mounted.container.querySelector('.ant-table-pagination')).toBeNull();
+});
+
+it('compact receiving selection clears before an asynchronous next page loads and remains page scoped after size and filter changes', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  let resolveNext!: (value: unknown) => void;
+  read.mockImplementation(async path => path.includes('/status')
+    ? { usedBodyBytes: 40, capacityBytes: 1073741824, receiptCount: 21, receiptLimit: 100000, requestCollection: 'UNKNOWN' }
+    : new URL(path, 'http://localhost').searchParams.get('page') === '2'
+      ? new Promise(resolve => { resolveNext = resolve; }) : { ...page(path), total: 21 });
+  view(); await screen.findByText('message-001');
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  const selection = screen.getByRole('toolbar', { name: '已选接收记录' });
+  expect(within(selection).getByText('已选择 1 条')).toBeVisible();
+  fireEvent.click(within(selection).getByRole('button', { name: '取消选择' }));
+  expect(screen.queryByRole('toolbar', { name: '已选接收记录' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  const pagination = screen.getByRole('navigation', { name: '接收记录分页' });
+  fireEvent.click(within(pagination).getByRole('button', { name: '下一页' }));
+  expect(screen.queryByRole('toolbar', { name: '已选接收记录' })).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: '选择当前页' })).toBeDisabled();
+  await act(async () => resolveNext({ ...page('/?page=2&limit=20'), items: [secondReceipt], total: 21 }));
+  await screen.findByText('message-002');
+  expect(screen.getByRole('checkbox', { name: '选择当前页' })).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  fireEvent.change(within(pagination).getByRole('combobox', { name: '每页条数' }), { target: { value: '50' } });
+  await screen.findByText('message-001');
+  expect(screen.queryByRole('toolbar', { name: '已选接收记录' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  openFilters();
+  fireEvent.change(screen.getByLabelText('来源系统编码', { selector: 'input' }), { target: { value: 'MES' } });
+  fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
+  expect(screen.queryByRole('toolbar', { name: '已选接收记录' })).not.toBeInTheDocument();
+});
+
+it('compact receiving deletion returns directly to the last valid page after removing the final page', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  let deleted = false;
+  read.mockImplementation(async path => {
+    if (path.includes('/status')) return { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: deleted ? 20 : 81, receiptLimit: 100000, requestCollection: 'UNKNOWN' };
+    const result = page(path);
+    return { ...result, items: result.page === 5 ? (deleted ? [] : [secondReceipt]) : [receipt], total: deleted ? 20 : 81 };
+  });
+  mutate.mockImplementation(async () => { deleted = true; return { deletedCount: 1, receiptIds: [secondReceipt.id] }; });
+  view(); await screen.findByText('message-001');
+  const pagination = screen.getByRole('navigation', { name: '接收记录分页' });
+  fireEvent.change(within(pagination).getByRole('spinbutton', { name: '跳至页' }), { target: { value: '5' } });
+  fireEvent.submit(within(pagination).getByRole('spinbutton', { name: '跳至页' }).closest('form')!);
+  await screen.findByText('message-002');
+  fireEvent.click(screen.getByRole('button', { name: '删除消息message-002' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除接收记录' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await screen.findByText('message-001');
+  expect(pagination).toHaveTextContent('1 / 1');
+  expect(pagination).toHaveTextContent('共 20 条');
+  const readsAfterDeletion = read.mock.calls.filter(([path]) => path.includes('/receipts?')).map(([path]) => Number(new URL(path, 'http://localhost').searchParams.get('page')));
+  expect(readsAfterDeletion).not.toContain(4);
+  expect(readsAfterDeletion).not.toContain(3);
+  expect(readsAfterDeletion).not.toContain(2);
+});
+
+it('compact receiving freezes selected IDs and all related controls during submitting and unknown deletion before exact retry', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  let rejectDelete!: (cause: unknown) => void;
+  mutate.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDelete = reject; }));
+  mutate.mockResolvedValueOnce({ deletedCount: 1, receiptIds: [receiptId] });
+  view(); const message = await screen.findByText('message-001'); openFilters();
+  const selectPage = screen.getByRole('checkbox', { name: '选择当前页' });
+  fireEvent.click(selectPage);
+  const selectedActions = within(screen.getByRole('toolbar', { name: '已选接收记录' }));
+  const actions = within(screen.getByRole('toolbar', { name: '接收记录操作' }));
+  const filters = within(screen.getByRole('form', { name: '接收记录筛选' }));
+  const pagination = within(screen.getByRole('navigation', { name: '接收记录分页' }));
+  const controls = [selectPage,
+    selectedActions.getByRole('button', { name: '取消选择' }),
+    within(message.closest('tr')!).getByRole('button', { name: '查看消息message-001' }),
+    actions.getByRole('combobox', { name: '记录视图' }),
+    actions.getByRole('button', { name: '设置组织正文容量' }),
+    filters.getByRole('button', { name: '应用筛选' }),
+    filters.getByRole('textbox', { name: '来源系统编码' }),
+    pagination.getByRole('combobox', { name: '每页条数' }),
+    pagination.getByRole('spinbutton', { name: '跳至页' }),
+  ];
+  fireEvent.click(selectedActions.getByRole('button', { name: '删除所选' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除接收记录' }));
+  controls.push(dialog.getByRole('button', { name: '取消' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  const assertFrozen = () => {
+    controls.forEach(control => expect(control).toBeDisabled());
+  };
+  assertFrozen();
+  await act(async () => rejectDelete(new ApiError({ code: 'HTTP_500', message: 'unknown' }, 500)));
+  await dialog.findByRole('button', { name: '重试删除' });
+  assertFrozen();
+  expect(selectPage).toBeChecked();
+  fireEvent.click(dialog.getByRole('button', { name: '重试删除' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2));
+  expect(mutate.mock.calls[1]![2]).toEqual(mutate.mock.calls[0]![2]);
+  await waitFor(() => expect(screen.queryByRole('toolbar', { name: '已选接收记录' })).not.toBeInTheDocument());
+});
+
 it('keeps receipt filters collapsed until the operator opens them', async () => {
   view(); await screen.findByText('message-001');
   expect(screen.getByRole('button', { name: '筛选条件' })).toHaveAttribute('aria-expanded', 'false');

@@ -12,6 +12,7 @@ import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { jest } from '@jest/globals';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { IntegrationRetentionService } from '../../src/modules/api-integration/integration-retention.service.js';
+import { IntegrationReceiptService } from '../../src/modules/api-integration/integration-receipt.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Receipt tests require disposable PostgreSQL.');
 
@@ -77,6 +78,30 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     expect(payload.body.text).toBe(item.text);
     expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_PAYLOAD_READ', resourceId: item.receipt.id } })).toBe(1);
   });
+  it('lists one thousand receipt and attempt metadata rows and rejects larger pages', async () => {
+    const item = await fixture();
+    await prisma.integrationReceipt.createMany({ data: Array.from({ length: 999 }, () => ({ organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, messageId: randomUUID(), bodyDigest: 'c'.repeat(64), configurationVersion: 1, configurationSnapshot: {}, bodyExpiresAt: item.receipt.bodyExpiresAt, metadataExpiresAt: item.receipt.metadataExpiresAt, payloadBytes: 0 })) });
+    const receipts = await prisma.integrationReceipt.findMany({ where: { organizationId: item.organization.id }, select: { id: true } });
+    await prisma.integrationRequestAttempt.createMany({ data: receipts.map(receipt => ({ id: randomUUID(), organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, receiptId: receipt.id, configurationVersion: 1, returnReceipt: true, statusCode: 201, outcome: 'RECEIVED', durationMs: 1 })) });
+    for (const view of ['receipts', 'attempts']) {
+      const response = await request(app.getHttpServer()).get(`${base}/${view}`).query({ limit: 1000 }).set('Cookie', item.cookie).expect(200);
+      expect(response.body).toMatchObject({ total: 1000, page: 1, limit: 1000 });
+      expect(response.body.items).toHaveLength(1000);
+      expect(new Set(response.body.items.map((row: { id: string }) => row.id)).size).toBe(1000);
+      expect(JSON.stringify(response.body)).not.toMatch(/payloadCiphertext|bodyDigest|secret_hash/);
+      await request(app.getHttpServer()).get(`${base}/${view}`).query({ limit: 1001 }).set('Cookie', item.cookie).expect(400);
+    }
+  });
+  it('enforces the one thousand page boundary in the service independently of DTO validation', async () => {
+    const item = await fixture();
+    const session = await prisma.session.findFirstOrThrow({ where: { userId: item.user.id } });
+    const actor = { id: item.user.id, organizationId: item.organization.id, sessionId: session.id, accountType: 'INTERNAL' as const };
+    const service = app.get(IntegrationReceiptService);
+    for (const method of ['listReceipts', 'listAttempts'] as const) {
+      await expect(service[method](actor, { limit: 1000 })).resolves.toMatchObject({ limit: 1000 });
+      await expect(service[method](actor, { limit: 1001 })).rejects.toMatchObject({ response: { code: 'INTEGRATION_INPUT_INVALID' }, status: 400 });
+    }
+  });
   it('deletes selected receipts, releases stored bytes, keeps attempts, and records audit', async () => {
     const item = await fixture(['integration:receipts:read', 'integration:payload:read', 'integration:manage']);
     const secondId = randomUUID();
@@ -94,6 +119,21 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: BigInt(0) });
     expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: BigInt(0), receiptCount: 0 });
     expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(2);
+  });
+  it('deletes one thousand receipts and releases their exact bytes and receipt capacity', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const additionalIds = Array.from({ length: 999 }, () => randomUUID());
+    await prisma.integrationReceipt.createMany({ data: additionalIds.map(id => ({ id, organizationId: item.organization.id, endpointId: item.endpoint.id, credentialId: item.credential.id, messageId: randomUUID(), bodyDigest: 'c'.repeat(64), configurationVersion: 1, configurationSnapshot: {}, bodyExpiresAt: item.receipt.bodyExpiresAt, metadataExpiresAt: item.receipt.metadataExpiresAt, payloadCiphertext: item.receipt.payloadCiphertext, payloadBytes: item.receipt.payloadBytes })) });
+    const bytes = item.receipt.payloadBytes * 1000;
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: bytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: bytes, receiptCount: 1000 } });
+    const receiptIds = [item.receipt.id, ...additionalIds];
+    const response = await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds }).expect(200);
+    expect(response.body).toEqual({ deletedCount: 1000, receiptIds: receiptIds.sort() });
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(0);
+    expect(await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).toMatchObject({ usedBodyBytes: 0n });
+    expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: 0n, receiptCount: 0 });
+    expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(1000);
   });
   it('requires session, CSRF, recent authentication and management permission, and rolls back mixed organization IDs', async () => {
     const item = await fixture(['integration:receipts:read', 'integration:manage']);
@@ -116,15 +156,23 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
   });
   it.each([
     { label: 'empty', receiptIds: [] },
-    { label: 'duplicate', receiptIds: ['RECEIPT', 'RECEIPT'] },
+    { label: 'duplicate', receiptIds: Array(2).fill('abcdef01-2345-4678-9abc-def012345678') as string[] },
     { label: 'case duplicate', receiptIds: ['Abcdef01-2345-4678-9abc-def012345678', 'abcdef01-2345-4678-9abc-def012345678'] },
     { label: 'non UUID', receiptIds: ['not-a-uuid'] },
-    { label: 'too many', receiptIds: Array.from({ length: 101 }, () => randomUUID()) },
+    { label: 'too many', receiptIds: Array.from({ length: 1001 }, () => randomUUID()) },
   ])('rejects $label receipt deletion input without changing data', async ({ receiptIds }) => {
     const item = await fixture(['integration:receipts:read', 'integration:manage']);
     const before = await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } });
     await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('x-csrf-token', 'fixture-csrf').set('Idempotency-Key', randomUUID()).send({ organizationId: item.organization.id, receiptIds }).expect(400);
     expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(before);
+  });
+  it('rejects one thousand and one deletion IDs in the service before touching retained data', async () => {
+    const item = await fixture(['integration:receipts:read', 'integration:manage']);
+    const session = await prisma.session.findFirstOrThrow({ where: { userId: item.user.id } });
+    const actor = { id: item.user.id, organizationId: item.organization.id, sessionId: session.id, accountType: 'INTERNAL' as const };
+    await expect(app.get(IntegrationReceiptService).deleteReceipts(actor, { receiptIds: [item.receipt.id, ...Array.from({ length: 1000 }, () => randomUUID())] }, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'INTEGRATION_INPUT_INVALID' }, status: 400 });
+    expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(0);
   });
   it('replays the same deletion result without decrementing capacity or adding audit rows', async () => {
     const item = await fixture(['integration:receipts:read', 'integration:manage']);

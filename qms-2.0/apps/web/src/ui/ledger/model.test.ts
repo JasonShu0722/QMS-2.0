@@ -32,4 +32,12 @@ describe('ledger preference model', () => {
     expect(normalizePageSize(200)).toBe(20);
     expect(normalizePageSize(NaN)).toBe(20);
   });
+  it('allows compact receiving sizes only when the caller raises its existing bound', () => {
+    expect(normalizePageSize(500, 1000)).toBe(500);
+    expect(normalizePageSize(1000, 1000)).toBe(1000);
+    expect(normalizePageSize(1000, 500)).toBe(20);
+    expect(normalizePageSize(500)).toBe(20);
+    expect(normalizePageSize(1000)).toBe(20);
+    expect(normalizePageSize(1001, 1000)).toBe(20);
+  });
 });

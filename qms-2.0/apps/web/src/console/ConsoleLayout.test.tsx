@@ -11,6 +11,7 @@ import { getConsoleContext } from './console-api';
 import type { ConsoleContext } from './console-navigation';
 import { useLedgerPageSize } from '../ui/ledger';
 import { FEEDBACK_FORM_URL } from '../features/feedback/feedback-config';
+import { UserAdministration } from '../features/admin/UserAdministration';
 
 vi.mock('./console-api', () => ({ getConsoleContext: vi.fn() }));
 const getContext = vi.mocked(getConsoleContext);
@@ -357,4 +358,77 @@ it('declares coarse-pointer desktop sidebar link targets of at least 44px, inclu
     expect(document.querySelector('.qms-console-collapsed')).not.toBeNull();
     verify();
   } finally { style.remove(); }
+});
+it.each([
+  { width: 1440, top: '16px', inline: '28px', bottom: '28px' },
+  { width: 1024, top: '16px', inline: '20px', bottom: '20px' },
+  { width: 390, top: '12px', inline: '14px', bottom: '18px' },
+])('keeps shared management content compact at $width px without changing the other page margins', async ({ width, top, inline, bottom }) => {
+  getContext.mockResolvedValue(context());
+  renderLayout();
+  await screen.findByText('受保护内容');
+  const content = screen.getByRole('main');
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/console/console.css', 'utf8');
+  document.head.append(style);
+  try {
+    const rules = Array.from(style.sheet!.cssRules).flatMap(rule => {
+      if (rule.type !== CSSRule.MEDIA_RULE) return [rule];
+      const media = rule as CSSMediaRule;
+      const maxWidth = /^\(max-width: (\d+)px\)$/.exec(media.conditionText);
+      return maxWidth && width <= Number(maxWidth[1]) ? Array.from(media.cssRules) : [];
+    }).filter((rule): rule is CSSStyleRule => rule.type === CSSRule.STYLE_RULE && content.matches((rule as CSSStyleRule).selectorText));
+    content.style.cssText = rules.map(rule => rule.style.cssText).join(' ');
+    const computed = getComputedStyle(content);
+    expect(computed.paddingTop).toBe(top);
+    expect(computed.paddingLeft).toBe(inline);
+    expect(computed.paddingRight).toBe(inline);
+    expect(computed.paddingBottom).toBe(bottom);
+    expect(content).toHaveClass('qms-console-content');
+    expect(document.querySelector('.qms-console-topbar')).toBeInTheDocument();
+  } finally { style.remove(); }
+});
+it('does not add a second top margin to the management verification state', () => {
+  getContext.mockReturnValue(new Promise(() => {}));
+  renderLayout();
+  const state = screen.getByRole('status', { name: '验证管理权限中' });
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/console/console.css', 'utf8');
+  document.head.append(style);
+  try {
+    expect(getComputedStyle(state).marginTop).toBe('0px');
+    expect(getComputedStyle(state).marginBottom).toBe('32px');
+  } finally { style.remove(); }
+});
+it.each(['users', 'governance'])('removes only the first management %s child spacing while keeping later and business content spaced', async kind => {
+  getContext.mockResolvedValue(context());
+  const organization = { ...a, permissions: ['account:users:read'] };
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }));
+  const view = render(<>
+    <MemoryRouter initialEntries={['/console/users']}><ConsoleLayout>
+      {kind === 'users' ? <UserAdministration organization={organization} organizations={[organization]} /> : <section className="governance-panel" aria-label="首项治理面板"><button>刷新治理数据</button></section>}
+      <div className="admin-toolbar" data-testid="later-toolbar">后续工具栏</div>
+      <section className="governance-panel" data-testid="later-panel">后续治理面板</section>
+    </ConsoleLayout></MemoryRouter>
+    <div className="qms-content" data-testid="business-content"><div className="admin-toolbar">业务工具栏</div><section className="governance-panel">业务治理面板</section></div>
+  </>);
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/styles/global.css', 'utf8').replaceAll('var(--qms-section-gap)', '6px') + readFileSync('src/console/console.css', 'utf8');
+  document.head.append(style);
+  try {
+    if (kind === 'users') await screen.findByLabelText('搜索用户');
+    else await screen.findByRole('region', { name: '首项治理面板' });
+    const content = screen.getByRole('main');
+    const first = content.querySelector(kind === 'users' ? '.admin-toolbar' : '.governance-panel')!;
+    expect(first.previousElementSibling).toHaveClass('sr-only');
+    const computed = getComputedStyle(first);
+    expect(kind === 'users' ? computed.marginTop : computed.paddingTop || computed.paddingBlockStart || computed.paddingBlock).toBe('0px');
+    expect(kind === 'users' ? computed.marginBottom : computed.paddingBottom || computed.paddingBlockEnd || computed.paddingBlock).toBe('6px');
+    const business = screen.getByTestId('business-content');
+    for (const toolbar of [screen.getByTestId('later-toolbar'), business.querySelector('.admin-toolbar')!]) expect(getComputedStyle(toolbar).marginTop).toBe('6px');
+    for (const panel of [screen.getByTestId('later-panel'), business.querySelector('.governance-panel')!]) {
+      const spacing = getComputedStyle(panel);
+      expect(spacing.paddingTop || spacing.paddingBlockStart || spacing.paddingBlock).toBe('6px');
+    }
+  } finally { view.unmount(); style.remove(); fetch.mockRestore(); }
 });

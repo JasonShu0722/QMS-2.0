@@ -25,11 +25,14 @@
 .qms-console-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .qms-console-breadcrumb a, .qms-console-breadcrumb > span { color: var(--qms-muted); }
 .qms-console-theme .qms-console-mobile-toggle { display: none; }
-.qms-console-content { min-width: 0; padding: 28px; }
+.qms-console-content { min-width: 0; padding: 16px 28px 28px; }
+.qms-console-content > .sr-only:first-child + .admin-toolbar { margin-top: 0; }
+.qms-console-content > .sr-only:first-child + .governance-panel { padding-top: 0; }
 .qms-console-reading-notes > summary { min-height: 36px; padding-block: 8px; cursor: pointer; color: var(--qms-muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .qms-console-reading-notes { min-width: 0; }
 .qms-console-reading-notes p { margin: 4px 0 8px; color: var(--qms-muted); line-height: 1.7; overflow-wrap: anywhere; }
 .qms-console-state { display: grid; gap: 16px; max-width: 720px; margin: 32px auto; }
+.qms-console-content > .qms-console-state { margin-top: 0; }
 .qms-console-state > button { justify-self: start; }
 .qms-console-theme :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--qms-accent-action); outline-offset: 3px; }
 .qms-console-skip { position: fixed; top: -80px; left: 12px; z-index: 2000; padding: 12px 16px; color: var(--qms-on-accent); background: var(--qms-accent-action); border-radius: 6px; }
@@ -46,7 +49,7 @@
 @media (max-width: 1100px) {
   .qms-console-layout { grid-template-columns: 208px minmax(0, 1fr); }
   .qms-console-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
-  .qms-console-content { padding: 20px; }
+  .qms-console-content { padding: 16px 20px 20px; }
 }
 @media (max-width: 760px) {
   .qms-console-layout { display: block; }
@@ -57,7 +60,7 @@
   .qms-console-topbar-leading { gap: 6px; }
   .qms-console-topbar-target { max-width: 42vw; }
   .qms-console-topbar-target select { min-width: 0; width: 100%; }
-  .qms-console-content { padding: 18px 14px; }
+  .qms-console-content { padding: 12px 14px 18px; }
 }
 @media (max-width: 760px), (pointer: coarse) {
   .qms-console-theme .qms-console-sidebar nav a { min-height: 44px; }

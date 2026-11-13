@@ -45,11 +45,13 @@ test.beforeAll(async () => {
   const catalog = await prisma.permission.findMany({ where: { code: { in: permissions } } });
   expect(catalog).toHaveLength(permissions.length);
   expect(await prisma.rolePermission.count({ where: { roleId: fixtureRoleId, permission: { code: { in: permissions } } } })).toBe(0);
-  const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
-  const where = { roleId_permissionId: { roleId: fixtureRoleId, permissionId: marker.id } };
-  if (!await prisma.rolePermission.findUnique({ where })) {
-    await prisma.rolePermission.create({ data: where.roleId_permissionId });
-    addedPermissionIds.push(marker.id);
+  for (const code of ['platform:admin', 'configuration:read']) {
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code } });
+    const where = { roleId_permissionId: { roleId: fixtureRoleId, permissionId: permission.id } };
+    if (!await prisma.rolePermission.findUnique({ where })) {
+      await prisma.rolePermission.create({ data: where.roleId_permissionId });
+      addedPermissionIds.push(permission.id);
+    }
   }
 });
 
@@ -214,6 +216,20 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
     capacityBefore = (await positionRead<Schema['IntegrationOperationDto']>(page.request, `/api/v1/admin/integrations/status?organizationId=${endpoint.organizationId}`)).usedBodyBytes;
 
     await section.getByRole('tab', { name: '接收记录', exact: true }).click();
+    await expect(section.getByText(/最近清理(成功|失败)/)).toHaveCount(0);
+    const recordTools = section.getByRole('toolbar', { name: '接收记录操作', exact: true });
+    await expect(recordTools.getByRole('button', { name: '设置组织正文容量', exact: true })).toBeVisible();
+    const recordPagination = section.getByRole('navigation', { name: '接收记录分页', exact: true });
+    await expect(recordPagination).toBeVisible();
+    await expect(recordPagination.getByRole('combobox', { name: '每页条数', exact: true }).locator('option')).toHaveCount(6);
+    const largePage = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === receiptsPath && url.searchParams.get('limit') === '1000';
+    });
+    await recordPagination.getByRole('combobox', { name: '每页条数', exact: true }).selectOption('1000');
+    expect((await largePage).status()).toBe(200);
+    const contentPadding = await page.locator('.qms-console-content').evaluate(element => parseFloat(getComputedStyle(element).paddingTop));
+    expect(contentPadding).toBeGreaterThanOrEqual(12); expect(contentPadding).toBeLessThanOrEqual(16);
     const filters = section.getByRole('form', { name: '接收记录筛选', exact: true });
     await expect(filters).toHaveCount(0);
     await expect(section.getByRole('button', { name: '筛选条件', exact: true })).toHaveAttribute('aria-expanded', 'false');
@@ -300,6 +316,14 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
     const thirdRow = section.locator('tbody tr').filter({ hasText: third.messageId });
     await thirdRow.locator('input[type="checkbox"]').click();
     await expect(section.getByText('已选择 2 条', { exact: true })).toBeVisible();
+    const floatingActions = section.getByRole('toolbar', { name: '已选接收记录', exact: true });
+    await expect(floatingActions).toBeVisible();
+    expect(await floatingActions.evaluate(element => getComputedStyle(element).position)).toBe('fixed');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await floatingActions.getByRole('button', { name: '取消选择', exact: true }).click();
+    await expect(floatingActions).toHaveCount(0);
+    await secondRow.locator('input[type="checkbox"]').click();
+    await thirdRow.locator('input[type="checkbox"]').click();
     await section.getByRole('button', { name: '删除所选', exact: true }).click();
     const batchConfirmation = page.getByRole('dialog', { name: '删除接收记录', exact: true });
     await expect(batchConfirmation).toContainText('确认删除选中的 2 条接收记录');
@@ -343,6 +367,78 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
       await prisma.integrationCredential.deleteMany({ where: { endpointId: { in: fixtureEndpointIds } } });
       await prisma.integrationEndpoint.deleteMany({ where: { id: { in: fixtureEndpointIds } } });
       await prisma.integrationEndpoint.deleteMany({ where: { organizationId: endpoint.organizationId, code: { startsWith: `UX_${suffix}_` } } });
+    }
+  }
+});
+
+test('real thousand row receiving page keeps selection actions reachable and deletes the selected page', async ({ page }) => {
+  const section = await openIntegrations(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const sourceCode = `PAGE1000_${suffix}`;
+  const endpoint = await prisma.integrationEndpoint.create({ data: { organizationId: organization.id, code: sourceCode, name: sourceCode, sourceCode, sourceName: sourceCode } });
+  const credential = await prisma.integrationCredential.create({ data: { organizationId: organization.id, endpointId: endpoint.id, name: sourceCode, secretHash: 'a'.repeat(64), expiresAt: null } });
+  let accounted = false;
+  try {
+    await prisma.$transaction(async transaction => {
+      await transaction.integrationReceipt.createMany({ data: Array.from({ length: 1000 }, () => ({ organizationId: organization.id, endpointId: endpoint.id, credentialId: credential.id, messageId: randomUUID(), configurationVersion: 1, configurationSnapshot: {}, bodyExpiresAt: new Date(Date.now() + 86400000), metadataExpiresAt: new Date(Date.now() + 86400000), payloadBytes: 0 })) });
+      await transaction.integrationScopeCapacity.upsert({ where: { organizationId: organization.id }, create: { organizationId: organization.id, receiptCount: 1000 }, update: { receiptCount: { increment: 1000 } } });
+    });
+    accounted = true;
+    await section.getByRole('tab', { name: '接收记录', exact: true }).click();
+    await section.getByRole('button', { name: '筛选条件', exact: true }).click();
+    const filters = section.getByRole('form', { name: '接收记录筛选', exact: true });
+    await filters.getByLabel('来源系统编码', { exact: true }).fill(sourceCode);
+    await filters.getByRole('button', { name: '应用筛选', exact: true }).click();
+    const pagination = section.getByRole('navigation', { name: '接收记录分页', exact: true });
+    await pagination.getByRole('combobox', { name: '每页条数', exact: true }).selectOption('1000');
+    await expect(section.locator('tbody tr[data-row-key]')).toHaveCount(1000);
+    await section.getByRole('checkbox', { name: '选择当前页', exact: true }).check();
+    const actions = section.getByRole('toolbar', { name: '已选接收记录', exact: true });
+    await expect(actions).toContainText('1000');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const desktopBox = await actions.boundingBox();
+    expect(desktopBox!.y + desktopBox!.height).toBeLessThanOrEqual(800);
+    await page.setViewportSize({ width: 390, height: 700 });
+    const mobileBox = await actions.boundingBox();
+    expect(mobileBox!.x).toBeGreaterThanOrEqual(0);
+    expect(mobileBox!.x + mobileBox!.width).toBeLessThanOrEqual(390);
+    expect(mobileBox!.y + mobileBox!.height).toBeLessThanOrEqual(700);
+    await actions.getByRole('button', { name: '删除所选', exact: true }).click();
+    const confirmation = page.getByRole('dialog', { name: '删除接收记录', exact: true });
+    await expect(confirmation).toContainText('1000');
+    const removed = page.waitForResponse(response => new URL(response.url()).pathname === receiptsPath && response.request().method() === 'DELETE');
+    await confirmation.getByRole('button', { name: '删除', exact: true }).click();
+    expect((await removed).status()).toBe(200);
+    await expect(actions).toHaveCount(0);
+    expect(await prisma.integrationReceipt.count({ where: { endpointId: endpoint.id } })).toBe(0);
+  } finally {
+    await prisma.$transaction(async transaction => {
+      const remaining = await transaction.integrationReceipt.count({ where: { endpointId: endpoint.id } });
+      await transaction.integrationReceipt.deleteMany({ where: { endpointId: endpoint.id } });
+      if (accounted && remaining) await transaction.integrationScopeCapacity.update({ where: { organizationId: organization.id }, data: { receiptCount: { decrement: remaining } } });
+      await transaction.integrationCredential.delete({ where: { id: credential.id } });
+      await transaction.integrationEndpoint.delete({ where: { id: endpoint.id } });
+    });
+  }
+});
+
+test('real management pages keep first content compact on desktop and narrow screens', async ({ page }) => {
+  page.on('pageerror', error => console.error('Management page runtime error:', error.message));
+  await openIntegrations(page);
+  for (const viewport of [{ width: 1440, height: 800 }, { width: 390, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const path of ['/console/users', '/console/configuration']) {
+      if (viewport.width <= 760) await page.getByRole('button', { name: '打开管理导航', exact: true }).click();
+      const navigation = viewport.width <= 760 ? page.getByRole('dialog', { name: '管理导航', exact: true }) : page.locator('.qms-console-sidebar');
+      await navigation.locator(`a[href="${path}"]`).click();
+      await page.waitForURL(url => url.pathname === path);
+      const firstContent = page.locator(path.endsWith('/users') ? 'main > .admin-toolbar' : 'main > .governance-panel').first();
+      await expect(firstContent, `${path}: ${(await page.locator('body').innerText()).slice(0, 1200)}`).toBeVisible();
+      const spacing = await firstContent.evaluate(element => ({ top: element.getBoundingClientRect().top, mainTop: element.closest('main')!.getBoundingClientRect().top, margin: getComputedStyle(element).marginTop, padding: getComputedStyle(element).paddingTop }));
+      expect(spacing.top - spacing.mainTop).toBeGreaterThanOrEqual(12);
+      expect(spacing.top - spacing.mainTop).toBeLessThanOrEqual(16);
+      if (path.endsWith('/users')) expect(spacing.margin).toBe('0px');
+      else expect(spacing.padding).toBe('0px');
     }
   }
 });

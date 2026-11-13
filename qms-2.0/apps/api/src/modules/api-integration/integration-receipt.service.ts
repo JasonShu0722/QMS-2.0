@@ -39,7 +39,7 @@ export class IntegrationReceiptService {
     const to = query.to ? new Date(query.to) : now;
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - days * 86400000);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to || to.getTime() - from.getTime() > 90 * 86400000 || to.getTime() > now.getTime() + 60000) integrationError('INTEGRATION_INPUT_INVALID', 400);
-    return { from, to, now, page: integrationInteger(query.page ?? 1, 1, 10000), limit: integrationInteger(query.limit ?? 20, 1, 100) };
+    return { from, to, now, page: integrationInteger(query.page ?? 1, 1, 10000), limit: integrationInteger(query.limit ?? 20, 1, 1000) };
   }
 
   async listReceiptEndpoints(actor: AdminActor, query: IntegrationReceiptEndpointQueryDto): Promise<IntegrationReceiptEndpointPageDto> {
@@ -57,7 +57,7 @@ export class IntegrationReceiptService {
 
   async deleteReceipts(actor: AdminActor, input: DeleteIntegrationReceiptsDto, traceId: string, key?: string): Promise<IntegrationReceiptDeleteResultDto> {
     const organizationId = integrationScope(actor);
-    if (!Array.isArray(input.receiptIds) || input.receiptIds.length < 1 || input.receiptIds.length > 100 || input.receiptIds.some(id => typeof id !== 'string' || !isUUID(id))) integrationError('INTEGRATION_INPUT_INVALID', 400);
+    if (!Array.isArray(input.receiptIds) || input.receiptIds.length < 1 || input.receiptIds.length > 1000 || input.receiptIds.some(id => typeof id !== 'string' || !isUUID(id))) integrationError('INTEGRATION_INPUT_INVALID', 400);
     const receiptIds = input.receiptIds.map(id => id.toLowerCase()).sort();
     if (new Set(receiptIds).size !== receiptIds.length) integrationError('INTEGRATION_INPUT_INVALID', 400);
     let rows: DeleteReceiptRow[] = [];
