@@ -128,7 +128,8 @@ describe('real integration retention, bounded results and administrative lifecyc
       await cleanup;
       const response = await incoming;
       expect(response.status).toBe(200);
-      const received = await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: response.body.receiptId } });
+      expect(response.body).toBe(true);
+      const received = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: item.endpoint.id }, orderBy: { receivedAt: 'desc' } });
       expect(received.payloadCiphertext).not.toBeNull();
       expect((await prisma.integrationReceipt.findUniqueOrThrow({ where: { id: item.receipt.id } })).payloadCiphertext).toBeNull();
       expect((await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).usedBodyBytes).toBe(BigInt(received.payloadBytes));

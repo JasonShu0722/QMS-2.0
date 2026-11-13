@@ -10524,19 +10524,6 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
         };
-        InboundReceiptDto: {
-            /** Format: uuid */
-            receiptId: string;
-            /**
-             * Format: uuid
-             * @description 服务端分配的本次接收检索编号。
-             */
-            messageId: string;
-            /** Format: date-time */
-            receivedAt: string;
-            /** @enum {string} */
-            status: "RECEIVED";
-        };
         IntegrationReceiptDto: {
             /** Format: uuid */
             id: string;
@@ -22472,13 +22459,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 接收成功；关闭回执正文时仍返回200但无正文。 */
+            /** @description 接收成功；开启回执返回 JSON true，关闭回执无正文。 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InboundReceiptDto"];
+                    "application/json": true;
                 };
             };
             default: {

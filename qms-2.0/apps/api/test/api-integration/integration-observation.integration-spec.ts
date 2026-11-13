@@ -48,7 +48,9 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     expect(first.headers['x-request-id']).not.toBe(repeated.headers['x-request-id']);
     const attempts=await prisma.integrationRequestAttempt.findMany({where:{organizationId:item.organization.id},orderBy:{observedAt:'asc'}});
     expect(attempts).toHaveLength(2); expect(attempts.map(row=>row.outcome)).toEqual(['RECEIVED','RECEIVED']);
-    expect(attempts.map(row=>row.messageId)).toEqual([first.body.receiptId,repeated.body.receiptId]);
+    expect(first.body).toBe(true); expect(repeated.body).toBe(true);
+    const receiptIds = (await prisma.integrationReceipt.findMany({ where: { endpointId: item.endpoint.id }, select: { id: true } })).map(row => row.id).sort();
+    expect(attempts.map(row=>row.messageId).sort()).toEqual(receiptIds);
     expect(new Set(attempts.map(row=>row.receiptId)).size).toBe(2);
     expect(JSON.stringify(attempts)).not.toContain(item.secret);
     const exchange=await prisma.dataExchangeAttempt.findMany({where:{scopeKey:item.organization.id}});
@@ -60,10 +62,10 @@ describe('noncritical integration observation on real HTTP and PostgreSQL', () =
     const encoded=`%${item.endpoint.id.charCodeAt(0).toString(16)}${item.endpoint.id.slice(1)}`;
     const first=await request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${encoded}/messages`).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(200);
     const repeated=await request(app.getHttpServer()).post(item.path).set('Authorization',item.authorization).set('Idempotency-Key',messageId).set('Content-Type','application/json').send(payload).expect(200);
-    expect(repeated.body.receiptId).not.toBe(first.body.receiptId);
+    expect(first.body).toBe(true); expect(repeated.body).toBe(true);
     const receipts=await prisma.integrationReceipt.findMany({where:{organizationId:item.organization.id}});
     expect(receipts).toHaveLength(2);
-    expect(receipts).toEqual(expect.arrayContaining([first,repeated].map(response=>expect.objectContaining({id:response.body.receiptId,messageId:response.body.receiptId,bodyDigest:null}))));
+    expect(receipts.every(response => response.id === response.messageId && response.bodyDigest === null)).toBe(true);
   });
   it('stores authenticated failure metadata but never failed plaintext or untrusted identity',async()=> {
     const item=await fixture(false),messageId=randomUUID();

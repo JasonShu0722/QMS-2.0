@@ -62,8 +62,10 @@ describe('inbound transactional concurrency', () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all(Array.from({ length: 8 }, () => send(receiver, messageId)));
     expect(responses.map(response => response.status)).toEqual(Array(8).fill(200));
-    expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(8);
-    expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 8 }]);
+    expect(responses.every(response => response.body === true)).toBe(true);
+    const receiptIds = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
+    expect(new Set(receiptIds.map(row => row.id)).size).toBe(8);
+    expect(receiptIds).toHaveLength(8);
     expect(await prisma.auditEvent.count({ where: { organizationId: receiver.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED' } })).toBe(8);
     const [capacity] = await prisma.$queryRaw<{ count: number; used: number; actual: number }[]>`SELECT receipt_count AS count,c.used_body_bytes::int AS used,
       (SELECT sum(payload_bytes)::int FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid) AS actual
@@ -75,7 +77,7 @@ describe('inbound transactional concurrency', () => {
     const receiver = await fixture(), messageId = randomUUID();
     const responses = await Promise.all([send(receiver, messageId, '[{"value":1}]'), send(receiver, messageId, '[{"value":2}]')]);
     expect(responses.map(response => response.status)).toEqual([200, 200]);
-    expect(new Set(responses.map(response => response.body.receiptId)).size).toBe(2);
+    expect(responses.every(response => response.body === true)).toBe(true);
     expect(await prisma.$queryRaw`SELECT count(*)::int AS count FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`).toEqual([{ count: 2 }]);
   });
 
@@ -121,8 +123,9 @@ describe('inbound transactional concurrency', () => {
       outgoing.once('error', reject); outgoing.end('[{"value":1}]');
     });
     const retry = await send(receiver, messageId).expect(200);
+    expect(retry.body).toBe(true);
     const receipts = await prisma.$queryRaw`SELECT id FROM integration_receipts WHERE endpoint_id=${receiver.endpointId}::uuid`;
-    expect(receipts).toHaveLength(2); expect(receipts).toEqual(expect.arrayContaining([{ id: retry.body.receiptId }]));
+    expect(receipts).toHaveLength(2);
   });
 
   it('matches IPv6 subnets and IPv4-mapped peers without accepting malformed allowlists', () => {

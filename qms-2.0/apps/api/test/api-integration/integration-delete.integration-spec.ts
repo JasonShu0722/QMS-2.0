@@ -121,10 +121,12 @@ describe('integration endpoint deletion through real HTTP and PostgreSQL', () =>
     await patch(item.cookie, item.endpoint.id, { expectedVersion: 3, name: 'Resurrect' }).expect(404);
     await write(item.cookie, `${item.endpoint.id}/credentials`, { name: 'Resurrect' }).expect(404);
     await write(item.cookie, `${item.endpoint.id}/credentials/${second.id}/revoke`, {}).expect(404);
+    expect(received.body).toBe(true);
+    const receivedId = (await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: item.endpoint.id }, orderBy: { receivedAt: 'desc' } })).id;
     const receipts = await request(app.getHttpServer()).get(`${base}/receipts`).query({ sourceCode: 'ERP' }).set('Cookie', item.cookie).expect(200);
-    expect(receipts.body.items.map((row: { id: string }) => row.id)).toContain(received.body.receiptId);
-    await request(app.getHttpServer()).get(`${base}/receipts/${received.body.receiptId}`).set('Cookie', item.cookie).expect(200);
-    await request(app.getHttpServer()).get(`${base}/receipts/${received.body.receiptId}/payload`).set('Cookie', item.cookie).expect(200);
+    expect(receipts.body.items.map((row: { id: string }) => row.id)).toContain(receivedId);
+    await request(app.getHttpServer()).get(`${base}/receipts/${receivedId}`).set('Cookie', item.cookie).expect(200);
+    await request(app.getHttpServer()).get(`${base}/receipts/${receivedId}/payload`).set('Cookie', item.cookie).expect(200);
     const attempts = await request(app.getHttpServer()).get(`${base}/attempts`).query({ sourceCode: 'ERP' }).set('Cookie', item.cookie).expect(200);
     expect(attempts.body.items.some((row: { endpointId: string }) => row.endpointId === item.endpoint.id)).toBe(true);
     await send(item.endpoint.code, first.secret).expect(401); await send(item.endpoint.id, first.secret).expect(401);
