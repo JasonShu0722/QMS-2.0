@@ -63,8 +63,8 @@ async function configure(policy: 'INTERNAL' | 'SUPPLIER' = 'INTERNAL') {
   expect(open).toBeEnabled(); fireEvent.click(open);
   await waitFor(() => expect(reads()).toHaveLength(1));
   await choose('责任科室', '质量科 (QA)');
-  await choose('专业人员（配置测试）', '专业张工 (engineer)');
-  if (policy === 'INTERNAL') await choose('内部负责人（配置测试）', '负责人李工 (owner)');
+  await choose('专业人员（配置测试）', '专业张工 / 部门未填写（engineer）');
+  if (policy === 'INTERNAL') await choose('内部负责人（配置测试）', '负责人李工 / 部门未填写（owner）');
 }
 // Modal already exposes its title through aria-labelledby; avoid full-page visibility scans.
 const previewDialog = () => screen.getByLabelText('关闭职责预览', { selector: '[role="dialog"]' });
@@ -137,7 +137,7 @@ it('searches and pages the bounded directory, retaining selected labels across p
   mount(); await configure();
   fireEvent.click(screen.getByTitle('2'));
   await waitFor(() => expect(reads().some(([path]) => path.includes('page=2') && path.includes('pageSize=20'))).toBe(true));
-  expect(previewDialog()).toHaveTextContent('专业张工 (engineer)');
+  expect(previewDialog()).toHaveTextContent('专业张工 / 部门未填写（engineer）');
   expect(previewDialog()).toHaveTextContent('质量科 (QA)');
   fireEvent.change(screen.getByRole('textbox', { name: '搜索科室或内部人员' }), { target: { value: 'missing' } });
   await waitFor(() => expect(reads().some(([path]) => path.includes('search=missing') && path.includes('page=1'))).toBe(true));

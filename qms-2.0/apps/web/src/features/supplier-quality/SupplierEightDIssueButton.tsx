@@ -6,6 +6,7 @@ import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChang
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerDenied, useCustomerLedgerWrite } from '../customer-quality/customer-ledger-write';
 import { supplierError } from './supplierQuality';
+import { personLabel } from '../../ui/personLabel';
 
 type Props = { id: string; version: number; disabled?: boolean; onIssued: () => void; onDenied: (cause: unknown) => void; onLockChange?: (locked: boolean) => void };
 type Page = components['schemas']['SupplierEightDAssignmentPageDto'];
@@ -44,6 +45,10 @@ function IssueScope({ id, version, disabled, onIssued, onDenied, onLockChange, s
     return () => onLockChange?.(false);
   }, [writer.busy, writer.uncertain, onLockChange]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => useWorkTabsStore.subscribe(state => {
+    if (state.sessionScope === scope) return;
+    revoked.current = true; clear.current(); setDenied(true); setAllowed(false); setData(undefined); setSelected(undefined); setError(undefined);
+  }), [scope]);
   useEffect(() => {
     const controller = new AbortController();
     apiRequest<components['schemas']['PermissionsResponseDto']>('/api/v1/system/my-permissions', { signal: controller.signal })
@@ -65,7 +70,7 @@ function IssueScope({ id, version, disabled, onIssued, onDenied, onLockChange, s
     setError(undefined);
     try {
       await writer.write<components['schemas']['SupplierEightDReportDto']>(`/api/v1/supplier-quality/eight-d/drafts/${encodeURIComponent(id)}/issue`,
-        { expectedVersion: version, sqeAssignmentId: selected.assignmentId }, 'POST');
+        { expectedVersion: version, sqeAssignmentId: selected.assignmentId }, 'POST', current);
       if (current()) callbacks.current.onIssued();
     } catch (cause) { if (current() && !ledgerDenied(cause)) setError(supplierError(cause)); }
   }
@@ -79,7 +84,7 @@ function IssueScope({ id, version, disabled, onIssued, onDenied, onLockChange, s
     <fieldset disabled={locked}><Input.Search aria-label="搜索SQE任职" maxLength={100} disabled={locked} onSearch={value => { setSearch(value); setPage(1); }} />
       {!result && !error && <Spin />}
       <label>SQE责任任职<select aria-label="SQE责任任职" disabled={locked} value={selected?.assignmentId ?? ''} onChange={event => setSelected(options.find(item => item.assignmentId === event.target.value))}>
-        <option value="">请选择有效SQE任职</option>{options.map(item => <option key={item.assignmentId} value={item.assignmentId}>{item.departmentName} / {item.positionName} / {item.fullName || item.username}</option>)}
+        <option value="">请选择有效SQE任职</option>{options.map(item => <option key={item.assignmentId} value={item.assignmentId}>{personLabel(item, true)}</option>)}
       </select></label>
       {result && <Pagination size="small" current={page} pageSize={20} total={result.total} showSizeChanger={false} disabled={locked} onChange={setPage} />}
       {result?.total === 0 && <p>未找到有效SQE任职，请先核对岗位及权限配置。</p>}

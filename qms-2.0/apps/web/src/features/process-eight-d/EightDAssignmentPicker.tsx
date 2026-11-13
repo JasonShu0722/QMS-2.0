@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pagination, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { EightDField } from './EightDDocumentEditor';
 import { aborted, useEightDText, type EightDRead, type EightDReport } from './eight-d';
 import styles from './eight-d.module.css';
 import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
+import { personLabel } from '../../ui/personLabel';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 type Options = components['schemas']['ProcessEightDAssignmentOptionsDto'];
 export function EightDAssignmentPicker({ report, read, collaborators, disabled, section, onSection, selected, onSelect, domain = 'process' }: {
@@ -17,19 +19,28 @@ export function EightDAssignmentPicker({ report, read, collaborators, disabled, 
   const [names, setNames] = useState<Record<string, string>>({});
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [retired, setRetired] = useState(false);
+  const initialScope = useRef(useWorkTabsStore.getState().sessionScope);
+  const invalidated = useRef(false);
+  useEffect(() => useWorkTabsStore.subscribe(state => {
+    if (state.sessionScope === initialScope.current) return;
+    invalidated.current = true; setRetired(true); setNames({}); setState(undefined);
+  }), []);
   const query = new URLSearchParams({ action: collaborators ? 'COLLABORATORS' : 'REASSIGN', problemId: report.problemId, organizationId: report.organizationId, page: String(page), pageSize: '20', search });
   if (section) query.set('sectionDepartmentId', section);
   const queryKey = query.toString();
   const options = state?.query === queryKey ? state.data : undefined;
   useEffect(() => {
+    if (retired) return;
     let active = true; setError(false);
     read<Options>(`${eightDDomain(domain).basePath}/assignment-options?${queryKey}`).then(data => {
-      if (!active) return;
+      if (!active || invalidated.current) return;
       setState({ query: queryKey, data });
-      setNames(previous => ({ ...previous, ...Object.fromEntries(data.users.map(user => [user.id, user.fullName || user.username])) }));
+      setNames(previous => ({ ...previous, ...Object.fromEntries(data.users.map(user => [user.id, personLabel(user)])) }));
     }).catch(cause => { if (active && !aborted(cause)) setError(true); });
     return () => { active = false; };
-  }, [queryKey, read, retry, domain]);
+  }, [queryKey, read, retry, domain, retired]);
+  if (retired) return <Alert type="warning" title={text('会话已变化，请重新打开操作。', 'Session changed. Reopen this action.')} />;
   return <div className={styles.modal}>
     <EightDField label={text('搜索人员 / 科室', 'Search people / sections')}><input disabled={disabled} value={search} maxLength={200} onChange={event => { setSearch(event.target.value); setPage(1); }} /></EightDField>
     {error ? <Alert type="error" title={text('候选加载失败', 'Options could not be loaded')} action={<button disabled={disabled} onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</button>} /> : !options ? <Spin aria-label={text('正在加载候选', 'Loading options')} /> : null}
@@ -40,8 +51,8 @@ export function EightDAssignmentPicker({ report, read, collaborators, disabled, 
     </select></EightDField>
     <EightDField label={collaborators ? text('协作者', 'Collaborators') : text('新负责人', 'New owner')}><select disabled={disabled || !options} multiple={collaborators} size={collaborators ? 5 : undefined} value={collaborators ? selected : selected[0] ?? ''} onChange={event => onSelect(Array.from(event.target.selectedOptions, option => option.value).filter(Boolean))}>
       {!collaborators && <option value="">{text('请选择负责人', 'Select an owner')}</option>}
-      {selected.filter(id => !options?.users.some(user => user.id === id)).map(id => <option key={id} value={id}>{names[id] ?? id}</option>)}
-      {options?.users.map(user => <option key={user.id} value={user.id}>{user.fullName || user.username} · {user.username}</option>)}
+      {selected.filter(id => !options?.users.some(user => user.id === id)).map(id => <option key={id} value={id}>{names[id] ?? text('已选人员（资料待核对）', 'Selected person (details unavailable)')}</option>)}
+      {options?.users.map(user => <option key={user.id} value={user.id}>{personLabel(user)}</option>)}
     </select></EightDField>
     <Pagination size="small" current={page} pageSize={20} showSizeChanger={false} total={Math.max(options?.departmentTotal ?? 0, options?.userTotal ?? 0)} disabled={disabled || !options} onChange={setPage} />
   </div>;

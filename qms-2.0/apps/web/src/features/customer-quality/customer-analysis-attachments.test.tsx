@@ -83,7 +83,7 @@ it.each(['save', 'transfer', 'assign'] as const)('rechecks real attachment pendi
   const original = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, init, options) => {
     if (path.endsWith('/complaints/complaint')) return { complaintId: 'complaint', fae: { ...record, fileIds: ['file'] }, supplier: null } as never;
-    if (path.includes('/candidates/')) return [{ userId: 'target', username: 'Target engineer', assignmentId: 'target-appointment', departmentId: 'department' }] as never;
+    if (path.includes('/candidates/')) return [{ userId: 'target', username: 'target', fullName: 'Target engineer', departmentName: 'Quality', positionName: 'Engineer', assignmentId: 'target-appointment', departmentId: 'department' }] as never;
     if (path === '/api/v1/files/file/download') return new Promise((_, reject) => {
       finishDownload = () => reject(new ApiError({ code: 'FILE_DOWNLOAD_UNAVAILABLE', message: '' }, 422));
     });
@@ -107,7 +107,7 @@ it.each(['save', 'transfer', 'assign'] as const)('rechecks real attachment pendi
     fireEvent.click(open);
     const dialog = await screen.findByRole('dialog', { name: title });
     fireEvent.mouseDown(await within(dialog).findByRole('combobox'));
-    fireEvent.click(await screen.findByText('Target engineer · 任职 target-appointment'));
+    fireEvent.click(await screen.findByText('Target engineer / Quality（target） · Engineer'));
     submit = within(dialog).getByRole('button', { name: action === 'transfer' ? '确认转派' : '确认指定' });
   }
   vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(resolve => { releaseCsrf = resolve; }));

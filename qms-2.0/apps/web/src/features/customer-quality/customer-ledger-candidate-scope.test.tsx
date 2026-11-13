@@ -75,7 +75,7 @@ it.each(['NEW_PRODUCT', 'MASS_PRODUCTION'] as const)('preserves all %s identity 
 
 it('keeps blank raw code registration and broad candidates without a scoped read', async () => {
   editor();
-  expect(within(select()).getByRole('option', { name: 'CQE' })).toBeInTheDocument();
+  expect(within(select()).getByRole('option', { name: 'CQE / 部门未填写（pq）' })).toBeInTheDocument();
   fireEvent.change(select(), { target: { value: 'cqe' } });
   fireEvent.click(screen.getByRole('button', { name: '登记' }));
   await waitFor(() => expect(writes()).toHaveLength(1));
@@ -87,7 +87,7 @@ it('uses component-scoped candidates, not the broad list, without requesting on 
   editor();
   changeCode(' A & B ');
   await waitFor(() => expect(readCandidates).toHaveBeenCalledWith('A & B', expect.any(AbortSignal)));
-  await waitFor(() => expect(within(select()).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument());
+  await waitFor(() => expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument());
   expect(reads()[0][0]).toContain('componentCode=A+%26+B');
   expect(reads()[0][0]).toContain(`organizationId=${org}`);
   expect(select()).toBeEnabled();
@@ -102,11 +102,11 @@ it('uses component-scoped candidates, not the broad list, without requesting on 
 it('uses saved-stage candidates until the raw component changes, then accepts MASS scoped CQE', async () => {
   editor(detail, [project, legacy]);
   expect(readCandidates).not.toHaveBeenCalled();
-  expect(within(select()).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
+  expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument();
   readCandidates.mockResolvedValue({ items: [project, cqe] });
   changeCode('B');
   fireEvent.change(select(), { target: { value: 'project' } });
-  await waitFor(() => expect(within(select()).getByRole('option', { name: 'CQE' })).toBeInTheDocument());
+  await waitFor(() => expect(within(select()).getByRole('option', { name: 'CQE / 部门未填写（pq）' })).toBeInTheDocument());
   fireEvent.change(select(), { target: { value: 'cqe' } });
   fireEvent.click(screen.getByRole('button', { name: '保存台账' }));
   await waitFor(() => expect(writes()).toHaveLength(1));
@@ -134,9 +134,9 @@ it('shows the invalid draft warning when scoped replies settle during modal appe
   expect(readCandidates).toHaveBeenCalledTimes(2);
   expect(readCandidates.mock.calls[0][1]?.aborted).toBe(true);
   expect(code).toHaveValue('B');
-  expect(engineer).toHaveValue('cqe');
-  expect(within(engineer).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
-  expect(within(engineer).getByRole('option', { name: '项目质量' })).toBeInTheDocument();
+  expect(select()).toHaveValue('cqe');
+  expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument();
+  expect(within(select()).getByRole('option', { name: '项目质量 / 部门未填写（pq）' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '登记' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '登记' }));
   expect(writes()).toHaveLength(0);
@@ -179,7 +179,7 @@ it('preserves fields and selection on failed reads, blocks dispatch, and explici
   const retry = await screen.findByRole('button', { name: '重试组件候选人员' });
   await waitFor(() => expect(screen.getByText('候选服务不可用')).toBeVisible());
   expect(select()).toHaveValue('project');
-  expect(within(select()).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
+  expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '登记' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '登记' }));
   expect(writes()).toHaveLength(0);
@@ -217,10 +217,10 @@ it.each(['unmount', 'session'] as const)('ignores a late scoped read after %s wi
   changeCode('B');
   await waitFor(() => expect(readCandidates).toHaveBeenLastCalledWith('B', expect.any(AbortSignal)));
   expect(readCandidates.mock.calls[0][1]?.aborted).toBe(true);
-  await waitFor(() => expect(within(select()).getByRole('option', { name: '项目质量' })).toBeInTheDocument());
+  await waitFor(() => expect(within(select()).getByRole('option', { name: '项目质量 / 部门未填写（pq）' })).toBeInTheDocument());
   await act(async () => { old.resolve({ items: [cqe] }); });
   expect(screen.getByRole('textbox', { name: '组件号' })).toHaveValue('B');
-  expect(within(select()).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
+  expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument();
   expect(first.props.onDenied).not.toHaveBeenCalled();
   expect(writes()).toHaveLength(0);
 });
@@ -233,7 +233,7 @@ it('ignores late denial from the obsolete component and restores broad rules whe
   await waitFor(() => expect(readCandidates).toHaveBeenCalledTimes(1));
   changeCode('');
   await act(async () => { old.reject(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, 403)); });
-  expect(within(select()).getByRole('option', { name: 'CQE' })).toBeInTheDocument();
+  expect(within(select()).getByRole('option', { name: 'CQE / 部门未填写（pq）' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '登记' })).toBeEnabled();
   expect(props.onDenied).not.toHaveBeenCalled();
 });
@@ -244,8 +244,8 @@ it('keeps the existing NEW stage fallback when a changed component has no mappin
   await waitFor(() => expect(readCandidates).toHaveBeenCalledTimes(1));
   const path = reads().at(-1)![0];
   expect(new URL(path, 'http://localhost').searchParams.get('stage')).toBe('NEW_PRODUCT');
-  await waitFor(() => expect(within(select()).getByRole('option', { name: '项目质量' })).toBeInTheDocument());
-  expect(within(select()).queryByRole('option', { name: 'CQE' })).not.toBeInTheDocument();
+  await waitFor(() => expect(within(select()).getByRole('option', { name: '项目质量 / 部门未填写（pq）' })).toBeInTheDocument());
+  expect(within(select()).queryByRole('option', { name: 'CQE / 部门未填写（pq）' })).not.toBeInTheDocument();
 });
 
 it('retains a long invalid component original without turning candidate lookup into a registration requirement', async () => {

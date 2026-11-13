@@ -34,7 +34,7 @@ vi.mock('./ProcessShipmentReportPanel', () => ({ ProcessShipmentReportPanel: () 
 const organizationId = '22222222-2222-4222-8222-222222222222';
 const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [] };
 const section = { id: '33333333-3333-4333-8333-333333333333', code: 'SEC', name: '制造科' };
-const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人' };
+const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人', departmentName: '制造科' };
 const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', reportNumber: 'PQ-OLD', title: '已有问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-exact-1' }];
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
@@ -275,7 +275,7 @@ async function fillIssue() {
   fireEvent.click(drawer.getByLabelText('非复发'));
   await selectOption('风险等级', '高', drawer);
   await selectOption('责任科室', '制造科', drawer);
-  await selectOption('负责人', '真实负责人', drawer);
+  await selectOption('负责人', '真实负责人 / 制造科（owner）', drawer);
 }
 
 it('previews visible and hidden relations without defaulting recurrence; posts server-bound 8D with exact token', async () => {
@@ -287,7 +287,7 @@ it('previews visible and hidden relations without defaulting recurrence; posts s
   fireEvent.click(screen.getByRole('radio', { name: '非复发' }));
   await selectOption('风险等级', '高');
   await selectOption('责任科室', '制造科');
-  await selectOption('负责人', '真实负责人');
+  await selectOption('负责人', '真实负责人 / 制造科（owner）');
   fireEvent.change(screen.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
   fireEvent.change(screen.getByLabelText('关闭计划'), { target: { value: '2026-11-20' } });
   fireEvent.click(screen.getByText('确认发起8D'));
@@ -487,10 +487,35 @@ it('keeps owner search keyboard-editable while loading and blocks issuing with s
   await waitFor(() => expect(searching).toBe(true));
   expect(input).toBeEnabled();
   expect(input).toHaveFocus();
-  expect(screen.queryByText('真实负责人', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
+  expect(screen.queryByText('真实负责人 / 制造科（owner）', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();
   expect(drawer.getByText('确认发起8D').closest('button')).toBeDisabled();
   await act(async () => { resolve({ departments: [section], users: [owner], departmentTotal: 1, userTotal: 1, page: 1, pageSize: 100 }); });
-  await screen.findByText('真实负责人', { selector: '.ant-select-item-option-content' });
+  await screen.findByText('真实负责人 / 制造科（owner）', { selector: '.ant-select-item-option-content' });
+});
+
+it('keeps a selected owner identifiable and usable after candidate pagination', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/assignment-options') && path.includes('sectionDepartmentId')) {
+      const page = new URL(path, 'http://localhost').searchParams.get('page');
+      return { departments: [section], users: page === '2' ? [{ ...owner, id: 'another', fullName: '其他负责人' }] : [owner], departmentTotal: 1, userTotal: 101 };
+    }
+    return baseResponse(path);
+  });
+  await openIssue(); await fillIssue();
+  fireEvent.click(screen.getByLabelText('负责人候选分页').querySelector('[title="2"]')!);
+  await screen.findByText('确认发起8D');
+  await waitFor(() => expect(screen.getByLabelText('负责人').closest('.ant-select')).toHaveTextContent('真实负责人 / 制造科（owner）'));
+  fireEvent.click(screen.getByText('确认发起8D'));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path, init]) => path.endsWith('/eight-d') && init?.method === 'POST')).toBe(true));
+});
+
+it('retires owner selections on a batched session A to B to A transition', async () => {
+  await openIssue(); await fillIssue();
+  const originalScope = useWorkTabsStore.getState().sessionScope;
+  act(() => { useWorkTabsStore.getState().bindSession('other'); if (originalScope) useWorkTabsStore.getState().bindSession(originalScope); else useWorkTabsStore.getState().reset(); });
+  expect(screen.getByLabelText('负责人')).toBeDisabled();
+  expect(screen.getByLabelText('负责人').closest('.ant-select')).not.toHaveTextContent('真实负责人 / 制造科（owner）');
+  expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
 });
 
 it('retains sources across pages and sends both recorded versions in a batch classification', async () => {

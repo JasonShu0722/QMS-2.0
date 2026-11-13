@@ -122,6 +122,7 @@ export class ProcessMaterialSqeDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty() username!: string;
   @ApiProperty({ type: String, nullable: true }) fullName!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) departmentName?: string | null;
 }
 
 export class ProcessMaterialSqePageDto {

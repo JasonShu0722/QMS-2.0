@@ -1,0 +1,12 @@
+.qms-ingestion-page,.qms-ingestion-section{display:flex;flex-direction:column;gap:12px;min-width:0}
+.qms-ingestion-page .ant-tabs-nav{margin-bottom:12px}
+.qms-ingestion-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.qms-ingestion-form .ant-form-item{margin-bottom:12px}
+.qms-ingestion-condition{display:grid;grid-template-columns:minmax(100px,1.2fr) minmax(100px,1fr) minmax(90px,.8fr) minmax(120px,1.5fr) auto;gap:8px;align-items:start;margin-bottom:12px}
+.qms-ingestion-condition .ant-form-item{margin-bottom:0}
+.qms-ingestion-form .ant-input-number{width:100%}
+.qms-ingestion-page small,.qms-ingestion-section small,.qms-ingestion-secondary{display:block;color:var(--qms-muted);font-size:12px}
+.qms-ingestion-counts{display:flex;flex-wrap:wrap;gap:8px 16px}
+.qms-ingestion-actions{margin-top:12px}
+.qms-ingestion-page .ant-table-cell{overflow-wrap:anywhere}
+@media(max-width:680px){.qms-ingestion-grid{grid-template-columns:minmax(0,1fr)}.qms-ingestion-condition{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.qms-ingestion-condition>:last-child{justify-self:start}.qms-ingestion-page .ant-tabs-content-holder{min-width:0}}

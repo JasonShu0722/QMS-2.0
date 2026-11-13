@@ -31,7 +31,7 @@ export class ConsoleActorDto {
   homeOrganization!: ConsoleOrganizationDto;
 }
 
-export const CONSOLE_MODULE_KEYS = ['users', 'organizations', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts', 'api-monitoring', 'data-exchanges', 'services', 'api-integrations'] as const;
+export const CONSOLE_MODULE_KEYS = ['users', 'organizations', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts', 'api-monitoring', 'data-exchanges', 'services', 'api-integrations', 'api-ingestion'] as const;
 
 export class ConsoleModuleDto {
   @ApiProperty({ enum: CONSOLE_MODULE_KEYS })

@@ -158,7 +158,7 @@ it('loads controlled deep-link detail in the target organization and exposes the
   show(`/app/customer-quality?complaintId=${id}&organizationId=${org}`);
   expect(await screen.findByText(`解析插槽 ${id}`)).toBeVisible();
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path === `${base}/${id}?organizationId=${org}`)).toBe(true);
-  expect(await within(screen.getByRole('region', { name: '客诉详情' })).findByText('实际工程师')).toBeVisible();
+  expect(await within(screen.getByRole('region', { name: '客诉详情' })).findByText('实际工程师 / 质量（qe） · 项目质量')).toBeVisible();
   expect(screen.getAllByText('未计算').length).toBeGreaterThan(0);
 });
 it('mounts the formal analysis panel by default and clears the ledger when its access is revoked', async () => {

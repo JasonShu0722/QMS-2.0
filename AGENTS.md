@@ -35,6 +35,8 @@
 
 ## 前端与 API 契约
 
+- 新增内部功能、权限或管理入口时，必须默认对有效 `platform:admin` 管理员开放，并同步受控菜单/context与权限回归；复用既有管理员投影，不按用户名特判、不批量篡改岗位。组织停用/待配置、供应商专属、既有明确例外及业务节点/数据范围约束继续生效。交付前同时验证管理员可见且可操作、普通未授权账号拒绝，不能只注册权限而漏入口。
+
 - 前端工作遵循 `docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md` 和 `qms-2.0/docs/FRONTEND-DESIGN.md`。
 - Web 变更前必须阅读 `qms-2.0/apps/web/AGENTS.md`；UI V2 是设计参考，不是生产迁移证据。
 - Nest Swagger 是唯一前端 API 契约来源。修改 API DTO 后运行 `contracts:generate` 和 `contracts:check`，提交生成的 `qms-2.0/packages/contracts/src/generated/api.ts`。

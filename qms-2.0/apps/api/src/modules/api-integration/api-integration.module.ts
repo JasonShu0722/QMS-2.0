@@ -15,12 +15,20 @@ import { IntegrationReceiptService } from './integration-receipt.service.js';
 import { IntegrationRetentionService } from './integration-retention.service.js';
 import { IntegrationObservationInterceptor } from './integration-observation.interceptor.js';
 import { IntegrationLifecycleEffect } from './integration-lifecycle.effect.js';
+import { MaterialMasterModule } from '../material-master/material-master.module.js';
+import { SupplierQualityModule } from '../supplier-quality/supplier-quality.module.js';
+import { CustomerQualityModule } from '../customer-quality/customer-quality.module.js';
+import { PlatformConfigurationModule } from '../platform-configuration/platform-configuration.module.js';
+import { IngestionController } from './ingestion.controller.js';
+import { IngestionService } from './ingestion.service.js';
+import { IngestionTargetsService } from './ingestion-targets.service.js';
+import { IngestionWorkerService } from './ingestion-worker.service.js';
 
 @Module({
-  imports: [AdminMutationModule, AuditLogModule, SystemManagementModule, AdministrativeLifecycleModule],
-  controllers: [IntegrationAdminController, InboundController, IntegrationReceiptController],
+  imports: [AdminMutationModule, AuditLogModule, SystemManagementModule, AdministrativeLifecycleModule, MaterialMasterModule, SupplierQualityModule, CustomerQualityModule, PlatformConfigurationModule],
+  controllers: [IntegrationAdminController, InboundController, IntegrationReceiptController, IngestionController],
   providers: [IntegrationAdminService, IntegrationCredentialService, InboundGuard, InboundService, IntegrationReceiptService,
-    IntegrationRetentionService, IntegrationLifecycleEffect, { provide: APP_INTERCEPTOR, useClass: IntegrationObservationInterceptor }],
-  exports: [IntegrationAdminService, IntegrationCredentialService, IntegrationRetentionService],
+    IntegrationRetentionService, IntegrationLifecycleEffect, IngestionService, IngestionTargetsService, IngestionWorkerService, { provide: APP_INTERCEPTOR, useClass: IntegrationObservationInterceptor }],
+  exports: [IntegrationAdminService, IntegrationCredentialService, IntegrationRetentionService, IngestionWorkerService, IngestionService],
 })
 export class ApiIntegrationModule {}

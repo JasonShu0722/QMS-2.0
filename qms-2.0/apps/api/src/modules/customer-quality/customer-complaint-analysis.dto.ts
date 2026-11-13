@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import type { AnalysisSection, FaeAnalysisStatus } from './customer-complaint-analysis.types.js';
 
@@ -8,6 +8,9 @@ export class CustomerAnalysisScopeDto {
 }
 export class CustomerAnalysisCandidatesQueryDto extends CustomerAnalysisScopeDto {
   @ApiPropertyOptional({ type: Boolean }) @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() recoverStale?: boolean;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) search?: string;
+  @ApiPropertyOptional({ minimum: 1, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+  @ApiPropertyOptional({ minimum: 0, maximum: 2147483647 }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(2147483647) offset?: number;
 }
 export class AssignCustomerAnalysisDto extends CustomerAnalysisScopeDto {
   @ApiProperty({ minimum: 0, maximum: 2147483647, description: '0 for the first assignment; otherwise the analysis version.' }) @IsInt() @Min(0) @Max(2147483647) expectedVersion!: number;
@@ -75,6 +78,9 @@ export class CustomerAnalysisHistoryDto {
 export class CustomerAnalysisCandidateDto {
   @ApiProperty({ format: 'uuid' }) userId!: string;
   @ApiProperty() username!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) fullName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) departmentName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) positionName?: string | null;
   @ApiProperty({ format: 'uuid' }) assignmentId!: string;
   @ApiProperty({ format: 'uuid' }) departmentId!: string;
 }

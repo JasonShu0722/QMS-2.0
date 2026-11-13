@@ -1,6 +1,7 @@
 export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
 export const CONSOLE_OBSERVATION_READ_PERMISSIONS = ['console:api:read', 'console:exchanges:read', 'console:services:read'];
 export const INTEGRATION_PERMISSIONS = ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read'];
+export const INGESTION_PERMISSIONS = ['ingestion:read', 'ingestion:manage', 'ingestion:run'];
 export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
   'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
 ];
@@ -24,6 +25,9 @@ const planned = (key: string, name: string, names: string[]): Group => ({ key, n
 
 export const PERMISSION_CATALOG: Group[] = [
   { key: 'platform', name: '平台功能', status: 'active', modules: [
+    { key: 'api-ingestion', name: 'API入库衔接', status: 'active', operations: [
+      operation('ingestion:read', '查看API入库规则与结果'), operation('ingestion:manage', '配置API入库规则'), operation('ingestion:run', '执行导入、队列控制与差异确认'),
+    ] },
     { key: 'api-integration', name: 'API接入管理', status: 'active', operations: [
       operation('integration:read', '查看API接口配置'), operation('integration:manage', '管理API接收接口'),
       operation('integration:credentials:manage', '管理API机器凭据'), operation('integration:receipts:read', '查询API接收记录'),

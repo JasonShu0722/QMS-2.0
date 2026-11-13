@@ -27,7 +27,7 @@ export class CustomerComplaintAnalysisController {
 
   @Get('complaints/:id/candidates/:section') @ApiOkResponse({ type: [CustomerAnalysisCandidateDto] })
   @RequireAccess({ featurePermission: 'customer-quality:complaints:read', organizationScope: queryScope })
-  candidates(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('section') section: string, @Query() query: CustomerAnalysisCandidatesQueryDto) { return this.service.candidates(actor(request), id, section, query.recoverStale); }
+  candidates(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Param('section') section: string, @Query() query: CustomerAnalysisCandidatesQueryDto) { return this.service.candidates(actor(request), id, section, query.recoverStale, query); }
 
   @Post('complaints/:id/assign/:section') @ApiCreatedResponse({ type: CustomerAnalysisDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'customer-quality:complaints:write', organizationScope: bodyScope })

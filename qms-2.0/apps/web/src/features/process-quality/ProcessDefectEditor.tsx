@@ -1,10 +1,12 @@
 import type { components } from '@qms/contracts';
+import { personLabel } from '../../ui/personLabel';
 import { Alert, Button, Collapse, Drawer, Form, Input, InputNumber, Pagination, Select, Space, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, type Defect } from './process-ledger';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 type Update = components['schemas']['UpdateProcessDefectDto'];
 type Material = components['schemas']['ProcessDefectMaterialInputDto'];
@@ -23,6 +25,12 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<unknown>();
   const [sqes, setSqes] = useState<SqePage>();
+  const [selectedSqes, setSelectedSqes] = useState<Record<string, SqePage['items'][number]>>({});
+  const [invalidated, setInvalidated] = useState(false);
+  const retired = useRef(false);
+  const scope = useWorkTabsStore(state => state.sessionScope);
+  const initialScope = useRef(scope);
+  const materials: Material[] | undefined = Form.useWatch('materials', { form, preserve: true });
   const [sqeSearch, setSqeSearch] = useState('');
   const [sqePage, setSqePage] = useState(1);
   const [sqeError, setSqeError] = useState<unknown>();
@@ -34,17 +42,31 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
   const requestLeave = useNavigationGuard();
   const submitting = useRef(false);
   const alive = useRef(true);
+  const current = () => alive.current && !retired.current && initialScope.current === useWorkTabsStore.getState().sessionScope;
+  const selectedIds = new Set((materials ?? materialInputs(record)).map(material => material.sqeUserId).filter((id): id is string => !!id));
+  const sqeChoices = [...new Map([...(sqes?.items ?? []), ...Object.values(selectedSqes).filter(user => selectedIds.has(user.id))].map(user => [user.id, user])).values()];
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => useWorkTabsStore.subscribe(state => {
+    if (state.sessionScope === initialScope.current) return;
+    retired.current = true; setInvalidated(true); setSqes(undefined); setSelectedSqes({});
+    form.setFieldValue('materials', (form.getFieldValue('materials') ?? []).map((material: Material) => ({ ...material, sqeUserId: null })));
+  }), [form]);
   useUnsavedChanges(dirty || writer.uncertain);
   useNavigationBusy(writer.busy);
   useEffect(() => {
+    if (invalidated) return;
     let active = true;
     const controller = new AbortController();
     setSqeLoading(true); setSqeError(undefined);
     const query = new URLSearchParams({ page: String(sqePage), pageSize: '100', search: sqeSearch });
-    void apiRequest<SqePage>(`/api/v1/process-quality/defects/material-sqes?${query}`, { signal: controller.signal }).then(value => { if (active) setSqes(value); }).catch(cause => { if (active) { setSqes(undefined); setSqeError(cause); if (denied(cause)) onDenied(cause); } }).finally(() => { if (active) setSqeLoading(false); });
+    void apiRequest<SqePage>(`/api/v1/process-quality/defects/material-sqes?${query}`, { signal: controller.signal }).then(value => {
+      if (!active || !current()) return;
+      setSqes(value);
+      const retained = new Set((form.getFieldValue('materials') as Material[] ?? materialInputs(record)).map(material => material.sqeUserId));
+      setSelectedSqes(previous => Object.fromEntries([...Object.values(previous), ...value.items].filter(user => retained.has(user.id)).map(user => [user.id, user])));
+    }).catch(cause => { if (active && current()) { setSqes(undefined); setSqeError(cause); if (denied(cause)) onDenied(cause); } }).finally(() => { if (active && current()) setSqeLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [sqeSearch, sqePage, optionRevision]);
+  }, [sqeSearch, sqePage, optionRevision, invalidated]);
   useEffect(() => {
     let active = true;
     setTypesError(undefined);
@@ -53,7 +75,7 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
   }, [optionRevision]);
 
   async function save(values: Update) {
-    if (submitting.current) return;
+    if (submitting.current || !current()) return;
     submitting.current = true; setError(undefined);
     try {
       const body: Omit<Update, 'expectedVersion'> = {
@@ -67,16 +89,17 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       };
       // The frozen create schema mis-types description as an object; use the generated update fact fields, never fabricate a DTO or object description.
       const result = await writer.write<Defect>(saved ? `/api/v1/process-quality/defects/${saved.id}` : '/api/v1/process-quality/defects', saved ? { ...body, expectedVersion: saved.version } satisfies Update : body, saved ? 'PUT' : 'POST');
-      if (alive.current) { setSaved(result); setDirty(false); onSaved(result); form.setFieldsValue({ materials: materialInputs(result) }); }
-    } catch (cause) { if (alive.current) setError(cause); }
+      if (current()) { setSaved(result); setDirty(false); onSaved(result); form.setFieldsValue({ materials: materialInputs(result) }); }
+    } catch (cause) { if (current()) setError(cause); }
     finally { submitting.current = false; }
   }
   const initialValues: Partial<Update> = record ? { ...record, materials: materialInputs(record), occurredAt: record.occurredAt ? new Date(new Date(record.occurredAt).getTime() - new Date(record.occurredAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : null } : { materials: [{}] };
   return <Drawer open title={record ? '维护人工台账' : '登记不良'} size="min(920px, 100vw)" onClose={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
     <ProcessError cause={error} fallback="保存失败，请重试。" />
+    {invalidated ? <Alert type="warning" title="会话已变化，请重新打开编辑器。" /> : null}
     {writer.uncertain ? <Alert type="warning" title="保存结果未知；已锁定原请求，请使用同请求重试，避免重复登记。" /> : null}
     {saved ? <Alert type="success" title={<>已保存 · 版本 {saved.version} <MappingHint record={saved} /></>} /> : null}
-    <Form form={form} layout="vertical" initialValues={initialValues} disabled={writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={() => void save(form.getFieldsValue(true))}>
+    <Form form={form} layout="vertical" initialValues={initialValues} disabled={invalidated || writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={() => void save(form.getFieldsValue(true))}>
       <Form.Item name="description" label="失效现象" rules={[{ max: 10000, message: '最多10000个字符' }]}><Input.TextArea rows={3} maxLength={10000} /></Form.Item>
       <div className="process-quality-form-grid"><Form.Item name="defectQuantity" label="不良数量"><InputNumber min={1} max={2147483647} precision={0} placeholder="未知可空" /></Form.Item><Form.Item name="occurredAt" label="发生时间"><Input type="datetime-local" /></Form.Item></div>
       <Collapse items={[{ key: 'clues', label: '人工表线索与分类（可空）', children: <>
@@ -93,13 +116,13 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
           <div className="process-quality-form-grid"><Form.Item name={[field.name, 'materialCode']} label={`物料编码 ${field.name + 1}`}><Input maxLength={100} /></Form.Item><Form.Item name={[field.name, 'materialName']} label={`物料名称 ${field.name + 1}`}><Input maxLength={200} /></Form.Item>
             <Form.Item name={[field.name, 'supplierProfileId']} label={`供应商 ${field.name + 1}`}><Select allowClear disabled={!canReadSuppliers || writer.busy || writer.uncertain} showSearch optionFilterProp="label" options={suppliers.map(supplier => ({ value: supplier.id, label: supplier.displayName }))} onChange={value => form.setFieldValue(['materials', field.name, 'supplierOrganizationId'], suppliers.find(supplier => supplier.id === value)?.supplierOrganizationId ?? null)} /></Form.Item>
             <Form.Item name={[field.name, 'materialBatch']} label={`物料批次 ${field.name + 1}`}><Input maxLength={100} /></Form.Item>
-            <Form.Item name={[field.name, 'sqeUserId']} label={`SQE ${field.name + 1}`}><Select allowClear loading={sqeLoading} showSearch filterOption={false} onSearch={value => { setSqeSearch(value); setSqePage(1); }} options={(sqes?.items ?? []).map(user => ({ value: user.id, label: user.fullName ?? user.username }))} /></Form.Item>
+            <Form.Item name={[field.name, 'sqeUserId']} label={`SQE ${field.name + 1}`}><Select allowClear loading={sqeLoading} showSearch filterOption={false} onSearch={value => { setSqeSearch(value); setSqePage(1); }} onChange={id => { const user = sqeChoices.find(user => user.id === id); if (user) setSelectedSqes(previous => ({ ...previous, [user.id]: user })); }} options={[...sqeChoices.map(user => ({ value: user.id, label: personLabel(user) })), ...[...selectedIds].filter(id => !sqeChoices.some(user => user.id === id)).map(id => ({ value: id, label: '原SQE（资料不可用）', disabled: true }))]} /></Form.Item>
             <Form.Item name={[field.name, 'notes']} label={`物料说明 ${field.name + 1}`}><Input maxLength={2000} /></Form.Item>
           </div><Button danger onClick={() => { remove(field.name); setDirty(true); }}>移除此物料</Button>
         </section>)}<Button disabled={fields.length >= 100 || writer.busy || writer.uncertain} onClick={() => { add({}); setDirty(true); }}>添加物料</Button></>}</Form.List>
         {(sqes?.total ?? 0) > 100 ? <Pagination aria-label="SQE候选分页" current={sqePage} pageSize={100} total={sqes?.total} showSizeChanger={false} onChange={setSqePage} /> : null}
       </> }]} />
-      <div className="qms-dialog-actions"><Button type="primary" htmlType="submit" loading={writer.busy} disabled={writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button></div>
+      <div className="qms-dialog-actions"><Button type="primary" htmlType="submit" loading={writer.busy} disabled={invalidated || writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button></div>
     </Form>
     {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : null}
   </Drawer>;

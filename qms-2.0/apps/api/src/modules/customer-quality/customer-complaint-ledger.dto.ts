@@ -182,8 +182,15 @@ export class CustomerLedgerCandidateDto {
   @ApiProperty({ type: String, nullable: true }) departmentName!: string | null;
   @ApiProperty({ type: String, nullable: true }) positionName!: string | null;
 }
+export class CustomerLedgerCandidatesQueryDto extends CustomerLedgerListDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+  @ApiPropertyOptional({ minimum: 0, maximum: 2147483647 }) @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(2147483647) offset?: number;
+}
 export class CustomerLedgerCandidatesDto {
   @ApiProperty({ type: [CustomerLedgerCandidateDto] }) items!: CustomerLedgerCandidateDto[];
+  @ApiPropertyOptional() total?: number;
+  @ApiPropertyOptional() limit?: number;
+  @ApiPropertyOptional() offset?: number;
 }
 export class CustomerLedgerEventDto {
   @ApiProperty({ format: 'uuid' }) id!: string;

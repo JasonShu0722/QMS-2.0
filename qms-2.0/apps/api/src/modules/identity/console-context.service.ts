@@ -2,12 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { adminError } from '../../common/security/admin-mutation.service.js';
 import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
-import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, INTEGRATION_PERMISSIONS } from '../authorization/permission-catalog.js';
+import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, INTEGRATION_PERMISSIONS, INGESTION_PERMISSIONS } from '../authorization/permission-catalog.js';
 import type { AuthorizedSessionUser } from '../authorization/authorization.service.js';
 import type { ConsoleContextDto, ConsoleModuleDto, ConsoleOrganizationDto } from './dto/console-context.dto.js';
 
 const masterMaintenance = ['material-master:write', 'material-master:import', 'component-project:manage', 'customer-quality:complaints:write', 'supplier-quality:profiles:write'];
 const modulePermissions: Partial<Record<ConsoleModuleDto['key'], string[]>> = {
+  'api-ingestion': INGESTION_PERMISSIONS,
   'api-integrations': INTEGRATION_PERMISSIONS,
   users: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('account:users:')), 'account:users:delete'],
   organizations: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('organization:') || code.startsWith('account:roles:')), 'organization:read', 'organization:force-delete', 'organization:departments:force-delete'],

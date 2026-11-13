@@ -3,6 +3,7 @@ import { Alert, Tooltip } from 'antd';
 import { ApiError, safeAccountError } from '../../api/client';
 import { ledgerFields, rawText } from './customer-ledger-import';
 import { ledgerDenied } from './customer-ledger-write';
+import { personLabel } from '../../ui/personLabel';
 
 export type LedgerItem = components['schemas']['CustomerLedgerItemDto'];
 export type LedgerDetail = components['schemas']['CustomerLedgerDetailDto'];
@@ -10,7 +11,7 @@ export type LedgerCandidate = components['schemas']['CustomerLedgerCandidateDto'
 export const ledgerBase = '/api/v1/customer-quality/ledger';
 export const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const scopedLedger = (path: string, organizationId?: string) => organizationId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(organizationId)}` : path;
-export const candidateLabel = (candidate: LedgerCandidate) => `${candidate.fullName || candidate.username || candidate.userId}${candidate.departmentName ? ` · ${candidate.departmentName}` : ''}${candidate.positionName ? ` · ${candidate.positionName}` : ''}`;
+export const candidateLabel = (candidate: LedgerCandidate) => personLabel(candidate, true);
 export const typeLabel = (value: string | null) => value === 'ZERO_KM' ? '零公里' : value === 'AFTER_SALES' ? '售后' : '待补正';
 export const stageLabel = (value: LedgerItem['stage']) => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '阶段待匹配';
 export type LedgerConflict = { field: string; before: unknown; latest: unknown; local: unknown };

@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { ServiceOperationReceiptService } from './modules/task-notification/service-operation-receipt.service.js';
 import { DataExchangeObservationService } from './modules/system-management/data-exchange-observation.service.js';
 import { IntegrationRetentionService } from './modules/api-integration/integration-retention.service.js';
+import { IngestionWorkerService } from './modules/api-integration/ingestion-worker.service.js';
 
 async function bootstrap(): Promise<void> {
   const options = parseWorkerOptions(process.argv.slice(2), process.env);
@@ -40,6 +41,7 @@ async function bootstrap(): Promise<void> {
     let nextMaintenance = 0;
     await runWorkerLoop(app.get(OutboxWorkerService), handler, options, controller.signal, async () => {
       await app.get(FileScanWorkerService).processDue(options.batchSize);
+      await app.get(IngestionWorkerService).processDue(options.batchSize);
       if (Date.now() < nextMaintenance) return;
       await app.get(FileScanWorkerService).expireUploads();
       await app.get(AuditExportService).purgeExpired();

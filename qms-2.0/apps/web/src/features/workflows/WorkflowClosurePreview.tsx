@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Descriptions, Input, Modal, Pagination, Select, Space, Table, Typography } from 'antd';
+import { personLabel } from '../../ui/personLabel';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -138,7 +139,7 @@ function ClosureScope({ policy, disabled, session }: Props & { session?: string 
     finally { locked.current = false; if (current() && !controller.signal.aborted) setBusy(false); }
   }
   const frozen = disabled || denied || busy;
-  const userOptions = options?.users.map(user => ({ value: user.id, label: user.fullName ? `${user.fullName} (${user.username})` : user.username })) ?? [];
+  const userOptions = options?.users.map(user => ({ value: user.id, label: personLabel(user, false, locale) })) ?? [];
   const select = (suffix: string, label: string, value: Choice | undefined, values: Choice[], change: (next: Choice | undefined) => void) => <div>
     <label htmlFor={`${id}-${suffix}`}>{t(label)}</label>
     <Select<Choice> id={`${id}-${suffix}`} aria-label={t(label)} style={{ width: '100%' }} labelInValue allowClear showSearch={false}

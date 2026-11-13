@@ -10,6 +10,7 @@ import { WorkflowUpgradeService } from '../workflow/workflow-upgrade.service.js'
 import { jsonObject } from '../workflow/workflow-runtime-policy.js';
 import { renderTrialSummaryReport, type TrialSummaryReport } from './trial-summary-report.js';
 import { NewProductEightDSourceService } from './new-product-eight-d-source.service.js';
+import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 
 export type TrialMetricCode = 'INPUT' | 'OUTPUT' | 'FIRST_PASS' | 'DEFECT' | 'CPK' | 'DIMENSION_PASS_RATE';
 export interface TrialMetricSourceAdapter<ExternalRecord> {
@@ -550,6 +551,29 @@ export class NewProductQualityService {
       if (project?.status !== 'ACTIVE') fail('NEW_PRODUCT_PROJECT_ARCHIVED', 409);
       const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE new_product_issues SET complexity = 'COMPLEX', response_form = 'EIGHT_D', status = 'ESCALATED', version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${expectedVersion} AND status = 'OPEN' RETURNING *`);
       if (!row) fail('CONCURRENCY_CONFLICT', 409); await this.record(tx, actor, organizationId, 'NEW_PRODUCT_ISSUE_ESCALATED', 'NewProductIssue', id, traceId); return row;
+    });
+  }
+
+  async issueAssignees(actor: AdminActor, issueId: string, query: { page: number; pageSize: number; search?: string }) {
+    const id = uuid(issueId);
+    if (!Number.isSafeInteger(query.page) || query.page < 1 || !Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100
+      || query.search !== undefined && (typeof query.search !== 'string' || query.search.length > 200)) fail('NEW_PRODUCT_INPUT_INVALID', 400);
+    return this.read(actor, async (tx, organizationId) => {
+      await assertAdminAccess(tx, actor, organizationId, WRITE);
+      const [issue] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT issue.status, project.status AS project_status FROM new_product_issues issue
+        JOIN new_product_projects project ON project.id = issue.project_id AND project.organization_id = issue.organization_id
+        WHERE issue.id = ${id}::uuid AND issue.organization_id = ${organizationId}::uuid`);
+      if (!issue) fail('NEW_PRODUCT_ISSUE_NOT_FOUND', 404);
+      if (!['OPEN', 'ESCALATED'].includes(issue.status)) fail('NEW_PRODUCT_ISSUE_STATE_INVALID', 409);
+      if (issue.project_status !== 'ACTIVE') fail('NEW_PRODUCT_PROJECT_ARCHIVED', 409);
+      const search = query.search?.trim();
+      const where: Prisma.UserWhereInput = { organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
+        ...(search ? { OR: [{ username: { contains: search, mode: 'insensitive' } }, { fullName: { contains: search, mode: 'insensitive' } }] } : {}) };
+      const [users, total] = await Promise.all([tx.user.findMany({ where, select: { id: true, username: true, fullName: true,
+        positions: { where: { organizationId, ...effectivePositionAssignmentWhere() }, select: { position: { select: { department: { select: { name: true } } } } } } },
+        orderBy: [{ username: 'asc' }, { id: 'asc' }], take: query.pageSize, skip: (query.page - 1) * query.pageSize }), tx.user.count({ where })]);
+      return { items: users.map(({ positions, ...user }) => ({ ...user, departmentName: [...new Set(positions.flatMap(assignment => assignment.position.department ? [assignment.position.department.name] : []))].sort().join('、') || null })),
+        total, page: query.page, pageSize: query.pageSize };
     });
   }
 

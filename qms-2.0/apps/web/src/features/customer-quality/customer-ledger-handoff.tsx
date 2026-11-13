@@ -2,8 +2,9 @@ import { Alert, Button, Input, Modal } from 'antd';
 import { useRef, useState } from 'react';
 import { ApiError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
-import { candidateLabel, LedgerError, ledgerBase, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
+import { LedgerError, ledgerBase, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import { ledgerDenied, useCustomerLedgerWrite } from './customer-ledger-write';
+import { CustomerEngineerSelect } from './CustomerEngineerSelect';
 
 type Props = {
   record: LedgerDetail; candidates: LedgerCandidate[]; permissions: string[]; organizationId?: string;
@@ -98,9 +99,9 @@ function HandoffDialog({ record, candidates, permissions, organizationId, readOn
         </> : null}
       </section> : null}
       <fieldset className="customer-ledger-form" disabled={blocked || writer.uncertain}>
-        <label><span>接任质量工程师</span><select aria-label="接任质量工程师" value={assignment} onChange={event => { setAssignment(event.target.value); setConfirmed(false); }}>
-          <option value="">请选择实际任职</option>{candidates.filter(candidate => !!candidate.assignmentId).map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
-        </select></label>
+        <div><span>接任质量工程师</span><CustomerEngineerSelect label="接任质量工程师" value={assignment} candidates={candidates.filter(candidate => !!candidate.assignmentId)} organizationId={organizationId} stage={record.stage} disabled={blocked || writer.uncertain || sourcePending} onDenied={onDenied} onChange={value => { setAssignment(value); setConfirmed(false); }}>
+          <option value="">请选择实际任职</option>
+        </CustomerEngineerSelect></div>
         <label className="customer-ledger-form-wide"><span>交接原因</span><Input.TextArea aria-label="交接原因" rows={4} value={reason} onChange={event => { setReason(event.target.value); setConfirmed(false); }} /></label>
       </fieldset>
     </Modal>

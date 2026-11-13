@@ -261,6 +261,27 @@ describe('new product foundation on PostgreSQL', () => {
     expect(actions.map((item) => item.action)).toEqual(expect.arrayContaining(['NEW_PRODUCT_ISSUE_ASSIGNED', 'NEW_PRODUCT_ISSUE_MEASURE_RECORDED', 'NEW_PRODUCT_ISSUE_VERIFIED', 'NEW_PRODUCT_ISSUE_CLOSED']));
   });
 
+  it('pages partial-name trial issue assignees over the original active internal organization scope', async () => {
+    const created = await project(); const issueId = randomUUID(); const marker = randomUUID();
+    await prisma.$executeRaw`INSERT INTO new_product_issues(id, organization_id, project_id, response_form, complexity, severity, created_by_id) VALUES (${issueId}::uuid,${organizationId}::uuid,${created.id}::uuid,'BRIEF','SIMPLE','HIGH',${userId}::uuid)`;
+    const people = [];
+    for (let index = 0; index < 3; index++) people.push(await prisma.user.create({ data: { organizationId, username: randomUUID(), fullName: `候选张${marker}`, accountType: 'INTERNAL', passwordHash: 'unused' } }));
+    await prisma.user.create({ data: { organizationId, username: randomUUID(), fullName: `候选张${marker}`, accountType: 'INTERNAL', status: 'DISABLED', passwordHash: 'unused' } });
+    await prisma.user.create({ data: { organizationId: otherOrganizationId, username: randomUUID(), fullName: `候选张${marker}`, accountType: 'INTERNAL', passwordHash: 'unused' } });
+    const department = await prisma.department.create({ data: { organizationId, code: randomUUID(), name: '试产质量部' } });
+    const position = await prisma.position.create({ data: { organizationId, departmentId: department.id, code: randomUUID(), name: '试产工程师' } });
+    for (const person of people) await prisma.userPosition.create({ data: { organizationId, userId: person.id, positionId: position.id, startedAt: new Date(Date.now() - 1000) } });
+    const first = await service.issueAssignees(actor, issueId, { search: `张${marker}`, page: 1, pageSize: 1 });
+    const second = await service.issueAssignees(actor, issueId, { search: `张${marker}`, page: 2, pageSize: 1 });
+    expect(first).toMatchObject({ total: 3, page: 1, pageSize: 1, items: [{ fullName: `候选张${marker}`, departmentName: department.name }] });
+    expect(second).toMatchObject({ total: 3, page: 2, pageSize: 1 });
+    expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
+    expect(people.some(person => person.id === second.items[0]!.id)).toBe(true);
+    await expect(service.issueAssignees({ ...actor, accountType: 'SUPPLIER' }, issueId, { page: 1, pageSize: 20 })).rejects.toMatchObject({ status: 403 });
+    await prisma.$executeRaw`UPDATE new_product_issues SET status = 'IN_PROGRESS' WHERE id = ${issueId}::uuid`;
+    await expect(service.issueAssignees(actor, issueId, { page: 1, pageSize: 20 })).rejects.toMatchObject({ status: 409 });
+  });
+
   it('does not close a formal trial issue while its problem workflow is unfinished', async () => {
     const created = await project();
     const issueId = randomUUID();

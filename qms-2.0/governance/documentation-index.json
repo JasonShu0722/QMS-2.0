@@ -104,7 +104,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -190,7 +190,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -246,7 +246,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "5b8fe66fce240baa9bbce342a2320c721138b39ec6b987c3b223c25b7b259259"
+            "sha256": "900c1dacfd454a852a5fa4edd75a37c175139c757157d7eaa9058786bfbbb132"
           },
           {
             "path": "docs/OPERABILITY-READINESS.md",
@@ -254,7 +254,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "131ad883290b74bb9ab61bbc62f3fd4e4da26a0c4f3f40ffc821cc00a7a79dd1"
+            "sha256": "47fd670445243eeaad325878d99af30329b1bb846fb433dcf5eba5a6e4e33255"
           },
           {
             "path": "README.md",
@@ -266,7 +266,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
@@ -414,7 +414,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "af158d16fc95367bb57d4c531957b4caea3bd3b76d0b2813668c38a1d1383dc8"
+            "sha256": "53f8a6b9898a3dffa62d6ccdfaa93ed7254d56d519abeed88b8d8cb7cb21b4e5"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -558,11 +558,11 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "b3bc31e5b30b1d418e34f314e30673e3d2293cfa4631c753ad7f9546776ddf88"
+            "sha256": "d33935fefd89030e1cce05a7430df2470a4f42b14d731466ac5fb2e5b595b45c"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
-            "sha256": "9642ebe1729c11dca462fb22de0501965cd9dfdfef72b0db500ddfa0821a4db8"
+            "sha256": "ac0642c83466e4d4a1d35c5963fade9b9a6db73640b62759f0dfa83b4a85386d"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectImport.tsx",
@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "31bcbc19c948f9594c32066b9212a9dfcbd7f0998f558297940b003ca87f9b22"
+            "sha256": "9af547092daecc4040c619baa2313b5e85dd2424dea41437c5221e91eaa77921"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
@@ -610,7 +610,7 @@
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowClosurePreview.tsx",
-            "sha256": "a99ffd3c044ee2067d8a0909c2ac63116484ee3282d2f08ed79cbcbb90f5ac52"
+            "sha256": "1bbf01d29348c73a2387ee33363ebbfa15b5584645a57214ff97a4dd7b53ea67"
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowClosureTemplateDialog.tsx",
@@ -646,11 +646,11 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/CustomerQualityPage.tsx",
-            "sha256": "0b326b37f53d43565dfca2af2a0aa451c65e38431dc2d8b4a53faa8ab311955a"
+            "sha256": "3a9d7d78da7c7875d891cbe8266cc534db474de6ea1cadf93decc3184357d465"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-analysis-panel.tsx",
-            "sha256": "deffbec7d6e65ca393a16541aeb56f38296a01c473169e4955c7cc06fb5ea393"
+            "sha256": "93a28d4ed98cdff78edbab4cf039acaf8fdf3a9b685c35756ad22c0195780cbd"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-source-attachments.tsx",
@@ -658,11 +658,11 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-handoff.tsx",
-            "sha256": "8bf20e44999b893e8c5f0464191e55a6605134ad350d8dffe5000db346b02a7f"
+            "sha256": "775d9f8d3c2d7f3f4a0e5f719d0866a6f234b55f0bb197c15051e06d3fb0ca8c"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-detail.tsx",
-            "sha256": "e9d8060ead3c0c8c66dcdf1f9ecf9c0ebc8b21bc5b473730c66340ff12bec329"
+            "sha256": "7c077a8c619f0db24004f6faba7707a760d032aa03586571b58fa216b6a6f2d1"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-write.ts",
@@ -670,7 +670,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-editor.tsx",
-            "sha256": "6a16dfa1dac6a83af401daee97fb79b81c00fb04cc83155e804349b82d241a31"
+            "sha256": "fdc60e0cf71915d338a8a00fa9f4c356ad9c8319d080237638b04b29dfb25f3f"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-29-qms-management-console-design.md",
@@ -996,7 +996,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -1052,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "355d77709d891eee3e154e7f2fcec8afd234ca6ad891553b7611330edc8183b4"
+            "sha256": "8d02b1d18681d38c2b7f36b41897c7373da6c22e10cd3962a3c4feb0a0137b21"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1128,7 +1128,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -1162,7 +1162,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -1196,7 +1196,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "5b8fe66fce240baa9bbce342a2320c721138b39ec6b987c3b223c25b7b259259"
+            "sha256": "900c1dacfd454a852a5fa4edd75a37c175139c757157d7eaa9058786bfbbb132"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
@@ -1230,7 +1230,7 @@
           },
           {
             "path": "AGENTS.md",
-            "sha256": "fb2a10e003b02325502356e18f48b5c87ca1fe6cbf0e02068eea43bd79b8eaf6"
+            "sha256": "9b47254122cee19d8fb6de032fb8b45d0179bc697ba50c0ecdc54a03eaa50602"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -1238,7 +1238,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e1b353dbf30d80d3dbeb6cb1a9ba8a2481a97b039355b2d0a75ce4f24c722c2c"
+            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",

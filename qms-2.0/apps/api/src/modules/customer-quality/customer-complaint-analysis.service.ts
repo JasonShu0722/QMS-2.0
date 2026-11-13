@@ -12,6 +12,7 @@ import { OrganizationService } from '../organization/organization.service.js';
 import { CustomerComplaintLedgerService } from './customer-complaint-ledger.service.js';
 import { LEDGER_PERMISSIONS, type CustomerLedgerCase } from './customer-complaint-ledger.types.js';
 import { ANALYSIS_PERMISSIONS, ANALYSIS_RESOURCE_TYPE, analysisContent, analysisFail, assertAnalysisTransfer, assertAnalysisWriter, faeAnalysisStatus, type AnalysisAssignmentInput, type AnalysisContent, type AnalysisSaveInput, type AnalysisSection, type AnalysisSnapshot } from './customer-complaint-analysis.types.js';
+import type { CustomerAnalysisCandidatesQueryDto } from './customer-complaint-analysis.dto.js';
 
 type StoredAnalysis = Omit<AnalysisSnapshot, keyof AnalysisContent | 'faeStatus' | 'updatedAt'> & { content: AnalysisContent; updatedAt: Date };
 const columns = Prisma.sql`id, organization_id AS "organizationId", complaint_id AS "complaintId", section,
@@ -52,11 +53,11 @@ export class CustomerComplaintAnalysisService {
 
   private async candidate(tx: AdminTransaction, organizationId: string, userId: string, assignmentId: string, section: AnalysisSection) {
     uuid(userId); uuid(assignmentId);
-    const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' }, select: { id: true, username: true } });
+    const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE' }, select: { id: true, username: true, fullName: true } });
     const assignment = (await this.organizations.currentAssignments(userId, organizationId, new Date(), tx)).find(item => item.id === assignmentId);
     const permissions = user && assignment ? await adminPermissions(tx, userId, organizationId) : [];
     if (!user || !assignment?.department || [LEDGER_PERMISSIONS.read, LEDGER_PERMISSIONS.write, ANALYSIS_PERMISSIONS[section]].some(code => !permissions.includes(code))) analysisFail('CUSTOMER_ANALYSIS_CANDIDATE_INVALID', 403);
-    return { userId, username: user.username, assignmentId, departmentId: assignment.department.id };
+    return { userId, username: user.username, fullName: user.fullName, assignmentId, departmentId: assignment.department.id, departmentName: assignment.department.name, positionName: assignment.position.name };
   }
 
   private async writer(tx: AdminTransaction, actor: AdminActor, row: StoredAnalysis, source: CustomerLedgerCase) {
@@ -132,7 +133,7 @@ export class CustomerComplaintAnalysisService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
-  async candidates(actor: AdminActor, complaintId: string, rawSection: string, recoverStale?: boolean) {
+  async candidates(actor: AdminActor, complaintId: string, rawSection: string, recoverStale?: boolean, query: Pick<CustomerAnalysisCandidatesQueryDto, 'search' | 'limit' | 'offset'> = {}) {
     const section = sectionValue(rawSection); const organizationId = this.scope(actor); uuid(complaintId);
     if (recoverStale !== undefined && typeof recoverStale !== 'boolean' || recoverStale && section !== 'FAE') analysisFail('CUSTOMER_ANALYSIS_INPUT_INVALID');
     return this.prisma.$transaction(async tx => {
@@ -146,7 +147,9 @@ export class CustomerComplaintAnalysisService {
       }
       else if (existing && section === 'FAE') { await this.writer(tx, actor, existing, source); departmentId = existing.departmentId; }
       else await this.dispatcher(tx, actor, source);
-      const users = await tx.user.findMany({ where: { organizationId, accountType: 'INTERNAL', status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } });
+      const search = query.search?.trim();
+      const users = await tx.user.findMany({ where: { organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
+        ...(search ? { OR: [{ username: { contains: search, mode: 'insensitive' as const } }, { fullName: { contains: search, mode: 'insensitive' as const } }] } : {}) }, select: { id: true }, orderBy: { id: 'asc' } });
       const result = [];
       for (const user of users) {
         const permissions = await adminPermissions(tx, user.id, organizationId);
@@ -156,7 +159,7 @@ export class CustomerComplaintAnalysisService {
           result.push(await this.candidate(tx, organizationId, user.id, assignment.id, section));
         }
       }
-      return result;
+      return result.slice(query.offset ?? 0, query.limit === undefined ? undefined : (query.offset ?? 0) + query.limit);
     }, { isolationLevel: 'ReadCommitted' });
   }
 

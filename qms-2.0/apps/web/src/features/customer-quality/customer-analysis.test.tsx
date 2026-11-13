@@ -34,7 +34,7 @@ beforeEach(() => {
     if (init?.method) return { ...(path.endsWith('/supplier') || path.endsWith('/assign/SUPPLIER') ? summary.supplier ?? { ...fae, id: 'analysis-sqe', section: 'SUPPLIER', faeStatus: null } : fae), ...JSON.parse(String(init.body)), version: 3 };
     if (path.startsWith('/api/v1/system/my-permissions')) return { organizationId: 'selected', permissions };
     if (path.startsWith('/api/v1/customer-quality/ledger/c1')) return source;
-    if (path.includes('/candidates/')) return [{ userId: 'target', username: '同部门工程师', assignmentId: 'appointment-a', departmentId: 'dep' }, { userId: 'target', username: '同部门工程师', assignmentId: 'appointment-b', departmentId: 'dep' }];
+    if (path.includes('/candidates/')) return [{ userId: 'target', username: 'qe', fullName: '同部门工程师', departmentName: '质量部', positionName: '岗位甲', assignmentId: 'appointment-a', departmentId: 'dep' }, { userId: 'target', username: 'qe', fullName: '同部门工程师', departmentName: '质量部', positionName: '岗位乙', assignmentId: 'appointment-b', departmentId: 'dep' }];
     if (path.includes('/history')) return [{ id: 'history-1', action: 'SAVED', snapshot: fae }];
     if (path.startsWith(`${base}/complaints/c1`)) return summary;
     throw new Error(`Unexpected request ${path}`);
@@ -284,7 +284,7 @@ it('starts with assignment and no attachment picker when no stable analysis exis
   const dialog = await screen.findByRole('dialog', { name: '指定 FAE' });
   expect(AttachmentPanel).not.toHaveBeenCalled();
   fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-  fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-b'));
+  fireEvent.click(await screen.findByText('同部门工程师 / 质量部（qe） · 岗位乙'));
   fireEvent.click(within(dialog).getByRole('button', { name: '确认指定' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}/complaints/c1/assign/FAE`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 'selected', expectedVersion: 0, assigneeUserId: 'target', assigneeAssignmentId: 'appointment-b' }) }), expect.anything()));
 });
@@ -313,7 +313,7 @@ it('recovers stale FAE dispatch explicitly without enabling QE edits or ordinary
   const dialog = await screen.findByRole('dialog', { name: '恢复 FAE 派工' });
   await waitFor(() => expect(within(dialog).getByRole('combobox')).toBeVisible());
   fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-  fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-b'));
+  fireEvent.click(await screen.findByText('同部门工程师 / 质量部（qe） · 岗位乙'));
   fireEvent.click(within(dialog).getByRole('button', { name: '确认恢复派工' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}/complaints/c1/assign/FAE`, expect.objectContaining({
     method: 'POST', body: JSON.stringify({ organizationId: 'selected', expectedVersion: 2, assigneeUserId: 'target', assigneeAssignmentId: 'appointment-b', recoverStale: true }),
@@ -340,7 +340,7 @@ it('transfers FAE with its current version and the exact chosen assignment ident
   mount(); fireEvent.click(await screen.findByRole('button', { name: '同部门转派 FAE' }));
   const dialog = await screen.findByRole('dialog', { name: '同部门转派 FAE' });
   fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-  fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-a'));
+  fireEvent.click(await screen.findByText('同部门工程师 / 质量部（qe） · 岗位甲'));
   fireEvent.click(within(dialog).getByRole('button', { name: '确认转派' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}/${fae.id}/transfer`, expect.objectContaining({ body: JSON.stringify({ organizationId: 'selected', expectedVersion: 2, assigneeUserId: 'target', assigneeAssignmentId: 'appointment-a' }) }), expect.anything()));
 });
@@ -575,7 +575,7 @@ it.each(['close', 'handoff', 'warning'] as const)('checks the actual current sou
   fireEvent.click(await screen.findByRole('button', { name: '指定 SQE' }));
   const dialog = await screen.findByRole('dialog', { name: '指定 SQE' });
   fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-  fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-a'));
+  fireEvent.click(await screen.findByText('同部门工程师 / 质量部（qe） · 岗位甲'));
   vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
   fireEvent.click(within(dialog).getByRole('button', { name: '确认指定' }));
   await waitFor(() => expect(csrfToken).toHaveBeenCalled());
@@ -623,7 +623,7 @@ it.each(['save', 'transfer'] as const)('rechecks parent closure after deferred C
     fireEvent.click(screen.getByRole('button', { name: '同部门转派 FAE' }));
     const dialog = await screen.findByRole('dialog', { name: '同部门转派 FAE' });
     fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-    fireEvent.click(await screen.findByText('同部门工程师 · 任职 appointment-a'));
+    fireEvent.click(await screen.findByText('同部门工程师 / 质量部（qe） · 岗位甲'));
     submit = within(dialog).getByRole('button', { name: '确认转派' });
   }
   vi.mocked(csrfToken).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));

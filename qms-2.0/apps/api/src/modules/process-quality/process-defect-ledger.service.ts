@@ -379,9 +379,18 @@ export class ProcessDefectLedgerService {
       await assertActiveAuthentication(tx, actor);
       await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
       const pattern = `%${(query.search ?? '').replace(/[\\%_]/g, '\\$&')}%`;
-      const [result] = await tx.$queryRaw<{ items: { id: string; username: string; fullName: string | null }[]; total: number }[]>(Prisma.sql`
+      const [result] = await tx.$queryRaw<{ items: { id: string; username: string; fullName: string | null; departmentName: string | null }[]; total: number }[]>(Prisma.sql`
         WITH eligible AS MATERIALIZED (
-          SELECT candidate.id, candidate.username, candidate.full_name AS "fullName" FROM users candidate
+          SELECT candidate.id, candidate.username, candidate.full_name AS "fullName",
+            (SELECT string_agg(DISTINCT dept.name, '、' ORDER BY dept.name) FROM user_positions assignment
+              JOIN positions pos ON pos.id = assignment.position_id JOIN departments dept ON dept.id = pos.department_id
+              JOIN organizations org ON org.id = assignment.organization_id
+              WHERE assignment.user_id = candidate.id AND assignment.organization_id = candidate.organization_id
+                AND assignment.started_at <= CURRENT_TIMESTAMP AND (assignment.ended_at IS NULL OR assignment.ended_at > CURRENT_TIMESTAMP)
+                AND pos.organization_id = candidate.organization_id AND pos.status = 'ACTIVE' AND pos.deleted_at IS NULL AND NOT pos.configuration_required
+                AND dept.organization_id = candidate.organization_id AND dept.status = 'ACTIVE' AND dept.deleted_at IS NULL AND NOT dept.configuration_required
+                AND org.status = 'ACTIVE' AND org.type = 'INTERNAL' AND org.deleted_at IS NULL AND NOT org.configuration_required) AS "departmentName"
+          FROM users candidate
           WHERE candidate.organization_id = ${organizationId}::uuid AND candidate.account_type = 'INTERNAL' AND candidate.status = 'ACTIVE'
             AND ${featurePredicate(Prisma.sql`candidate.id`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:materials:review'`)}
             ${query.search ? Prisma.sql`AND (candidate.username ILIKE ${pattern} OR candidate.full_name ILIKE ${pattern})` : Prisma.empty}

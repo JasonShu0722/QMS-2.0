@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { CustomerComplaintLedgerService } from './customer-complaint-ledger.service.js';
-import { CustomerLedgerCandidatesDto, CustomerLedgerCreateDto, CustomerLedgerDetailDto, CustomerLedgerImportDto,
+import { CustomerLedgerCandidatesDto, CustomerLedgerCandidatesQueryDto, CustomerLedgerCreateDto, CustomerLedgerDetailDto, CustomerLedgerImportDto,
   CustomerLedgerImportResultDto, CustomerLedgerItemDto, CustomerLedgerListDto, CustomerLedgerNoteDto,
   CustomerLedgerPageDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerScopeDto, CustomerLedgerUpdateDto } from './customer-complaint-ledger.dto.js';
 import { LEDGER_PERMISSIONS } from './customer-complaint-ledger.types.js';
@@ -33,7 +33,7 @@ export class CustomerComplaintLedgerController {
 
   @Get('candidates') @ApiOkResponse({ type: CustomerLedgerCandidatesDto })
   @RequireAccess({ featurePermission: LEDGER_PERMISSIONS.read, organizationScope: queryScope })
-  candidates(@Req() request: Request, @Query() dto: CustomerLedgerListDto) { return this.service.candidates(actor(request), dto); }
+  candidates(@Req() request: Request, @Query() dto: CustomerLedgerCandidatesQueryDto) { return this.service.candidates(actor(request), dto); }
 
   @Post('import/preview') @ApiCreatedResponse({ type: CustomerLedgerImportResultDto }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: LEDGER_PERMISSIONS.write, organizationScope: bodyScope })

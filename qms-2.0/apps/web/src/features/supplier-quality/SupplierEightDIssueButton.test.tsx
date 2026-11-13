@@ -74,3 +74,13 @@ it('clears the embedded issuer and propagates a current directory denial', async
   expect(screen.queryByLabelText('SQE责任任职')).not.toBeInTheDocument();
   expect(issued).not.toHaveBeenCalled();
 });
+
+it('does not revive a selected appointment after a batched session A to B to A transition', async () => {
+  scene();
+  await screen.findByRole('option', { name: /供应商质量室/ });
+  fireEvent.change(screen.getByLabelText('SQE责任任职'), { target: { value: assignment.assignmentId } });
+  act(() => { useWorkTabsStore.getState().bindSession('other'); useWorkTabsStore.getState().bindSession('INTERNAL:org:actor'); });
+  expect(screen.queryByLabelText('SQE责任任职')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '正式发起8D' })).not.toBeInTheDocument();
+  expect(issued).not.toHaveBeenCalled(); expect(denied).not.toHaveBeenCalled();
+});

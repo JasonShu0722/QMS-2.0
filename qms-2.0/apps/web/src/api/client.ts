@@ -106,6 +106,10 @@ export function getAdminUser(organizationId: string, userId: string): Promise<co
 }
 
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
+  components['schemas']['SaveIngestionRuleDto'] | components['schemas']['UpdateIngestionRuleDto'] |
+  components['schemas']['DeleteIngestionRuleDto'] | components['schemas']['IngestionPreviewInputDto'] |
+  components['schemas']['IngestionHistoryPreviewInputDto'] | components['schemas']['SubmitIngestionImportDto'] |
+  components['schemas']['IngestionControlDto'] | components['schemas']['IngestionItemActionDto'] |
   components['schemas']['CreateIntegrationEndpointDto'] | components['schemas']['UpdateIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationReceiptsDto'] |

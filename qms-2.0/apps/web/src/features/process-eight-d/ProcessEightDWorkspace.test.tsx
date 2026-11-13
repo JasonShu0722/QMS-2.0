@@ -352,7 +352,7 @@ it('appends closed sources without sending a forbidden primary-source rewrite', 
 
 it('searches assignment options with problem, action, organization and section filters', async () => {
   mount(); await screen.findByDisplayValue('真实过程问题'); fireEvent.click(actions().getByRole('button', { name: '专业重派 / 科室内转派' }));
-  const dialog = await screen.findByRole('dialog'); await within(dialog).findByRole('option', { name: '候选负责人 · user2' });
+  const dialog = await screen.findByRole('dialog'); await within(dialog).findByRole('option', { name: '候选负责人 / 部门未填写（user2）' });
   const first = fetcher.mock.calls.map(([url]) => new URL(String(url), 'http://qms.test')).find(url => url.pathname.endsWith('/assignment-options'))!;
   expect(first.searchParams.has('sectionDepartmentId')).toBe(false);
   fireEvent.change(within(dialog).getByLabelText('筛选科室'), { target: { value: 'section-1' } });
