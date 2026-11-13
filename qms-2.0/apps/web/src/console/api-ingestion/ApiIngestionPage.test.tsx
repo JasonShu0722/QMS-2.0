@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
@@ -53,7 +53,7 @@ function jobsView() {
   return componentView(<JobList scope={verifiedScope()} endpoints={[{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }]} canReceipts clearReceipt={vi.fn()} />);
 }
 beforeEach(() => {
-  vi.clearAllMocks(); read.mockReset(); mocks.mutate.mockReset(); mocks.context = context(); localStorage.clear();
+  vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); read.mockReset(); mocks.mutate.mockReset(); mocks.context = context(); localStorage.clear();
   useWorkTabsStore.getState().bindSession(`INTERNAL:${homeId}:${actorId}`);
   read.mockImplementation(async path => {
     if (path.includes('/ingestion/endpoints')) return { items: [{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }], total: 1, page: 1, limit: 100 } as never;
@@ -62,6 +62,7 @@ beforeEach(() => {
     return { items: [], total: 0, page: 1, limit: 20 } as never;
   });
 });
+afterEach(() => { vi.unstubAllEnvs(); localStorage.clear(); });
 it('requires the scoped ingestion capability even for a platform administrator', () => {
   mocks.context = { ...context(), modules: [] }; view();
   expect(screen.getByRole('alert')).toHaveTextContent('无权访问API入库衔接'); expect(read).not.toHaveBeenCalled();
@@ -177,9 +178,10 @@ it('keeps stale item differences visible while disabling confirmation', async ()
     if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
     return original(path, ...args);
   });
-  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  jobsView(); const openJob = await screen.findByLabelText('查看任务1'); await act(async () => { fireEvent.click(openJob); });
   const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
-  fireEvent.click(await jobDialog.findByRole('button', { name: '查看差异' }));
+  const viewDifferences = await jobDialog.findByRole('button', { name: '查看差异' });
+  await act(async () => { fireEvent.click(viewDifferences); });
   const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
   const stale = await detail.findByText('当前档案已变化，旧差异不可确认覆盖');
   await waitFor(() => expect(stale).toBeVisible());
@@ -196,9 +198,9 @@ it('allows retrying a blocked job even when failure occurred before selecting an
     return original(path, ...args);
   });
   mocks.mutate.mockResolvedValue({ ...job, status: 'PENDING', errorCode: null });
-  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  jobsView(); const openJob = await screen.findByLabelText('查看任务1'); await act(async () => { fireEvent.click(openJob); });
   const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
-  const retry = await jobDialog.findByRole('button', { name: '重试处理' }); await waitFor(() => expect(retry).toBeEnabled()); fireEvent.click(retry);
+  const retry = await jobDialog.findByRole('button', { name: '重试处理' }); await waitFor(() => expect(retry).toBeEnabled()); await act(async () => { fireEvent.click(retry); });
   const control = within(await screen.findByRole('dialog', { name: '重试处理' }));
   fireEvent.change(control.getByLabelText('操作原因'), { target: { value: '接口和配置授权已恢复' } }); fireEvent.click(control.getByRole('button', { name: '确认操作' }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
@@ -224,11 +226,12 @@ it.each(['validation', 'duplicate'])('shows the %s item location or existing con
     if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
     return original(path, ...args);
   });
-  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  jobsView(); const openJob = await screen.findByLabelText('查看任务1'); await act(async () => { fireEvent.click(openJob); });
   const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
-  await waitFor(() => expect(jobDialog.getByText(kind === 'validation' ? 'supplier.name' : '已关联既有待确认项')).toBeVisible());
-  fireEvent.click(jobDialog.getByRole('button', { name: '查看差异' })); const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
-  if (kind === 'validation') { await waitFor(() => expect(detail.getByText('supplier.name')).toBeVisible()); expect(detail.getByText('来源字段类型与规则不符')).toBeVisible(); }
-  else { await waitFor(() => expect(detail.getByText('已关联既有待确认项')).toBeVisible()); expect(detail.getByText(originalItemId)).toBeVisible(); expect(detail.queryByRole('button', { name: '确认更新' })).not.toBeInTheDocument(); expect(detail.queryByRole('button', { name: '跳过此项' })).not.toBeInTheDocument(); }
+  const summary = await jobDialog.findByText(kind === 'validation' ? 'supplier.name' : '已关联既有待确认项');
+  await waitFor(() => expect(summary).toBeVisible());
+  await act(async () => { fireEvent.click(jobDialog.getByRole('button', { name: '查看差异' })); }); const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
+  if (kind === 'validation') { const field = await detail.findByText('supplier.name'); await waitFor(() => expect(field).toBeVisible()); expect(detail.getByText('来源字段类型与规则不符')).toBeVisible(); }
+  else { const linked = await detail.findByText('已关联既有待确认项'); await waitFor(() => expect(linked).toBeVisible()); expect(detail.getByText(originalItemId)).toBeVisible(); expect(detail.queryByRole('button', { name: '确认更新' })).not.toBeInTheDocument(); expect(detail.queryByRole('button', { name: '跳过此项' })).not.toBeInTheDocument(); }
   expect(mocks.mutate).not.toHaveBeenCalled();
 });

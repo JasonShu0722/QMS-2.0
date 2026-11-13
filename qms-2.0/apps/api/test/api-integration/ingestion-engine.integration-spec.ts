@@ -243,6 +243,60 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(jobs.reduce((sum, job) => sum + job.total, 0)).toBe(2);
   });
 
+  it('keeps a failed queue blocked when another awaiting or pending row is skipped and resumes only after skipping its failed row', async () => {
+    const item = await fixture(); await rule(item, 'MATERIAL', 'CONFIRM');
+    await prisma.$transaction(tx => targets.write(tx, item.actor, 'MATERIAL', { code: 'skip-waiting', name: 'current' }, null, trace()));
+    await machine(item, [{ code: 'skip-waiting', name: 'awaiting' }, { code: 'skip-failed', name: 'failed' }, { code: 'skip-other', name: 'pending to skip' }, { code: 'skip-after', name: 'remaining' }]);
+    await machine(item, [{ code: 'skip-later-job', name: 'later job' }]);
+    const functionName = `ingestion_skip_fault_${item.organizationId.replaceAll('-', '')}`;
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${item.organizationId}'::uuid AND NEW.row_index=1 AND NEW.status='INSERTED' THEN RAISE EXCEPTION 'controlled_test_fault'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ${functionName} BEFORE UPDATE ON integration_ingestion_items FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
+    try { expect(await worker.processDue(10)).toBe(2); }
+    finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER ${functionName} ON integration_ingestion_items`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION ${functionName}()`);
+    }
+    const blocked = (await service.listJobs(item.actor, {})).items.find(job => job.status === 'BLOCKED')!;
+    const rows = (await service.listItems(item.actor, blocked.id, {})).items;
+    expect(rows.map(row => row.status)).toEqual(['AWAITING_CONFIRMATION', 'PROCESSING_FAILED', 'PENDING', 'PENDING']);
+    try {
+      for (const index of [0, 2]) {
+        await service.actOnItem(item.actor, rows[index]!.id, { expectedVersion: rows[index]!.version, reason: '只跳过旁行，不解除失败阻塞' }, false, trace(), key());
+        expect(await service.getJob(item.actor, blocked.id)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_PROCESSING_FAILED' });
+        expect(await worker.processDue(10)).toBe(0);
+        expect(await inspect(item, 'MATERIAL', 'skip-after')).toBeNull();
+        expect(await inspect(item, 'MATERIAL', 'skip-later-job')).toBeNull();
+      }
+      await service.actOnItem(item.actor, rows[1]!.id, { expectedVersion: rows[1]!.version, reason: '明确跳过原失败行后继续' }, false, trace(), key());
+      expect((await service.getJob(item.actor, blocked.id)).status).toBe('PENDING');
+      expect(await worker.processDue(10)).toBe(2);
+      expect((await inspect(item, 'MATERIAL', 'skip-after'))?.values.name).toBe('remaining');
+      expect((await inspect(item, 'MATERIAL', 'skip-later-job'))?.values.name).toBe('later job');
+      expect(await inspect(item, 'MATERIAL', 'skip-failed')).toBeNull();
+    } finally {
+      for (const job of (await service.listJobs(item.actor, {})).items.filter(job => ['PENDING', 'BLOCKED'].includes(job.status))) await service.controlJob(item.actor, job.id, { action: 'CANCEL', reason: '隔离失败回归剩余队列' }, trace(), key());
+    }
+  });
+
+  it('does not clear authorization blocking without a failed row by skipping a pending row', async () => {
+    const item = await fixture(); await rule(item);
+    await machine(item, [{ code: 'auth-skip-one', name: 'one' }, { code: 'auth-skip-two', name: 'two' }]);
+    await machine(item, [{ code: 'auth-skip-later', name: 'later' }]);
+    await prisma.user.update({ where: { id: item.userId }, data: { status: 'DISABLED' } });
+    try { expect(await worker.processDue(10)).toBe(1); }
+    finally { await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } }); }
+    const blocked = (await service.listJobs(item.actor, {})).items.find(job => job.status === 'BLOCKED')!;
+    const rows = (await service.listItems(item.actor, blocked.id, {})).items;
+    expect(rows.map(row => row.status)).toEqual(['PENDING', 'PENDING']);
+    await service.actOnItem(item.actor, rows[0]!.id, { expectedVersion: rows[0]!.version, reason: '旁行跳过不代表重新授权' }, false, trace(), key());
+    expect(await service.getJob(item.actor, blocked.id)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+    expect(await worker.processDue(10)).toBe(0);
+    expect(await inspect(item, 'MATERIAL', 'auth-skip-two')).toBeNull();
+    expect(await inspect(item, 'MATERIAL', 'auth-skip-later')).toBeNull();
+    await service.controlJob(item.actor, blocked.id, { action: 'RETRY', reason: '显式重新授权后恢复' }, trace(), key());
+    expect(await worker.processDue(10)).toBe(2);
+  });
+
   it('rolls back target writes when item persistence fails, blocks later jobs, and recovers durably', async () => {
     const item = await fixture(); await rule(item);
     await machine(item, [{ code: 'atomic-fault', name: 'first' }]); await machine(item, [{ code: 'atomic-fault', name: 'second' }]);

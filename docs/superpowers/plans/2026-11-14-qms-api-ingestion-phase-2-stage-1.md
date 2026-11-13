@@ -6,10 +6,10 @@
 | --- | --- |
 | 授权 | 负责人明确已调整状态、继续开发至PR/合并部署；新增全部功能管理员默认可用并写规则 |
 | 台账 | REQ-0037 / reczz28ZE8jkkxxc，当前回读rev369为开发中；用户本轮直接授权覆盖当前需求文档及新增管理员要求，不依赖最后编辑者推断 |
-| 映射 | Issue119；codex/req0037-api-ingestion；基线11e63cece80e31488f9de99b7a3d50ef1c7d8858；V0.0.51预留，远端main及开放PR/Issue已查重 |
-| 状态 | 独立SPEC/QUALITY与选定本地工程门禁通过；最新核心34项、目标管理员49项、接收44+22项、制程58项、客诉API71项及目标单元58项PASS；Web新页面21项、一期/人员51项、制程/交接56项、客诉6文件166项PASS，浏览器编译Worker四目标1/1PASS；源码冻结，准备提交PR，完整全站CI及部署尚待 |
+| 映射 | Issue119；PR120；codex/req0037-api-ingestion；基线11e63cece80e31488f9de99b7a3d50ef1c7d8858；V0.0.51首提交5744f3ce34bce49465ff88127b75bbd1c1cc4ba5，fix1预留纠错，远端main/开放PR/Issue已查重 |
+| 状态 | 首CI43489559990的4个失败job和Codex队列P2全部本地闭合；fix1核心真PG36/36、审计58/58、CI入口Web21/21与工作区68/68、Web类型/API构建/治理PASS，独立聚焦QUALITY/SPEC通过；准备推送fix1，未合并发布 |
 | 目标 | 配置、四目标写入、有序队列/历史/试处理/确认、组件补配和姓名选择闭环；不新增库存、发出接口或账号自动授权 |
-| 下一步 | 收束人员剩余相邻文件及原失败完整证据，提交推送V0.0.51与一个PR；等待精确head完整CI/Review、合并树/mainCI/部署及公网核验，保持Issue开放和人工验收边界 |
+| 下一步 | fix1提交推送同PR并重新审查/精确CI，合并树/mainCI/部署及公网核验，保持Issue开放和人工验收边界 |
 
 ## 开工评审与最小实现决策
 
@@ -71,3 +71,15 @@
 本次一个PR关联Issue119，不自动关闭Issue、不代写人工验收完成；获准动作继续到精确PR/main完整CI、同SHA部署与公网资源核验。提交前再查远端main及开放PR/版本预留，沿用V0.0.51。生产真实接口规则、字段、凭据及容量不因技术验收而擅改；未使用保留预览库55440。
 
 剩余人工项：正式业务账号与真实来源样本配置/字段语义、四档案实际业务验收、组件手工批配的真实项目人员确认、物理手机及全部主题/语言视觉组合。自动390px主链不等于物理设备验收；10GiB生产全容量备份恢复仍未证明。既有`qms-2.0/$null`保持未跟踪且不得纳入提交。完整CI/部署/线上事实继续在本计划映射的Issue和Git外证据目录记录，不用本地PASS替代上线。
+
+## PR120首轮失败与fix1（2026-11-14）
+
+首CI run43489559990/attempt1/head5744f3ce完整24job已结束：20success，api-unit、web-tests(6)、web-tests(7)为真实失败，foundation因前述job未成功派生失败。api-unit只一个来源契约用例缺十个INGESTION审计中文动作标签（重复出现同一失败不重复计根因）；Web6四个任务弹窗用例因RC工具在NODE_ENV=test固定test-id与筛选输入重复导致aria-labelledby错配，Web7只一个旧候选人员标签未同步。其他完整分片通过，包括组件44与职责预览30的全文件修后覆盖；原本地定向证据不扩大为全站PASS。
+
+Codex Review discussion4567529687核对成立：BLOCKED的某行PROCESSING_FAILED时，跳过另一个PENDING/AWAITING行不应解除队列屏障。真实PG触发器隔离RED2/2按预期失败，最小修为仅明确跳过原失败行、原原因属处理失败且不存在其他失败行才恢复；撤权阻塞仍须RETRY/取消。engine/policy/audit完整36/36PASS（26.337秒），独立聚焦QUALITY及队列SPEC复核PASS，事务锁序和其他流程不变。
+
+审计十个中文标签补齐，audit-action-labels/audit-event-read-model两个完整文件58/58PASS。Web使用同目录既有beforeEach环境标准化并afterEach恢复，产品不改；NODE_ENV=test实际入口后两次完整21为20PASS/1FAIL，重复ID已闭合，剩余validation字段可见性正在精确DOM诊断，未放宽预算、关闭motion或去掉断言。ProcessEightDWorkspace旧标签已改为fixture准确“候选负责人 / 部门未填写（user2）”，完整文件待复验。原log/json均Git外保存，不重跑旧CI掩盖失败。
+
+最终DOM诊断确认code连接正常、祖先display/visibility均正常，唯一子Modal停留ant-zoom-appear-prepare且opacity0；将父/子弹窗打开置于真实异步act，完成React更新/微任务后再等待自然可见，保精确标题与全部可见/无写断言。validation和duplicate各精准PASS后，`NODE_ENV=test`真实CI入口完整21/21PASS（green14，104.72秒），不再将单例通过当整组结果。API fix1 build与最新治理均PASS；DTO/迁移未变，既有契约检查证据仍适用。修复仅影响skip解阻路径，原浏览器确认/导入主链无变化；真实PG新增屏障用例承担该新路径验证。
+
+ProcessEightDWorkspace修后完整68/68PASS（60.28秒），Web最终类型检查PASS；与新页面21项均从新shell/Enter-Qms/显式NODE_ENV=test直接入口执行，不借测试设置注入development冒称CI复现。fix1所有原失败对应完整文件已绿，未重跑旧失败CI；将由新精确head重新执行完整24job与Codex Review。临时诊断已清除，仅保外部日志和真实FAIL历史。

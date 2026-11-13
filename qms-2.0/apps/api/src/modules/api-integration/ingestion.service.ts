@@ -473,7 +473,9 @@ export class IngestionService {
         await this.applyEvaluation(tx, job, item, receipt, evaluation, actor, traceId);
       } else {
         await tx.$executeRaw`UPDATE integration_ingestion_items SET status='SKIPPED',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=${id}::uuid`;
-        if (job.status === 'BLOCKED') await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL WHERE id=${job.id}::uuid`;
+        if (job.status === 'BLOCKED' && item.status === 'PROCESSING_FAILED' && job.error_code === 'INGESTION_PROCESSING_FAILED') {
+          await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL WHERE id=${job.id}::uuid AND status='BLOCKED' AND error_code='INGESTION_PROCESSING_FAILED' AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PROCESSING_FAILED')`;
+        }
       }
       await this.refreshJob(tx, job.id);
       await this.event(tx, actor, organizationId, confirm ? 'INGESTION_ITEM_CONFIRMED' : 'INGESTION_ITEM_SKIPPED', id, traceId, { ingestionReason: input.reason.trim(), jobId: job.id });
