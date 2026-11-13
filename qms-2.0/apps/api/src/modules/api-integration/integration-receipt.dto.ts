@@ -1,9 +1,11 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
 export const INTEGRATION_ATTEMPT_OUTCOMES = ['RECEIVED', 'DUPLICATE', 'REJECTED', 'FAILED', 'UNKNOWN'] as const;
-export class IntegrationReceiptQueryDto extends IntegrationPageQueryDto {
+export class IntegrationReceiptQueryDto extends OmitType(IntegrationPageQueryDto, ['limit'] as const) {
+  @ApiPropertyOptional({ minimum: 1, maximum: 1000, default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
   @ApiPropertyOptional({ format: 'date-time' }) @IsOptional() @IsDateString() from?: string;
   @ApiPropertyOptional({ format: 'date-time' }) @IsOptional() @IsDateString() to?: string;
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() endpointId?: string;
@@ -15,7 +17,7 @@ export class IntegrationReceiptQueryDto extends IntegrationPageQueryDto {
 }
 export class DeleteIntegrationReceiptsDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
-  @ApiProperty({ type: [String], minItems: 1, maxItems: 100, format: 'uuid' }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsUUID('all', { each: true }) receiptIds!: string[];
+  @ApiProperty({ type: [String], minItems: 1, maxItems: 1000, format: 'uuid' }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(1000) @IsUUID('all', { each: true }) receiptIds!: string[];
 }
 export class IntegrationReceiptDeleteResultDto {
   @ApiProperty() deletedCount!: number;

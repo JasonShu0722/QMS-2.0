@@ -9,6 +9,7 @@ export { LedgerScopeProvider, useLedgerPageSize } from './preferences';
 export type LedgerTableProps<RecordType extends object> = TableProps<RecordType> & {
   ledgerId: string; organizationId?: string; viewId?: string; requiredColumnKeys?: string[];
   resizableSelection?: boolean;
+  toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
   onColumnOrderChange?: (keys: string[]) => void; onVisibleColumnKeysChange?: (keys: string[]) => void;
 };
@@ -27,7 +28,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -178,7 +179,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   </div>;
   const expansion = expandable?.expandedRowRender ? { ...expandable, columnTitle: expandable.columnTitle === undefined ? text('明细', 'Details') : expandable.columnTitle, columnWidth: expandable.columnWidth ?? 64, showExpandColumn: expandable.showExpandColumn ?? (tableProps.dataSource?.some(record => !expandable.rowExpandable || expandable.rowExpandable(record)) ?? false) } : expandable;
   return <div className="qms-ledger">
-    <div className="qms-ledger__tools"><Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
+    <div className="qms-ledger__tools">{toolbarContent}<Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
     <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} tableLayout={fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={{ x: 'max-content', ...scroll, ...(fitSelection ? { x: `max(100%, ${businessWidth + selectionWidth}px)` } : {}) }} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
   </div>;
 }

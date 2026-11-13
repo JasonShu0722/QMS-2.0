@@ -53,6 +53,6 @@ export function moveColumn(order: string[], source: string, target: string, fixe
 }
 export function normalizePageSize(input: unknown, maxPageSize = 100) {
   const limit = Number.isFinite(maxPageSize) ? Math.max(10, maxPageSize) : 100;
-  const options = [10, 20, 50, 100].filter(size => size <= limit);
+  const options = [10, 20, 50, 100, 500, 1000].filter(size => size <= limit);
   return typeof input === 'number' && options.includes(input) ? input : options.includes(20) ? 20 : options[0];
 }

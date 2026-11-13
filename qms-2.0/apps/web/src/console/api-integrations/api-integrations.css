@@ -1,5 +1,16 @@
 .qms-integration-page, .qms-integration-section { min-width: 0; }
 .qms-integration-section { display: grid; gap: 12px; }
+.qms-integration-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qms-integration-record-actions > .qms-integration-capacity-button { margin-inline-start: auto; min-height: 36px; color: var(--qms-muted); }
+.qms-integration-filter-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.qms-integration-records .qms-ledger__tools { position: sticky; top: 0; z-index: 20; flex-wrap: wrap; align-items: center; gap: 8px; padding-block: 6px; background: var(--qms-surface); }
+.qms-integration-pagination { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-variant-numeric: tabular-nums; }
+.qms-integration-pagination :is(label, form) { display: inline-flex; align-items: center; gap: 4px; margin: 0; }
+.qms-integration-pagination :is(select, input) { min-height: 28px; border: 1px solid var(--qms-border); border-radius: 4px; color: var(--qms-text); background: var(--qms-surface); font: inherit; }
+.qms-integration-pagination input { width: 64px; }
+.qms-integration-records--selected { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+.qms-integration-selection-bar { position: fixed; z-index: 30; inset-inline-start: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 160px); padding: 8px 12px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); color: var(--qms-text); box-shadow: 0 3px 12px rgb(0 0 0 / 12%); }
+.qms-integration-selection-bar > span { white-space: nowrap; }
 .qms-integration-section small { display: block; color: var(--qms-muted); margin-top: 3px; overflow-wrap: anywhere; }
 .qms-integration-capacity-button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: start; }
 .qms-integration-capacity-button:disabled { cursor: default; }
@@ -34,8 +45,11 @@
 .qms-integration-detail-value-popover { max-width: min(520px, calc(100vw - 32px)); max-height: min(240px, 45vh); overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 640px) {
   .qms-integration-form-grid, .qms-integration-filters { grid-template-columns: minmax(0, 1fr); }
+  .qms-integration-records--selected { padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
+  .qms-integration-record-actions > .qms-integration-capacity-button { margin-inline-start: 0; }
 }
 @media (pointer: coarse) {
+  .qms-integration-pagination :is(button, select, input), .qms-integration-selection-bar button { min-height: 44px; min-width: 44px; }
   .qms-integration-payload-frame .qms-integration-payload { padding-top: 56px; }
 }
 @media (pointer: coarse) and (max-height: 420px) {
