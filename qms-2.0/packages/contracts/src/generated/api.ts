@@ -22459,13 +22459,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 接收成功；开启回执返回 true，关闭回执返回空正文。 */
+            /** @description 接收成功；开启回执返回 JSON true，关闭回执无正文。 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": true | string;
+                    "application/json": true;
                 };
             };
             default: {

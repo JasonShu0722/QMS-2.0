@@ -15,7 +15,7 @@ export class InboundController {
   @ApiParam({ name: 'endpointId', required: true, description: '接口编码（区分大小写），或原有接口 UUID。', schema: { type: 'string', maxLength: 64 } })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiBody({ schema: { type: 'array', items: { type: 'object', additionalProperties: true } } })
-  @ApiResponse({ status: 200, schema: { oneOf: [{ type: 'boolean', enum: [true], example: true }, { type: 'string', example: '' }] }, description: '接收成功；开启回执返回 true，关闭回执返回空正文。' })
+  @ApiResponse({ status: 200, schema: { type: 'boolean', enum: [true], example: true }, description: '接收成功；开启回执返回 JSON true，关闭回执无正文。' })
   @ApiResponse({ status: 'default', type: ErrorResponse })
   async receive(@Req() request: InboundRequest, @Res({ passthrough: true }) response: Response): Promise<true | undefined> {
     response.setHeader('Cache-Control', 'no-store');
