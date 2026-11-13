@@ -4,11 +4,16 @@ import { validate } from 'class-validator';
 import {
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto,
   UpdateComponentProjectMappingDto, ComponentProjectListQueryDto, ResolveComponentProjectQueryDto,
-  ComponentProjectImportDto,
+  ComponentProjectImportDto, ComponentProjectMappingsQueryDto,
 } from '../../src/modules/platform-configuration/component-project.dto.js';
 
 const options = { whitelist: true, forbidNonWhitelisted: true };
 describe('component project DTO boundaries', () => {
+  it('accepts an optional explicit mapping readiness filter without changing the default query', async () => {
+    expect(await validate(plainToInstance(ComponentProjectMappingsQueryDto, {}), options)).toEqual([]);
+    for (const configuration of ['PENDING', 'CONFIGURED']) expect(await validate(plainToInstance(ComponentProjectMappingsQueryDto, { configuration }), options)).toEqual([]);
+    expect((await validate(plainToInstance(ComponentProjectMappingsQueryDto, { configuration: 'ACTIVE' }), options)).length).toBeGreaterThan(0);
+  });
   it('validates import structure strictly while leaving row contents to transactional validation', async () => {
     const row = { rowNumber: 1, componentCode: 123, componentName: { formula: 'A1' } };
     const valid = plainToInstance(ComponentProjectImportDto, { rows: [row] });

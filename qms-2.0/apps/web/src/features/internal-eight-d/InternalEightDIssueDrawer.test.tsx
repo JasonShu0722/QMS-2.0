@@ -16,7 +16,7 @@ beforeEach(() => {
   vi.mocked(getSession).mockResolvedValue({ userId: 'issuer', organizationId: org, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   vi.mocked(csrfToken).mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/sources/preview') ? preview : path.includes('/assignment-options') ? {
-    departments: [{ id: 'section', name: '制造科' }], departmentTotal: 1, users: path.includes('sectionDepartmentId') ? [{ id: 'owner', username: '负责人' }] : [], userTotal: 1,
+    departments: [{ id: 'section', name: '制造科' }], departmentTotal: 1, users: path.includes('sectionDepartmentId') ? [{ id: 'owner', username: 'owner', fullName: '负责人', departmentName: '制造科' }] : [], userTotal: 1,
   } : { problem: { id: 'new', reportNumber: 'NEW-8D' }, replayed: false });
 });
 function mount(domain: InternalEightDDomain = 'customer-quality', onDenied = vi.fn(), sources: EightDIssueSource[] = [source]) {
@@ -32,7 +32,7 @@ async function select(label: string, value: string) {
 async function fill() {
   await screen.findByText('OLD-8D');
   fireEvent.click(screen.getByRole('radio', { name: /^复发$/ }));
-  await select('风险等级', '高'); await select('责任科室', '制造科'); await select('负责人', '负责人');
+  await select('风险等级', '高'); await select('责任科室', '制造科'); await select('负责人', '负责人 / 制造科（owner）');
 }
 it.each(['customer-quality', 'new-product-quality'] as const)('posts %s selection identities, exact recurrence token and actual-issuer semantics', async domain => {
   const { onIssued } = mount(domain); await fill();
@@ -49,7 +49,7 @@ it.each(['customer-quality', 'new-product-quality'] as const)('issues an unlinke
   const { onIssued } = mount(domain);
   await screen.findByText(/未发现其他关联/);
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-  await select('风险等级', '高'); await select('责任科室', '制造科'); await select('负责人', '负责人');
+  await select('风险等级', '高'); await select('责任科室', '制造科'); await select('负责人', '负责人 / 制造科（owner）');
   fireEvent.click(screen.getByText('确认发起8D'));
   await waitFor(() => expect(onIssued).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path === `/api/v1/${domain}/eight-d` && init?.method === 'POST');
@@ -345,4 +345,31 @@ it('propagates a late owner denial after a concurrent department 404', async () 
   expect(onDenied).toHaveBeenLastCalledWith(denial);
   expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
   expect(writes()).toHaveLength(0); expect(onIssued).not.toHaveBeenCalled();
+});
+
+it('preserves the selected owner identity and request after paging beyond its candidate page', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/assignment-options') && path.includes('sectionDepartmentId')) {
+      const second = new URL(path, 'http://localhost').searchParams.get('page') === '2';
+      return { departments: [{ id: 'section', name: '制造科' }], departmentTotal: 1, users: second ? [{ id: 'other', username: 'other', fullName: '李四', departmentName: '制造科' }] : [{ id: 'owner', username: 'owner', fullName: '负责人', departmentName: '制造科' }], userTotal: 101 };
+    }
+    return read(path, init);
+  });
+  const { onIssued } = mount(); await fill();
+  const pages = screen.getByLabelText('负责人候选分页');
+  fireEvent.click(pages.querySelector('[title="2"]')!);
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('sectionDepartmentId') && new URL(path, 'http://localhost').searchParams.get('page') === '2')).toBe(true));
+  await waitFor(() => expect(screen.getByLabelText('负责人').closest('.ant-select')).toHaveTextContent('负责人 / 制造科（owner）'));
+  fireEvent.click(screen.getByText('确认发起8D'));
+  await waitFor(() => expect(onIssued).toHaveBeenCalled());
+  expect(JSON.parse(String(writes()[0][1]?.body))).toMatchObject({ ownerUserId: 'owner' });
+});
+
+it('retires selected owner identities on a batched session A to B to A transition', async () => {
+  mount(); await fill();
+  act(() => { useWorkTabsStore.getState().bindSession('other'); useWorkTabsStore.getState().bindSession(`INTERNAL:${org}:issuer`); });
+  expect(screen.getByText('来源选择或会话已变化，请重新打开抽屉。')).toBeVisible();
+  expect(screen.getByLabelText('负责人').closest('.ant-select')).not.toHaveTextContent('负责人 / 制造科（owner）');
+  expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
 });

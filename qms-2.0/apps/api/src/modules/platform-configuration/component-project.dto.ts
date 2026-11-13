@@ -23,6 +23,10 @@ export class ComponentEngineerAssignmentsQueryDto extends ComponentProjectListQu
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() selectedAssignmentId?: string;
 }
 
+export class ComponentProjectMappingsQueryDto extends ComponentProjectListQueryDto {
+  @ApiPropertyOptional({ enum: ['PENDING', 'CONFIGURED'] }) @IsOptional() @IsIn(['PENDING', 'CONFIGURED']) configuration?: 'PENDING' | 'CONFIGURED';
+}
+
 export class ResolveComponentProjectQueryDto extends ComponentProjectScopeDto {
   @ApiProperty({ maxLength: 100 }) @Transform(trim) @IsString() @Length(1, 100) componentCode!: string;
   @ApiPropertyOptional({ format: 'uuid', nullable: true, type: String }) @IsOptional() @IsUUID() currentQualityEngineerId?: string | null;

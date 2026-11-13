@@ -72,6 +72,15 @@ describe('REQ0032 console context with real HTTP sessions and PostgreSQL authori
   it('requires a real authenticated session', async () => {
     expect((await request(app.getHttpServer()).get(path).expect(401)).body.code).toBe('AUTH_SESSION_REQUIRED');
   });
+  it('makes new ingestion permissions and management entry available from the platform marker alone', async () => {
+    const administrator = await fixture();
+    await grant(administrator.user.id, administrator.home.id, ['platform:admin']);
+    const context = await get(administrator.cookie).expect(200);
+    expect(context.body.modules).toContainEqual(expect.objectContaining({ key: 'api-ingestion', scope: 'TARGET', organizationId: administrator.home.id, permissions: expect.arrayContaining(['ingestion:read', 'ingestion:manage', 'ingestion:run']) }));
+    const ordinary = await fixture();
+    await get(ordinary.cookie).expect(403);
+    await request(app.getHttpServer()).get('/api/v1/admin/integrations/ingestion/rules').set('Cookie', ordinary.cookie).expect(403);
+  });
   it('allows workflow-only personnel at their actual session home without user capabilities', async () => {
     const f = await fixture();
     await grant(f.user.id, f.home.id, ['workflow:manage']);

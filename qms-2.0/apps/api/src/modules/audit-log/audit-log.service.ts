@@ -33,6 +33,7 @@ interface AuditEventWriter {
 }
 
 const configurationTextLimits: Readonly<Record<string, number>> = {
+  ingestionReason: 300,
   originalOrganizationCode: 64, originalOrganizationName: 200,
   componentProjectCode: 100, previousComponentProjectCode: 100,
   componentProjectName: 200, previousComponentProjectName: 200,
@@ -42,6 +43,7 @@ const configurationTextLimits: Readonly<Record<string, number>> = {
   productSubcategory: 100, previousProductSubcategory: 100,
 };
 const configurationIdKeys = new Set([
+  'jobId', 'ruleId',
   'endpointId', 'credentialId', 'receiptId',
   'originalOrganizationId',
   'componentProjectId', 'projectRecordId', 'previousProjectRecordId',
@@ -52,6 +54,7 @@ const configurationIdKeys = new Set([
 ]);
 const configurationDateKeys = new Set(['validFrom', 'validTo', 'previousValidFrom', 'previousValidTo']);
 const SAFE_METADATA_KEYS = new Set([
+  'rowIndex', 'ruleVersion', 'receiptCount', 'rowCount', 'result', 'target', 'action', 'enabled', 'reprocessed',
   ...Object.keys(configurationTextLimits), ...configurationIdKeys,
   'componentProjectStage', 'previousComponentProjectStage', 'previousStatus',
   ...configurationDateKeys, 'responsibility', 'bindingVersion', 'previousResourceVersion',
@@ -118,6 +121,14 @@ export class AuditLogService {
   }
 
   private isSafeConfigurationValue(key: string, value: Prisma.InputJsonValue | null | undefined): boolean {
+    if (key === 'enabled' || key === 'reprocessed') return typeof value === 'boolean';
+    if (key === 'receiptCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
+    if (key === 'rowCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
+    if (key === 'rowIndex') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value < 10000;
+    if (key === 'ruleVersion') return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
+    if (key === 'target') return ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'].includes(String(value));
+    if (key === 'action') return ['PAUSE', 'RESUME', 'CANCEL', 'RETRY'].includes(String(value));
+    if (key === 'result') return ['INSERTED', 'UPDATED', 'UNCHANGED', 'FILTERED', 'EXISTING_SKIPPED', 'AWAITING_CONFIRMATION', 'VALIDATION_FAILED', 'PROCESSING_FAILED', 'SKIPPED', 'CANCELLED'].includes(String(value));
     if (key === 'returnReceipt') return typeof value === 'boolean';
     if (Object.hasOwn(configurationTextLimits, key)) {
       if (value === null && ['productCategory', 'previousProductCategory', 'productSubcategory', 'previousProductSubcategory', 'componentName', 'previousComponentName'].includes(key)) return true;

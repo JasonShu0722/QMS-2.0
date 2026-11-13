@@ -6,6 +6,7 @@ export type ConsoleModule = components['schemas']['ConsoleModuleDto'];
 export type ConsoleNavigationItem = { path: string; label: string; english: string; group: string; icon: LucideIcon; module?: ConsoleModule['key'] };
 const home: ConsoleNavigationItem = { path: '/console', label: '管理首页', english: 'Management home', group: 'workspace', icon: LayoutDashboard };
 const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
+  { path: '/console/api-ingestion', label: 'API入库衔接', english: 'API data ingestion', group: 'configuration', icon: ArrowLeftRight, module: 'api-ingestion', permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run'] },
   { path: '/console/api-integrations', label: 'API接口管理', english: 'API integrations', group: 'configuration', icon: Plug, module: 'api-integrations', permissions: ['integration:read', 'integration:receipts:read'] },
   { path: '/console/users', label: '用户与任职', english: 'Users & appointments', group: 'administration', icon: Users, module: 'users' },
   { path: '/console/organizations', label: '组织与岗位', english: 'Organizations & positions', group: 'administration', icon: Building2, module: 'organizations' },

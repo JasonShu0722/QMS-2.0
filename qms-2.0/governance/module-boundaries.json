@@ -1,6 +1,10 @@
 {
   "version": 1,
   "allowedModuleDependencies": [
+    "api-integration -> material-master",
+    "api-integration -> supplier-quality",
+    "api-integration -> customer-quality",
+    "api-integration -> platform-configuration",
     "api-integration -> authorization",
     "api-integration -> audit-log",
     "api-integration -> organization",

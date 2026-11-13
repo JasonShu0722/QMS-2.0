@@ -5,8 +5,9 @@ import { ApiError, apiRequest } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerFields, rawText, type LedgerFields } from './customer-ledger-import';
-import { candidateLabel, LedgerConflicts, LedgerError, ledgerBase, ledgerChanges, ledgerConflicts, scopedLedger, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
+import { LedgerConflicts, LedgerError, ledgerBase, ledgerChanges, ledgerConflicts, scopedLedger, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import { ledgerDenied, useCustomerLedgerWrite } from './customer-ledger-write';
+import { CustomerEngineerSelect } from './CustomerEngineerSelect';
 
 const choices: Partial<Record<keyof LedgerFields, readonly (readonly [string, string])[]>> = {
   complaintType: [['ZERO_KM', '零公里'], ['AFTER_SALES', '售后']],
@@ -128,9 +129,9 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
         </label>;
       })}
       {record && canInvestigate ? <label className="customer-ledger-form-wide"><span>调查情况</span><Input.TextArea aria-label="调查情况" rows={4} value={rawText(fields.investigation)} onChange={event => { setFields(current => ({ ...current, investigation: event.target.value })); setConfirmed(false); setDirty(true); }} /></label> : null}
-      <label><span>实际跟进质量工程师</span><select aria-label="实际跟进质量工程师" value={assignment ?? '__KEEP__'} onChange={event => { setAssignment(event.target.value === '__KEEP__' ? undefined : event.target.value); setConfirmed(false); setDirty(true); }}>
-        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '按映射分配（无匹配时待分配）'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定，按映射分配' : '未指定（按映射分配）'}</option>{assignmentInvalid ? <option value={assignment} disabled>草稿选择（不在当前候选，请重新选择）</option> : null}{availableCandidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}
-      </select></label>
+      <div><span>实际跟进质量工程师</span><CustomerEngineerSelect label="实际跟进质量工程师" organizationId={organizationId} componentCode={componentCode} stage={candidateStage} candidates={availableCandidates} value={assignment ?? '__KEEP__'} disabled={writer.busy || writer.uncertain || refreshing || candidatesPending} onDenied={onDenied} onChange={value => { setAssignment(value === '__KEEP__' ? undefined : value); setConfirmed(false); setDirty(true); }}>
+        <option value="__KEEP__">{record ? '保留当前实际跟进人' : '按映射分配（无匹配时待分配）'}</option><option value="" disabled={baseline?.status === 'CLOSED'}>{record ? '清除指定，按映射分配' : '未指定（按映射分配）'}</option>{assignmentInvalid ? <option value={assignment} disabled>草稿选择（不在当前候选，请重新选择）</option> : null}
+      </CustomerEngineerSelect></div>
     </fieldset>
   </Modal>;
 }

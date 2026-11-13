@@ -1,6 +1,7 @@
 import type { components, operations } from '@qms/contracts';
 import { Alert, Button, Drawer, Empty, Form, Input, Pagination, Radio, Select, Space, Spin, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { personLabel } from '../../ui/personLabel';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -29,6 +30,8 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
   const [optionsError, setOptionsError] = useState<unknown>();
   const [departments, setDepartments] = useState<Options['departments']>([]);
   const [users, setUsers] = useState<Options['users']>([]);
+  const [selectedOwner, setSelectedOwner] = useState<Options['users'][number]>();
+  const [identityInvalidated, setIdentityInvalidated] = useState(false);
   const [departmentTotal, setDepartmentTotal] = useState(0);
   const [userTotal, setUserTotal] = useState(0);
   const [departmentPage, setDepartmentPage] = useState(1);
@@ -55,12 +58,17 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
   const initialSelection = useRef(selection);
   const invalidatedRef = useRef(false);
   invalidatedRef.current ||= scope !== initialScope.current || selection !== initialSelection.current;
-  const invalidated = invalidatedRef.current;
+  const invalidated = identityInvalidated || invalidatedRef.current;
+  const ownerChoices = selectedOwner && !users.some(user => user.id === selectedOwner.id) ? [selectedOwner, ...users] : users;
   const sourceRefs = baseline.map(record => ({ sourceId: record.id, expectedVersion: record.version }));
   const busy = writer.busy || previewLoading || sourceLoading;
   useUnsavedChanges(dirty || writer.uncertain);
   useNavigationBusy(writer.busy || sourceLoading || (previewLoading && dirty));
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => useWorkTabsStore.subscribe(state => {
+    if (state.sessionScope === initialScope.current) return;
+    invalidatedRef.current = true; setIdentityInvalidated(true); setSelectedOwner(undefined); setUsers([]); setDepartments([]); setPreviews(undefined); form.setFieldValue('ownerUserId', undefined);
+  }), [form]);
 
   function isCurrent(expectedContext = context) {
     return alive.current && !invalidatedRef.current && liveContext.current === expectedContext && useWorkTabsStore.getState().sessionScope === scope;
@@ -176,6 +184,7 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
       if (!active || !isCurrent()) return;
       setDepartments(departmentOptions.departments); setDepartmentTotal(departmentOptions.departmentTotal);
       setUsers(ownerOptions?.users ?? []); setUserTotal(ownerOptions?.userTotal ?? 0);
+      setSelectedOwner(previous => ownerOptions?.users.find(user => user.id === previous?.id) ?? previous);
     }).catch(cause => { if (active && isCurrent()) { setOptionsError(cause); setUsers([]); setDepartments([]); } }).finally(() => { if (active && isCurrent()) setOptionsLoading(false); });
     return () => { active = false; controller.abort(); };
   }, [section, departmentPage, departmentSearch, userPage, userSearch, optionRevision, context, invalidated]);
@@ -193,7 +202,7 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
         if (fingerprint(fresh) !== fingerprint(previews)) {
           setPreviews(fresh); setConfirmations({}); setChangedRelations(true); return;
         }
-        if (!users.some(user => user.id === values.ownerUserId) || values.responsibleSectionDepartmentId !== section) throw new Error('请重新选择当前科室有效负责人。');
+        if (!ownerChoices.some(user => user.id === values.ownerUserId) || values.responsibleSectionDepartmentId !== section) throw new Error('请重新选择当前科室有效负责人。');
       }
       const sourceConfirmations: Body['sourceConfirmations'] = required.map(item => ({ sourceId: item.sourceId, relatedProblemIds: item.relatedProblems.map(problem => problem.problemId), relatedSetToken: item.relatedSetToken, recurrence: confirmations[item.sourceId], ...(reasons[item.sourceId]?.trim() ? { reason: reasons[item.sourceId].trim() } : {}) }));
       const body: Body = { organizationId, sources: sourceRefs, severity: values.severity, responsibleSectionDepartmentId: values.responsibleSectionDepartmentId, ownerUserId: values.ownerUserId,
@@ -226,9 +235,9 @@ export function InternalEightDIssueDrawer({ domain, organizationId, sources, onC
     <ProcessError cause={optionsError} fallback="责任候选加载失败，请重试。" />
     <Form form={form} layout="vertical" disabled={invalidated || busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={values => void submit(values)}>
       <Form.Item name="severity" label="风险等级" rules={[{ required: true, message: '请选择风险等级' }]}><Select options={[{ value: 'LOW', label: '低' }, { value: 'MEDIUM', label: '中' }, { value: 'HIGH', label: '高' }, { value: 'CRITICAL', label: '重大' }]} /></Form.Item>
-      <Form.Item name="responsibleSectionDepartmentId" label="责任科室" rules={[{ required: true, message: '请选择责任科室' }]}><Select loading={optionsLoading} showSearch filterOption={false} onSearch={value => { setDepartmentSearch(value); setDepartmentPage(1); }} options={optionsLoading ? [] : departments.map(department => ({ value: department.id, label: department.name }))} onChange={value => { setSection(value); setUsers([]); setUserSearch(''); setUserPage(1); form.setFieldValue('ownerUserId', undefined); }} notFoundContent={optionsLoading ? <Spin size="small" /> : <Empty description="无有效责任科室" />} /></Form.Item>
+      <Form.Item name="responsibleSectionDepartmentId" label="责任科室" rules={[{ required: true, message: '请选择责任科室' }]}><Select loading={optionsLoading} showSearch filterOption={false} onSearch={value => { setDepartmentSearch(value); setDepartmentPage(1); }} options={optionsLoading ? [] : departments.map(department => ({ value: department.id, label: department.name }))} onChange={value => { setSection(value); setUsers([]); setSelectedOwner(undefined); setUserSearch(''); setUserPage(1); form.setFieldValue('ownerUserId', undefined); }} notFoundContent={optionsLoading ? <Spin size="small" /> : <Empty description="无有效责任科室" />} /></Form.Item>
       {departmentTotal > 100 ? <Pagination aria-label="责任科室候选分页" disabled={busy || writer.uncertain} current={departmentPage} pageSize={100} total={departmentTotal} showSizeChanger={false} onChange={setDepartmentPage} /> : null}
-      <Form.Item name="ownerUserId" label="负责人" rules={[{ required: true, message: '请选择该科室有效负责人' }]}><Select disabled={invalidated || !section || busy || writer.uncertain} loading={optionsLoading} showSearch filterOption={false} onSearch={value => { setUserSearch(value); setUserPage(1); }} options={optionsLoading ? [] : users.map(user => ({ value: user.id, label: user.fullName ?? user.username }))} notFoundContent={optionsLoading ? <Spin size="small" /> : <Empty description="该科室暂无有效负责人" />} /></Form.Item>
+      <Form.Item name="ownerUserId" label="负责人" rules={[{ required: true, message: '请选择该科室有效负责人' }]}><Select disabled={invalidated || !section || busy || writer.uncertain} loading={optionsLoading} showSearch filterOption={false} onSearch={value => { setUserSearch(value); setUserPage(1); }} onChange={id => setSelectedOwner(users.find(user => user.id === id))} options={optionsLoading ? [] : ownerChoices.map(user => ({ value: user.id, label: personLabel(user) }))} notFoundContent={optionsLoading ? <Spin size="small" /> : <Empty description="该科室暂无有效负责人" />} /></Form.Item>
       {userTotal > 100 ? <Pagination aria-label="负责人候选分页" disabled={busy || writer.uncertain} current={userPage} pageSize={100} total={userTotal} showSizeChanger={false} onChange={setUserPage} /> : null}
       {optionsError ? <Button onClick={() => setOptionRevision(value => value + 1)}>重试责任候选</Button> : null}
       <div className="process-quality-form-grid"><Form.Item name="analysisDueAt" label="分析/对策期限"><Input type="date" /></Form.Item><Form.Item name="closureDueAt" label="关闭计划"><Input type="date" /></Form.Item></div>

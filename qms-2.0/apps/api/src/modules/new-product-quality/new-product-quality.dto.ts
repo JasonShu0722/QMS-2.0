@@ -4,6 +4,23 @@ import { Type } from 'class-transformer';
 import type { TrialMetricCode } from './new-product-quality.service.js';
 
 export class NewProductScopeDto { @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string; }
+export class NewProductIssueAssigneesQueryDto extends NewProductScopeDto {
+  @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) page = 1;
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+  @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) search?: string;
+}
+export class NewProductIssueAssigneeDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty() username!: string;
+  @ApiProperty({ type: String, nullable: true }) fullName!: string | null;
+  @ApiProperty({ type: String, nullable: true }) departmentName!: string | null;
+}
+export class NewProductIssueAssigneesDto {
+  @ApiProperty({ type: [NewProductIssueAssigneeDto] }) items!: NewProductIssueAssigneeDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
+}
 export class NewProductDefectSelectionDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organization_id!: string;

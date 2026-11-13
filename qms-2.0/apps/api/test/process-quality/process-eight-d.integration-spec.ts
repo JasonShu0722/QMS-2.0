@@ -735,9 +735,12 @@ describe('process 8D real domain transactions', () => {
     await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: workflowManage.id } } });
     const query = (input: Partial<ProcessEightDAssignmentOptionsQueryDto>) => Object.assign(new ProcessEightDAssignmentOptionsQueryDto(), input);
     const selected = await service.assignmentOptions(f.issuer.actor, query({ sectionDepartmentId: f.section.id, search: f.owner.user.username }));
-    expect(selected.users).toEqual([{ id: f.owner.user.id, username: f.owner.user.username, fullName: null }]);
+    expect(selected.users).toEqual([{ id: f.owner.user.id, username: f.owner.user.username, fullName: null, departmentName: f.section.name }]);
     expect(selected.userTotal).toBe(1);
-    expect(Object.keys(selected.users[0]!).sort()).toEqual(['fullName', 'id', 'username']);
+    expect(Object.keys(selected.users[0]!).sort()).toEqual(['departmentName', 'fullName', 'id', 'username']);
+    await prisma.user.update({ where: { id: f.owner.user.id }, data: { fullName: '张三' } });
+    const named = await service.assignmentOptions(f.issuer.actor, query({ sectionDepartmentId: f.section.id, search: '张', pageSize: 1 }));
+    expect(named).toMatchObject({ users: [{ id: f.owner.user.id, username: f.owner.user.username, fullName: '张三', departmentName: f.section.name }], userTotal: 1 });
     expect(selected.departments.every(department => [f.section.id, f.department.id, f.otherSection.id].includes(department.id))).toBe(true);
     const page = await service.assignmentOptions(f.issuer.actor, query({ sectionDepartmentId: f.section.id, pageSize: 1, page: 2 }));
     expect(page.users).toHaveLength(1); expect(page.userTotal).toBe(2);

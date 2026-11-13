@@ -15,6 +15,8 @@
 
 ## 必须遵守
 
+- 新增内部功能遵循根规则的管理员默认授权：有效platform:admin应在既有组织边界内获得新权限与可达入口；必须同时覆盖菜单/context、后端操作及普通账号拒绝回归，不以管理员用户名特判或代改存量岗位实现。
+
 - 所有实现、测试和 Docker 构建上下文只能位于 `qms-2.0/`。
 - API Swagger 是唯一前端契约来源；修改 DTO 后必须运行 `contracts:generate` 和 `contracts:check`。
 - 不得手工编辑 `packages/contracts/src/generated/api.ts`。

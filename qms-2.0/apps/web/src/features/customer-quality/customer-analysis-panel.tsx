@@ -1,5 +1,6 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Descriptions, Empty, Form, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
+import { personLabel } from '../../ui/personLabel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, safeAccountError, type SessionView } from '../../api/client';
@@ -14,7 +15,7 @@ import { createCustomerAnalysisWrite, customerAnalysisBase as base, customerAnal
 import './customer-analysis.css';
 
 type Props = { complaintId: string; onDenied?: (cause: ApiError) => void; organizationId?: string; sourceRecord?: components['schemas']['CustomerLedgerDetailDto'] };
-type Assignment = { section: Section; transfer: boolean; recoverStale?: boolean; candidates?: CustomerAnalysisCandidate[]; selected?: string };
+type Assignment = { section: Section; transfer: boolean; recoverStale?: boolean; candidates?: CustomerAnalysisCandidate[]; selected?: string; selectedCandidate?: CustomerAnalysisCandidate; search?: string; page?: number };
 type Operation = { section: Section; path: string; method: 'POST' | 'PUT'; body: CustomerAnalysisBody };
 const titles: Record<Section, string> = { FAE: 'FAE 解析', SUPPLIER: '供应商分析' };
 const keys = ['FAE', 'SUPPLIER'] as const;
@@ -232,20 +233,24 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     if (summary?.supplier) setSupplierDraft(customerSupplierDraft(summary.supplier));
     setDirty({ FAE: false, SUPPLIER: false });
   }
-  async function openAssignment(section: Section, transfer: boolean, recoverStale = false) {
+  async function openAssignment(section: Section, transfer: boolean, recoverStale = false, search?: string, page = 1) {
     const eligibilityKey = recoverStale ? 'recover' : transfer ? section : 'assign';
     if (!current() || !eligibility.current[eligibilityKey]) return;
     const generation = ++dialogGeneration.current;
-    setAssignment({ section, transfer, recoverStale }); setHistory(undefined); setDialogError(undefined);
+    const preserved = search !== undefined ? { selected: assignment?.selected, selectedCandidate: assignment?.selectedCandidate } : {};
+    setAssignment({ section, transfer, recoverStale, search, page, ...preserved }); setHistory(undefined); setDialogError(undefined);
     try {
       const path = scoped(`${base}/complaints/${encodeURIComponent(complaintId)}/candidates/${section}`);
-      const candidates = await apiRequest<CustomerAnalysisCandidate[]>(`${path}${recoverStale ? `${organizationId ? '&' : '?'}recoverStale=true` : ''}`, { signal: lifetime.current!.signal });
-      if (current() && generation === dialogGeneration.current && eligibility.current[eligibilityKey]) setAssignment({ section, transfer, recoverStale, candidates });
+      const params = new URLSearchParams();
+      if (recoverStale) params.set('recoverStale', 'true');
+      if (search !== undefined) { params.set('search', search); params.set('limit', '21'); params.set('offset', String((page - 1) * 20)); }
+      const candidates = await apiRequest<CustomerAnalysisCandidate[]>(`${path}${params.size ? `${organizationId ? '&' : '?'}${params}` : ''}`, { signal: lifetime.current!.signal });
+      if (current() && generation === dialogGeneration.current && eligibility.current[eligibilityKey]) setAssignment({ section, transfer, recoverStale, search, page, ...preserved, candidates });
     } catch (cause) { if (customerAnalysisDenied(cause) || generation === dialogGeneration.current) failure(cause, true); }
   }
   function confirmAssignment() {
     if (!assignment || locked || !assignmentAllowed) return;
-    const target = assignment.candidates?.find(candidate => `${candidate.userId}:${candidate.assignmentId}` === assignment.selected);
+    const target = assignment.selectedCandidate ?? assignment.candidates?.find(candidate => `${candidate.userId}:${candidate.assignmentId}` === assignment.selected);
     if (!target || !source) return;
     const record = summary?.[slot(assignment.section)];
     const body: components['schemas']['AssignCustomerAnalysisDto'] = { organizationId: source.organizationId, expectedVersion: record?.version ?? 0, assigneeUserId: target.userId, assigneeAssignmentId: target.assignmentId, ...(assignment.recoverStale ? { recoverStale: true } : {}) };
@@ -319,7 +324,8 @@ function AnalysisContent({ complaintId, organizationId, sourceRecord, onDenied, 
     {!lost && <Modal open={!!assignment} title={t(assignment?.recoverStale ? '恢复 FAE 派工' : assignment?.transfer ? '同部门转派 FAE' : assignment?.section === 'FAE' ? '指定 FAE' : '指定 SQE')} onCancel={closeAssignment} footer={<div className="qms-dialog-actions"><Button disabled={busy || uncertain} onClick={closeAssignment}>{t('取消')}</Button>{uncertain ? <Button type="primary" disabled={busy || uploading || !canRetry} loading={busy} onClick={() => void mutate()}>{t('重试确认解析结果')}</Button> : <Button type="primary" disabled={locked || !assignment?.selected || !assignmentAllowed} loading={busy} onClick={confirmAssignment}>{t(assignment?.recoverStale ? '确认恢复派工' : assignment?.transfer ? '确认转派' : '确认指定')}</Button>}</div>} closable={!busy && !uncertain} mask={{ closable: !busy && !uncertain }}>
       {dialogError && assignment ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button disabled={busy || uncertain || !assignmentAllowed} onClick={() => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale)}>{t('重试加载候选人')}</Button>} /> : null}
       {error && assignment ? <Alert type="error" showIcon title={t(errorMessage(error))} /> : null}
-      {assignment?.candidates ? <Form layout="vertical"><Form.Item label={t('解析人及有效任职')}><Select aria-label={t('解析人及有效任职')} placeholder={t('选择解析人及任职')} disabled={busy || uncertain || !assignmentAllowed} value={assignment.selected} options={assignment.candidates.map(candidate => ({ value: `${candidate.userId}:${candidate.assignmentId}`, label: `${candidate.username} · ${t('任职')} ${candidate.assignmentId}` }))} onChange={selected => setAssignment({ ...assignment, selected })} /></Form.Item>{!assignment.candidates.length && <Empty description={t('当前没有具备权限和有效任职的候选人')} />}</Form> : assignment && !dialogError ? <Spin aria-label={t('正在加载候选人')} /> : null}
+      {assignment ? <Input.Search aria-label={t('搜索解析人姓名')} maxLength={100} disabled={busy || uncertain || !assignmentAllowed} onSearch={search => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale, search.trim(), 1)} /> : null}
+      {assignment?.candidates ? <Form layout="vertical"><Form.Item label={t('解析人及有效任职')}><Select aria-label={t('解析人及有效任职')} placeholder={t('选择解析人及任职')} disabled={busy || uncertain || !assignmentAllowed} value={assignment.selected} options={[...(assignment.selectedCandidate && !assignment.candidates.slice(0, 20).some(candidate => candidate.assignmentId === assignment.selectedCandidate!.assignmentId) ? [assignment.selectedCandidate] : []), ...assignment.candidates.slice(0, 20)].map(candidate => ({ value: `${candidate.userId}:${candidate.assignmentId}`, label: personLabel(candidate, true) }))} onChange={selected => setAssignment({ ...assignment, selected, selectedCandidate: assignment.candidates?.find(candidate => `${candidate.userId}:${candidate.assignmentId}` === selected) ?? assignment.selectedCandidate })} /></Form.Item>{!assignment.candidates.length && <Empty description={t('当前没有具备权限和有效任职的候选人')} />}<Space><Button disabled={busy || uncertain || !assignmentAllowed || (assignment.page ?? 1) === 1} onClick={() => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale, assignment.search ?? '', (assignment.page ?? 1) - 1)}>{t('上一页')}</Button><Button disabled={busy || uncertain || !assignmentAllowed || assignment.candidates.length <= 20} onClick={() => void openAssignment(assignment.section, assignment.transfer, assignment.recoverStale, assignment.search ?? '', (assignment.page ?? 1) + 1)}>{t('下一页')}</Button></Space></Form> : assignment && !dialogError ? <Spin aria-label={t('正在加载候选人')} /> : null}
     </Modal>}
     {!lost && <Modal open={!!history} title={t(history?.section === 'FAE' ? 'FAE 解析历史' : '供应商分析历史')} footer={null} onCancel={() => { dialogGeneration.current++; setHistory(undefined); setDialogError(undefined); }}>
       {dialogError && history ? <Alert type="error" showIcon title={t(errorMessage(dialogError))} action={<Button onClick={() => void openHistory(history.section)}>{t('重试加载解析历史')}</Button>} /> : null}

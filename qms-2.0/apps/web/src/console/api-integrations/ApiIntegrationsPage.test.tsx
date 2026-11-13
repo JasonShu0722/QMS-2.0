@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
@@ -30,8 +30,12 @@ function endpoint(organizationId = targetId) {
     returnReceipt: true, maxBodyBytes: 1048576, ratePerMinute: 60, bodyRetentionDays: 7, capacityBytes: 268435456, usedBodyBytes: 0, allowedIps: [],
     createdAt: '2026-11-09T03:00:00.000Z', updatedAt: '2026-11-09T03:00:00.000Z', publicUrl: `https://qms.example.test/api/v1/integrations/inbound/${endpointId}/messages` };
 }
+function CurrentLocation() {
+  const location = useLocation();
+  return <output aria-label="当前路径">{location.pathname}{location.search}</output>;
+}
 function view() {
-  const tree = () => <LanguageProvider><ConsoleTheme><MemoryRouter><UnsavedChangesProvider><ApiIntegrationsPage /></UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider>;
+  const tree = () => <LanguageProvider><ConsoleTheme><MemoryRouter><UnsavedChangesProvider><ApiIntegrationsPage /><CurrentLocation /></UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider>;
   const result = render(tree()); return { ...result, update: () => result.rerender(tree()) };
 }
 beforeEach(() => {
@@ -61,6 +65,22 @@ it('keeps interface maintenance unavailable to receipt-only or configuration rea
   mocks.context = context(['integration:read']); view(); await screen.findByText('MES质量推送');
   expect(screen.queryByRole('button', { name: '新增接收接口' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /编辑|凭据/ })).not.toBeInTheDocument();
+});
+
+it('offers receipt-linked ingestion only with the matching organization capability', async () => {
+  const receiptId = '44444444-4444-4444-8444-444444444444';
+  mocks.context.modules.push({ key: 'api-ingestion', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: targetId, permissions: ['ingestion:read'] });
+  read.mockImplementation(async path => path.includes('/status') ? { usedBodyBytes: 0, capacityBytes: 1073741824 } : path.includes('/receipts?')
+    ? { items: [{ ...endpoint(), id: receiptId, endpointId, messageId: 'message-linked', receivedAt: '2026-11-14T00:00:00Z', bodyAvailable: true }], total: 1, page: 1, limit: 20 }
+    : { items: [endpoint()], total: 1, page: 1, limit: 20 });
+  const mounted = view(); await screen.findByText('MES质量推送');
+  fireEvent.click(screen.getByRole('tab', { name: '接收记录' }));
+  expect(await screen.findByRole('button', { name: '查看消息message-linked入库结果' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '查看消息message-linked入库结果' }));
+  expect(screen.getByLabelText('当前路径')).toHaveTextContent(`/console/api-ingestion?receiptId=${receiptId}`);
+  mocks.context = { ...mocks.context, modules: mocks.context.modules.filter(module => module.key !== 'api-ingestion') };
+  mounted.update();
+  await waitFor(() => expect(screen.queryByRole('button', { name: '查看消息message-linked入库结果' })).not.toBeInTheDocument());
 });
 
 it('refuses endpoint results attributed to another organization', async () => {

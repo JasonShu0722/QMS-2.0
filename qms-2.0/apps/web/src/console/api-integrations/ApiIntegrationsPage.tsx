@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Empty, Popconfirm, Space, Tabs, Tag, Typography, type TableProps } from 'antd';
 import { RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
 import { subscribeSessionSignals } from '../../features/auth/session-invalidation';
@@ -33,6 +34,7 @@ export function ApiIntegrationsPage() {
 }
 
 function IntegrationPage({ context, session, epoch, invalidate }: { context: ConsoleContext; session?: string; epoch: number; invalidate: () => void }) {
+  const navigate = useNavigate();
   const { locale } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
   const [denied, setDenied] = useState(false);
@@ -44,6 +46,7 @@ function IntegrationPage({ context, session, epoch, invalidate }: { context: Con
   const scope = useMemo<IntegrationScope>(() => ({ organizationId: context.targetOrganization.id, session: session ?? '', epoch, permissions, deny }), [context.targetOrganization.id, session, epoch, module, deny]);
   const canRead = permissions.includes('integration:read');
   const canReadReceipts = permissions.includes('integration:receipts:read');
+  const canReadIngestion = context.modules.some(item => item.key === 'api-ingestion' && item.scope === 'TARGET' && item.coverage === 'ORGANIZATION' && item.organizationId === context.targetOrganization.id && item.permissions.includes('ingestion:read'));
   const [tab, setTab] = useState(canRead ? 'endpoints' : 'receipts');
   const requestLeave = useNavigationGuard();
   useEffect(() => subscribeSessionSignals(signal => { if (signal === 'invalidate') deny(); }), [deny]);
@@ -51,7 +54,7 @@ function IntegrationPage({ context, session, epoch, invalidate }: { context: Con
   return <section className="qms-integration-page" aria-label={text('API接口管理', 'API integrations')}>
     <Tabs activeKey={tab} destroyOnHidden onChange={next => requestLeave(() => setTab(next))} items={[
       { key: 'endpoints', label: text('接收接口', 'Receiving interfaces'), disabled: !canRead, children: canRead ? <EndpointList scope={scope} /> : null },
-      { key: 'receipts', label: text('接收记录', 'Receiving records'), disabled: !canReadReceipts, children: tab === 'receipts' && canReadReceipts ? <ReceiptList scope={scope} /> : null },
+      { key: 'receipts', label: text('接收记录', 'Receiving records'), disabled: !canReadReceipts, children: tab === 'receipts' && canReadReceipts ? <ReceiptList scope={scope} onViewIngestion={canReadIngestion ? receiptId => requestLeave(() => navigate(`/console/api-ingestion?receiptId=${encodeURIComponent(receiptId)}`)) : undefined} /> : null },
       { key: 'outbound', label: text('发出接口', 'Outbound interfaces'), children: <Empty description={text('后续开放', 'Available in a future phase')} /> },
     ]} />
   </section>;

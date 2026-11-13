@@ -6,6 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { NewProductQualityService } from './new-product-quality.service.js';
+import { NewProductIssueAssigneesDto, NewProductIssueAssigneesQueryDto } from './new-product-quality.dto.js';
 import { ApproveNewProductEarlyFlowDto, ApproveNewProductMassProductionDto, AssignNewProductIssueDto, CloseNewProductIssueDto, ConfirmNewProductLessonDto, CreateNewProductDeliverableDto, CreateNewProductEarlyFlowDto, CreateNewProductLegacyIssueDto, CreateNewProductLessonDto, CreateNewProductProjectDto, CreateNewProductStageDto, CreateNewProductTrialBatchDto, CreateNewProductTrialSummaryDto, DecideNewProductEarlyFlowReleaseDto, DecideNewProductTrialSummaryDto, EscalateNewProductIssueDto, HandoverNewProductProjectDto, IssueNewProductDefectsDto, NewProductDefectSelectionDto, NewProductDeliverableDto, NewProductEarlyFlowDto, NewProductEarlyFlowReleaseDto, NewProductHandoverDto, NewProductIssueDto, NewProductIssueListDto, NewProductLessonCheckDto, NewProductLessonDto, NewProductProjectDetailDto, NewProductProjectDto, NewProductScopeDto, NewProductStageDto, NewProductTrialBatchDto, NewProductTrialMetricDto, NewProductTrialReportDto, NewProductTrialSummaryDto, NewProductTrialSummaryRevisionDto, RecordNewProductMeasureDto, RecordNewProductMetricDto, ReviseNewProductEarlyFlowDto, ReviseNewProductTrialSummaryDto, ReviewNewProductStageDto, SelectNewProductDefectDto, SubmitNewProductDeliverableDto, SubmitNewProductEarlyFlowDto, SubmitNewProductTrialSummaryDto, VerifyNewProductIssueDto } from './new-product-quality.dto.js';
 
 function actor(request: Request) {
@@ -155,6 +156,9 @@ export class NewProductQualityController {
 
   @Get('projects/:id/issues') @ApiOkResponse({ type: NewProductIssueListDto }) @RequireAccess({ featurePermission: 'new-product-quality:projects:read', organizationScope: queryScope })
   issues(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string) { return this.service.issueListForProject(actor(request), id); }
+
+  @Get('issues/:id/assignees') @ApiOkResponse({ type: NewProductIssueAssigneesDto }) @RequireAccess({ featurePermission: 'new-product-quality:projects:write', organizationScope: queryScope })
+  issueAssignees(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: NewProductIssueAssigneesQueryDto) { return this.service.issueAssignees(actor(request), id, query); }
 
   @Put('issues/:id/assign') @ApiOkResponse({ type: NewProductIssueDto }) @RequireAccess({ featurePermission: 'new-product-quality:projects:write', organizationScope: bodyScope })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

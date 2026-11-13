@@ -7,7 +7,7 @@ import { ledgerFields, rawText } from './customer-ledger-import';
 import { CustomerLedgerEditor } from './customer-ledger-editor';
 import { CustomerLedgerSourceAttachments } from './customer-ledger-source-attachments';
 import { CustomerLedgerHandoff } from './customer-ledger-handoff';
-import { LedgerConflicts, LedgerError, LedgerWarnings, ledgerBase, ledgerChanges, ledgerConflicts, stageLabel, typeLabel, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
+import { candidateLabel, LedgerConflicts, LedgerError, LedgerWarnings, ledgerBase, ledgerChanges, ledgerConflicts, stageLabel, typeLabel, type LedgerConflict, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import { useCustomerLedgerWrite } from './customer-ledger-write';
 
 export function CustomerLedgerDetail({ record, candidates, customers = [], userId, permissions, organizationId, onDenied, onSaved, refreshDetail, renderAnalysis }: {
@@ -90,7 +90,7 @@ export function CustomerLedgerDetail({ record, candidates, customers = [], userI
     <CustomerLedgerHandoff record={record} candidates={candidateOptions} permissions={permissions} organizationId={organizationId}
       sourcePending={sourcePending} canDispatch={() => !sourcePendingRef.current} onDenied={onDenied} onSaved={onSaved} refreshDetail={refreshDetail} />
     <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} items={[
-      { key: 'engineer', label: '实际跟进质量工程师', children: assigned?.fullName || assigned?.username || (record.qualityEngineerId ? `原跟进人 ${record.qualityEngineerId}（当前任职不可用）` : '待分配') },
+      { key: 'engineer', label: '实际跟进质量工程师', children: assigned ? candidateLabel(assigned) : record.qualityEngineerId ? `原跟进人 ${record.qualityEngineerId}（当前任职不可用）` : '待分配' },
       { key: 'source', label: '人员来源', children: record.qualityEngineerSource === 'MANUAL' ? '人工指定' : record.qualityEngineerSource === 'MAPPING' ? '映射带出' : '未分配' },
       { key: 'project', label: '映射项目', children: record.mapping?.project ? `${record.mapping.project.code} · ${record.mapping.project.name}` : '未检索到映射关系' },
       { key: 'category', label: '产品大类 / 细分', children: `${record.mapping?.mapping?.productCategory ?? '待匹配'} / ${record.mapping?.mapping?.productSubcategory ?? '待匹配'}` },

@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import type { Request } from 'express';
@@ -10,6 +10,7 @@ import { encryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { INBOUND_CONFIGURATION, type InboundConfigurationContext, type InboundIdentity, type InboundReceiptDto, type InboundResult } from './inbound.dto.js';
+import { IngestionService } from './ingestion.service.js';
 
 type Endpoint = {
   id: string; organization_id: string; status: string; deleted_at: Date | null; version: number; return_receipt: boolean;
@@ -84,7 +85,7 @@ function validBody(request: Request, maximum: number): { bytes: Buffer; text: st
 
 @Injectable()
 export class InboundService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditLogService, @Optional() private readonly ingestion?: IngestionService) {}
 
   async authenticate(request: Request): Promise<InboundIdentity> {
     const authorization = oneHeader(request, 'authorization', 'INTEGRATION_AUTH_INVALID', 401);
@@ -157,6 +158,12 @@ export class InboundService {
           VALUES(${receiptId}::uuid,${identity.organizationId}::uuid,${identity.endpointId}::uuid,${identity.credentialId}::uuid,${receiptId},${endpoint.version},${JSON.stringify(snapshot)}::jsonb,${now},${bodyExpiresAt},${metadataExpiresAt},${ciphertext},${payloadBytes})`;
         await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes+${payloadBytes} WHERE id=${identity.endpointId}::uuid`;
         await tx.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes+${payloadBytes},receipt_count=receipt_count+1 WHERE organization_id=${identity.organizationId}::uuid`;
+        const rowCount = (JSON.parse(body.text) as unknown[]).length;
+        if (this.ingestion) await this.ingestion.enqueueReceived(tx, identity.organizationId, identity.endpointId, receiptId, rowCount);
+        else {
+          const [active] = await tx.$queryRaw<{ exists: boolean }[]>`SELECT EXISTS(SELECT 1 FROM integration_ingestion_rules WHERE organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid AND enabled) AS exists`;
+          if (active?.exists) reject('INGESTION_CAPACITY_UNAVAILABLE', 503);
+        }
         await this.audit.record({ actorUserId: null, organizationId: identity.organizationId, action: 'INTEGRATION_MESSAGE_RECEIVED', resourceType: 'IntegrationReceipt', resourceId: receiptId, outcome: 'SUCCESS', traceId,
           metadata: { endpointId: identity.endpointId, credentialId: identity.credentialId, receiptId, resourceVersion: endpoint.version, returnReceipt: endpoint.return_receipt } }, tx);
         return this.result(identity, endpoint, { id: receiptId, message_id: receiptId, received_at: now }, traceId);

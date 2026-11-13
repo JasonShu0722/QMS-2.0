@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { ComponentProjectService } from './component-project.service.js';
 import {
-  ComponentProjectScopeDto, ComponentProjectListQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
+  ComponentProjectScopeDto, ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto, UpdateComponentProjectMappingDto,
   ComponentProjectRecordDto, ComponentProjectMappingDto, ComponentProjectRecordsPageDto, ComponentProjectMappingsPageDto,
   ComponentEngineerAssignmentsPageDto, ComponentProjectResolutionDto,
@@ -45,7 +45,7 @@ export class ComponentProjectController {
   }
 
   @Get('component-project-mappings') @RequireAccess(readAccess) @ApiOkResponse({ type: ComponentProjectMappingsPageDto })
-  listMappings(@Query() query: ComponentProjectListQueryDto, @Req() request: AuthorizedRequest) {
+  listMappings(@Query() query: ComponentProjectMappingsQueryDto, @Req() request: AuthorizedRequest) {
     return this.service.listMappings(this.actor(request), request.authorizedOrganizationId!, query);
   }
 

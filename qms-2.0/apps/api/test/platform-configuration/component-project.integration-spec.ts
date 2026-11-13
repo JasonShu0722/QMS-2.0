@@ -334,9 +334,10 @@ describe('component project mapping with real PostgreSQL / HTTP', () => {
     }
     await engineer(f);
     await engineer(f);
-    const choices = (await get(f, 'component-project-mappings/engineer-assignments', { search: 'N2 Engineer', page: 2, pageSize: 1 }).expect(200)).body;
+    const choices = (await get(f, 'component-project-mappings/engineer-assignments', { search: 'Engin', page: 2, pageSize: 1 }).expect(200)).body;
     expect(choices).toMatchObject({ total: 2, page: 2, pageSize: 1 });
     expect(choices.items).toHaveLength(1);
+    expect(choices.items[0]).toMatchObject({ fullName: 'N2 Engineer', departmentName: 'Engineering', username: expect.any(String), assignmentId: expect.any(String), valid: true });
     await get(f, 'settings').expect(403);
     const config = await fixture(['configuration:read', 'configuration:manage']);
     await get(config, 'component-project-records').expect(403);

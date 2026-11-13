@@ -23,13 +23,17 @@ export class WorkflowClosurePreviewService {
     return this.prisma.$transaction(async tx => {
       await this.authorize(tx, actor);
       const search = query.search?.trim(); const skip = (query.page - 1) * query.pageSize;
+      const assignmentWhere = { organizationId: actor.organizationId, ...effectivePositionAssignmentWhere(), AND: { position: { departmentId: { not: null } } } };
       const departments = await this.responsibilities.workflowDepartmentOptions(tx, actor.organizationId, search, query.pageSize, skip);
       const where: Prisma.UserWhereInput = { organizationId: actor.organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
         positions: { some: { organizationId: actor.organizationId, ...effectivePositionAssignmentWhere(), AND: { position: { departmentId: { not: null } } } } },
         ...(search ? { OR: [{ username: { contains: search, mode: 'insensitive' } }, { fullName: { contains: search, mode: 'insensitive' } }] } : {}) };
-      const [users, userTotal] = await Promise.all([tx.user.findMany({ where, select: { id: true, username: true, fullName: true }, orderBy: [{ username: 'asc' }, { id: 'asc' }], take: query.pageSize, skip }), tx.user.count({ where })]);
+      const [users, userTotal] = await Promise.all([tx.user.findMany({ where, select: { id: true, username: true, fullName: true,
+        positions: { where: assignmentWhere, select: { position: { select: { department: { select: { name: true } } } } } } }, orderBy: [{ username: 'asc' }, { id: 'asc' }], take: query.pageSize, skip }), tx.user.count({ where })]);
       await this.authorize(tx, actor);
-      return { departments: departments.items, departmentTotal: departments.total, users, userTotal, page: query.page, pageSize: query.pageSize };
+      return { departments: departments.items, departmentTotal: departments.total,
+        users: users.map(({ positions, ...user }) => ({ ...user, departmentName: [...new Set(positions.map(assignment => assignment.position.department!.name))].sort().join('、') || null })),
+        userTotal, page: query.page, pageSize: query.pageSize };
     }, { isolationLevel: 'ReadCommitted' });
   }
 

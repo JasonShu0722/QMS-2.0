@@ -10,6 +10,7 @@ import { ComponentProjectBulkController } from './component-project-bulk.control
 import { ComponentProjectBulkService } from './component-project-bulk.service.js';
 import { AdministrativeLifecycleModule } from '../../common/security/administrative-lifecycle.registry.js';
 import { ComponentProjectLifecycleService } from './component-project-lifecycle.service.js';
+import { ComponentProjectIngestionAdapter } from './component-project-ingestion.adapter.js';
 
-@Module({ imports: [AdminMutationModule, AuditLogModule, OrganizationModule, AdministrativeLifecycleModule], controllers: [PlatformConfigurationController, ComponentProjectController, ComponentProjectBulkController], providers: [PlatformConfigurationService, ComponentProjectService, ComponentProjectBulkService, ComponentProjectLifecycleService], exports: [ComponentProjectService] })
+@Module({ imports: [AdminMutationModule, AuditLogModule, OrganizationModule, AdministrativeLifecycleModule], controllers: [PlatformConfigurationController, ComponentProjectController, ComponentProjectBulkController], providers: [PlatformConfigurationService, ComponentProjectService, ComponentProjectBulkService, ComponentProjectLifecycleService, ComponentProjectIngestionAdapter], exports: [ComponentProjectService, ComponentProjectIngestionAdapter] })
 export class PlatformConfigurationModule {}

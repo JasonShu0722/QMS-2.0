@@ -104,10 +104,10 @@ describe('workflow closure configuration preview with real HTTP and PostgreSQL',
     const choices = (await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?pageSize=1&page=1').set('Cookie', f.cookie).expect(200)).body;
     expect(choices).toMatchObject({ page: 1, pageSize: 1, departmentTotal: 2, userTotal: 4 });
     expect(choices.departments).toHaveLength(1); expect(choices.users).toHaveLength(1);
-    expect(Object.keys(choices.users[0]).sort()).toEqual(['fullName', 'id', 'username']);
+    expect(Object.keys(choices.users[0]).sort()).toEqual(['departmentName', 'fullName', 'id', 'username']);
     expect(JSON.stringify(choices)).not.toContain(other.professional.user.id);
     const found = (await request(app.getHttpServer()).get(`/api/v1/workflows/closure-options?search=${f.professional.user.username}`).set('Cookie', f.cookie).expect(200)).body;
-    expect(found.users).toEqual([{ id: f.professional.user.id, username: f.professional.user.username, fullName: null }]);
+    expect(found.users).toEqual([{ id: f.professional.user.id, username: f.professional.user.username, fullName: null, departmentName: f.dept.name }]);
     const second = (await request(app.getHttpServer()).get('/api/v1/workflows/closure-options?pageSize=1&page=2').set('Cookie', f.cookie).expect(200)).body;
     expect(second.users[0].id).not.toBe(choices.users[0].id); expect(second.departments[0].id).not.toBe(choices.departments[0].id);
     expect(Object.keys(choices.departments[0]).sort()).toEqual(['code', 'id', 'name']);

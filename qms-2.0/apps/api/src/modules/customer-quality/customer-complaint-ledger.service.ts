@@ -16,7 +16,7 @@ import type { DomainSourceRecord, DomainSourceReference } from '../problem-index
 import type { SupplierCopyMaterial, SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 import { complaintMileageBand, complaintMisTag, complaintServiceMonths, parseComplaintDate } from './customer-complaint-derived.js';
 import { CustomerLedgerCreateDto, CustomerLedgerImportDto, CustomerLedgerListDto, CustomerLedgerNoteDto, CustomerLedgerReceivingDto, CustomerLedgerReassignDto, CustomerLedgerUpdateDto,
-  type CustomerLedgerCandidateDto, type CustomerLedgerDetailDto, type CustomerLedgerImportItemDto, type CustomerLedgerImportResultDto,
+  CustomerLedgerCandidatesQueryDto, type CustomerLedgerCandidateDto, type CustomerLedgerDetailDto, type CustomerLedgerImportItemDto, type CustomerLedgerImportResultDto,
   type CustomerLedgerImportRowDto, type CustomerLedgerItemDto } from './customer-complaint-ledger.dto.js';
 import { CUSTOMER_SOURCE_PERMISSIONS, LEDGER_PERMISSIONS, ledgerDisplayStatus, ledgerFail, mergeComplaintSupplement, normalizeComplaintFields,
   type ComplaintFields, type CustomerLedgerCase, type LedgerOperation, type LedgerStage } from './customer-complaint-ledger.types.js';
@@ -313,8 +313,8 @@ export class CustomerComplaintLedgerService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
-  async candidates(actor: AdminActor, query: CustomerLedgerListDto) {
-    const dto = await this.input(CustomerLedgerListDto, query);
+  async candidates(actor: AdminActor, query: CustomerLedgerCandidatesQueryDto) {
+    const dto = await this.input(CustomerLedgerCandidatesQueryDto, query);
     return this.prisma.$transaction(async tx => {
       const organizationId = await this.authorize(tx, actor);
       const items: CustomerLedgerCandidateDto[] = [];
@@ -331,7 +331,7 @@ export class CustomerComplaintLedgerService {
         }
         if (page++ * 100 >= result.total) break;
       }
-      return { items };
+      return dto.limit === undefined ? { items } : { items: items.slice(dto.offset ?? 0, (dto.offset ?? 0) + dto.limit), total: items.length, limit: dto.limit, offset: dto.offset ?? 0 };
     }, { isolationLevel: 'ReadCommitted' });
   }
 

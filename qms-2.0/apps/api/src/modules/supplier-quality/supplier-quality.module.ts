@@ -37,15 +37,16 @@ import { SupplierEightDRevisionService } from './supplier-eight-d-revision.servi
 import { SupplierEightDRevisionController, SupplierPortalEightDRevisionController } from './supplier-eight-d-revision.controller.js';
 import { ProblemReadModule } from '../problem-index/problem-read.module.js';
 import { SupplierEightDReadAdapter } from './supplier-eight-d-read.adapter.js';
+import { SupplierProfileIngestionAdapter } from './supplier-profile-ingestion.adapter.js';
 
 @Module({
   imports: [AdminMutationModule, AuditLogModule, FileManagementModule, IdentityModule, OrganizationModule, ProblemIndexModule, ProblemReadModule, WorkflowModule, TaskNotificationModule],
   controllers: [SupplierQualityController, SupplierPortalController, SupplierWorkflowBindingController, SupplierMasterController, SupplierEightDAssignmentController, SupplierEightDTaskController, SupplierPortalEightDTaskController, SupplierEightDController, SupplierPortalEightDController, SupplierEightDDisclosureController, SupplierPortalEightDDisclosureController,
     SupplierEightDDeadlineController, SupplierPortalEightDDeadlineController, SupplierEightDReportController, SupplierPortalEightDReportController,
     SupplierEightDRevisionController, SupplierPortalEightDRevisionController],
-  providers: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierQualityFileResourceAdapter, SupplierQualityUpgradeAdapter, SupplierAccountService, SupplierProfileImportService,
+  providers: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierQualityFileResourceAdapter, SupplierQualityUpgradeAdapter, SupplierAccountService, SupplierProfileImportService, SupplierProfileIngestionAdapter,
     SupplierEightDService, SupplierEightDClosureAdapter, SupplierEightDSupplementFileAdapter, SupplierEightDDisclosureService, SupplierEightDDisclosureFileAdapter,
     SupplierEightDDeadlineService, SupplierEightDReportService, SupplierEightDTaskService, SupplierEightDReminderService, SupplierEightDAssignmentService, SupplierEightDRevisionService, SupplierEightDReadAdapter],
-  exports: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierEightDService, SupplierEightDReminderService],
+  exports: [SupplierQualityService, SupplierWorkflowAccess, SupplierWorkflowBindingService, SupplierEightDService, SupplierEightDReminderService, SupplierProfileIngestionAdapter],
 })
 export class SupplierQualityModule {}

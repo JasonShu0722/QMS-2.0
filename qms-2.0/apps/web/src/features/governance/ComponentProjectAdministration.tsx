@@ -12,6 +12,7 @@ import type { AdminOrganization } from '../admin/admin';
 import { configurationPath } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
 import { ComponentProjectImport } from './ComponentProjectImport';
+import { personLabel } from '../../ui/personLabel';
 
 type Project = components['schemas']['ComponentProjectRecordDto'];
 type ProjectDisplay = Pick<Project, 'id' | 'code' | 'name' | 'stage' | 'status'>;
@@ -70,6 +71,8 @@ const english: Record<string, string> = {
   '任职尚未生效': 'The appointment has not started', '任职已结束': 'The appointment has ended',
   '岗位已停用': 'The position is disabled', '部门已停用': 'The department is disabled',
   '需要有效的内部任职': 'A valid internal appointment is required', '任职组织不一致': 'The appointment organization does not match',
+  '配置状态': 'Configuration status', '全部配置状态': 'All configuration states', '待配置': 'Pending configuration', '已配置': 'Configured',
+  '姓名未填写': 'Name not provided', '部门未填写': 'Department not provided', '账号不可用': 'Account unavailable',
 };
 const assignmentIssues: Record<string, string> = {
   ASSIGNMENT_NOT_FOUND: '原任职不存在或不可读', ORGANIZATION_DISABLED: '组织已停用', INTERNAL_USER_REQUIRED: '需要有效的内部任职',
@@ -84,9 +87,7 @@ function projectLabel(project: ProjectDisplay, t: (text: string) => string) {
   return `${project.code} · ${project.name} · ${t(project.stage === 'NEW_PRODUCT' ? '新品' : '量产')}${project.status === 'DISABLED' ? ` · ${t('停用')}` : ''}`;
 }
 function assignmentLabel(assignment: Assignment, t: (text: string) => string) {
-  const unavailable = t(assignment.assignmentId ? '任职资料不可用' : '未配置');
-  const name = assignment.fullName && assignment.username ? `${assignment.fullName}（${assignment.username}）` : assignment.fullName || assignment.username || unavailable;
-  return `${name} · ${assignment.positionName || unavailable} / ${assignment.departmentName || unavailable}`;
+  return personLabel(assignment, true, t('姓名未填写') === 'Name not provided' ? 'en-US' : 'zh-CN');
 }
 
 function EngineerCell({ assignment, label }: { assignment: Assignment; label: string }) {
@@ -239,12 +240,13 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   const pending = useRef(false);
   const signature = JSON.stringify(selection);
   const selectionIdentity = useRef(signature); selectionIdentity.current = signature;
-  const current = () => alive.current && session === useWorkTabsStore.getState().sessionScope && selectionIdentity.current === signature;
+  const current = () => alive.current && !lifetime.current?.signal.aborted && session === useWorkTabsStore.getState().sessionScope && selectionIdentity.current === signature;
   useUnsavedChanges(dirty);
   useNavigationBusy(busy);
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
-    return () => { alive.current = false; lifetime.current?.abort(); };
+    const unsubscribe = useWorkTabsStore.subscribe(state => { if (state.sessionScope !== session) lifetime.current?.abort(); });
+    return () => { alive.current = false; lifetime.current?.abort(); unsubscribe(); };
   }, []);
   useEffect(() => { onBusyChange(busy); return () => onBusyChange(false); }, [busy, onBusyChange]);
   useEffect(() => { setPreview(undefined); }, [signature]);
@@ -338,7 +340,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const session = useWorkTabsStore.getState().sessionScope;
-  const [query, setQuery] = useState({ search: '', page: 1, pageSize: preferredPageSize });
+  const [query, setQuery] = useState({ search: '', configuration: '', page: 1, pageSize: preferredPageSize });
   const [searchInput, setSearchInput] = useState('');
   const [revision, setRevision] = useState(0);
   const [mappings, setMappings] = useState<MappingsPage>();
@@ -350,6 +352,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const [selectedProject, setSelectedProject] = useState<Project>();
   const [projectLoading, setProjectLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>();
   const [editor, setEditor] = useState<Editor>();
@@ -375,7 +378,12 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   useNavigationBusy(busy);
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
-    return () => { alive.current = false; editorGeneration.current++; lifetime.current?.abort(); projectController.current?.abort(); };
+    const unsubscribe = useWorkTabsStore.subscribe(state => {
+      if (state.sessionScope === session) return;
+      ending.current = true; lifetime.current?.abort(); projectController.current?.abort(); editorGeneration.current++;
+      setSessionEnded(true); setEditor(undefined); setMappings(undefined); setSelection({}); setSelectedProject(undefined); setDirty(false); setUncertain(undefined); form.resetFields();
+    });
+    return () => { alive.current = false; editorGeneration.current++; lifetime.current?.abort(); projectController.current?.abort(); unsubscribe(); };
   }, []);
   const reportError = useCallback((cause: unknown) => {
     if (!alive.current || ending.current || session !== useWorkTabsStore.getState().sessionScope) return;
@@ -392,6 +400,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     const valid = () => active && alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope;
     setLoading(true); setError(undefined); setMappings(undefined);
     const params = new URLSearchParams({ search: query.search, page: String(query.page), pageSize: String(query.pageSize) });
+    if (query.configuration) params.set('configuration', query.configuration);
     const path = configurationPath(organization.id, 'component-project-mappings');
     const request = apiRequest<MappingsPage>(`${path}&${params}`, { signal: controller.signal }).then(next => { if (valid()) setMappings({ ...next, items: next.items.filter(item => item.organizationId === organization.id) }); });
     void request.catch(cause => { if (valid()) reportError(cause); }).finally(() => { if (valid()) setLoading(false); });
@@ -478,6 +487,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       }
     }
   }
+  if (sessionEnded) return null;
   if (!read) return <Alert type="info" showIcon title={t('无组件项目映射读取权限')} />;
   const statusOptions = [{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }];
   const empty = error ? t('加载失败') : query.search ? t('无匹配结果') : t('暂无数据');
@@ -495,6 +505,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       <Button disabled={loading || busy} onClick={refresh}>{t('刷新')}</Button>
       <Input.Search aria-label={t('搜索组件')} maxLength={200} value={searchInput} disabled={busy} allowClear style={{ width: 'min(100%, 320px)' }}
         onChange={event => setSearchInput(event.target.value)} onSearch={search => leave(() => setQuery({ ...query, search: search.trim(), page: 1 }))} />
+      <Select aria-label={t('配置状态')} value={query.configuration} disabled={busy} style={{ minWidth: 140 }} options={[{ value: '', label: t('全部配置状态') }, { value: 'PENDING', label: t('待配置') }, { value: 'CONFIGURED', label: t('已配置') }]} onChange={configuration => leave(() => setQuery({ ...query, configuration, page: 1 }))} />
       {!manage && <Typography.Text>{t('只读')}</Typography.Text>}
     </div>
     {manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 100').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
@@ -515,6 +526,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> }} columns={[
         { key: 'componentCode', title: t('组件编码'), dataIndex: 'componentCode', width: 160, render: text },
         { key: 'componentName', title: t('组件名称'), dataIndex: 'componentName', width: 200, render: value => value ? text(value) : '—' },
+        { key: 'configuration', title: t('配置状态'), width: 120, render: (_, record) => t(!record.projectRecordId || !record.productCategory?.trim() ? '待配置' : '已配置') },
         { key: 'project', title: t('关联项目'), width: 230, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
         { key: 'productCategory', title: t('产品大类'), dataIndex: 'productCategory', width: 140, render: value => value ? text(value) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> }, { key: 'productSubcategory', title: t('产品细分'), dataIndex: 'productSubcategory', width: 140, render: value => value ? text(value) : '—' },
         { key: 'stage', title: t('项目阶段'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },

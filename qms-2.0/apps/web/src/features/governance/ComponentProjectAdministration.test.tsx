@@ -108,6 +108,24 @@ it('offers mapping columns without remounting an unsaved component editor', asyn
   expect(within(dialog).getByLabelText('组件编码')).toHaveValue('KEEP-COMPONENT');
 });
 
+it('queries pending configuration on the server without changing bulk selection limits', async () => {
+  const { reads } = server(); mount();
+  await screen.findByText('驱动总成');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '配置状态' }));
+  fireEvent.click(await screen.findByText('待配置', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(reads.some(url => url.pathname.endsWith('/component-project-mappings') && url.searchParams.get('configuration') === 'PENDING' && url.searchParams.get('page') === '1')).toBe(true));
+  expect(screen.getByText('已选择 0 / 100')).toBeInTheDocument();
+});
+
+it('retires an open personnel editor after a batched session A to B to A transition', async () => {
+  server(); mount();
+  await screen.findByText('驱动总成');
+  await openProject();
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '客户质量工程师' })).toBeEnabled());
+  act(() => { useWorkTabsStore.getState().bindSession('other'); useWorkTabsStore.getState().bindSession('INTERNAL:org-a:user-a'); });
+  expect(screen.queryByRole('dialog', { name: '项目资料' })).not.toBeInTheDocument();
+});
+
 it('requires an explicit project stage and creates a project with nullable engineers using the platform mutation', async () => {
   const { writes } = server({ projects: [] }); mount();
   await screen.findByText('驱动总成');
@@ -158,7 +176,7 @@ it('uses async named appointments, preserves selected identities and allows clea
   const { writes, reads } = server({ projects: [{ ...project, customerEngineerAssignmentId: engineer.assignmentId }] }); mount();
   fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
   const dialog = await screen.findByRole('dialog', { name: '项目资料' });
-  await within(dialog).findByText('张三（zhangsan） · 质量工程师 / 项目质量室');
+  await within(dialog).findByText('张三 / 项目质量室（zhangsan） · 质量工程师');
   expect(reads.some(url => url.searchParams.get('selectedAssignmentId') === engineer.assignmentId)).toBe(true);
   fireEvent.click(within(dialog).getByRole('button', { name: '清空客户质量工程师' }));
   submit(dialog);
@@ -300,7 +318,7 @@ it('reports candidate API failure with a retry and keeps the project draft', asy
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '保留草稿' } });
   await within(dialog).findAllByRole('alert'); fail = false;
   fireEvent.click(within(dialog).getAllByRole('button', { name: /^重\s*试$/ })[0]);
-  await choose('客户质量工程师', '张三（zhangsan） · 质量工程师 / 项目质量室');
+  await choose('客户质量工程师', '张三 / 项目质量室（zhangsan） · 质量工程师');
   expect(within(dialog).getByLabelText('项目名称')).toHaveValue('保留草稿');
 });
 
@@ -505,9 +523,9 @@ it('does not claim unselected components will change when the server reports sel
 it('renders joined engineer identities on every shared component without per-row personnel or project requests', async () => {
   const joined: Summary = { ...summary, customerEngineer: engineer, projectEngineer: { ...engineer, assignmentId: 'assignment-b', userId: 'user-b', username: 'lisi', fullName: '李四', positionName: '项目工程师' } };
   const { reads } = server({ mappings: [{ ...mapping, project: joined }, { ...mapping, id: 'mapping-b', componentCode: 'COMP-002', project: joined }] }); mount();
-  await screen.findAllByText('张三（zhangsan） · 质量工程师 / 项目质量室');
-  expect(screen.getAllByText('张三（zhangsan） · 质量工程师 / 项目质量室')).toHaveLength(2);
-  expect(screen.getAllByText('李四（lisi） · 项目工程师 / 项目质量室')).toHaveLength(2);
+  await screen.findAllByText('张三 / 项目质量室（zhangsan） · 质量工程师');
+  expect(screen.getAllByText('张三 / 项目质量室（zhangsan） · 质量工程师')).toHaveLength(2);
+  expect(screen.getAllByText('李四 / 项目质量室（lisi） · 项目工程师')).toHaveLength(2);
   expect(screen.queryByText('项目资料中查看')).not.toBeInTheDocument();
   expect(reads).toHaveLength(1);
   expect(reads[0].pathname).toMatch(/component-project-mappings$/);
@@ -524,7 +542,7 @@ it('treats nullable unconfigured engineers as allowed empty values without warni
 it('preserves an invalid configured engineer identity and exposes the reason through a focusable touch tooltip', async () => {
   const joined: Summary = { ...summary, customerEngineer: { ...engineer, valid: false, issues: ['USER_DISABLED'] } };
   server({ mappings: [{ ...mapping, project: joined }] }); mount();
-  await screen.findByText('张三（zhangsan） · 质量工程师 / 项目质量室');
+  await screen.findByText('张三 / 项目质量室（zhangsan） · 质量工程师');
   const hint = screen.getByRole('button', { name: '客户质量工程师任职已失效' });
   act(() => hint.focus()); expect(hint).toHaveFocus();
   fireEvent.blur(hint); fireEvent.click(hint);
@@ -574,10 +592,10 @@ it('disambiguates same-name valid appointment options and table identities by us
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '同名任职验证' } });
   await choose('项目阶段', '新品');
   fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: '客户质量工程师' }));
-  expect(await screen.findByRole('option', { name: '张三（zhangsan） · 质量工程师 / 项目质量室' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('option', { name: '张三（zhangsan02） · 质量工程师 / 项目质量室' }));
-  expect(within(table).getByText('张三（zhangsan） · 质量工程师 / 项目质量室')).toBeInTheDocument();
-  expect(within(table).getByText('张三（zhangsan02） · 质量工程师 / 项目质量室')).toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: '张三 / 项目质量室（zhangsan） · 质量工程师' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: '张三 / 项目质量室（zhangsan02） · 质量工程师' }));
+  expect(within(table).getByText('张三 / 项目质量室（zhangsan） · 质量工程师')).toBeInTheDocument();
+  expect(within(table).getByText('张三 / 项目质量室（zhangsan02） · 质量工程师')).toBeInTheDocument();
   await waitFor(() => expect(within(dialog).getByRole('button', { name: /^保\s*存$/ })).toBeEnabled());
   submit(dialog);
   await waitFor(() => expect(writes).toHaveLength(1));
@@ -585,8 +603,8 @@ it('disambiguates same-name valid appointment options and table identities by us
 });
 
 it.each([
-  { fullName: '张三', username: null, expected: '张三 · 质量工程师 / 项目质量室' },
-  { fullName: null, username: 'zhangsan', expected: 'zhangsan · 质量工程师 / 项目质量室' },
+  { fullName: '张三', username: null, expected: '张三 / 项目质量室（账号不可用） · 质量工程师' },
+  { fullName: null, username: 'zhangsan', expected: '姓名未填写 / 项目质量室（zhangsan） · 质量工程师' },
 ])('keeps the original identity fallback when fullName or username is absent: $expected', async ({ fullName, username, expected }) => {
   server({ mappings: [{ ...mapping, project: { ...summary, customerEngineer: { ...engineer, fullName, username } } }] }); mount();
   expect(await screen.findByText(expected)).toBeInTheDocument();
@@ -597,7 +615,7 @@ it('keeps read-only project engineers disabled without allowing selection, clear
   mount({ ...organization, permissions: ['component-project:read'] });
   fireEvent.click(await screen.findByRole('button', { name: '查看项目 P001' }));
   const dialog = await screen.findByRole('dialog', { name: '项目资料' });
-  await waitFor(() => expect(within(dialog).getAllByText('张三（zhangsan） · 质量工程师 / 项目质量室')).toHaveLength(2));
+  await waitFor(() => expect(within(dialog).getAllByText('张三 / 项目质量室（zhangsan） · 质量工程师')).toHaveLength(2));
   for (const label of ['客户质量工程师', '项目质量工程师']) {
     const picker = within(dialog).getByRole('combobox', { name: label });
     expect(picker).toBeDisabled();
@@ -606,7 +624,7 @@ it('keeps read-only project engineers disabled without allowing selection, clear
     const clear = within(dialog).getByRole('button', { name: `清空${label}` });
     expect(clear).toBeDisabled(); fireEvent.click(clear);
   }
-  expect(within(dialog).getAllByText('张三（zhangsan） · 质量工程师 / 项目质量室')).toHaveLength(2);
+  expect(within(dialog).getAllByText('张三 / 项目质量室（zhangsan） · 质量工程师')).toHaveLength(2);
   fireEvent.click(within(dialog).getByRole('button', { name: '关闭编辑器' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();

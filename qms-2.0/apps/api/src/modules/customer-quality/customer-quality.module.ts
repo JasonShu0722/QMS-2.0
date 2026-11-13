@@ -23,14 +23,15 @@ import { CustomerEightDController } from './customer-eight-d.controller.js';
 import { INTERNAL_EIGHT_D_DOMAINS } from '../../common/eight-d/internal-eight-d-domain.js';
 import { CUSTOMER_EIGHT_D_RUNTIME, internalEightDRuntimeProvider, type InternalEightDRuntime } from '../../common/eight-d/internal-eight-d-runtime.js';
 import { internalEightDDeliveryController } from '../../common/eight-d/internal-eight-d-delivery.controller.js';
+import { CustomerMasterIngestionAdapter } from './customer-master-ingestion.adapter.js';
 
 const CustomerEightDDeliveryController = internalEightDDeliveryController(INTERNAL_EIGHT_D_DOMAINS.CUSTOMER, CUSTOMER_EIGHT_D_RUNTIME);
 
 @Module({ imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, ProblemReadModule, WorkflowModule, OrganizationModule, PlatformConfigurationModule, TaskNotificationModule],
   controllers: [CustomerQualityController, CustomerComplaintLedgerController, CustomerComplaintAnalysisController, CustomerEightDDeliveryController, CustomerEightDController],
-  providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter,
+  providers: [CustomerQualityService, CustomerIssueService, CustomerComplaintProcessingService, CustomerComplaintFileResourceAdapter, CustomerMasterIngestionAdapter,
     CustomerComplaintLedgerService, CustomerComplaintAnalysisService, CustomerComplaintAnalysisFileAdapter,
     internalEightDRuntimeProvider(CUSTOMER_EIGHT_D_RUNTIME, CustomerComplaintLedgerService, INTERNAL_EIGHT_D_DOMAINS.CUSTOMER),
     { provide: CustomerEightDService, inject: [CUSTOMER_EIGHT_D_RUNTIME], useFactory: (runtime: InternalEightDRuntime) => new CustomerEightDService(runtime.core) }],
-  exports: [CustomerQualityService, CustomerIssueService, CustomerComplaintLedgerService, CustomerEightDService, CUSTOMER_EIGHT_D_RUNTIME] })
+  exports: [CustomerQualityService, CustomerIssueService, CustomerComplaintLedgerService, CustomerEightDService, CUSTOMER_EIGHT_D_RUNTIME, CustomerMasterIngestionAdapter] })
 export class CustomerQualityModule {}

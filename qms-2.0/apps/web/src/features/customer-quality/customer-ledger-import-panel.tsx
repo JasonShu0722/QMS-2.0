@@ -4,8 +4,9 @@ import { useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { ledgerFields, parseLedgerTsv, rawText, readLedgerWorkbook } from './customer-ledger-import';
-import { candidateLabel, LedgerError, LedgerWarnings, ledgerBase, scopedLedger, type LedgerCandidate, type LedgerItem } from './customer-ledger-ui';
+import { LedgerError, LedgerWarnings, ledgerBase, scopedLedger, type LedgerCandidate, type LedgerItem } from './customer-ledger-ui';
 import { ledgerDenied, useCustomerLedgerWrite } from './customer-ledger-write';
+import { CustomerEngineerSelect } from './CustomerEngineerSelect';
 
 type ImportBody = components['schemas']['CustomerLedgerImportDto'];
 type ImportRow = components['schemas']['CustomerLedgerImportRowDto'];
@@ -112,7 +113,7 @@ export function CustomerLedgerImportPanel({ organizationId, existing, customers 
           { title: '逐行决定', render: (_, row) => <select aria-label={`第 ${row.rowNumber} 行操作`} value={row.action} disabled={locked} onChange={event => {
             const action = event.target.value; if (action === 'ADD' || action === 'SKIP' || action === 'SUPPLEMENT') changeRow(row.rowNumber, { action, targetId: undefined, expectedVersion: undefined, qualityEngineerAssignmentId: undefined });
           }}><option value="ADD">新增</option><option value="SKIP">跳过</option><option value="SUPPLEMENT">补充已有</option></select> },
-          { title: '实际跟进质量工程师（仅新增）', render: (_, row) => row.action === 'ADD' ? <select aria-label={`第 ${row.rowNumber} 行实际跟进质量工程师`} value={row.qualityEngineerAssignmentId === undefined ? '__AUTO__' : row.qualityEngineerAssignmentId ?? ''} disabled={locked} onChange={event => changeRow(row.rowNumber, { qualityEngineerAssignmentId: event.target.value === '__AUTO__' ? undefined : event.target.value || null })}><option value="__AUTO__">按映射分配（无匹配时待分配）</option><option value="">未指定（按映射分配）</option>{candidates.map(candidate => <option key={candidate.assignmentId} value={candidate.assignmentId}>{candidateLabel(candidate)}</option>)}</select> : '保留原实际跟进人' },
+          { title: '实际跟进质量工程师（仅新增）', render: (_, row) => row.action === 'ADD' ? <CustomerEngineerSelect label={`第 ${row.rowNumber} 行实际跟进质量工程师`} value={row.qualityEngineerAssignmentId === undefined ? '__AUTO__' : row.qualityEngineerAssignmentId ?? ''} candidates={candidates} organizationId={organizationId} componentCode={rawText(row.fields.componentCode).trim()} disabled={locked} onDenied={onDenied} onChange={value => changeRow(row.rowNumber, { qualityEngineerAssignmentId: value === '__AUTO__' ? undefined : value || null })}><option value="__AUTO__">按映射分配（无匹配时待分配）</option><option value="">未指定（按映射分配）</option></CustomerEngineerSelect> : '保留原实际跟进人' },
           { title: '明确补充目标与变更', render: (_, row) => {
             if (row.action !== 'SUPPLEMENT') return '—';
             const options = [...new Map([...(preview.items.find(item => item.rowNumber === row.rowNumber)?.similarities ?? []), ...targets].map(item => [item.id, item])).values()];

@@ -20,6 +20,7 @@ import { ApiMonitoringPage } from './console/ApiMonitoringPage';
 import { DataExchangePage } from './console/DataExchangePage';
 import { ServiceOperationsPage } from './console/ServiceOperationsPage';
 import { ApiIntegrationsPage } from './console/api-integrations/ApiIntegrationsPage';
+import { ApiIngestionPage } from './console/api-ingestion/ApiIngestionPage';
 import { LegacyConsoleRedirect } from './features/navigation/LegacyConsoleRedirect';
 
 export function App() {
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="data-exchanges" element={<DataExchangePage />} />
           <Route path="services" element={<ServiceOperationsPage />} />
           <Route path="api-integrations" element={<ApiIntegrationsPage />} />
+          <Route path="api-ingestion" element={<ApiIngestionPage />} />
           {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'configuration', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
           <Route path="workflows/*" element={<ConsoleWorkflowPage />} />
         </Route>

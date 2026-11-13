@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
@@ -7,6 +7,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
+import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource }: { resource: { resourceType: string; resourceId: string } }) => <div>附件资源 {resource.resourceType}:{resource.resourceId}</div> }));
@@ -44,6 +45,21 @@ it('starts a new registration with one optional material row and preserves appen
   expect(screen.getByText('附件资源 process-defect:defect')).toBeVisible();
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
   expect(JSON.parse(String(call?.[1]?.body)).materials).toEqual([{ materialCode: null, materialName: null, materialBatch: null, notes: '仅补充物料线索', sqeUserId: null, supplierProfileId: null, supplierOrganizationId: null }]);
+});
+
+it('preserves the selected SQE label while paging and retires it after session A to B to A', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('material-sqes') ? { items: new URL(path, 'http://localhost').searchParams.get('page') === '2' ? [{ id: 'other', username: 'other', fullName: '其他SQE', departmentName: '质量部' }] : [{ id: 'sqe', username: 'sqe', fullName: '有效SQE', departmentName: '质量部' }], total: 101, pageSize: 100 } : []);
+  editor();
+  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
+  await waitFor(() => expect(screen.getByLabelText('SQE 1').closest('.ant-select')).toHaveTextContent('有效SQE / 质量部（sqe）'));
+  fireEvent.click(screen.getByLabelText('SQE候选分页').querySelector('[title="2"]')!);
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('material-sqes') && new URL(path, 'http://localhost').searchParams.get('page') === '2')).toBe(true));
+  expect(screen.getByLabelText('SQE 1').closest('.ant-select')).toHaveTextContent('有效SQE / 质量部（sqe）');
+  const originalScope = useWorkTabsStore.getState().sessionScope;
+  act(() => { useWorkTabsStore.getState().bindSession('other'); if (originalScope) useWorkTabsStore.getState().bindSession(originalScope); else useWorkTabsStore.getState().reset(); });
+  expect(screen.getByLabelText('SQE 1')).toBeDisabled();
+  expect(screen.getByLabelText('SQE 1').closest('.ant-select')).not.toHaveTextContent('有效SQE / 质量部（sqe）');
+  expect(screen.getByText('保存登记').closest('button')).toBeDisabled();
 });
 it('prunes blank added material rows without requiring material facts for a new registration', async () => {
   const saved = editor('new');

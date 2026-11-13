@@ -93,6 +93,22 @@ describe('component catalog import with real PostgreSQL / HTTP', () => {
     expect(foreign.some((fk) => fk.definition.includes('FOREIGN KEY (organization_id, project_record_id)'))).toBe(true);
   });
 
+  it('filters pending and configured mappings before pagination while the unfiltered endpoint remains compatible', async () => {
+    const f = await fixture();
+    await post(f, { rows: [row(1, 'A-PENDING', 'Pending A'), row(2, 'B-CONFIGURED', 'Configured'), row(3, 'C-PENDING', 'Pending C')] }).expect(201);
+    const original = (await list(f).expect(200)).body;
+    const configured = original.items.find((item: { componentCode: string }) => item.componentCode === 'B-CONFIGURED');
+    const shared = await project(f);
+    await patch(f, configured.id, { expectedVersion: 1, projectRecordId: shared.id, productCategory: 'Drive' }).expect(200);
+    expect((await list(f).expect(200)).body.total).toBe(3);
+    const pending = (await list(f, { configuration: 'PENDING', pageSize: 1, page: 2 }).expect(200)).body;
+    expect(pending).toMatchObject({ total: 2, page: 2, pageSize: 1, items: [{ componentCode: 'C-PENDING', projectRecordId: null }] });
+    expect((await list(f, { configuration: 'CONFIGURED' }).expect(200)).body).toMatchObject({ total: 1, items: [{ componentCode: 'B-CONFIGURED', projectRecordId: shared.id }] });
+    await list(f, { configuration: 'GUESS' }).expect(400);
+    const other = await fixture();
+    expect((await list(other, { configuration: 'PENDING' }).expect(200)).body.total).toBe(0);
+  });
+
   it('imports basic text only, preserves IMS punctuation/leading zeros, lists unmapped rows and audits nullable facts', async () => {
     const f = await fixture();
     const result = (await post(f, { rows: [row(1, '  ZA.M030-R0000  ', '  Sample ^^ assembly, (left)  '), row(2, '00012-A.0', 'Other')] }).expect(201)).body;

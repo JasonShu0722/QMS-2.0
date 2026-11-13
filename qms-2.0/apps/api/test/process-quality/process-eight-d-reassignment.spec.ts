@@ -39,6 +39,13 @@ function fixture(kind: 'INDEPENDENT' | 'OWNER' | 'MANAGEMENT' = 'INDEPENDENT') {
 }
 
 describe('process 8D independent and internal reassignment seams (no database)', () => {
+  it('keeps the authorized department projection and rejects private response fields', async () => {
+    const f = fixture();
+    Object.assign(f.tx, { $queryRaw: async () => [{ users: [{ id: f.target, username: 'D1411024', fullName: '张三', departmentName: '质量保证部', email: 'private' }], userTotal: 1 }] });
+    const result = await f.service.assignmentOptions(f.actor, { action: 'REASSIGN', problemId: f.problemId, search: '张', page: 2, pageSize: 1 });
+    expect(result.users).toEqual([{ id: f.target, username: 'D1411024', fullName: '张三', departmentName: '质量保证部' }]);
+    expect(result).toMatchObject({ userTotal: 1, page: 2, pageSize: 1 });
+  });
   it.each(['none', 'current', 'other'])('keeps independent candidate eligibility with %s section filter', async choice => {
     const f = fixture();
     const sectionDepartmentId = choice === 'none' ? undefined : choice === 'current' ? f.section : f.other;

@@ -9,7 +9,7 @@ import { effectivePositionAssignmentWhere } from '../../common/security/effectiv
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
 import {
-  ComponentProjectListQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
+  ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
   ComponentProjectImportDto, type ComponentProjectImportItemDto, type ComponentProjectImportResultDto,
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto, UpdateComponentProjectMappingDto,
   type ComponentProjectRecordDto, type ComponentProjectMappingDto, type ComponentProjectMappingListItemDto, type ComponentEngineerAssignmentDto, type ComponentProjectResolutionDto,
@@ -89,11 +89,13 @@ export class ComponentProjectService {
     });
   }
 
-  async listMappings(actor: AdminActor, organizationId: string, input: ComponentProjectListQueryDto) {
-    const query = await this.input(ComponentProjectListQueryDto, input);
+  async listMappings(actor: AdminActor, organizationId: string, input: ComponentProjectMappingsQueryDto) {
+    const query = await this.input(ComponentProjectMappingsQueryDto, input);
     return this.read(actor, organizationId, async (transaction) => {
       const filter = Prisma.sql`organization_id = ${organizationId}::uuid
         ${query.status ? Prisma.sql`AND status = ${query.status}` : Prisma.empty}
+        ${query.configuration === 'PENDING' ? Prisma.sql`AND (project_record_id IS NULL OR product_category IS NULL OR btrim(product_category) = '')` : Prisma.empty}
+        ${query.configuration === 'CONFIGURED' ? Prisma.sql`AND project_record_id IS NOT NULL AND product_category IS NOT NULL AND btrim(product_category) <> ''` : Prisma.empty}
         ${query.search ? Prisma.sql`AND (strpos(lower(component_code), lower(${query.search})) > 0 OR strpos(lower(component_name), lower(${query.search})) > 0 OR strpos(lower(product_category), lower(${query.search})) > 0)` : Prisma.empty}`;
       const rows = await transaction.$queryRaw<MappingPageRow[]>(Prisma.sql`
         SELECT m.*, CASE WHEN p.id IS NULL THEN NULL ELSE json_build_object('id', p.id, 'code', p.code, 'name', p.name, 'stage', p.stage, 'status', p.status,

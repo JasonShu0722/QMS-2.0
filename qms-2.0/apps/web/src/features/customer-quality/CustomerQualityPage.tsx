@@ -15,7 +15,7 @@ import { CustomerLedgerImportPanel } from './customer-ledger-import-panel';
 import { ledgerDenied } from './customer-ledger-write';
 import { InternalEightDIssueDrawer } from '../internal-eight-d/InternalEightDIssueDrawer';
 import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
-import { LedgerError, LedgerWarnings, ledgerBase, scopedLedger, stageLabel, typeLabel, uuid, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
+import { candidateLabel, LedgerError, LedgerWarnings, ledgerBase, scopedLedger, stageLabel, typeLabel, uuid, type LedgerCandidate, type LedgerDetail, type LedgerItem } from './customer-ledger-ui';
 import './customer-quality.css';
 
 type LedgerPage = components['schemas']['CustomerLedgerPageDto'];
@@ -156,7 +156,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       { title: '里程分档 / MIS', key: 'mileageMis', width: 160, render: (_: unknown, row: LedgerItem) => <>{row.mileageBand ?? '未计算'}<br />{row.misTag ?? '未计算'} / {row.serviceMonths === null ? '月数未计算' : `${row.serviceMonths} 月`}</> },
       { title: '收件', key: 'receipt', width: 150, render: (_: unknown, row: LedgerItem) => <>{row.courierNumber ?? '未填写'}<br />{row.receivedOn ?? '日期未填写'}</> },
     ] : []),
-    { title: '实际工程师', key: 'qualityEngineer', width: 140, render: (_, row) => { const person = candidates.find(candidate => candidate.assignmentId === row.qualityEngineerAssignmentId && candidate.userId === row.qualityEngineerId); return person?.fullName || person?.username || (row.qualityEngineerId ? '原跟进人（任职待核对）' : '待分配'); } },
+    { title: '实际工程师', key: 'qualityEngineer', width: 180, render: (_, row) => { const person = candidates.find(candidate => candidate.assignmentId === row.qualityEngineerAssignmentId && candidate.userId === row.qualityEngineerId); return person ? candidateLabel(person) : row.qualityEngineerId ? '原跟进人（任职待核对）' : '待分配'; } },
     { title: '台账状态', key: 'status', width: 100, render: (_, row) => <Tag>{row.status === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
   ];
   if (accessLost) return <main className="customer-quality-page"><Alert type="warning" showIcon title="访问已失效，当前列表、详情和草稿已清除。请重新登录或确认目标组织权限后重新进入。" /><LedgerError cause={error} /></main>;
@@ -183,7 +183,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
           <label><span>阶段</span><select aria-label="筛选阶段" value={stage} onChange={event => { setStage(event.target.value); setPage(1); }}><option value="">全部阶段</option><option value="NEW_PRODUCT">新品</option><option value="MASS_PRODUCTION">量产</option></select></label>
           <label><span>发生日期从</span><Input type="date" aria-label="发生日期从" value={from} onChange={event => { setFrom(event.target.value); setPage(1); }} /></label>
           <label><span>发生日期至</span><Input type="date" aria-label="发生日期至" value={to} onChange={event => { setTo(event.target.value); setPage(1); }} /></label>
-          <label><span>工程师</span><select aria-label="筛选工程师" value={engineer} onChange={event => { setEngineer(event.target.value); setPage(1); }}><option value="">全部工程师</option>{[...new Map(candidates.map(person => [person.userId, person])).values()].map(person => <option key={person.userId} value={person.userId}>{person.fullName || person.username || person.userId}</option>)}</select></label>
+          <label><span>工程师</span><select aria-label="筛选工程师" value={engineer} onChange={event => { setEngineer(event.target.value); setPage(1); }}><option value="">全部工程师</option>{[...new Map(candidates.map(person => [person.userId, person])).values()].map(person => <option key={person.userId} value={person.userId}>{candidateLabel({ ...person, departmentName: [...new Set(candidates.filter(candidate => candidate.userId === person.userId).map(candidate => candidate.departmentName).filter(Boolean))].join('、') })}</option>)}</select></label>
           <label><span>台账状态</span><select aria-label="筛选台账状态" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">全部状态</option><option value="FOLLOWING">跟进中</option><option value="CLOSED">已关闭</option></select></label>
         </div></details>
         {loading ? <div className="customer-quality-loading"><Spin /></div> : error ? <Button onClick={refresh}>重试台账读取</Button> : <LedgerTable<LedgerItem> ledgerId="customer-quality-ledger" organizationId={targetOrganizationId} viewId={view} requiredColumnKeys={['eight-d-select', 'complaintNumber']} className="customer-ledger-table" tableLayout="fixed" rowKey="id" dataSource={result?.items ?? []} columns={columns} scroll={{ x: view === 'ALL' ? 1350 : 1650 }} locale={{ emptyText: <Empty description="权限范围内暂无符合条件的客诉" /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} />}
