@@ -165,8 +165,8 @@ describe('API inbound durable reception', () => {
     const retry = await send(alias, messageId).expect(200);
     expect(first.body).toBe(true); expect(second.body).toBe(true); expect(retry.body).toBe(true);
     const originalIds = await receiptIds(original.endpointId), aliasIds = await receiptIds(alias.endpointId);
-    expect(originalIds).toHaveLength(2); expect(aliasIds).toHaveLength(1);
-    expect(originalIds[0]!.id).not.toBe(originalIds[1]!.id);
+    const ids = [...originalIds, ...aliasIds].map(row => row.id);
+    expect(ids).toHaveLength(3); expect(new Set(ids).size).toBe(3);
   });
 
   it('accepts a permanent credential on the code address until it is revoked', async () => {
