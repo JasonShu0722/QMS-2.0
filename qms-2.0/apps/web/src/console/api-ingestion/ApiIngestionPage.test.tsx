@@ -345,8 +345,9 @@ it('opens child item differences from a historical parent job without treating i
   const dialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
   const viewDifferences = (await dialog.findByText('查看差异', { selector: 'button span' })).closest('button')!;
   expect(dialog.queryByText('接收记录已清理')).not.toBeInTheDocument(); await waitFor(() => expect(dialog.getByText('历史接收集合')).toBeVisible()); expect(mocks.invalidate).not.toHaveBeenCalled();
-  fireEvent.click(viewDifferences); const detail = within((await screen.findByText('数组第1行', { selector: '.ant-modal-title' })).closest('[role="dialog"]')!);
-  await waitFor(() => expect(detail.getByText('新名称')).toBeVisible()); expect(detail.getByText('确认更新', { selector: 'button span' }).closest('button')).toBeEnabled(); expect(mocks.invalidate).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.click(viewDifferences); }); const detail = within((await screen.findByText('数组第1行', { selector: '.ant-modal-title' })).closest('[role="dialog"]')!);
+  const updatedName = await detail.findByText('新名称');
+  await waitFor(() => expect(updatedName).toBeVisible()); expect(detail.getByText('确认更新', { selector: 'button span' }).closest('button')).toBeEnabled(); expect(mocks.invalidate).not.toHaveBeenCalled();
 });
 it.each([
   { status: 'COMPLETED', expansionComplete: false }, { status: 'CANCELLED', expansionComplete: false },

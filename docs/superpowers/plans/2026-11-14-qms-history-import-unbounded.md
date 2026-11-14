@@ -6,8 +6,8 @@
 | --- | --- |
 | 授权 | 负责人明确否决历史100份/10000行限制，数量不可控，不接受手动拆批；复用本会话修复、PR、合并部署持续授权，不代改生产业务/台账或关闭验收Issue |
 | 映射 | Issue121/原入库119，V0.0.52-fix1，codex/history-import-unbounded，基线已部署6a0c2c92ce5a46092561ca3307d42d5ffc257af0；远端无同号预留/开放PR，原本地归档135cad2和历史main及$null保留 |
-| 状态 | SPEC及QUALITY复审均通过；API6文件140PASS、Web42PASS、API/Web lint/build、契约/治理/归档/Compose通过。独立DB155迁移/seed与真实浏览器完整文件2场景（四目标+101份/10001行）全通过；十万份metadata接纳/首规划探针通过 |
-| 下一步 | 提交V0.0.52-fix1修复PR，逐SHA核CI/Review后合并部署。提交前远端main仍6a0c2c9、无开放PR及同号发布；不写生产业务/台账，不关闭Issue |
+| 状态 | PR123候选98edf1e后的P1修复已真实RED→GREEN、API6文件142PASS、lint/build及增量SPEC/QUALITY通过；Web CI动画等待修复定向4.83s及完整42PASS（195.68s），真实编译Worker/浏览器历史场景再次PASS（1.3m）。155迁移/十万份探针/其余未变门禁继续有效 |
+| 下一步 | 推送V0.0.52-fix2修复提交至PR123，精确新head CI/Review后合并部署；不写生产业务/台账，不关闭Issue |
 
 本计划接续[原维护计划](2026-11-14-qms-receipt-filter-reset.md)。原V0.0.52的历史上限及要求缩小范围的文案被负责人本次指令覆盖，原发布/失败证据作为历史保留。
 
@@ -41,6 +41,8 @@
 Web诊断：768MiB verbose为41PASS/1父详情timeout，分段计时确认多层弹窗角色查询占约2秒/处；改为局部标题/按钮定位，保持全部业务、可见性和权限断言，差异按钮查询2136ms→16ms，定向7.93s→5.82s，完整42/42PASS（189.49s）。512MiB原240s未完成、768MiB编译OOM保留；实测空闲5439MiB后1536MiB单进程lint/build通过，未加测试timeout或关闭motion。Ant Design height NaN及既有chunk体积告警保留，不扩展修复范围。另两次Git外验证入口参数/运行时校验在启动前拒绝，未执行业务测试；正确入口重接，不作为业务FAIL或PASS。
 
 真实浏览器：首轮后台统计精确文本定位不匹配、一次详情按钮未按接口收窄导致重复编号命中均已修正；两次规则页签导航超时保留，随后相同功能路径未复现，不武断归因。最终browser-history-final-retest为2/2PASS（1.6m）：有效platform:admin默认权限、四目标真实编译Worker、差异确认、101份完整成功、10001行接纳/首段实际写入后主动取消、旧接收筛选清除、父聚合详情、老认证无密码复验。10001行测试主动取消余量，不声称全量完成；十万份仅metadata规模，不声称十万正文全量性能。最后只移除临时导航诊断日志，不改生产源码、业务操作或断言；复用相同路径证据，CI继续执行清理后的完整文件。
+
+PR123审查反馈：自动Codex指出首次lazy展开与首行写入同事务，失败回滚后itemId已不存在，recordFailure提前退出。真实trigger两case RED复现，最小修复将items/cursor展开提交为独立步骤，下一轮处理首行；RETRY/SKIP、目标回滚、失败项可见及FIFO恢复均GREEN。原三个测试补一轮展开步骤，保持最终断言，完整6文件142/142PASS（66.903s），最新lint/build、独立增量SPEC/QUALITY通过。首CI唯一web-tests(6)失败为子弹窗正文已挂载未可见，其余107PASS，改为异步act完成点击后先等内容挂载再等可见；不加timeout、关motion或删断言。原head完成及未完成CI结果均分开保存，新head重新走完整门禁。
 
 ## 执行与证据
 

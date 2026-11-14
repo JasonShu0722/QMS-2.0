@@ -358,7 +358,8 @@ export class IngestionService {
             if (end > job.next_row_index) await tx.$executeRaw`INSERT INTO integration_ingestion_items(id,organization_id,job_id,receipt_id,rule_id,rule_version,row_index,generation)
               SELECT gen_random_uuid(),${job.organization_id}::uuid,${job.id}::uuid,${job.receipt_id}::uuid,${job.rule_id}::uuid,${job.rule_version},row_index,${job.generation} FROM generate_series(${job.next_row_index}::integer,${end - 1}::integer) AS row_index ON CONFLICT(organization_id,receipt_id,rule_id,rule_version,row_index,generation) DO NOTHING`;
             await tx.$executeRaw`UPDATE integration_ingestion_jobs SET next_row_index=${end},expansion_complete=${end === rows.length} WHERE id=${job.id}::uuid`;
-            [item] = await tx.$queryRaw<ItemRow[]>`SELECT * FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PENDING' ORDER BY row_index LIMIT 1 FOR UPDATE`;
+            await this.refreshJob(tx, job.id);
+            return true;
           }
           if (!item) { await this.refreshJob(tx, job.id); return !job.expansion_complete; }
           itemId = item.id;

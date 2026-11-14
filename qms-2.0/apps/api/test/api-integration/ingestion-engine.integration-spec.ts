@@ -327,7 +327,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const [child] = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid`;
     await prisma.$executeRaw`INSERT INTO integration_ingestion_items(id,organization_id,job_id,receipt_id,rule_id,rule_version,row_index,generation,status) SELECT gen_random_uuid(),${item.organizationId}::uuid,${child!.id}::uuid,${receiptId}::uuid,${configuration.id}::uuid,1,row_index,0,'FILTERED' FROM generate_series(0,9999) row_index`;
     await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET next_row_index=10000 WHERE id=${child!.id}::uuid`;
-    await new IngestionWorkerService(service).processDue(1);
+    await new IngestionWorkerService(service).processDue(2);
     expect((await inspect(item, 'MATERIAL', '10000'))?.values.name).toBe('最后一行真实执行');
     expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', total: 10001, expansionComplete: true });
     const audit = await prisma.auditEvent.findFirst({ where: { organizationId: item.organizationId, action: 'INGESTION_ITEM_PROCESSED' } });
@@ -418,7 +418,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(await service.getJob(item.actor, jobId)).toMatchObject({ total: null, expansionComplete: false, status: 'PENDING' });
     expect((await service.listItems(item.actor, jobId, {})).total).toBe(0);
     expect((await submitSingle(item, configuration, receiptId, 9999)).result).toMatchObject({ reused: true, jobIds: [jobId] });
-    await worker.processDue(2);
+    await worker.processDue(3);
     const [cursor] = await prisma.$queryRaw<{ next_row_index: number; expansion_complete: boolean }[]>`SELECT next_row_index,expansion_complete FROM integration_ingestion_jobs WHERE parent_job_id=${jobId}::uuid`;
     expect(cursor!.next_row_index).toBeGreaterThan(0); expect(cursor!.next_row_index).toBeLessThan(10001); expect(cursor!.expansion_complete).toBe(false);
     await service.controlJob(item.actor, jobId, { action: 'PAUSE', reason: '暂停游标' }, trace(), key());
@@ -445,7 +445,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id=${preview.previewId}::uuid`;
     await app.get(IntegrationRetentionService).purgeExpired();
     await expect(app.get(IntegrationReceiptService).deleteReceipts(item.actor, { receiptIds: [receiptId] }, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_INPUT_PROTECTED' } });
-    await worker.processDue(2);
+    await worker.processDue(3);
     expect((await inspect(item, 'MATERIAL', 'snapshot'))?.values.name).toBe('保留正文');
     expect(await inspect(item, 'MATERIAL', 'late-backdated')).toBeNull();
   });
@@ -697,6 +697,45 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const restarted = new IngestionWorkerService(new IngestionService(prisma, app.get(AdminMutationService), app.get(AuditLogService), targets));
     await restarted.processDue(10);
     expect(await inspect(item, 'MATERIAL', 'atomic-fault')).toMatchObject({ version: 2, values: { name: 'second' } });
+  });
+
+  it.each(['RETRY', 'SKIP'] as const)('persists lazy history expansion before a first-row failure and restores FIFO with %s', async recovery => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'lazy-atomic-fault', name: 'first' }, { code: 'lazy-next-row', name: 'second' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    const laterReceiptId = await received(item, [{ code: 'lazy-later-receipt', name: 'later' }]);
+    const later = await submitSingle(item, configuration, laterReceiptId);
+    const functionName = `lazy_ingestion_fault_${item.organizationId.replaceAll('-', '')}`;
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${item.organizationId}'::uuid AND NEW.status='INSERTED' AND NEW.row_index=0 AND NEW.receipt_id='${receiptId}'::uuid THEN RAISE EXCEPTION 'sensitive_lazy_source_must_not_escape'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ${functionName} BEFORE UPDATE ON integration_ingestion_items FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
+    let failedItem: { id: string; version: number } | undefined;
+    try {
+      await worker.processDue(10);
+      expect(await inspect(item, 'MATERIAL', 'lazy-atomic-fault')).toBeNull();
+      expect(await inspect(item, 'MATERIAL', 'lazy-next-row')).toBeNull();
+      expect(await inspect(item, 'MATERIAL', 'lazy-later-receipt')).toBeNull();
+      expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_PROCESSING_FAILED' });
+      const [child] = await prisma.$queryRaw<{ id: string; status: string; next_row_index: number; expansion_complete: boolean }[]>`SELECT id,status,next_row_index,expansion_complete FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid`;
+      expect(child).toMatchObject({ status: 'BLOCKED', next_row_index: 2, expansion_complete: true });
+      const rows = await service.listItems(item.actor, parentId, {});
+      expect(rows.items.map(row => row.status)).toEqual(['PROCESSING_FAILED', 'PENDING']);
+      failedItem = rows.items[0]!;
+      expect((await service.getJob(item.actor, later.jobId)).status).toBe('PENDING');
+      expect(await worker.processDue(2)).toBe(0);
+      expect(JSON.stringify(await service.getJob(item.actor, parentId))).not.toContain('sensitive_lazy_source');
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER ${functionName} ON integration_ingestion_items`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION ${functionName}()`);
+    }
+    if (recovery === 'RETRY') await service.controlJob(item.actor, parentId, { action: 'RETRY', reason: '首行故障移除后重试' }, trace(), key());
+    else await service.actOnItem(item.actor, failedItem!.id, { expectedVersion: failedItem!.version, reason: '跳过唯一失败首行' }, false, trace(), key());
+    await new IngestionWorkerService(service).processDue(10);
+    expect((await service.getJob(item.actor, parentId)).status).toBe('COMPLETED');
+    expect((await inspect(item, 'MATERIAL', 'lazy-next-row'))?.values.name).toBe('second');
+    expect((await inspect(item, 'MATERIAL', 'lazy-later-receipt'))?.values.name).toBe('later');
+    expect(await inspect(item, 'MATERIAL', 'lazy-atomic-fault')).toEqual(recovery === 'RETRY' ? expect.objectContaining({ version: 1, values: expect.objectContaining({ name: 'first' }) }) : null);
   });
 
   it('rechecks the configuration author independently from the historical submitting actor', async () => {
