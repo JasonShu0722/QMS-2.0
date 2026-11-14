@@ -331,7 +331,7 @@ export class IngestionService {
   }
   private async releaseResolvedParents(tx: AdminTransaction, organizationId: string, ownerIds: string[], errorCodes: string[]) {
     if (!ownerIds.length) return;
-    await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN ${historyParentHasWork} THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN ${historyParentHasWork} THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE parent.organization_id=${organizationId}::uuid AND parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND parent.status='BLOCKED' AND parent.error_code=ANY(${errorCodes}::text[]) AND NOT (${historyParentHasBlockedSource}) AND EXISTS(SELECT 1 FROM integration_ingestion_jobs owner WHERE owner.id=ANY(${ownerIds}::uuid[]) AND ${this.parentReferencesJob(Prisma.sql`owner.id`)})`);
+    await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN ${historyParentHasWork} THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN ${historyParentHasWork} THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE parent.organization_id=${organizationId}::uuid AND parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND (parent.status IN ('PENDING','COMPLETED') OR (parent.status='BLOCKED' AND parent.error_code=ANY(${errorCodes}::text[]) AND NOT (${historyParentHasBlockedSource}))) AND EXISTS(SELECT 1 FROM integration_ingestion_jobs owner WHERE owner.id=ANY(${ownerIds}::uuid[]) AND ${this.parentReferencesJob(Prisma.sql`owner.id`)})`);
   }
 
   async processDue(limit = 100): Promise<number> {

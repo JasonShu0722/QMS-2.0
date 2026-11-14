@@ -870,6 +870,72 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect((await service.listItems(item.actor, original.jobId, {})).items[0]!.status).toBe(action === 'RETRY' ? 'INSERTED' : 'CANCELLED');
   });
 
+  it.each(['unexpanded', 'expanded'] as const)('finishes a pending parent after another batch cancels its shared %s owner and releases expired input', async expansion => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'shared-pending-cancel', name: '取消共享待处理事实' }]);
+    const input = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+    const first = await service.previewHistory(item.actor, input, trace(), key());
+    const firstId = (await service.submitImport(item.actor, { previewId: first.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    const second = await service.previewHistory(item.actor, input, trace(), key());
+    const secondId = (await service.submitImport(item.actor, { previewId: second.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    await worker.processDue(expansion === 'expanded' ? 2 : 1);
+    const [owner] = await prisma.$queryRaw<{ id: string; expansion_complete: boolean }[]>`SELECT id,expansion_complete FROM integration_ingestion_jobs WHERE parent_job_id=${firstId}::uuid`;
+    expect(owner!.expansion_complete).toBe(expansion === 'expanded');
+    expect((await service.getJob(item.actor, firstId)).status).toBe('PENDING');
+    await service.controlJob(item.actor, secondId, { action: 'CANCEL', reason: '取消共享待处理来源' }, trace(), key());
+    expect((await service.getJob(item.actor, owner!.id)).status).toBe('CANCELLED');
+    expect((await service.getJob(item.actor, firstId)).status).toBe('COMPLETED');
+    expect((await service.getJob(item.actor, secondId)).status).toBe('CANCELLED');
+    expect(await worker.processDue(3)).toBe(0);
+    expect(await inspect(item, 'MATERIAL', 'shared-pending-cancel')).toBeNull();
+    await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id IN (${first.previewId}::uuid,${second.previewId}::uuid)`;
+    await prisma.$executeRaw`UPDATE integration_receipts SET body_expires_at=clock_timestamp()-interval '1 second' WHERE id=${receiptId}::uuid`;
+    await app.get(IntegrationRetentionService).purgeExpired();
+    expect((await prisma.integrationReceipt.findUnique({ where: { id: receiptId } }))?.payloadCiphertext).toBeNull();
+  });
+
+  it('marks a completed reference pending immediately when another batch retries its shared failed owner', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 42, name: '共享校验失败' }]);
+    const original = await submitSingle(item, configuration, receiptId); await worker.processDue(1);
+    const input = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+    const first = await service.previewHistory(item.actor, input, trace(), key());
+    const firstId = (await service.submitImport(item.actor, { previewId: first.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    const second = await service.previewHistory(item.actor, input, trace(), key());
+    const secondId = (await service.submitImport(item.actor, { previewId: second.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    await worker.processDue(10);
+    expect(await service.getJob(item.actor, firstId)).toMatchObject({ status: 'COMPLETED', failed: 1 });
+    expect(await service.getJob(item.actor, secondId)).toMatchObject({ status: 'COMPLETED', failed: 1 });
+    await service.controlJob(item.actor, secondId, { action: 'RETRY', reason: '立即刷新全部既有引用' }, trace(), key());
+    expect((await service.listItems(item.actor, original.jobId, {})).items[0]!.status).toBe('PENDING');
+    expect(await service.getJob(item.actor, firstId)).toMatchObject({ status: 'PENDING', failed: 0, pending: 1 });
+    expect(await service.getJob(item.actor, secondId)).toMatchObject({ status: 'PENDING', failed: 0, pending: 1 });
+    await worker.processDue(1);
+    expect(await service.getJob(item.actor, firstId)).toMatchObject({ status: 'COMPLETED', failed: 1, pending: 0 });
+    expect(await service.getJob(item.actor, secondId)).toMatchObject({ status: 'COMPLETED', failed: 1, pending: 0 });
+  });
+
+  it('keeps a reference pending while a non-overlapping source still has work', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receivedAt = Date.now();
+    await received(item, [{ code: 'cancel-overlap-only', name: '仅取消重叠来源' }], new Date(receivedAt - 20000));
+    const retainedId = await received(item, [{ code: 'retain-other-source', name: '其他来源继续' }], new Date(receivedAt - 10000));
+    const first = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const firstId = (await service.submitImport(item.actor, { previewId: first.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    const second = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(receivedAt - 60000).toISOString(), to: new Date(receivedAt - 15000).toISOString() }, trace(), key());
+    const secondId = (await service.submitImport(item.actor, { previewId: second.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    await worker.processDue(1);
+    const [retained] = await prisma.$queryRaw<{ id: string; actor_snapshot: unknown; rule_snapshot: unknown }[]>`SELECT id,actor_snapshot,rule_snapshot FROM integration_ingestion_jobs WHERE parent_job_id=${firstId}::uuid AND receipt_id=${retainedId}::uuid`;
+    await service.controlJob(item.actor, secondId, { action: 'CANCEL', reason: '范围外工作不能被取消或误完成' }, trace(), key());
+    expect((await service.getJob(item.actor, firstId)).status).toBe('PENDING');
+    const [after] = await prisma.$queryRaw<{ id: string; actor_snapshot: unknown; rule_snapshot: unknown }[]>`SELECT id,actor_snapshot,rule_snapshot FROM integration_ingestion_jobs WHERE id=${retained!.id}::uuid`;
+    expect(after).toEqual(retained);
+    await worker.processDue(10);
+    expect((await service.getJob(item.actor, firstId)).status).toBe('COMPLETED');
+    expect(await inspect(item, 'MATERIAL', 'cancel-overlap-only')).toBeNull();
+    expect((await inspect(item, 'MATERIAL', 'retain-other-source'))?.values.name).toBe('其他来源继续');
+  });
+
   it.each(['RETRY', 'SKIP'] as const)('persists lazy history expansion before a first-row failure and restores FIFO with %s', async recovery => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
     const receiptId = await received(item, [{ code: 'lazy-atomic-fault', name: 'first' }, { code: 'lazy-next-row', name: 'second' }]);

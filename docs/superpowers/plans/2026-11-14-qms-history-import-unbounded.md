@@ -6,8 +6,8 @@
 | --- | --- |
 | 授权 | 负责人明确否决历史100份/10000行限制，数量不可控，不接受手动拆批；复用本会话修复、PR、合并部署持续授权，不代改生产业务/台账或关闭验收Issue |
 | 映射 | Issue121/原入库119，V0.0.52-fix1，codex/history-import-unbounded，基线已部署6a0c2c92ce5a46092561ca3307d42d5ffc257af0；远端无同号预留/开放PR，原本地归档135cad2和历史main及$null保留 |
-| 状态 | PR123 head6a8d700已通过同SHA Git对象API非强制上传，原Git CLI因代理TLS失败记录保留。自动Review追加零item共享owner遗漏，fix4仅补manifest owner收件匹配；真实RED→GREEN、独立库qms_history_fix4_final156迁移/seed及API6文件151PASS，tsc及增量SPEC/QUALITY通过。其他未变证据继续有效 |
-| 下一步 | 提交推送V0.0.52-fix4至同PR123，精确新head CI/Review后合并部署及公网核验；不写生产业务/台账，不关闭Issue |
+| 状态 | PR123 headb1f5289 CI43581909372为24/24PASS。自动Review发现共享owner取消后原PENDING父任务未刷新；fix5扩展现有批量SQL同步PENDING/COMPLETED引用，保留BLOCKED原解锁条件及PAUSED/CANCELLED。真实RED→GREEN、独立库qms_history_fix5_final156迁移/seed及API6文件155PASS、tsc、增量SPEC/QUALITY及治理通过；其他未变证据继续有效 |
+| 下一步 | 提交推送V0.0.52-fix5至同PR123，精确新head CI/Review后合并部署及公网核验；不写生产业务/台账，不关闭Issue |
 
 本计划接续[原维护计划](2026-11-14-qms-receipt-filter-reset.md)。原V0.0.52的历史上限及要求缩小范围的文案被负责人本次指令覆盖，原发布/失败证据作为历史保留。
 
@@ -49,6 +49,8 @@ PR123审查反馈：自动Codex指出首次lazy展开与首行写入同事务，
 fix3最终证据：复用、范围隔离、A/B共享阻塞和人工暂停均有真实PG RED→GREEN；父重试只重置表示范围内失败及授权，不复活CANCELLED/其他组织或generation，不解除其他owner的人工PAUSED。原150项运行为149PASS/1既有retention5s timeout，保留FAIL；新建release独立DB156迁移+seed后同6文件150/150PASS（66.991s），未增加timeout。暂停修复仅SQL状态CASE，lint/tsc通过，同结构build与未走暂停分支的真实Worker/browser证据复用；最终精确head CI仍完整运行。最新browser-reused-owner-final为PASS（1.5m）。00600索引针对真父查询，100000子任务+10000旧顶层任务的EXPLAIN从过滤10001行、1512缓冲页、3.615ms变为实际父索引20页、0.262ms；仅为此读取消费者新增索引，110001探针行已精确清除。
 
 fix4证据：规划完成但尚未展开的共享owner没有items，原重试查找只依赖条目，会漏掉授权撤销后的空子任务。单个OR补充同manifest收件匹配，普通任务planningPreviewId为空不会扩大控制范围；真实旧actor持续停用、替代管理员从B恢复A、事实只写一次RED→GREEN，连同暂停/范围隔离5项通过。独立fix4库156迁移+seed、完整6文件151/151PASS（80.261s），tsc及增量SPEC/QUALITY通过；无DTO、迁移或普通浏览器路径行为变化，复用未变构建/浏览器证据。Git网络阶段未关闭证书校验、未改代理全局配置或重写分支；原API提交说明末尾换行校验拦截后修正，blob/tree/commit与本地同SHA验证通过才非强制更新ref。
+
+fix5证据：共享owner被另一批取消后，原PENDING父不再永久占用正文；已完成引用在共享失败重试时立即恢复PENDING，其他来源仍有工作则保持PENDING。覆盖已展开/未展开取消、正文过期释放、COMPLETED引用重试、非重叠来源隔离，真实RED与最终4/4GREEN均保留。独立fix5库156迁移+seed、完整6文件155/155PASS（78.179s），tsc通过，主代理已核对原始日志与退出码；生产仅现有一条批量SQL条件变化，无DTO/迁移变化，未变浏览器和构建路径按影响分析复用，最新CI仍完整执行。
 
 ## 执行与证据
 
