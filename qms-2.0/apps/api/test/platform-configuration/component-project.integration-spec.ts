@@ -330,7 +330,9 @@ describe('component project mapping with real PostgreSQL / HTTP', () => {
       expect(first.items).toHaveLength(1);
       expect(second.items).toHaveLength(1);
       expect(first.items[0].id).not.toBe(second.items[0].id);
-      await get(f, path, { pageSize: 101 }).expect(400);
+      const maximum = path === 'component-project-mappings' ? 1000 : 100;
+      expect((await get(f, path, { pageSize: maximum }).expect(200)).body).toMatchObject({ total: 2, pageSize: maximum });
+      await get(f, path, { pageSize: maximum + 1 }).expect(400);
     }
     await engineer(f);
     await engineer(f);

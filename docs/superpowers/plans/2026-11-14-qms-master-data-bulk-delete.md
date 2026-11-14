@@ -6,8 +6,8 @@
 | --- | --- |
 | 授权 | 用户明确两项修复，先完成上一轮收尾后继续；复用本会话开发/PR/合并部署授权，不代改生产业务或飞书 |
 | 映射 | Issue124；V0.0.53；codex/master-data-bulk-delete；基线已部署6e18f4fa21d8e7b8c95a9d76f3e963455e47138a；远端main/开放PR查重无冲突 |
-| 状态 | 实现与适用验证完成：API27PASS及邻近30PASS，取消旧消费者四完整文件107PASS，批删/供应商最终26PASS、客户21/物料19/组件45完整PASS，契约/API类型/Web类型构建/治理/归档/Compose通过；真实浏览器2PASS（36.6s）。SPEC及QUALITY返修后增量通过 |
-| 下一步 | 创建PR关联124，精确CI/Review后合并部署，核主干/快照/156迁移与同SHA三服务及公网；生产业务人工与物理手机仍未执行 |
+| 状态 | PR125首head5f70623自动Review无发现，CI43616581393为22/24PASS；唯一业务失败是旧组件分页测试仍统一拒101，foundation为汇总失败。fix1仅同步两列表各自1000/100上限及上限加1断言，真实PG两完整文件33PASS（39.232s），增量SPEC/QUALITY通过；未变类型/构建/契约/Web及浏览器证据继续有效 |
+| 下一步 | 推送同PR125 V0.0.53-fix1，精确新head CI/Review通过后合并部署，核主干/快照/156迁移与同SHA三服务及公网；生产业务人工与物理手机仍未执行 |
 
 设计见[本轮规格](../specs/2026-11-14-qms-master-data-bulk-delete-design.md)。不重新开发已发布历史导入，不修改其总量或统计语义。
 
@@ -32,3 +32,5 @@
 最终验证：专用本地取消CLIENT_REAUTHENTICATION_CANCELLED/400完成真实Provider→旧UserForceDelete RED→GREEN，四完整文件Provider14/UserForceDelete40/admin-request9/ApiIngestion44共107PASS，真正401/403及未知重试原边界保持。QUALITY增量PASS；共享删除13/供应商13最终26PASS，其他未变完整文件客户21/物料19/组件45与integration-ui5组合证据有效，不重复累计admin-request9。Web lint首FAIL为两个新增测试类型错误，移除ByRoleOptions无效exact及补closest<HTMLElement>后lint/build PASS（1536MiB，运行前空闲7802MiB），不改变业务行为或断言。所有页长选项统一有效10/20/50/100/500/1000。
 
 真实浏览器首轮两定位FAIL、诊断两FAIL及首次修正一PASS/一FAIL均保留：实际AntD双字按钮含空格，分页标签是“50 条/页”，另“关闭”需限定正文以免重复命中。没有提高timeout/关闭motion；最终两场景2PASS（36.6s），覆盖真实嵌套密码元素命中与焦点、取消关闭重开、真实MFA、原任务明确重提后PG PAUSED；管理员四档案批删、客户部分REFERENCED并保关系、PG删除事实、390px浮动栏/反馈不重叠及主题变量。只去除诊断日志后复用相同行为证据，不因此重建未变业务源码。生产业务未写入，物理手机/正式数据准确性仍待人工验收。
+
+PR首轮真实FAIL：integration(2)为54文件/599项PASS、仅component-project.integration-spec.ts分页测试1FAIL；旧循环仍要求映射pageSize101拒绝，而新DTO按批准接受至1000。其余22检查PASS，foundation只是依赖汇总失败，完整job132512911872日志保留。此前30项邻近通过发生于分页改动前，不能覆盖此失败。fix1只在原循环按映射1000/项目100各验证最大值成功及超1拒绝，保留排序/分页/候选与授权全部断言；真实PG两完整文件33/33PASS，独立SPEC/QUALITY增量通过，未变生产、类型、构建、浏览器按实际影响复用，精确新head仍完整CI。
