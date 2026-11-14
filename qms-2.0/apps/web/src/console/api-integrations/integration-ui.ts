@@ -31,7 +31,7 @@ export function useScopedIntegrationRequests(scope: IntegrationScope) {
       if (!current() || controller.signal.aborted) throw new DOMException('Scope changed', 'AbortError');
       return result;
     } catch (cause) {
-      if (current() && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) scope.deny();
+      if (current() && cause instanceof ApiError && cause.code !== 'AUTH_REAUTHENTICATION_REQUIRED' && (cause.status === 401 || cause.status === 403)) scope.deny();
       throw cause;
     } finally { controllers.current.delete(controller); }
   }, [current, scope.deny]);

@@ -5,6 +5,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
+import { MasterDataBulkDeleteDto, MasterDataBulkDeleteResultDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { MaterialMasterService } from './material-master.service.js';
 import { CreateMaterialMasterDto, MaterialMasterDto, MaterialMasterImportDto, MaterialMasterImportResultDto, MaterialMasterScopeDto, UpdateMaterialMasterDto } from './material-master.dto.js';
 
@@ -17,6 +18,7 @@ const bodyScope = { source: 'body', field: 'organizationId', optional: true } as
 @ApiResponse({ status: 'default', type: ErrorResponse })
 export class MaterialMasterController {
   constructor(private readonly service: MaterialMasterService) {}
+  @Post('bulk-delete') @ApiCreatedResponse({ type: MasterDataBulkDeleteResultDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'material-master:write', organizationScope: bodyScope }) bulkDeleteMaterials(@Req() request: Request, @Body() dto: MasterDataBulkDeleteDto) { return this.service.bulkDeleteMaterials(actor(request), dto, requestTraceId(request), request.get('Idempotency-Key')); }
   @Get() @ApiOkResponse({ type: [MaterialMasterDto] }) @RequireAccess({ featurePermission: 'material-master:read', organizationScope: queryScope }) list(@Req() request: Request, @Query() _query: MaterialMasterScopeDto) { return this.service.listMaterials(actor(request)); }
   @Post() @ApiCreatedResponse({ type: MaterialMasterDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'material-master:write', organizationScope: bodyScope }) create(@Req() request: Request, @Body() dto: CreateMaterialMasterDto) { return this.service.createMaterial(actor(request), dto, requestTraceId(request), request.get('Idempotency-Key')); }
   @Patch(':id') @ApiOkResponse({ type: MaterialMasterDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'material-master:write', organizationScope: bodyScope }) update(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMaterialMasterDto) { return this.service.updateMaterial(actor(request), id, dto, requestTraceId(request), request.get('Idempotency-Key')); }

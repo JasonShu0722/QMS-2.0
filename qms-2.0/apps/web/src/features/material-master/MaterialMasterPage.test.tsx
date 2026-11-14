@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, ApiError, csrfToken } from '../../api/client';
 import { readXlsxFile } from '../imports/read-xlsx';
 import { MaterialMasterPage } from './MaterialMasterPage';
@@ -30,6 +30,26 @@ beforeEach(() => {
   spreadsheet.rows = []; spreadsheet.writeBuffer.mockClear();
 });
 const upload = () => { if (!screen.queryByLabelText('物料清单文件')) fireEvent.click(screen.getByRole('button', { name: '批量导入物料' })); fireEvent.change(screen.getByLabelText('物料清单文件'), { target: { files: [new File(['xlsx'], 'materials.xlsx')] } }); };
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it('selects only the current material page for deletion and confirms the captured versions', async () => {
+  vi.stubEnv('NODE_ENV', 'development');
+  const rows = Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` }));
+  vi.mocked(apiRequest).mockResolvedValue(rows);
+  const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path.endsWith('/csrf') ? { csrfToken: 'token' } : { items: rows.slice(0, 20).map(row => ({ id: row.id, status: 'DELETED' })), deleted: 20, referenced: 0, conflicted: 0, notFound: 0 }), { headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', fetcher);
+  render(<MaterialMasterPage organizationId="org-a" organizationPermissions={permissions} />);
+  await screen.findByText('物料-0');
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  const toolbar = within(screen.getByRole('toolbar', { name: '已选物料' }));
+  expect(toolbar.getByText('已选择 20 条')).toBeVisible();
+  fireEvent.click(toolbar.getByRole('button', { name: '删除所选' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除物料' }));
+  expect(dialog.getByText(/20/)).toHaveTextContent('删除后不可恢复');
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/v1/material-masters/bulk-delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 'org-a', records: rows.slice(0, 20).map(row => ({ id: row.id, expectedVersion: row.version })) }) })));
+  await waitFor(() => expect(screen.queryByRole('toolbar', { name: '已选物料' })).not.toBeInTheDocument());
+});
 
 it('paginates the complete material array locally without a new request', async () => {
   vi.mocked(apiRequest).mockResolvedValue(Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` })));
@@ -38,7 +58,7 @@ it('paginates the complete material array locally without a new request', async 
   expect(screen.queryByText('物料-24')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
   await userEvent.click(screen.getByRole('combobox'));
-  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  await userEvent.click(await screen.findByRole('option', { name: '50 / page' }));
   expect(await screen.findByText('物料-24')).toBeInTheDocument();
   expect(apiRequest).toHaveBeenCalledTimes(1);
   expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org');

@@ -12,7 +12,30 @@ vi.mock('exceljs', () => ({ default: { Workbook: class {
   addWorksheet() { return { columns: spreadsheet.columns, addRow: (row: unknown[]) => spreadsheet.rows.push(row) }; }
 } } }));
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it('deletes selected supplier versions in the selected organization and preserves referenced profiles', async () => {
+  vi.stubEnv('NODE_ENV', 'development');
+  const profiles = [{ id: 'p1', version: 4, businessCode: 'SUP-1', displayName: '一供应商' }, { id: 'p2', version: 5, businessCode: 'SUP-2', displayName: '二供应商' }];
+  const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  let removed = false;
+  const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'token' });
+    if (path.endsWith('/bulk-delete')) { removed = true; return json({ items: [{ id: 'p1', status: 'DELETED' }, { id: 'p2', status: 'REFERENCED' }], deleted: 1, referenced: 1, conflicted: 0, notFound: 0 }); }
+    return json({ items: removed ? profiles.slice(1) : profiles, total: removed ? 1 : 2 });
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(<SupplierProfilesPage organizationId="org-a" organizationPermissions={['supplier-quality:profiles:read', 'supplier-quality:profiles:write']} />);
+  await screen.findByText('一供应商');
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除供应商档案' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await screen.findByText('SUP-2 · 二供应商：仍有业务引用，不能删除');
+  await waitFor(() => expect(screen.queryByText('一供应商')).not.toBeInTheDocument());
+  expect(screen.getByRole('toolbar', { name: '已选供应商档案' })).toHaveTextContent('已选择 1 条');
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/supplier-quality/profiles/bulk-delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 'org-a', records: profiles.map(row => ({ id: row.id, expectedVersion: row.version })) }) }));
+});
 
 it('requests an explicit page size for the target organization', async () => {
   const request = vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0 }), { headers: { 'content-type': 'application/json' } }));
@@ -28,20 +51,22 @@ it.each(['create', 'edit'])('shows success and releases busy after a StrictMode 
   const profile = { id: 'p', version: 1, supplierOrganizationId: null, businessCode: 'A', displayName: '甲' };
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => path.endsWith('/csrf') ? json({ csrfToken: 'csrf' }) : options?.method ? json(profile) : json({ items: [profile], total: 1, canManage: true })));
-  render(<StrictMode><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:read', 'supplier-quality:profiles:write']} /></StrictMode>);
+  const view = render(<StrictMode><SupplierProfilesPage organizationPermissions={['supplier-quality:profiles:read', 'supplier-quality:profiles:write']} /></StrictMode>);
+  const page = within(view.container);
   if (action === 'create') {
-    fireEvent.click(screen.getByRole('button', { name: '登记供应商资料' }));
-    fireEvent.change(screen.getByRole('textbox', { name: '供应商名称' }), { target: { value: '新供应商' } });
-    fireEvent.change(screen.getByRole('textbox', { name: '业务编码' }), { target: { value: 'B' } });
-    fireEvent.click(screen.getByRole('button', { name: '登记供应商' }));
+    fireEvent.click(page.getByRole('button', { name: '登记供应商资料' }));
+    const editor = within(screen.getByRole('dialog'));
+    fireEvent.change(editor.getByRole('textbox', { name: '供应商名称' }), { target: { value: '新供应商' } });
+    fireEvent.change(editor.getByRole('textbox', { name: '业务编码' }), { target: { value: 'B' } });
+    fireEvent.click(editor.getByRole('button', { name: '登记供应商' }));
   } else {
-    fireEvent.click(await screen.findByRole('button', { name: '编辑资料' }));
+    fireEvent.click(await page.findByRole('button', { name: '编辑资料' }));
     const editor = within(screen.getByRole('dialog'));
     fireEvent.change(editor.getByLabelText('供应商名称'), { target: { value: '编辑名称' } });
     fireEvent.click(editor.getByRole('button', { name: '保存供应商资料' }));
   }
-  await screen.findByText('供应商资料已保存');
-  if (action === 'create') expect(screen.getByRole('button', { name: '登记供应商资料' })).toBeEnabled();
+  await page.findByText('供应商资料已保存');
+  if (action === 'create') expect(page.getByRole('button', { name: '登记供应商资料' })).toBeEnabled();
   else await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 

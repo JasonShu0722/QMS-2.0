@@ -4,6 +4,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
+import { MasterDataBulkDeleteDto, MasterDataBulkDeleteResultDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { ComponentProjectService } from './component-project.service.js';
 import {
   ComponentProjectScopeDto, ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
@@ -21,6 +22,13 @@ const writeAccess = { ...readAccess, featurePermission: 'component-project:manag
 @ApiResponse({ status: 'default', type: ErrorResponse })
 export class ComponentProjectController {
   constructor(private readonly service: ComponentProjectService) {}
+
+  @Post('component-project-mappings/bulk-delete') @ApiCreatedResponse({ type: MasterDataBulkDeleteResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'component-project:manage', organizationScope: { source: 'body', field: 'organizationId', optional: true } })
+  bulkDeleteMappings(@Body() dto: MasterDataBulkDeleteDto, @Req() request: AuthorizedRequest) {
+    return this.service.bulkDeleteMappings(this.actor(request), request.authorizedOrganizationId!, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
 
   @Get('component-project-records') @RequireAccess(readAccess) @ApiOkResponse({ type: ComponentProjectRecordsPageDto })
   listProjects(@Query() query: ComponentProjectListQueryDto, @Req() request: AuthorizedRequest) {

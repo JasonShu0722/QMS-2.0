@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken } from '../../api/client';
 import { CustomerMasterSection } from './CustomerMasterSection';
@@ -31,6 +31,24 @@ beforeEach(() => {
   spreadsheet.writeBuffer.mockReset().mockResolvedValue(new Uint8Array([1]));
   vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockImplementation((path) => Promise.resolve(path.endsWith('/my-permissions') ? { permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] } : path.endsWith('/customers') ? [customer] : []));
+});
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it('provides a selectable customer ledger and deletes the captured current-page versions without changing relations', async () => {
+  vi.stubEnv('NODE_ENV', 'development');
+  vi.mocked(apiRequest).mockResolvedValue([customer, otherCustomer]);
+  const fetcher = vi.fn(async (path: string, _init?: RequestInit) => new Response(JSON.stringify(path.endsWith('/csrf') ? { csrfToken: 'token' } : { items: [{ id: customer.id, status: 'CONFLICT' }, { id: otherCustomer.id, status: 'REFERENCED' }], deleted: 0, referenced: 1, conflicted: 1, notFound: 0 }), { headers: { 'content-type': 'application/json' } }));
+  vi.stubGlobal('fetch', fetcher);
+  render(<CustomerMasterSection organizationId="org-a" organizationPermissions={['customer-quality:complaints:read', 'customer-quality:complaints:write']} />);
+  await screen.findByText('客户一');
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除客户档案' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await screen.findByText('C-1 · 客户一：版本已变化，请刷新后重新选择');
+  expect(screen.getByRole('toolbar', { name: '已选客户档案' })).toHaveTextContent('已选择 2 条');
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/customer-quality/customers/bulk-delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: 'org-a', records: [customer, otherCustomer].map(row => ({ id: row.id, expectedVersion: row.version })) }) }));
+  expect(vi.mocked(apiRequest).mock.calls.every(([path]) => !path.includes('/relations'))).toBe(true);
 });
 
 it('keeps the embedded customer heading accessible without a duplicate visible title', async () => {
@@ -174,7 +192,7 @@ it('creates customer with CSRF and idempotency', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: '新增客户' })).toBeInTheDocument());
   fireEvent.click(screen.getByRole('button', { name: '新增客户' }));
   fireEvent.change(screen.getByLabelText('客户代码'), { target: { value: 'C-2' } });
-  fireEvent.change(screen.getByLabelText('客户名称'), { target: { value: '客户二' } });
+  fireEvent.change(screen.getByLabelText('客户名称', { selector: 'input' }), { target: { value: '客户二' } });
   fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path, options]) => path.endsWith('/customers') && options?.method === 'POST')).toBe(true));
   const call = vi.mocked(apiRequest).mock.calls.find(([path, options]) => path.endsWith('/customers') && options?.method === 'POST');

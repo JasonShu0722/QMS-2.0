@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
-import { completeMfa } from './mfa-login';
+import { completeMfa, takeMfaRecoveryCode } from './mfa-login';
 import { positionRead, positionWrite } from './position-fixture';
 import { fillSecret } from './secret-input';
 
@@ -284,5 +284,190 @@ test('historical imports accept more than 100 receipts and 10000 rows with real 
     expect(cancelled.status).toBe('CANCELLED');
   } finally {
     await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: oldReauthenticatedAt } });
+  }
+});
+
+test('nested ingestion pause keeps real reauthentication reachable and resumes after cancellation and verification', async ({ page }) => {
+  await login(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { organizationId_username: { organizationId: organization.id, username: 'local.internal' } } });
+  const reauthSuffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  let endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, '/api/v1/admin/integrations/endpoints', 'POST', {
+    code: `REAUTH_${reauthSuffix}`, name: `嵌套认证${reauthSuffix}`, sourceCode: `REAUTH_${reauthSuffix}`, sourceName: '嵌套认证一次性验收', returnReceipt: true,
+  }, 201);
+  const credential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `/api/v1/admin/integrations/endpoints/${endpoint.id}/credentials`, 'POST', { name: '嵌套认证凭据', validityDays: null }, 201);
+  endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, `/api/v1/admin/integrations/endpoints/${endpoint.id}`, 'PATCH', { expectedVersion: endpoint.version, status: 'ENABLED' });
+  const rule = await positionWrite<Schema['IngestionRuleDto']>(page.request, `${root}/rules`, 'POST', {
+    name: `嵌套认证规则${reauthSuffix}`, endpointId: endpoint.id, target: 'CUSTOMER', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'code', name: 'name' }, mode: 'INSERT_ONLY', updateFields: [],
+  } satisfies Schema['SaveIngestionRuleDto'], 201);
+  const inbound = await fetch(new URL(`/api/v1/integrations/inbound/${endpoint.code}/messages`, baseURL), {
+    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000), headers: { Authorization: `Bearer ${credential.secret!}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ code: `AUTH_${reauthSuffix}`, name: '嵌套认证客户' }]),
+  });
+  expect(inbound.status).toBe(200); expect(await inbound.json()).toBe(true);
+  const receipt = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id }, orderBy: { receivedAt: 'desc' } });
+  const preview = await positionWrite<Schema['IngestionPreviewDto']>(page.request, `${root}/preview`, 'POST', { ruleId: rule.id, ruleVersion: rule.version, receiptId: receipt.id, rowIndex: 0 }, 201);
+  const imported = await positionWrite<Schema['IngestionImportResultDto']>(page.request, `${root}/imports`, 'POST', { previewId: preview.previewId, confirmed: true }, 201);
+  expect(imported.jobIds).toHaveLength(1);
+  const job = await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${imported.jobIds[0]}`);
+  expect(job.status).toBe('PENDING');
+  const activeSession = await prisma.session.findFirstOrThrow({ where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+  const oldReauthenticatedAt = activeSession.reauthenticatedAt;
+  const controlPath = `${root}/jobs/${job.id}/control`;
+  const controlRequests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname === controlPath && request.method() === 'POST') controlRequests.push(request.url()); });
+  try {
+    await page.goto(`/console/api-ingestion?receiptId=${receipt.id}`);
+    const detail = page.getByRole('dialog', { name: `${endpoint.name} · #${job.sequence}`, exact: true });
+    const pause = page.getByRole('dialog', { name: '暂停', exact: true });
+    const authentication = page.getByRole('dialog', { name: '重新验证身份', exact: true });
+    await page.getByRole('button', { name: `查看任务${job.sequence}`, exact: true }).click();
+    await detail.getByRole('button', { name: /^暂\s*停$/ }).click();
+    await pause.getByLabel('操作原因', { exact: true }).fill('取消认证后重新操作');
+    await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: new Date(Date.now() - 600_000) } });
+    const firstRefusal = page.waitForResponse(response => new URL(response.url()).pathname === controlPath && response.request().method() === 'POST');
+    await pause.getByRole('button', { name: '确认操作', exact: true }).click();
+    expect(await (await firstRefusal).json()).toMatchObject({ code: 'AUTH_REAUTHENTICATION_REQUIRED' });
+    await expect(authentication).toBeVisible();
+    await authentication.getByRole('button', { name: /^取\s*消$/ }).click();
+    await expect(authentication).toHaveCount(0);
+    await expect(pause.getByRole('button', { name: /^返\s*回$/ })).toBeEnabled();
+    expect((await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${job.id}`)).status).toBe('PENDING');
+    await pause.getByRole('button', { name: /^返\s*回$/ }).click();
+    await page.getByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。', exact: true }).getByRole('button', { name: '放弃修改并关闭', exact: true }).click();
+    await expect(pause).toHaveCount(0);
+    await detail.locator('.ant-modal-body').getByRole('button', { name: /^关\s*闭$/ }).click();
+    await expect(detail).toHaveCount(0);
+    await page.getByRole('button', { name: `查看任务${job.sequence}`, exact: true }).click();
+    await detail.getByRole('button', { name: /^暂\s*停$/ }).click();
+    await pause.getByLabel('操作原因', { exact: true }).fill('真实密码与MFA重认证后暂停');
+    const secondRefusal = page.waitForResponse(response => new URL(response.url()).pathname === controlPath && response.request().method() === 'POST');
+    await pause.getByRole('button', { name: '确认操作', exact: true }).click();
+    expect(await (await secondRefusal).json()).toMatchObject({ code: 'AUTH_REAUTHENTICATION_REQUIRED' });
+    await expect(authentication).toBeVisible();
+    const passwordField = authentication.getByLabel('当前密码', { exact: true });
+    await expect(passwordField).toBeVisible();
+    await expect.poll(() => passwordField.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === element;
+    })).toBe(true);
+    await passwordField.click();
+    await expect(passwordField).toBeFocused();
+    await fillSecret(passwordField, password!);
+    await fillSecret(authentication.getByLabel('验证码或恢复码', { exact: true }), takeMfaRecoveryCode('local.internal'));
+    const verified = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/me/reauthenticate' && response.request().method() === 'POST');
+    await authentication.getByRole('button', { name: /^验\s*证$/ }).click();
+    expect((await verified).status()).toBe(200);
+    await expect(authentication).toHaveCount(0);
+    await expect(pause.getByRole('button', { name: '确认操作', exact: true })).toBeEnabled();
+    expect(controlRequests).toHaveLength(2);
+    expect((await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${job.id}`)).status).toBe('PENDING');
+    const paused = page.waitForResponse(response => new URL(response.url()).pathname === controlPath && response.request().method() === 'POST');
+    await pause.getByRole('button', { name: '确认操作', exact: true }).click();
+    const pausedResponse = await paused;
+    expect(pausedResponse.status()).toBe(201);
+    expect(await pausedResponse.json()).toMatchObject({ id: job.id, status: 'PAUSED' });
+    await expect(pause).toHaveCount(0);
+    await expect(detail.getByText('已暂停', { exact: true })).toBeVisible();
+    expect(controlRequests).toHaveLength(3);
+    expect((await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${job.id}`)).status).toBe('PAUSED');
+  } finally {
+    await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: oldReauthenticatedAt } });
+  }
+});
+
+test('administrator bulk deletes four master data lists with partial reference protection and reachable narrow-screen controls', async ({ page }) => {
+  await login(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const bulkSuffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  const suppliers: { id: string; code: string }[] = [], customers: { id: string; code: string }[] = [], materials: { id: string; code: string }[] = [];
+  const mappingPath = '/api/v1/admin/configuration/component-project-mappings';
+  for (const ordinal of [1, 2]) {
+    const supplier = await positionWrite<Schema['SupplierProfileDto']>(page.request, '/api/v1/supplier-quality/profiles', 'POST', { businessCode: `SUP_${bulkSuffix}_${ordinal}`, displayName: `批量删除供应商${ordinal}` }, 201);
+    suppliers.push({ id: supplier.id, code: supplier.businessCode });
+    const customer = await positionWrite<Schema['CustomerMasterDto']>(page.request, '/api/v1/customer-quality/customers', 'POST', { code: `CUS_${bulkSuffix}_${ordinal}`, name: `批量删除客户${ordinal}` }, 201);
+    customers.push({ id: customer.id, code: customer.code });
+    const material = await positionWrite<Schema['MaterialMasterDto']>(page.request, '/api/v1/material-masters', 'POST', { materialCode: `MAT_${bulkSuffix}_${ordinal}`, materialName: `批量删除物料${ordinal}` }, 201);
+    materials.push({ id: material.id, code: material.materialCode });
+  }
+  const imported = await positionWrite<Schema['ComponentProjectImportResultDto']>(page.request, `${mappingPath}/import`, 'POST', {
+    rows: [1, 2].map(rowNumber => ({ rowNumber, componentCode: `CMP_${bulkSuffix}_${rowNumber}`, componentName: `批量删除组件${rowNumber}` })),
+  }, 201);
+  expect(imported).toMatchObject({ created: 2, skipped: 0, failed: 0 });
+  const mappingPage = await positionRead<Schema['ComponentProjectMappingsPageDto']>(page.request, `${mappingPath}?search=${bulkSuffix}`);
+  expect(mappingPage.items).toHaveLength(2);
+  const mappings = mappingPage.items.map(row => ({ id: row.id, code: row.componentCode }));
+  const relation = await positionWrite<Schema['CustomerRelationDto']>(page.request, `/api/v1/customer-quality/customers/${customers[0]!.id}/relations`, 'POST', {
+    relationType: 'PRODUCT', relatedCode: `PRODUCT_${bulkSuffix}`, relatedName: '必须保留的客户产品关系',
+  }, 201);
+  const domains = [
+    { link: '供应商档案', noun: '供应商档案', path: '/api/v1/supplier-quality/profiles/bulk-delete', records: suppliers, referenced: undefined,
+      remaining: () => prisma.supplierBusinessProfile.findMany({ where: { ownerOrganizationId: organization.id, id: { in: suppliers.map(row => row.id) } }, select: { id: true } }) },
+    { link: '客户档案', noun: '客户档案', path: '/api/v1/customer-quality/customers/bulk-delete', records: customers, referenced: customers[0]!.id,
+      remaining: () => prisma.customerQualityCustomer.findMany({ where: { organizationId: organization.id, id: { in: customers.map(row => row.id) } }, select: { id: true } }) },
+    { link: '物料主数据', noun: '物料', path: '/api/v1/material-masters/bulk-delete', records: materials, referenced: undefined,
+      remaining: () => prisma.materialMaster.findMany({ where: { organizationId: organization.id, id: { in: materials.map(row => row.id) } }, select: { id: true } }) },
+    { link: '组件项目映射', noun: '组件项目映射', path: `${mappingPath}/bulk-delete`, records: mappings, referenced: undefined,
+      remaining: () => prisma.$queryRaw<{ id: string }[]>`SELECT id FROM component_project_mappings WHERE organization_id=${organization.id}::uuid AND id IN (${mappings[0]!.id}::uuid,${mappings[1]!.id}::uuid)` },
+  ];
+  for (const domain of domains) {
+    await page.getByRole('link', { name: domain.link, exact: true }).click();
+    const row = (code: string) => page.getByRole('row').filter({ has: page.getByText(code, { exact: true }) });
+    const toolbar = page.getByRole('toolbar', { name: `已选${domain.noun}`, exact: true });
+    await expect(toolbar).toHaveCount(0);
+    for (const record of domain.records) await row(record.code).getByRole('checkbox').check();
+    await expect(toolbar).toContainText('已选择 2 条');
+    const confirmation = page.getByRole('dialog', { name: `删除${domain.noun}`, exact: true });
+    if (domain.link === '供应商档案') {
+      await toolbar.getByRole('button', { name: '删除所选', exact: true }).click();
+      await confirmation.getByRole('button', { name: '取消', exact: true }).click();
+      await expect(confirmation).toHaveCount(0);
+      expect(await domain.remaining()).toHaveLength(2);
+      await page.locator('.ant-pagination-options .ant-select').click();
+      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^50 条\/页$/ }).click();
+      await expect(toolbar).toHaveCount(0);
+      for (const record of domain.records) {
+        await expect(row(record.code).getByRole('checkbox')).not.toBeChecked();
+        await row(record.code).getByRole('checkbox').check();
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(toolbar).toBeVisible();
+      const geometry = await toolbar.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const feedback = document.querySelector('.qms-feedback-button')!.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const probe = document.createElement('span'); probe.style.backgroundColor = 'var(--qms-surface)'; element.append(probe);
+        const themed = style.getPropertyValue('--qms-surface').trim().length > 0 && style.backgroundColor === getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { fixed: style.position === 'fixed', inViewport: bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight,
+          overlapsFeedback: bounds.left < feedback.right && bounds.right > feedback.left && bounds.top < feedback.bottom && bounds.bottom > feedback.top, themed };
+      });
+      expect(geometry).toEqual({ fixed: true, inViewport: true, overlapsFeedback: false, themed: true });
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    await toolbar.getByRole('button', { name: '删除所选', exact: true }).click();
+    await expect(confirmation).toContainText(`确认删除选中的 2 条${domain.noun}`);
+    const deleted = page.waitForResponse(response => new URL(response.url()).pathname === domain.path && response.request().method() === 'POST');
+    await confirmation.getByRole('button', { name: '删除', exact: true }).click();
+    const deletedResponse = await deleted;
+    expect(deletedResponse.status()).toBe(201);
+    const result = await deletedResponse.json() as Schema['MasterDataBulkDeleteResultDto'];
+    expect(result).toMatchObject({ deleted: domain.referenced ? 1 : 2, referenced: domain.referenced ? 1 : 0, conflicted: 0, notFound: 0 });
+    expect(result.items).toHaveLength(2);
+    for (const record of domain.records) expect(result.items).toContainEqual({ id: record.id, status: record.id === domain.referenced ? 'REFERENCED' : 'DELETED' });
+    const results = page.getByRole('status').filter({ hasText: '删除结果' });
+    for (const record of domain.records) await expect(results.getByRole('listitem').filter({ hasText: record.code })).toContainText(record.id === domain.referenced ? '仍有业务引用，不能删除' : '已删除');
+    await expect(confirmation).toHaveCount(0);
+    expect(await domain.remaining()).toEqual(domain.referenced ? [{ id: domain.referenced }] : []);
+    if (domain.referenced) {
+      await expect(toolbar).toContainText('已选择 1 条');
+      await expect(row(customers[0]!.code).getByRole('checkbox')).toBeChecked();
+      expect(await prisma.customerQualityCustomerRelation.findUniqueOrThrow({ where: { id: relation.id } })).toMatchObject({ customerId: domain.referenced, relationType: 'PRODUCT', relatedCode: `PRODUCT_${bulkSuffix}` });
+      await page.getByRole('link', { name: 'API入库衔接', exact: true }).click();
+      await expect(page.getByRole('toolbar', { name: '已选客户档案', exact: true })).toHaveCount(0);
+      await page.getByRole('link', { name: domain.link, exact: true }).click();
+      await expect(row(customers[0]!.code).getByRole('checkbox')).not.toBeChecked();
+    }
+    await expect(toolbar).toHaveCount(0);
   }
 });

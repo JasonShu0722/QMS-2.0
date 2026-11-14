@@ -8,6 +8,9 @@ import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, t
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
+import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
+import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
+import { componentMappingIsReferenced } from '../../common/master-data/master-data-deletion-references.read-model.js';
 import {
   ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
   ComponentProjectImportDto, type ComponentProjectImportItemDto, type ComponentProjectImportResultDto,
@@ -235,11 +238,20 @@ export class ComponentProjectService {
     const query = await this.input(ResolveComponentProjectQueryDto, { componentCode });
     const organization = await this.organizations.lookup(organizationId, transaction);
     if (organization?.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
-    return this.resolveCurrent(transaction, organizationId, query);
+    return this.resolveCurrent(transaction, organizationId, query, true);
   }
 
-  private async resolveCurrent(current: AdminTransaction, organizationId: string, query: ResolveComponentProjectQueryDto): Promise<ComponentProjectResolutionDto> {
-      const [row] = await current.$queryRaw<Stored<ComponentProjectMappingDto>[]>(Prisma.sql`SELECT ${mappingColumns} FROM component_project_mappings WHERE organization_id = ${organizationId}::uuid AND component_code = ${query.componentCode}`);
+  bulkDeleteMappings(actor: AdminActor, organizationId: string, input: MasterDataBulkDeleteDto, traceId: string, key?: string) {
+    const dto = validateMasterDataDeletion(input);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'COMPONENT_PROJECT_MAPPINGS_BULK_DELETED', payload: dto,
+      permission: 'component-project:manage', isolationLevel: 'ReadCommitted' },
+    transaction => deleteSelectedMasterData(transaction, this.audit, actor, organizationId, 'mapping', dto, traceId,
+      (current, id) => componentMappingIsReferenced(current, organizationId, id)),
+    transaction => this.internalScope(transaction, actor, organizationId));
+  }
+
+  private async resolveCurrent(current: AdminTransaction, organizationId: string, query: ResolveComponentProjectQueryDto, lock = false): Promise<ComponentProjectResolutionDto> {
+      const [row] = await current.$queryRaw<Stored<ComponentProjectMappingDto>[]>(Prisma.sql`SELECT ${mappingColumns} FROM component_project_mappings WHERE organization_id = ${organizationId}::uuid AND component_code = ${query.componentCode} ${lock ? Prisma.sql`FOR SHARE` : Prisma.empty}`);
       const mapping = row ? dates<ComponentProjectMappingDto>(row) : null;
       const project = mapping?.projectRecordId ? await this.project(current, organizationId, mapping.projectRecordId) : null;
       const now = new Date();

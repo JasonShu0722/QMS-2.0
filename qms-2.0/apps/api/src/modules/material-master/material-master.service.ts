@@ -4,6 +4,8 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { MaterialMasterDto, MaterialMasterImportRowDto, MaterialMasterImportItemDto } from './material-master.dto.js';
+import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
+import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
 
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
 function text(value: unknown, max: number): string {
@@ -24,6 +26,15 @@ export class MaterialMasterService {
   private async assertInternalOrganization(tx: AdminTransaction, organizationId: string) {
     const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { type: true } });
     if (organization?.type !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
+  }
+
+  bulkDeleteMaterials(actor: AdminActor, input: MasterDataBulkDeleteDto, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const dto = validateMasterDataDeletion(input);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'MATERIAL_MASTERS_BULK_DELETED', payload: dto,
+      permission: 'material-master:write', isolationLevel: 'ReadCommitted' },
+    transaction => deleteSelectedMasterData(transaction, this.audit, actor, organizationId, 'material', dto, traceId),
+    transaction => this.assertInternalOrganization(transaction, organizationId));
   }
 
   async listMaterials(actor: AdminActor): Promise<MaterialMasterDto[]> {

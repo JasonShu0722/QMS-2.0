@@ -8,15 +8,18 @@ import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { createSupplierMutation, supplierApi, supplierError, type ProfileInput, type ProfilePage, type SupplierProfile } from './supplierQuality';
 import { SupplierMasterImport } from './SupplierMasterImport';
 import { SupplierUsersPanel } from './SupplierUsersPanel';
+import { useMasterDataBulkDelete } from '../imports/MasterDataBulkDelete';
+import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
 
 type Props = { organizationId?: string; organizationPermissions?: string[]; onDenied?: (cause: ApiError) => void };
 const base = `${supplierApi(false)}/profiles`;
 export function SupplierProfilesPage(props: Props = {}) {
-  return <ProfilesContent key={props.organizationId ?? 'current'} {...props} />;
+  const epoch = useLedgerSessionEpoch();
+  return <ProfilesContent key={JSON.stringify([props.organizationId, epoch])} {...props} />;
 }
 
 function ProfilesContent({ organizationId, organizationPermissions, onDenied }: Props) {
-  const [pageSize, setPageSize] = useLedgerPageSize('supplier-profiles', organizationId);
+  const [pageSize, setPageSize] = useLedgerPageSize('supplier-profiles', organizationId, 1000);
   const { t } = useLanguage();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -30,11 +33,13 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
   const [notice, setNotice] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [denied, setDenied] = useState(false);
+  const [selection, setSelection] = useState<Record<string, Pick<SupplierProfile, 'id' | 'version'>>>({});
   const alive = useRef(true);
   const sequence = useRef(0);
   const granted = organizationPermissions ?? permissions;
   const canRead = !denied && granted.includes('supplier-quality:profiles:read');
   const canWrite = !denied && granted.includes('supplier-quality:profiles:write');
+  const deletion = useMasterDataBulkDelete({ organizationId, allowed: canRead && canWrite, disabled: loading || creating || Boolean(editing || accounts), path: `${base}/bulk-delete`, noun: '供应商档案', selection, setSelection, label: id => { const row = data?.items.find(item => item.id === id); return row ? `${row.businessCode} · ${row.displayName}` : id; }, onDeleted: () => reload(), onDenied: accountDenied });
   const scope = organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : '';
   function accountDenied(cause: ApiError) {
     if (!alive.current) return;
@@ -46,7 +51,7 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     setLoading(true);
     try {
       const result = await apiRequest<ProfilePage>(`${base}?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}${scope}`);
-      if (alive.current && request === sequence.current) { setData(result); setDenied(false); setError(undefined); }
+      if (alive.current && request === sequence.current) { setData(result); setDenied(false); setError(undefined); if (page > Math.max(1, Math.ceil(result.total / pageSize))) setPage(Math.max(1, Math.ceil(result.total / pageSize))); }
     } catch (cause) { if (alive.current && request === sequence.current) { setData(undefined); setError(cause); } if (reportFailure) throw cause; }
     finally { if (alive.current && request === sequence.current) setLoading(false); }
   }
@@ -74,16 +79,17 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     } catch (cause) { if (alive.current) setError(cause); }
     finally { if (alive.current) setExporting(false); }
   }
-  return <section aria-label={t('供应商档案')}>
+  return <section className={deletion.selectedClass} aria-label={t('供应商档案')}>
+    {deletion.feedback}{deletion.controls}
     {notice ? <Alert type="success" title={t('供应商资料已保存')} /> : null}
-    {error ? <Alert type="error" title={t(supplierError(error))} action={granted.includes('supplier-quality:profiles:read') ? <Button onClick={() => void reload()}>{t('重新加载')}</Button> : undefined} /> : null}
-    {canRead ? <><Space wrap><Input.Search aria-label={t('搜索供应商资料')} placeholder={t('搜索供应商名称或业务编码')} maxLength={100} allowClear onSearch={(value) => { setSearch(value); setPage(1); }} /><Button loading={loading} onClick={() => void reload()}>{t('重新加载')}</Button><Button loading={exporting} disabled={loading || !data?.items.length} onClick={() => void exportPage()}>{t('导出当前页供应商清单')}</Button></Space>
-      <LedgerTable<SupplierProfile> ledgerId="supplier-profiles" organizationId={organizationId} requiredColumnKeys={['businessCode', 'actions']} rowKey="id" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 800 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
+    {error ? <Alert type="error" title={t(supplierError(error))} action={granted.includes('supplier-quality:profiles:read') ? <Button disabled={deletion.busy} onClick={() => { setSelection({}); void reload(); }}>{t('重新加载')}</Button> : undefined} /> : null}
+    {canRead ? <><Space wrap><Input.Search aria-label={t('搜索供应商资料')} placeholder={t('搜索供应商名称或业务编码')} maxLength={100} disabled={deletion.busy} allowClear onSearch={(value) => { if (!deletion.busy) { setSelection({}); setSearch(value); setPage(1); } }} /><Button loading={loading} disabled={deletion.busy} onClick={() => { setSelection({}); void reload(); }}>{t('重新加载')}</Button><Button loading={exporting} disabled={loading || deletion.busy || !data?.items.length} onClick={() => void exportPage()}>{t('导出当前页供应商清单')}</Button></Space>
+      <LedgerTable<SupplierProfile> ledgerId="supplier-profiles" organizationId={organizationId} requiredColumnKeys={['businessCode', 'actions']} rowKey="id" loading={loading} dataSource={data?.items ?? []} rowSelection={deletion.rowSelection(data?.items ?? [])} scroll={{ x: 800 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: deletion.busy, onChange: (next, size) => { if (!deletion.busy) { setSelection({}); setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[
         { key: 'businessCode', title: t('业务编码'), dataIndex: 'businessCode' }, { key: 'displayName', title: t('供应商名称'), dataIndex: 'displayName' }, { key: 'contactName', title: t('联系人'), dataIndex: 'contactName' }, { key: 'contactEmail', title: t('联系邮箱'), dataIndex: 'contactEmail' },
         { key: 'collaboration', title: t('协作边界'), render: (_, row) => t(row.supplierOrganizationId ? '已开通协作' : '未开通协作') },
-        { key: 'actions', title: t('操作'), render: (_, profile) => <Space wrap>{canWrite ? <Button onClick={() => { setEditing(profile); setNotice(false); }}>{t('编辑资料')}</Button> : null}<Button onClick={() => setAccounts(profile)}>{t('供应商用户账号')}</Button></Space> },
+        { key: 'actions', title: t('操作'), render: (_, profile) => <Space wrap>{canWrite ? <Button disabled={deletion.busy} onClick={() => { setEditing(profile); setNotice(false); }}>{t('编辑资料')}</Button> : null}<Button disabled={deletion.busy} onClick={() => setAccounts(profile)}>{t('供应商用户账号')}</Button></Space> },
       ]} /></> : <Alert type="info" title={t('没有供应商档案查看权限')} />}
-    {canWrite ? <Space wrap><Button onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Space> : null}
+    {canWrite ? <Space wrap><Button disabled={deletion.busy} onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><Form component={false} disabled={deletion.busy}><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Form></Space> : null}
     {canWrite && creating ? <ProfileCreator organizationId={organizationId} saved={saved} close={() => setCreating(false)} /> : null}
     {editing ? <ProfileEditor key={editing.id} organizationId={organizationId} record={editing} saved={saved} close={() => setEditing(undefined)} /> : null}
     {accounts ? <SupplierUsersPanel key={accounts.id} profile={accounts} organizationId={organizationId} organizationPermissions={granted} onBound={canRead ? reload : () => undefined} onClose={() => setAccounts(undefined)} onDenied={accountDenied} /> : null}

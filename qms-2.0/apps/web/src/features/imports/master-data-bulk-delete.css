@@ -1,0 +1,7 @@
+.qms-master-delete--selected { padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+.qms-master-delete-bar { position: fixed; z-index: 30; inset-inline-start: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 160px); padding: 8px 12px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); color: var(--qms-text); box-shadow: 0 3px 12px rgb(0 0 0 / 12%); }
+.qms-master-delete-bar > span { white-space: nowrap; }
+.qms-master-delete-results { overflow-wrap: anywhere; }
+.qms-master-delete-results ul { max-height: 240px; overflow: auto; }
+@media (max-width: 640px) { .qms-master-delete--selected { padding-bottom: calc(224px + env(safe-area-inset-bottom, 0px)); } }
+@media (pointer: coarse) { .qms-master-delete-bar button { min-height: 44px; min-width: 44px; } }

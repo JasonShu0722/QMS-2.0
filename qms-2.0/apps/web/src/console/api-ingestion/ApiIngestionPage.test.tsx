@@ -235,8 +235,21 @@ it('resolves interface names beyond the first lookup page', async () => {
   view(); expect(await screen.findByText('第二页供应商接收')).toBeVisible();
   expect(read.mock.calls.some(call => call[0].includes('/ingestion/endpoints?') && call[0].includes('page=2'))).toBe(true);
 });
-it('clears the page when a preview receives a permission refusal', async () => {
-  mocks.mutate.mockRejectedValueOnce(new ApiError({ code: 'INGESTION_AUTHORIZATION_REVOKED', message: 'Denied', fields: {}, traceId: 'trace' }, 403));
+it('keeps the scoped ingestion form editable and retryable after reauthentication is cancelled', async () => {
+  let reject!: (cause: unknown) => void;
+  mocks.mutate.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; })).mockResolvedValueOnce({ previewId: 'preview-after-cancel', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', fields: { code: 'RETRIED' } });
+  view(); const row = (await screen.findByText('供应商规则')).closest('tr')!; fireEvent.click(within(row).getByRole('button', { name: '历史批量导入' }));
+  const dialog = within(screen.getByRole('dialog', { name: `历史批量导入 · ${rule.name}` }));
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' })); await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
+  await act(async () => reject(new ApiError({ code: 'CLIENT_REAUTHENTICATION_CANCELLED', message: 'Reauthentication cancelled' }, 400)));
+  expect(mocks.invalidate).not.toHaveBeenCalled(); expect(screen.queryByText('无权访问API入库衔接')).not.toBeInTheDocument();
+  expect(dialog.getByLabelText('接收时间止')).toBeEnabled(); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeEnabled(); expect(dialog.queryByRole('button', { name: '重试原请求' })).not.toBeInTheDocument();
+  fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T13:00' } }); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  await dialog.findByText('RETRIED'); expect(mocks.mutate).toHaveBeenCalledTimes(2); expect(mocks.mutate.mock.calls[1]?.[2]).toMatchObject({ to: new Date('2026-11-13T13:00').toISOString() });
+});
+it.each([401, 403])('clears the page when a preview receives a permission refusal %s', async status => {
+  mocks.mutate.mockRejectedValueOnce(new ApiError({ code: 'INGESTION_AUTHORIZATION_REVOKED', message: 'Denied', fields: {}, traceId: 'trace' }, status));
   view(); const row = (await screen.findByText('供应商规则')).closest('tr')!; fireEvent.click(within(row).getByRole('button', { name: '历史批量导入' }));
   const dialog = within(screen.getByRole('dialog', { name: `历史批量导入 · ${rule.name}` }));
   fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });

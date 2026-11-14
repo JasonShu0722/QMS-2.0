@@ -13,6 +13,8 @@ import { configurationPath } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
 import { ComponentProjectImport } from './ComponentProjectImport';
 import { personLabel } from '../../ui/personLabel';
+import { useMasterDataBulkDelete } from '../imports/MasterDataBulkDelete';
+import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
 
 type Project = components['schemas']['ComponentProjectRecordDto'];
 type ProjectDisplay = Pick<Project, 'id' | 'code' | 'name' | 'stage' | 'status'>;
@@ -53,7 +55,8 @@ const english: Record<string, string> = {
   '新增组件': 'Add component', '组件名称': 'Component name', '选择项目': 'Select project', '编辑项目资料': 'Edit project details',
   '未映射': 'Unmapped', '尚未关联项目，可稍后完善映射。': 'No project is linked. Complete the mapping later.',
   '产品大类未配置': 'Product category not configured', '产品大类未配置，可稍后完善。': 'No product category is configured. Complete it later.',
-  '已选择 {count} / 100': 'Selected {count} / 100', '清除选择': 'Clear selection',
+  '已选择 {count} / 1000': 'Selected {count} / 1000', '清除选择': 'Clear selection',
+  '批量设置最多100条': 'Bulk changes support up to 100 records',
   '查看项目': 'View project', '关闭编辑器': 'Close editor',
   '批量设置': 'Bulk changes', '预览影响': 'Preview impact', '确认应用': 'Confirm and apply', '请至少选择一个批量字段': 'Enable at least one field',
   '设置关联项目': 'Set project', '设置项目阶段': 'Set project stage', '设置客户质量工程师': 'Set customer quality engineer', '设置项目质量工程师': 'Set project quality engineer',
@@ -207,11 +210,12 @@ function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady,
 
 export function ComponentProjectAdministration({ organization }: { organization: AdminOrganization }) {
   const session = useWorkTabsStore(state => state.sessionScope);
+  const epoch = useLedgerSessionEpoch();
   const wasBound = useRef(!!session);
   if (session) wasBound.current = true;
   // Session reset can render before the login navigation commits; do not remount readers in that gap.
   if (wasBound.current && !session) return null;
-  return <ComponentProjectScope key={JSON.stringify([session, organization.id, [...organization.permissions].sort()])} organization={organization} />;
+  return <ComponentProjectScope key={JSON.stringify([session, epoch, organization.id, [...organization.permissions].sort()])} organization={organization} />;
 }
 
 function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange, onUnauthorized }: {
@@ -334,7 +338,7 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
 }
 
 function ComponentProjectScope({ organization }: { organization: AdminOrganization }) {
-  const [preferredPageSize, setPageSize] = useLedgerPageSize('component-project-mappings', organization.id);
+  const [preferredPageSize, setPageSize] = useLedgerPageSize('component-project-mappings', organization.id, 1000);
   const t = useCopy();
   const navigate = useNavigate();
   const requestLeave = useNavigationGuard();
@@ -372,9 +376,10 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const projectController = useRef<AbortController | undefined>(undefined);
   const read = organization.permissions.includes('component-project:read');
   const manage = read && organization.permissions.includes('component-project:manage');
+  const deletion = useMasterDataBulkDelete({ organizationId: organization.id, allowed: manage && !sessionEnded, disabled: loading || saving || projectLoading || bulkOpen || bulkBusy || Boolean(editor), path: configurationPath(organization.id, 'component-project-mappings/bulk-delete').split('?')[0], noun: '组件项目映射', selection, setSelection, label: id => { const row = mappings?.items.find(item => item.id === id); return row ? `${row.componentCode} · ${row.componentName ?? ''}` : id; }, onDeleted: () => { if (current()) setRevision(next => next + 1); }, onDenied: cause => { setMappings(undefined); setSelection({}); setEditor(undefined); setSessionEnded(true); reportError(cause); } });
   const current = () => alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope;
   useUnsavedChanges(!!editor && (dirty || !!uncertain));
-  const busy = saving || projectLoading || bulkBusy;
+  const busy = saving || projectLoading || bulkBusy || deletion.busy;
   useNavigationBusy(busy);
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
@@ -402,7 +407,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     const params = new URLSearchParams({ search: query.search, page: String(query.page), pageSize: String(query.pageSize) });
     if (query.configuration) params.set('configuration', query.configuration);
     const path = configurationPath(organization.id, 'component-project-mappings');
-    const request = apiRequest<MappingsPage>(`${path}&${params}`, { signal: controller.signal }).then(next => { if (valid()) setMappings({ ...next, items: next.items.filter(item => item.organizationId === organization.id) }); });
+    const request = apiRequest<MappingsPage>(`${path}&${params}`, { signal: controller.signal }).then(next => { if (valid()) { setMappings({ ...next, items: next.items.filter(item => item.organizationId === organization.id) }); const lastPage = Math.max(1, Math.ceil(next.total / query.pageSize)); if (query.page > lastPage) setQuery(previous => ({ ...previous, page: lastPage })); } });
     void request.catch(cause => { if (valid()) reportError(cause); }).finally(() => { if (valid()) setLoading(false); });
     return () => { active = false; controller.abort(); };
   }, [organization.id, read, query, revision, session, reportError]);
@@ -491,11 +496,12 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   if (!read) return <Alert type="info" showIcon title={t('无组件项目映射读取权限')} />;
   const statusOptions = [{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }];
   const empty = error ? t('加载失败') : query.search ? t('无匹配结果') : t('暂无数据');
-  const pagination = { current: query.page, pageSize: query.pageSize, total: mappings?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || loading, onChange: (page: number, pageSize: number) => leave(() => { setPageSize(pageSize); setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize })); }) };
+  const pagination = { current: query.page, pageSize: query.pageSize, total: mappings?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy || loading, onChange: (page: number, pageSize: number) => { if (!busy) leave(() => { setPageSize(pageSize); setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize })); }); } };
   const text = (value: string) => <Typography.Text ellipsis={{ tooltip: value }} style={{ maxWidth: '100%' }}>{value}</Typography.Text>;
   const required = [{ required: true, whitespace: true, message: t('请填写必填内容') }];
   const frozen = busy || !!uncertain;
-  return <section className="governance-panel" aria-label={t('组件项目映射')} style={{ minWidth: 0 }}>
+  return <section className={`governance-panel ${deletion.selectedClass ?? ''}`} aria-label={t('组件项目映射')} style={{ minWidth: 0 }}>
+    {deletion.feedback}{deletion.controls}
     {notice && <Typography.Paragraph role="status">{t('已更新 {mappings} 条组件资料、{projects} 个项目；影响 {affected} 条组件。').replace('{mappings}', String(notice.updatedMappingCount)).replace('{projects}', String(notice.updatedProjectCount)).replace('{affected}', String(notice.affectedComponentCount))}</Typography.Paragraph>}
     {!editor && <GovernanceFeedback error={error} retry={loading || busy ? undefined : refresh} />}
     <div className="governance-toolbar">
@@ -508,21 +514,9 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       <Select aria-label={t('配置状态')} value={query.configuration} disabled={busy} style={{ minWidth: 140 }} options={[{ value: '', label: t('全部配置状态') }, { value: 'PENDING', label: t('待配置') }, { value: 'CONFIGURED', label: t('已配置') }]} onChange={configuration => leave(() => setQuery({ ...query, configuration, page: 1 }))} />
       {!manage && <Typography.Text>{t('只读')}</Typography.Text>}
     </div>
-    {manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 100').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
+    {manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 1000').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Tooltip title={Object.keys(selection).length > 100 ? t('批量设置最多100条') : undefined}><Button disabled={busy || bulkOpen || !Object.keys(selection).length || Object.keys(selection).length > 100} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button></Tooltip><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
     <LedgerTable<Mapping> ledgerId="component-project-mappings" organizationId={organization.id} requiredColumnKeys={['componentCode', 'actions']} rowKey="id" loading={loading} dataSource={mappings?.items ?? []} scroll={{ x: 1550 }} pagination={pagination}
-      rowSelection={manage ? { selectedRowKeys: Object.keys(selection), preserveSelectedRowKeys: true,
-        getCheckboxProps: record => ({ disabled: busy || bulkOpen || !selection[record.id] && Object.keys(selection).length >= 100 }),
-        onChange: keys => {
-          if (busy || bulkOpen || keys.length > 100) return;
-          const next: typeof selection = {};
-          for (const key of keys) {
-            const id = String(key); const record = mappings?.items.find(item => item.id === id);
-            const captured = selection[id] ?? (record ? { id: record.id, version: record.version } : undefined);
-            if (captured) next[id] = captured;
-          }
-          setSelection(next);
-        },
-      } : undefined}
+      rowSelection={deletion.rowSelection(mappings?.items ?? [], true)}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> }} columns={[
         { key: 'componentCode', title: t('组件编码'), dataIndex: 'componentCode', width: 160, render: text },
         { key: 'componentName', title: t('组件名称'), dataIndex: 'componentName', width: 200, render: value => value ? text(value) : '—' },

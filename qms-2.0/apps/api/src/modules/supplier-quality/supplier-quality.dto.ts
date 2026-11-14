@@ -11,6 +11,10 @@ export class SupplierScopeQueryDto {
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) search?: string;
 }
 
+export class SupplierProfilesQueryDto extends SupplierScopeQueryDto {
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 1000 }) @Type(() => Number) @IsInt() @Min(1) @Max(1000) override pageSize = 20;
+}
+
 export class CreateSupplierProfileDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() supplierOrganizationId?: string;
