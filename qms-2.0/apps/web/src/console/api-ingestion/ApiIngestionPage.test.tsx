@@ -121,6 +121,24 @@ it('keeps a failed preview editable and retries the changed preview request', as
   fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T13:00' } }); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
   await dialog.findByText('002'); expect(mocks.mutate.mock.calls[1]?.[2]).toMatchObject({ to: new Date('2026-11-13T13:00').toISOString() });
 });
+it('confirms a historical receipt snapshot while its row count is still being counted in the background', async () => {
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-counting', receiptCount: 101, rowCount: null, expiresAt: '2099-11-14T03:00:00Z' }).mockResolvedValueOnce({ jobIds: ['job-counting'], reused: false, receiptCount: 101, rowCount: null });
+  const dialog = previewView(true);
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
+  await waitFor(() => expect(preview.getByText('数据条数: 后台统计')).toBeVisible()); expect(preview.getByText('接收份数: 101')).toBeVisible(); expect(preview.getByRole('button', { name: '确认导入' })).toBeEnabled();
+  fireEvent.click(preview.getByRole('button', { name: '确认导入' }));
+  const submitted = await dialog.findByRole('status'); expect(submitted).toHaveTextContent('数据条数: 后台统计'); expect(submitted).toHaveTextContent('任务数: 1');
+  expect(mocks.mutate.mock.calls[1]?.[2]).toEqual({ organizationId: homeId, previewId: 'preview-counting', confirmed: true });
+});
+it('keeps a historical preview with no matching receipts unavailable for confirmation', async () => {
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-empty', receiptCount: 0, rowCount: null, expiresAt: '2099-11-14T03:00:00Z' });
+  const dialog = previewView(true);
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  expect(await dialog.findByRole('button', { name: '确认导入' })).toBeDisabled(); expect(mocks.mutate).toHaveBeenCalledTimes(1);
+});
 it('lets a single preview close after a failed request while keeping an in-flight request protected', async () => {
   let reject!: (cause: unknown) => void; const close = vi.fn();
   mocks.mutate.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
@@ -171,7 +189,7 @@ it.each([
   if (!otherDraft) { fireEvent.click(pageTab('规则')); await screen.findByText('供应商规则'); expect(pageTab('规则')).toHaveAttribute('aria-selected', 'true'); }
 });
 it.each([
-  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 422, '本次预览最多100份接收记录、10000条数据，请缩短接收时间范围'],
+  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 422, '请重新生成历史预览'],
   ['INGESTION_PREVIEW_LIMIT_EXCEEDED', 429, '临时预览已达上限，请稍后重试'],
 ] as const)('explains the controlled %s failure without locking preview inputs', async (code, status, message) => {
   mocks.mutate.mockRejectedValueOnce(new ApiError({ code, message: 'Limit', fields: {}, traceId: 'trace' }, status));
@@ -179,7 +197,7 @@ it.each([
   await dialog.findByText(message); expect(dialog.getByLabelText('接收时间起')).toBeEnabled(); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeEnabled();
 });
 it.each([
-  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 'This preview is limited to 100 receiving records and 10,000 rows. Shorten the time range.'],
+  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 'Generate a new historical preview.'],
   ['INGESTION_PREVIEW_LIMIT_EXCEEDED', 'Temporary preview capacity is full. Retry later.'],
 ] as const)('explains the controlled %s failure in English', (code, message) => {
   localStorage.setItem('qms:locale:v1', 'en-US'); componentView(<IngestionError error={new ApiError({ code, message: 'Limit', fields: {}, traceId: 'trace' }, 429)} />);
@@ -288,6 +306,65 @@ it('allows retrying a blocked job even when failure occurred before selecting an
   fireEvent.change(control.getByLabelText('操作原因'), { target: { value: '接口和配置授权已恢复' } }); fireEvent.click(control.getByRole('button', { name: '确认操作' }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
   expect(mocks.mutate.mock.calls[0]?.slice(0, 3)).toEqual([`/api/v1/admin/integrations/ingestion/jobs/${jobId}/control`, 'POST', { organizationId: homeId, action: 'RETRY', reason: '接口和配置授权已恢复' }]);
+});
+it.each([null, 12000])('shows an unexpanded historical job as preparing with total %s and allows cancellation before items exist', async total => {
+  const jobId = '66666666-6666-4666-8666-666666666666';
+  const job = { id: jobId, endpointId, receiptId: null, parentJobId: null, planningPreviewId: 'preview-planning', planned: 98, receiptCount: 101, ruleId, ruleVersion: 2, target: 'SUPPLIER', source: 'HISTORY', status: 'PENDING', sequence: 1, total, expansionComplete: false, pending: 0, succeeded: 0, skipped: 0, failed: 0, awaitingConfirmation: 0, errorCode: null, createdAt: '2026-11-14T02:00:00Z' };
+  const original = read.getMockImplementation()!;
+  read.mockImplementation(async (path, ...args) => {
+    if (path.includes(`/jobs/${jobId}/items`)) return { items: [], total: 0, page: 1, limit: 20 } as never;
+    if (path.includes(`/jobs/${jobId}?`)) return job as never;
+    if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
+    return original(path, ...args);
+  });
+  mocks.mutate.mockResolvedValue({ ...job, status: 'CANCELLED' });
+  jobsView(); const openJob = await screen.findByLabelText('查看任务1'); const row = within(openJob.closest('tr')!);
+  expect(row.getByText('准备中')).toBeVisible(); expect(row.getByText('接收准备进度 98/101')).toBeVisible(); expect(row.getByText(total === null ? '总数 后台统计' : '总数 12000')).toBeVisible(); expect(row.queryByText('已完成')).not.toBeInTheDocument();
+  await act(async () => { fireEvent.click(openJob); });
+  const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
+  await waitFor(() => expect(jobDialog.getByText('准备中')).toBeVisible());
+  const cancel = jobDialog.getByText('取消任务', { selector: 'button span' }).closest('button')!; await waitFor(() => expect(cancel).toBeEnabled()); fireEvent.click(cancel);
+  const controlDialog = within(await screen.findByRole('dialog', { name: '取消任务' }));
+  fireEvent.change(controlDialog.getByLabelText('操作原因'), { target: { value: '停止尚未展开的历史导入' } }); fireEvent.click(controlDialog.getByText('确认操作', { selector: 'button span' }).closest('button')!);
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
+  expect(mocks.mutate.mock.calls[0]?.slice(0, 3)).toEqual([`/api/v1/admin/integrations/ingestion/jobs/${jobId}/control`, 'POST', { organizationId: homeId, action: 'CANCEL', reason: '停止尚未展开的历史导入' }]);
+});
+it('opens child item differences from a historical parent job without treating its receiving snapshot as removed', async () => {
+  const jobId = '66666666-6666-4666-8666-666666666666'; const childJobId = '88888888-8888-4888-8888-888888888888'; const itemId = '77777777-7777-4777-8777-777777777777';
+  const job = { id: jobId, endpointId, receiptId: null, parentJobId: null, planningPreviewId: 'preview-parent', planned: 1, receiptCount: 101, ruleId, ruleVersion: 2, target: 'SUPPLIER', source: 'HISTORY', status: 'PENDING', sequence: 1, total: null, expansionComplete: false, pending: 0, succeeded: 0, skipped: 0, failed: 0, awaitingConfirmation: 1, errorCode: null, createdAt: '2026-11-14T02:00:00Z' };
+  const item = { id: itemId, jobId: childJobId, receiptId, rowIndex: 0, status: 'AWAITING_CONFIRMATION', errorCode: null, targetId: 'target', targetVersion: 1, version: 3 };
+  const original = read.getMockImplementation()!;
+  read.mockImplementation(async (path, ...args) => {
+    if (path.includes(`/items/${itemId}`)) return { ...item, stale: false, differences: [{ field: 'name', before: '旧名称', after: '新名称' }] } as never;
+    if (path.includes(`/jobs/${jobId}/items`)) return { items: [item], total: 1, page: 1, limit: 20 } as never;
+    if (path.includes(`/jobs/${jobId}?`)) return job as never;
+    if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
+    return original(path, ...args);
+  });
+  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  const dialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
+  const viewDifferences = (await dialog.findByText('查看差异', { selector: 'button span' })).closest('button')!;
+  expect(dialog.queryByText('接收记录已清理')).not.toBeInTheDocument(); await waitFor(() => expect(dialog.getByText('历史接收集合')).toBeVisible()); expect(mocks.invalidate).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.click(viewDifferences); }); const detail = within((await screen.findByText('数组第1行', { selector: '.ant-modal-title' })).closest('[role="dialog"]')!);
+  const updatedName = await detail.findByText('新名称');
+  await waitFor(() => expect(updatedName).toBeVisible()); expect(detail.getByText('确认更新', { selector: 'button span' }).closest('button')).toBeEnabled(); expect(mocks.invalidate).not.toHaveBeenCalled();
+});
+it.each([
+  { status: 'COMPLETED', expansionComplete: false }, { status: 'CANCELLED', expansionComplete: false },
+  { status: 'COMPLETED', expansionComplete: undefined }, { status: 'PENDING', expansionComplete: undefined },
+])('does not prepare or cancel a zero-item $status job with expansionComplete=$expansionComplete', async ({ status, expansionComplete }) => {
+  const jobId = '66666666-6666-4666-8666-666666666666';
+  const job = { id: jobId, endpointId, receiptId, ruleId, ruleVersion: 2, target: 'SUPPLIER', source: 'HISTORY', status, sequence: 1, total: 0, expansionComplete, pending: 0, succeeded: 0, skipped: 0, failed: 0, awaitingConfirmation: 0, errorCode: null, createdAt: '2026-11-14T02:00:00Z' };
+  const original = read.getMockImplementation()!;
+  read.mockImplementation(async (path, ...args) => {
+    if (path.includes(`/jobs/${jobId}/items`)) return { items: [], total: 0, page: 1, limit: 20 } as never;
+    if (path.includes(`/jobs/${jobId}?`)) return job as never;
+    if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
+    return original(path, ...args);
+  });
+  jobsView(); const openJob = await screen.findByLabelText('查看任务1'); expect(within(openJob.closest('tr')!).queryByText('准备中')).not.toBeInTheDocument();
+  fireEvent.click(openJob); const dialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
+  await dialog.findByText('接收编号'); expect(dialog.queryByText('准备中')).not.toBeInTheDocument(); expect(dialog.getByText('取消任务', { selector: 'button span' }).closest('button')).toBeDisabled();
 });
 it('locates a failed preview using its controlled source field without displaying raw error codes', async () => {
   mocks.mutate.mockResolvedValue({ previewId: 'preview-invalid', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'VALIDATION_FAILED', errorCode: 'INGESTION_FIELD_MISSING', errorField: 'supplier.code', differences: [] });

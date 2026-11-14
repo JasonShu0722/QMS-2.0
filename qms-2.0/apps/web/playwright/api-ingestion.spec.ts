@@ -173,7 +173,7 @@ test('administrator configures ingestion and real compiled Worker imports four t
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
-test('stale recent authentication can preview and import while an oversized history remains editable and closable', async ({ page }) => {
+test('historical imports accept more than 100 receipts and 10000 rows with real background processing', async ({ page }) => {
   await login(page);
   const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
   const user = await prisma.user.findUniqueOrThrow({ where: { organizationId_username: { organizationId: organization.id, username: 'local.internal' } } });
@@ -198,6 +198,7 @@ test('stale recent authentication can preview and import while an oversized hist
   const normal = receipts[0]!;
   await prisma.integrationReceipt.updateMany({ where: { endpointId: endpoint.id }, data: { receivedAt: new Date(Date.now() - 3_600_000) } });
   await prisma.integrationReceipt.update({ where: { id: normal.id }, data: { receivedAt: new Date(Date.now() - 120_000) } });
+  await prisma.$executeRaw`UPDATE integration_receipts SET row_count=NULL WHERE endpoint_id=${endpoint.id}::uuid`;
   const activeSession = await prisma.session.findFirstOrThrow({ where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
   const oldReauthenticatedAt = activeSession.reauthenticatedAt;
   const reauthRequests: string[] = [];
@@ -224,40 +225,63 @@ test('stale recent authentication can preview and import while an oversized hist
     const localTime = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     await history.getByLabel('接收时间起', { exact: true }).fill(localTime(new Date(Date.now() - 7_200_000)));
     await history.getByLabel('接收时间止', { exact: true }).fill(localTime(new Date(Date.now() - 1_000)));
-    const limited = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports/preview` && response.request().method() === 'POST');
+    const historicalPreview = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports/preview` && response.request().method() === 'POST');
     await history.getByRole('button', { name: '生成预览', exact: true }).click();
-    const limitResponse = await limited;
-    expect(limitResponse.status()).toBe(422);
-    expect(await limitResponse.json()).toMatchObject({ code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' });
-    await expect(history.getByRole('alert')).toContainText('本次预览最多100份接收记录、10000条数据，请缩短接收时间范围');
-    await expect(history.getByLabel('接收时间起', { exact: true })).toBeEnabled();
-    await expect(history.getByRole('button', { name: '关闭', exact: true })).toBeEnabled();
-    await history.getByRole('button', { name: '关闭', exact: true }).click();
-    await page.getByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。', exact: true }).getByRole('button', { name: '放弃修改并关闭', exact: true }).click();
-    await expect(history).toHaveCount(0);
-
-    await row.getByRole('button', { name: '历史批量导入', exact: true }).click();
-    await history.getByLabel('接收时间起', { exact: true }).fill(localTime(new Date(Date.now() - 300_000)));
-    await history.getByLabel('接收时间止', { exact: true }).fill(localTime(new Date(Date.now() - 1_000)));
-    const normalPreview = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports/preview` && response.request().method() === 'POST');
-    await history.getByRole('button', { name: '生成预览', exact: true }).click();
-    const normalResponse = await normalPreview;
-    expect(normalResponse.status()).toBe(201);
-    expect(await normalResponse.json()).toMatchObject({ receiptCount: 1, rowCount: 1 });
+    const previewResponse = await historicalPreview;
+    expect(previewResponse.status()).toBe(201);
+    expect(await previewResponse.json()).toMatchObject({ receiptCount: 101, rowCount: null });
+    await expect(history.getByText('数据条数: 后台统计', { exact: true })).toBeVisible();
+    await expect(history.getByRole('button', { name: '确认导入', exact: true })).toBeEnabled();
     const imported = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports` && response.request().method() === 'POST');
     await history.getByRole('button', { name: '确认导入', exact: true }).click();
     const importResponse = await imported;
     expect(importResponse.status()).toBe(201);
     const result = await importResponse.json() as Schema['IngestionImportResultDto'];
     expect(result.jobIds).toHaveLength(1);
+    expect(result.receiptCount).toBe(101);
     await history.getByRole('button', { name: '查看处理任务', exact: true }).click();
     await expect(page.getByRole('tab', { name: '处理任务', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page).toHaveURL(/\/console\/api-ingestion$/);
     const jobs = await positionRead<Schema['IngestionJobPageDto']>(page.request, `${root}/jobs?receiptId=${normal.id}`);
     expect(jobs.items.map(job => job.id)).toEqual(result.jobIds);
     await expect(page.getByRole('row').filter({ hasText: endpoint.name }).getByRole('button', { name: `查看任务${jobs.items[0]!.sequence}`, exact: true })).toBeVisible();
+    let batch = await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${result.jobIds[0]}`);
+    for (let cycle = 0; cycle < 4 && batch.status !== 'COMPLETED'; cycle++) {
+      await worker();
+      batch = await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${result.jobIds[0]}`);
+    }
+    expect(batch).toMatchObject({ status: 'COMPLETED', total: 101, succeeded: 101, expansionComplete: true });
+    expect(await prisma.customerQualityCustomer.count({ where: { organizationId: organization.id, code: { startsWith: `RC_${recoverySuffix.toUpperCase()}_` } } })).toBe(101);
+    await page.getByRole('button', { name: '刷新任务', exact: true }).click();
+    await page.getByRole('row').filter({ hasText: endpoint.name }).getByRole('button', { name: `查看任务${batch.sequence}`, exact: true }).click();
+    const batchDetail = page.getByRole('dialog', { name: `${endpoint.name} · #${batch.sequence}`, exact: true });
+    await expect(batchDetail.getByRole('button', { name: '查看差异', exact: true }).first()).toBeVisible();
+    await expect(batchDetail.getByText('历史接收集合', { exact: true })).toBeVisible();
+    await batchDetail.getByRole('button', { name: '关闭', exact: true }).click();
+
+    const largeBody = JSON.stringify(Array.from({ length: 10001 }, (_, ordinal) => ({ code: `BIG_${recoverySuffix}_${ordinal}`, name: `历史大数组${ordinal}` })));
+    const largeResponse = await fetch(new URL(`/api/v1/integrations/inbound/${endpoint.code}/messages`, baseURL), {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000), headers: { Authorization: `Bearer ${credential.secret!}`, 'Content-Type': 'application/json' }, body: largeBody,
+    });
+    expect(largeResponse.status).toBe(200);
+    expect(await largeResponse.json()).toBe(true);
+    const largeReceipt = await prisma.integrationReceipt.findFirstOrThrow({ where: { endpointId: endpoint.id }, orderBy: { receivedAt: 'desc' } });
+    const largePreview = await positionWrite<Schema['IngestionPreviewDto']>(page.request, `${root}/imports/preview`, 'POST', {
+      ruleId: rule.id, ruleVersion: rule.version, from: new Date(largeReceipt.receivedAt.getTime() - 1).toISOString(), to: new Date().toISOString(),
+    }, 201);
+    expect(largePreview).toMatchObject({ receiptCount: 1, rowCount: 10001 });
+    const largeImport = await positionWrite<Schema['IngestionImportResultDto']>(page.request, `${root}/imports`, 'POST', { previewId: largePreview.previewId, confirmed: true }, 201);
+    expect(largeImport.jobIds).toHaveLength(1);
+    expect(largeImport).toMatchObject({ receiptCount: 1, rowCount: 10001 });
+    await worker();
+    const largeTask = await positionRead<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${largeImport.jobIds[0]}`);
+    expect(largeTask.status).toBe('PENDING');
+    expect(largeTask.pending + largeTask.succeeded).toBeGreaterThan(0);
     expect(reauthRequests).toHaveLength(0);
     expect((await prisma.session.findUniqueOrThrow({ where: { id: activeSession.id } })).reauthenticatedAt!.getTime()).toBeLessThan(Date.now() - 540_000);
+    await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: oldReauthenticatedAt } });
+    const cancelled = await positionWrite<Schema['IngestionJobDto']>(page.request, `${root}/jobs/${largeImport.jobIds[0]}/control`, 'POST', { action: 'CANCEL', reason: '浏览器验收核对大数组分段推进后主动取消余量' }, 201);
+    expect(cancelled.status).toBe('CANCELLED');
   } finally {
     await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: oldReauthenticatedAt } });
   }

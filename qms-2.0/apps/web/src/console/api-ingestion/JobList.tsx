@@ -30,7 +30,7 @@ export function JobList({ scope, endpoints, receiptId, clearReceipt, canReceipts
 }
 function JobCounts({ job }: { job: Job }) {
   const text = useIngestionText();
-  return <div className="qms-ingestion-counts"><span>{text('总数', 'Total')} {job.total}</span><span>{text('待处理', 'Pending')} {job.pending}</span><span>{text('成功', 'Succeeded')} {job.succeeded}</span><span>{text('跳过', 'Skipped')} {job.skipped}</span><span>{text('失败', 'Failed')} {job.failed}</span><span>{text('待确认', 'To confirm')} {job.awaitingConfirmation}</span></div>;
+  return <div className="qms-ingestion-counts">{job.expansionComplete === false && job.status !== 'CANCELLED' && job.status !== 'COMPLETED' && <span>{text('准备中', 'Preparing')}</span>}{job.planningPreviewId && <span>{text('接收准备进度', 'Receiving preparation')} {job.planned}/{job.receiptCount}</span>}<span>{text('总数', 'Total')} {job.total ?? text('后台统计', 'Counting in background')}</span><span>{text('待处理', 'Pending')} {job.pending}</span><span>{text('成功', 'Succeeded')} {job.succeeded}</span><span>{text('跳过', 'Skipped')} {job.skipped}</span><span>{text('失败', 'Failed')} {job.failed}</span><span>{text('待确认', 'To confirm')} {job.awaitingConfirmation}</span></div>;
 }
 function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }: { scope: IntegrationScope; initial: Job; endpointName: string; close: () => void; changed: () => void; canReceipts: boolean }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en'; const requestLeave = useNavigationGuard();
@@ -40,6 +40,7 @@ function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }
   const { read, current } = useScopedIntegrationRequests(scope);
   const result = useIngestionPage<components['schemas']['IngestionItemPageDto']>(scope, `${ingestionPath}/jobs/${initial.id}/items`, page, pageSize, revision);
   const canRun = scope.permissions.includes('ingestion:run');
+  const parent = initial.parentJobId === null && !!initial.planningPreviewId;
   useEffect(() => {
     let active = true; setJob(undefined); setJobLoading(true); setJobError(undefined);
     void read<Job>(`${ingestionPath}/jobs/${initial.id}`).then(value => {
@@ -48,9 +49,9 @@ function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }
     }).catch(cause => { if (active && current() && !isAborted(cause)) setJobError(cause); }).finally(() => { if (active && current()) setJobLoading(false); });
     return () => { active = false; };
   }, [read, current, scope.deny, initial.id, initial.endpointId, revision]);
-  useEffect(() => { if (result.data?.items.some(item => item.jobId !== initial.id)) scope.deny(); }, [result.data, scope.deny, initial.id]);
+  useEffect(() => { if (!parent && result.data?.items.some(item => item.jobId !== initial.id)) scope.deny(); }, [result.data, scope.deny, initial.id, parent]);
   const reload = () => { setRevision(value => value + 1); changed(); };
-  const available = (action: components['schemas']['IngestionControlDto']['action']) => !!job && (action === 'PAUSE' ? job.status === 'PENDING' : action === 'RESUME' ? job.status === 'PAUSED' : action === 'RETRY' ? (job.failed > 0 || job.status === 'BLOCKED') && job.status !== 'CANCELLED' : job.status !== 'CANCELLED' && (job.pending > 0 || job.failed > 0 || job.awaitingConfirmation > 0));
+  const available = (action: components['schemas']['IngestionControlDto']['action']) => !!job && (action === 'PAUSE' ? job.status === 'PENDING' : action === 'RESUME' ? job.status === 'PAUSED' : action === 'RETRY' ? (job.failed > 0 || job.status === 'BLOCKED') && job.status !== 'CANCELLED' : job.status !== 'CANCELLED' && (job.expansionComplete === false && job.status !== 'COMPLETED' || job.pending > 0 || job.failed > 0 || job.awaitingConfirmation > 0));
   const columns: TableProps<Item>['columns'] = [
     { key: 'row', title: text('数组行号', 'Array row'), width: 100, render: (_, item) => item.rowIndex + 1 },
     { key: 'status', title: text('处理结果', 'Result'), width: 160, render: (_, item) => <>{label(item.status, english)}{item.duplicateOfItemId && <small>{text('已关联既有待确认项', 'Linked to an existing confirmation')}</small>}</> },
@@ -61,9 +62,9 @@ function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }
   return <Modal open title={`${endpointName} · #${initial.sequence}`} width={1040} footer={null} destroyOnHidden mask={{ closable: false }} onCancel={() => requestLeave(close, true)}>
     <div className="qms-ingestion-section">
       <Space wrap><Button icon={<RefreshCw size={15} />} loading={jobLoading || result.loading} disabled={!!control || !!selected} onClick={reload}>{text('刷新详情', 'Refresh details')}</Button>{job && <Tag>{label(job.status, english)}</Tag>}{canRun && (['PAUSE', 'RESUME', 'CANCEL', 'RETRY'] as const).map(action => <Button key={action} danger={action === 'CANCEL'} disabled={!available(action) || !!control || !!selected} onClick={() => setControl(action)}>{label(action, english)}</Button>)}</Space>
-      <IngestionError error={jobError} />{job && <><JobCounts job={job} /><Descriptions size="small" column={1} items={[{ key: 'source', label: text('来源', 'Source'), children: label(job.source, english) }, { key: 'receipt', label: text('接收编号', 'Receiving ID'), children: job.receiptId ?? text('接收记录已清理', 'Receiving record removed') }, { key: 'version', label: text('规则版本', 'Rule version'), children: job.ruleVersion }]} />{job.errorCode && <Alert type="error" showIcon title={text('任务处理异常', 'Job processing error')} description={ingestionIssue(job.errorCode, english)} />}</>}
+      <IngestionError error={jobError} />{job && <><JobCounts job={job} /><Descriptions size="small" column={1} items={[{ key: 'source', label: text('来源', 'Source'), children: label(job.source, english) }, { key: 'receipt', label: text('接收编号', 'Receiving ID'), children: parent ? text('历史接收集合', 'Historical receiving snapshot') : job.receiptId ?? text('接收记录已清理', 'Receiving record removed') }, { key: 'version', label: text('规则版本', 'Rule version'), children: job.ruleVersion }]} />{job.errorCode && <Alert type="error" showIcon title={text('任务处理异常', 'Job processing error')} description={ingestionIssue(job.errorCode, english)} />}</>}
       <IngestionError error={result.error} />
-      <LedgerTable<Item> ledgerId="console-ingestion-items" organizationId={scope.organizationId} requiredColumnKeys={['row', 'actions']} rowKey="id" loading={result.loading} dataSource={result.data?.items.filter(item => item.jobId === initial.id) ?? []} columns={columns} scroll={{ x: 720 }} pagination={{ current: page, pageSize, total: result.data?.total ?? 0, disabled: !!control || !!selected, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
+      <LedgerTable<Item> ledgerId="console-ingestion-items" organizationId={scope.organizationId} requiredColumnKeys={['row', 'actions']} rowKey="id" loading={result.loading} dataSource={result.data?.items.filter(item => parent || item.jobId === initial.id) ?? []} columns={columns} scroll={{ x: 720 }} pagination={{ current: page, pageSize, total: result.data?.total ?? 0, disabled: !!control || !!selected, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} />
       <Button onClick={() => requestLeave(close, true)}>{text('关闭', 'Close')}</Button>
     </div>
     {control && job && <JobControl scope={scope} job={job} action={control} close={() => setControl(undefined)} saved={() => { setControl(undefined); reload(); }} />}
@@ -74,7 +75,7 @@ function JobControl({ scope, job, action, close, saved }: { scope: IntegrationSc
   const text = useIngestionText(); const english = text('zh', 'en') === 'en'; const mutation = useIngestionMutation(scope); const requestLeave = useNavigationGuard(); const [dirty, setDirty] = useState(false); useUnsavedChanges(dirty);
   function submit(values: { reason: string }) { if (mutation.locked) return; const body: components['schemas']['IngestionControlDto'] = { organizationId: scope.organizationId, action, reason: values.reason.trim() }; void mutation.execute<Job>({ path: `${ingestionPath}/jobs/${job.id}/control`, method: 'POST', body }, () => { setDirty(false); saved(); }); }
   return <Modal open title={label(action, english)} width={520} footer={null} mask={{ closable: false }} closable={!mutation.locked} keyboard={!mutation.locked} onCancel={() => { if (!mutation.locked) requestLeave(close, true); }}>
-    {action === 'CANCEL' && <Alert type="warning" showIcon title={text('取消仅影响尚未完成的条目，已入库资料不会回滚', 'Cancellation affects unfinished items; imported records are not rolled back')} />}
+    {action === 'CANCEL' && <Alert type="warning" showIcon title={text('取消将停止后续接收准备与未完成条目，已入库资料不会回滚', 'Cancellation stops further receiving preparation and unfinished items; imported records are not rolled back')} />}
     {action === 'PAUSE' && <Alert type="info" title={text('暂停阻止后续处理，当前事务可能已完成', 'Pause stops subsequent processing; the current transaction may complete')} />}
     <Form layout="vertical" className="qms-ingestion-form qms-ingestion-actions" disabled={mutation.locked} onValuesChange={() => setDirty(true)} onFinish={submit}>
       <Form.Item name="reason" label={text('操作原因', 'Reason')} rules={[{ required: true, whitespace: true }]}><Input.TextArea maxLength={300} autoSize={{ minRows: 2, maxRows: 4 }} /></Form.Item>

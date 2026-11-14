@@ -128,8 +128,8 @@ export class AuditLogService {
   private isSafeConfigurationValue(key: string, value: Prisma.InputJsonValue | null | undefined): boolean {
     if (key === 'enabled' || key === 'reprocessed') return typeof value === 'boolean';
     if (key === 'receiptCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
-    if (key === 'rowCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
-    if (key === 'rowIndex') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value < 10000;
+    if (key === 'rowCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+    if (key === 'rowIndex') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
     if (key === 'ruleVersion') return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
     if (key === 'target') return ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'].includes(String(value));
     if (key === 'action') return ['PAUSE', 'RESUME', 'CANCEL', 'RETRY'].includes(String(value));

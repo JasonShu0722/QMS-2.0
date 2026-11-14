@@ -71,7 +71,7 @@ export class IngestionDifferenceDto {
 export class IngestionPreviewDto {
   @ApiProperty({ format: 'uuid' }) previewId!: string;
   @ApiProperty() receiptCount!: number;
-  @ApiProperty() rowCount!: number;
+  @ApiProperty({ nullable: true, type: Number }) rowCount!: number | null;
   @ApiProperty({ format: 'date-time' }) expiresAt!: string;
   @ApiPropertyOptional({ enum: ['INSERTED', 'UPDATED', 'UNCHANGED', 'FILTERED', 'EXISTING_SKIPPED', 'AWAITING_CONFIRMATION', 'VALIDATION_FAILED'] }) action?: string;
   @ApiPropertyOptional() errorCode?: string;
@@ -88,7 +88,7 @@ export class IngestionImportResultDto {
   @ApiProperty({ type: [String] }) jobIds!: string[];
   @ApiProperty() reused!: boolean;
   @ApiProperty() receiptCount!: number;
-  @ApiProperty() rowCount!: number;
+  @ApiProperty({ nullable: true, type: Number }) rowCount!: number | null;
 }
 export class IngestionJobQueryDto extends IntegrationPageQueryDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() endpointId?: string;
@@ -98,13 +98,18 @@ export class IngestionJobDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) endpointId!: string;
   @ApiProperty({ format: 'uuid', nullable: true, type: String }) receiptId!: string | null;
+  @ApiProperty({ format: 'uuid', nullable: true, type: String }) parentJobId!: string | null;
+  @ApiProperty({ format: 'uuid', nullable: true, type: String }) planningPreviewId!: string | null;
   @ApiProperty({ format: 'uuid' }) ruleId!: string;
   @ApiProperty() ruleVersion!: number;
   @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'] }) target!: IngestionTarget;
   @ApiProperty({ enum: ['AUTO', 'SINGLE', 'HISTORY'] }) source!: string;
   @ApiProperty({ enum: ['PENDING', 'PAUSED', 'BLOCKED', 'COMPLETED', 'CANCELLED'] }) status!: string;
   @ApiProperty() sequence!: number;
-  @ApiProperty() total!: number;
+  @ApiProperty({ nullable: true, type: Number }) total!: number | null;
+  @ApiProperty() expansionComplete!: boolean;
+  @ApiProperty() planned!: number;
+  @ApiProperty() receiptCount!: number;
   @ApiProperty() pending!: number;
   @ApiProperty() succeeded!: number;
   @ApiProperty() skipped!: number;

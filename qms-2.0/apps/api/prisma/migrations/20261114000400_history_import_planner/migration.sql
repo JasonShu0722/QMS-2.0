@@ -1,0 +1,9 @@
+ALTER TABLE integration_ingestion_jobs ADD COLUMN parent_job_id UUID;
+ALTER TABLE integration_ingestion_jobs ADD COLUMN planning_preview_id UUID;
+ALTER TABLE integration_ingestion_jobs ADD CONSTRAINT integration_ingestion_jobs_parent_fk FOREIGN KEY (organization_id,parent_job_id) REFERENCES integration_ingestion_jobs(organization_id,id) ON DELETE CASCADE;
+ALTER TABLE integration_ingestion_jobs ADD CONSTRAINT integration_ingestion_jobs_preview_fk FOREIGN KEY (planning_preview_id) REFERENCES integration_ingestion_previews(id) ON DELETE SET NULL;
+CREATE INDEX integration_ingestion_jobs_parent ON integration_ingestion_jobs(organization_id,parent_job_id,sequence);
+
+ALTER TABLE integration_ingestion_previews DROP CONSTRAINT integration_ingestion_previews_organization_id_rule_id_fkey;
+ALTER TABLE integration_ingestion_previews ALTER COLUMN rule_id DROP NOT NULL;
+ALTER TABLE integration_ingestion_previews ADD CONSTRAINT integration_ingestion_previews_organization_id_rule_id_fkey FOREIGN KEY (organization_id,rule_id) REFERENCES integration_ingestion_rules(organization_id,id) ON DELETE SET NULL (rule_id);

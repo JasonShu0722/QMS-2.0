@@ -9,4 +9,8 @@ describe('ingestion audit metadata stays bounded and useful', () => {
   it('rejects invalid task identities, values and free-form operation names', () => {
     expect(service.safeMetadata({ jobId: 'bad', rowIndex: -1, ruleVersion: 0, receiptCount: 100001, rowCount: Infinity, target: 'OTHER', result: 'arbitrary', action: 'execute', ingestionReason: 'x'.repeat(301), enabled: 'true', reprocessed: 1 })).toEqual({});
   });
+  it('retains large historical counts and later row positions within their storage ranges', () => {
+    expect(service.safeMetadata({ rowCount: 100001, rowIndex: 10000 })).toEqual({ rowCount: 100001, rowIndex: 10000 });
+    expect(service.safeMetadata({ rowCount: Number.MAX_SAFE_INTEGER + 1, rowIndex: 2147483648 })).toEqual({});
+  });
 });

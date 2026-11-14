@@ -52,7 +52,7 @@ export function IngestionError({ error, unknown = false, unknownTitle }: { error
     INTEGRATION_PAYLOAD_EXPIRED: ['接收正文已清理，请选择其他接收记录', 'The received payload expired. Select another record.'],
     INGESTION_CAPACITY_UNAVAILABLE: ['处理容量不足，请先处理积压任务', 'Processing capacity is unavailable. Resolve queued jobs first.'],
     INGESTION_QUEUE_BLOCKED: ['接口队列已阻塞，请查看任务错误并处理', 'The interface queue is blocked. Resolve the job error.'],
-    INGESTION_HISTORY_LIMIT_EXCEEDED: ['本次预览最多100份接收记录、10000条数据，请缩短接收时间范围', 'This preview is limited to 100 receiving records and 10,000 rows. Shorten the time range.'],
+    INGESTION_HISTORY_LIMIT_EXCEEDED: ['请重新生成历史预览', 'Generate a new historical preview.'],
     INGESTION_PREVIEW_LIMIT_EXCEEDED: ['临时预览已达上限，请稍后重试', 'Temporary preview capacity is full. Retry later.'],
   };
   const message = error instanceof ApiError ? messages[error.code] : undefined;

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
+import { ingestionInputProtected } from './ingestion-input.read-model.js';
 
 type RetentionCandidate = { id: string; organization_id: string; endpoint_id: string };
 type LockedReceipt = RetentionCandidate & { payload_ciphertext: string | null; payload_bytes: number; metadata_expired: boolean; body_expired: boolean };
@@ -13,8 +14,8 @@ export class IntegrationRetentionService {
   async purgeExpired(): Promise<{ bodies: number; receipts: number; attempts: number; windows: number }> {
     const result = { bodies: 0, receipts: 0, attempts: 0, windows: 0 };
     for (let round = 0; round<10; round++) {
-      const rows = await this.prisma.$queryRaw<RetentionCandidate[]>`SELECT r.id,r.organization_id,r.endpoint_id FROM integration_receipts r
-        WHERE (metadata_expires_at<=clock_timestamp() OR (payload_ciphertext IS NOT NULL AND body_expires_at<=clock_timestamp())) AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs j JOIN integration_ingestion_items i ON i.job_id=j.id WHERE j.organization_id=r.organization_id AND j.receipt_id=r.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED')) ORDER BY metadata_expires_at,id LIMIT 100`;
+      const rows = await this.prisma.$queryRaw<RetentionCandidate[]>(Prisma.sql`SELECT r.id,r.organization_id,r.endpoint_id FROM integration_receipts r
+        WHERE (metadata_expires_at<=clock_timestamp() OR (payload_ciphertext IS NOT NULL AND body_expires_at<=clock_timestamp())) AND NOT ${ingestionInputProtected} ORDER BY metadata_expires_at,id LIMIT 100`);
       const organizations = new Map<string, RetentionCandidate[]>();
       for (const candidate of rows) {
         const candidates = organizations.get(candidate.organization_id) ?? [];
@@ -28,7 +29,7 @@ export class IntegrationRetentionService {
             const receiptIds = candidates.map(candidate => candidate.id).sort();
             await readOrganizationRuntime(transaction, organizationId, true);
             await transaction.$queryRaw(Prisma.sql`SELECT id FROM integration_endpoints WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(endpointIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
-            const locked = await transaction.$queryRaw<LockedReceipt[]>(Prisma.sql`SELECT r.id,r.organization_id,r.endpoint_id,r.payload_ciphertext,r.payload_bytes,r.metadata_expires_at<=clock_timestamp() AS metadata_expired,r.body_expires_at<=clock_timestamp() AS body_expired FROM integration_receipts r WHERE r.organization_id=${organizationId}::uuid AND r.id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs j JOIN integration_ingestion_items i ON i.job_id=j.id WHERE j.organization_id=r.organization_id AND j.receipt_id=r.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED')) ORDER BY r.id FOR UPDATE OF r`);
+            const locked = await transaction.$queryRaw<LockedReceipt[]>(Prisma.sql`SELECT r.id,r.organization_id,r.endpoint_id,r.payload_ciphertext,r.payload_bytes,r.metadata_expires_at<=clock_timestamp() AS metadata_expired,r.body_expires_at<=clock_timestamp() AS body_expired FROM integration_receipts r WHERE r.organization_id=${organizationId}::uuid AND r.id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) AND NOT ${ingestionInputProtected} ORDER BY r.id FOR UPDATE OF r`);
             const expired = locked.filter(receipt => receipt.metadata_expired || receipt.payload_ciphertext !== null && receipt.body_expired);
             if (!expired.length) return { bodies: 0, receipts: 0 };
             const metadataIds = expired.filter(receipt => receipt.metadata_expired).map(receipt => receipt.id);
