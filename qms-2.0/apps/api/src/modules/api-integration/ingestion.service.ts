@@ -31,6 +31,9 @@ const validationField = (error: HttpException, rule: IngestionRule): string => {
   return typeof field === 'string' && controlled.includes(field) ? field : 'target';
 };
 const newestDate = (first: Date | null | undefined, second: Date | null | undefined): Date | null => !first ? second ?? null : !second || first >= second ? first : second;
+const pausedHistoryReference = Prisma.sql`EXISTS(SELECT 1 FROM integration_ingestion_jobs parent JOIN integration_ingestion_preview_receipts snapshot ON snapshot.organization_id=parent.organization_id AND snapshot.preview_id=parent.planning_preview_id WHERE parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND parent.organization_id=j.organization_id AND snapshot.receipt_id=j.receipt_id AND parent.rule_id=j.rule_id AND parent.rule_version=j.rule_version AND parent.generation=j.generation AND parent.status='PAUSED')`;
+const historyParentHasWork = Prisma.sql`NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs owner JOIN integration_ingestion_preview_receipts snapshot ON snapshot.receipt_id=owner.receipt_id AND snapshot.preview_id=parent.planning_preview_id WHERE owner.organization_id=parent.organization_id AND owner.rule_id=parent.rule_id AND owner.rule_version=parent.rule_version AND owner.generation=parent.generation AND owner.status IN ('PENDING','PAUSED','BLOCKED'))`;
+const historyParentHasBlockedSource = Prisma.sql`EXISTS(SELECT 1 FROM integration_ingestion_jobs owner JOIN integration_ingestion_preview_receipts snapshot ON snapshot.receipt_id=owner.receipt_id AND snapshot.preview_id=parent.planning_preview_id WHERE owner.organization_id=parent.organization_id AND owner.rule_id=parent.rule_id AND owner.rule_version=parent.rule_version AND owner.generation=parent.generation AND owner.status='BLOCKED') OR EXISTS(SELECT 1 FROM integration_ingestion_items failed JOIN integration_ingestion_preview_receipts snapshot ON snapshot.receipt_id=failed.receipt_id AND snapshot.preview_id=parent.planning_preview_id WHERE failed.organization_id=parent.organization_id AND failed.rule_id=parent.rule_id AND failed.rule_version=parent.rule_version AND failed.generation=parent.generation AND failed.status='PROCESSING_FAILED')`;
 
 @Injectable()
 export class IngestionService {
@@ -321,14 +324,21 @@ export class IngestionService {
   }
   private async refreshJob(tx: AdminTransaction, id: string) {
     await tx.$executeRaw`UPDATE integration_ingestion_jobs j SET status=CASE WHEN NOT expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN NOT expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE j.id=${id}::uuid AND j.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`;
-    await tx.$executeRaw`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs child JOIN integration_ingestion_preview_receipts s ON s.receipt_id=child.receipt_id AND s.preview_id=parent.planning_preview_id WHERE child.organization_id=parent.organization_id AND child.rule_id=parent.rule_id AND child.rule_version=parent.rule_version AND child.generation=parent.generation AND child.status IN ('PENDING','PAUSED','BLOCKED')) THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs child JOIN integration_ingestion_preview_receipts s ON s.receipt_id=child.receipt_id AND s.preview_id=parent.planning_preview_id WHERE child.organization_id=parent.organization_id AND child.rule_id=parent.rule_id AND child.rule_version=parent.rule_version AND child.generation=parent.generation AND child.status IN ('PENDING','PAUSED','BLOCKED')) THEN NULL ELSE clock_timestamp() END WHERE parent.planning_preview_id IS NOT NULL AND (parent.id=${id}::uuid OR parent.id=(SELECT parent_job_id FROM integration_ingestion_jobs WHERE id=${id}::uuid)) AND parent.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`;
+    await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN ${historyParentHasWork} THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN ${historyParentHasWork} THEN NULL ELSE clock_timestamp() END WHERE ${this.parentReferencesJob(id)} AND parent.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`);
+  }
+  private parentReferencesJob(id: string | Prisma.Sql) {
+    return Prisma.sql`parent.organization_id=(SELECT organization_id FROM integration_ingestion_jobs WHERE id=${id}::uuid) AND parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND (parent.id=${id}::uuid OR EXISTS(SELECT 1 FROM integration_ingestion_jobs changed WHERE changed.id=${id}::uuid AND changed.organization_id=parent.organization_id AND changed.rule_id=parent.rule_id AND changed.rule_version=parent.rule_version AND changed.generation=parent.generation AND (changed.parent_job_id=parent.id OR EXISTS(SELECT 1 FROM integration_ingestion_preview_receipts snapshot WHERE snapshot.organization_id=parent.organization_id AND snapshot.preview_id=parent.planning_preview_id AND snapshot.receipt_id=changed.receipt_id))))`;
+  }
+  private async releaseResolvedParents(tx: AdminTransaction, organizationId: string, ownerIds: string[], errorCodes: string[]) {
+    if (!ownerIds.length) return;
+    await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN ${historyParentHasWork} THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN ${historyParentHasWork} THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE parent.organization_id=${organizationId}::uuid AND parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND parent.status='BLOCKED' AND parent.error_code=ANY(${errorCodes}::text[]) AND NOT (${historyParentHasBlockedSource}) AND EXISTS(SELECT 1 FROM integration_ingestion_jobs owner WHERE owner.id=ANY(${ownerIds}::uuid[]) AND ${this.parentReferencesJob(Prisma.sql`owner.id`)})`);
   }
 
   async processDue(limit = 100): Promise<number> {
     integrationInteger(limit, 1, 1000);
     let processed = 0;
     for (let round = 0; round < limit; round++) {
-      const candidates = await this.prisma.$queryRaw<JobRow[]>`SELECT j.* FROM integration_ingestion_jobs j WHERE j.status='PENDING' AND (j.planning_preview_id IS NULL OR NOT j.expansion_complete) AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs earlier WHERE earlier.organization_id=j.organization_id AND earlier.endpoint_id=j.endpoint_id AND earlier.sequence<j.sequence AND (earlier.status IN ('PAUSED','BLOCKED') OR (earlier.status='PENDING' AND (earlier.planning_preview_id IS NULL OR NOT earlier.expansion_complete)))) ORDER BY j.created_at,j.id LIMIT 1`;
+      const candidates = await this.prisma.$queryRaw<JobRow[]>(Prisma.sql`SELECT j.* FROM integration_ingestion_jobs j WHERE j.status='PENDING' AND (j.planning_preview_id IS NULL OR NOT j.expansion_complete) AND NOT ${pausedHistoryReference} AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs earlier WHERE earlier.organization_id=j.organization_id AND earlier.endpoint_id=j.endpoint_id AND earlier.sequence<j.sequence AND (earlier.status IN ('PAUSED','BLOCKED') OR (earlier.status='PENDING' AND (earlier.planning_preview_id IS NULL OR NOT earlier.expansion_complete)))) ORDER BY j.created_at,j.id LIMIT 1`);
       const candidate = candidates[0];
       if (!candidate) break;
       let itemId: string | undefined;
@@ -336,7 +346,7 @@ export class IngestionService {
         const completed = await this.prisma.$transaction(async tx => {
           const endpoint = await lockIntegrationEndpoint(tx, candidate.organization_id, candidate.endpoint_id);
           if (endpoint.status !== 'ENABLED') ingestionError('INGESTION_AUTHORIZATION_REVOKED', 403);
-          const [job] = await tx.$queryRaw<JobRow[]>`SELECT * FROM integration_ingestion_jobs WHERE organization_id=${candidate.organization_id}::uuid AND id=${candidate.id}::uuid FOR UPDATE`;
+          const [job] = await tx.$queryRaw<JobRow[]>(Prisma.sql`SELECT j.* FROM integration_ingestion_jobs j WHERE j.organization_id=${candidate.organization_id}::uuid AND j.id=${candidate.id}::uuid AND NOT ${pausedHistoryReference} FOR UPDATE OF j`);
           if (!job || job.status !== 'PENDING') return false;
           const [earlier] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${job.organization_id}::uuid AND endpoint_id=${job.endpoint_id}::uuid AND sequence<${job.sequence} AND (status IN ('PAUSED','BLOCKED') OR (status='PENDING' AND (planning_preview_id IS NULL OR NOT expansion_complete))) LIMIT 1`;
           if (earlier) return false;
@@ -439,7 +449,7 @@ export class IngestionService {
       if (itemId) await tx.$executeRaw`UPDATE integration_ingestion_items SET status=${validation ? 'VALIDATION_FAILED' : 'PROCESSING_FAILED'},error_code=${code},error_field=${validation ? validationField(error as HttpException, job.rule_snapshot) : null},version=version+1,updated_at=clock_timestamp() WHERE id=${itemId}::uuid AND job_id=${job.id}::uuid AND status='PENDING'`;
       if (validation) await this.refreshJob(tx, job.id);
       else await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='BLOCKED',error_code=${code} WHERE id=${job.id}::uuid`;
-      if (!validation && job.parent_job_id) await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='BLOCKED',error_code=${code} WHERE id=${job.parent_job_id}::uuid AND status='PENDING'`;
+      if (!validation) await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_jobs parent SET status='BLOCKED',error_code=${code} WHERE ${this.parentReferencesJob(job.id)} AND parent.status='PENDING'`);
     }, { isolationLevel: 'ReadCommitted' });
   }
 
@@ -458,6 +468,9 @@ export class IngestionService {
     return job.planning_preview_id
       ? Prisma.sql`i.organization_id=${job.organization_id}::uuid AND i.rule_id=${job.rule_id}::uuid AND i.rule_version=${job.rule_version} AND i.generation=${job.generation} AND i.receipt_id IN (SELECT receipt_id FROM integration_ingestion_preview_receipts WHERE preview_id=${job.planning_preview_id}::uuid)`
       : Prisma.sql`i.job_id=${job.id}::uuid`;
+  }
+  private jobOwnersFilter(job: JobRow) {
+    return Prisma.sql`owner.organization_id=${job.organization_id}::uuid AND owner.rule_id=${job.rule_id}::uuid AND owner.rule_version=${job.rule_version} AND owner.generation=${job.generation} AND (owner.id=${job.id}::uuid OR owner.parent_job_id=${job.id}::uuid OR owner.id IN (SELECT i.job_id FROM integration_ingestion_items i WHERE ${this.jobItemsFilter(job)}))`;
   }
   async listJobs(actor: AdminActor, query: IngestionJobQueryDto): Promise<IngestionJobPageDto> {
     const { page, limit } = this.page(query);
@@ -514,11 +527,12 @@ export class IngestionService {
       await lockIntegrationEndpoint(tx, organizationId, initial.endpoint_id, true);
       const job = await this.jobRow(tx, organizationId, id);
       await this.access(tx, actor, 'ingestion:run', false, job.rule_snapshot.target);
+      let affectedOwnerIds: string[] = [];
       if (input.action === 'CANCEL') {
-        await tx.$executeRaw`UPDATE integration_ingestion_items SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE job_id=${id}::uuid AND status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED')`;
-        await tx.$executeRaw`UPDATE integration_ingestion_items SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE job_id IN (SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${id}::uuid) AND status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED')`;
+        const cancelled = await tx.$queryRaw<{ job_id: string }[]>(Prisma.sql`UPDATE integration_ingestion_items i SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE ${this.jobItemsFilter(job)} AND i.status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED') RETURNING i.job_id`);
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE id=${id}::uuid`;
-        await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE parent_job_id=${id}::uuid AND status NOT IN ('COMPLETED','CANCELLED')`;
+        const owners = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`UPDATE integration_ingestion_jobs owner SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE ${this.jobOwnersFilter(job)} AND owner.status NOT IN ('COMPLETED','CANCELLED') RETURNING owner.id`);
+        affectedOwnerIds = [...new Set([...cancelled.map(row => row.job_id), ...owners.map(owner => owner.id)])];
       } else if (input.action === 'PAUSE') {
         if (job.status === 'PENDING') await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PAUSED' WHERE id=${id}::uuid`;
       } else {
@@ -526,13 +540,14 @@ export class IngestionService {
         if (input.action === 'RETRY') {
           if (job.receipt_id) await this.receipt(tx, organizationId, job.receipt_id, job.endpoint_id, true);
           await tx.$executeRaw`UPDATE integration_ingestion_jobs SET rule_snapshot=jsonb_set(rule_snapshot,'{authorizedBy}',${JSON.stringify(actorSnapshot(actor, organizationId))}::jsonb) WHERE id=${id}::uuid`;
-          await tx.$executeRaw`UPDATE integration_ingestion_items SET status='PENDING',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE job_id=${id}::uuid AND status IN ('PROCESSING_FAILED','VALIDATION_FAILED')`;
-          await tx.$executeRaw`UPDATE integration_ingestion_jobs child SET status='PENDING',error_code=NULL,completed_at=NULL,rule_snapshot=jsonb_set(rule_snapshot,'{authorizedBy}',${JSON.stringify(actorSnapshot(actor, organizationId))}::jsonb) WHERE child.parent_job_id=${id}::uuid AND child.status<>'CANCELLED' AND (child.status IN ('PENDING','BLOCKED','PAUSED') OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=child.id AND i.status IN ('PROCESSING_FAILED','VALIDATION_FAILED')))`;
-          await tx.$executeRaw`UPDATE integration_ingestion_items SET status='PENDING',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE job_id IN (SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${id}::uuid) AND status IN ('PROCESSING_FAILED','VALIDATION_FAILED')`;
+          const owners = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`UPDATE integration_ingestion_jobs owner SET status=CASE WHEN owner.id=${id}::uuid THEN 'PENDING' WHEN owner.status='PAUSED' THEN 'PAUSED' ELSE 'PENDING' END,error_code=NULL,completed_at=NULL,rule_snapshot=jsonb_set(rule_snapshot,'{authorizedBy}',${JSON.stringify(actorSnapshot(actor, organizationId))}::jsonb) WHERE ${this.jobOwnersFilter(job)} AND owner.status<>'CANCELLED' AND (owner.status IN ('PENDING','BLOCKED','PAUSED') OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=owner.id AND ${this.jobItemsFilter(job)} AND i.status IN ('PROCESSING_FAILED','VALIDATION_FAILED'))) RETURNING owner.id`);
+          affectedOwnerIds = owners.map(owner => owner.id);
+          await tx.$executeRaw(Prisma.sql`UPDATE integration_ingestion_items i SET status='PENDING',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE ${this.jobItemsFilter(job)} AND i.status IN ('PROCESSING_FAILED','VALIDATION_FAILED') AND EXISTS(SELECT 1 FROM integration_ingestion_jobs owner WHERE owner.id=i.job_id AND owner.status<>'CANCELLED')`);
         } else if (job.status === 'BLOCKED') ingestionError('INGESTION_QUEUE_BLOCKED', 409);
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL,completed_at=NULL WHERE id=${id}::uuid`;
-        await this.refreshJob(tx, id);
       }
+      await this.releaseResolvedParents(tx, organizationId, affectedOwnerIds, ['INGESTION_PROCESSING_FAILED','INGESTION_AUTHORIZATION_REVOKED']);
+      await this.refreshJob(tx, id);
       await this.event(tx, actor, organizationId, 'INGESTION_JOB_CONTROLLED', id, traceId, { action: input.action, ingestionReason: input.reason.trim() });
       return this.jobDto(tx, await this.jobRow(tx, organizationId, id));
     });
@@ -565,9 +580,8 @@ export class IngestionService {
         }
       }
       await this.refreshJob(tx, job.id);
-      if (!confirm && item.status === 'PROCESSING_FAILED' && job.parent_job_id && job.error_code === 'INGESTION_PROCESSING_FAILED') {
-        await tx.$executeRaw`UPDATE integration_ingestion_jobs parent SET status='PENDING',error_code=NULL WHERE parent.id=${job.parent_job_id}::uuid AND parent.status='BLOCKED' AND parent.error_code='INGESTION_PROCESSING_FAILED' AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs child WHERE child.parent_job_id=parent.id AND child.status='BLOCKED') AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items failed JOIN integration_ingestion_jobs child ON child.id=failed.job_id WHERE child.parent_job_id=parent.id AND failed.status='PROCESSING_FAILED')`;
-        await this.refreshJob(tx, job.parent_job_id);
+      if (!confirm && item.status === 'PROCESSING_FAILED' && job.error_code === 'INGESTION_PROCESSING_FAILED') {
+        await this.releaseResolvedParents(tx, organizationId, [job.id], ['INGESTION_PROCESSING_FAILED']);
       }
       await this.event(tx, actor, organizationId, confirm ? 'INGESTION_ITEM_CONFIRMED' : 'INGESTION_ITEM_SKIPPED', id, traceId, { ingestionReason: input.reason.trim(), jobId: job.id });
       return itemDto(await this.itemRow(tx, organizationId, id));

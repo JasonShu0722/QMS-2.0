@@ -6,8 +6,8 @@
 | --- | --- |
 | 授权 | 负责人明确否决历史100份/10000行限制，数量不可控，不接受手动拆批；复用本会话修复、PR、合并部署持续授权，不代改生产业务/台账或关闭验收Issue |
 | 映射 | Issue121/原入库119，V0.0.52-fix1，codex/history-import-unbounded，基线已部署6a0c2c92ce5a46092561ca3307d42d5ffc257af0；远端无同号预留/开放PR，原本地归档135cad2和历史main及$null保留 |
-| 状态 | PR123候选98edf1e后的P1修复已真实RED→GREEN、API6文件142PASS、lint/build及增量SPEC/QUALITY通过；Web CI动画等待修复定向4.83s及完整42PASS（195.68s），真实编译Worker/浏览器历史场景再次PASS（1.3m）。155迁移/十万份探针/其余未变门禁继续有效 |
-| 下一步 | 推送V0.0.52-fix2修复提交至PR123，精确新head CI/Review后合并部署；不写生产业务/台账，不关闭Issue |
+| 状态 | PR123的fix3返修完成：复用SINGLE/AUTO、共享A/B控制联动及人工暂停保护已RED→GREEN，独立SPEC/QUALITY最终通过；独立release DB156迁移/seed及完整API6文件150PASS。00600部分索引真实混合规模计划通过。最新真实Worker/browser历史场景PASS，Web42与未变门禁有效；前head daec17f CI24/24PASS与P2记录保留 |
+| 下一步 | 推送V0.0.52-fix3至同PR123，精确新head CI/Review后合并部署及公网核验；不写生产业务/台账，不关闭Issue |
 
 本计划接续[原维护计划](2026-11-14-qms-receipt-filter-reset.md)。原V0.0.52的历史上限及要求缩小范围的文案被负责人本次指令覆盖，原发布/失败证据作为历史保留。
 
@@ -42,7 +42,11 @@ Web诊断：768MiB verbose为41PASS/1父详情timeout，分段计时确认多层
 
 真实浏览器：首轮后台统计精确文本定位不匹配、一次详情按钮未按接口收窄导致重复编号命中均已修正；两次规则页签导航超时保留，随后相同功能路径未复现，不武断归因。最终browser-history-final-retest为2/2PASS（1.6m）：有效platform:admin默认权限、四目标真实编译Worker、差异确认、101份完整成功、10001行接纳/首段实际写入后主动取消、旧接收筛选清除、父聚合详情、老认证无密码复验。10001行测试主动取消余量，不声称全量完成；十万份仅metadata规模，不声称十万正文全量性能。最后只移除临时导航诊断日志，不改生产源码、业务操作或断言；复用相同路径证据，CI继续执行清理后的完整文件。
 
-PR123审查反馈：自动Codex指出首次lazy展开与首行写入同事务，失败回滚后itemId已不存在，recordFailure提前退出。真实trigger两case RED复现，最小修复将items/cursor展开提交为独立步骤，下一轮处理首行；RETRY/SKIP、目标回滚、失败项可见及FIFO恢复均GREEN。原三个测试补一轮展开步骤，保持最终断言，完整6文件142/142PASS（66.903s），最新lint/build、独立增量SPEC/QUALITY通过。首CI唯一web-tests(6)失败为子弹窗正文已挂载未可见，其余107PASS，改为异步act完成点击后先等内容挂载再等可见；不加timeout、关motion或删断言。原head完成及未完成CI结果均分开保存，新head重新走完整门禁。
+PR123审查反馈：自动Codex指出首次lazy展开与首行写入同事务，失败回滚后itemId已不存在，recordFailure提前退出。真实trigger两case RED复现，最小修复将items/cursor展开提交为独立步骤，下一轮处理首行；RETRY/SKIP、目标回滚、失败项可见及FIFO恢复均GREEN。原三个测试补一轮展开步骤，保持最终断言，完整6文件142/142PASS（66.903s），最新lint/build、独立增量SPEC/QUALITY通过。首CI先发现的web-tests(6)失败为子弹窗正文已挂载未可见，该分片其余107PASS，改为异步act完成点击后先等内容挂载再等可见；不加timeout、关motion或删断言。原head完成及未完成CI结果均分开保存，新head重新走完整门禁。
+
+首head最终CI43573249319为21/24PASS：web-tests(6)为上述新测试等待失败；web-tests(13)为7个未改业务文件22FAIL及onTaskUpdate超时，包含超时/隐藏标题/任职选项等，foundation为依赖汇总失败。完整日志及逐项只读审计保留；未扩展修改这些业务文件。新head daec17f对应两分片及全部24项通过，不能把旧FAIL抹成PASS。该head自动审查新P2为parent聚合SINGLE/AUTO失败但重试仅直属owner；真实RED2后补聚合owner、状态刷新、暂停/取消范围，独立质量审查又指出A/B共享owner的原父阻塞需同步恢复，按真实共享回归继续处理。新head第三轮须覆盖修复，原CI绿色不替代新提交验证。
+
+fix3最终证据：复用、范围隔离、A/B共享阻塞和人工暂停均有真实PG RED→GREEN；父重试只重置表示范围内失败及授权，不复活CANCELLED/其他组织或generation，不解除其他owner的人工PAUSED。原150项运行为149PASS/1既有retention5s timeout，保留FAIL；新建release独立DB156迁移+seed后同6文件150/150PASS（66.991s），未增加timeout。暂停修复仅SQL状态CASE，lint/tsc通过，同结构build与未走暂停分支的真实Worker/browser证据复用；最终精确head CI仍完整运行。最新browser-reused-owner-final为PASS（1.5m）。00600索引针对真父查询，100000子任务+10000旧顶层任务的EXPLAIN从过滤10001行、1512缓冲页、3.615ms变为实际父索引20页、0.262ms；仅为此读取消费者新增索引，110001探针行已精确清除。
 
 ## 执行与证据
 

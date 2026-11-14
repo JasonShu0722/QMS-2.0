@@ -699,6 +699,142 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(await inspect(item, 'MATERIAL', 'atomic-fault')).toMatchObject({ version: 2, values: { name: 'second' } });
   });
 
+  it.each(['SINGLE', 'AUTO'] as const)('retries a represented %s failure through its history parent and refreshes completion', async source => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', source === 'AUTO');
+    let receiptId: string;
+    if (source === 'AUTO') {
+      await machine(item, [{ code: 'reused-failure', name: '真实重试' }]);
+      receiptId = (await service.listJobs(item.actor, {})).items[0]!.receiptId!;
+    } else receiptId = await received(item, [{ code: 'reused-failure', name: '真实重试' }, { code: 'history-extra', name: '原单行之外' }]);
+    const originalId = source === 'SINGLE' ? (await submitSingle(item, configuration, receiptId)).jobId : (await service.listJobs(item.actor, {})).items[0]!.id;
+    const functionName = `reused_fault_${item.organizationId.replaceAll('-', '')}`;
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${item.organizationId}'::uuid AND NEW.status='INSERTED' THEN RAISE EXCEPTION 'reused_target_failure'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ${functionName} BEFORE UPDATE ON integration_ingestion_items FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
+    try { await worker.processDue(1); }
+    finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER ${functionName} ON integration_ingestion_items`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION ${functionName}()`);
+    }
+    expect((await service.getJob(item.actor, originalId)).failed).toBe(1);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    expect((await service.getJob(item.actor, parentId)).failed).toBe(1);
+    await service.controlJob(item.actor, parentId, { action: 'RETRY', reason: '重试批次表示的既有失败' }, trace(), key());
+    expect((await service.listItems(item.actor, originalId, {})).items[0]!.status).toBe('PENDING');
+    await service.controlJob(item.actor, parentId, { action: 'PAUSE', reason: '暂停重试的原条目' }, trace(), key());
+    expect(await worker.processDue(2)).toBe(0);
+    await service.controlJob(item.actor, parentId, { action: 'RESUME', reason: '恢复原条目' }, trace(), key());
+    await worker.processDue(10);
+    expect((await inspect(item, 'MATERIAL', 'reused-failure'))?.version).toBe(1);
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', failed: 0, succeeded: source === 'AUTO' ? 1 : 2 });
+  });
+
+  it.each(['AUTO', 'HISTORY_CHILD'] as const)('preserves a %s manual pause when its history parent retries represented failures', async source => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', source === 'AUTO');
+    const rows = [{ code: 42, name: '首行校验失败' }, { code: 'paused-original', name: '待明确恢复后执行' }];
+    let originalId = '';
+    if (source === 'AUTO') {
+      await machine(item, rows);
+      originalId = (await service.listJobs(item.actor, {})).items[0]!.id;
+      await worker.processDue(1);
+      expect(await service.getJob(item.actor, originalId)).toMatchObject({ status: 'PENDING', failed: 1, pending: 1 });
+      await service.controlJob(item.actor, originalId, { action: 'PAUSE', reason: '原任务人工暂停' }, trace(), key());
+    } else await received(item, rows);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    if (source === 'HISTORY_CHILD') {
+      await worker.processDue(3);
+      const [child] = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid`;
+      originalId = child!.id;
+      await service.controlJob(item.actor, originalId, { action: 'PAUSE', reason: '直属子任务人工暂停' }, trace(), key());
+    }
+    expect((await service.getJob(item.actor, parentId)).failed).toBe(1);
+    await service.controlJob(item.actor, parentId, { action: 'RETRY', reason: '父重试不能解除原任务暂停' }, trace(), key());
+    expect(await service.getJob(item.actor, originalId)).toMatchObject({ status: 'PAUSED', failed: 0, pending: 2 });
+    expect(await worker.processDue(3)).toBe(0);
+    expect(await inspect(item, 'MATERIAL', 'paused-original')).toBeNull();
+    await service.controlJob(item.actor, originalId, { action: 'RETRY', reason: '明确恢复原任务' }, trace(), key());
+    await worker.processDue(10);
+    expect((await inspect(item, 'MATERIAL', 'paused-original'))?.values.name).toBe('待明确恢复后执行');
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', failed: 1, succeeded: 1 });
+  });
+
+  it.each(['RETRY', 'CANCEL'] as const)('limits history %s to represented rows while preserving cancelled, other-generation and unrelated failures', async action => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 42, name: '真实字段校验失败' }]);
+    const original = await submitSingle(item, configuration, receiptId); await worker.processDue(1);
+    const failed = (await service.listItems(item.actor, original.jobId, {})).items[0]!;
+    const anotherPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 }, trace(), key());
+    const otherGeneration = await service.submitImport(item.actor, { previewId: anotherPreview.previewId, confirmed: true, reprocessReason: '保留范围外generation' }, trace(), key());
+    await worker.processDue(1);
+    const cancelledGeneration = await service.submitImport(item.actor, { previewId: anotherPreview.previewId, confirmed: true, reprocessReason: '保留已取消generation' }, trace(), key());
+    await service.controlJob(item.actor, cancelledGeneration.jobIds[0]!, { action: 'CANCEL', reason: '不应被批次重试复活' }, trace(), key());
+    const outsideReceiptId = await received(item, [{ code: 42, name: '时间范围外失败' }], new Date(Date.now() + 3600000));
+    const outside = await submitSingle(item, configuration, outsideReceiptId); await worker.processDue(1);
+    const foreign = await fixture(), foreignRule = await rule(foreign, 'MATERIAL', 'UPDATE', false);
+    const foreignId = await received(foreign, [{ code: 42, name: '其他组织失败' }]);
+    const foreignJob = await submitSingle(foreign, foreignRule, foreignId); await worker.processDue(1);
+    const untouchedJobs = [otherGeneration.jobIds[0]!, cancelledGeneration.jobIds[0]!, outside.jobId, foreignJob.jobId];
+    const untouched = await prisma.$queryRaw<{ id: string; status: string; version: number }[]>`SELECT id,status,version FROM integration_ingestion_items WHERE job_id=ANY(${untouchedJobs}::uuid[]) ORDER BY id`;
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(3);
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', failed: 1 });
+    await service.controlJob(item.actor, parentId, { action: 'RETRY', reason: '只重试本批表示的失败' }, trace(), key());
+    expect((await service.listItems(item.actor, original.jobId, {})).items[0]!.status).toBe('PENDING');
+    if (action === 'CANCEL') {
+      await service.controlJob(item.actor, parentId, { action: 'CANCEL', reason: '取消本批重试' }, trace(), key());
+      expect((await service.listItems(item.actor, original.jobId, {})).items[0]!.status).toBe('CANCELLED');
+      expect((await service.getJob(item.actor, parentId)).status).toBe('CANCELLED');
+    } else {
+      await worker.processDue(3);
+      const retried = (await service.listItems(item.actor, original.jobId, {})).items[0]!;
+      expect(retried).toMatchObject({ status: 'VALIDATION_FAILED', version: failed.version + 2 });
+      expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', failed: 1, pending: 0 });
+    }
+    expect(await prisma.$queryRaw<{ id: string; status: string; version: number }[]>`SELECT id,status,version FROM integration_ingestion_items WHERE job_id=ANY(${untouchedJobs}::uuid[]) ORDER BY id`).toEqual(untouched);
+  });
+
+  it.each(['RETRY', 'CANCEL'] as const)('releases other blocked history references when the later batch uses %s on their shared owner', async action => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'shared-owner', name: '共享原事实' }]);
+    const original = await submitSingle(item, configuration, receiptId);
+    const functionName = `shared_fault_${item.organizationId.replaceAll('-', '')}`;
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.organization_id='${item.organizationId}'::uuid AND NEW.status='INSERTED' THEN RAISE EXCEPTION 'shared_owner_failure'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER ${functionName} BEFORE UPDATE ON integration_ingestion_items FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
+    let firstId = '', secondId = '';
+    try {
+      await worker.processDue(1);
+      const input = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+      const first = await service.previewHistory(item.actor, input, trace(), key());
+      firstId = (await service.submitImport(item.actor, { previewId: first.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+      const second = await service.previewHistory(item.actor, input, trace(), key());
+      secondId = (await service.submitImport(item.actor, { previewId: second.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+      await service.controlJob(item.actor, secondId, { action: 'RETRY', reason: '触发两个引用共同阻塞' }, trace(), key());
+      await worker.processDue(1);
+      expect((await service.getJob(item.actor, firstId)).status).toBe('BLOCKED');
+      expect((await service.getJob(item.actor, secondId)).status).toBe('BLOCKED');
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER ${functionName} ON integration_ingestion_items`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION ${functionName}()`);
+    }
+    await service.controlJob(item.actor, secondId, { action, reason: '从后一个批次恢复共享依赖' }, trace(), key());
+    if (action === 'RETRY') {
+      await service.controlJob(item.actor, firstId, { action: 'PAUSE', reason: '手动暂停仍须保留' }, trace(), key());
+      await service.controlJob(item.actor, secondId, { action: 'RETRY', reason: '不得解除另一个批次的手动暂停' }, trace(), key());
+      expect((await service.getJob(item.actor, firstId)).status).toBe('PAUSED');
+      expect(await worker.processDue(2)).toBe(0);
+      await service.controlJob(item.actor, firstId, { action: 'RESUME', reason: '显式恢复后执行' }, trace(), key());
+    }
+    await worker.processDue(10);
+    expect((await service.getJob(item.actor, firstId)).status).toBe('COMPLETED');
+    expect((await service.getJob(item.actor, secondId)).status).toBe(action === 'RETRY' ? 'COMPLETED' : 'CANCELLED');
+    expect((await service.listItems(item.actor, original.jobId, {})).items[0]!.status).toBe(action === 'RETRY' ? 'INSERTED' : 'CANCELLED');
+  });
+
   it.each(['RETRY', 'SKIP'] as const)('persists lazy history expansion before a first-row failure and restores FIFO with %s', async recovery => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
     const receiptId = await received(item, [{ code: 'lazy-atomic-fault', name: 'first' }, { code: 'lazy-next-row', name: 'second' }]);
