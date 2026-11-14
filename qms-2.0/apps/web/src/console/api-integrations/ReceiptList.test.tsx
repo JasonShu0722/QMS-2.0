@@ -153,6 +153,7 @@ it('compact receiving freezes selected IDs and all related controls during submi
   const filters = within(screen.getByRole('form', { name: '接收记录筛选' }));
   const pagination = within(screen.getByRole('navigation', { name: '接收记录分页' }));
   const controls = [selectPage,
+    actions.getByRole('button', { name: '清空筛选' }),
     selectedActions.getByRole('button', { name: '取消选择' }),
     within(message.closest('tr')!).getByRole('button', { name: '查看消息message-001' }),
     actions.getByRole('combobox', { name: '记录视图' }),
@@ -189,6 +190,94 @@ it('keeps receipt filters collapsed until the operator opens them', async () => 
   expect(screen.getByRole('combobox', { name: '接口名称或编码' })).toBeVisible();
 });
 
+it('clears applied and draft filters and reloads the default record list', async () => {
+  scope.permissions = ['integration:receipts:read'];
+  view(); await screen.findByText('message-001'); openFilters();
+  fireEvent.change(screen.getByRole('textbox', { name: '来源系统编码' }), { target: { value: 'MES' } });
+  fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
+  await waitFor(() => expect(new URL(read.mock.calls.filter(([path]) => path.includes('/receipts?')).at(-1)![0], 'http://localhost').searchParams.get('sourceCode')).toBe('MES'));
+  const readsBeforeClear = read.mock.calls.filter(([path]) => path.includes('/receipts?')).length;
+  fireEvent.change(screen.getByRole('textbox', { name: '来源系统编码' }), { target: { value: 'STALE' } });
+  fireEvent.click(screen.getByRole('button', { name: '清空筛选' }));
+  await waitFor(() => expect(read.mock.calls.filter(([path]) => path.includes('/receipts?')).length).toBeGreaterThan(readsBeforeClear));
+  const query = new URL(read.mock.calls.filter(([path]) => path.includes('/receipts?')).at(-1)![0], 'http://localhost').searchParams;
+  expect(query.has('sourceCode')).toBe(false); expect(query.get('page')).toBe('1'); expect(screen.getByRole('textbox', { name: '来源系统编码' })).toHaveValue('');
+});
+
+it('clears both receipt and attempt filters without leaving the selected view or page size', async () => {
+  scope.permissions = ['integration:receipts:read'];
+  view(); await screen.findByText('message-001'); openFilters();
+  fireEvent.mouseDown(screen.getByLabelText('记录视图', { selector: 'input' }));
+  fireEvent.click(await screen.findByText('请求结果', { selector: '.ant-select-item-option-content' }));
+  await screen.findByText('message-001');
+  fireEvent.change(screen.getByLabelText('每页条数'), { target: { value: '50' } });
+  await screen.findByText('message-001');
+  const form = within(screen.getByRole('form', { name: '接收记录筛选' }));
+  fireEvent.change(form.getByLabelText('来源系统编码', { selector: 'input' }), { target: { value: ' ERP ' } });
+  fireEvent.change(form.getByLabelText('请求追踪号', { selector: 'input' }), { target: { value: traceId } });
+  fireEvent.mouseDown(form.getByLabelText('查询时段', { selector: 'input' }));
+  fireEvent.click(await screen.findByText('近1天', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(form.getByRole('button', { name: '应用筛选' }));
+  await waitFor(() => expect(read.mock.calls.some(([path]) => path.includes('/attempts?') && new URL(path, 'http://localhost').searchParams.get('sourceCode') === 'ERP')).toBe(true));
+  const readsBeforeClear = read.mock.calls.filter(([path]) => path.includes('/attempts?')).length;
+  fireEvent.click(within(screen.getByRole('toolbar', { name: '接收记录操作' })).getByRole('button', { name: '清空筛选' }));
+  await waitFor(() => expect(read.mock.calls.filter(([path]) => path.includes('/attempts?')).length).toBeGreaterThan(readsBeforeClear));
+  const query = new URL(read.mock.calls.filter(([path]) => path.includes('/attempts?')).at(-1)![0], 'http://localhost').searchParams;
+  expect(query.has('sourceCode')).toBe(false); expect(query.has('traceId')).toBe(false); expect(query.get('page')).toBe('1'); expect(query.get('limit')).toBe('50');
+  expect(new Date(query.get('to')!).getTime() - new Date(query.get('from')!).getTime()).toBe(7 * 86400000 - 60000);
+  expect(form.getByLabelText('来源系统编码', { selector: 'input' })).toHaveValue('');
+  expect(form.getByLabelText('请求追踪号', { selector: 'input' })).toHaveValue('');
+  expect(form.getByLabelText('查询时段', { selector: 'input' }).closest('.ant-select')).toHaveTextContent('近7天');
+  expect(screen.getByLabelText('记录视图', { selector: 'input' }).closest('.ant-select')).toHaveTextContent('请求结果');
+  expect(screen.getByLabelText('每页条数')).toHaveValue('50');
+});
+
+it('clears validation, page jumps and selection without opening collapsed filters', async () => {
+  scope.permissions = ['integration:receipts:read', 'integration:manage'];
+  read.mockImplementation(async path => path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 81, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : { ...page(path), total: 81 });
+  view(); await screen.findByText('message-001'); openFilters();
+  const form = within(screen.getByLabelText('接收记录筛选'));
+  fireEvent.change(form.getByLabelText('接收编号', { selector: 'input' }), { target: { value: 'invalid' } });
+  fireEvent.click(form.getByRole('button', { name: '应用筛选' }));
+  expect(screen.getByText(/请检查标识格式/)).toBeVisible();
+  openFilters();
+  const paginationElement = screen.getByLabelText('接收记录分页');
+  const pagination = within(paginationElement);
+  fireEvent.click(pagination.getByRole('button', { name: '下一页' })); await screen.findByText('message-001');
+  fireEvent.change(pagination.getByLabelText('跳至页'), { target: { value: '4' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  const actions = within(screen.getByLabelText('接收记录操作'));
+  fireEvent.click(actions.getByRole('button', { name: '清空筛选' })); await screen.findByText('message-001');
+  expect(screen.queryByText(/请检查标识格式/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('已选接收记录')).not.toBeInTheDocument();
+  expect(pagination.getByLabelText('跳至页')).toHaveValue(null);
+  expect(paginationElement).toHaveTextContent('1 / 5');
+  expect(actions.getByRole('button', { name: '筛选条件' })).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('clears candidate errors and ignores stale candidates after clearing search', async () => {
+  let resolveCandidates!: (value: unknown) => void;
+  read.mockImplementation(async path => {
+    if (path.includes('/receipt-endpoints?') && path.includes('search=failed')) throw new Error('candidate unavailable');
+    if (path.includes('/receipt-endpoints?') && path.includes('search=stale')) return new Promise(resolve => { resolveCandidates = resolve; });
+    return path.includes('/status') ? { usedBodyBytes: 20, capacityBytes: 1073741824, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' } : page(path);
+  });
+  view(); await screen.findByText('message-001'); openFilters();
+  const selector = screen.getByLabelText('接口名称或编码', { selector: 'input' });
+  const actions = within(screen.getByRole('toolbar', { name: '接收记录操作' }));
+  fireEvent.change(selector, { target: { value: 'failed' } });
+  await screen.findByText('接口候选加载失败，请重试');
+  fireEvent.click(actions.getByRole('button', { name: '清空筛选' }));
+  expect(screen.queryByText('接口候选加载失败，请重试')).not.toBeInTheDocument();
+  expect(selector).toHaveValue('');
+  fireEvent.change(selector, { target: { value: 'stale' } });
+  await waitFor(() => expect(resolveCandidates).toBeTypeOf('function'));
+  fireEvent.click(actions.getByRole('button', { name: '清空筛选' }));
+  await act(async () => resolveCandidates({ items: [{ id: endpointId, name: 'STALE_CANDIDATE', code: 'stale' }], total: 1, page: 1, limit: 20 }));
+  fireEvent.mouseDown(selector);
+  expect(screen.queryByText(/STALE_CANDIDATE/)).not.toBeInTheDocument();
+});
+
 it('saves a ten GiB organization payload capacity from the facts button', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   view(); await screen.findByText('message-001');
@@ -223,6 +312,7 @@ it('keeps the original capacity request for an unknown result and offers retry',
   const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
   fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(dialog.getByRole('button', { name: /重试\s*保存/ })).toBeVisible()); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
+  expect(within(screen.getByRole('toolbar', { name: '接收记录操作' })).getByRole('button', { name: '清空筛选' })).toBeDisabled();
   expect(mutate).toHaveBeenCalledTimes(1);
 });
 

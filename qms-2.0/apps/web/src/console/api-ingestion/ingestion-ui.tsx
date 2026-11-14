@@ -40,7 +40,7 @@ export function ingestionIssue(code: string, english: boolean) {
   };
   return (messages[code] ?? ['处理异常，请联系管理员核查', 'Processing failed. Contact an administrator'])[english ? 1 : 0];
 }
-export function IngestionError({ error, unknown = false }: { error?: unknown; unknown?: boolean }) {
+export function IngestionError({ error, unknown = false, unknownTitle }: { error?: unknown; unknown?: boolean; unknownTitle?: string }) {
   const text = useIngestionText();
   if (!error) return null;
   const messages: Record<string, [string, string]> = {
@@ -52,10 +52,12 @@ export function IngestionError({ error, unknown = false }: { error?: unknown; un
     INTEGRATION_PAYLOAD_EXPIRED: ['接收正文已清理，请选择其他接收记录', 'The received payload expired. Select another record.'],
     INGESTION_CAPACITY_UNAVAILABLE: ['处理容量不足，请先处理积压任务', 'Processing capacity is unavailable. Resolve queued jobs first.'],
     INGESTION_QUEUE_BLOCKED: ['接口队列已阻塞，请查看任务错误并处理', 'The interface queue is blocked. Resolve the job error.'],
+    INGESTION_HISTORY_LIMIT_EXCEEDED: ['本次预览最多100份接收记录、10000条数据，请缩短接收时间范围', 'This preview is limited to 100 receiving records and 10,000 rows. Shorten the time range.'],
+    INGESTION_PREVIEW_LIMIT_EXCEEDED: ['临时预览已达上限，请稍后重试', 'Temporary preview capacity is full. Retry later.'],
   };
   const message = error instanceof ApiError ? messages[error.code] : undefined;
   return <Alert role="alert" type="error" showIcon title={unknown
-    ? text('操作结果未确认，请重试原请求；当前输入已锁定', 'The outcome is unknown. Retry the original request; inputs are locked.')
+    ? unknownTitle ?? text('操作结果未确认，请重试原请求；当前输入已锁定', 'The outcome is unknown. Retry the original request; inputs are locked.')
     : message ? text(...message) : error instanceof ApiError && error.status === 409
       ? text('配置或档案已变化，请保留输入并刷新后重试', 'Configuration or records changed. Preserve your input and refresh before retrying.')
       : text('请求失败，请检查输入后重试', 'Request failed. Check your input and retry.')}
@@ -64,7 +66,8 @@ export function IngestionError({ error, unknown = false }: { error?: unknown; un
 
 type Requests = ReturnType<typeof useScopedIntegrationRequests>;
 type Command = { path: string; method: 'POST' | 'PATCH' | 'DELETE'; body: Parameters<Requests['write']>[2] };
-export function useIngestionMutation(scope: IntegrationScope) {
+export function useIngestionMutation(scope: IntegrationScope, options?: { recoverableUnknown?: boolean }) {
+  const recoverableUnknown = options?.recoverableUnknown ?? false;
   const requests = useScopedIntegrationRequests(scope);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -83,8 +86,8 @@ export function useIngestionMutation(scope: IntegrationScope) {
     } catch (cause) {
       if (!requests.current() || isAborted(cause)) return;
       const known = cause instanceof ApiError && (cause.status !== undefined && cause.status >= 400 && cause.status < 500 && cause.status !== 408 && cause.status !== 425 || cause.code === 'CLIENT_REAUTHENTICATION_COMPLETED');
-      if (known) frozen.current = undefined;
-      setUnknown(!known); setError(cause);
+      if (known || recoverableUnknown) frozen.current = undefined;
+      setUnknown(!known && !recoverableUnknown); setError(cause);
     } finally { if (requests.current()) { pending.current = false; setBusy(false); } }
   }
   function retry() { if (frozen.current) void execute(frozen.current.command, frozen.current.done); }

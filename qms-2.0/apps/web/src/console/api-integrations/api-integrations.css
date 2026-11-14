@@ -35,7 +35,9 @@
 .qms-integration-copy-error { color: var(--qms-danger); }
 .qms-integration-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .qms-integration-filters label { display: grid; gap: 4px; min-width: 0; }
-.qms-integration-filters .ant-select { width: 100%; }
+.qms-integration-filters .ant-select { width: 100%; min-width: 0; max-width: 100%; }
+.qms-integration-filters .ant-select-content { min-width: 0; }
+.qms-integration-filters .ant-select-content-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qms-integration-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin: 0 0 4px; }
 .qms-integration-detail > div { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px; align-items: baseline; min-width: 0; }
 .qms-integration-detail dt { min-width: 0; color: var(--qms-muted); font-size: 12px; line-height: 1.25; white-space: nowrap; }

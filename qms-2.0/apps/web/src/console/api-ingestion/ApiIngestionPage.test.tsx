@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { transferableAbortController } from 'node:util';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
-import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { getLedgerSessionEpoch } from '../../ui/ledger/preferences';
 import { ConsoleTheme } from '../ConsoleTheme';
@@ -13,7 +14,7 @@ import { ApiIngestionPage } from './ApiIngestionPage';
 import { ImportPreview } from './ImportPreview';
 import { RuleEditor } from './RuleEditor';
 import { JobList } from './JobList';
-import type { Rule } from './ingestion-ui';
+import { IngestionError, type Rule } from './ingestion-ui';
 import type { IntegrationScope } from '../api-integrations/integration-ui';
 
 const mocks = vi.hoisted(() => ({ context: {} as ConsoleContext, invalidate: vi.fn(), mutate: vi.fn() }));
@@ -41,8 +42,8 @@ function componentView(children: ReactNode) {
 function verifiedScope(): IntegrationScope {
   return { organizationId: homeId, session: `INTERNAL:${homeId}:${actorId}`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run'], deny: mocks.invalidate };
 }
-function previewView(history = false) {
-  componentView(<ImportPreview scope={verifiedScope()} rule={rule} history={history} canReceipts close={vi.fn()} />);
+function previewView(history = false, viewJobs = vi.fn()) {
+  componentView(<ImportPreview scope={verifiedScope()} rule={rule} history={history} canReceipts close={vi.fn()} viewJobs={viewJobs} />);
   return within(screen.getByRole('dialog', { name: `${history ? '历史批量导入' : '单条试处理'} · ${rule.name}` }));
 }
 function editorView(existing = rule) {
@@ -51,6 +52,13 @@ function editorView(existing = rule) {
 }
 function jobsView() {
   return componentView(<JobList scope={verifiedScope()} endpoints={[{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }]} canReceipts clearReceipt={vi.fn()} />);
+}
+function pageTab(name: string) { return screen.getByText(name, { selector: '[role="tab"]' }); }
+function OtherDraft() { useUnsavedChanges(true); return null; }
+function resultsView(initialEntry: string, otherDraft = false) {
+  vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  const router = createMemoryRouter([{ path: '*', element: <UnsavedChangesProvider><ApiIngestionPage />{otherDraft && <OtherDraft />}</UnsavedChangesProvider> }], { initialEntries: [initialEntry] });
+  render(<LanguageProvider><ConsoleTheme><RouterProvider router={router} /></ConsoleTheme></LanguageProvider>); return router;
 }
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); read.mockReset(); mocks.mutate.mockReset(); mocks.context = context(); localStorage.clear();
@@ -62,7 +70,7 @@ beforeEach(() => {
     return { items: [], total: 0, page: 1, limit: 20 } as never;
   });
 });
-afterEach(() => { vi.unstubAllEnvs(); localStorage.clear(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); localStorage.clear(); });
 it('requires the scoped ingestion capability even for a platform administrator', () => {
   mocks.context = { ...context(), modules: [] }; view();
   expect(screen.getByRole('alert')).toHaveTextContent('无权访问API入库衔接'); expect(read).not.toHaveBeenCalled();
@@ -75,10 +83,10 @@ it('shows named endpoints and keeps mutation controls absent for readers', async
 it('opens receipt-linked processing jobs and clears the controlled receipt filter', async () => {
   view(`/console/api-ingestion?receiptId=${receiptId}`);
   await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && new URL(call[0], 'http://localhost').searchParams.get('receiptId') === receiptId)).toBe(true));
-  expect(screen.getByRole('tab', { name: '处理任务' })).toHaveAttribute('aria-selected', 'true');
+  expect(pageTab('处理任务')).toHaveAttribute('aria-selected', 'true');
   fireEvent.click(screen.getByRole('button', { name: '清除接收记录筛选' })); await screen.findByText('供应商规则');
   expect(screen.queryByRole('button', { name: '清除接收记录筛选' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: '处理任务' }));
+  fireEvent.click(pageTab('处理任务'));
   await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && !new URL(call[0], 'http://localhost').searchParams.has('receiptId'))).toBe(true));
 });
 it.each(['not-a-receipt', `${receiptId}&receiptId=${receiptId}`])('refuses an invalid or ambiguous receipt filter %s', value => {
@@ -103,6 +111,80 @@ it('previews a selected receipt without submitting an import until explicit conf
   fireEvent.click(dialog.getByRole('button', { name: '确认导入' })); await dialog.findByText(/已提交/);
   expect(mocks.mutate.mock.calls[1]?.[2]).toEqual({ organizationId: homeId, previewId: 'preview-one', confirmed: true });
 });
+it('keeps a failed preview editable and retries the changed preview request', async () => {
+  const failure = new ApiError({ code: 'HTTP_502', message: 'Unknown', fields: {}, traceId: 'trace' }, 502);
+  mocks.mutate.mockRejectedValueOnce(failure).mockResolvedValueOnce({ previewId: 'preview-retry', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'INSERTED', fields: { code: '002' }, differences: [] });
+  const dialog = previewView(true);
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' })); await dialog.findByRole('alert');
+  expect(dialog.getByLabelText('接收时间起')).toBeEnabled(); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeEnabled();
+  fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T13:00' } }); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  await dialog.findByText('002'); expect(mocks.mutate.mock.calls[1]?.[2]).toMatchObject({ to: new Date('2026-11-13T13:00').toISOString() });
+});
+it('lets a single preview close after a failed request while keeping an in-flight request protected', async () => {
+  let reject!: (cause: unknown) => void; const close = vi.fn();
+  mocks.mutate.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  componentView(<ImportPreview scope={verifiedScope()} rule={rule} history={false} canReceipts close={close} />);
+  const dialog = within(screen.getByRole('dialog', { name: `单条试处理 · ${rule.name}` }));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' })); fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' })); await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1)); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeDisabled();
+  await act(async () => reject(new ApiError({ code: 'HTTP_502', message: 'Unknown', fields: {}, traceId: 'trace' }, 502)));
+  expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeEnabled(); fireEvent.click(dialog.getByRole('button', { name: /^关\s+闭$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改并关闭' })); expect(close).toHaveBeenCalledTimes(1); expect(mocks.mutate).toHaveBeenCalledTimes(1);
+});
+it('offers a safe task-list exit after an unknown submit without clearing its retry state', async () => {
+  const failure = new ApiError({ code: 'HTTP_502', message: 'Unknown', fields: {}, traceId: 'trace' }, 502); const viewJobs = vi.fn(); let reject!: (cause: unknown) => void;
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-exit', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z' }).mockRejectedValueOnce(failure).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  const dialog = previewView(true, viewJobs);
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' })); await dialog.findByRole('button', { name: '确认导入' }); fireEvent.click(dialog.getByRole('button', { name: '确认导入' }));
+  const exit = await dialog.findByRole('button', { name: '关闭并查看处理任务' }); expect(exit).toBeEnabled(); expect(dialog.getByRole('alert')).toHaveTextContent('可能已经提交');
+  fireEvent.click(dialog.getByRole('button', { name: '重试原请求' })); await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(3)); expect(exit).toBeDisabled(); fireEvent.click(exit); expect(viewJobs).not.toHaveBeenCalled();
+  await act(async () => reject(failure)); expect(exit).toBeEnabled(); fireEvent.click(exit); expect(viewJobs).toHaveBeenCalledTimes(1); expect(mocks.mutate.mock.calls[2]?.slice(0, 3)).toEqual(mocks.mutate.mock.calls[1]?.slice(0, 3));
+});
+it.each([
+  { outcome: 'success', receiptFilter: false, otherDraft: false }, { outcome: 'unknown', receiptFilter: false, otherDraft: false },
+  { outcome: 'success', receiptFilter: true, otherDraft: false }, { outcome: 'unknown', receiptFilter: true, otherDraft: false },
+  { outcome: 'unknown', receiptFilter: false, otherDraft: true },
+])('opens fresh jobs after $outcome import, old receiving filter=$receiptFilter, other draft=$otherDraft', async ({ outcome, receiptFilter, otherDraft }) => {
+  const job = { id: '66666666-6666-4666-8666-666666666666', endpointId, receiptId: '99999999-9999-4999-8999-999999999999', ruleId, ruleVersion: 2, target: 'SUPPLIER', source: 'HISTORY', status: 'PENDING', sequence: 1, total: 1, pending: 1, succeeded: 0, skipped: 0, failed: 0, awaitingConfirmation: 0, errorCode: null, createdAt: '2026-11-14T02:00:00Z' };
+  let resolveOldReceipt!: (page: unknown) => void;
+  const original = read.getMockImplementation()!;
+  read.mockImplementation(async (path, ...args) => {
+    if (path.includes('/ingestion/jobs?')) return new URL(path, 'http://localhost').searchParams.has('receiptId') ? new Promise(done => { resolveOldReceipt = done; }) as never : { items: [job], total: 1, page: 1, limit: 20 } as never;
+    return original(path, ...args);
+  });
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-tasks', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z' });
+  if (outcome === 'success') mocks.mutate.mockResolvedValueOnce({ jobIds: [job.id], reused: false, receiptCount: 1, rowCount: 1 });
+  else mocks.mutate.mockRejectedValueOnce(new ApiError({ code: 'HTTP_502', message: 'Unknown', fields: {}, traceId: 'trace' }, 502));
+  const router = resultsView(`/console/api-ingestion${receiptFilter ? `?receiptId=${receiptId}` : ''}`, otherDraft);
+  if (receiptFilter) { await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && new URL(call[0], 'http://localhost').searchParams.get('receiptId') === receiptId)).toBe(true)); fireEvent.click(pageTab('规则')); expect(router.state.location.search).toBe(`?receiptId=${receiptId}`); }
+  const row = (await screen.findByText('供应商规则')).closest('tr')!; fireEvent.click(within(row).getByText('历史批量导入', { selector: 'button span' }));
+  const dialog = within(screen.getByRole('dialog', { name: `历史批量导入 · ${rule.name}` }));
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByText('生成预览', { selector: 'button span' })); fireEvent.click(await dialog.findByText('确认导入', { selector: 'button span' }));
+  fireEvent.click(await dialog.findByText(outcome === 'success' ? '查看处理任务' : '关闭并查看处理任务', { selector: 'button span' }));
+  if (otherDraft) { const discard = await screen.findByText('放弃修改', { selector: 'button span' }); expect(pageTab('规则')).toHaveAttribute('aria-selected', 'true'); expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?'))).toBe(false); fireEvent.click(discard); }
+  await waitFor(() => expect(router.state.location.search).toBe('')); await screen.findByLabelText('查看任务1'); expect(pageTab('处理任务')).toHaveAttribute('aria-selected', 'true'); await waitFor(() => expect(screen.queryByText(`历史批量导入 · ${rule.name}`)).not.toBeInTheDocument());
+  const jobsReads = read.mock.calls.filter(call => call[0].includes('/ingestion/jobs?')); expect(new URL(jobsReads.at(-1)![0], 'http://localhost').searchParams.has('receiptId')).toBe(false); expect(mocks.mutate).toHaveBeenCalledTimes(2);
+  if (receiptFilter) { await act(async () => resolveOldReceipt({ items: [{ ...job, id: 'old-job', receiptId, sequence: 99 }], total: 1, page: 1, limit: 20 })); expect(screen.queryByLabelText('查看任务99')).not.toBeInTheDocument(); expect(screen.getByLabelText('查看任务1')).toBeVisible(); }
+  if (!otherDraft) { fireEvent.click(pageTab('规则')); await screen.findByText('供应商规则'); expect(pageTab('规则')).toHaveAttribute('aria-selected', 'true'); }
+});
+it.each([
+  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 422, '本次预览最多100份接收记录、10000条数据，请缩短接收时间范围'],
+  ['INGESTION_PREVIEW_LIMIT_EXCEEDED', 429, '临时预览已达上限，请稍后重试'],
+] as const)('explains the controlled %s failure without locking preview inputs', async (code, status, message) => {
+  mocks.mutate.mockRejectedValueOnce(new ApiError({ code, message: 'Limit', fields: {}, traceId: 'trace' }, status));
+  const dialog = previewView(true); fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } }); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  await dialog.findByText(message); expect(dialog.getByLabelText('接收时间起')).toBeEnabled(); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeEnabled();
+});
+it.each([
+  ['INGESTION_HISTORY_LIMIT_EXCEEDED', 'This preview is limited to 100 receiving records and 10,000 rows. Shorten the time range.'],
+  ['INGESTION_PREVIEW_LIMIT_EXCEEDED', 'Temporary preview capacity is full. Retry later.'],
+] as const)('explains the controlled %s failure in English', (code, message) => {
+  localStorage.setItem('qms:locale:v1', 'en-US'); componentView(<IngestionError error={new ApiError({ code, message: 'Limit', fields: {}, traceId: 'trace' }, 429)} />);
+  expect(screen.getByRole('alert')).toHaveTextContent(message); expect(screen.getByRole('alert')).not.toHaveTextContent(code);
+});
 it.each([502, 408, 425])('freezes an unknown import command across repeated %s outcomes', async status => {
   const failure = new ApiError({ code: `HTTP_${status}`, message: 'Unknown', fields: {}, traceId: 'trace' }, status);
   mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-frozen', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z' }).mockRejectedValueOnce(failure).mockRejectedValueOnce(failure).mockResolvedValueOnce({ jobIds: [], reused: true, receiptCount: 1, rowCount: 1 });
@@ -110,7 +192,7 @@ it.each([502, 408, 425])('freezes an unknown import command across repeated %s o
   fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
   fireEvent.click(dialog.getByRole('button', { name: '生成预览' })); await dialog.findByRole('button', { name: '确认导入' });
   fireEvent.click(dialog.getByRole('button', { name: '确认导入' })); const retry = await dialog.findByRole('button', { name: '重试原请求' });
-  expect(dialog.getByLabelText('接收时间起')).toBeDisabled(); expect(dialog.getByRole('button', { name: /关\s*闭/ })).toBeDisabled(); expect(dialog.getByRole('button', { name: '生成预览' })).toBeDisabled();
+  expect(dialog.getByLabelText('接收时间起')).toBeDisabled(); expect(dialog.getByRole('button', { name: /^关\s+闭$/ })).toBeDisabled(); expect(dialog.getByRole('button', { name: '生成预览' })).toBeDisabled();
   fireEvent.click(retry); await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(3));
   await waitFor(() => expect(dialog.getByRole('button', { name: '重试原请求' })).not.toHaveClass('ant-btn-loading'));
   expect(dialog.getByLabelText('接收时间起')).toBeDisabled(); fireEvent.click(dialog.getByRole('button', { name: '重试原请求' }));
@@ -137,9 +219,10 @@ it('resolves interface names beyond the first lookup page', async () => {
 });
 it('clears the page when a preview receives a permission refusal', async () => {
   mocks.mutate.mockRejectedValueOnce(new ApiError({ code: 'INGESTION_AUTHORIZATION_REVOKED', message: 'Denied', fields: {}, traceId: 'trace' }, 403));
-  view(); await screen.findByText('供应商规则'); fireEvent.click(screen.getByRole('button', { name: '历史批量导入' }));
-  fireEvent.change(screen.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(screen.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
+  view(); const row = (await screen.findByText('供应商规则')).closest('tr')!; fireEvent.click(within(row).getByRole('button', { name: '历史批量导入' }));
+  const dialog = within(screen.getByRole('dialog', { name: `历史批量导入 · ${rule.name}` }));
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } }); fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
   await screen.findByText('无权访问API入库衔接'); expect(screen.queryByText('供应商规则')).not.toBeInTheDocument(); expect(mocks.invalidate).toHaveBeenCalled();
 });
 it('invalidates the preview when the selected array row changes', async () => {
@@ -152,11 +235,11 @@ it('invalidates the preview when the selected array row changes', async () => {
 });
 it('edits structured numeric conditions and preserves the expected rule version', async () => {
   mocks.mutate.mockResolvedValue(rule); const editor = editorView();
-  expect(editor.getByRole('combobox', { name: '接收接口' })).toBeDisabled(); expect(editor.getByRole('combobox', { name: '目标档案' })).toBeDisabled();
+  expect(editor.getByLabelText('接收接口')).toBeDisabled(); expect(editor.getByLabelText('目标档案')).toBeDisabled();
   fireEvent.change(editor.getByLabelText('来源更新时间字段'), { target: { value: 'modifiedAt' } });
   fireEvent.click(editor.getByRole('button', { name: '添加条件' })); fireEvent.change(editor.getByLabelText('判断字段1'), { target: { value: 'kind' } });
-  fireEvent.mouseDown(editor.getByRole('combobox', { name: '值类型' })); fireEvent.click(await screen.findByText('数字', { selector: '.ant-select-item-option-content' }));
-  fireEvent.change(editor.getByRole('spinbutton', { name: '比较值' }), { target: { value: '3' } });
+  fireEvent.mouseDown(editor.getByLabelText('值类型')); fireEvent.click(await screen.findByText('数字', { selector: '.ant-select-item-option-content' }));
+  fireEvent.change(editor.getByLabelText('比较值'), { target: { value: '3' } });
   fireEvent.click(editor.getByRole('button', { name: /保\s*存/ })); await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
   expect(mocks.mutate.mock.calls[0]?.[2]).toMatchObject({ expectedVersion: 2, enabled: false, sourceUpdatedAtField: 'modifiedAt', conditions: [{ path: 'kind', operator: 'EQ', value: 3 }] });
 });
@@ -179,10 +262,10 @@ it('keeps stale item differences visible while disabling confirmation', async ()
     return original(path, ...args);
   });
   jobsView(); const openJob = await screen.findByLabelText('查看任务1'); await act(async () => { fireEvent.click(openJob); });
-  const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
-  const viewDifferences = await jobDialog.findByRole('button', { name: '查看差异' });
+  const jobDialog = within((await screen.findByText('供应商接收 · #1')).closest('[role="dialog"]')!);
+  const viewDifferences = await jobDialog.findByText('查看差异', { selector: 'button span' });
   await act(async () => { fireEvent.click(viewDifferences); });
-  const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
+  const detail = within((await screen.findByText('数组第1行')).closest('[role="dialog"]')!);
   const stale = await detail.findByText('当前档案已变化，旧差异不可确认覆盖');
   await waitFor(() => expect(stale).toBeVisible());
   expect(detail.getByRole('button', { name: '确认更新' })).toBeDisabled(); expect(detail.getByText('旧供应商')).toBeVisible(); expect(mocks.mutate).not.toHaveBeenCalled();

@@ -8,7 +8,7 @@ import { IngestionError, IngestionFields, ingestionIssue, ingestionPath, label, 
 type Preview = components['schemas']['IngestionPreviewDto'];
 type Receipt = components['schemas']['IntegrationReceiptDto'];
 type Values = { receiptId?: string; row: number; from?: string; to?: string; reprocessReason?: string };
-export function ImportPreview({ scope, rule, history, canReceipts, close }: { scope: IntegrationScope; rule: Rule; history: boolean; canReceipts: boolean; close: () => void }) {
+export function ImportPreview({ scope, rule, history, canReceipts, close, viewJobs }: { scope: IntegrationScope; rule: Rule; history: boolean; canReceipts: boolean; close: () => void; viewJobs?: () => void }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
   const [form] = Form.useForm<Values>(); const requestLeave = useNavigationGuard();
   const { read, current } = useScopedIntegrationRequests(scope);
@@ -16,7 +16,7 @@ export function ImportPreview({ scope, rule, history, canReceipts, close }: { sc
   const [dirty, setDirty] = useState(false); const [expired, setExpired] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]); const [receiptPage, setReceiptPage] = useState(1); const [receiptTotal, setReceiptTotal] = useState(0);
   const [receiptsLoading, setReceiptsLoading] = useState(false); const [receiptError, setReceiptError] = useState<unknown>(); const [revision, setRevision] = useState(0);
-  const previewMutation = useIngestionMutation(scope); const submitMutation = useIngestionMutation(scope);
+  const previewMutation = useIngestionMutation(scope, { recoverableUnknown: true }); const submitMutation = useIngestionMutation(scope);
   const locked = previewMutation.locked || submitMutation.locked;
   useUnsavedChanges(dirty && !submitted);
   useEffect(() => { setPreview(undefined); setSubmitted(undefined); }, [rule.id, rule.version]);
@@ -69,7 +69,7 @@ export function ImportPreview({ scope, rule, history, canReceipts, close }: { sc
       </>}
       {!submitted && <Form.Item name="reprocessReason" label={text('重新处理原因（仅需另建处理记录时填写）', 'Reprocessing reason (only when creating a new processing record)')}><Input.TextArea maxLength={300} autoSize={{ minRows: 1, maxRows: 3 }} /></Form.Item>}
       <IngestionError error={previewMutation.error} unknown={previewMutation.unknown} />
-      {!submitted && <Space className="qms-ingestion-actions"><Button type="primary" htmlType={previewMutation.unknown ? 'button' : 'submit'} loading={previewMutation.busy} disabled={submitMutation.locked || !canReceipts} onClick={previewMutation.unknown ? previewMutation.retry : undefined}>{previewMutation.unknown ? text('重试原请求', 'Retry original request') : text('生成预览', 'Generate preview')}</Button></Space>}
+      {!submitted && <Space className="qms-ingestion-actions"><Button type="primary" htmlType="submit" loading={previewMutation.busy} disabled={submitMutation.locked || !canReceipts}>{text('生成预览', 'Generate preview')}</Button></Space>}
     </Form>
     {preview && <div className="qms-ingestion-section qms-ingestion-actions" role="region" aria-label={text('入库预览', 'Ingestion preview')}>
       <div className="qms-ingestion-counts"><span>{text('接收份数', 'Receiving records')}: {preview.receiptCount}</span><span>{text('数据条数', 'Rows')}: {preview.rowCount}</span>{preview.action && <Tag>{label(preview.action, english)}</Tag>}</div>
@@ -79,9 +79,9 @@ export function ImportPreview({ scope, rule, history, canReceipts, close }: { sc
       {expired && <Alert type="warning" title={text('预览已过期，请重新生成', 'Preview expired. Generate a new preview.')} />}
       {!submitMutation.unknown && <Button type="primary" disabled={locked || expired || preview.rowCount === 0 || preview.action === 'VALIDATION_FAILED'} loading={submitMutation.busy} onClick={submit}>{text('确认导入', 'Confirm import')}</Button>}
     </div>}
-    <IngestionError error={submitMutation.error} unknown={submitMutation.unknown} />
-    {submitMutation.unknown && <Button className="qms-ingestion-actions" type="primary" loading={submitMutation.busy} onClick={submitMutation.retry}>{text('重试原请求', 'Retry original request')}</Button>}
-    {submitted && <Alert role="status" className="qms-ingestion-actions" type="success" showIcon title={submitted.reused ? text('已复用原处理任务', 'Existing processing jobs reused') : text('已提交处理任务', 'Processing jobs submitted')} description={`${text('任务数', 'Jobs')}: ${submitted.jobIds.length} · ${text('数据条数', 'Rows')}: ${submitted.rowCount}`} />}
+    <IngestionError error={submitMutation.error} unknown={submitMutation.unknown} unknownTitle={text('导入结果未确认，可能已经提交。请重试原请求，或查看处理任务核对；核对前请勿重新导入。', 'The import outcome is unknown and may have been submitted. Retry the original request or check processing jobs. Do not start another import before checking.')} />
+    {submitMutation.unknown && <><Button className="qms-ingestion-actions" type="primary" loading={submitMutation.busy} onClick={submitMutation.retry}>{text('重试原请求', 'Retry original request')}</Button>{viewJobs && <Button className="qms-ingestion-actions" disabled={submitMutation.busy} onClick={viewJobs}>{text('关闭并查看处理任务', 'Close and view processing jobs')}</Button>}</>}
+    {submitted && <Alert role="status" className="qms-ingestion-actions" type="success" showIcon title={submitted.reused ? text('已复用原处理任务', 'Existing processing jobs reused') : text('已提交处理任务', 'Processing jobs submitted')} description={<><div>{text('任务数', 'Jobs')}: {submitted.jobIds.length} · {text('数据条数', 'Rows')}: {submitted.rowCount}</div>{viewJobs && <Button type="link" onClick={viewJobs}>{text('查看处理任务', 'View processing jobs')}</Button>}</>} />}
     <Button className="qms-ingestion-actions" disabled={locked} onClick={() => requestLeave(close, true)}>{text('关闭', 'Close')}</Button>
   </Modal>;
 }

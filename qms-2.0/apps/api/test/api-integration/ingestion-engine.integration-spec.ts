@@ -99,6 +99,168 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(await worker.processDue(10)).toBe(0);
   });
 
+  it.each([null, new Date(Date.now() - 600000)])('allows previews and explicit history imports with active authentication last reverified at %s', async reauthenticatedAt => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'active-session', name: '有效登录直接试处理' }]);
+    await prisma.session.update({ where: { id: item.actor.sessionId }, data: { reauthenticatedAt } });
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 }, trace(), key());
+    expect(preview).toMatchObject({ action: 'INSERTED', rowCount: 1 });
+    const history = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: history.previewId, confirmed: true }, trace(), key());
+    expect(imported).toMatchObject({ rowCount: 1, receiptCount: 1, reused: false });
+    await expect(service.saveRule(item.actor, { ...configuration, expectedVersion: 1 }, trace(), key(), configuration.id)).rejects.toThrow('AUTH_REAUTHENTICATION_REQUIRED');
+    await prisma.session.update({ where: { id: item.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
+    await service.controlJob(item.actor, imported.jobIds[0]!, { action: 'CANCEL', reason: '有效会话边界验证结束' }, trace(), key());
+  });
+
+  it.each(['revoked', 'expired', 'unauthorized'] as const)('rejects every manual ingestion entry with %s authentication', async state => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'denied-session', name: '必须继续拒绝' }]);
+    const previewInput = { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 };
+    const historyInput = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+    const preview = await service.preview(item.actor, previewInput, trace(), key());
+    if (state === 'unauthorized') await prisma.userRole.deleteMany({ where: { userId: item.userId } });
+    else await prisma.session.update({ where: { id: item.actor.sessionId }, data: state === 'revoked' ? { revokedAt: new Date() } : { expiresAt: new Date(Date.now() - 1000) } });
+    const code = state === 'unauthorized' ? 'FEATURE_PERMISSION_DENIED' : 'AUTH_SESSION_REQUIRED';
+    await expect(service.preview(item.actor, previewInput, trace(), key())).rejects.toMatchObject({ response: { code } });
+    await expect(service.previewHistory(item.actor, historyInput, trace(), key())).rejects.toMatchObject({ response: { code } });
+    await expect(service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key())).rejects.toMatchObject({ response: { code } });
+    expect((await prisma.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_jobs WHERE organization_id=${item.organizationId}::uuid`)[0]!.total).toBe(0);
+  });
+
+  it.each(['ingestion:run', 'integration:payload:read', 'material-master:write'])('rechecks %s before replaying successful preview and import mutations', async permissionCode => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'replay-access', name: '重放仍须授权' }]);
+    const previewInput = { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 }, previewKey = key(), historyKey = key(), importKey = key();
+    const historyInput = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+    await service.preview(item.actor, previewInput, trace(), previewKey);
+    const history = await service.previewHistory(item.actor, historyInput, trace(), historyKey);
+    const importInput = { previewId: history.previewId, confirmed: true };
+    const imported = await service.submitImport(item.actor, importInput, trace(), importKey);
+    const denied = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', permissionCode] } } });
+    await prisma.rolePermission.deleteMany({ where: { roleId: item.roleId, permissionId: { in: denied.map(permission => permission.id) } } });
+    try {
+      await expect(service.preview(item.actor, previewInput, trace(), previewKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+      await expect(service.previewHistory(item.actor, historyInput, trace(), historyKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+      await expect(service.submitImport(item.actor, importInput, trace(), importKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    } finally {
+      await prisma.rolePermission.createMany({ data: denied.map(permission => ({ roleId: item.roleId, permissionId: permission.id })) });
+      await service.controlJob(item.actor, imported.jobIds[0]!, { action: 'CANCEL', reason: '幂等授权验证结束' }, trace(), key());
+    }
+  });
+
+  it('rejects historical previews above 100 receipts without truncating or creating a task', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const originalId = await received(item, [{ code: 'history-limit', name: '真实历史上限' }]);
+    await prisma.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) SELECT gen_random_uuid(),organization_id,endpoint_id,credential_id,gen_random_uuid()::text,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes FROM integration_receipts CROSS JOIN generate_series(1,100) WHERE id=${originalId}::uuid`;
+    await expect(service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key())).rejects.toMatchObject({ status: 422, response: { code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' } });
+    expect((await service.listJobs(item.actor, {})).total).toBe(0);
+  });
+
+  it.each(['cleared preview', 'updated rule', 'deleted rule'] as const)('recovers a committed import after %s while retaining current permission checks', async change => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'durable-recovery', name: '提交成功丢响应恢复' }]);
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 }, trace(), key());
+    const input = { previewId: preview.previewId, confirmed: true }, commandKey = key();
+    const result = await service.submitImport(item.actor, input, trace(), commandKey);
+    try {
+      if (change === 'cleared preview') await prisma.$executeRaw`DELETE FROM integration_ingestion_previews WHERE id=${preview.previewId}::uuid`;
+      else if (change === 'updated rule') await service.saveRule(item.actor, { ...configuration, expectedVersion: 1, name: '提交后修改规则' }, trace(), key(), configuration.id);
+      else await service.deleteRule(item.actor, configuration.id, { expectedVersion: 1 }, trace(), key());
+      await prisma.session.update({ where: { id: item.actor.sessionId }, data: { reauthenticatedAt: null } });
+      expect(await service.submitImport(item.actor, input, trace(), commandKey)).toEqual(result);
+      await expect(service.submitImport(item.actor, { ...input, reprocessReason: '不同请求不得重放' }, trace(), commandKey)).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_REPLAY' } });
+      for (const code of ['ingestion:run', 'integration:payload:read', 'material-master:write']) {
+        const removed = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', code] } } });
+        await prisma.rolePermission.deleteMany({ where: { roleId: item.roleId, permissionId: { in: removed.map(permission => permission.id) } } });
+        try { await expect(service.submitImport(item.actor, input, trace(), commandKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } }); }
+        finally { await prisma.rolePermission.createMany({ data: removed.map(permission => ({ roleId: item.roleId, permissionId: permission.id })) }); }
+      }
+      await prisma.$executeRaw`DELETE FROM integration_ingestion_previews WHERE id=${preview.previewId}::uuid`;
+      await expect(service.submitImport(item.actor, input, trace(), key())).rejects.toMatchObject({ status: 410, response: { code: 'INGESTION_PREVIEW_EXPIRED' } });
+    } finally {
+      await prisma.session.update({ where: { id: item.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
+      await service.controlJob(item.actor, result.jobIds[0]!, { action: 'CANCEL', reason: '持久回执恢复验收结束' }, trace(), key());
+    }
+  });
+
+  it('recovers a committed empty history import from durable command facts after preview and rule deletion', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const input = { previewId: preview.previewId, confirmed: true }, commandKey = key();
+    const result = await service.submitImport(item.actor, input, trace(), commandKey);
+    expect(result.jobIds).toEqual([]);
+    await service.deleteRule(item.actor, configuration.id, { expectedVersion: 1 }, trace(), key());
+    expect(await service.submitImport(item.actor, input, trace(), commandKey)).toEqual(result);
+    const denied = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', 'material-master:write'] } } });
+    await prisma.rolePermission.deleteMany({ where: { roleId: item.roleId, permissionId: { in: denied.map(permission => permission.id) } } });
+    await expect(service.submitImport(item.actor, input, trace(), commandKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+  });
+
+  it('authorizes older committed imports from their task snapshots when the audit target is absent', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'legacy-recovery', name: '旧命令持久任务事实' }]);
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 }, trace(), key());
+    const input = { previewId: preview.previewId, confirmed: true }, commandKey = key();
+    const result = await service.submitImport(item.actor, input, trace(), commandKey);
+    await prisma.$executeRaw`UPDATE audit_events SET metadata=metadata-'target' WHERE organization_id=${item.organizationId}::uuid AND resource_id=${preview.previewId} AND action='INGESTION_IMPORT_SUBMITTED'`;
+    await service.deleteRule(item.actor, configuration.id, { expectedVersion: 1 }, trace(), key());
+    try { expect(await service.submitImport(item.actor, input, trace(), commandKey)).toEqual(result); }
+    finally { await service.controlJob(item.actor, result.jobIds[0]!, { action: 'CANCEL', reason: '旧命令任务事实验收结束' }, trace(), key()); }
+  });
+
+  it('recovers an older empty import from its audited rule without requiring its preview or original rule version', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const input = { previewId: preview.previewId, confirmed: true }, commandKey = key();
+    const result = await service.submitImport(item.actor, input, trace(), commandKey);
+    expect(result.jobIds).toEqual([]);
+    await prisma.$executeRaw`UPDATE audit_events SET metadata=metadata-'target' WHERE organization_id=${item.organizationId}::uuid AND resource_id=${preview.previewId} AND action='INGESTION_IMPORT_SUBMITTED'`;
+    expect(await service.submitImport(item.actor, input, trace(), commandKey)).toEqual(result);
+    await prisma.$executeRaw`DELETE FROM integration_ingestion_previews WHERE id=${preview.previewId}::uuid`;
+    await service.saveRule(item.actor, { ...configuration, expectedVersion: 1, name: '旧空命令提交后规则更新' }, trace(), key(), configuration.id);
+    expect(await service.submitImport(item.actor, input, trace(), commandKey)).toEqual(result);
+    for (const code of ['integration:payload:read', 'material-master:write']) {
+      const denied = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', code] } } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: item.roleId, permissionId: { in: denied.map(permission => permission.id) } } });
+      try { await expect(service.submitImport(item.actor, input, trace(), commandKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } }); }
+      finally { await prisma.rolePermission.createMany({ data: denied.map(permission => ({ roleId: item.roleId, permissionId: permission.id })) }); }
+    }
+    await service.deleteRule(item.actor, configuration.id, { expectedVersion: 2 }, trace(), key());
+    await expect(service.submitImport(item.actor, input, trace(), commandKey)).rejects.toMatchObject({ status: 404, response: { code: 'INGESTION_NOT_FOUND' } });
+  });
+
+  it('rejects historical previews above 10000 rows without treating it as queue exhaustion', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    await received(item, Array.from({ length: 10000 }, (_, index) => ({ code: `${index}`, name: '历史行数限制' })));
+    await received(item, [{ code: '10001', name: '不能静默截断' }]);
+    await expect(service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key())).rejects.toMatchObject({ status: 422, response: { code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' } });
+    expect((await service.listJobs(item.actor, {})).total).toBe(0);
+  });
+
+  it('reports the preview storage limit separately from the ingestion queue', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'preview-limit', name: '预览空间上限' }]);
+    const previewInput = { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 0 };
+    const first = await service.preview(item.actor, previewInput, trace(), key());
+    await prisma.$executeRaw`INSERT INTO integration_ingestion_previews(id,organization_id,actor_id,endpoint_id,rule_id,rule_version,kind,selections,expires_at) SELECT gen_random_uuid(),organization_id,actor_id,endpoint_id,rule_id,rule_version,kind,selections,expires_at FROM integration_ingestion_previews CROSS JOIN generate_series(1,99) WHERE id=${first.previewId}::uuid`;
+    await expect(service.preview(item.actor, previewInput, trace(), key())).rejects.toMatchObject({ status: 429, response: { code: 'INGESTION_PREVIEW_LIMIT_EXCEEDED' } });
+    expect((await service.listJobs(item.actor, {})).total).toBe(0);
+  });
+
+  it('returns a controlled queue capacity rejection for manual submission while machine intake remains unavailable', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'queue-original', name: '队列原任务' }, { code: 'queue-next', name: '队列容量边界' }]);
+    const first = await submitSingle(item, configuration, receiptId);
+    await service.controlJob(item.actor, first.jobId, { action: 'CANCEL', reason: '只填充任务容量边界' }, trace(), key());
+    await prisma.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,status,sequence,generation,selection_key,completed_at) SELECT gen_random_uuid(),organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,'AUTO','CANCELLED',sequence+batch,generation+batch,-1,clock_timestamp() FROM integration_ingestion_jobs CROSS JOIN generate_series(1,9999) AS batch WHERE id=${first.jobId}::uuid`;
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 1 }, trace(), key());
+    await expect(service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key())).rejects.toMatchObject({ status: 429, response: { code: 'INGESTION_CAPACITY_UNAVAILABLE' } });
+    expect((await service.listJobs(item.actor, {})).total).toBe(10000);
+    await service.saveRule(item.actor, { ...configuration, expectedVersion: 1, enabled: true }, trace(), key(), configuration.id);
+    expect((await machine(item, [{ code: 'queue-machine', name: '机器重试语义' }])).status).toBe(503);
+  });
+
   it('atomically receives true and persists four target tasks, then serial workers do not double write', async () => {
     const item = await fixture();
     for (const target of ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'] as const) await rule(item, target);

@@ -371,6 +371,141 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
   }
 });
 
+test('real receipt filters contain long endpoints and clear applied and invalid draft values in both views', async ({ page }) => {
+  const section = await openIntegrations(page);
+  const endpointIds: string[] = [];
+  const receiptIds: string[] = [];
+  let organizationId = '';
+  const search = `筛选验收 ${suffix}`;
+  const name = `${search} ${'长接口名称'.repeat(20)}`.slice(0, 120);
+  const code = `FILTER_${suffix}_${'LONGCODE'.repeat(6)}`.slice(0, 64);
+  const sourceCode = `FILTERSRC_${suffix}`;
+  const listResponse = (path: string, matches: (query: URLSearchParams) => boolean) => page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET' && url.pathname === path && matches(url.searchParams);
+  });
+  try {
+    for (const [endpointName, endpointCode, source, count] of [[name, code, sourceCode, 11], [`${search} 第二接口`, `FILTER2_${suffix}`, `${sourceCode}_2`, 1]] as const) {
+      const endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, endpoints, 'POST', {
+        code: endpointCode, name: endpointName, sourceCode: source, sourceName: endpointName, returnReceipt: true,
+      }, 201);
+      endpointIds.push(endpoint.id); organizationId = endpoint.organizationId;
+      const credential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `${endpoints}/${endpoint.id}/credentials`, 'POST', {
+        organizationId, name: `筛选凭据 ${suffix}`, validityDays: null,
+      }, 201);
+      await positionWrite(page.request, `${endpoints}/${endpoint.id}`, 'PATCH', { organizationId, expectedVersion: endpoint.version, status: 'ENABLED' });
+      for (let ordinal = 0; ordinal < count; ordinal++) await sendMessage(endpointCode, credential.secret!, JSON.stringify([{ acceptance: 'receipt-filter-reset', ordinal }]));
+      receiptIds.push(...(await prisma.integrationReceipt.findMany({ where: { endpointId: endpoint.id }, select: { id: true } })).map(receipt => receipt.id));
+    }
+    expect(receiptIds).toHaveLength(12);
+    await section.getByRole('tab', { name: '接收记录', exact: true }).click();
+    const pagination = section.getByRole('navigation', { name: '接收记录分页', exact: true });
+    const sized = listResponse(receiptsPath, query => query.get('limit') === '10');
+    await pagination.getByRole('combobox', { name: '每页条数', exact: true }).selectOption('10');
+    expect((await sized).status()).toBe(200);
+    const filterToggle = section.getByRole('button', { name: '筛选条件', exact: true });
+    await filterToggle.click();
+    const filters = section.getByRole('form', { name: '接收记录筛选', exact: true });
+    const selector = filters.getByRole('combobox', { name: '接口名称或编码', exact: true });
+    const candidates = listResponse('/api/v1/admin/integrations/receipt-endpoints', query => query.get('search') === search);
+    await selector.fill(search);
+    expect((await candidates).status()).toBe(200);
+    const label = `${name} (${code}) · ${endpointIds[0]}`;
+    const dropdown = page.locator('.ant-select-dropdown:visible');
+    await expect(dropdown.locator('.ant-select-item-option')).toHaveCount(2);
+    const option = dropdown.locator('.ant-select-item-option').filter({ hasText: label });
+    await expect(option).toContainText(label);
+    await option.click();
+    await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
+    const endpointField = selector.locator('xpath=ancestor::label');
+    const selectedItem = endpointField.locator('.ant-select-content');
+    await expect(selectedItem).toHaveAttribute('title', label);
+    for (const viewport of [{ width: 1440, height: 800 }, { width: 1920, height: 900 }, { width: 390, height: 700 }, { width: 320, height: 700 }]) {
+      await page.setViewportSize(viewport);
+      const geometry = await endpointField.evaluate(field => {
+        const select = field.querySelector<HTMLElement>('.ant-select')!;
+        const item = field.querySelector<HTMLElement>('.ant-select-content')!;
+        const source = field.nextElementSibling!;
+        const fieldRect = field.getBoundingClientRect(), selectRect = select.getBoundingClientRect(), itemRect = item.getBoundingClientRect(), sourceRect = source.getBoundingClientRect();
+        const overflowing = [...document.querySelectorAll<HTMLElement>('body *')].filter(element => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.right > innerWidth + 1 && !element.closest('.ant-table-content');
+        }).slice(0, 12).map(element => ({ tag: element.tagName, className: String(element.className), right: element.getBoundingClientRect().right, width: element.clientWidth, scrollWidth: element.scrollWidth, ancestors: [element.parentElement, element.parentElement?.parentElement].filter(Boolean).map(parent => ({ className: String(parent!.className), display: getComputedStyle(parent!).display, overflowX: getComputedStyle(parent!).overflowX, visibility: getComputedStyle(parent!).visibility })) }));
+        return { fieldRight: fieldRect.right, fieldBottom: fieldRect.bottom, selectRight: selectRect.right, itemRight: itemRect.right, sourceLeft: sourceRect.left, sourceTop: sourceRect.top, itemWidth: item.clientWidth, itemScrollWidth: item.scrollWidth, overflow: getComputedStyle(item).textOverflow, filterWidth: field.closest('fieldset')!.clientWidth, filterScrollWidth: field.closest('fieldset')!.scrollWidth, documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, overflowing };
+      });
+      expect(geometry.selectRight).toBeLessThanOrEqual(geometry.fieldRight + 1);
+      expect(geometry.itemRight).toBeLessThanOrEqual(geometry.fieldRight + 1);
+      if (viewport.width > 640) expect(geometry.selectRight).toBeLessThanOrEqual(geometry.sourceLeft);
+      else expect(geometry.sourceTop).toBeGreaterThanOrEqual(geometry.fieldBottom);
+      expect(geometry.itemScrollWidth).toBeGreaterThan(geometry.itemWidth);
+      expect(geometry.overflow).toBe('ellipsis');
+      expect(geometry.filterScrollWidth).toBeLessThanOrEqual(geometry.filterWidth + 1);
+      expect(geometry.documentWidth, JSON.stringify(geometry.overflowing)).toBeLessThanOrEqual(geometry.viewportWidth);
+    }
+    await page.setViewportSize({ width: 1440, height: 800 });
+    for (const mode of ['receipts', 'attempts'] as const) {
+      const path = `/api/v1/admin/integrations/${mode}`;
+      if (mode === 'attempts') {
+        const switched = listResponse(path, query => query.get('page') === '1');
+        await section.getByRole('combobox', { name: '记录视图', exact: true }).click();
+        await page.getByText('请求结果', { exact: true }).click();
+        expect((await switched).status()).toBe(200);
+      }
+      await filters.getByLabel('来源系统编码', { exact: true }).fill(sourceCode);
+      await filters.getByRole('combobox', { name: '查询时段', exact: true }).click();
+      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^近1天$/ }).click();
+      const applied = listResponse(path, query => query.get('sourceCode') === sourceCode && query.get('page') === '1');
+      await filters.getByRole('button', { name: '应用筛选', exact: true }).click();
+      expect((await applied).status()).toBe(200);
+      const secondPage = listResponse(path, query => query.get('sourceCode') === sourceCode && query.get('page') === '2');
+      await pagination.getByRole('button', { name: '下一页', exact: true }).click();
+      expect((await secondPage).status()).toBe(200);
+      if (mode === 'receipts') await section.getByRole('checkbox', { name: '选择当前页', exact: true }).check();
+      await pagination.getByRole('spinbutton', { name: '跳至页', exact: true }).fill('2');
+      await filters.getByLabel('来源系统编码', { exact: true }).fill('invalid source');
+      await filters.getByLabel('消息编号', { exact: true }).fill('bad');
+      await filters.getByLabel('接收编号', { exact: true }).fill('invalid-receipt');
+      if (mode === 'attempts') {
+        await filters.getByLabel('请求追踪号', { exact: true }).fill('invalid-trace');
+        await filters.getByRole('combobox', { name: '请求结果', exact: true }).click();
+        await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^失败$/ }).click();
+      }
+      await filters.getByRole('button', { name: '应用筛选', exact: true }).click();
+      await expect(section.getByText('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', { exact: true })).toBeVisible();
+      const cleared = listResponse(path, query => query.get('page') === '1' && query.get('limit') === '10' && ['endpointId', 'sourceCode', 'messageId', 'receiptId', 'traceId', 'outcome'].every(key => !query.has(key)));
+      await section.getByRole('button', { name: '清空筛选', exact: true }).click();
+      const response = await cleared;
+      expect(response.status()).toBe(200);
+      const query = new URL(response.url()).searchParams;
+      const rangeDays = (Date.parse(query.get('to')!) - Date.parse(query.get('from')!)) / 86400000;
+      expect(rangeDays).toBeGreaterThan(6.99); expect(rangeDays).toBeLessThanOrEqual(7);
+      const result = await response.json() as Schema['IntegrationReceiptPageDto'] | Schema['IntegrationAttemptPageDto'];
+      const verified = await positionRead<Schema['IntegrationReceiptPageDto'] | Schema['IntegrationAttemptPageDto']>(page.request, `${path}?${query.toString()}`);
+      expect(result.items.map(item => item.id)).toEqual(verified.items.map(item => item.id));
+      expect(result.total).toBeGreaterThanOrEqual(12);
+      await expect(pagination.getByRole('combobox', { name: '每页条数', exact: true })).toHaveValue('10');
+      await expect(pagination.getByRole('spinbutton', { name: '跳至页', exact: true })).toHaveValue('');
+      await expect(filterToggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(section.getByRole('toolbar', { name: '已选接收记录', exact: true })).toHaveCount(0);
+      await expect(section.getByText('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', { exact: true })).toHaveCount(0);
+      await expect(section.getByRole('combobox', { name: '记录视图', exact: true }).locator('xpath=ancestor::div[contains(@class,"ant-select")]').first()).toContainText(mode === 'receipts' ? '已收数据' : '请求结果');
+      await expect(filters).toBeVisible();
+      for (const field of ['来源系统编码', '消息编号', '接收编号', ...(mode === 'attempts' ? ['请求追踪号'] : [])]) await expect(filters.getByLabel(field, { exact: true })).toHaveValue('');
+      await expect(endpointField.locator('.ant-select-content')).not.toHaveAttribute('title', label);
+      await expect(endpointField.locator('.ant-select-content')).not.toContainText(name);
+      await expect(filters.getByRole('combobox', { name: '查询时段', exact: true }).locator('xpath=ancestor::div[contains(@class,"ant-select")]').first()).toContainText('近7天');
+      if (mode === 'attempts') await expect(filters.getByRole('combobox', { name: '请求结果', exact: true }).locator('xpath=ancestor::div[contains(@class,"ant-select")]').first()).toContainText('全部结果');
+    }
+  } finally {
+    const remaining = await prisma.integrationReceipt.findMany({ where: { endpointId: { in: endpointIds } }, select: { id: true } });
+    if (remaining.length) await positionWrite(page.request, receiptsPath, 'DELETE', { organizationId, receiptIds: remaining.map(item => item.id) });
+    await prisma.integrationRequestAttempt.deleteMany({ where: { endpointId: { in: endpointIds } } });
+    await prisma.integrationRateWindow.deleteMany({ where: { endpointId: { in: endpointIds } } });
+    await prisma.integrationCredential.deleteMany({ where: { endpointId: { in: endpointIds } } });
+    await prisma.integrationEndpoint.deleteMany({ where: { id: { in: endpointIds } } });
+  }
+});
+
 test('real thousand row receiving page keeps selection actions reachable and deletes the selected page', async ({ page }) => {
   const section = await openIntegrations(page);
   const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });

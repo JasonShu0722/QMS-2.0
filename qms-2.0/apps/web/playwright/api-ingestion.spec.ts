@@ -172,3 +172,93 @@ test('administrator configures ingestion and real compiled Worker imports four t
   await expect(page.locator('.qms-ingestion-page .ant-spin-spinning')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
+
+test('stale recent authentication can preview and import while an oversized history remains editable and closable', async ({ page }) => {
+  await login(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { organizationId_username: { organizationId: organization.id, username: 'local.internal' } } });
+  const recoverySuffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  let endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, '/api/v1/admin/integrations/endpoints', 'POST', {
+    code: `RECOVERY_${recoverySuffix}`, name: `预览恢复${recoverySuffix}`, sourceCode: `RECOVERY_${recoverySuffix}`, sourceName: '真实预览恢复验收', returnReceipt: true, ratePerMinute: 300,
+  }, 201);
+  const credential = await positionWrite<Schema['IntegrationCredentialDto']>(page.request, `/api/v1/admin/integrations/endpoints/${endpoint.id}/credentials`, 'POST', { name: '预览恢复凭据', validityDays: null }, 201);
+  endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, `/api/v1/admin/integrations/endpoints/${endpoint.id}`, 'PATCH', { expectedVersion: endpoint.version, status: 'ENABLED' });
+  const rule = await positionWrite<Schema['IngestionRuleDto']>(page.request, `${root}/rules`, 'POST', {
+    name: `预览恢复规则${recoverySuffix}`, endpointId: endpoint.id, target: 'CUSTOMER', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'code', name: 'name' }, mode: 'INSERT_ONLY', updateFields: [],
+  } satisfies Schema['SaveIngestionRuleDto'], 201);
+  for (let ordinal = 0; ordinal < 101; ordinal++) {
+    const response = await fetch(new URL(`/api/v1/integrations/inbound/${endpoint.code}/messages`, baseURL), {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000), headers: { Authorization: `Bearer ${credential.secret!}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ code: `RC_${recoverySuffix}_${ordinal}`, name: `真实恢复客户${ordinal}` }]),
+    });
+    expect(response.status).toBe(200); expect(await response.json()).toBe(true);
+  }
+  const receipts = await prisma.integrationReceipt.findMany({ where: { endpointId: endpoint.id }, orderBy: { receivedAt: 'asc' } });
+  expect(receipts).toHaveLength(101);
+  const normal = receipts[0]!;
+  await prisma.integrationReceipt.updateMany({ where: { endpointId: endpoint.id }, data: { receivedAt: new Date(Date.now() - 3_600_000) } });
+  await prisma.integrationReceipt.update({ where: { id: normal.id }, data: { receivedAt: new Date(Date.now() - 120_000) } });
+  const activeSession = await prisma.session.findFirstOrThrow({ where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
+  const oldReauthenticatedAt = activeSession.reauthenticatedAt;
+  const reauthRequests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/me/reauthenticate') reauthRequests.push(request.url()); });
+  try {
+    await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: new Date(Date.now() - 600_000) } });
+    await page.goto(`/console/api-ingestion?receiptId=${receipts[1]!.id}`);
+    await page.getByRole('tab', { name: '规则', exact: true }).click();
+    const row = page.getByRole('row').filter({ hasText: rule.name });
+    await row.getByRole('button', { name: '单条试处理', exact: true }).click();
+    const single = page.getByRole('dialog', { name: `单条试处理 · ${rule.name}`, exact: true });
+    await single.getByLabel('接收记录', { exact: true }).click();
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: normal.messageId }).click();
+    const singlePreview = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/preview` && response.request().method() === 'POST');
+    await single.getByRole('button', { name: '生成预览', exact: true }).click();
+    expect((await singlePreview).status()).toBe(201);
+    await expect(single.getByRole('region', { name: '入库预览', exact: true })).toBeVisible();
+    await single.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。', exact: true }).getByRole('button', { name: '放弃修改并关闭', exact: true }).click();
+    await expect(single).toHaveCount(0);
+
+    await row.getByRole('button', { name: '历史批量导入', exact: true }).click();
+    const history = page.getByRole('dialog', { name: `历史批量导入 · ${rule.name}`, exact: true });
+    const localTime = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    await history.getByLabel('接收时间起', { exact: true }).fill(localTime(new Date(Date.now() - 7_200_000)));
+    await history.getByLabel('接收时间止', { exact: true }).fill(localTime(new Date(Date.now() - 1_000)));
+    const limited = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports/preview` && response.request().method() === 'POST');
+    await history.getByRole('button', { name: '生成预览', exact: true }).click();
+    const limitResponse = await limited;
+    expect(limitResponse.status()).toBe(422);
+    expect(await limitResponse.json()).toMatchObject({ code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' });
+    await expect(history.getByRole('alert')).toContainText('本次预览最多100份接收记录、10000条数据，请缩短接收时间范围');
+    await expect(history.getByLabel('接收时间起', { exact: true })).toBeEnabled();
+    await expect(history.getByRole('button', { name: '关闭', exact: true })).toBeEnabled();
+    await history.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。', exact: true }).getByRole('button', { name: '放弃修改并关闭', exact: true }).click();
+    await expect(history).toHaveCount(0);
+
+    await row.getByRole('button', { name: '历史批量导入', exact: true }).click();
+    await history.getByLabel('接收时间起', { exact: true }).fill(localTime(new Date(Date.now() - 300_000)));
+    await history.getByLabel('接收时间止', { exact: true }).fill(localTime(new Date(Date.now() - 1_000)));
+    const normalPreview = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports/preview` && response.request().method() === 'POST');
+    await history.getByRole('button', { name: '生成预览', exact: true }).click();
+    const normalResponse = await normalPreview;
+    expect(normalResponse.status()).toBe(201);
+    expect(await normalResponse.json()).toMatchObject({ receiptCount: 1, rowCount: 1 });
+    const imported = page.waitForResponse(response => new URL(response.url()).pathname === `${root}/imports` && response.request().method() === 'POST');
+    await history.getByRole('button', { name: '确认导入', exact: true }).click();
+    const importResponse = await imported;
+    expect(importResponse.status()).toBe(201);
+    const result = await importResponse.json() as Schema['IngestionImportResultDto'];
+    expect(result.jobIds).toHaveLength(1);
+    await history.getByRole('button', { name: '查看处理任务', exact: true }).click();
+    await expect(page.getByRole('tab', { name: '处理任务', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page).toHaveURL(/\/console\/api-ingestion$/);
+    const jobs = await positionRead<Schema['IngestionJobPageDto']>(page.request, `${root}/jobs?receiptId=${normal.id}`);
+    expect(jobs.items.map(job => job.id)).toEqual(result.jobIds);
+    await expect(page.getByRole('row').filter({ hasText: endpoint.name }).getByRole('button', { name: `查看任务${jobs.items[0]!.sequence}`, exact: true })).toBeVisible();
+    expect(reauthRequests).toHaveLength(0);
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: activeSession.id } })).reauthenticatedAt!.getTime()).toBeLessThan(Date.now() - 540_000);
+  } finally {
+    await prisma.session.update({ where: { id: activeSession.id }, data: { reauthenticatedAt: oldReauthenticatedAt } });
+  }
+});

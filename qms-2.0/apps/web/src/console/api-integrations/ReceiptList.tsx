@@ -138,6 +138,11 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
     if (['endpointId', 'receiptId', 'traceId'].some(key => next[key as keyof Filters] && !uuid.test(String(next[key as keyof Filters]))) || next.sourceCode && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(next.sourceCode) || next.messageId && !/^[A-Za-z0-9._:-]{8,128}$/.test(next.messageId)) { setValidation(true); return; }
     setValidation(false); setSelectedIds([]); setPage(1); setFilters(next); setJumpPage('');
   }
+  function clearFilters() {
+    if (busy || !current()) return;
+    setDraft({ ...defaults }); setFilters({ ...defaults }); setPage(1); setJumpPage(''); setSelected(undefined); setSelectedIds([]); setValidation(false);
+    setEndpointSearch(''); setEndpointOptions([]); setEndpointPage(1); setEndpointTotal(0); setEndpointLoadedPage(0); setEndpointError(undefined); setEndpointLoading(false); setEndpointRetry(0);
+  }
   const canDelete = current() && mode === 'receipts' && scope.permissions.includes('integration:manage');
   const pageRows = data?.items ?? [];
   const pageIds = canDelete ? pageRows.map(item => item.id) : [];
@@ -192,6 +197,7 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
     <div role="toolbar" aria-label={text('接收记录操作', 'Receiving record actions')} className="qms-integration-record-actions"><Select disabled={busy} aria-label={text('记录视图', 'Record view')} value={mode} options={[{ value: 'receipts', label: text('已收数据', 'Received data') }, { value: 'attempts', label: text('请求结果', 'Request results') }]} onChange={value => { if (busy) return; setSelectedIds([]); setMode(value); setPage(1); setTotal(0); setJumpPage(''); setFilters(defaults); setDraft(defaults); setEndpointSearch(''); setEndpointOptions([]); setEndpointLoadedPage(0); }} />
       <Button disabled={busy} loading={loading} onClick={() => setRevision(value => value + 1)}>{text('刷新记录', 'Refresh records')}</Button>
       <Button disabled={busy} aria-expanded={filtersOpen} aria-controls="qms-integration-record-filters" onClick={() => setFiltersOpen(value => !value)}>{text('筛选条件', 'Filters')}</Button>
+      <Button disabled={busy || !current()} onClick={clearFilters}>{text('清空筛选', 'Clear filters')}</Button>
       {operation && <button type="button" className={`qms-integration-capacity-button${operation.usedBodyBytes >= operation.capacityBytes * .8 ? ' qms-integration-capacity-warning' : ''}`} disabled={!canManageCapacity || busy} onClick={() => { setCapacityGiB(Math.max(1, Math.min(10, Math.round(operation.capacityBytes / 1073741824)))); setCapacityError(undefined); setCapacityUnknown(false); setCapacityOpen(true); }} aria-label={text('设置组织正文容量', 'Set organization payload capacity')}>{text('组织正文容量', 'Organization payload capacity')} {(operation.usedBodyBytes / 1048576).toFixed(1)} / {(operation.capacityBytes / 1048576).toFixed(0)} MiB</button>}
     </div>
     {operationFailed && <Alert type="warning" showIcon title={text('运行事实暂不可读取', 'Operation facts are unavailable')} />}

@@ -92,6 +92,11 @@ export class AuditLogService {
     return !!await transaction.auditEvent.findFirst({ where: { resourceType, resourceId }, select: { id: true } });
   }
 
+  async readSuccessfulResourceMetadata(transaction: Prisma.TransactionClient, scope: { organizationId: string; actorUserId: string; action: string; resourceType: string; resourceId: string }) {
+    const event = await transaction.auditEvent.findFirst({ where: { ...scope, outcome: 'SUCCESS' }, select: { metadata: true } });
+    return event?.metadata;
+  }
+
   async record(input: RecordAuditEventInput, transaction?: AuditEventWriter): Promise<unknown> {
     const writer = transaction ?? this.prisma;
     return writer.auditEvent.create({

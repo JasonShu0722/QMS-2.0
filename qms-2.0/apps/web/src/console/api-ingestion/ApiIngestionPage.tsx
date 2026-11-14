@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Space, Tabs } from 'antd';
 import { RefreshCw } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { subscribeSessionSignals } from '../../features/auth/session-invalidation';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
@@ -30,10 +30,12 @@ export function ApiIngestionPage() {
   if (retired) return <Alert role="alert" type="error" showIcon title={text('无权访问API入库衔接', 'API ingestion access denied')} />;
   if (invalidReceipt) return <Alert role="alert" type="error" showIcon title={text('接收记录筛选无效', 'Invalid receiving record filter')} />;
   const clearReceipt = () => requestLeave(() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('receiptId'); return next; }));
-  return <IngestionPage key={key} context={context} session={session} epoch={epoch} invalidate={invalidate} receiptId={receiptId} clearReceipt={clearReceipt} />;
+  const viewJobs = (open: () => void) => requestLeave(() => { if (!receiptId) open(); setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('receiptId'); return next; }, { state: { ingestionTab: 'jobs' } }); });
+  return <IngestionPage key={key} context={context} session={session} epoch={epoch} invalidate={invalidate} receiptId={receiptId} clearReceipt={clearReceipt} viewJobs={viewJobs} />;
 }
-function IngestionPage({ context, session, epoch, invalidate, receiptId, clearReceipt }: { context: ConsoleContext; session?: string; epoch: number; invalidate: () => void; receiptId?: string; clearReceipt: () => void }) {
+function IngestionPage({ context, session, epoch, invalidate, receiptId, clearReceipt, viewJobs }: { context: ConsoleContext; session?: string; epoch: number; invalidate: () => void; receiptId?: string; clearReceipt: () => void; viewJobs: (open: () => void) => void }) {
   const text = useIngestionText(); const requestLeave = useNavigationGuard();
+  const location = useLocation();
   const [denied, setDenied] = useState(false);
   const deny = useCallback(() => { setDenied(true); invalidate(); }, [invalidate]);
   const module = context.modules.find(item => item.key === 'api-ingestion' && item.scope === 'TARGET' && item.coverage === 'ORGANIZATION' && item.organizationId === context.targetOrganization.id);
@@ -42,12 +44,12 @@ function IngestionPage({ context, session, epoch, invalidate, receiptId, clearRe
   const valid = !denied && permissions.includes('ingestion:read') && session === `INTERNAL:${context.actor.homeOrganization.id}:${context.actor.id}` && context.actor.accountType === 'INTERNAL'
     && context.targetOrganization.type === 'INTERNAL' && context.targetOrganization.status === 'ACTIVE' && !context.targetOrganization.configurationRequired;
   const scope = useMemo<IntegrationScope>(() => ({ organizationId: context.targetOrganization.id, session: session ?? '', epoch, permissions, deny }), [context.targetOrganization.id, session, epoch, module, deny]);
-  const [tab, setTab] = useState(receiptId ? 'jobs' : 'rules');
+  const [tab, setTab] = useState(receiptId || location.state?.ingestionTab === 'jobs' ? 'jobs' : 'rules');
   useEffect(() => subscribeSessionSignals(signal => { if (signal === 'invalidate') deny(); }), [deny]);
   if (!valid) return <Alert role="alert" type="error" showIcon title={text('无权访问API入库衔接', 'API ingestion access denied')} />;
-  return <IngestionContent scope={scope} tab={tab} changeTab={next => requestLeave(() => setTab(next))} canReceipts={!!receiptModule && ['integration:receipts:read', 'integration:payload:read'].every(permission => receiptModule.permissions.includes(permission))} receiptId={receiptId} clearReceipt={clearReceipt} />;
+  return <IngestionContent scope={scope} tab={tab} changeTab={next => requestLeave(() => setTab(next))} viewJobs={() => viewJobs(() => setTab('jobs'))} canReceipts={!!receiptModule && ['integration:receipts:read', 'integration:payload:read'].every(permission => receiptModule.permissions.includes(permission))} receiptId={receiptId} clearReceipt={clearReceipt} />;
 }
-function IngestionContent({ scope, tab, changeTab, canReceipts, receiptId, clearReceipt }: { scope: IntegrationScope; tab: string; changeTab: (tab: string) => void; canReceipts: boolean; receiptId?: string; clearReceipt: () => void }) {
+function IngestionContent({ scope, tab, changeTab, viewJobs, canReceipts, receiptId, clearReceipt }: { scope: IntegrationScope; tab: string; changeTab: (tab: string) => void; viewJobs: () => void; canReceipts: boolean; receiptId?: string; clearReceipt: () => void }) {
   const text = useIngestionText(); const { read, current } = useScopedIntegrationRequests(scope);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]); const [error, setError] = useState<unknown>(); const [loading, setLoading] = useState(true); const [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -68,7 +70,7 @@ function IngestionContent({ scope, tab, changeTab, canReceipts, receiptId, clear
     <IngestionError error={error} />
     {!!error && <Space><Button icon={<RefreshCw size={15} />} onClick={() => setRevision(value => value + 1)}>{text('重试加载接口', 'Retry loading interfaces')}</Button></Space>}
     <Tabs activeKey={tab} destroyOnHidden onChange={changeTab} items={[
-      { key: 'rules', label: text('规则', 'Rules'), children: <RuleList scope={scope} endpoints={endpoints} endpointsLoading={loading} canReceipts={canReceipts} /> },
+      { key: 'rules', label: text('规则', 'Rules'), children: <RuleList scope={scope} endpoints={endpoints} endpointsLoading={loading} canReceipts={canReceipts} onViewJobs={viewJobs} /> },
       { key: 'jobs', label: text('处理任务', 'Processing jobs'), children: <JobList scope={scope} endpoints={endpoints} receiptId={receiptId} clearReceipt={clearReceipt} canReceipts={canReceipts} /> },
     ]} />
   </section>;
