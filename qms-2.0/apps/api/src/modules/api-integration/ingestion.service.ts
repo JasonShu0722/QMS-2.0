@@ -532,7 +532,7 @@ export class IngestionService {
         const cancelled = await tx.$queryRaw<{ job_id: string }[]>(Prisma.sql`UPDATE integration_ingestion_items i SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE ${this.jobItemsFilter(job)} AND i.status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED') RETURNING i.job_id`);
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE id=${id}::uuid`;
         const owners = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`UPDATE integration_ingestion_jobs owner SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE ${this.jobOwnersFilter(job)} AND owner.status NOT IN ('COMPLETED','CANCELLED') RETURNING owner.id`);
-        affectedOwnerIds = [...new Set([...cancelled.map(row => row.job_id), ...owners.map(owner => owner.id)])];
+        affectedOwnerIds = [...new Set([id, ...cancelled.map(row => row.job_id), ...owners.map(owner => owner.id)])];
       } else if (input.action === 'PAUSE') {
         if (job.status === 'PENDING') await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PAUSED' WHERE id=${id}::uuid`;
       } else {

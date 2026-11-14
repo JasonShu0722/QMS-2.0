@@ -332,6 +332,46 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     } finally { await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } }); }
   });
 
+  it.each(['unexpanded', 'chunk-boundary'] as const)('releases a blocked parent after direct child cancellation at %s with no cancellable items', async boundary => {
+    const item = await fixture(), initial = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const configuration = await service.saveRule(item.actor, { ...initial, expectedVersion: 1, conditions: [{ path: 'kind', operator: 'EQ', value: 'keep' }] }, trace(), key(), initial.id);
+    const rows = boundary === 'chunk-boundary'
+      ? [...Array.from({ length: 500 }, (_, index) => ({ code: `filtered-${index}`, name: '已提交过滤前缀', kind: 'drop' })), { code: 'cancel-unexpanded-tail', name: '不应执行的后段', kind: 'keep' }]
+      : [{ code: 'cancel-unexpanded-tail', name: '不应执行的首行', kind: 'keep' }];
+    const receiptId = await received(item, rows);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 2, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const parentId = (await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    await worker.processDue(boundary === 'chunk-boundary' ? 2 : 1);
+    const [owner] = await prisma.$queryRaw<{ id: string; next_row_index: number; expansion_complete: boolean }[]>`SELECT id,next_row_index,expansion_complete FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid`;
+    expect(owner).toMatchObject({ next_row_index: boundary === 'chunk-boundary' ? 500 : 0, expansion_complete: false });
+    if (boundary === 'chunk-boundary') expect(await prisma.$executeRaw`UPDATE integration_ingestion_items SET status='FILTERED',version=version+1,updated_at=clock_timestamp() WHERE job_id=${owner!.id}::uuid AND status='PENDING'`).toBe(500);
+    const laterReceiptId = await received(item, [{ code: 'after-direct-cancel', name: '后续FIFO继续', kind: 'keep' }]);
+    const later = await submitSingle(item, configuration, laterReceiptId);
+    await prisma.user.update({ where: { id: item.userId }, data: { status: 'DISABLED' } });
+    const replacement = await prisma.user.create({ data: { organizationId: item.organizationId, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
+    await prisma.userRole.create({ data: { organizationId: item.organizationId, userId: replacement.id, roleId: item.roleId } });
+    const token = await app.get(SessionService).create(replacement.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const session = await app.get(SessionService).resolve(token);
+    const actor: AdminActor = { ...item.actor, id: replacement.id, sessionId: session!.id };
+    try {
+      expect(await worker.processDue(1)).toBe(1);
+      expect(await service.getJob(actor, owner!.id)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+      expect((await service.getJob(actor, parentId)).status).toBe('BLOCKED');
+      expect((await service.listItems(actor, owner!.id, {})).items.every(row => row.status === 'FILTERED')).toBe(true);
+      await service.controlJob(actor, later.jobId, { action: 'RETRY', reason: '明确授权后续任务' }, trace(), key());
+      await service.controlJob(actor, owner!.id, { action: 'CANCEL', reason: '直接终止无可取消项的lazy owner' }, trace(), key());
+      expect((await service.getJob(actor, parentId)).status).toBe('COMPLETED');
+      await worker.processDue(10);
+      expect((await service.getJob(actor, later.jobId)).status).toBe('COMPLETED');
+      expect((await inspect({ ...item, actor }, 'MATERIAL', 'after-direct-cancel'))?.values.name).toBe('后续FIFO继续');
+      expect(await inspect({ ...item, actor }, 'MATERIAL', 'cancel-unexpanded-tail')).toBeNull();
+      await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id=${preview.previewId}::uuid`;
+      await prisma.$executeRaw`UPDATE integration_receipts SET body_expires_at=clock_timestamp()-interval '1 second' WHERE id=${receiptId}::uuid`;
+      await app.get(IntegrationRetentionService).purgeExpired();
+      expect((await prisma.integrationReceipt.findUnique({ where: { id: receiptId } }))?.payloadCiphertext).toBeNull();
+    } finally { await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } }); }
+  });
+
   it('unblocks a processing-failure parent only after skipping its final failed child', async () => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
     const receiptId = await received(item, [{ code: 'skip-parent-failure', name: '失败后跳过' }]);
