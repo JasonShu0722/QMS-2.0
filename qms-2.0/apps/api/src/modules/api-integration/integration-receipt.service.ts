@@ -1,6 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
+import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertRecentAuthentication } from '../../common/security/session-security.js';
@@ -62,7 +63,7 @@ export class IntegrationReceiptService {
     if (new Set(receiptIds).size !== receiptIds.length) integrationError('INTEGRATION_INPUT_INVALID', 400);
     let rows: DeleteReceiptRow[] = [];
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'INTEGRATION_RECEIPTS_DELETED', payload: { receiptIds }, permission: 'integration:manage', isolationLevel: 'ReadCommitted' }, async tx => {
-      const [protectedInput] = await tx.$queryRaw<{ count: number }[]>(Prisma.sql`SELECT count(*)::int AS count FROM integration_ingestion_jobs j WHERE j.organization_id=${organizationId}::uuid AND j.receipt_id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) AND EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED'))`);
+      const [protectedInput] = await tx.$queryRaw<{ count: number }[]>(Prisma.sql`SELECT count(*)::int AS count FROM integration_receipts r WHERE r.organization_id=${organizationId}::uuid AND r.id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) AND ${ingestionInputProtected}`);
       if (protectedInput!.count) integrationError('INGESTION_INPUT_PROTECTED', 409);
       if (rows.length !== receiptIds.length || rows.some(row => row.metadata_expires_at <= row.now)) integrationError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
       const released = new Map<string, bigint>();

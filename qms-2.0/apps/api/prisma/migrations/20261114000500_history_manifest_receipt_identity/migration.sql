@@ -1,0 +1,2 @@
+ALTER TABLE integration_ingestion_preview_receipts
+  DROP CONSTRAINT integration_ingestion_preview_r_organization_id_receipt_id_fkey;

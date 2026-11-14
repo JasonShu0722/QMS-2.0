@@ -154,11 +154,11 @@ export class InboundService {
         if (Number(endpoint.used_body_bytes) + payloadBytes > endpoint.capacity_bytes || Number(capacity.used_body_bytes) + payloadBytes > Number(capacity.capacity_bytes) || capacity.receipt_count >= 100000) reject('INTEGRATION_CAPACITY_UNAVAILABLE', 503);
         const snapshot = { version: endpoint.version, returnReceipt: endpoint.return_receipt, maxBodyBytes: endpoint.max_body_bytes, bodyRetentionDays: endpoint.body_retention_days };
         const bodyExpiresAt = new Date(now.getTime() + endpoint.body_retention_days * 86400000), metadataExpiresAt = new Date(now.getTime() + 90 * 86400000);
-        await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes)
-          VALUES(${receiptId}::uuid,${identity.organizationId}::uuid,${identity.endpointId}::uuid,${identity.credentialId}::uuid,${receiptId},${endpoint.version},${JSON.stringify(snapshot)}::jsonb,${now},${bodyExpiresAt},${metadataExpiresAt},${ciphertext},${payloadBytes})`;
+        const rowCount = (JSON.parse(body.text) as unknown[]).length;
+        await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes,row_count)
+          VALUES(${receiptId}::uuid,${identity.organizationId}::uuid,${identity.endpointId}::uuid,${identity.credentialId}::uuid,${receiptId},${endpoint.version},${JSON.stringify(snapshot)}::jsonb,${now},${bodyExpiresAt},${metadataExpiresAt},${ciphertext},${payloadBytes},${rowCount})`;
         await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes+${payloadBytes} WHERE id=${identity.endpointId}::uuid`;
         await tx.$executeRaw`UPDATE integration_scope_capacities SET used_body_bytes=used_body_bytes+${payloadBytes},receipt_count=receipt_count+1 WHERE organization_id=${identity.organizationId}::uuid`;
-        const rowCount = (JSON.parse(body.text) as unknown[]).length;
         if (this.ingestion) await this.ingestion.enqueueReceived(tx, identity.organizationId, identity.endpointId, receiptId, rowCount);
         else {
           const [active] = await tx.$queryRaw<{ exists: boolean }[]>`SELECT EXISTS(SELECT 1 FROM integration_ingestion_rules WHERE organization_id=${identity.organizationId}::uuid AND endpoint_id=${identity.endpointId}::uuid AND enabled) AS exists`;

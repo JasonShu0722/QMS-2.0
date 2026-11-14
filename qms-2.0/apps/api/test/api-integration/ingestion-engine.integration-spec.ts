@@ -34,6 +34,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   let service: IngestionService;
   let worker: IngestionWorkerService;
   let targets: IngestionTargetsService;
+  const fixtureOrganizations: string[] = [];
   const trace = () => randomUUID();
   const key = () => randomUUID();
   beforeAll(async () => {
@@ -43,9 +44,15 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     prisma = app.get(PrismaService); service = app.get(IngestionService); worker = app.get(IngestionWorkerService); targets = app.get(IngestionTargetsService);
   });
   afterAll(async () => { await app?.close(); });
+  afterEach(async () => {
+    if (fixtureOrganizations.length) {
+      await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=ANY(${fixtureOrganizations.splice(0)}::uuid[]) AND status IN ('PENDING','PAUSED','BLOCKED')`;
+    }
+  });
 
   async function fixture() {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: '入库一次性验收组织', type: 'INTERNAL' } });
+    fixtureOrganizations.push(organization.id);
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
     const permissions = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', 'ingestion:read', 'ingestion:manage', 'ingestion:run', 'integration:read', 'integration:manage', 'integration:receipts:read', 'integration:payload:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:write', 'material-master:write', 'component-project:manage'] } } });
     expect(permissions).toHaveLength(12);
@@ -66,7 +73,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   async function received(item: Fixture, rows: unknown[], receivedAt = new Date()) {
     const id = randomUUID(), text = JSON.stringify(rows), ciphertext = encryptSecret(text, `integration:${item.organizationId}:${item.endpointId}:${id}`);
     await prisma.$transaction(async tx => {
-      await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) VALUES(${id}::uuid,${item.organizationId}::uuid,${item.endpointId}::uuid,${item.credentialId}::uuid,${id},1,'{}'::jsonb,${receivedAt},clock_timestamp()+interval '1 day',clock_timestamp()+interval '90 days',${ciphertext},${Buffer.byteLength(ciphertext)})`;
+      await tx.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes,row_count) VALUES(${id}::uuid,${item.organizationId}::uuid,${item.endpointId}::uuid,${item.credentialId}::uuid,${id},1,'{}'::jsonb,${receivedAt},clock_timestamp()+interval '1 day',clock_timestamp()+interval '90 days',${ciphertext},${Buffer.byteLength(ciphertext)},${rows.length})`;
       await tx.$executeRaw`UPDATE integration_endpoints SET used_body_bytes=used_body_bytes+${Buffer.byteLength(ciphertext)} WHERE id=${item.endpointId}::uuid`;
       await tx.$executeRaw`INSERT INTO integration_scope_capacities(organization_id,used_body_bytes,receipt_count) VALUES(${item.organizationId}::uuid,${Buffer.byteLength(ciphertext)},1) ON CONFLICT(organization_id) DO UPDATE SET used_body_bytes=integration_scope_capacities.used_body_bytes+${Buffer.byteLength(ciphertext)},receipt_count=integration_scope_capacities.receipt_count+1`;
     });
@@ -149,12 +156,182 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     }
   });
 
-  it('rejects historical previews above 100 receipts without truncating or creating a task', async () => {
+  it('snapshots more than 100 historical receipts without decrypting or truncating them', async () => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
     const originalId = await received(item, [{ code: 'history-limit', name: '真实历史上限' }]);
     await prisma.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) SELECT gen_random_uuid(),organization_id,endpoint_id,credential_id,gen_random_uuid()::text,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes FROM integration_receipts CROSS JOIN generate_series(1,100) WHERE id=${originalId}::uuid`;
-    await expect(service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key())).rejects.toMatchObject({ status: 422, response: { code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' } });
-    expect((await service.listJobs(item.actor, {})).total).toBe(0);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    expect(preview).toMatchObject({ receiptCount: 101, rowCount: null });
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    expect(imported.jobIds).toHaveLength(1);
+    expect((await service.listJobs(item.actor, {})).total).toBe(1);
+    await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${item.organizationId}::uuid`;
+  });
+
+  it('plans a history parent in pages, pins its expired manifest, reserves later AUTO order and cancels unfinished children', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const originalId = await received(item, [{ code: 'planner-origin', name: '只规划不解密副本' }]);
+    await prisma.$executeRaw`INSERT INTO integration_receipts(id,organization_id,endpoint_id,credential_id,message_id,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes) SELECT gen_random_uuid(),organization_id,endpoint_id,credential_id,gen_random_uuid()::text,configuration_version,configuration_snapshot,received_at,body_expires_at,metadata_expires_at,payload_ciphertext,payload_bytes FROM integration_receipts CROSS JOIN generate_series(1,500) WHERE id=${originalId}::uuid`;
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    expect(imported.jobIds).toHaveLength(1);
+    const parentId = imported.jobIds[0]!;
+    try {
+      expect(await service.getJob(item.actor, parentId)).toMatchObject({ receiptId: null, planned: 0, status: 'PENDING', expansionComplete: false });
+      await service.saveRule(item.actor, { ...configuration, expectedVersion: 1, enabled: true }, trace(), key(), configuration.id);
+      await machine(item, [{ code: 'after-parent', name: '排在整批之后' }]);
+      const [automatic] = await prisma.$queryRaw<{ sequence: bigint }[]>`SELECT sequence FROM integration_ingestion_jobs WHERE organization_id=${item.organizationId}::uuid AND source='AUTO'`;
+      expect(Number(automatic!.sequence)).toBe(503);
+      await worker.processDue(1);
+      expect(await service.getJob(item.actor, parentId)).toMatchObject({ planned: 500, status: 'PENDING', expansionComplete: false });
+      await service.controlJob(item.actor, parentId, { action: 'PAUSE', reason: '父批次暂停' }, trace(), key());
+      expect(await worker.processDue(1)).toBe(0);
+      await service.controlJob(item.actor, parentId, { action: 'RESUME', reason: '父批次恢复' }, trace(), key());
+      await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id=${preview.previewId}::uuid`;
+      await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 2, receiptId: originalId, rowIndex: 0 }, trace(), key());
+      await service.deleteRule(item.actor, configuration.id, { expectedVersion: 2 }, trace(), key());
+      const [retained] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_ingestion_preview_receipts WHERE preview_id=${preview.previewId}::uuid`;
+      expect(retained!.count).toBe(501);
+      await new IngestionWorkerService(service).processDue(1);
+      expect(await service.getJob(item.actor, parentId)).toMatchObject({ planned: 501, status: 'PENDING', expansionComplete: false });
+      expect((await service.listJobs(item.actor, {})).total).toBe(2);
+      expect((await service.listJobs(item.actor, { receiptId: originalId })).items.map(job => job.id)).toContain(parentId);
+      await service.controlJob(item.actor, parentId, { action: 'CANCEL', reason: '取消整个父批次' }, trace(), key());
+      const [remaining] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid AND status<>'CANCELLED'`;
+      expect(remaining!.count).toBe(0);
+    } finally {
+      await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${item.organizationId}::uuid`;
+    }
+  });
+
+  it.each(['AWAITING_CONFIRMATION', 'PROCESSING_FAILED'] as const)('keeps an old terminal parent when a child still has %s evidence', async status => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    await prisma.$transaction(tx => targets.write(tx, item.actor, 'MATERIAL', { code: 'retained-parent', name: '现有事实' }, null, trace()));
+    await received(item, [{ code: 'retained-parent', name: '待确认历史' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    try {
+      await worker.processDue(3);
+      const pending = (await service.listItems(item.actor, parentId, {})).items[0]!;
+      expect(pending.status).toBe('AWAITING_CONFIRMATION');
+      await prisma.$executeRaw`UPDATE integration_ingestion_items SET status=${status} WHERE id=${pending.id}::uuid`;
+      await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='COMPLETED',completed_at=clock_timestamp()-interval '91 days' WHERE id=${parentId}::uuid OR parent_job_id=${parentId}::uuid`;
+      const another = await received(item, [{ code: 'cleanup-trigger', name: '触发原有终态清理' }]);
+      await submitSingle(item, configuration, another);
+      expect((await service.getJob(item.actor, parentId)).id).toBe(parentId);
+      expect((await service.getItem(item.actor, pending.id, trace())).status).toBe(status);
+    } finally {
+      await service.controlJob(item.actor, parentId, { action: 'CANCEL', reason: '保留证据验收收尾' }, trace(), key());
+      await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${item.organizationId}::uuid`;
+    }
+  });
+
+  it.each(['delete', 'retention'] as const)('preserves completed history counts and item identities after %s releases its source receipt', async release => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'completed-history', name: '保留入库历史' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(3);
+    const before = await service.getJob(item.actor, parentId), itemsBefore = await service.listItems(item.actor, parentId, {});
+    expect(before).toMatchObject({ status: 'COMPLETED', receiptCount: 1, total: 1, succeeded: 1 });
+    expect(itemsBefore.items).toHaveLength(1);
+    await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id=${preview.previewId}::uuid`;
+    if (release === 'delete') {
+      expect(await app.get(IntegrationReceiptService).deleteReceipts(item.actor, { receiptIds: [receiptId] }, trace(), key())).toMatchObject({ deletedCount: 1 });
+    } else {
+      await prisma.$executeRaw`UPDATE integration_receipts SET body_expires_at=clock_timestamp()-interval '1 day',metadata_expires_at=clock_timestamp()-interval '1 day' WHERE id=${receiptId}::uuid`;
+      await app.get(IntegrationRetentionService).purgeExpired();
+    }
+    expect(await prisma.integrationReceipt.findUnique({ where: { id: receiptId } })).toBeNull();
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', receiptCount: 1, total: 1, succeeded: 1 });
+    expect(await service.listItems(item.actor, parentId, {})).toEqual(itemsBefore);
+  });
+
+  it('blocks a historical parent on revoked grants and resumes its children with explicit retry', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    await received(item, [{ code: 'parent-retry', name: '恢复后执行' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(1);
+    await prisma.user.update({ where: { id: item.userId }, data: { status: 'DISABLED' } });
+    try { expect(await worker.processDue(1)).toBe(1); }
+    finally { await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } }); }
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+    await service.controlJob(item.actor, parentId, { action: 'RETRY', reason: '管理员恢复权限' }, trace(), key());
+    await worker.processDue(3);
+    expect((await inspect(item, 'MATERIAL', 'parent-retry'))?.values.name).toBe('恢复后执行');
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', expansionComplete: true, succeeded: 1 });
+  });
+
+  it('rebinds every unfinished child when a replacement administrator retries a blocked parent', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    await received(item, [{ code: 'parent-retry-one', name: '一' }]);
+    await received(item, [{ code: 'parent-retry-two', name: '二' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(1);
+    await prisma.user.update({ where: { id: item.userId }, data: { status: 'DISABLED' } });
+    expect(await worker.processDue(1)).toBe(1);
+    const replacement = await prisma.user.create({ data: { organizationId: item.organizationId, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
+    await prisma.userRole.create({ data: { organizationId: item.organizationId, userId: replacement.id, roleId: item.roleId } });
+    const token = await app.get(SessionService).create(replacement.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const replacementSession = await app.get(SessionService).resolve(token);
+    const replacementActor: AdminActor = { ...item.actor, id: replacement.id, sessionId: replacementSession!.id };
+    const childrenBefore = await prisma.$queryRaw<{ id: string; status: string }[]>`SELECT id,status FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid ORDER BY sequence`;
+    expect(childrenBefore).toHaveLength(2);
+    try {
+      await service.controlJob(replacementActor, parentId, { action: 'RETRY', reason: '接管全部未完成子任务' }, trace(), key());
+      const childrenAfter = await prisma.$queryRaw<{ id: string; status: string; authorized_by: string | null }[]>`SELECT id,status,rule_snapshot->'authorizedBy'->>'id' AS authorized_by FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid ORDER BY sequence`;
+      expect(childrenAfter.every(child => child.status === 'PENDING' && child.authorized_by === replacement.id)).toBe(true);
+      await worker.processDue(10);
+      expect((await service.getJob(replacementActor, parentId)).status).toBe('COMPLETED');
+    } finally {
+      await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } });
+      await service.controlJob(item.actor, parentId, { action: 'CANCEL', reason: '接管验收收尾' }, trace(), key());
+    }
+    expect((await inspect(item, 'MATERIAL', 'parent-retry-one'))?.values.name).toBe('一');
+    expect((await inspect(item, 'MATERIAL', 'parent-retry-two'))?.values.name).toBe('二');
+  });
+
+  it('unblocks a processing-failure parent only after skipping its final failed child', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'skip-parent-failure', name: '失败后跳过' }]);
+    await received(item, [{ code: 'after-skip-parent-failure', name: '继续下一份' }]);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(2);
+    const [child] = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid ORDER BY sequence`;
+    const [failed] = await prisma.$queryRaw<{ id: string; version: number }[]>`SELECT id,version FROM integration_ingestion_items WHERE job_id=${child!.id}::uuid`;
+    await prisma.$executeRaw`UPDATE integration_ingestion_items SET status='PROCESSING_FAILED' WHERE id=${failed!.id}::uuid`;
+    await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='BLOCKED',error_code='INGESTION_PROCESSING_FAILED' WHERE id IN (${child!.id}::uuid,${parentId}::uuid)`;
+    await service.actOnItem(item.actor, failed!.id, { expectedVersion: failed!.version, reason: '确认该失败项不可恢复，跳过' }, false, trace(), key());
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'PENDING', errorCode: null });
+    expect(await service.getJob(item.actor, child!.id)).toMatchObject({ status: 'COMPLETED' });
+    expect((await service.listItems(item.actor, child!.id, {})).items[0]).toMatchObject({ receiptId, status: 'SKIPPED' });
+    await worker.processDue(3);
+    expect((await inspect(item, 'MATERIAL', 'after-skip-parent-failure'))?.values.name).toBe('继续下一份');
+  });
+
+  it('resumes a persisted historical cursor beyond row 10000 and retains its audit position', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, Array.from({ length: 10001 }, (_, index) => ({ code: `${index}`, name: '最后一行真实执行' })));
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const parentId = imported.jobIds[0]!;
+    await worker.processDue(1);
+    const [child] = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${parentId}::uuid`;
+    await prisma.$executeRaw`INSERT INTO integration_ingestion_items(id,organization_id,job_id,receipt_id,rule_id,rule_version,row_index,generation,status) SELECT gen_random_uuid(),${item.organizationId}::uuid,${child!.id}::uuid,${receiptId}::uuid,${configuration.id}::uuid,1,row_index,0,'FILTERED' FROM generate_series(0,9999) row_index`;
+    await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET next_row_index=10000 WHERE id=${child!.id}::uuid`;
+    await new IngestionWorkerService(service).processDue(1);
+    expect((await inspect(item, 'MATERIAL', '10000'))?.values.name).toBe('最后一行真实执行');
+    expect(await service.getJob(item.actor, parentId)).toMatchObject({ status: 'COMPLETED', total: 10001, expansionComplete: true });
+    const audit = await prisma.auditEvent.findFirst({ where: { organizationId: item.organizationId, action: 'INGESTION_ITEM_PROCESSED' } });
+    expect(audit!.metadata).toMatchObject({ rowIndex: 10000 });
   });
 
   it.each(['cleared preview', 'updated rule', 'deleted rule'] as const)('recovers a committed import after %s while retaining current permission checks', async change => {
@@ -230,12 +407,47 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     await expect(service.submitImport(item.actor, input, trace(), commandKey)).rejects.toMatchObject({ status: 404, response: { code: 'INGESTION_NOT_FOUND' } });
   });
 
-  it('rejects historical previews above 10000 rows without treating it as queue exhaustion', async () => {
+  it('lazily imports a historical array above 10000 rows and reuses its unexpanded rows for single submissions', async () => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
-    await received(item, Array.from({ length: 10000 }, (_, index) => ({ code: `${index}`, name: '历史行数限制' })));
-    await received(item, [{ code: '10001', name: '不能静默截断' }]);
-    await expect(service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key())).rejects.toMatchObject({ status: 422, response: { code: 'INGESTION_HISTORY_LIMIT_EXCEEDED' } });
-    expect((await service.listJobs(item.actor, {})).total).toBe(0);
+    const receiptId = await received(item, Array.from({ length: 10001 }, (_, index) => ({ code: `${index}`, name: '后台分段' })));
+    await prisma.$executeRaw`UPDATE integration_receipts SET row_count=NULL WHERE id=${receiptId}::uuid`;
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    expect(preview).toMatchObject({ receiptCount: 1, rowCount: null });
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    const jobId = imported.jobIds[0]!;
+    expect(await service.getJob(item.actor, jobId)).toMatchObject({ total: null, expansionComplete: false, status: 'PENDING' });
+    expect((await service.listItems(item.actor, jobId, {})).total).toBe(0);
+    expect((await submitSingle(item, configuration, receiptId, 9999)).result).toMatchObject({ reused: true, jobIds: [jobId] });
+    await worker.processDue(2);
+    const [cursor] = await prisma.$queryRaw<{ next_row_index: number; expansion_complete: boolean }[]>`SELECT next_row_index,expansion_complete FROM integration_ingestion_jobs WHERE parent_job_id=${jobId}::uuid`;
+    expect(cursor!.next_row_index).toBeGreaterThan(0); expect(cursor!.next_row_index).toBeLessThan(10001); expect(cursor!.expansion_complete).toBe(false);
+    await service.controlJob(item.actor, jobId, { action: 'PAUSE', reason: '暂停游标' }, trace(), key());
+    expect(await worker.processDue(1)).toBe(0);
+    await service.controlJob(item.actor, jobId, { action: 'RESUME', reason: '恢复游标' }, trace(), key());
+    await new IngestionWorkerService(service).processDue(1);
+    expect((await inspect(item, 'MATERIAL', '1'))?.values.name).toBe('后台分段');
+    await service.controlJob(item.actor, jobId, { action: 'CANCEL', reason: '终止尚未展开的后续行' }, trace(), key());
+    expect(await worker.processDue(1)).toBe(0);
+    expect(await service.getJob(item.actor, jobId)).toMatchObject({ status: 'CANCELLED', expansionComplete: false });
+  });
+
+  it('protects a historical snapshot and its lazy job after expiry and excludes backdated receipts added after preview', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receivedAt = new Date(Date.now() - 10000), receiptId = await received(item, [{ code: 'snapshot', name: '保留正文' }], receivedAt);
+    const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    await received(item, [{ code: 'late-backdated', name: '不能扩大集合' }], receivedAt);
+    await prisma.$executeRaw`UPDATE integration_receipts SET body_expires_at=clock_timestamp()-interval '1 second' WHERE id=${receiptId}::uuid`;
+    await expect(app.get(IntegrationReceiptService).deleteReceipts(item.actor, { receiptIds: [receiptId] }, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_INPUT_PROTECTED' } });
+    await app.get(IntegrationRetentionService).purgeExpired();
+    expect((await prisma.integrationReceipt.findUnique({ where: { id: receiptId } }))?.payloadCiphertext).toBeTruthy();
+    const imported = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    expect(imported.receiptCount).toBe(1);
+    await prisma.$executeRaw`UPDATE integration_ingestion_previews SET expires_at=clock_timestamp()-interval '1 second' WHERE id=${preview.previewId}::uuid`;
+    await app.get(IntegrationRetentionService).purgeExpired();
+    await expect(app.get(IntegrationReceiptService).deleteReceipts(item.actor, { receiptIds: [receiptId] }, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_INPUT_PROTECTED' } });
+    await worker.processDue(2);
+    expect((await inspect(item, 'MATERIAL', 'snapshot'))?.values.name).toBe('保留正文');
+    expect(await inspect(item, 'MATERIAL', 'late-backdated')).toBeNull();
   });
 
   it('reports the preview storage limit separately from the ingestion queue', async () => {
@@ -253,12 +465,17 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const receiptId = await received(item, [{ code: 'queue-original', name: '队列原任务' }, { code: 'queue-next', name: '队列容量边界' }]);
     const first = await submitSingle(item, configuration, receiptId);
     await service.controlJob(item.actor, first.jobId, { action: 'CANCEL', reason: '只填充任务容量边界' }, trace(), key());
-    await prisma.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,status,sequence,generation,selection_key,completed_at) SELECT gen_random_uuid(),organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,'AUTO','CANCELLED',sequence+batch,generation+batch,-1,clock_timestamp() FROM integration_ingestion_jobs CROSS JOIN generate_series(1,9999) AS batch WHERE id=${first.jobId}::uuid`;
+    await prisma.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,status,sequence,generation,selection_key) SELECT gen_random_uuid(),organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,'AUTO','PENDING',sequence+batch,generation+batch,-1 FROM integration_ingestion_jobs CROSS JOIN generate_series(1,10000) AS batch WHERE id=${first.jobId}::uuid`;
+    await prisma.$executeRaw`UPDATE integration_ingestion_queues SET next_sequence=10002 WHERE organization_id=${item.organizationId}::uuid AND endpoint_id=${item.endpointId}::uuid`;
     const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: 1, receiptId, rowIndex: 1 }, trace(), key());
     await expect(service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key())).rejects.toMatchObject({ status: 429, response: { code: 'INGESTION_CAPACITY_UNAVAILABLE' } });
-    expect((await service.listJobs(item.actor, {})).total).toBe(10000);
+    expect((await service.listJobs(item.actor, {})).total).toBe(10001);
     await service.saveRule(item.actor, { ...configuration, expectedVersion: 1, enabled: true }, trace(), key(), configuration.id);
     expect((await machine(item, [{ code: 'queue-machine', name: '机器重试语义' }])).status).toBe(503);
+    const history = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 2, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
+    const historical = await service.submitImport(item.actor, { previewId: history.previewId, confirmed: true }, trace(), key());
+    expect(historical.jobIds).toHaveLength(1);
+    await prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${item.organizationId}::uuid`;
   });
 
   it('atomically receives true and persists four target tasks, then serial workers do not double write', async () => {
@@ -326,7 +543,8 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(imported).toMatchObject({ receiptCount: 1, rowCount: 1 }); await worker.processDue(10);
     expect((await inspect(item, 'MATERIAL', 'history'))?.values.name).toBe('current');
     expect(await inspect(item, 'MATERIAL', 'outside-window')).toBeNull();
-    const job = await service.getJob(item.actor, imported.jobIds[0]!); expect(job).toMatchObject({ receiptId, awaitingConfirmation: 1 });
+    const job = await service.getJob(item.actor, imported.jobIds[0]!); expect(job).toMatchObject({ receiptId: null, awaitingConfirmation: 1 });
+    expect((await service.listItems(item.actor, job.id, {})).items[0]!.receiptId).toBe(receiptId);
     await service.controlJob(item.actor, job.id, { action: 'CANCEL', reason: '验收结束' }, trace(), key());
   });
 
@@ -397,12 +615,11 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const first = await submitSingle(item, configuration, receiptId); await worker.processDue(10);
     const preview = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
     const historical = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
-    expect(historical.jobIds).toContain(first.jobId); expect(historical.jobIds).toHaveLength(2);
+    expect(historical.jobIds).toHaveLength(1);
     await worker.processDue(10);
     expect((await inspect(item, 'MATERIAL', 'single-first'))?.version).toBe(1);
     expect((await inspect(item, 'MATERIAL', 'history-rest'))?.version).toBe(1);
-    const jobs = (await service.listJobs(item.actor, {})).items;
-    expect(jobs.reduce((sum, job) => sum + job.total, 0)).toBe(2);
+    expect((await service.getJob(item.actor, historical.jobIds[0]!)).total).toBe(2);
   });
 
   it('keeps a failed queue blocked when another awaiting or pending row is skipped and resumes only after skipping its failed row', async () => {

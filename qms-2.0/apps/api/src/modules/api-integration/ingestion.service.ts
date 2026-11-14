@@ -9,6 +9,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { assertIntegrationOrganization, integrationInteger, integrationScope, lockIntegrationEndpoint } from './integration-types.js';
 import { IngestionTargetsService } from './ingestion-targets.service.js';
+import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { evaluateIngestionRow, ingestionError, ingestionTargetPermission, normalizeIngestionRule, type IngestionFields, type IngestionRule } from './ingestion.policy.js';
 import type { DeleteIngestionRuleDto, IngestionControlDto, IngestionDifferenceDto, IngestionEndpointDto, IngestionEndpointPageDto, IngestionHistoryPreviewInputDto, IngestionImportResultDto, IngestionItemActionDto, IngestionItemDetailDto, IngestionItemDto, IngestionItemPageDto, IngestionJobDto, IngestionJobPageDto, IngestionJobQueryDto, IngestionPreviewDto, IngestionPreviewInputDto, IngestionRuleDto, IngestionRulePageDto, SaveIngestionRuleDto, SubmitIngestionImportDto, UpdateIngestionRuleDto } from './ingestion.dto.js';
 import type { IntegrationPageQueryDto } from './integration-admin.dto.js';
@@ -17,7 +18,7 @@ type RuleRow = { id: string; organization_id: string; endpoint_id: string; creat
 type ReceiptRow = { id: string; endpoint_id: string; organization_id: string; received_at: Date; payload_ciphertext: string | null; available: boolean };
 type Selection = { receiptId: string; indexes: number[]; expected?: { id: string; version: number } | null };
 type PreviewRow = { id: string; actor_id: string; endpoint_id: string; rule_id: string; rule_version: number; kind: 'SINGLE' | 'HISTORY'; selections: Selection[]; valid: boolean; expires_at: Date };
-type JobRow = { id: string; organization_id: string; endpoint_id: string; receipt_id: string | null; rule_id: string; rule_version: number; rule_snapshot: IngestionRule & { configuredBy?: AdminActor; authorizedBy?: AdminActor }; actor_snapshot: AdminActor; source: 'AUTO' | 'SINGLE' | 'HISTORY'; status: string; sequence: bigint; generation: number; error_code: string | null; created_at: Date };
+type JobRow = { id: string; organization_id: string; endpoint_id: string; receipt_id: string | null; rule_id: string; rule_version: number; rule_snapshot: IngestionRule & { configuredBy?: AdminActor; authorizedBy?: AdminActor }; actor_snapshot: AdminActor; source: 'AUTO' | 'SINGLE' | 'HISTORY'; status: string; sequence: bigint; generation: number; error_code: string | null; created_at: Date; next_row_index: number; expansion_complete: boolean; parent_job_id: string | null; planning_preview_id: string | null; reprocess_reason: string | null };
 type ItemRow = { id: string; organization_id: string; job_id: string; receipt_id: string; row_index: number; status: string; target_id: string | null; target_version: number | null; source_updated_at: Date | null; source_received_at: Date | null; error_code: string | null; error_field: string | null; duplicate_of_item_id: string | null; version: number };
 type Evaluation = { action: string; fields?: IngestionFields; differences: IngestionDifferenceDto[]; current: IntegrationRecord | null; sourceUpdatedAt: string | null; sourceReceivedAt?: Date; errorCode?: string; errorField?: string; duplicateOfItemId?: string };
 const actorSnapshot = (actor: AdminActor, organizationId: string): AdminActor => ({ id: actor.id, organizationId: actor.organizationId, accountType: actor.accountType, sessionId: '', scopeOrganizationId: organizationId });
@@ -109,14 +110,14 @@ export class IngestionService {
   }
 
   private async receipt(tx: AdminTransaction, organizationId: string, id: string, endpointId: string, allowProtected = false): Promise<ReceiptRow> {
-    const [row] = await tx.$queryRaw<ReceiptRow[]>`SELECT r.id,r.organization_id,r.endpoint_id,r.received_at,r.payload_ciphertext,(r.body_expires_at>clock_timestamp() OR (${allowProtected} AND EXISTS(SELECT 1 FROM integration_ingestion_jobs j JOIN integration_ingestion_items i ON i.job_id=j.id WHERE j.organization_id=r.organization_id AND j.receipt_id=r.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED')))) AS available FROM integration_receipts r WHERE r.organization_id=${organizationId}::uuid AND r.id=${id}::uuid AND r.endpoint_id=${endpointId}::uuid`;
+    const [row] = await tx.$queryRaw<ReceiptRow[]>(Prisma.sql`SELECT r.id,r.organization_id,r.endpoint_id,r.received_at,r.payload_ciphertext,(r.body_expires_at>clock_timestamp() OR (${allowProtected} AND ${ingestionInputProtected})) AS available FROM integration_receipts r WHERE r.organization_id=${organizationId}::uuid AND r.id=${id}::uuid AND r.endpoint_id=${endpointId}::uuid`);
     if (!row) ingestionError('INTEGRATION_RECEIPT_NOT_FOUND', 404);
     if (!row.payload_ciphertext || !row.available) ingestionError('INTEGRATION_PAYLOAD_EXPIRED', 410);
     return row;
   }
   private payload(receipt: ReceiptRow): unknown[] {
     const value: unknown = JSON.parse(decryptSecret(receipt.payload_ciphertext!, `integration:${receipt.organization_id}:${receipt.endpoint_id}:${receipt.id}`));
-    if (!Array.isArray(value) || value.length > 10000 || value.some(item => !item || typeof item !== 'object' || Array.isArray(item))) ingestionError('INTEGRATION_MESSAGE_INVALID');
+    if (!Array.isArray(value) || value.some(item => !item || typeof item !== 'object' || Array.isArray(item))) ingestionError('INTEGRATION_MESSAGE_INVALID');
     return value;
   }
   private async evaluate(tx: AdminTransaction, actor: AdminActor, rule: IngestionRule, row: unknown, receipt: ReceiptRow, source: string): Promise<Evaluation> {
@@ -170,21 +171,16 @@ export class IngestionService {
     const organizationId = integrationScope(actor), from = new Date(input.from), to = new Date(input.to);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to || to.getTime() > Date.now()) ingestionError('INGESTION_RULE_INVALID');
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_HISTORY_PREVIEWED', payload: input, permission: 'ingestion:run', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
+      const initial = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
+      await lockIntegrationEndpoint(tx, organizationId, initial.endpoint_id);
       const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
-      await lockIntegrationEndpoint(tx, organizationId, rule.endpoint_id);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
-      const receipts = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND endpoint_id=${rule.endpoint_id}::uuid AND received_at>=${from} AND received_at<=${to} ORDER BY received_at,id LIMIT 101`;
-      if (receipts.length > 100) ingestionError('INGESTION_HISTORY_LIMIT_EXCEEDED', 422);
-      const selections: Selection[] = [];
-      let total = 0;
-      for (const receipt of receipts) {
-        const rows = this.payload(await this.receipt(tx, organizationId, receipt.id, rule.endpoint_id));
-        total += rows.length;
-        if (total > 10000) ingestionError('INGESTION_HISTORY_LIMIT_EXCEEDED', 422);
-        selections.push({ receiptId: receipt.id, indexes: rows.map((_, index) => index) });
-      }
-      const preview = await this.storePreview(tx, actor, rule, 'HISTORY', selections);
-      await this.event(tx, actor, organizationId, 'INGESTION_HISTORY_PREVIEWED', preview.previewId, traceId, { ruleId: rule.id, receiptCount: selections.length, rowCount: total });
+      const [unavailable] = await tx.$queryRaw<{ exists: boolean }[]>`SELECT EXISTS(SELECT 1 FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND endpoint_id=${rule.endpoint_id}::uuid AND received_at>=${from} AND received_at<=${to} AND (payload_ciphertext IS NULL OR body_expires_at<=clock_timestamp())) AS exists`;
+      if (unavailable!.exists) ingestionError('INTEGRATION_PAYLOAD_EXPIRED', 410);
+      const preview = await this.storePreview(tx, actor, rule, 'HISTORY', []);
+      await tx.$executeRaw`INSERT INTO integration_ingestion_preview_receipts(preview_id,organization_id,receipt_id,ordinal) SELECT ${preview.previewId}::uuid,organization_id,id,(row_number() OVER(ORDER BY received_at,id)-1)::int FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND endpoint_id=${rule.endpoint_id}::uuid AND received_at>=${from} AND received_at<=${to}`;
+      Object.assign(preview, await this.historyStats(tx, organizationId, preview.previewId));
+      await this.event(tx, actor, organizationId, 'INGESTION_HISTORY_PREVIEWED', preview.previewId, traceId, { ruleId: rule.id, receiptCount: preview.receiptCount, ...(preview.rowCount === null ? {} : { rowCount: preview.rowCount }) });
       return preview;
     }, async tx => {
       const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
@@ -192,12 +188,43 @@ export class IngestionService {
     });
   }
   private async storePreview(tx: AdminTransaction, actor: AdminActor, rule: RuleRow, kind: 'SINGLE' | 'HISTORY', selections: Selection[]): Promise<IngestionPreviewDto> {
-    await tx.$executeRaw`DELETE FROM integration_ingestion_previews WHERE organization_id=${rule.organization_id}::uuid AND expires_at<=clock_timestamp()`;
-    const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_previews WHERE organization_id=${rule.organization_id}::uuid`;
+    await tx.$executeRaw`DELETE FROM integration_ingestion_previews p WHERE p.organization_id=${rule.organization_id}::uuid AND p.expires_at<=clock_timestamp() AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs j WHERE j.planning_preview_id=p.id)`;
+    const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_previews p WHERE p.organization_id=${rule.organization_id}::uuid AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs j WHERE j.planning_preview_id=p.id)`;
     if (count!.total >= 100) ingestionError('INGESTION_PREVIEW_LIMIT_EXCEEDED', 429);
     const previewId = randomUUID(), expiresAt = new Date(Date.now() + 600000);
     await tx.$executeRaw`INSERT INTO integration_ingestion_previews(id,organization_id,actor_id,endpoint_id,rule_id,rule_version,kind,selections,expires_at) VALUES(${previewId}::uuid,${rule.organization_id}::uuid,${actor.id}::uuid,${rule.endpoint_id}::uuid,${rule.id}::uuid,${rule.version},${kind},${JSON.stringify(selections)}::jsonb,${expiresAt})`;
     return { previewId, receiptCount: selections.length, rowCount: selections.reduce((sum, selection) => sum + selection.indexes.length, 0), expiresAt: expiresAt.toISOString() };
+  }
+  private async historyStats(tx: AdminTransaction, organizationId: string, previewId: string): Promise<{ receiptCount: number; rowCount: number | null }> {
+    const [row] = await tx.$queryRaw<{ receipt_count: number; known_count: number; total: bigint | null }[]>`SELECT count(*)::int AS receipt_count,count(r.row_count)::int AS known_count,sum(r.row_count) AS total FROM integration_ingestion_preview_receipts s JOIN integration_receipts r ON r.organization_id=s.organization_id AND r.id=s.receipt_id WHERE s.organization_id=${organizationId}::uuid AND s.preview_id=${previewId}::uuid`;
+    return { receiptCount: row!.receipt_count, rowCount: row!.known_count === row!.receipt_count ? Number(row!.total ?? 0) : null };
+  }
+  private async enqueueHistory(tx: AdminTransaction, rule: RuleRow, previewId: string, actor: AdminActor, reprocessReason?: string): Promise<IngestionImportResultDto> {
+    const organizationId = rule.organization_id, endpointId = rule.endpoint_id;
+    const [unavailable] = await tx.$queryRaw<{ exists: boolean }[]>`SELECT EXISTS(SELECT 1 FROM integration_ingestion_preview_receipts s JOIN integration_receipts r ON r.organization_id=s.organization_id AND r.id=s.receipt_id WHERE s.organization_id=${organizationId}::uuid AND s.preview_id=${previewId}::uuid AND r.payload_ciphertext IS NULL) AS exists`;
+    if (unavailable!.exists) ingestionError('INTEGRATION_PAYLOAD_EXPIRED', 410);
+    const stats = await this.historyStats(tx, organizationId, previewId);
+    await tx.$executeRaw`INSERT INTO integration_ingestion_queues(organization_id,endpoint_id) VALUES(${organizationId}::uuid,${endpointId}::uuid) ON CONFLICT DO NOTHING`;
+    if (!stats.receiptCount) return { ...stats, jobIds: [], reused: true };
+    const [existing] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND planning_preview_id=${previewId}::uuid AND parent_job_id IS NULL AND ${!reprocessReason}`;
+    if (existing) return { ...stats, jobIds: [existing.id], reused: true };
+    const [queue] = await tx.$queryRaw<{ next_sequence: bigint }[]>`UPDATE integration_ingestion_queues SET next_sequence=next_sequence+1+(SELECT count(*) FROM integration_ingestion_preview_receipts WHERE preview_id=${previewId}::uuid) WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid RETURNING next_sequence-(1+(SELECT count(*) FROM integration_ingestion_preview_receipts WHERE preview_id=${previewId}::uuid)) AS next_sequence`;
+    const id = randomUUID();
+    const [generation] = await tx.$queryRaw<{ value: number }[]>`SELECT CASE WHEN ${!!reprocessReason} THEN COALESCE(max(generation),0)+1 ELSE 0 END AS value FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version}`;
+    await tx.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,sequence,generation,selection_key,reprocess_reason,expansion_complete,next_row_index,planning_preview_id) VALUES(${id}::uuid,${organizationId}::uuid,${endpointId}::uuid,NULL,${rule.id}::uuid,${rule.version},${JSON.stringify({ ...rule.configuration, configuredBy: rule.actor_snapshot })}::jsonb,${JSON.stringify(actor)}::jsonb,'HISTORY',${queue!.next_sequence},${generation!.value},-2,${reprocessReason ?? null},false,0,${previewId}::uuid)`;
+    return { ...stats, jobIds: [id], reused: false };
+  }
+  private async planHistoryParent(tx: AdminTransaction, parent: JobRow): Promise<void> {
+    const [total] = await tx.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_ingestion_preview_receipts WHERE organization_id=${parent.organization_id}::uuid AND preview_id=${parent.planning_preview_id}::uuid`;
+    const end = Math.min(total!.count, parent.next_row_index + 500);
+    if (end > parent.next_row_index) {
+      await tx.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,sequence,generation,selection_key,reprocess_reason,expansion_complete,parent_job_id,planning_preview_id)
+        SELECT gen_random_uuid(),parent.organization_id,parent.endpoint_id,s.receipt_id,parent.rule_id,parent.rule_version,parent.rule_snapshot,parent.actor_snapshot,'HISTORY',parent.sequence+s.ordinal+1,parent.generation,-1,parent.reprocess_reason,false,parent.id,NULL
+        FROM integration_ingestion_jobs parent JOIN integration_ingestion_preview_receipts s ON s.organization_id=parent.organization_id AND s.preview_id=parent.planning_preview_id WHERE parent.id=${parent.id}::uuid AND s.ordinal>=${parent.next_row_index} AND s.ordinal<${end}
+        ON CONFLICT DO NOTHING`;
+    }
+    await tx.$executeRaw`UPDATE integration_ingestion_jobs SET next_row_index=${end},expansion_complete=${end}=${total!.count} WHERE id=${parent.id}::uuid`;
+    await this.refreshJob(tx, parent.id);
   }
 
   async submitImport(actor: AdminActor, input: SubmitIngestionImportDto, traceId: string, key?: string): Promise<IngestionImportResultDto> {
@@ -210,6 +237,11 @@ export class IngestionService {
       const rule = await this.rule(tx, organizationId, preview.rule_id, preview.rule_version);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
       await this.access(tx, rule.actor_snapshot, 'ingestion:run', false, rule.configuration.target);
+      if (preview.kind === 'HISTORY' && !preview.selections.length) {
+        const result = await this.enqueueHistory(tx, rule, preview.id, actorSnapshot(actor, organizationId), input.reprocessReason?.trim());
+        await this.event(tx, actor, organizationId, 'INGESTION_IMPORT_SUBMITTED', preview.id, traceId, { ruleId: rule.id, target: rule.configuration.target, receiptCount: result.receiptCount, ...(result.rowCount === null ? {} : { rowCount: result.rowCount }), reprocessed: !!input.reprocessReason });
+        return result;
+      }
       const result: IngestionImportResultDto = { jobIds: [], reused: true, receiptCount: preview.selections.length, rowCount: 0 };
       for (const selection of preview.selections) {
         const receipt = await this.receipt(tx, organizationId, selection.receiptId, rule.endpoint_id), rows = this.payload(receipt);
@@ -220,10 +252,10 @@ export class IngestionService {
           if ((evaluation.current?.id ?? null) !== (selection.expected?.id ?? null) || (evaluation.current?.version ?? null) !== (selection.expected?.version ?? null)) ingestionError('CONCURRENCY_CONFLICT', 409);
         }
         const queued = await this.enqueue(tx, rule, receipt.id, selection.indexes, preview.kind, actorSnapshot(actor, organizationId), input.reprocessReason?.trim(), selection.expected);
-        result.jobIds.push(queued.id, ...queued.additionalIds); result.reused &&= queued.reused; result.rowCount += selection.indexes.length;
+        result.jobIds.push(queued.id, ...queued.additionalIds); result.reused &&= queued.reused; result.rowCount! += selection.indexes.length;
       }
       result.jobIds = [...new Set(result.jobIds)];
-      await this.event(tx, actor, organizationId, 'INGESTION_IMPORT_SUBMITTED', preview.id, traceId, { ruleId: rule.id, target: rule.configuration.target, receiptCount: result.receiptCount, rowCount: result.rowCount, reprocessed: !!input.reprocessReason });
+      await this.event(tx, actor, organizationId, 'INGESTION_IMPORT_SUBMITTED', preview.id, traceId, { ruleId: rule.id, target: rule.configuration.target, receiptCount: result.receiptCount, rowCount: result.rowCount!, reprocessed: !!input.reprocessReason });
       return result;
     }, async tx => {
       const [preview] = await tx.$queryRaw<PreviewRow[]>`SELECT * FROM integration_ingestion_previews WHERE organization_id=${organizationId}::uuid AND id=${input.previewId}::uuid AND actor_id=${actor.id}::uuid`;
@@ -257,9 +289,13 @@ export class IngestionService {
     const organizationId = rule.organization_id, endpointId = rule.endpoint_id;
     let generation = 0;
     if (reprocessReason) {
-      const [last] = await tx.$queryRaw<{ generation: number }[]>`SELECT COALESCE(max(generation),0)::int AS generation FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND receipt_id=${receiptId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version}`;
+      const [last] = await tx.$queryRaw<{ generation: number }[]>`SELECT COALESCE(max(generation),0)::int AS generation FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND (receipt_id=${receiptId}::uuid OR planning_preview_id IN (SELECT preview_id FROM integration_ingestion_preview_receipts WHERE receipt_id=${receiptId}::uuid)) AND rule_id=${rule.id}::uuid AND rule_version=${rule.version}`;
       generation = last!.generation + 1;
     }
+    const [parent] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version} AND generation=${generation} AND parent_job_id IS NULL AND planning_preview_id IN (SELECT preview_id FROM integration_ingestion_preview_receipts WHERE organization_id=${organizationId}::uuid AND receipt_id=${receiptId}::uuid) ORDER BY sequence LIMIT 1`;
+    if (parent) return { id: parent.id, additionalIds: [], reused: true };
+    const [unexpanded] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND receipt_id=${receiptId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version} AND generation=${generation} AND selection_key=-1 AND NOT expansion_complete`;
+    if (unexpanded) return { id: unexpanded.id, additionalIds: [], reused: true };
     const covered = await tx.$queryRaw<{ row_index: number; job_id: string }[]>`SELECT row_index,job_id FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid AND receipt_id=${receiptId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version} AND generation=${generation} AND row_index=ANY(${indexes}::integer[]) ORDER BY row_index`;
     const coveredJobs = [...new Set(covered.map(item => item.job_id))];
     const coveredIndexes = new Set(covered.map(item => item.row_index));
@@ -268,8 +304,8 @@ export class IngestionService {
     const selectionKey = source === 'SINGLE' ? indexes[0]! : -1;
     const [existing] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND receipt_id=${receiptId}::uuid AND rule_id=${rule.id}::uuid AND rule_version=${rule.version} AND generation=${generation} AND selection_key=${selectionKey}`;
     if (existing) return { id: existing.id, additionalIds: coveredJobs, reused: true };
-    await tx.$executeRaw`DELETE FROM integration_ingestion_jobs j WHERE j.organization_id=${organizationId}::uuid AND j.completed_at<clock_timestamp()-INTERVAL '90 days' AND j.status IN ('COMPLETED','CANCELLED') AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED'))`;
-    const [counts] = await tx.$queryRaw<{ jobs: number; items: number }[]>`SELECT (SELECT count(*)::int FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid) AS jobs,(SELECT count(*)::int FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid) AS items`;
+    await tx.$executeRaw`DELETE FROM integration_ingestion_jobs j WHERE j.organization_id=${organizationId}::uuid AND j.completed_at<clock_timestamp()-INTERVAL '90 days' AND j.status IN ('COMPLETED','CANCELLED') AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items i JOIN integration_ingestion_jobs owner ON owner.id=i.job_id WHERE (owner.id=j.id OR owner.parent_job_id=j.id) AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED')) AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs child WHERE child.parent_job_id=j.id AND child.status IN ('PENDING','PAUSED','BLOCKED'))`;
+    const [counts] = await tx.$queryRaw<{ jobs: number; items: number }[]>`SELECT (SELECT count(*)::int FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND expansion_complete AND status IN ('PENDING','PAUSED','BLOCKED')) AS jobs,(SELECT count(*)::int FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid AND status='PENDING') AS items`;
     if (counts!.jobs >= 10000 || counts!.items + indexes.length > 100000) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', source === 'AUTO' ? 503 : 429);
     await tx.$executeRaw`INSERT INTO integration_ingestion_queues(organization_id,endpoint_id) VALUES(${organizationId}::uuid,${endpointId}::uuid) ON CONFLICT DO NOTHING`;
     const [queue] = await tx.$queryRaw<{ next_sequence: bigint }[]>`UPDATE integration_ingestion_queues SET next_sequence=next_sequence+1 WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid RETURNING next_sequence-1 AS next_sequence`;
@@ -284,14 +320,15 @@ export class IngestionService {
     await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'IntegrationIngestion', resourceId: id, outcome: 'SUCCESS', traceId, metadata }, tx);
   }
   private async refreshJob(tx: AdminTransaction, id: string) {
-    await tx.$executeRaw`UPDATE integration_ingestion_jobs j SET status=CASE WHEN EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE j.id=${id}::uuid AND j.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`;
+    await tx.$executeRaw`UPDATE integration_ingestion_jobs j SET status=CASE WHEN NOT expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN NOT expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status='PENDING') THEN NULL ELSE clock_timestamp() END,error_code=NULL WHERE j.id=${id}::uuid AND j.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`;
+    await tx.$executeRaw`UPDATE integration_ingestion_jobs parent SET status=CASE WHEN NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs child JOIN integration_ingestion_preview_receipts s ON s.receipt_id=child.receipt_id AND s.preview_id=parent.planning_preview_id WHERE child.organization_id=parent.organization_id AND child.rule_id=parent.rule_id AND child.rule_version=parent.rule_version AND child.generation=parent.generation AND child.status IN ('PENDING','PAUSED','BLOCKED')) THEN 'PENDING' ELSE 'COMPLETED' END,completed_at=CASE WHEN NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs child JOIN integration_ingestion_preview_receipts s ON s.receipt_id=child.receipt_id AND s.preview_id=parent.planning_preview_id WHERE child.organization_id=parent.organization_id AND child.rule_id=parent.rule_id AND child.rule_version=parent.rule_version AND child.generation=parent.generation AND child.status IN ('PENDING','PAUSED','BLOCKED')) THEN NULL ELSE clock_timestamp() END WHERE parent.planning_preview_id IS NOT NULL AND (parent.id=${id}::uuid OR parent.id=(SELECT parent_job_id FROM integration_ingestion_jobs WHERE id=${id}::uuid)) AND parent.status NOT IN ('PAUSED','CANCELLED','BLOCKED')`;
   }
 
   async processDue(limit = 100): Promise<number> {
     integrationInteger(limit, 1, 1000);
     let processed = 0;
     for (let round = 0; round < limit; round++) {
-      const candidates = await this.prisma.$queryRaw<JobRow[]>`SELECT j.* FROM integration_ingestion_jobs j WHERE j.status='PENDING' AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs earlier WHERE earlier.organization_id=j.organization_id AND earlier.endpoint_id=j.endpoint_id AND earlier.sequence<j.sequence AND earlier.status IN ('PENDING','PAUSED','BLOCKED')) ORDER BY j.created_at,j.id LIMIT 1`;
+      const candidates = await this.prisma.$queryRaw<JobRow[]>`SELECT j.* FROM integration_ingestion_jobs j WHERE j.status='PENDING' AND (j.planning_preview_id IS NULL OR NOT j.expansion_complete) AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs earlier WHERE earlier.organization_id=j.organization_id AND earlier.endpoint_id=j.endpoint_id AND earlier.sequence<j.sequence AND (earlier.status IN ('PAUSED','BLOCKED') OR (earlier.status='PENDING' AND (earlier.planning_preview_id IS NULL OR NOT earlier.expansion_complete)))) ORDER BY j.created_at,j.id LIMIT 1`;
       const candidate = candidates[0];
       if (!candidate) break;
       let itemId: string | undefined;
@@ -301,16 +338,32 @@ export class IngestionService {
           if (endpoint.status !== 'ENABLED') ingestionError('INGESTION_AUTHORIZATION_REVOKED', 403);
           const [job] = await tx.$queryRaw<JobRow[]>`SELECT * FROM integration_ingestion_jobs WHERE organization_id=${candidate.organization_id}::uuid AND id=${candidate.id}::uuid FOR UPDATE`;
           if (!job || job.status !== 'PENDING') return false;
-          const [earlier] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${job.organization_id}::uuid AND endpoint_id=${job.endpoint_id}::uuid AND sequence<${job.sequence} AND status IN ('PENDING','PAUSED','BLOCKED') LIMIT 1`;
+          const [earlier] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${job.organization_id}::uuid AND endpoint_id=${job.endpoint_id}::uuid AND sequence<${job.sequence} AND (status IN ('PAUSED','BLOCKED') OR (status='PENDING' AND (planning_preview_id IS NULL OR NOT expansion_complete))) LIMIT 1`;
           if (earlier) return false;
           const executionActor = job.rule_snapshot.authorizedBy ?? job.actor_snapshot;
           await this.access(tx, executionActor, 'ingestion:run', false, job.rule_snapshot.target);
           if (!job.rule_snapshot.authorizedBy && job.rule_snapshot.configuredBy) await this.access(tx, job.rule_snapshot.configuredBy, 'ingestion:run', false, job.rule_snapshot.target);
-          const [item] = await tx.$queryRaw<ItemRow[]>`SELECT * FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PENDING' ORDER BY row_index LIMIT 1 FOR UPDATE`;
-          if (!item) { await this.refreshJob(tx, job.id); return false; }
+          if (job.parent_job_id === null && job.planning_preview_id !== null && job.receipt_id === null) {
+            await this.planHistoryParent(tx, job);
+            return true;
+          }
+          let [item] = await tx.$queryRaw<ItemRow[]>`SELECT * FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PENDING' ORDER BY row_index LIMIT 1 FOR UPDATE`;
+          let receipt: ReceiptRow | undefined, rows: unknown[] | undefined;
+          if (!item && !job.expansion_complete) {
+            receipt = await this.receipt(tx, job.organization_id, job.receipt_id!, job.endpoint_id, true);
+            rows = this.payload(receipt);
+            await tx.$executeRaw`UPDATE integration_receipts SET row_count=${rows.length} WHERE organization_id=${job.organization_id}::uuid AND id=${job.receipt_id}::uuid AND row_count IS NULL`;
+            const [active] = await tx.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM integration_ingestion_items WHERE organization_id=${job.organization_id}::uuid AND status='PENDING'`;
+            const end = Math.min(rows.length, job.next_row_index + Math.max(1, Math.min(500, 100000 - active!.count)));
+            if (end > job.next_row_index) await tx.$executeRaw`INSERT INTO integration_ingestion_items(id,organization_id,job_id,receipt_id,rule_id,rule_version,row_index,generation)
+              SELECT gen_random_uuid(),${job.organization_id}::uuid,${job.id}::uuid,${job.receipt_id}::uuid,${job.rule_id}::uuid,${job.rule_version},row_index,${job.generation} FROM generate_series(${job.next_row_index}::integer,${end - 1}::integer) AS row_index ON CONFLICT(organization_id,receipt_id,rule_id,rule_version,row_index,generation) DO NOTHING`;
+            await tx.$executeRaw`UPDATE integration_ingestion_jobs SET next_row_index=${end},expansion_complete=${end === rows.length} WHERE id=${job.id}::uuid`;
+            [item] = await tx.$queryRaw<ItemRow[]>`SELECT * FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PENDING' ORDER BY row_index LIMIT 1 FOR UPDATE`;
+          }
+          if (!item) { await this.refreshJob(tx, job.id); return !job.expansion_complete; }
           itemId = item.id;
-          const receipt = await this.receipt(tx, job.organization_id, item.receipt_id, job.endpoint_id, true);
-          const rows = this.payload(receipt);
+          receipt ??= await this.receipt(tx, job.organization_id, item.receipt_id, job.endpoint_id, true);
+          rows ??= this.payload(receipt);
           if (item.row_index >= rows.length) ingestionError('INTEGRATION_MESSAGE_INVALID');
           const parsed = (() => { try { return evaluateIngestionRow(job.rule_snapshot, rows[item.row_index]); } catch { return null; } })();
           if (parsed?.matched) await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion-target:${job.organization_id}:${job.rule_snapshot.target}:${parsed.fields.code}`},0))::text`;
@@ -385,6 +438,7 @@ export class IngestionService {
       if (itemId) await tx.$executeRaw`UPDATE integration_ingestion_items SET status=${validation ? 'VALIDATION_FAILED' : 'PROCESSING_FAILED'},error_code=${code},error_field=${validation ? validationField(error as HttpException, job.rule_snapshot) : null},version=version+1,updated_at=clock_timestamp() WHERE id=${itemId}::uuid AND job_id=${job.id}::uuid AND status='PENDING'`;
       if (validation) await this.refreshJob(tx, job.id);
       else await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='BLOCKED',error_code=${code} WHERE id=${job.id}::uuid`;
+      if (!validation && job.parent_job_id) await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='BLOCKED',error_code=${code} WHERE id=${job.parent_job_id}::uuid AND status='PENDING'`;
     }, { isolationLevel: 'ReadCommitted' });
   }
 
@@ -394,13 +448,20 @@ export class IngestionService {
     return row;
   }
   private async jobDto(tx: AdminTransaction, row: JobRow): Promise<IngestionJobDto> {
-    const [counts] = await tx.$queryRaw<{ total: number; pending: number; succeeded: number; skipped: number; failed: number; awaiting: number }[]>`SELECT count(*)::int AS total,count(*) FILTER(WHERE status='PENDING')::int AS pending,count(*) FILTER(WHERE status IN ('INSERTED','UPDATED','UNCHANGED'))::int AS succeeded,count(*) FILTER(WHERE status IN ('FILTERED','EXISTING_SKIPPED','SKIPPED','CANCELLED'))::int AS skipped,count(*) FILTER(WHERE status IN ('VALIDATION_FAILED','PROCESSING_FAILED'))::int AS failed,count(*) FILTER(WHERE status='AWAITING_CONFIRMATION')::int AS awaiting FROM integration_ingestion_items WHERE job_id=${row.id}::uuid`;
-    return { id: row.id, endpointId: row.endpoint_id, receiptId: row.receipt_id, ruleId: row.rule_id, ruleVersion: row.rule_version, target: row.rule_snapshot.target, source: row.source, status: row.status, sequence: Number(row.sequence), total: counts!.total, pending: counts!.pending, succeeded: counts!.succeeded, skipped: counts!.skipped, failed: counts!.failed, awaitingConfirmation: counts!.awaiting, errorCode: row.error_code, createdAt: row.created_at.toISOString() };
+    const [counts] = await tx.$queryRaw<{ total: number; pending: number; succeeded: number; skipped: number; failed: number; awaiting: number }[]>(Prisma.sql`SELECT count(*)::int AS total,count(*) FILTER(WHERE status='PENDING')::int AS pending,count(*) FILTER(WHERE status IN ('INSERTED','UPDATED','UNCHANGED'))::int AS succeeded,count(*) FILTER(WHERE status IN ('FILTERED','EXISTING_SKIPPED','SKIPPED','CANCELLED'))::int AS skipped,count(*) FILTER(WHERE status IN ('VALIDATION_FAILED','PROCESSING_FAILED'))::int AS failed,count(*) FILTER(WHERE status='AWAITING_CONFIRMATION')::int AS awaiting FROM integration_ingestion_items i WHERE ${this.jobItemsFilter(row)}`);
+    const [batch] = row.planning_preview_id ? await tx.$queryRaw<{ receipt_count: number; unexpanded: boolean }[]>`SELECT count(*)::int AS receipt_count,EXISTS(SELECT 1 FROM integration_ingestion_jobs child JOIN integration_ingestion_preview_receipts s ON s.preview_id=${row.planning_preview_id}::uuid AND s.receipt_id=child.receipt_id WHERE child.organization_id=${row.organization_id}::uuid AND child.rule_id=${row.rule_id}::uuid AND child.rule_version=${row.rule_version} AND child.generation=${row.generation} AND NOT child.expansion_complete) AS unexpanded FROM integration_ingestion_preview_receipts WHERE preview_id=${row.planning_preview_id}::uuid` : [];
+    const expanded = row.expansion_complete && !batch?.unexpanded;
+    return { id: row.id, endpointId: row.endpoint_id, receiptId: row.receipt_id, parentJobId: row.parent_job_id, planningPreviewId: row.planning_preview_id, ruleId: row.rule_id, ruleVersion: row.rule_version, target: row.rule_snapshot.target, source: row.source, status: row.status, sequence: Number(row.sequence), total: expanded ? counts!.total : null, expansionComplete: expanded, planned: row.planning_preview_id ? row.next_row_index : 0, receiptCount: batch?.receipt_count ?? (row.receipt_id ? 1 : 0), pending: counts!.pending, succeeded: counts!.succeeded, skipped: counts!.skipped, failed: counts!.failed, awaitingConfirmation: counts!.awaiting, errorCode: row.error_code, createdAt: row.created_at.toISOString() };
+  }
+  private jobItemsFilter(job: JobRow) {
+    return job.planning_preview_id
+      ? Prisma.sql`i.organization_id=${job.organization_id}::uuid AND i.rule_id=${job.rule_id}::uuid AND i.rule_version=${job.rule_version} AND i.generation=${job.generation} AND i.receipt_id IN (SELECT receipt_id FROM integration_ingestion_preview_receipts WHERE preview_id=${job.planning_preview_id}::uuid)`
+      : Prisma.sql`i.job_id=${job.id}::uuid`;
   }
   async listJobs(actor: AdminActor, query: IngestionJobQueryDto): Promise<IngestionJobPageDto> {
     const { page, limit } = this.page(query);
     return this.prisma.$transaction(async tx => {
-      const organizationId = await this.access(tx, actor), filter = Prisma.sql`organization_id=${organizationId}::uuid ${query.endpointId ? Prisma.sql`AND endpoint_id=${query.endpointId}::uuid` : Prisma.empty} ${query.receiptId ? Prisma.sql`AND receipt_id=${query.receiptId}::uuid` : Prisma.empty}`;
+      const organizationId = await this.access(tx, actor), filter = Prisma.sql`organization_id=${organizationId}::uuid AND parent_job_id IS NULL ${query.endpointId ? Prisma.sql`AND endpoint_id=${query.endpointId}::uuid` : Prisma.empty} ${query.receiptId ? Prisma.sql`AND (receipt_id=${query.receiptId}::uuid OR planning_preview_id IN (SELECT preview_id FROM integration_ingestion_preview_receipts WHERE receipt_id=${query.receiptId}::uuid))` : Prisma.empty}`;
       const rows = await tx.$queryRaw<JobRow[]>(Prisma.sql`SELECT * FROM integration_ingestion_jobs WHERE ${filter} ORDER BY created_at DESC,id LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
       const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM integration_ingestion_jobs WHERE ${filter}`);
       const items = [];
@@ -414,9 +475,9 @@ export class IngestionService {
   async listItems(actor: AdminActor, jobId: string, query: IntegrationPageQueryDto): Promise<IngestionItemPageDto> {
     const { page, limit } = this.page(query);
     return this.prisma.$transaction(async tx => {
-      const organizationId = await this.access(tx, actor); await this.jobRow(tx, organizationId, jobId);
-      const rows = await tx.$queryRaw<ItemRow[]>`SELECT * FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid AND job_id=${jobId}::uuid ORDER BY row_index LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
-      const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid AND job_id=${jobId}::uuid`;
+      const organizationId = await this.access(tx, actor), job = await this.jobRow(tx, organizationId, jobId);
+      const rows = await tx.$queryRaw<ItemRow[]>(Prisma.sql`SELECT i.* FROM integration_ingestion_items i JOIN integration_ingestion_jobs j ON j.id=i.job_id WHERE ${this.jobItemsFilter(job)} ORDER BY j.sequence,i.row_index LIMIT ${limit} OFFSET ${(page - 1) * limit}`);
+      const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM integration_ingestion_items i WHERE ${this.jobItemsFilter(job)}`);
       return { items: rows.map(itemDto), total: count!.total, page, limit };
     }, { isolationLevel: 'RepeatableRead' });
   }
@@ -454,15 +515,19 @@ export class IngestionService {
       await this.access(tx, actor, 'ingestion:run', false, job.rule_snapshot.target);
       if (input.action === 'CANCEL') {
         await tx.$executeRaw`UPDATE integration_ingestion_items SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE job_id=${id}::uuid AND status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED')`;
+        await tx.$executeRaw`UPDATE integration_ingestion_items SET status='CANCELLED',version=version+1,updated_at=clock_timestamp() WHERE job_id IN (SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${id}::uuid) AND status IN ('PENDING','PROCESSING_FAILED','AWAITING_CONFIRMATION','VALIDATION_FAILED')`;
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE id=${id}::uuid`;
+        await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED',error_code=NULL,completed_at=clock_timestamp() WHERE parent_job_id=${id}::uuid AND status NOT IN ('COMPLETED','CANCELLED')`;
       } else if (input.action === 'PAUSE') {
         if (job.status === 'PENDING') await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PAUSED' WHERE id=${id}::uuid`;
       } else {
         if (job.status === 'CANCELLED') ingestionError('CONCURRENCY_CONFLICT', 409);
         if (input.action === 'RETRY') {
-          await this.receipt(tx, organizationId, job.receipt_id!, job.endpoint_id, true);
+          if (job.receipt_id) await this.receipt(tx, organizationId, job.receipt_id, job.endpoint_id, true);
           await tx.$executeRaw`UPDATE integration_ingestion_jobs SET rule_snapshot=jsonb_set(rule_snapshot,'{authorizedBy}',${JSON.stringify(actorSnapshot(actor, organizationId))}::jsonb) WHERE id=${id}::uuid`;
           await tx.$executeRaw`UPDATE integration_ingestion_items SET status='PENDING',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE job_id=${id}::uuid AND status IN ('PROCESSING_FAILED','VALIDATION_FAILED')`;
+          await tx.$executeRaw`UPDATE integration_ingestion_jobs child SET status='PENDING',error_code=NULL,completed_at=NULL,rule_snapshot=jsonb_set(rule_snapshot,'{authorizedBy}',${JSON.stringify(actorSnapshot(actor, organizationId))}::jsonb) WHERE child.parent_job_id=${id}::uuid AND child.status<>'CANCELLED' AND (child.status IN ('PENDING','BLOCKED','PAUSED') OR EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=child.id AND i.status IN ('PROCESSING_FAILED','VALIDATION_FAILED')))`;
+          await tx.$executeRaw`UPDATE integration_ingestion_items SET status='PENDING',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE job_id IN (SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${id}::uuid) AND status IN ('PROCESSING_FAILED','VALIDATION_FAILED')`;
         } else if (job.status === 'BLOCKED') ingestionError('INGESTION_QUEUE_BLOCKED', 409);
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL,completed_at=NULL WHERE id=${id}::uuid`;
         await this.refreshJob(tx, id);
@@ -499,6 +564,10 @@ export class IngestionService {
         }
       }
       await this.refreshJob(tx, job.id);
+      if (!confirm && item.status === 'PROCESSING_FAILED' && job.parent_job_id && job.error_code === 'INGESTION_PROCESSING_FAILED') {
+        await tx.$executeRaw`UPDATE integration_ingestion_jobs parent SET status='PENDING',error_code=NULL WHERE parent.id=${job.parent_job_id}::uuid AND parent.status='BLOCKED' AND parent.error_code='INGESTION_PROCESSING_FAILED' AND NOT EXISTS(SELECT 1 FROM integration_ingestion_jobs child WHERE child.parent_job_id=parent.id AND child.status='BLOCKED') AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items failed JOIN integration_ingestion_jobs child ON child.id=failed.job_id WHERE child.parent_job_id=parent.id AND failed.status='PROCESSING_FAILED')`;
+        await this.refreshJob(tx, job.parent_job_id);
+      }
       await this.event(tx, actor, organizationId, confirm ? 'INGESTION_ITEM_CONFIRMED' : 'INGESTION_ITEM_SKIPPED', id, traceId, { ingestionReason: input.reason.trim(), jobId: job.id });
       return itemDto(await this.itemRow(tx, organizationId, id));
     });

@@ -224,7 +224,7 @@ export const PLATFORM_ERROR_MESSAGES: Record<PlatformErrorCode, string> = {
   INGESTION_PREVIEW_EXPIRED: '试处理结果已过期或配置已变化，请重新预览',
   INGESTION_INPUT_PROTECTED: '接收数据仍有未完成的入库任务，暂时不能删除',
   INGESTION_CAPACITY_UNAVAILABLE: '入库队列容量不足，请处理积压任务后重试',
-  INGESTION_HISTORY_LIMIT_EXCEEDED: '所选时段超过单批100份接收记录或10000条数据，请缩小时间范围分批导入',
+  INGESTION_HISTORY_LIMIT_EXCEEDED: '请重新生成历史预览',
   INGESTION_PREVIEW_LIMIT_EXCEEDED: '预览数量已达上限，请等待已有预览过期后重试',
   INGESTION_STALE_CONFIRMATION: '档案或来源数据已变化，请重新核对差异',
   INGESTION_QUEUE_BLOCKED: '入库队列已暂停或阻塞，请检查任务状态',

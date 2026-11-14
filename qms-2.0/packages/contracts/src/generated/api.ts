@@ -10985,7 +10985,7 @@ export interface components {
             /** Format: uuid */
             previewId: string;
             receiptCount: number;
-            rowCount: number;
+            rowCount: number | null;
             /** Format: date-time */
             expiresAt: string;
             /** @enum {string} */
@@ -11022,7 +11022,7 @@ export interface components {
             jobIds: string[];
             reused: boolean;
             receiptCount: number;
-            rowCount: number;
+            rowCount: number | null;
         };
         IngestionJobDto: {
             /** Format: uuid */
@@ -11031,6 +11031,10 @@ export interface components {
             endpointId: string;
             /** Format: uuid */
             receiptId: string | null;
+            /** Format: uuid */
+            parentJobId: string | null;
+            /** Format: uuid */
+            planningPreviewId: string | null;
             /** Format: uuid */
             ruleId: string;
             ruleVersion: number;
@@ -11041,7 +11045,10 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "PAUSED" | "BLOCKED" | "COMPLETED" | "CANCELLED";
             sequence: number;
-            total: number;
+            total: number | null;
+            expansionComplete: boolean;
+            planned: number;
+            receiptCount: number;
             pending: number;
             succeeded: number;
             skipped: number;
