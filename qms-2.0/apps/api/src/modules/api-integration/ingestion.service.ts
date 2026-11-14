@@ -470,7 +470,7 @@ export class IngestionService {
       : Prisma.sql`i.job_id=${job.id}::uuid`;
   }
   private jobOwnersFilter(job: JobRow) {
-    return Prisma.sql`owner.organization_id=${job.organization_id}::uuid AND owner.rule_id=${job.rule_id}::uuid AND owner.rule_version=${job.rule_version} AND owner.generation=${job.generation} AND (owner.id=${job.id}::uuid OR owner.parent_job_id=${job.id}::uuid OR owner.id IN (SELECT i.job_id FROM integration_ingestion_items i WHERE ${this.jobItemsFilter(job)}))`;
+    return Prisma.sql`owner.organization_id=${job.organization_id}::uuid AND owner.rule_id=${job.rule_id}::uuid AND owner.rule_version=${job.rule_version} AND owner.generation=${job.generation} AND (owner.id=${job.id}::uuid OR owner.parent_job_id=${job.id}::uuid OR owner.id IN (SELECT i.job_id FROM integration_ingestion_items i WHERE ${this.jobItemsFilter(job)}) OR owner.receipt_id IN (SELECT receipt_id FROM integration_ingestion_preview_receipts WHERE organization_id=${job.organization_id}::uuid AND preview_id=${job.planning_preview_id}::uuid))`;
   }
   async listJobs(actor: AdminActor, query: IngestionJobQueryDto): Promise<IngestionJobPageDto> {
     const { page, limit } = this.page(query);

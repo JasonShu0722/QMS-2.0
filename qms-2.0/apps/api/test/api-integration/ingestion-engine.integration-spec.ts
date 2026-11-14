@@ -297,6 +297,41 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect((await inspect(item, 'MATERIAL', 'parent-retry-two'))?.values.name).toBe('二');
   });
 
+  it('recovers an overlapping parent through a shared unexpanded owner with no items', async () => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    await received(item, [{ code: 'empty-shared-owner', name: '无条目仍可恢复' }]);
+    const input = { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() };
+    const first = await service.previewHistory(item.actor, input, trace(), key());
+    const firstId = (await service.submitImport(item.actor, { previewId: first.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    const second = await service.previewHistory(item.actor, input, trace(), key());
+    const secondId = (await service.submitImport(item.actor, { previewId: second.previewId, confirmed: true }, trace(), key())).jobIds[0]!;
+    await worker.processDue(1);
+    const [owner] = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE parent_job_id=${firstId}::uuid`;
+    expect(await service.getJob(item.actor, owner!.id)).toMatchObject({ status: 'PENDING', expansionComplete: false, pending: 0 });
+    expect((await service.listItems(item.actor, owner!.id, {})).total).toBe(0);
+    await prisma.user.update({ where: { id: item.userId }, data: { status: 'DISABLED' } });
+    const replacement = await prisma.user.create({ data: { organizationId: item.organizationId, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
+    await prisma.userRole.create({ data: { organizationId: item.organizationId, userId: replacement.id, roleId: item.roleId } });
+    const token = await app.get(SessionService).create(replacement.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const replacementSession = await app.get(SessionService).resolve(token);
+    const replacementActor: AdminActor = { ...item.actor, id: replacement.id, sessionId: replacementSession!.id };
+    try {
+      expect(await worker.processDue(1)).toBe(1);
+      expect(await service.getJob(replacementActor, firstId)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+      expect(await service.getJob(replacementActor, secondId)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+      expect(await worker.processDue(2)).toBe(0);
+      await service.controlJob(replacementActor, secondId, { action: 'RETRY', reason: '接管未展开的共享owner' }, trace(), key());
+      const [retried] = await prisma.$queryRaw<{ status: string; authorized_by: string | null }[]>`SELECT status,rule_snapshot->'authorizedBy'->>'id' AS authorized_by FROM integration_ingestion_jobs WHERE id=${owner!.id}::uuid`;
+      expect(retried).toMatchObject({ status: 'PENDING', authorized_by: replacement.id });
+      expect((await service.listItems(replacementActor, owner!.id, {})).total).toBe(0);
+      await worker.processDue(10);
+      expect(await service.getJob(replacementActor, firstId)).toMatchObject({ status: 'COMPLETED', succeeded: 1 });
+      expect(await service.getJob(replacementActor, secondId)).toMatchObject({ status: 'COMPLETED', succeeded: 1 });
+      expect((await inspect({ ...item, actor: replacementActor }, 'MATERIAL', 'empty-shared-owner'))?.version).toBe(1);
+      expect((await prisma.user.findUnique({ where: { id: item.userId } }))?.status).toBe('DISABLED');
+    } finally { await prisma.user.update({ where: { id: item.userId }, data: { status: 'ACTIVE' } }); }
+  });
+
   it('unblocks a processing-failure parent only after skipping its final failed child', async () => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
     const receiptId = await received(item, [{ code: 'skip-parent-failure', name: '失败后跳过' }]);

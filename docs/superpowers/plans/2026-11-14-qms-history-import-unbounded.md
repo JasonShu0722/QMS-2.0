@@ -6,8 +6,8 @@
 | --- | --- |
 | 授权 | 负责人明确否决历史100份/10000行限制，数量不可控，不接受手动拆批；复用本会话修复、PR、合并部署持续授权，不代改生产业务/台账或关闭验收Issue |
 | 映射 | Issue121/原入库119，V0.0.52-fix1，codex/history-import-unbounded，基线已部署6a0c2c92ce5a46092561ca3307d42d5ffc257af0；远端无同号预留/开放PR，原本地归档135cad2和历史main及$null保留 |
-| 状态 | PR123的fix3返修完成：复用SINGLE/AUTO、共享A/B控制联动及人工暂停保护已RED→GREEN，独立SPEC/QUALITY最终通过；独立release DB156迁移/seed及完整API6文件150PASS。00600部分索引真实混合规模计划通过。最新真实Worker/browser历史场景PASS，Web42与未变门禁有效；前head daec17f CI24/24PASS与P2记录保留 |
-| 下一步 | 推送V0.0.52-fix3至同PR123，精确新head CI/Review后合并部署及公网核验；不写生产业务/台账，不关闭Issue |
+| 状态 | PR123 head6a8d700已通过同SHA Git对象API非强制上传，原Git CLI因代理TLS失败记录保留。自动Review追加零item共享owner遗漏，fix4仅补manifest owner收件匹配；真实RED→GREEN、独立库qms_history_fix4_final156迁移/seed及API6文件151PASS，tsc及增量SPEC/QUALITY通过。其他未变证据继续有效 |
+| 下一步 | 提交推送V0.0.52-fix4至同PR123，精确新head CI/Review后合并部署及公网核验；不写生产业务/台账，不关闭Issue |
 
 本计划接续[原维护计划](2026-11-14-qms-receipt-filter-reset.md)。原V0.0.52的历史上限及要求缩小范围的文案被负责人本次指令覆盖，原发布/失败证据作为历史保留。
 
@@ -47,6 +47,8 @@ PR123审查反馈：自动Codex指出首次lazy展开与首行写入同事务，
 首head最终CI43573249319为21/24PASS：web-tests(6)为上述新测试等待失败；web-tests(13)为7个未改业务文件22FAIL及onTaskUpdate超时，包含超时/隐藏标题/任职选项等，foundation为依赖汇总失败。完整日志及逐项只读审计保留；未扩展修改这些业务文件。新head daec17f对应两分片及全部24项通过，不能把旧FAIL抹成PASS。该head自动审查新P2为parent聚合SINGLE/AUTO失败但重试仅直属owner；真实RED2后补聚合owner、状态刷新、暂停/取消范围，独立质量审查又指出A/B共享owner的原父阻塞需同步恢复，按真实共享回归继续处理。新head第三轮须覆盖修复，原CI绿色不替代新提交验证。
 
 fix3最终证据：复用、范围隔离、A/B共享阻塞和人工暂停均有真实PG RED→GREEN；父重试只重置表示范围内失败及授权，不复活CANCELLED/其他组织或generation，不解除其他owner的人工PAUSED。原150项运行为149PASS/1既有retention5s timeout，保留FAIL；新建release独立DB156迁移+seed后同6文件150/150PASS（66.991s），未增加timeout。暂停修复仅SQL状态CASE，lint/tsc通过，同结构build与未走暂停分支的真实Worker/browser证据复用；最终精确head CI仍完整运行。最新browser-reused-owner-final为PASS（1.5m）。00600索引针对真父查询，100000子任务+10000旧顶层任务的EXPLAIN从过滤10001行、1512缓冲页、3.615ms变为实际父索引20页、0.262ms；仅为此读取消费者新增索引，110001探针行已精确清除。
+
+fix4证据：规划完成但尚未展开的共享owner没有items，原重试查找只依赖条目，会漏掉授权撤销后的空子任务。单个OR补充同manifest收件匹配，普通任务planningPreviewId为空不会扩大控制范围；真实旧actor持续停用、替代管理员从B恢复A、事实只写一次RED→GREEN，连同暂停/范围隔离5项通过。独立fix4库156迁移+seed、完整6文件151/151PASS（80.261s），tsc及增量SPEC/QUALITY通过；无DTO、迁移或普通浏览器路径行为变化，复用未变构建/浏览器证据。Git网络阶段未关闭证书校验、未改代理全局配置或重写分支；原API提交说明末尾换行校验拦截后修正，blob/tree/commit与本地同SHA验证通过才非强制更新ref。
 
 ## 执行与证据
 
