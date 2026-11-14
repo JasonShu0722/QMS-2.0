@@ -24,6 +24,7 @@ export class ComponentEngineerAssignmentsQueryDto extends ComponentProjectListQu
 }
 
 export class ComponentProjectMappingsQueryDto extends ComponentProjectListQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 1000, default: 20 }) @Type(() => Number) @IsInt() @Min(1) @Max(1000) override pageSize = 20;
   @ApiPropertyOptional({ enum: ['PENDING', 'CONFIGURED'] }) @IsOptional() @IsIn(['PENDING', 'CONFIGURED']) configuration?: 'PENDING' | 'CONFIGURED';
 }
 

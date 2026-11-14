@@ -1,13 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { apiRequest, createAdminMutation, login, logout } from '../../api/client';
+import { ApiError, apiRequest, createAdminMutation, login, logout } from '../../api/client';
 import { ReauthenticationProvider } from './ReauthenticationProvider';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { AuthenticatedRoute } from './AuthenticatedRoute';
 import { publishSessionSignal, sessionSignalVersion } from './session-invalidation';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { accountAvatarEpoch } from '../account/account-avatar-state';
+import { Drawer, Modal } from 'antd';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 Object.defineProperties(HTMLDialogElement.prototype, { showModal: { configurable: true, writable: true, value(this: HTMLDialogElement) { this.setAttribute('open', ''); } }, close: { configurable: true, writable: true, value(this: HTMLDialogElement) { this.removeAttribute('open'); } } });
@@ -28,8 +29,26 @@ async function pendingReauthentication() {
   fireEvent.change(content.getByLabelText('当前密码'), { target: { value: 'only-in-memory-password' } });
   fireEvent.change(content.getByLabelText('验证码或恢复码'), { target: { value: '123456' } });
   const form = content.getByLabelText('当前密码').closest('form')!;
-  return { view, dialog, content, form, finish, operation, rejected, resolved, writes: () => fetcher.mock.calls.filter(([path]) => path.endsWith('/reauthenticate')) };
+  return { view, dialog, content, form, finish, operation, rejected, resolved, writes: () => fetcher.mock.calls.filter(([path]) => path.endsWith('/reauthenticate')), guardedWrites: () => fetcher.mock.calls.filter(([path]) => path.endsWith('/guarded')) };
 }
+
+it('rejects cancelled reauthentication as a known local cancellation without replaying the business write', async () => {
+  const { view, content, operation, rejected, resolved, writes, guardedWrites } = await pendingReauthentication();
+  try {
+    await userEvent.click(content.getByRole('button', { name: /取\s*消/ }));
+    await operation;
+    expect(rejected).toHaveBeenCalledTimes(1);
+    expect(rejected.mock.calls[0]![0]).toBeInstanceOf(ApiError);
+    expect(rejected.mock.calls[0]![0]).toMatchObject({ code: 'CLIENT_REAUTHENTICATION_CANCELLED', status: 400 });
+    expect(resolved).not.toHaveBeenCalled();
+    expect(writes()).toHaveLength(0);
+    expect(guardedWrites()).toHaveLength(1);
+    expect(screen.queryByLabelText('当前密码')).not.toBeInTheDocument();
+  } finally {
+    view.unmount();
+    await operation;
+  }
+});
 
 it('keeps reauthentication inputs frozen while pending and retains them after a safe failure', async () => {
   const { view, content, form, finish, operation, writes } = await pendingReauthentication();
@@ -48,6 +67,47 @@ it('keeps reauthentication inputs frozen while pending and retains them after a 
   } finally {
     view.unmount();
     await operation;
+  }
+});
+
+it.each(['modal', 'drawer', 'unsaved'] as const)('keeps reauthentication above %s overlays and resumes the original mutation after success', async overlay => {
+  let recent = false;
+  const mutations: RequestInit[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path.endsWith('/reauthenticate')) { recent = true; return json({}); }
+    mutations.push(init!);
+    return recent ? json({ saved: true }) : json({ code: 'AUTH_REAUTHENTICATION_REQUIRED' }, 403);
+  }));
+  const action = <Modal open title="暂停确认" zIndex={overlay === 'unsaved' ? 2000 : undefined} footer={null}><p>暂停当前任务</p></Modal>;
+  const view = render(<ReauthenticationProvider>{overlay === 'drawer' ? <Drawer open title="任务详情">{action}</Drawer> : <Modal open title="任务详情" footer={null}>{action}</Modal>}</ReauthenticationProvider>);
+  const operation = createAdminMutation()('/api/v1/admin/users/user', 'PATCH', { email: 'updated@example.test' });
+  const settled = operation.then(value => ({ value }), error => ({ error }));
+  try {
+    const password = await screen.findByLabelText('当前密码');
+    const dialog = password.closest<HTMLElement>('[role="dialog"]')!;
+    const wrapper = dialog.closest<HTMLElement>('.ant-modal-wrap')!;
+    const mask = wrapper.parentElement!.querySelector<HTMLElement>('.ant-modal-mask')!;
+    const underlyingLayers = [...document.querySelectorAll<HTMLElement>('.ant-modal-wrap, .ant-drawer')].filter(element => element !== wrapper);
+    for (const layer of underlyingLayers) {
+      const layerIndex = Number(layer.style.zIndex || 1000);
+      expect(Number(wrapper.style.zIndex || 1000)).toBeGreaterThan(layerIndex);
+      expect(Number(mask.style.zIndex || 1000)).toBeGreaterThan(layerIndex);
+    }
+    const content = within(dialog);
+    await userEvent.click(content.getByLabelText('当前密码'));
+    expect(content.getByLabelText('当前密码')).toHaveFocus();
+    await userEvent.type(content.getByLabelText('当前密码'), 'only-in-memory-password');
+    fireEvent.submit(content.getByLabelText('当前密码').closest('form')!);
+    expect(await settled).toEqual({ value: { saved: true } });
+    await waitFor(() => expect(password).not.toBeInTheDocument());
+    expect(mutations).toHaveLength(2);
+    expect(mutations[1]!.body).toBe(mutations[0]!.body);
+    expect((mutations[1]!.headers as Record<string, string>)['Idempotency-Key']).toBe((mutations[0]!.headers as Record<string, string>)['Idempotency-Key']);
+    expect(screen.getByText('暂停当前任务')).toBeVisible();
+  } finally {
+    view.unmount();
+    await settled;
   }
 });
 

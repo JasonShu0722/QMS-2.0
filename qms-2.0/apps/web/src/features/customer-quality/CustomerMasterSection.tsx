@@ -5,6 +5,9 @@ import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { CustomerMasterImport } from './CustomerMasterImport';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
+import { useMasterDataBulkDelete } from '../imports/MasterDataBulkDelete';
 
 type Customer = components['schemas']['CustomerMasterDto'];
 type Relation = components['schemas']['CustomerRelationDto'];
@@ -19,7 +22,8 @@ export function relationPayload(values: CreateRelation): CreateRelation {
 }
 
 export function CustomerMasterSection({ organizationId, organizationPermissions, embedded }: { organizationId?: string; organizationPermissions?: string[]; embedded?: boolean } = {}) {
-  return <CustomerMasterContent key={organizationId ?? 'current'} organizationId={organizationId} organizationPermissions={organizationPermissions} embedded={embedded} />;
+  const epoch = useLedgerSessionEpoch();
+  return <CustomerMasterContent key={JSON.stringify([organizationId, epoch])} organizationId={organizationId} organizationPermissions={organizationPermissions} embedded={embedded} />;
 }
 
 function CustomerMasterContent({ organizationId, organizationPermissions, embedded }: { organizationId?: string; organizationPermissions?: string[]; embedded?: boolean }) {
@@ -29,7 +33,11 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
   const [relations, setRelations] = useState<Relation[]>([]);
   const [permissions, setPermissions] = useState<Permissions | undefined>(organizationPermissions ? { organizationId: organizationId ?? '', permissions: organizationPermissions } : undefined);
   const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useLedgerPageSize('customer-master', organizationId, 1000);
+  const [selection, setSelection] = useState<Record<string, Pick<Customer, 'id' | 'version'>>>({});
   const [customersLoaded, setCustomersLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState(false);
@@ -43,15 +51,20 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
   const [editDirty, setEditDirty] = useState(false);
   const requestLeave = useNavigationGuard();
   useUnsavedChanges(createDirty || relationDirty || editDirty);
-  useNavigationBusy(busy);
   const [form] = Form.useForm<CreateRelation>();
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const relationRequest = useRef(0);
   const selectedCustomer = useRef<string | undefined>(undefined);
   const customerRequest = useRef(0);
   const mounted = useRef(true);
-  const canWrite = (organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:write') ?? false;
-  const canRead = (organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:read') ?? false;
+  const canWrite = !denied && ((organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:write') ?? false);
+  const canRead = !denied && ((organizationPermissions ?? permissions?.permissions)?.includes('customer-quality:complaints:read') ?? false);
+  const deletion = useMasterDataBulkDelete({ organizationId, allowed: canRead && canWrite, disabled: saving || !customersLoaded || creating || Boolean(edit) || relationDirty, path: `${base}/customers/bulk-delete`, noun: '客户档案', selection, setSelection, label: id => { const row = customers.find(item => item.id === id); return row ? `${row.code} · ${row.name}` : id; }, onDeleted: async ids => {
+    if (selected && ids.includes(selected)) { selectedCustomer.current = undefined; relationRequest.current++; setSelected(undefined); setRelations([]); }
+    await refreshCustomers();
+  }, onDenied: cause => { setDenied(true); setCustomers([]); setRelations([]); setSelected(undefined); selectedCustomer.current = undefined; setEdit(undefined); setError(cause); } });
+  const busy = saving || deletion.busy;
+  useNavigationBusy(busy);
   const readable = useRef(canRead);
   readable.current = canRead;
   const scoped = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path;
@@ -69,7 +82,7 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
       }
       const rows = await apiRequest<Customer[]>(scoped(`${base}/customers`));
       if (mounted.current && request === customerRequest.current) {
-        setCustomers(rows); setCustomersLoaded(true); setError(undefined);
+        setCustomers(rows); setCustomersLoaded(true); setError(undefined); setPage(current => Math.min(current, Math.max(1, Math.ceil(rows.length / pageSize))));
       }
     }
     catch (cause) { if (!mounted.current || request !== customerRequest.current) return; relationRequest.current++; selectedCustomer.current = undefined; setCustomers([]); setSelected(undefined); setRelations([]); setEdit(undefined); setError(cause); if (reportFailure) throw cause; }
@@ -141,7 +154,7 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
   }
   function refreshFromUser() {
     if (busy) return;
-    requestLeave(() => { form.resetFields(); setRelationDirty(false); setEdit(undefined); setEditDirty(false); void refreshCustomers(); });
+    requestLeave(() => { setSelection({}); form.resetFields(); setRelationDirty(false); setEdit(undefined); setEditDirty(false); void refreshCustomers(); });
   }
   async function addRelation(values: CreateRelation) {
     if (!canWrite || busy || !selected) return;
@@ -173,12 +186,17 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
     finally { setBusy(false); }
   }
 
-  return <section className="customer-quality-card" aria-label="客户主数据">
+  return <section className={`customer-quality-card ${deletion.selectedClass ?? ''}`} aria-label="客户主数据">
     <Typography.Title level={3} className={embedded ? 'sr-only' : undefined}>客户主数据</Typography.Title>
+    {deletion.feedback}{deletion.controls}
     {exportError ? <Alert showIcon type="error" title={t('客户清单导出失败，请重试')} /> : null}
     {error ? <Alert showIcon type="error" title={safeAccountError(error)} action={<Button onClick={refreshFromUser}>重试</Button>} /> : null}
     {canRead ? <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} disabled={busy && !relationSubmitting.current} onChange={changeCustomer} /><Button disabled={busy} onClick={refreshFromUser}>刷新客户</Button>{canRead ? <Button onClick={() => void exportCustomers()} loading={exporting} disabled={!customersLoaded || !customers.length || exporting}>{t('导出当前客户清单')}</Button> : null}{selected && canWrite ? <Button onClick={() => requestLeave(() => { const customer = customers.find((item) => item.id === selected); if (customer) { setEditDirty(false); setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); } })} disabled={busy}>编辑客户</Button> : null}</Space> : null}
-    {canWrite ? <Space wrap><Button onClick={() => setCreating(true)}>{t('新增客户')}</Button><CustomerMasterImport organizationId={organizationId} onImported={canRead ? () => refreshCustomers(true) : () => undefined} /></Space> : null}
+    {canWrite ? <Space wrap><Button disabled={busy} onClick={() => setCreating(true)}>{t('新增客户')}</Button><Form component={false} disabled={busy}><CustomerMasterImport organizationId={organizationId} onImported={canRead ? () => refreshCustomers(true) : () => undefined} /></Form></Space> : null}
+    {canRead && <LedgerTable<Customer> ledgerId="customer-master" organizationId={organizationId} requiredColumnKeys={['code', 'actions']} rowKey="id" dataSource={customers} loading={!customersLoaded} scroll={{ x: 560 }}
+      rowSelection={deletion.rowSelection(customers.slice((page - 1) * pageSize, page * pageSize))}
+      pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy, onChange: (next, size) => { if (!busy) requestLeave(() => { setSelection({}); setPage(size === pageSize ? next : 1); setPageSize(size); }); } }}
+      columns={[{ key: 'code', title: t('客户编码'), dataIndex: 'code' }, { key: 'name', title: t('客户名称'), dataIndex: 'name' }, { key: 'actions', title: t('操作'), render: (_, customer) => <Button disabled={busy} onClick={() => changeCustomer(customer.id)}>{t('查看关系')}</Button> }]} />}
     {canWrite ? <Modal title={t('新增客户')} open={creating} footer={null} onCancel={cancelCreate} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
       <Form form={createForm} layout="vertical" onValuesChange={() => setCreateDirty(true)} onFinish={(values: components['schemas']['CreateCustomerDto']) => void createCustomer(values)}>
         <Form.Item name="code" rules={[{ required: true, whitespace: true }]}><Input aria-label="客户代码" placeholder="客户代码" maxLength={100} disabled={busy} /></Form.Item>

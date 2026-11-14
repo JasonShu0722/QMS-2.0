@@ -5,6 +5,8 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
+import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
+import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
 
 export type CustomerComplaintType = 'ZERO_KM' | 'AFTER_SALES';
 export type CustomerExternalSourceSystem = 'ERP' | 'SAP' | 'IMS';
@@ -69,6 +71,20 @@ export class CustomerQualityService {
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     return actor.scopeOrganizationId ?? actor.organizationId;
+  }
+
+  bulkDeleteCustomers(actor: AdminActor, input: MasterDataBulkDeleteDto, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const dto = validateMasterDataDeletion(input);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'CUSTOMER_MASTERS_BULK_DELETED', payload: dto,
+      permission: 'customer-quality:complaints:write', isolationLevel: 'ReadCommitted' },
+    transaction => deleteSelectedMasterData(transaction, this.audit, actor, organizationId, 'customer', dto, traceId, async (current, id) => {
+      const [result] = await current.$queryRaw<{ referenced: boolean }[]>`SELECT EXISTS (SELECT 1 FROM customer_quality_customer_relations
+        WHERE organization_id = ${organizationId}::uuid AND (customer_id = ${id}::uuid OR related_customer_id = ${id}::uuid)) AS referenced`;
+      return result!.referenced;
+    }), async transaction => {
+      if ((await transaction.organization.findUnique({ where: { id: organizationId }, select: { type: true } }))?.type !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
+    });
   }
 
   private async authorizeLegacyComplaint(tx: AdminTransaction, organizationId: string, id: string) {

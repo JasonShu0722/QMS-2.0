@@ -113,6 +113,7 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
   components['schemas']['CreateIntegrationEndpointDto'] | components['schemas']['UpdateIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationEndpointDto'] |
   components['schemas']['DeleteIntegrationReceiptsDto'] |
+  components['schemas']['MasterDataBulkDeleteDto'] |
   components['schemas']['UpdateIntegrationCapacityDto'] |
   components['schemas']['CreateIntegrationCredentialDto'] | components['schemas']['IntegrationScopeDto'] |
   components['schemas']['DeleteAdminUserDto'] | components['schemas']['OrganizationForceDeleteDto'] |
@@ -126,7 +127,7 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
 
 export function createAdminMutation(options: { replayAfterReauthentication?: boolean } = {}) {
   let pending: { signature: string; key: string } | undefined;
-  return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody, signal?: AbortSignal): Promise<T> {
+  return async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: AdminBody, signal?: AbortSignal, validateResult?: (value: T) => void): Promise<T> {
     const version = sessionSignalVersion();
     const signature = JSON.stringify([path, method, body]);
     if (pending?.signature !== signature) pending = { signature, key: crypto.randomUUID() };
@@ -135,6 +136,7 @@ export function createAdminMutation(options: { replayAfterReauthentication?: boo
     signal?.throwIfAborted();
     if (version !== sessionSignalVersion()) throw new DOMException('Session changed', 'AbortError');
     const result = await request<T>(path, { method, signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': attempt.key }, body: body === undefined ? undefined : JSON.stringify(body) }, options);
+    validateResult?.(result);
     if (pending === attempt) pending = undefined;
     return result;
   };
@@ -174,6 +176,7 @@ export function safeAccountError(cause: unknown): string {
     AUTH_SESSION_REQUIRED: '请先登录',
     AUTH_RATE_LIMITED: '请求过于频繁，请稍后重试',
     AUTH_REAUTHENTICATION_REQUIRED: '此操作需要重新验证身份',
+    CLIENT_REAUTHENTICATION_CANCELLED: '已取消身份验证，操作未提交',
     AUTH_MFA_CODE_INVALID: '验证码无效或已使用，请使用新的验证码',
     AUTH_MFA_CHALLENGE_INVALID: '验证已过期，请重新登录',
     AUTH_MFA_RATE_LIMITED: '验证尝试过多，请稍后重试',

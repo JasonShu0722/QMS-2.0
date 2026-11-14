@@ -8,6 +8,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { UserForceDelete, type UserForceDeleteProps } from './UserForceDelete';
 import { UserAdministration } from './UserAdministration';
 import type { AdminOrganization } from './admin';
+import { ReauthenticationProvider } from '../auth/ReauthenticationProvider';
 
 const target = { id: '20000000-0000-4000-8000-000000000001', organizationId: '10000000-0000-4000-8000-000000000001', username: 'alice-private', securityVersion: 7 };
 const path = `/api/v1/admin/users/${target.id}?organizationId=${target.organizationId}`;
@@ -49,6 +50,29 @@ it('uses the profile-owned supplier deletion endpoint with the same real securit
   expect(writes(fetch)).toHaveLength(1);
   expect(writes(fetch)[0][0]).toBe(deletePath);
   expect(JSON.parse(String(writes(fetch)[0][1]?.body))).toEqual({ expectedSecurityVersion: target.securityVersion });
+});
+
+it('preserves the legacy deletion confirmation when the real provider cancels reauthentication without denying access', async () => {
+  const fetch = network(async () => json({ code: 'AUTH_REAUTHENTICATION_REQUIRED' }, 403));
+  const props: UserForceDeleteProps = { target, canDelete: true, onDeleted: vi.fn(), onDenied: vi.fn() };
+  render(<ReauthenticationProvider><UserForceDelete {...props} /></ReauthenticationProvider>);
+  await open(); await confirm();
+  const password = await screen.findByLabelText('当前密码');
+  const authentication = within(password.closest('[role="dialog"]')!);
+  await userEvent.type(password, 'only-in-memory-password');
+  await userEvent.click(authentication.getByRole('button', { name: /取\s*消/ }));
+  await waitFor(() => expect(password).not.toBeInTheDocument());
+  expect(props.onDenied).not.toHaveBeenCalled(); expect(props.onDeleted).not.toHaveBeenCalled();
+  const confirmation = within(screen.getByText(target.username).closest('[role="dialog"]')!);
+  expect(confirmation.getByRole('button', { name: /取\s*消/ })).toBeEnabled();
+  expect(confirmation.queryByRole('button', { name: '重试确认结果' })).not.toBeInTheDocument();
+  expect(writes(fetch)).toHaveLength(1);
+  await userEvent.click(confirmation.getByRole('button', { name: /取\s*消/ }));
+  await waitFor(() => expect(screen.queryByText(target.username)).not.toBeInTheDocument());
+  const reopened = within(await open());
+  expect(reopened.getByText(target.username)).toBeVisible();
+  expect(reopened.getByRole('button', { name: /确认永久删除/ })).toBeEnabled();
+  expect(writes(fetch)).toHaveLength(1);
 });
 
 it('retires the old unknown command when the profile-owned deletion path changes', async () => {

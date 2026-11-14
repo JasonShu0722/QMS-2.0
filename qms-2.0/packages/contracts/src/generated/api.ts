@@ -1575,6 +1575,22 @@ export interface paths {
         patch: operations["PlatformConfigurationController_updateCategory"];
         trace?: never;
     };
+    "/api/v1/admin/configuration/component-project-mappings/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ComponentProjectController_bulkDeleteMappings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/configuration/component-project-records": {
         parameters: {
             query?: never;
@@ -2407,6 +2423,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/material-masters/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MaterialMasterController_bulkDeleteMaterials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/material-masters": {
         parameters: {
             query?: never;
@@ -2449,6 +2481,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["MaterialMasterController_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-quality/profiles/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierQualityController_bulkDeleteProfiles"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3649,6 +3697,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["WorkflowDeadlineExtensionController_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer-quality/customers/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerQualityController_bulkDeleteCustomers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9946,6 +10010,29 @@ export interface components {
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
             sortOrder?: number;
+        };
+        MasterDataDeleteRecordDto: {
+            /** Format: uuid */
+            id: string;
+            expectedVersion: number;
+        };
+        MasterDataBulkDeleteDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            records: components["schemas"]["MasterDataDeleteRecordDto"][];
+        };
+        MasterDataBulkDeleteItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "DELETED" | "REFERENCED" | "CONFLICT" | "NOT_FOUND";
+        };
+        MasterDataBulkDeleteResultDto: {
+            items: components["schemas"]["MasterDataBulkDeleteItemDto"][];
+            deleted: number;
+            referenced: number;
+            conflicted: number;
+            notFound: number;
         };
         ComponentProjectRecordDto: {
             /** Format: uuid */
@@ -21605,6 +21692,40 @@ export interface operations {
             };
         };
     };
+    ComponentProjectController_bulkDeleteMappings: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataBulkDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataBulkDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ComponentProjectController_listProjects: {
         parameters: {
             query?: {
@@ -23757,6 +23878,40 @@ export interface operations {
             };
         };
     };
+    MaterialMasterController_bulkDeleteMaterials: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataBulkDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataBulkDeleteResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     MaterialMasterController_list: {
         parameters: {
             query?: {
@@ -23878,6 +24033,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialMasterImportResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierQualityController_bulkDeleteProfiles: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataBulkDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataBulkDeleteResultDto"];
                 };
             };
             default: {
@@ -26858,6 +27047,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowDeadlineExtensionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerQualityController_bulkDeleteCustomers: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterDataBulkDeleteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataBulkDeleteResultDto"];
                 };
             };
             default: {

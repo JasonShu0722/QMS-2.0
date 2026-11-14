@@ -5,6 +5,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
+import { MasterDataBulkDeleteDto, MasterDataBulkDeleteResultDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { CustomerQualityService } from './customer-quality.service.js';
 import { CustomerMasterImportDto, CustomerMasterImportResultDto } from './customer-quality.dto.js';
 import { CustomerIssueService } from './customer-issue.service.js';
@@ -21,6 +22,7 @@ const bodyScope = { source: 'body', field: 'organizationId', optional: true } as
 @ApiResponse({ status: 'default', type: ErrorResponse })
 export class CustomerQualityController {
   constructor(private readonly service: CustomerQualityService, private readonly issues: CustomerIssueService, private readonly processing: CustomerComplaintProcessingService) {}
+  @Post('customers/bulk-delete') @ApiCreatedResponse({ type: MasterDataBulkDeleteResultDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'customer-quality:complaints:write', organizationScope: bodyScope }) bulkDeleteCustomers(@Req() request: Request, @Body() dto: MasterDataBulkDeleteDto) { return this.service.bulkDeleteCustomers(actor(request), dto, requestTraceId(request), request.get('Idempotency-Key')); }
   @Get('customers') @ApiOkResponse({ type: [CustomerMasterDto] }) @RequireAccess({ featurePermission: 'customer-quality:complaints:read', organizationScope: queryScope }) customers(@Req() request: Request, @Query() _query: CustomerScopeDto) { return this.service.listCustomers(actor(request)); }
   @Post('customers') @ApiCreatedResponse({ type: CustomerMasterDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'customer-quality:complaints:write', organizationScope: bodyScope }) createCustomer(@Req() request: Request, @Body() dto: CreateCustomerDto) { return this.service.createCustomer(actor(request), dto, requestTraceId(request), request.get('Idempotency-Key')); }
   @Post('customers/import') @ApiCreatedResponse({ type: CustomerMasterImportResultDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true }) @RequireAccess({ featurePermission: 'customer-quality:complaints:write', organizationScope: bodyScope }) importCustomers(@Req() request: Request, @Body() dto: CustomerMasterImportDto) { return this.service.importCustomers(actor(request), dto.rows, requestTraceId(request), request.get('Idempotency-Key')); }

@@ -30,6 +30,13 @@ function writeCache(cache: Record<string, string[]>) {
   const encrypted = Buffer.concat([cipher.update(JSON.stringify(cache)), cipher.final()]);
   writeFileSync(cachePath!, Buffer.concat([nonce, cipher.getAuthTag(), encrypted]), { mode: 0o600 });
 }
+export function takeMfaRecoveryCode(identifier: string): string {
+  const cache = readCache();
+  const code = cache[identifier]?.shift();
+  if (!code) throw new Error('MFA acceptance recovery cache unavailable for disposable account');
+  writeCache(cache);
+  return code;
+}
 async function post(client: APIRequestContext, path: string, data?: object) {
   const csrf = await client.get('/api/v1/auth/csrf'); expect(csrf.status()).toBe(200);
   return client.post(`/api/v1/${path}`, { headers: { 'x-csrf-token': (await csrf.json()).csrfToken }, data });

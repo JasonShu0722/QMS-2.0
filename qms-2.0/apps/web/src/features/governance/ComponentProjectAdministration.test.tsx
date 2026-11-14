@@ -75,6 +75,26 @@ function workspace(org: AdminOrganization) {
   </Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>;
 }
 function mount(org = organization) { return render(workspace(org)); }
+
+it('uses the existing component selection for mapping deletion and never deletes shared project records', async () => {
+  let removed = false;
+  const requests = server({ intercept: (url) => {
+    if (url.pathname.endsWith('/component-project-mappings/bulk-delete')) { removed = true; return Promise.resolve(json({ items: [{ id: mapping.id, status: 'DELETED' }], deleted: 1, referenced: 0, conflicted: 0, notFound: 0 })); }
+    if (removed && url.pathname.endsWith('/component-project-mappings')) return Promise.resolve(json({ items: [], total: 0, page: 1, pageSize: 20 }));
+    return undefined;
+  } });
+  mount(); await screen.findByText(mapping.componentCode);
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择当前页' }));
+  expect(screen.getByRole('button', { name: '批量设置' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除组件项目映射' }));
+  fireEvent.click(dialog.getByRole('button', { name: '删除' }));
+  await screen.findByText('COMP-001 · 驱动总成：已删除');
+  await waitFor(() => expect(screen.queryByText(mapping.componentCode)).not.toBeInTheDocument());
+  expect(screen.queryByRole('toolbar', { name: '已选组件项目映射' })).not.toBeInTheDocument();
+  expect(requests.fetchMock).toHaveBeenCalledWith('/api/v1/admin/configuration/component-project-mappings/bulk-delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ organizationId: organization.id, records: [{ id: mapping.id, expectedVersion: mapping.version }] }) }));
+  expect(requests.fetchMock.mock.calls.some(([path, init]) => String(path).includes('/component-project-records') && init?.method === 'POST')).toBe(false);
+});
 function componentToolbar() {
   const panel = screen.getByRole('region', { name: '组件项目映射' });
   return within(panel.querySelector<HTMLElement>('.governance-toolbar')!);
@@ -114,7 +134,7 @@ it('queries pending configuration on the server without changing bulk selection 
   fireEvent.mouseDown(screen.getByRole('combobox', { name: '配置状态' }));
   fireEvent.click(await screen.findByText('待配置', { selector: '.ant-select-item-option-content' }));
   await waitFor(() => expect(reads.some(url => url.pathname.endsWith('/component-project-mappings') && url.searchParams.get('configuration') === 'PENDING' && url.searchParams.get('page') === '1')).toBe(true));
-  expect(screen.getByText('已选择 0 / 100')).toBeInTheDocument();
+  expect(screen.getByText('已选择 0 / 1000')).toBeInTheDocument();
 });
 
 it('retires an open personnel editor after a batched session A to B to A transition', async () => {
@@ -376,13 +396,13 @@ it('keeps selected component identities across pages and clears them on organiza
   const view = render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter><ComponentProjectAdministration organization={organization} /></MemoryRouter></LanguageProvider></ConfigProvider>);
   await screen.findByText('COMP-1');
   fireEvent.click(screen.getAllByRole('checkbox')[1]);
-  await screen.findByText('已选择 1 / 100');
+  await screen.findByText('已选择 1 / 1000');
   fireEvent.click(screen.getByTitle('2'));
   await screen.findByText('COMP-2');
   fireEvent.click(screen.getAllByRole('checkbox')[1]);
-  await screen.findByText('已选择 2 / 100');
+  await screen.findByText('已选择 2 / 1000');
   view.rerender(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter><ComponentProjectAdministration organization={{ ...organization, id: 'org-b' }} /></MemoryRouter></LanguageProvider></ConfigProvider>);
-  await screen.findByText('已选择 0 / 100');
+  await screen.findByText('已选择 0 / 1000');
 });
 
 it('protects keyboard Escape and restores focus to the new-component trigger after discard', async () => {
@@ -456,7 +476,7 @@ it('preserves the bulk draft and selection on a 409 but requires a fresh preview
   await within(dialog).findAllByRole('alert');
   expect(within(dialog).queryByRole('button', { name: '确认应用' })).not.toBeInTheDocument();
   expect(within(dialog).getByRole('checkbox', { name: '设置项目阶段' })).toBeChecked();
-  expect(screen.getByText('已选择 1 / 100')).toBeInTheDocument();
+  expect(screen.getByText('已选择 1 / 1000')).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '预览影响' }));
   await waitFor(() => expect(requests).toHaveLength(3));
   expect(JSON.parse(String(requests[2].init.body)).changes).toEqual({ stage: 'MASS_PRODUCTION' });

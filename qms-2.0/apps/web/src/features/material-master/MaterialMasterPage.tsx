@@ -6,6 +6,8 @@ import { apiRequest, ApiError, csrfToken, safeAccountError } from '../../api/cli
 import { MaterialMasterImport } from './MaterialMasterImport';
 import { useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useLanguage } from '../../i18n/Language';
+import { useMasterDataBulkDelete } from '../imports/MasterDataBulkDelete';
+import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
 
 type Material = components['schemas']['MaterialMasterDto'];
 type Create = components['schemas']['CreateMaterialMasterDto'];
@@ -15,19 +17,21 @@ type Props = { organizationId?: string; organizationPermissions?: string[] };
 const base = '/api/v1/material-masters';
 
 export function MaterialMasterPage(props: Props = {}) {
-  return <MaterialMasterContent key={props.organizationId ?? 'current'} {...props} />;
+  const epoch = useLedgerSessionEpoch();
+  return <MaterialMasterContent key={JSON.stringify([props.organizationId, epoch])} {...props} />;
 }
 
 function MaterialMasterContent({ organizationId, organizationPermissions }: Props) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useLedgerPageSize('material-master', organizationId);
+  const [pageSize, setPageSize] = useLedgerPageSize('material-master', organizationId, 1000);
   const { t } = useLanguage();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [error, setError] = useState<unknown>();
   const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const [selection, setSelection] = useState<Record<string, Pick<Material, 'id' | 'version'>>>({});
   const [exporting, setExporting] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -40,8 +44,10 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const granted = organizationPermissions ?? permissions;
   const canRead = !denied && granted.includes('material-master:read');
-  const canWrite = granted.includes('material-master:write');
+  const canWrite = !denied && granted.includes('material-master:write');
   const canImport = granted.includes('material-master:import');
+  const deletion = useMasterDataBulkDelete({ organizationId, allowed: canRead && canWrite, disabled: saving || loading || creating || Boolean(edit), path: `${base}/bulk-delete`, noun: '物料', selection, setSelection, label: id => { const row = materials.find(item => item.id === id); return row ? `${row.materialCode} · ${row.materialName}` : id; }, onDeleted: () => refresh(), onDenied: cause => { setDenied(true); setMaterials([]); setEdit(undefined); setError(cause); } });
+  const busy = saving || deletion.busy;
   useUnsavedChanges(busy || dirty || Boolean(edit && edit.materialName !== edit.item.materialName));
   const scoped = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path;
 
@@ -52,7 +58,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     try {
       const result = await apiRequest<Material[]>(scoped(base));
       if (mounted.current && sequence.current === request) {
-        setMaterials(result); setError(undefined); setDenied(false);
+        setMaterials(result); setError(undefined); setDenied(false); setPage(current => Math.min(current, Math.max(1, Math.ceil(result.length / pageSize))));
         if (reloadEdit) {
           setEdit((current) => {
             if (!current || current.item.id !== editedId) return current;
@@ -134,19 +140,20 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     finally { if (mounted.current) setExporting(false); }
   }
 
-  return <section className="customer-quality-card" aria-label={t('物料主数据')}>
+  return <section className={`customer-quality-card ${deletion.selectedClass ?? ''}`} aria-label={t('物料主数据')}>
     {contextHolder}<Typography.Title level={3} className="sr-only">{t('物料主数据')}</Typography.Title>
+    {deletion.feedback}{deletion.controls}
 
-    {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} action={canRead ? <Button onClick={() => void refresh(true)}>{t('重试')}</Button> : undefined} /> : null}
-    {canRead ? <Space wrap><Button onClick={() => void refresh(true)} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
-    <Space wrap>{canWrite ? <Button onClick={() => setCreating(true)}>{t('新增物料')}</Button> : null}{canImport ? <MaterialMasterImport organizationId={organizationId} onImported={canRead ? () => refresh(false, true) : () => undefined} /> : null}</Space>
+    {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} action={canRead ? <Button disabled={busy} onClick={() => { setSelection({}); void refresh(true); }}>{t('重试')}</Button> : undefined} /> : null}
+    {canRead ? <Space wrap><Button onClick={() => { setSelection({}); void refresh(true); }} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
+    <Space wrap>{canWrite ? <Button disabled={busy} onClick={() => setCreating(true)}>{t('新增物料')}</Button> : null}{canImport ? <Form component={false} disabled={busy}><MaterialMasterImport organizationId={organizationId} onImported={canRead ? () => refresh(false, true) : () => undefined} /></Form> : null}</Space>
     {canWrite ? <Modal title={t('新增物料')} open={creating} footer={null} onCancel={cancelCreate} closable={!busy} keyboard={!busy} mask={{ closable: false }}><Form form={form} layout="vertical" onValuesChange={() => setDirty(true)} onFinish={(values: Create) => void save(values)}>
       <Form.Item name="materialCode" extra={t('区分大小写，保留前导 0')} rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料编码')} placeholder={t('物料编码')} maxLength={100} disabled={busy} /></Form.Item>
       <Form.Item name="materialName" rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料名称')} placeholder={t('物料名称')} maxLength={200} disabled={busy} /></Form.Item>
       {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} /> : null}
       <div className="qms-dialog-actions" role="group" aria-label={t('新增物料')}><Button htmlType="submit" loading={busy}>{t('保存')}</Button></div>
     </Form></Modal> : null}
-    {canRead ? <LedgerTable<Material> ledgerId="material-master" organizationId={organizationId} requiredColumnKeys={['materialCode', 'actions']} loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!busy) { setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[{ key: 'materialCode', title: t('物料编码'), dataIndex: 'materialCode' }, { key: 'materialName', title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ key: 'actions', title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
+    {canRead ? <LedgerTable<Material> ledgerId="material-master" organizationId={organizationId} requiredColumnKeys={['materialCode', 'actions']} loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} rowSelection={deletion.rowSelection(materials.slice((page - 1) * pageSize, page * pageSize))} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy, onChange: (next, size) => { if (!busy) { setSelection({}); setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[{ key: 'materialCode', title: t('物料编码'), dataIndex: 'materialCode' }, { key: 'materialName', title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ key: 'actions', title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
     <Modal title={t('修改物料名称')} open={Boolean(edit)} onCancel={cancelEdit} footer={null} destroyOnHidden>
       <Typography.Paragraph>{edit?.item.materialCode}</Typography.Paragraph>
       <Input aria-label={t('编辑物料名称')} maxLength={200} disabled={busy || loading} value={edit?.materialName ?? ''} onChange={(event) => setEdit((current) => current ? { ...current, materialName: event.target.value } : current)} />

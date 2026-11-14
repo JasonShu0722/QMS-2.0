@@ -5,8 +5,9 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
+import { MasterDataBulkDeleteDto, MasterDataBulkDeleteResultDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { SupplierQualityService } from './supplier-quality.service.js';
-import { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
+import { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemPageDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierProfilePageDto, SupplierProfilesQueryDto, SupplierReferenceQueryDto, SupplierReferenceOptionsDto, SupplierScopeQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -23,9 +24,14 @@ const bodyScope = { source: 'body', field: 'organizationId', optional: true } as
 export class SupplierQualityController {
   constructor(private readonly service: SupplierQualityService) {}
 
+  @Post('profiles/bulk-delete') @ApiCreatedResponse({ type: MasterDataBulkDeleteResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:profiles:write', organizationScope: bodyScope })
+  bulkDeleteProfiles(@Req() request: Request, @Body() dto: MasterDataBulkDeleteDto) { return this.service.bulkDeleteProfiles(actor(request), dto, requestTraceId(request), request.get('Idempotency-Key')); }
+
   @Get('profiles') @ApiOkResponse({ type: SupplierProfilePageDto })
   @RequireAccess({ featurePermission: 'supplier-quality:profiles:read', organizationScope: queryScope })
-  profiles(@Req() request: Request, @Query() query: SupplierScopeQueryDto) { return this.service.profiles(actor(request), query); }
+  profiles(@Req() request: Request, @Query() query: SupplierProfilesQueryDto) { return this.service.profiles(actor(request), query); }
 
   @Get('profiles/:id') @ApiOkResponse({ type: SupplierProfileDto })
   @RequireAccess({ featurePermission: 'supplier-quality:profiles:read', organizationScope: queryScope })

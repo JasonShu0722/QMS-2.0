@@ -34,7 +34,7 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
     return () => { stopSignals(); unregister(); const previous = pending.current; pending.current = undefined; previous?.controller.abort(); previous?.reject(new DOMException('Authentication interrupted', 'AbortError')); form.resetFields(); };
   }, [form, clearPending]);
   function cancel() {
-    clearPending(new ApiError({ code: 'AUTH_REAUTHENTICATION_REQUIRED', message: t('此操作需要重新验证身份') }));
+    clearPending(new ApiError({ code: 'CLIENT_REAUTHENTICATION_CANCELLED', message: t('已取消身份验证，操作未提交') }, 400));
   }
   async function submit(values: components['schemas']['ReauthenticateDto']) {
     const attempt = pending.current;
@@ -50,7 +50,7 @@ export function ReauthenticationProvider({ children }: { children: ReactNode }) 
     } catch (cause) { if (pending.current === attempt && !attempt.controller.signal.aborted) setError(cause); }
     finally { if (pending.current === attempt && !attempt.controller.signal.aborted) { submitting.current = false; setSaving(false); } }
   }
-  return <>{children}<Modal open={open} title={t('重新验证身份')} onOk={() => form.submit()} onCancel={cancel} okText={t('验证')} cancelText={t('取消')} confirmLoading={saving} closable={!saving} maskClosable={false} cancelButtonProps={{ disabled: saving }} destroyOnHidden>
+  return <>{children}<Modal zIndex={3000} open={open} title={t('重新验证身份')} onOk={() => form.submit()} onCancel={cancel} okText={t('验证')} cancelText={t('取消')} confirmLoading={saving} closable={!saving} maskClosable={false} cancelButtonProps={{ disabled: saving }} destroyOnHidden>
     <GovernanceFeedback error={error} /><Form form={form} layout="vertical" onFinish={submit} disabled={saving} preserve={false} clearOnDestroy>
       <Form.Item name="password" label={t('当前密码')} rules={[{ required: true }]}><Input.Password autoComplete="current-password" autoFocus /></Form.Item>
       <Form.Item name="code" label={t('验证码或恢复码')}><Input autoComplete="one-time-code" maxLength={43} /></Form.Item>

@@ -18,10 +18,13 @@ import type { WorkflowAction } from '../workflow/workflow.types.js';
 import type { WorkflowActionInput } from '../workflow/workflow-runtime.service.js';
 import { assertInternalClosure, assertReplyActor, validateProblemFacts, validateResponseContent } from './supplier-quality.rules.js';
 import { SupplierRuleError } from './supplier-quality.types.js';
-import type { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierReferenceQueryDto, SupplierResponseRevisionDto, SupplierScopeQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
+import type { CreateSupplierProfileDto, IssueSupplierProblemDto, SaveSupplierResponseDraftDto, SubmitSupplierResponseDto, SupplierDirectoryQueryDto, SupplierProblemDetailQueryDto, SupplierProblemDto, SupplierProblemDraftDto, SupplierProblemQueryDto, SupplierProfileDto, SupplierReferenceQueryDto, SupplierResponseRevisionDto, SupplierProfilesQueryDto, SupplierWorkflowActionDto, UpdateSupplierProblemDraftDto, UpdateSupplierProfileDto } from './supplier-quality.dto.js';
 import { canonical, jsonObject } from '../workflow/workflow-runtime-policy.js';
 import { supplierProfileInput } from './supplier-profile-input.js';
 import { assertSupplierAccountGovernance } from '../authorization/supplier-account-authorization.js';
+import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
+import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
+import { supplierProfileHasAccounts } from '../../common/master-data/master-data-deletion-references.read-model.js';
 
 const problemInclude = { profile: true, responseDraft: true } as const;
 type ProblemRecord = Prisma.SupplierQualityProblemGetPayload<{ include: typeof problemInclude }>;
@@ -45,7 +48,19 @@ export class SupplierQualityService {
     if (actor.accountType !== 'SUPPLIER') adminError('ORGANIZATION_SCOPE_DENIED', 403);
   }
 
-  async profiles(actor: AdminActor, query: SupplierScopeQueryDto) {
+  bulkDeleteProfiles(actor: AdminActor, input: MasterDataBulkDeleteDto, traceId: string, key?: string) {
+    this.internal(actor);
+    const dto = validateMasterDataDeletion(input);
+    const organizationId = this.scope(actor);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_PROFILES_BULK_DELETED', payload: dto,
+      permission: 'supplier-quality:profiles:write', isolationLevel: 'ReadCommitted' },
+    transaction => deleteSelectedMasterData(transaction, this.audit, actor, organizationId, 'supplier', dto, traceId,
+      (current, id) => supplierProfileHasAccounts(current, organizationId, id)), async transaction => {
+      if ((await this.organizations.lookup(organizationId, transaction))?.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+    });
+  }
+
+  async profiles(actor: AdminActor, query: SupplierProfilesQueryDto) {
     this.internal(actor);
     return this.prisma.$transaction(async (transaction) => {
       const granted = await assertAdminAccess(transaction, actor, this.scope(actor), 'supplier-quality:profiles:read');
