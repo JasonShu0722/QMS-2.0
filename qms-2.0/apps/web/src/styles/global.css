@@ -11,6 +11,15 @@ body {
   min-width: 320px;
 }
 
+:is(.qms-content, .qms-console-theme, .ant-modal, .ant-drawer) :is(.ant-select, .ant-input-number, textarea) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+:is(.qms-content, .qms-console-theme, .ant-modal, .ant-drawer) :is(.ant-select, .ant-input-number) {
+  min-width: 0;
+}
+
 a {
   color: inherit;
   text-decoration: none;

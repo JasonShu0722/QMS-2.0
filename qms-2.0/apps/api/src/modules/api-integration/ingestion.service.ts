@@ -146,7 +146,7 @@ export class IngestionService {
 
   async preview(actor: AdminActor, input: IngestionPreviewInputDto, traceId: string, key?: string): Promise<IngestionPreviewDto> {
     const organizationId = integrationScope(actor);
-    const preview = await this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_PREVIEWED', payload: input, permission: 'ingestion:run', isolationLevel: 'ReadCommitted' }, async tx => {
+    const preview = await this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_PREVIEWED', payload: input, permission: 'ingestion:run', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
       await lockIntegrationEndpoint(tx, organizationId, rule.endpoint_id);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
@@ -169,29 +169,32 @@ export class IngestionService {
   async previewHistory(actor: AdminActor, input: IngestionHistoryPreviewInputDto, traceId: string, key?: string): Promise<IngestionPreviewDto> {
     const organizationId = integrationScope(actor), from = new Date(input.from), to = new Date(input.to);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to || to.getTime() > Date.now()) ingestionError('INGESTION_RULE_INVALID');
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_HISTORY_PREVIEWED', payload: input, permission: 'ingestion:run', isolationLevel: 'ReadCommitted' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_HISTORY_PREVIEWED', payload: input, permission: 'ingestion:run', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
       await lockIntegrationEndpoint(tx, organizationId, rule.endpoint_id);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
       const receipts = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND endpoint_id=${rule.endpoint_id}::uuid AND received_at>=${from} AND received_at<=${to} ORDER BY received_at,id LIMIT 101`;
-      if (receipts.length > 100) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', 503);
+      if (receipts.length > 100) ingestionError('INGESTION_HISTORY_LIMIT_EXCEEDED', 422);
       const selections: Selection[] = [];
       let total = 0;
       for (const receipt of receipts) {
         const rows = this.payload(await this.receipt(tx, organizationId, receipt.id, rule.endpoint_id));
         total += rows.length;
-        if (total > 10000) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', 503);
+        if (total > 10000) ingestionError('INGESTION_HISTORY_LIMIT_EXCEEDED', 422);
         selections.push({ receiptId: receipt.id, indexes: rows.map((_, index) => index) });
       }
       const preview = await this.storePreview(tx, actor, rule, 'HISTORY', selections);
       await this.event(tx, actor, organizationId, 'INGESTION_HISTORY_PREVIEWED', preview.previewId, traceId, { ruleId: rule.id, receiptCount: selections.length, rowCount: total });
       return preview;
+    }, async tx => {
+      const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
+      await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
     });
   }
   private async storePreview(tx: AdminTransaction, actor: AdminActor, rule: RuleRow, kind: 'SINGLE' | 'HISTORY', selections: Selection[]): Promise<IngestionPreviewDto> {
     await tx.$executeRaw`DELETE FROM integration_ingestion_previews WHERE organization_id=${rule.organization_id}::uuid AND expires_at<=clock_timestamp()`;
     const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_previews WHERE organization_id=${rule.organization_id}::uuid`;
-    if (count!.total >= 100) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', 503);
+    if (count!.total >= 100) ingestionError('INGESTION_PREVIEW_LIMIT_EXCEEDED', 429);
     const previewId = randomUUID(), expiresAt = new Date(Date.now() + 600000);
     await tx.$executeRaw`INSERT INTO integration_ingestion_previews(id,organization_id,actor_id,endpoint_id,rule_id,rule_version,kind,selections,expires_at) VALUES(${previewId}::uuid,${rule.organization_id}::uuid,${actor.id}::uuid,${rule.endpoint_id}::uuid,${rule.id}::uuid,${rule.version},${kind},${JSON.stringify(selections)}::jsonb,${expiresAt})`;
     return { previewId, receiptCount: selections.length, rowCount: selections.reduce((sum, selection) => sum + selection.indexes.length, 0), expiresAt: expiresAt.toISOString() };
@@ -200,7 +203,7 @@ export class IngestionService {
   async submitImport(actor: AdminActor, input: SubmitIngestionImportDto, traceId: string, key?: string): Promise<IngestionImportResultDto> {
     const organizationId = integrationScope(actor);
     if (input.confirmed !== true || input.reprocessReason !== undefined && (!input.reprocessReason.trim() || input.reprocessReason.length > 300)) ingestionError('INGESTION_RULE_INVALID');
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_IMPORT_SUBMITTED', payload: input, permission: 'ingestion:run', isolationLevel: 'ReadCommitted' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_IMPORT_SUBMITTED', payload: input, permission: 'ingestion:run', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const [preview] = await tx.$queryRaw<PreviewRow[]>`SELECT *,expires_at>clock_timestamp() AS valid FROM integration_ingestion_previews WHERE organization_id=${organizationId}::uuid AND id=${input.previewId}::uuid AND actor_id=${actor.id}::uuid`;
       if (!preview?.valid) ingestionError('INGESTION_PREVIEW_EXPIRED', 410);
       await lockIntegrationEndpoint(tx, organizationId, preview.endpoint_id);
@@ -220,8 +223,26 @@ export class IngestionService {
         result.jobIds.push(queued.id, ...queued.additionalIds); result.reused &&= queued.reused; result.rowCount += selection.indexes.length;
       }
       result.jobIds = [...new Set(result.jobIds)];
-      await this.event(tx, actor, organizationId, 'INGESTION_IMPORT_SUBMITTED', preview.id, traceId, { ruleId: rule.id, receiptCount: result.receiptCount, rowCount: result.rowCount, reprocessed: !!input.reprocessReason });
+      await this.event(tx, actor, organizationId, 'INGESTION_IMPORT_SUBMITTED', preview.id, traceId, { ruleId: rule.id, target: rule.configuration.target, receiptCount: result.receiptCount, rowCount: result.rowCount, reprocessed: !!input.reprocessReason });
       return result;
+    }, async tx => {
+      const [preview] = await tx.$queryRaw<PreviewRow[]>`SELECT * FROM integration_ingestion_previews WHERE organization_id=${organizationId}::uuid AND id=${input.previewId}::uuid AND actor_id=${actor.id}::uuid`;
+      if (!preview) ingestionError('INGESTION_PREVIEW_EXPIRED', 410);
+      const rule = await this.rule(tx, organizationId, preview.rule_id, preview.rule_version);
+      await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
+    }, async (tx, response) => {
+      const metadata = await this.audit.readSuccessfulResourceMetadata(tx, { organizationId, actorUserId: actor.id, action: 'INGESTION_IMPORT_SUBMITTED', resourceType: 'IntegrationIngestion', resourceId: input.previewId });
+      const target = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata.target : undefined;
+      const auditedRuleId = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata.ruleId : undefined;
+      const targets = typeof target === 'string' && ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'].includes(target)
+        ? [target as IngestionRule['target']]
+        : (await tx.$queryRaw<{ target: IngestionRule['target'] }[]>`SELECT DISTINCT rule_snapshot->>'target' AS target FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND id=ANY(${response.jobIds}::uuid[])`).map(job => job.target);
+      if (!targets.length && response.jobIds.length === 0 && typeof auditedRuleId === 'string') {
+        const currentRule = await tx.$queryRaw<{ target: IngestionRule['target'] }[]>`SELECT target FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid AND id=${auditedRuleId}::uuid`;
+        if (currentRule[0]?.target) targets.push(currentRule[0].target);
+      }
+      if (!targets.length) ingestionError('INGESTION_NOT_FOUND', 404);
+      for (const target of targets) await this.access(tx, actor, 'ingestion:run', true, target);
     });
   }
 
@@ -249,7 +270,7 @@ export class IngestionService {
     if (existing) return { id: existing.id, additionalIds: coveredJobs, reused: true };
     await tx.$executeRaw`DELETE FROM integration_ingestion_jobs j WHERE j.organization_id=${organizationId}::uuid AND j.completed_at<clock_timestamp()-INTERVAL '90 days' AND j.status IN ('COMPLETED','CANCELLED') AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items i WHERE i.job_id=j.id AND i.status IN ('PENDING','AWAITING_CONFIRMATION','PROCESSING_FAILED'))`;
     const [counts] = await tx.$queryRaw<{ jobs: number; items: number }[]>`SELECT (SELECT count(*)::int FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid) AS jobs,(SELECT count(*)::int FROM integration_ingestion_items WHERE organization_id=${organizationId}::uuid) AS items`;
-    if (counts!.jobs >= 10000 || counts!.items + indexes.length > 100000) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', 503);
+    if (counts!.jobs >= 10000 || counts!.items + indexes.length > 100000) ingestionError('INGESTION_CAPACITY_UNAVAILABLE', source === 'AUTO' ? 503 : 429);
     await tx.$executeRaw`INSERT INTO integration_ingestion_queues(organization_id,endpoint_id) VALUES(${organizationId}::uuid,${endpointId}::uuid) ON CONFLICT DO NOTHING`;
     const [queue] = await tx.$queryRaw<{ next_sequence: bigint }[]>`UPDATE integration_ingestion_queues SET next_sequence=next_sequence+1 WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid RETURNING next_sequence-1 AS next_sequence`;
     const id = randomUUID();

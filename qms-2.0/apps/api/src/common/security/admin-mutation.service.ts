@@ -5,7 +5,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogModule } from '../../modules/audit-log/audit-log.module.js';
 import { AuditLogService } from '../../modules/audit-log/audit-log.service.js';
 import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/platform-error.js';
-import { assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
+import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
 import { effectiveRoleGrants } from './effective-role-grants.js';
 import { hasPlatformAdministrator } from './platform-administrator.js';
 import { PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
@@ -55,7 +55,7 @@ export class AdminMutationService {
     this.secret = configured ?? 'qms-development-rate-limit-secret-not-for-production';
   }
 
-  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel; archivedReceipt?: { organizationId: string; find: (transaction: AdminTransaction) => Promise<{ organizationId: string; action: string; requestDigest: string; response: Prisma.JsonValue } | undefined> } }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>): Promise<Result> {
+  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; authentication?: 'active' | 'recent'; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel; archivedReceipt?: { organizationId: string; find: (transaction: AdminTransaction) => Promise<{ organizationId: string; action: string; requestDigest: string; response: Prisma.JsonValue } | undefined> } }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>, authorizeReplay?: (transaction: AdminTransaction, response: Result) => Promise<void>): Promise<Result> {
     try {
       if (!input.key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(input.key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       const key = input.key;
@@ -66,10 +66,11 @@ export class AdminMutationService {
           const lock = `admin-mutation:${input.organizationId}:${input.actor.id}:${key}`;
           await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))::text`;
         }
-        await assertRecentAuthentication(transaction, input.actor);
+        if (input.authentication === 'active') await assertActiveAuthentication(transaction, input.actor);
+        else await assertRecentAuthentication(transaction, input.actor);
         const granted = await assertAdminAccess(transaction, input.actor, input.organizationId, input.permission);
         for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);
-        await authorizeResource?.(transaction);
+        if (!authorizeReplay) await authorizeResource?.(transaction);
         const identity = { actorUserId: input.actor.id, organizationId: input.organizationId, key };
         // Archived namespaces never consult or populate the surviving scope's live key space.
         const existing = input.archivedReceipt ? await input.archivedReceipt.find(transaction)
@@ -77,9 +78,12 @@ export class AdminMutationService {
         if (existing) {
           if (input.archivedReceipt && existing.organizationId !== input.archivedReceipt.organizationId) adminError('IDEMPOTENCY_REPLAY', 409);
           if (existing.action !== input.action || !requestDigests.includes(existing.requestDigest)) adminError('IDEMPOTENCY_REPLAY', 409);
-          return (existing.response as { value: Result }).value;
+          const response = (existing.response as { value: Result }).value;
+          await authorizeReplay?.(transaction, response);
+          return response;
         }
         if (input.archivedReceipt) adminError('ORGANIZATION_NOT_FOUND', 404);
+        if (authorizeReplay) await authorizeResource?.(transaction);
         const result = await work(transaction, granted);
         const response = JSON.parse(JSON.stringify({ value: result ?? null })) as Prisma.InputJsonObject;
         await transaction.adminMutation.create({ data: { ...identity, action: input.action, requestDigest, response } });
