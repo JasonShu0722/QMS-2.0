@@ -37,6 +37,17 @@ async function openHistory(user: ReturnType<typeof userEvent.setup>, id: string)
   return screen.findByRole('dialog', { name: '通知尝试回执' });
 }
 
+it('keeps the failure queue controls above the table and advances the real offset', async () => {
+  const fetch = vi.fn(async (_path: string) => json({ total: 30, items: [{ id: 'event-a', eventType: 'WORKFLOW_TASK_ASSIGNED', aggregateId: 'resource-a', attempts: 1, createdAt: '2026-10-21T00:00:00Z', reasonCode: 'OUTBOX_DELIVERY_FAILED' }] }));
+  vi.stubGlobal('fetch', fetch);
+  render(view());
+  await screen.findByText('resource-a');
+  const next = screen.getByRole('button', { name: '下一页' });
+  expect(next.compareDocumentPosition(document.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await userEvent.click(next);
+  await waitFor(() => expect(fetch.mock.calls.at(-1)?.[0]).toContain('offset=20'));
+});
+
 it('does not reopen closed attempt history when its response arrives late', async () => {
   const user = userEvent.setup();
   const { first } = mountOutbox();

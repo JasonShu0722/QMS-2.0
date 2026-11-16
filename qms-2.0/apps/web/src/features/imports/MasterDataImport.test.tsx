@@ -54,6 +54,9 @@ it('opens only on demand and strictly serializes 250 rows with cumulative acknow
   render(<CustomerMasterImport organizationId="org" onImported={vi.fn()} />);
   expect(screen.queryByLabelText('客户清单文件')).not.toBeInTheDocument();
   await openUpload();
+  const importer = screen.getByRole('region', { name: '客户批量新增' });
+  const preview = importer.querySelector('.ant-table-wrapper')!;
+  expect(preview.querySelector('.ant-pagination')!.compareDocumentPosition(preview.querySelector('.ant-table')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '导入客户' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(1));
   expect(screen.getByText('已确认 0 / 250，未处理 250')).toBeInTheDocument();
@@ -62,6 +65,9 @@ it('opens only on demand and strictly serializes 250 rows with cumulative acknow
   expect(screen.getByText('已确认 100 / 250，未处理 150')).toBeInTheDocument();
   await act(async () => second.resolve(receipt(102, 100)));
   await screen.findByText('已确认 250 / 250，未处理 0');
+  const tables = importer.querySelectorAll('.ant-table-wrapper');
+  expect(tables).toHaveLength(2);
+  for (const table of tables) expect(table.querySelector('.ant-pagination')!.compareDocumentPosition(table.querySelector('.ant-table')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(vi.mocked(apiRequest).mock.calls.map(([, init]) => JSON.parse(init!.body as string).rows.length)).toEqual([100, 100, 50]);
 });
 

@@ -56,6 +56,9 @@ it('uses the chosen page length in the request and response validation and reset
   view();
   await screen.findByText('/api/v1/tasks/:id');
   expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
+  const next = screen.getByRole('button', { name: '下一页' });
+  const ledger = screen.getByRole('region', { name: '分钟聚合明细' });
+  expect(next.compareDocumentPosition(ledger.querySelector('.ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));
   await choose('每页条数', '50');

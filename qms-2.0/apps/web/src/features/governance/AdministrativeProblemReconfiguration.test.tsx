@@ -52,32 +52,37 @@ it('keeps the recovery section heading accessible while retaining the visible re
 
 let editor: HTMLElement | undefined;
 async function choose(label: string, text: string, keyboard = false) {
-  const field = label === '问题领域' || !editor?.isConnected ? document.body : within(editor).getByText(label, { selector: 'label' }).closest('.ant-form-item');
+  const owner = label === '问题领域' || !editor?.isConnected ? document.body : editor;
+  const field = owner === document.body ? owner : [...owner.querySelectorAll('label')].find(element => element.textContent === label)?.closest('.ant-form-item');
   if (!(field instanceof HTMLElement)) throw new Error(`Missing field for ${label}`);
   const input = within(field).getByLabelText(label, { selector: 'input' });
   if (!(input instanceof HTMLInputElement)) throw new Error(`Missing input for ${label}`);
+  const control = input.closest('.ant-select');
+  if (!(control instanceof HTMLElement)) throw new Error('Assignment control is not an HTML element');
   if (keyboard) {
-    act(() => input.focus());
-    fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 });
-    fireEvent.keyUp(input, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 });
+    act(() => {
+      input.focus();
+      fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 });
+      fireEvent.keyUp(input, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 });
+    });
   }
   else await userEvent.click(input);
   const popup = await waitFor(() => {
     const element = document.getElementById(input.getAttribute('aria-controls') ?? '')?.closest('.ant-select-dropdown');
     if (!(element instanceof HTMLElement)) throw new Error(`Missing popup for ${label}`);
     return element;
-  });
+  }, { container: control });
   const option = await within(popup).findByText(text, { selector: '.ant-select-item-option-content' });
   await waitFor(() => {
     expect(option).toBeVisible(); expect(window.getComputedStyle(option).pointerEvents).not.toBe('none');
   }, { container: popup });
   if (keyboard) {
-    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 });
-    fireEvent.keyUp(input, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 });
+    act(() => {
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 });
+      fireEvent.keyUp(input, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 });
+    });
   }
   else await userEvent.click(option);
-  const control = input.closest('.ant-select');
-  if (!(control instanceof HTMLElement)) throw new Error('Assignment control is not an HTML element');
   await waitFor(() => expect(input).toHaveAttribute('aria-expanded', 'false'), { container: control });
 }
 function button(name: string) {
@@ -135,6 +140,9 @@ it('uses scan nextOffset even for an empty window, without total or per-record r
   render(scene()); expect(await screen.findByText(/当前扫描窗口无待配置问题/)).toBeVisible();
   expect(calls).toHaveLength(1); fireEvent.click(button('下一扫描页')); await edit();
   expect(calls.some(call => call.path.includes('/PROCESS?offset=93&pageSize=20'))).toBe(true);
+  const section = screen.getByRole('region', { name: '问题责任恢复' });
+  const next = within(section).getByRole('button', { name: '下一扫描页' });
+  expect(next.compareDocumentPosition(section.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(button('下一扫描页')).toBeDisabled();
 });
 
@@ -160,17 +168,22 @@ it('retains the draft on 409 but requires explicit reload and reselects a fresh 
     if (call.init?.method === 'POST') return json({ ...internal, version: version + 1, problemVersion: 5 });
     if (call.path.includes('/PROCESS?')) return json({ items: [{ ...internal, version }], pageSize: 20, offset: 0, nextOffset: null });
   });
-  render(scene()); await edit(); await choose('专业责任任职', label('PROFESSIONAL'), true); await choose('负责人任职', label('OWNER'), true); await save(); await screen.findByText(/版本已变化/);
+  render(scene()); await edit(); await choose('专业责任任职', label('PROFESSIONAL'), true); await choose('负责人任职', label('OWNER'), true); await save(); await within(editor!).findByText(/版本已变化/);
   expect(button('确认恢复责任')).toBeDisabled();
-  expect(within(screen.getByLabelText('负责人任职').closest('.ant-select')!).getByTitle(label('OWNER'))).toBeVisible();
+  const previousOwner = within(editor!).getByLabelText('负责人任职');
+  expect(within(previousOwner.closest('.ant-select')!).getByTitle(label('OWNER'))).toBeVisible();
   fireEvent.click(button('重新读取并重选责任'));
   const abandon = (await screen.findByText('放弃修改', { selector: 'button > span' })).closest('button')!;
   const dialog = abandon.closest<HTMLElement>('[role="dialog"]')!;
-  expect(dialog).not.toBeNull(); await waitFor(() => expect(dialog).toBeVisible(), { container: dialog }); await userEvent.click(abandon);
-  await waitFor(() => expect(screen.queryByLabelText('负责人任职')).not.toBeInTheDocument()); await edit();
+  expect(dialog).not.toBeNull(); await waitFor(() => expect(dialog).toBeVisible(), { container: dialog });
+  expect(abandon).toBeVisible(); expect(abandon).toBeEnabled(); expect(window.getComputedStyle(abandon).pointerEvents).not.toBe('none');
+  act(() => abandon.focus()); await userEvent.keyboard('{Enter}');
+  const previousEditor = editor!;
+  const recovery = document.querySelector('.administrative-problem-reconfiguration') as HTMLElement;
+  await waitFor(() => { expect(previousEditor).not.toBeInTheDocument(); expect(previousOwner).not.toBeInTheDocument(); }, { container: recovery }); await edit();
   expect(button('确认恢复责任')).toBeDisabled();
   await choose('专业责任任职', label('PROFESSIONAL'), true); await choose('负责人任职', label('OWNER'), true); await save();
-  await screen.findByText(/责任恢复成功/); expect(posts(calls)).toHaveLength(2); expect(JSON.parse(posts(calls)[1].init!.body as string).expectedVersion).toBe(9);
+  await within(recovery).findByText(/责任恢复成功/); expect(posts(calls)).toHaveLength(2); expect(JSON.parse(posts(calls)[1].init!.body as string).expectedVersion).toBe(9);
 });
 
 it.each([401, 403])('clears sensitive state and calls the parent on denial %s', async status => {

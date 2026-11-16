@@ -184,7 +184,7 @@ export function QualityDataPage() {
       {trendError ? <Alert type={isDenied(trendError) ? 'warning' : 'error'} showIcon title={isDenied(trendError) ? '暂无该指标趋势访问权限' : trendError instanceof ApiError ? safeAccountError(trendError) : '趋势加载失败，请重试。'} description={trendError instanceof ApiError ? trendError.traceId : undefined} action={isDenied(trendError) ? undefined : <Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}
       {loadingFacts && facts.length === 0 ? <div className="quality-data-loading"><Spin /></div> : (!trendError || facts.length > 0) ? <>
         {facts.length ? <TrendChart facts={facts} /> : <Empty description="该指标暂无期间事实" />}
-        {facts.length ? <Table<Fact> rowKey="id" dataSource={facts} pagination={{ pageSize: 10, showSizeChanger: false }} scroll={{ x: 760 }} columns={[
+        {facts.length ? <Table<Fact> rowKey="id" dataSource={facts} pagination={{ placement: ['topStart'], pageSize: 10, showSizeChanger: false }} scroll={{ x: 760 }} columns={[
           { title: '统计期间', key: 'period', render: (_, fact) => `${new Date(fact.periodStart).toLocaleDateString('zh-CN')} – ${new Date(fact.periodEnd).toLocaleDateString('zh-CN')}` },
           { title: selected.numeratorLabel, dataIndex: 'numerator' },
           { title: selected.denominatorLabel, dataIndex: 'denominator' },

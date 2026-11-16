@@ -82,10 +82,22 @@ function seedDefaultLayout(organizationId: string, order: string[], visible: str
   return key;
 }
 function openColumnSettings() {
-  const button = document.querySelector('.qms-ledger__tools button')!;
+  const button = within(document.querySelector('.qms-ledger__tools') as HTMLElement).getByRole('button', { name: '列设置' });
   expect(button).toHaveAccessibleName('列设置');
   fireEvent.click(button);
 }
+
+it('keeps exactly one problem pager and the real total above the table with column settings', async () => {
+  vi.mocked(api.getProblemIndex).mockResolvedValue({ ...emptyPage, total: 51 });
+  const view = renderPage();
+  const total = await screen.findByText('51', { exact: false, selector: '.qms-ledger__tools .ant-typography' });
+  const ledger = view.container.querySelector('.qms-ledger')!;
+  const tools = ledger.querySelector('.qms-ledger__tools')!;
+  expect(tools).toContainElement(total);
+  expect(view.container.querySelectorAll('.ant-pagination')).toHaveLength(1);
+  expect(tools.querySelector('.ant-pagination')).toBeInTheDocument();
+  expect(tools.compareDocumentPosition(ledger.querySelector('.ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
 
 it('persists the default layout across remounts and saves the displayed order and visibility without losing widths', async () => {
   useWorkTabsStore.getState().bindSession(preferenceSession);

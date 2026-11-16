@@ -123,7 +123,7 @@ function UsersContent({ profile, organizationId, organizationPermissions, onBoun
     <Typography.Paragraph>{t(bound ? '已开通协作' : '未开通协作')}{bound ? ` · ${bound}` : ''}</Typography.Paragraph>
     {error ? <Alert type="error" title={t(supplierError(error))} description={error instanceof ApiError && error.status === 409 ? t('当前填写内容已保留，请显式刷新账号后重试。') : undefined} /> : null}
     <Button disabled={locked || invalidated} loading={loading} onClick={() => void refresh()}>{t('刷新供应商账号')}</Button>
-    {data ? <Table<Account> rowKey="id" size="small" loading={loading} dataSource={data.items} scroll={{ x: 600 }} pagination={{ pageSize: 10 }} columns={[
+    {data ? <Table<Account> rowKey="id" size="small" loading={loading} dataSource={data.items} scroll={{ x: 600 }} pagination={{ placement: ['topStart'], pageSize: 10 }} columns={[
       { title: t('用户名'), dataIndex: 'username' }, { title: t('邮箱'), dataIndex: 'email' }, { title: t('状态'), dataIndex: 'status', render: (value: string) => t(value === 'ACTIVE' ? '启用' : '停用') },
       { title: t('操作'), render: (_, account) => <Space wrap>{canReset && account.status === 'ACTIVE' ? <Button disabled={locked} onClick={() => { setSelected(account); setTemporary(undefined); setPasswordRevision((value) => value + 1); }}>{t('临时密码')}</Button> : null}
         {canStatus ? <Popconfirm title={t(account.status === 'ACTIVE' ? '确认停用此账号并撤销会话？' : '确认启用此账号？')} okText={t('确认')} cancelText={t('取消')} onConfirm={() => status(account)}><Button danger={account.status === 'ACTIVE'} disabled={locked}>{t(account.status === 'ACTIVE' ? '停用账号' : '启用账号')}</Button></Popconfirm> : null}

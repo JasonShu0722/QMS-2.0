@@ -20,7 +20,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-const settings = () => fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+const settings = () => fireEvent.click(within(document.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' }));
 
 describe('ledger page size', () => {
   it('defaults to twenty, persists legal sizes and isolates target organization on the first render', () => {
@@ -118,6 +118,78 @@ describe('ledger page size', () => {
 });
 
 describe('LedgerTable', () => {
+  it('places native controlled pagination above the table while preserving totals and callbacks', () => {
+    const onChange = vi.fn();
+    const onTableChange = vi.fn();
+    const { container } = render(<LedgerTable ledgerId="top-controlled" columns={columns} dataSource={data} title={() => 'Caller title'} footer={() => 'Caller footer'} onChange={onTableChange} pagination={{ current: 2, pageSize: 20, total: 120, showTotal: total => `Total ${total}`, onChange }} />);
+    const pagination = container.querySelector('.ant-pagination')!;
+    expect(container.querySelectorAll('.ant-pagination')).toHaveLength(1);
+    expect(pagination.nextElementSibling).toHaveClass('ant-table');
+    expect(within(pagination as HTMLElement).getByText('Total 120')).toBeInTheDocument();
+    expect(pagination.querySelector('.ant-pagination-item-active')).toHaveAttribute('title', '2');
+    fireEvent.click(pagination.querySelector('[title="3"]')!);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(3, 20);
+    expect(onTableChange).toHaveBeenCalledTimes(1);
+    expect(onTableChange.mock.calls[0][0]).toMatchObject({ current: 3, pageSize: 20, total: 120 });
+    expect(pagination.querySelector('.ant-pagination-item-active')).toHaveAttribute('title', '2');
+    expect(screen.getByText('Caller title')).toBeInTheDocument();
+    expect(screen.getByText('Caller footer')).toBeInTheDocument();
+  });
+  it('keeps uncontrolled native slicing, default page size, size changes and sorter/filter resets', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({ key: String(index), a: String(index).padStart(2, '0'), b: index % 2 ? 'Odd' : 'Even' }));
+    const onChange = vi.fn();
+    const { container } = render(<LedgerTable ledgerId="top-local" columns={[{ ...columns[0], sorter: (left, right) => left.a.localeCompare(right.a) }, { ...columns[1], filters: [{ text: 'Even', value: 'Even' }], onFilter: (value, record) => record.b === value }]} dataSource={rows} pagination={{ defaultCurrent: 2, defaultPageSize: 2, showSizeChanger: true, pageSizeOptions: [2, 4], showTotal: total => `Filtered ${total}` }} onChange={onChange} />);
+    const pagination = container.querySelector('.ant-pagination')!;
+    expect(pagination.nextElementSibling).toHaveClass('ant-table');
+    expect(screen.getByText('02')).toBeInTheDocument();
+    expect(screen.queryByText('00')).not.toBeInTheDocument();
+    fireEvent.click(pagination.querySelector('[title="3"]')!);
+    expect(screen.getByText('04')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('columnheader', { name: '编号' }));
+    expect(onChange.mock.lastCall?.[3]).toMatchObject({ action: 'sort' });
+    expect(screen.getByText('04')).toBeInTheDocument();
+    await userEvent.click(within(pagination as HTMLElement).getByRole('combobox'));
+    await userEvent.click(screen.getByRole('option', { name: '4 / page' }));
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ pageSize: 4 });
+    fireEvent.click(screen.getByRole('button', { name: 'filter' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Even' }));
+    await userEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(onChange.mock.lastCall?.[3]).toMatchObject({ action: 'filter' });
+    expect(pagination.querySelector('.ant-pagination-item-active')).toHaveAttribute('title', '1');
+    expect(screen.getByText('Filtered 6')).toBeInTheDocument();
+    expect(screen.getByText('00')).toBeInTheDocument();
+    expect(screen.queryByText('01')).not.toBeInTheDocument();
+  });
+  it('defaults to top pagination and keeps disabled, single-page hiding and custom non-paginated tools', () => {
+    const onChange = vi.fn();
+    const props = { ledgerId: 'top-default', columns, dataSource: data };
+    const { container, rerender } = render(<LedgerTable {...props} />);
+    expect(container.querySelector('.ant-pagination')?.nextElementSibling).toHaveClass('ant-table');
+    rerender(<LedgerTable {...props} pagination={{ total: 30, pageSize: 10, disabled: true, onChange }} />);
+    fireEvent.click(container.querySelector('.ant-pagination [title="2"]')!);
+    expect(onChange).not.toHaveBeenCalled();
+    rerender(<LedgerTable {...props} pagination={{ hideOnSinglePage: true }} />);
+    expect(container.querySelector('.ant-pagination')).toBeNull();
+    rerender(<LedgerTable {...props} pagination={false} toolbarContent={<nav aria-label="Custom pagination"><button>Next records</button></nav>} />);
+    expect(container.querySelector('.ant-pagination')).toBeNull();
+    expect(screen.getAllByRole('navigation', { name: 'Custom pagination' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '列设置' })).toBeInTheDocument();
+  });
+  it('insets the wrapping toolbar and top pagination without shrinking column settings', () => {
+    const { container } = render(<LedgerTable ledgerId="toolbar-spacing" columns={columns} dataSource={data} />);
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      const tools = container.querySelector('.qms-ledger__tools')!;
+      const button = screen.getByRole('button', { name: '列设置' });
+      const pagination = container.querySelector('.ant-pagination')!;
+      expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('padding-inline') === '12px' && rule.style.getPropertyValue('flex-wrap') === 'wrap')).toBe(true);
+      expect(rules.some(rule => button.matches(rule.selectorText) && rule.style.getPropertyValue('flex-shrink') === '0')).toBe(true);
+      expect(rules.some(rule => pagination.matches(rule.selectorText) && rule.style.getPropertyValue('padding-inline') === '12px' && rule.style.getPropertyValue('box-sizing') === 'border-box')).toBe(true);
+    } finally { style.remove(); }
+  });
   it('anchors resize handles directly to real grouped, sortable, ellipsis and fixed header cells', () => {
     const click = vi.fn();
     render(<LedgerTable ledgerId="header-boundary" columns={[{ title: 'Group', children: [{ ...columns[0], sorter: true, ellipsis: true, fixed: 'left', onHeaderCell: () => ({ className: 'caller-edge', style: { paddingInline: 24 }, onClick: click, 'aria-label': 'Caller edge' }) }, columns[1]] }, columns[2]]} dataSource={data} pagination={false} />);
@@ -260,7 +332,7 @@ describe('LedgerTable', () => {
       }
       const unhosted = container.querySelector(':scope > .ant-pagination')!;
       expect(narrowRules.some(rule => unhosted.matches(rule.selectorText) || unhosted.querySelector('.ant-pagination-options')!.matches(rule.selectorText))).toBe(false);
-      expect(rules.filter((rule): rule is CSSStyleRule => 'selectorText' in rule).some(rule => paginations.some(pagination => pagination.matches(rule.selectorText) || pagination.querySelector('.ant-pagination-options')!.matches(rule.selectorText)))).toBe(false);
+      expect(rules.filter((rule): rule is CSSStyleRule => 'selectorText' in rule).some(rule => paginations[1].matches(rule.selectorText) || paginations[1].querySelector('.ant-pagination-options')!.matches(rule.selectorText))).toBe(false);
     } finally {
       style.remove();
     }
@@ -317,15 +389,17 @@ describe('LedgerTable', () => {
   });
   it('settings hide permitted columns, keep required actions and preserve business selection', () => {
     const onChange = vi.fn();
-    render(<LedgerTable ledgerId="basic" columns={columns} dataSource={data} requiredColumnKeys={['action']} pagination={false} rowSelection={{ selectedRowKeys: ['one'], onChange }} />);
+    const { container } = render(<LedgerTable ledgerId="basic" columns={columns} dataSource={data} requiredColumnKeys={['action']} pagination={false} rowSelection={{ selectedRowKeys: ['one'], onChange }} />);
+    const table = within(container.querySelector('table')!);
     settings();
-    expect(screen.queryByRole('spinbutton', { name: '列宽 选择' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('checkbox', { name: '显示 名称' }));
-    expect(screen.queryByRole('columnheader', { name: /名称/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: '显示 操作' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument();
+    const popup = within(document.querySelector<HTMLElement>('.qms-ledger__settings')!);
+    expect(popup.queryByRole('spinbutton', { name: '列宽 选择' })).not.toBeInTheDocument();
+    fireEvent.click(popup.getByRole('checkbox', { name: '显示 名称' }));
+    expect(table.queryByRole('columnheader', { name: /名称/ })).not.toBeInTheDocument();
+    expect(popup.getByRole('checkbox', { name: '显示 操作' })).toBeDisabled();
+    expect(table.getByRole('button', { name: '编辑' })).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    expect(within(screen.getByRole('table')).getAllByRole('checkbox').at(-1)).toBeChecked();
+    expect(table.getAllByRole('checkbox').at(-1)).toBeChecked();
   });
   it('persists an opt-in selection width after dragging without treating it as a business column', () => {
     const onChange = vi.fn();
@@ -365,19 +439,23 @@ describe('LedgerTable', () => {
     expect(table).not.toHaveStyle({ tableLayout: 'fixed' });
   });
   it('supports numeric width, pinning, moving, single and all resets without touching page size', () => {
-    render(<LedgerTable ledgerId="controls" columns={columns} dataSource={data} pagination={false} />);
+    const { container } = render(<LedgerTable ledgerId="controls" columns={columns} dataSource={data} pagination={false} />);
+    const headings = within(container.querySelector('thead')!);
     settings();
-    fireEvent.change(screen.getByRole('spinbutton', { name: '列宽 编号' }), { target: { value: '300' } });
-    fireEvent.blur(screen.getByRole('spinbutton', { name: '列宽 编号' }));
-    expect(screen.getByRole('separator', { name: '调整列宽 编号' })).toHaveAttribute('aria-valuenow', '300');
-    fireEvent.change(screen.getByRole('combobox', { name: '固定 编号' }), { target: { value: 'left' } });
-    expect(screen.getByRole('columnheader', { name: /编号/ })).toHaveClass('ant-table-cell-fix-start');
-    fireEvent.click(screen.getByRole('button', { name: '恢复 编号' }));
-    expect(screen.getByRole('separator', { name: '调整列宽 编号' })).toHaveAttribute('aria-valuenow', '180');
-    fireEvent.click(screen.getByRole('button', { name: '下移 编号' }));
-    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('名称');
-    fireEvent.click(screen.getByRole('button', { name: '恢复全部列' }));
-    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
+    const popup = within(document.querySelector<HTMLElement>('.qms-ledger__settings')!);
+    const width = popup.getByRole('spinbutton', { name: '列宽 编号' });
+    const columnSettings = within(width.closest<HTMLElement>('.qms-ledger__setting')!);
+    fireEvent.change(width, { target: { value: '300' } });
+    fireEvent.blur(width);
+    expect(headings.getByRole('separator', { name: '调整列宽 编号' })).toHaveAttribute('aria-valuenow', '300');
+    fireEvent.change(columnSettings.getByRole('combobox', { name: '固定 编号' }), { target: { value: 'left' } });
+    expect(headings.getByRole('columnheader', { name: /编号/ })).toHaveClass('ant-table-cell-fix-start');
+    fireEvent.click(columnSettings.getByRole('button', { name: '恢复 编号' }));
+    expect(headings.getByRole('separator', { name: '调整列宽 编号' })).toHaveAttribute('aria-valuenow', '180');
+    fireEvent.click(columnSettings.getByRole('button', { name: '下移 编号' }));
+    expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('名称');
+    fireEvent.click(popup.getByRole('button', { name: '恢复全部列' }));
+    expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
   });
   it('keyboard resizing and double click reset do not sort; pointer cancel restores and only completion saves', () => {
     const sort = vi.fn();
@@ -450,20 +528,22 @@ describe('LedgerTable', () => {
     expect(separator).toHaveAttribute('aria-valuenow', '260');
   });
   it('header drag has an independent handle and commits order only on pointer completion', () => {
-    render(<LedgerTable ledgerId="header-drag" columns={columns} dataSource={data} pagination={false} />);
-    const grip = screen.getByRole('button', { name: '移动列 编号' });
-    const target = screen.getByRole('columnheader', { name: /名称/ }).querySelector('[data-ledger-column]')!;
+    const { container } = render(<LedgerTable ledgerId="header-drag" columns={columns} dataSource={data} pagination={false} />);
+    const header = container.querySelector('thead')!;
+    const headings = within(header as HTMLElement);
+    const grip = headings.getByRole('button', { name: '移动列 编号' });
+    const target = headings.getByRole('columnheader', { name: '名称' }).querySelector('[data-ledger-column]')!;
     Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => target });
     fireEvent.pointerDown(grip, { clientX: 10, pointerId: 1 });
     fireEvent.pointerMove(grip, { clientX: 250, pointerId: 1 });
-    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
+    expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
     expect(target).toHaveClass('qms-ledger__heading--drop');
     fireEvent.pointerCancel(grip, { pointerId: 1 });
-    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
+    expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('编号');
     fireEvent.pointerDown(grip, { clientX: 10, pointerId: 1 });
     fireEvent.pointerMove(grip, { clientX: 250, pointerId: 1 });
     fireEvent.pointerUp(grip, { clientX: 250, pointerId: 1 });
-    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('名称');
+    expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('名称');
     Reflect.deleteProperty(document, 'elementFromPoint');
   });
   it('scope changes during a width drag cannot write old preferences into the new target', () => {

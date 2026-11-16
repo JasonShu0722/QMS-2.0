@@ -98,6 +98,7 @@ export function MyTasksPage() {
         </Space>
         <InboxError cause={tasks.error} />
         {tasks.loading ? <Spin aria-label={t('正在加载待办')} /> : tasks.data && <>
+          {pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}
           <List dataSource={tasks.data.items} locale={{ emptyText: <Empty description={t('暂无待办')} /> }} renderItem={(task) => <List.Item key={task.id} actions={[
             ...(task.canClaim ? [<Button key="claim" aria-label={t(task.claimedByUserId ? '重新领取' : '领取')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/claim`, task.id, task.version, tasks.refresh)}>{t(task.claimedByUserId ? '重新领取' : '领取')}</Button>] : []),
             ...(task.canRelease ? [<Button key="release" aria-label={t('释放')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/release`, task.id, task.version, tasks.refresh)}>{t('释放')}</Button>] : []),
@@ -111,7 +112,6 @@ export function MyTasksPage() {
               {task.dueAt && <span>{t('截止时间')}：{date(task.dueAt)}</span>}
             </Space>} />
           </List.Item>} />
-          {pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}
         </>}
       </Space> },
       { key: 'notifications', label: t('我的通知'), children: <Space orientation="vertical" size={6} style={{ width: '100%' }}>
@@ -120,6 +120,7 @@ export function MyTasksPage() {
         </select></label><Button onClick={notifications.refresh} disabled={notifications.loading}>{t('刷新')}</Button></Space>
         <InboxError cause={notifications.error} />
         {notifications.loading ? <Spin aria-label={t('正在加载通知')} /> : notifications.data && <>
+          {pagination(noticeOffset, notifications.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
           <List dataSource={notifications.data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) => <List.Item key={notice.id}>
             <Card className="qms-display-card" style={{ width: '100%' }} title={notice.subject ?? t(notice.kind === 'TASK_ESCALATED' ? '超时升级' : notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')} extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
               <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>{notice.body}</Typography.Paragraph>
@@ -129,7 +130,6 @@ export function MyTasksPage() {
               </Space>
             </Card>
           </List.Item>} />
-          {pagination(noticeOffset, notifications.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
         </>}
       </Space> },
     ]} />

@@ -6,7 +6,9 @@
 .qms-ledger .ant-table-thead > tr > th::before { display: none; }
 .qms-ledger .ant-table-thead > tr > th:has(> .qms-ledger__resize:hover), .qms-ledger .ant-table-thead > tr > th:has(> .qms-ledger__resize:focus-visible) { border-inline-end-color: var(--qms-accent); }
 .qms-ledger .ant-table-cell-ellipsis .qms-ledger__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qms-ledger__tools { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.qms-ledger__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding-block: 6px; padding-inline: 12px; margin-bottom: 4px; }
+.qms-ledger__tools > .ant-btn { flex-shrink: 0; }
+.qms-ledger .ant-table-pagination { box-sizing: border-box; padding-inline: 12px; }
 .qms-ledger__heading { display: flex; align-items: center; gap: 3px; min-width: 0; }
 .qms-ledger__title { flex: 1; min-width: 0; }
 .qms-ledger__grip { display: inline-flex; align-items: center; padding: 2px 0; border: 0; background: transparent; color: var(--qms-muted); cursor: grab; touch-action: none; }

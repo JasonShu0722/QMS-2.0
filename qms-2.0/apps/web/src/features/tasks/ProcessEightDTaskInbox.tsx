@@ -151,7 +151,7 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
     {!denied && <>
       <section aria-label={t(`${domainLabel}正式待办`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}正式待办`)}</Typography.Title><Button disabled={tasksLoading || !!selected} onClick={() => setTaskRevision(value => value + 1)}>{t('刷新8D待办')}</Button></Space>
 
-        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <LedgerTable<Task> ledgerId={`${domain}-eight-d-tasks`} requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
+        {taskError ? <Alert type="error" title={t('8D待办加载失败，请重试')} /> : <LedgerTable<Task> ledgerId={`${domain}-eight-d-tasks`} toolbarContent={tasks && pager(taskOffset, tasks.total, taskPageSize, setTaskOffset, setTaskPageSize)} requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasksLoading} pagination={false} scroll={{ x: 760 }} dataSource={tasks?.items ?? []} locale={{ emptyText: t(`暂无${domainLabel}待办`) }} columns={[
           { key: 'reportNumber', title: t('问题编号'), dataIndex: 'reportNumber' },
           { key: 'duty', title: t('职责'), render: (_, task) => `${status(task.status)} · ${t(stages[task.stage])}` },
           { key: 'dueAt', title: t('原期限'), render: (_, task) => <span>{date(task.dueAt)}{task.overdue ? ` · ${t('已逾期')}` : ''}</span> },
@@ -165,14 +165,13 @@ function InboxScope({ session, domain }: { session?: string; domain: Domain }) {
             {task.kind === 'EXTENSION' && task.actions.includes('DECIDE_EXTENSION') && task.extensionRequestId && <Button disabled={!!selected || busy} onClick={event => { trigger.current = event.currentTarget; setSelected(task); setComment(''); setDecision('APPROVE'); void check(task); }}>{t('审核延期')}</Button>}
           </Space> },
         ]} />}
-        {tasks && pager(taskOffset, tasks.total, taskPageSize, setTaskOffset, setTaskPageSize)}
       </section>
       <section aria-label={t(`${domainLabel}通知`)}><Space wrap><Typography.Title level={3}>{t(`${domainLabel}通知`)}</Typography.Title><Button disabled={noticesLoading} onClick={() => setNoticeRevision(value => value + 1)}>{t('刷新8D通知')}</Button></Space>
+        {notices && pager(noticeOffset, notices.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
         {noticeError ? <Alert type="error" title={t('8D通知加载失败，请重试')} /> : noticesLoading ? <Spin aria-label={t('正在加载8D通知')} /> : notices?.items.map(notice => <Card key={notice.id} title={notice.subject}>
           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{notice.body}</Typography.Paragraph><Space wrap><time>{date(notice.deliveredAt)}</time><Link to={workspace(notice.problemId)}>{t('查看关联8D')}</Link></Space>
         </Card>)}
         {notices && !notices.items.length && <p>{t(`暂无${domainLabel}通知`)}</p>}
-        {notices && pager(noticeOffset, notices.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
       </section>
     </>}
     {selected && !denied && <Modal open title={t('延期审核')} onCancel={close} closable={!busy && !attempt} mask={{ closable: !busy && !attempt }} keyboard={!busy && !attempt} focusable={{ focusTriggerAfterClose: false }} footer={<Space wrap>

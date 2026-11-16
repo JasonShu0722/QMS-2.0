@@ -211,24 +211,22 @@ function ClosureInboxScope({ session, onDenied }: { session?: string; onDenied?:
       <section aria-label={text('关闭职责待办')} style={{ minWidth: 0 }}>
         <Space wrap><Typography.Title level={4}>{text('关闭职责待办')}</Typography.Title><Button onClick={refreshTasks} disabled={tasks.loading || locked || checking}>{text('刷新职责待办')}</Button></Space>
         {tasks.error && <Alert type="error" showIcon title={text('加载失败，请重试')} />}
-        {!tasks.error && <LedgerTable<Task> ledgerId="closure-duties" requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasks.loading} dataSource={tasks.data?.items ?? []} pagination={false} scroll={{ x: 880 }} locale={{ emptyText: text('暂无关闭职责待办') }} columns={[
+        {!tasks.error && <LedgerTable<Task> ledgerId="closure-duties" toolbarContent={tasks.data && <><Typography.Text>{locale === 'en-US' ? `Duty tasks: ${tasks.data.total} (not problem count)` : `职责待办总数：${tasks.data.total}（非问题数）`}</Typography.Text>{pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}</>} requiredColumnKeys={['reportNumber', 'actions']} rowKey="id" size="small" loading={tasks.loading} dataSource={tasks.data?.items ?? []} pagination={false} scroll={{ x: 880 }} locale={{ emptyText: text('暂无关闭职责待办') }} columns={[
           { title: text('问题编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={workspace(item.problemId)}>{value}</Link> },
           { title: text('职责'), dataIndex: 'duty', render: (value: Task['duty'], item) => <Space orientation="vertical" size={0}><Tag>{text(dutyNames[value])}</Tag>{value !== 'PROFESSIONAL' && item.requiresJointConfirmation && <Typography.Text strong>{text('本次一次确认科室经理与部长两份职责，不包含专业审核。')}</Typography.Text>}</Space> },
           { title: text('固定内容版本'), dataIndex: 'contentVersion' }, { title: text('轮次版本'), dataIndex: 'roundVersion' },
           { title: text('轮次标识'), dataIndex: 'roundId' },
           { key: 'actions', title: text('操作'), render: (_, item) => <Button disabled={!item.canAct || item.status !== 'PENDING' || locked || checking || !!selected} onClick={event => { trigger.current = event.currentTarget; setSelected(item); setComment(''); setDecision('APPROVE'); void checkHistory(item); }}>{text('审核关闭职责')}</Button> },
         ]} />}
-        {tasks.data && <><Typography.Paragraph>{locale === 'en-US' ? `Duty tasks: ${tasks.data.total} (not problem count)` : `职责待办总数：${tasks.data.total}（非问题数）`}</Typography.Paragraph>{pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}</>}
       </section>
       <section aria-label={text('关闭职责通知')} style={{ minWidth: 0 }}>
         <Space wrap><Typography.Title level={4}>{text('关闭职责通知')}</Typography.Title><Button onClick={notices.refresh} disabled={notices.loading}>{text('刷新职责通知')}</Button></Space>
         {notices.error && <Alert type="error" showIcon title={text('加载失败，请重试')} />}
-        {!notices.error && <LedgerTable<Notices['items'][number]> ledgerId="closure-notifications" requiredColumnKeys={['reportNumber']} rowKey="id" size="small" loading={notices.loading} dataSource={notices.data?.items ?? []} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: text('暂无关闭职责通知') }} columns={[
+        {!notices.error && <LedgerTable<Notices['items'][number]> ledgerId="closure-notifications" toolbarContent={notices.data && pagination(noticeOffset, notices.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)} requiredColumnKeys={['reportNumber']} rowKey="id" size="small" loading={notices.loading} dataSource={notices.data?.items ?? []} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: text('暂无关闭职责通知') }} columns={[
           { key: 'reportNumber', title: text('问题编号'), render: (_, item) => <Link to={workspace(item.problemId)}>{item.reportNumber}</Link> },
           { key: 'notice', title: text('通知'), render: (_, item) => <Space orientation="vertical" size={0}><Typography.Text strong>{item.subject}</Typography.Text><Typography.Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.body}</Typography.Text></Space> },
           { key: 'duties', title: text('职责'), render: (_, item) => item.duties.map(name => text(dutyNames[name])).join(' / ') },
         ]} />}
-        {notices.data && pagination(noticeOffset, notices.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
       </section>
     </>}
     {!selected && deniedOutcome}
