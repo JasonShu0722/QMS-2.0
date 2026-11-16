@@ -26,7 +26,7 @@ export function label(value: string, english: boolean) {
     AUTO: ['自动触发', 'Automatic'], SINGLE: ['单条导入', 'Single import'], HISTORY: ['历史导入', 'Historical import'],
     code: ['编码', 'Code'], name: ['名称', 'Name'], contactName: ['联系人', 'Contact'], contactEmail: ['联系邮箱', 'Contact email'],
     registrationIssues: ['来源字段问题', 'Source field issues'],
-    occurredAt: ['发生时间', 'Occurrence time'], productCode: ['成品编码', 'Product code'], workOrderCode: ['工单号', 'Work order'], lineCode: ['生产线编码', 'Line code'], lineName: ['生产线名称', 'Line name'], operationCode: ['工序编码', 'Operation code'], operationName: ['工序名称', 'Operation name'], traceCode: ['追溯码', 'Trace code'], description: ['不良描述', 'Defect description'], externalRecordKey: ['来源明细编号', 'Source detail ID'],
+    occurredAt: ['发生时间', 'Occurrence time'], productCode: ['成品编码', 'Product code'], workOrderCode: ['工单号', 'Work order'], lineCode: ['生产线编码', 'Line code'], lineName: ['生产线名称', 'Line name'], operationCode: ['工序编码', 'Operation code'], operationName: ['工序名称', 'Operation name'], traceCode: ['追溯码', 'Trace code'], description: ['不良描述', 'Defect description'], externalRecordKey: ['来源明细编号', 'Source detail ID'], sourceObservedAt: ['来源更新时间', 'Source updated time'],
     PAUSE: ['暂停', 'Pause'], RESUME: ['恢复', 'Resume'], CANCEL: ['取消任务', 'Cancel job'], RETRY: ['重试处理', 'Retry processing'],
   };
   return labels[value]?.[english ? 1 : 0] ?? value;

@@ -35,6 +35,11 @@ function proposedChanges(rule: IngestionRule, fields: IngestionFields, current: 
   const source = fields as ProcessDefectIntegrationFields;
   const issues = rule.target === 'PROCESS_DEFECT' ? (source.issues ?? []).filter(issue => issue.startsWith('sourceObservedAt:') || (rule.mode === 'INSERT_ONLY' ? processDefectSourceFields : rule.updateFields).includes(issue.split(':')[0]!)) : [];
   if (rule.target === 'PROCESS_DEFECT') {
+    if (source.externalRecordKey && !currentValues.externalRecordKey) {
+      permitted.push(['externalRecordKey', source.externalRecordKey]);
+      differences.push({ field: 'externalRecordKey', before: null, after: source.externalRecordKey });
+    }
+    if (source.sourceObservedAt && source.sourceObservedAt !== currentValues.sourceObservedAt) differences.push({ field: 'sourceObservedAt', before: typeof currentValues.sourceObservedAt === 'string' ? currentValues.sourceObservedAt : null, after: source.sourceObservedAt });
     const before = [...new Set((current.values as ProcessDefectIntegrationFields).issues?.filter(issue => issue.includes(':')) ?? [])].sort();
     const supplied = [...permitted.map(([field]) => field), ...(source.sourceObservedAt ? ['sourceObservedAt'] : [])];
     const after = [...new Set([...before.filter(issue => !supplied.includes(issue.split(':')[0]!)), ...issues])].sort();
@@ -48,6 +53,8 @@ const validationField = (error: HttpException, rule: IngestionRule): string => {
   const controlled = [...Object.values(rule.mapping), ...rule.conditions.map(condition => condition.path), rule.sourceUpdatedAtField];
   return typeof field === 'string' && controlled.includes(field) ? field : 'target';
 };
+const sourceVersionIsStale = (incoming: Date, latest: Date, differences: IngestionDifferenceDto[]) => incoming < latest || incoming.getTime() === latest.getTime()
+  && !(differences.length === 1 && differences[0]!.field === 'externalRecordKey' && differences[0]!.before === null);
 const newestDate = (first: Date | null | undefined, second: Date | null | undefined): Date | null => !first ? second ?? null : !second || first >= second ? first : second;
 const pausedHistoryReference = Prisma.sql`EXISTS(SELECT 1 FROM integration_ingestion_jobs parent JOIN integration_ingestion_preview_receipts snapshot ON snapshot.organization_id=parent.organization_id AND snapshot.preview_id=parent.planning_preview_id WHERE parent.parent_job_id IS NULL AND parent.planning_preview_id IS NOT NULL AND parent.organization_id=j.organization_id AND snapshot.receipt_id=j.receipt_id AND parent.rule_id=j.rule_id AND parent.rule_version=j.rule_version AND parent.generation=j.generation AND parent.status='PAUSED')`;
 const historyParentHasWork = Prisma.sql`NOT parent.expansion_complete OR EXISTS(SELECT 1 FROM integration_ingestion_jobs owner JOIN integration_ingestion_preview_receipts snapshot ON snapshot.receipt_id=owner.receipt_id AND snapshot.preview_id=parent.planning_preview_id WHERE owner.organization_id=parent.organization_id AND owner.rule_id=parent.rule_id AND owner.rule_version=parent.rule_version AND owner.generation=parent.generation AND owner.status IN ('PENDING','PAUSED','BLOCKED'))`;
@@ -204,7 +211,7 @@ export class IngestionService {
     if (rule.mode === 'INSERT_ONLY') return { ...result, action: 'EXISTING_SKIPPED' };
     const [latest] = await tx.$queryRaw<{ endpoint_id: string; receipt_received_at: Date; source_updated_at: Date | null; target_version: number }[]>`SELECT endpoint_id,receipt_received_at,source_updated_at,target_version FROM integration_ingestion_target_versions WHERE organization_id=${receipt.organization_id}::uuid AND target=${rule.target} AND target_id=${current.id}::uuid`;
     const timestamp = parsed.sourceUpdatedAt ? new Date(parsed.sourceUpdatedAt) : null;
-    const staleSource = latest && (latest.endpoint_id !== receipt.endpoint_id || latest.receipt_received_at > receipt.received_at || latest.target_version !== current.version || timestamp && latest.source_updated_at && timestamp <= latest.source_updated_at);
+    const staleSource = latest && (latest.endpoint_id !== receipt.endpoint_id || latest.receipt_received_at > receipt.received_at || latest.target_version !== current.version || timestamp && latest.source_updated_at && sourceVersionIsStale(timestamp, latest.source_updated_at, differences));
     const uncertainHistory = source === 'HISTORY' && (!timestamp || !latest?.source_updated_at);
     const protectedDifference = 'protectedFields' in current && current.protectedFields?.some(field => differences.some(difference => difference.field === field));
     return { ...result, action: rule.mode === 'CONFIRM' || staleSource || uncertainHistory || protectedDifference ? 'AWAITING_CONFIRMATION' : 'UPDATED' };
@@ -493,7 +500,7 @@ export class IngestionService {
     let current = evaluation.current;
     if (evaluation.action === 'INSERTED' || evaluation.action === 'UPDATED') {
       current = await this.targets.write(tx, actor, job.rule_snapshot.target, evaluation.fields! as IngestionTargetFields, current ? { id: current.id, version: current.version } : null, traceId, confirmed);
-      await tx.$executeRaw`INSERT INTO integration_ingestion_target_versions(organization_id,target,target_id,endpoint_id,receipt_received_at,source_updated_at,target_version) VALUES(${job.organization_id}::uuid,${job.rule_snapshot.target},${current.id}::uuid,${job.endpoint_id}::uuid,${receivedAt},${sourceUpdatedAt},${current.version}) ON CONFLICT(organization_id,target,target_id) DO UPDATE SET endpoint_id=EXCLUDED.endpoint_id,receipt_received_at=EXCLUDED.receipt_received_at,source_updated_at=EXCLUDED.source_updated_at,target_version=EXCLUDED.target_version`;
+      await tx.$executeRaw`INSERT INTO integration_ingestion_target_versions(organization_id,target,target_id,endpoint_id,receipt_received_at,source_updated_at,target_version) VALUES(${job.organization_id}::uuid,${job.rule_snapshot.target},${current.id}::uuid,${job.endpoint_id}::uuid,${receivedAt},${sourceUpdatedAt},${current.version}) ON CONFLICT(organization_id,target,target_id) DO UPDATE SET endpoint_id=EXCLUDED.endpoint_id,receipt_received_at=EXCLUDED.receipt_received_at,source_updated_at=COALESCE(EXCLUDED.source_updated_at,integration_ingestion_target_versions.source_updated_at),target_version=EXCLUDED.target_version`;
     }
     if (evaluation.action === 'UNCHANGED' && current) await tx.$executeRaw`INSERT INTO integration_ingestion_target_versions(organization_id,target,target_id,endpoint_id,receipt_received_at,source_updated_at,target_version) VALUES(${job.organization_id}::uuid,${job.rule_snapshot.target},${current.id}::uuid,${job.endpoint_id}::uuid,${receipt.received_at},${evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null},${current.version}) ON CONFLICT(organization_id,target,target_id) DO UPDATE SET receipt_received_at=EXCLUDED.receipt_received_at,source_updated_at=COALESCE(EXCLUDED.source_updated_at,integration_ingestion_target_versions.source_updated_at),target_version=EXCLUDED.target_version WHERE integration_ingestion_target_versions.endpoint_id=EXCLUDED.endpoint_id AND integration_ingestion_target_versions.receipt_received_at<=EXCLUDED.receipt_received_at AND (integration_ingestion_target_versions.source_updated_at IS NULL OR EXCLUDED.source_updated_at IS NULL OR integration_ingestion_target_versions.source_updated_at<=EXCLUDED.source_updated_at)`;
     if (this.ai && job.rule_snapshot.target === 'PROCESS_DEFECT' && job.rule_snapshot.aiDescription && current && ['INSERTED','UPDATED','UNCHANGED'].includes(evaluation.action)
@@ -585,7 +592,7 @@ export class IngestionService {
     const [newer] = await tx.$queryRaw<{ id: string }[]>`SELECT i.id FROM integration_ingestion_items i JOIN integration_ingestion_jobs j ON j.id=i.job_id JOIN integration_receipts r ON r.id=i.receipt_id WHERE i.organization_id=${job.organization_id}::uuid AND i.target_id=${evaluation.current.id}::uuid AND j.rule_snapshot->>'target'=${job.rule_snapshot.target} AND i.status IN ('INSERTED','UPDATED','UNCHANGED') AND (r.received_at>${receivedAt} OR (r.received_at=${receivedAt} AND i.receipt_id=${item.receipt_id}::uuid AND i.row_index>${item.row_index}) OR (r.received_at=${receivedAt} AND r.received_at=${receipt.received_at} AND j.endpoint_id=${job.endpoint_id}::uuid AND j.sequence>${job.sequence})) LIMIT 1`;
     if (newer) return true;
     const [latest] = await tx.$queryRaw<{ receipt_received_at: Date; source_updated_at: Date | null }[]>`SELECT receipt_received_at,source_updated_at FROM integration_ingestion_target_versions WHERE organization_id=${job.organization_id}::uuid AND target=${job.rule_snapshot.target} AND target_id=${evaluation.current.id}::uuid`;
-    return !!latest && (latest.receipt_received_at > receivedAt || !!item.source_updated_at && !!latest.source_updated_at && item.source_updated_at <= latest.source_updated_at);
+    return !!latest && (latest.receipt_received_at > receivedAt || !!item.source_updated_at && !!latest.source_updated_at && sourceVersionIsStale(item.source_updated_at, latest.source_updated_at, evaluation.differences));
   }
   async getItem(actor: AdminActor, id: string, traceId: string): Promise<IngestionItemDetailDto> {
     return this.prisma.$transaction(async tx => {

@@ -12,8 +12,8 @@
 | 台账 | REQ-0038 / reczz28aMCqsFOpX；user回读rev373开发中，负责人当前直接声明本人已更新状态并批准当前范围 |
 | 前置 | REQ-0037入库引擎，关联REQ-0027制程/新品历史范围；不改原记录 |
 | 基线 | 运行源码072479afed986c11553976c9180bf767d11dba98，本地f6dd064仅前轮归档；分支codex/process-defect-ingestion-plan，既有$null保留 |
-| 状态 | Issue129/V0.0.55本地验证完成，待提交PR。基础API单测171文件2527PASS、领域18文件263有效PASS、Web15文件363有效PASS、管理员context26PASS，基础审查问题已修。162链已真实应用；AI API最终构建/类型检查及契约PASS，连接23项有效PASS、后续10项PASS，jobs完整4文件51PASS（含ABA、撤权重放、更新掩码、回退缺项、业务版本及失效连接下停用），在新专属release库再验51PASS；真实备份恢复8/8PASS。API及Web独立SPEC与QUALITY全部PASS，已知P2均关闭；Web最终9完整文件133唯一项PASS（AI19+旧调用方114），lint/build PASS。新release库领域/入库完整3文件102PASS；最终治理、审计目录10项、归档隔离及diff-check PASS。最终产物真实API/PG/编译Worker浏览器三场景有效组合PASS（首次2PASS/1FAIL，AI修正准确按钮名后1PASS），未把首次失败改写为整次全绿 |
-| 下一步 | 提交一个PR，精确CI/Review通过后合并、部署、公网只读核验及本地收尾。真实供应商/IMS联调、物理手机与10GiB完整恢复为NOT_RUN，不代人工验收 |
+| 状态 | [PR130](https://github.com/JasonShu0722/QMS-2.0/pull/130)已创建，首head8fcc75350f81eeab227b8750e0a5e0424832c18f，base072479a；仅该PR，未合并/发布。首CI43940404311为20/24PASS：Web13安装Prisma引擎ECONNRESET未跑测试，integration4旧手工夹具缺新必填2FAIL/852PASS，Web7配置输入等待失败1FAIL/553PASS，foundation依赖汇总失败，日志完整保留。Review两P2及相等源版本补空ID/缺失源时间保水位接缝已修；fix1最终真实5文件133PASS、8D HTTP链2PASS、console-migration66PASS；Web一行来源时间双语label新build PASS，最后APIbuild和增量QUALITY进行中，SPEC PASS |
+| 下一步 | 完成fix1构建/双轴复核后推送同PR；精确新head CI/Review通过后合并、部署、公网只读核验及本地收尾。真实供应商/IMS联调、物理手机与10GiB完整恢复为NOT_RUN，不代人工验收 |
 
 **目标：** IMS不良逐条入现有制程台账，统一手工字段、缺项完善、关联快照与自动补配。
 
@@ -191,3 +191,13 @@ Web最终9完整文件133唯一项PASS（AI19、旧caller114），与原363项�
 最终生产产物、真实API/PG/编译Worker浏览器：browser-stage2-ai-final首次2PASS/1FAIL，前两场景覆盖多行缺项/补配/阶段冻结及手工扫码草稿与默认数量。AI连接GET实际200并含目标ID；三次诊断均证实行存在，首失败是AntD两中文字自动空格，后续规则编辑使用带规则名的aria-label。仅修测试准确定位，移除临时DIAG，不改正确业务逻辑或预算；browser-stage2-ai-rule-label-final第三场景完整1PASS/34.6秒，覆盖密钥不回填、所选输入/模型/JSON字段、非法模型400、三宽度无横溢、实际Worker生成、供应商失败保底及人工迟到建议。有效三场景组合通过，不冒称单次3/3；桌面截图捕获入场过渡帧、390图稳定，不能把过渡帧归为永久叠层问题。纯测试定位增量已由独立QUALITY复核PASS。
 
 未连接55440或生产业务写入；供应商/IMS真实联调、物理手机扫码及近10GiB恢复为NOT_RUN。部署与公网证据将在实际完成后接续，不预填PASS。
+
+### PR130首轮反馈与fix1（2026-11-17）
+
+V0.0.55候选8fcc753由117个文件组成；常规Git网络故障后复用官方对象API，逐blob/tree/commit比对原SHA、非强制建立分支。首次本地上传缓冲区不足，1,223,396字节生成契约超过Node默认1MiB，保护断言在更新分支前阻止；修正任务专用上传工具缓冲和四路独立blob上传后同SHA成功。中间辅助脚本语法失败同样没有更新ref，未改全局代理/证书或运行源码。
+
+首轮CI43940404311完整24任务为20成功/4失败。Web13安装Prisma引擎ECONNRESET，未运行测试；integration4的55文件852项通过、旧8D HTTP链两处手工录单预期201实际400，缺新四必填夹具；Web7的15文件553项通过、一个实际配置portal保留用例查找输入失败，错误快照为系统参数Card仍loading。foundation仅检查依赖结果，随Web/集成失败。四个完整job日志及首轮jobs/state单独保存在Git外，未用新head证据覆盖。
+
+fix1最小修复：缺失来源明细编号和来源观察时间成为正常差异，仍走INSERT_ONLY/UPDATE/CONFIRM、领域冲突、人工保护及版本水位；已分配身份不替换。只在唯一差异为从null补ID时允许相等来源版本，严格更旧时间、其他事实变化、后续接收与CAS继续拒绝。接纳缺失来源时间不能清空旧有效水位，沿既有UNCHANGED口径使用COALESCE保留。首元数据7例6FAIL/1PASS→7PASS，相等版本两例及缺失水位一例各先真实RED再GREEN；最终engine91加领域/AI四文件共133/133PASS、125.134秒，未将过滤项计入。
+
+两处旧8D手工夹具补发生时间/成品编码/追溯码，明确手工默认数量1，保完整上传/真实ClamAV/审批/不可变PDF、不完整8D提交拒绝及独立转派，完整2/2PASS。控制台fixture补真实契约AI连接空数组，限定真实平台配置/系统参数/通知Card和Modal owner，保dirty/同DOM/焦点与无重读断言；本地原case实际10秒超时，与CI输入查找失败分别保留，完整66/66PASS、25.83秒、portal6471ms，不调预算或动效。来源时间差异增加双语标签，Web production build PASS，最新JS index-X_01TiBf.js、CSS index-DolPiEhS.css。
