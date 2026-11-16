@@ -76,6 +76,6 @@ export function AccountSessionHistory() {
       { title: t('会话期限'), dataIndex: 'lifetimeType', render: (value: keyof typeof lifetime) => t(lifetime[value]) },
       { title: t('状态'), dataIndex: 'status', render: (value: keyof typeof status, row) => <>{t(status[value])}{row.isCurrent ? ` · ${t('当前会话')}` : ''}</> },
       { title: t('操作'), key: 'actions', render: (_, row) => row.status === 'ACTIVE' && !row.isCurrent ? <Button type="link" disabled={revoking || loading || !!error} onClick={() => void revoke(row)}>{t('撤销')}</Button> : null },
-    ]} pagination={data ? { current: page.current, pageSize: data.pageSize, total: data.total, showSizeChanger: false, disabled: loading || revoking, onChange: next => { page.current = next; void load(); }, hideOnSinglePage: true } : false} />
+    ]} pagination={data ? { placement: ['topStart'], current: page.current, pageSize: data.pageSize, total: data.total, showSizeChanger: false, disabled: loading || revoking, onChange: next => { page.current = next; void load(); }, hideOnSinglePage: true } : false} />
   </Card></section>;
 }

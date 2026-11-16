@@ -54,12 +54,18 @@ function scene(organization = org, callbacks: { onChanged?: () => void; onDenied
 async function select(label: string, text: string) {
   const input = screen.getByLabelText(label);
   fireEvent.mouseDown(input);
+  const control = input.closest('.ant-select') as HTMLElement;
+  const popup = await waitFor(() => {
+    const element = document.getElementById(input.getAttribute('aria-controls') ?? '')?.closest('.ant-select-dropdown');
+    if (!(element instanceof HTMLElement)) throw new Error(`Missing popup for ${label}`);
+    return element;
+  }, { container: control });
   // Virtualized role=option nodes are accessibility mirrors, not the clickable options.
-  const option = await screen.findByText(text, { selector: '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content' });
-  await waitFor(() => { expect(option).toBeVisible(); expect(window.getComputedStyle(option).pointerEvents).not.toBe('none'); });
+  const option = await within(popup).findByText(text, { selector: '.ant-select-item-option-content' });
+  await waitFor(() => { expect(option).toBeVisible(); expect(window.getComputedStyle(option).pointerEvents).not.toBe('none'); }, { container: popup });
   // Setup drives the real option handler; pointer/keyboard acceptance remains a separate browser gate.
   fireEvent.click(option);
-  await waitFor(() => expect(input).toHaveAttribute('aria-expanded', 'false'));
+  await waitFor(() => expect(input).toHaveAttribute('aria-expanded', 'false'), { container: control });
 }
 const editor = () => within(screen.getByLabelText('配置 · 待配置对象', { selector: 'section' }));
 async function edit() {
@@ -78,6 +84,8 @@ it('changes the real queue page size and resets offset through the existing leav
   const calls = server(undefined, call => call.path.includes('/reconfiguration?') ? json({ items: [pending('ORGANIZATION', ['parentId'])], total: 90, pageSize: Number(new URL(call.path, 'http://localhost').searchParams.get('pageSize')), offset: 0 }) : undefined);
   render(scene());
   await screen.findByLabelText('配置 · 待配置对象', { selector: 'button' });
+  const queue = screen.getByRole('region', { name: '待配置管理' });
+  expect(queue.querySelector('.ant-pagination')!.compareDocumentPosition(queue.querySelector('.ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByTitle('2'));
   await waitFor(() => expect(calls.some(call => call.path.includes('offset=20'))).toBe(true));
   const control = screen.getAllByRole('combobox').find(input => input.closest('.ant-pagination-options'))!;

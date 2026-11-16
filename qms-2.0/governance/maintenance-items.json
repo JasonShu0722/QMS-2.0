@@ -23,7 +23,7 @@
         },
         {
           "path": "apps/web/src/features/audit-standards/AuditStandardsPage.tsx",
-          "sha256": "3e046e47612c49cbf30dfddfb795bef331a3536acc4843e077223ad55c3be619"
+          "sha256": "38849f1d57f3e3340d10416908fdbc9e23f19eddc2e6f982593bb3e1c66caf1d"
         },
         {
           "path": "apps/web/src/features/new-product-quality/NewProductQualityPage.tsx",

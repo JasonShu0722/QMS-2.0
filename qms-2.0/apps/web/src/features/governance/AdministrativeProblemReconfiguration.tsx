@@ -191,16 +191,16 @@ function ProblemReconfigurationScope({ organization, onChanged, onDenied }: Prop
     {!!error && !selected && <Button disabled={locked || loading} onClick={reload}>{t('重试问题读取')}</Button>}
     {success && <Alert type="success" showIcon title={t('责任恢复成功')} />}
     {loading ? <div role="status" aria-label={t('读取问题责任')}><Spin /></div> : page && <>
-      {!page.items.length ? <Empty description={t('当前扫描窗口无待配置问题')} /> : <LedgerTable<Item> ledgerId="admin-problem-reconfiguration" organizationId={organization.id} viewId={domain} requiredColumnKeys={['report', 'action']} rowKey={itemId} size="small" dataSource={page.items} pagination={false} scroll={{ x: 620 }} columns={[
-        { key: 'report', title: t('原报告编号'), width: 190, render: (_, item) => item.reportNumber },
-        { key: 'scope', title: t('原归属（历史范围）'), width: 240, render: (_, item) => item.originalOrganizationId },
-        { key: 'action', title: t('操作'), width: 160, render: (_, item) => <Button disabled={locked} aria-label={`${t('恢复责任')} · ${item.reportNumber}`} onClick={() => edit(item)}>{t('恢复责任')}</Button> },
-      ]} />}
       <Space wrap>
         <Button disabled={locked || offsets.length < 2} onClick={() => requestLeave(() => { if (!current()) return; closeEditor(); setOffsets(value => value.slice(0, -1)); })}>{t('上一扫描页')}</Button>
         <Typography.Text type="secondary">{t('扫描窗口')} {offset}</Typography.Text>
         <Button disabled={locked || page.nextOffset === null || !Number.isSafeInteger(page.nextOffset) || page.nextOffset <= offset} onClick={() => requestLeave(() => { if (!current() || page.nextOffset === null) return; closeEditor(); setOffsets(value => [...value, page.nextOffset!]); })}>{t('下一扫描页')}</Button>
       </Space>
+      {!page.items.length ? <Empty description={t('当前扫描窗口无待配置问题')} /> : <LedgerTable<Item> ledgerId="admin-problem-reconfiguration" organizationId={organization.id} viewId={domain} requiredColumnKeys={['report', 'action']} rowKey={itemId} size="small" dataSource={page.items} pagination={false} scroll={{ x: 620 }} columns={[
+        { key: 'report', title: t('原报告编号'), width: 190, render: (_, item) => item.reportNumber },
+        { key: 'scope', title: t('原归属（历史范围）'), width: 240, render: (_, item) => item.originalOrganizationId },
+        { key: 'action', title: t('操作'), width: 160, render: (_, item) => <Button disabled={locked} aria-label={`${t('恢复责任')} · ${item.reportNumber}`} onClick={() => edit(item)}>{t('恢复责任')}</Button> },
+      ]} />}
     </>}
     {selected && <section className="administrative-problem-reconfiguration-editor" aria-label={`${t('恢复责任')} · ${selected.reportNumber}`}>
       <Typography.Title level={5}>{t('恢复责任')} · {selected.reportNumber}</Typography.Title>

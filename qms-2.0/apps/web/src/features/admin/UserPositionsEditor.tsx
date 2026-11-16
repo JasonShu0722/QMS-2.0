@@ -84,7 +84,7 @@ export function UserPositionsEditor({ organizationId, user, onClose, onSaved, on
       </>}
       <Button type="primary" loading={busy} disabled={loading || conflict || !preview} onClick={() => void save()}>{t('保存任职')}</Button>
       <Typography.Text strong>{t('任职记录（含历史）')}</Typography.Text>
-      <Table<UserPosition> size="small" rowKey="id" loading={loading} dataSource={assignments} scroll={{ x: 560 }} columns={[
+      <Table<UserPosition> size="small" rowKey="id" loading={loading} dataSource={assignments} pagination={{ placement: ['topStart'] }} scroll={{ x: 560 }} columns={[
         { title: t('岗位'), render: (_, assignment) => assignment.position.name },
         { title: t('开始时间'), render: (_, assignment) => new Date(assignment.startedAt).toLocaleString(locale) },
         { title: t('结束时间'), render: (_, assignment) => assignment.endedAt ? new Date(assignment.endedAt).toLocaleString(locale) : t('未结束') },

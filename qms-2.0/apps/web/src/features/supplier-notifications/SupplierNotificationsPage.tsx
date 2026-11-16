@@ -72,6 +72,8 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
     <InboxError cause={mutationError} />
     <InboxError cause={error} />
     {loading ? <Spin aria-label={t('正在加载通知')} /> : data && <>
+      <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(data.total, 10000 + pageSize)}
+        showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />
       <List dataSource={data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) =>
         <List.Item key={notice.id}>
           <Card className="supplier-notifications__card qms-display-card" title={notice.subject ?? t(notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')}
@@ -85,8 +87,6 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
             </Space>
           </Card>
         </List.Item>} />
-      <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(data.total, 10000 + pageSize)}
-        showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />
     </>}
   </section>;
 }

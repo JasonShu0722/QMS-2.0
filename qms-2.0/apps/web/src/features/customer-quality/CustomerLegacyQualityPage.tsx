@@ -119,11 +119,11 @@ export function CustomerLegacyQualityPage() {
       {importName ? <Typography.Paragraph>当前文件：{importName}；数据行：{importRows.length}</Typography.Paragraph> : null}
       {importError ? <Alert type={importError instanceof ApiError && importError.status === 403 ? 'warning' : 'error'} showIcon title={importError instanceof ApiError ? safeAccountError(importError) : importError instanceof Error ? importError.message : '导入失败，请重试'} description={importError instanceof ApiError ? importError.traceId : undefined} /> : null}
       {importErrors.length ? <Alert type="error" showIcon title={`发现 ${importErrors.length} 处字段错误，修正 Excel 后重新选择文件`} description={<ul>{importErrors.map((issue, index) => <li key={`${issue.rowNumber}-${issue.field}-${index}`}>第 {issue.rowNumber} 行 {issue.field}：{issue.message}</li>)}</ul>} /> : null}
-      {importRows.length ? <><Table<ImportBody['rows'][number]> size="small" rowKey="rowNumber" dataSource={importRows} pagination={{ pageSize: 10 }} scroll={{ x: 800 }} columns={[
+      {importRows.length ? <><Table<ImportBody['rows'][number]> size="small" rowKey="rowNumber" dataSource={importRows} pagination={{ placement: ['topStart'], pageSize: 10 }} scroll={{ x: 800 }} columns={[
         { title: 'Excel 行', dataIndex: 'rowNumber' },
         ...importFields.map((field) => ({ title: field, dataIndex: field, render: (value: unknown) => value === undefined ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value) })),
       ]} /><Button type="primary" loading={importBusy} disabled={Boolean(importErrors.length) || imported} onClick={() => void submitImport()}>导入 {importRows.length} 条</Button></> : null}
-      {importResult ? <><Typography.Paragraph>已创建 {importResult.created} 条，重复 {importResult.duplicates} 条，拒绝 {importResult.rejected} 条。</Typography.Paragraph><Table<ImportResult['items'][number]> size="small" rowKey="rowNumber" dataSource={importResult.items} pagination={{ pageSize: 10 }} columns={[
+      {importResult ? <><Typography.Paragraph>已创建 {importResult.created} 条，重复 {importResult.duplicates} 条，拒绝 {importResult.rejected} 条。</Typography.Paragraph><Table<ImportResult['items'][number]> size="small" rowKey="rowNumber" dataSource={importResult.items} pagination={{ placement: ['topStart'], pageSize: 10 }} columns={[
         { title: 'Excel 行', dataIndex: 'rowNumber' }, { title: '结果', dataIndex: 'status', render: (status: string) => ({ CREATED: '已创建', DUPLICATE: '重复', REJECTED: '已拒绝' })[status as 'CREATED' | 'DUPLICATE' | 'REJECTED'] }, { title: '客诉编号', dataIndex: 'complaintNumber', render: (value: string | null) => value ?? '—' }, { title: '错误代码', dataIndex: 'errorCode', render: (value: string | null) => value ?? '—' },
       ]} /></> : null}
     </section> : null}

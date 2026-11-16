@@ -62,8 +62,20 @@ it.each([
   ['audit imports', <AuditManagementPage />, '/api/v1/audit-management/imports'],
   ['audit catalog', <AuditStandardsPage />, '/api/v1/audit-standards/templates'],
 ])('remaining lists request the default twenty for %s', async (_, content, endpoint) => {
-  mount(content);
+  const view = mount(content);
   await waitFor(() => expect(requested(endpoint, 20)).toBe(true));
+  if (endpoint !== '/api/v1/supplier-quality/eight-d/tasks') {
+    await waitFor(() => {
+      const scope = endpoint === '/api/v1/audit-management/imports'
+        ? screen.getByRole('region', { name: '审核导入行' })
+        : view.container;
+      const pager = scope.querySelector('.ant-pagination');
+      const list = scope.querySelector('.ant-table-wrapper, .ant-list');
+      expect(pager).toBeInTheDocument();
+      expect(list).toBeInTheDocument();
+      expect(pager!.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  }
 });
 
 it('remaining lists change the audit catalog request size and reset its real page without remounting the editor', async () => {
@@ -90,6 +102,41 @@ it('remaining lists expose independent task and notice sizes with real offset re
   await chooseFifty(within(document.querySelector('.ant-pagination') as HTMLElement).getByRole('combobox'));
   await waitFor(() => expect(requested('/api/v1/tasks', 50)).toBe(true));
   expect(requested('/api/v1/notifications', 20)).toBe(true);
+});
+
+it('remaining lists keep the personal notification pager above its cards and request the next real offset', async () => {
+  mount(<MyTasksPage />);
+  fireEvent.click(screen.getByRole('tab', { name: '我的通知' }));
+  const panel = screen.getByRole('tabpanel', { name: '我的通知' });
+  await waitFor(() => expect(within(panel).getByTitle('2')).toBeVisible());
+  const pager = panel.querySelector('.ant-pagination')!;
+  expect(panel.querySelectorAll('.ant-pagination')).toHaveLength(1);
+  expect(pager.compareDocumentPosition(panel.querySelector('.ant-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(within(pager as HTMLElement).getByTitle('2'));
+  await waitFor(() => expect(requested('/api/v1/notifications', 20, 20)).toBe(true));
+});
+
+it.each([
+  ['closure', <ClosureTaskInbox />, '关闭职责通知', '/api/v1/notifications/closure'],
+  ['process', <ProcessEightDTaskInbox />, '过程8D通知', '/api/v1/process-quality/eight-d/notifications'],
+  ['customer', <ProcessEightDTaskInbox domain="customer-quality" />, '客户8D通知', '/api/v1/customer-quality/eight-d/notifications'],
+  ['new product', <ProcessEightDTaskInbox domain="new-product-quality" />, '新品8D通知', '/api/v1/new-product-quality/eight-d/notifications'],
+])('remaining lists keep the %s notification pager above the content with real offset paging', async (_, content, label, endpoint) => {
+  const original = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    const response = await original(path, init);
+    return path.startsWith(`${endpoint}?`)
+      ? { ...response as object, items: [{ id: 'notice', problemId: 'problem', reportNumber: '8D-123', subject: '独立通知', body: '通知内容', duties: [], deliveredAt: '2026-11-15T00:00:00Z' }] }
+      : response;
+  });
+  mount(content);
+  const section = screen.getByRole('region', { name: label });
+  const notice = await within(section).findByText('独立通知');
+  const pager = section.querySelector('.ant-pagination')!;
+  expect(section.querySelectorAll('.ant-pagination')).toHaveLength(1);
+  expect(pager.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(within(pager as HTMLElement).getByTitle('2'));
+  await waitFor(() => expect(requested(endpoint, 20, 20)).toBe(true));
 });
 
 it('remaining lists expose real audit import pages and reset the request when size changes', async () => {
@@ -143,6 +190,8 @@ it('remaining lists paginate the actual legacy complaint array at twenty', async
 it('remaining lists expose real management announcement page sizes', async () => {
   mount(<AnnouncementsPage />);
   fireEvent.click(await screen.findByRole('tab', { name: '公告管理' }));
+  const panel = screen.getByRole('tabpanel', { name: '公告管理' });
+  expect(panel.querySelector('.ant-pagination')!.compareDocumentPosition(panel.querySelector('.ant-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await chooseFifty(screen.getByRole('combobox'));
   await waitFor(() => expect(requested('/api/v1/announcements/manage', 50)).toBe(true));
 });

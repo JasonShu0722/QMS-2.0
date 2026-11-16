@@ -357,6 +357,9 @@ describe('account center', () => {
     render(<MemoryRouter><AccountCenterPage /></MemoryRouter>);
     expect(await screen.findByText('管理员记住登录')).toBeVisible();
     expect(screen.getByText('已撤销')).toBeVisible();
+    const sessions = screen.getByRole('region', { name: '登录会话' });
+    expect(sessions.querySelectorAll('.ant-pagination')).toHaveLength(1);
+    expect(sessions.querySelector('.ant-pagination')!.compareDocumentPosition(sessions.querySelector('.ant-table')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await userEvent.click(screen.getByTitle('Next Page'));
     await waitFor(() => expect(api.getAccountSessionHistory).toHaveBeenLastCalledWith(2));
     expect(await screen.findByText('用户记住登录')).toBeVisible();
