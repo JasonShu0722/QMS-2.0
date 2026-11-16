@@ -12,8 +12,8 @@
 | 台账 | REQ-0038 / reczz28aMCqsFOpX；user回读rev373开发中，负责人当前直接声明本人已更新状态并批准当前范围 |
 | 前置 | REQ-0037入库引擎，关联REQ-0027制程/新品历史范围；不改原记录 |
 | 基线 | 运行源码072479afed986c11553976c9180bf767d11dba98，本地f6dd064仅前轮归档；分支codex/process-defect-ingestion-plan，既有$null保留 |
-| 状态 | [PR130](https://github.com/JasonShu0722/QMS-2.0/pull/130)已创建，首head8fcc75350f81eeab227b8750e0a5e0424832c18f，base072479a；仅该PR，未合并/发布。首CI43940404311为20/24PASS：Web13安装Prisma引擎ECONNRESET未跑测试，integration4旧手工夹具缺新必填2FAIL/852PASS，Web7配置输入等待失败1FAIL/553PASS，foundation依赖汇总失败，日志完整保留。Review两P2及相等源版本补空ID/缺失源时间保水位接缝已修；fix1最终真实5文件133PASS、8D HTTP链2PASS、console-migration66PASS；Web一行来源时间双语label新build PASS，最后APIbuild和增量QUALITY进行中，SPEC PASS |
-| 下一步 | 完成fix1构建/双轴复核后推送同PR；精确新head CI/Review通过后合并、部署、公网只读核验及本地收尾。真实供应商/IMS联调、物理手机与10GiB完整恢复为NOT_RUN，不代人工验收 |
+| 状态 | [PR130](https://github.com/JasonShu0722/QMS-2.0/pull/130)当前headad5c048274062749528e10e09ae9687114a56655，base072479a；仅该PR，未合并/发布。首CI43940404311为20/24PASS，逐失败记录保留。fix1验证及独立审查PASS、两条Review关闭；第二CI43945461384精确head已24/24PASS。第二Review两P2已在fix2修复，6完整文件147PASS、API/Web最终build PASS、增量QUALITY PASS；源码冻结，最终真实API/PG/编译Worker/PW单次完整3/3PASS（2.1分钟），待推送同PR，不提前合并 |
+| 下一步 | 完成SPEC最终证据记录后推送fix2同PR，再以精确最新head CI/Review合并、部署、公网核验及本地收尾。真实供应商/IMS联调、物理手机与10GiB完整恢复为NOT_RUN，不代人工验收 |
 
 **目标：** IMS不良逐条入现有制程台账，统一手工字段、缺项完善、关联快照与自动补配。
 
@@ -201,3 +201,13 @@ V0.0.55候选8fcc753由117个文件组成；常规Git网络故障后复用官方
 fix1最小修复：缺失来源明细编号和来源观察时间成为正常差异，仍走INSERT_ONLY/UPDATE/CONFIRM、领域冲突、人工保护及版本水位；已分配身份不替换。只在唯一差异为从null补ID时允许相等来源版本，严格更旧时间、其他事实变化、后续接收与CAS继续拒绝。接纳缺失来源时间不能清空旧有效水位，沿既有UNCHANGED口径使用COALESCE保留。首元数据7例6FAIL/1PASS→7PASS，相等版本两例及缺失水位一例各先真实RED再GREEN；最终engine91加领域/AI四文件共133/133PASS、125.134秒，未将过滤项计入。
 
 两处旧8D手工夹具补发生时间/成品编码/追溯码，明确手工默认数量1，保完整上传/真实ClamAV/审批/不可变PDF、不完整8D提交拒绝及独立转派，完整2/2PASS。控制台fixture补真实契约AI连接空数组，限定真实平台配置/系统参数/通知Card和Modal owner，保dirty/同DOM/焦点与无重读断言；本地原case实际10秒超时，与CI输入查找失败分别保留，完整66/66PASS、25.83秒、portal6471ms，不调预算或动效。来源时间差异增加双语标签，Web production build PASS，最新JS index-X_01TiBf.js、CSS index-DolPiEhS.css。
+
+### 第二Review与fix2（2026-11-17）
+
+fix1精确候选ad5c048的CI43945461384实际24/24PASS，但Review指出两个实际接缝缺口，未因绿色CI跳过修复。独立AI输入/提示词变化原来没有进入evaluate差异，CONFIRM可自动排队、旧收件可替换当前AI输入；现在AiDescriptionService通过公开只读比较返回受控aiDescription差异，引擎所有调用显式传规则ID/版本，沿原三模式、旧来源/CAS、description更新掩码及人工描述保护，不把差异字段当领域业务列写入。差异只含选定事实和受控配置，无密钥或完整收件。
+
+自动补配原来推进领域version却不更新入库水位，后续正常UPDATE会被误判人工。现在completion在同一事务内调用公开onCompleted回调，Worker传入IngestionService同步其自有表，仅旧target_version匹配previousVersion时推进；不跨写领域私表，不新增反向模块依赖或事件队列。回调失败回滚领域事实、历史和审计，再走原补配重试；真正人工分歧不隐藏。
+
+真实RED：AI三策略/提示词人工/旧收件和补配同步6FAIL，callback异常回滚1FAIL；最小实现后7定向GREEN（116过滤不计），最终六完整文件147/147PASS、131.308秒，API最终生产build PASS。Web仅增加AI差异双语label一行，production build PASS，最新index-p5qFRz3E.js、CSS index-DolPiEhS.css。增量QUALITY PASS；独立SPEC和最终真实编译Worker/浏览器证据随后接续。未改DTO/迁移/契约/依赖，原无变化验证有效复用。
+
+fix2最终生产Web及API编译产物在新专属浏览器数据库（162迁移/标准seed）完整运行三场景，fix2/browser-final实际单次3/3PASS、2.1分钟，包含编译Worker自动补配新回调接线和AI后台生成/失败/人工迟到，无页面定位错误。该最终3/3与前轮有效组合分别保存，未删除原失败。新版本最终资源、迁移和契约无后续改动；真实外部供应商与物理手机仍NOT_RUN。

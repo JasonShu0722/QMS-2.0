@@ -13,6 +13,7 @@ import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { evaluateIngestionRow, ingestionError, ingestionTargetPermission, normalizeIngestionRule, processDefectSourceFields, selectedDescriptionInput, type IngestionFields, type IngestionRule } from './ingestion.policy.js';
 import { AiDescriptionService } from './ai-description.service.js';
 import type { AiIngestionPreviewDto } from './ai-description.dto.js';
+import type { ProcessCompletionVersion } from '../process-quality/process-defect-completion.service.js';
 import type { DeleteIngestionRuleDto, IngestionControlDto, IngestionDifferenceDto, IngestionEndpointDto, IngestionEndpointPageDto, IngestionHistoryPreviewInputDto, IngestionImportResultDto, IngestionItemActionDto, IngestionItemDetailDto, IngestionItemDto, IngestionItemPageDto, IngestionJobDto, IngestionJobPageDto, IngestionJobQueryDto, IngestionPreviewDto, IngestionPreviewInputDto, IngestionRuleDto, IngestionRulePageDto, SaveIngestionRuleDto, SubmitIngestionImportDto, UpdateIngestionRuleDto } from './ingestion.dto.js';
 import type { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
@@ -63,6 +64,10 @@ const historyParentHasBlockedSource = Prisma.sql`EXISTS(SELECT 1 FROM integratio
 @Injectable()
 export class IngestionService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly targets: IngestionTargetsService, @Optional() private readonly ai?: AiDescriptionService) {}
+
+  async syncProcessCompletionVersion(transaction: AdminTransaction, change: ProcessCompletionVersion): Promise<void> {
+    await transaction.$executeRaw`UPDATE integration_ingestion_target_versions SET target_version=${change.version} WHERE organization_id=${change.organizationId}::uuid AND target='PROCESS_DEFECT' AND target_id=${change.id}::uuid AND target_version=${change.previousVersion}`;
+  }
 
   private async rule(tx: AdminTransaction, organizationId: string, id: string, version?: number): Promise<RuleRow> {
     const [row] = await tx.$queryRaw<RuleRow[]>`SELECT * FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid`;
@@ -181,7 +186,7 @@ export class IngestionService {
     if (!Array.isArray(value) || value.some(item => !item || typeof item !== 'object' || Array.isArray(item))) ingestionError('INTEGRATION_MESSAGE_INVALID');
     return value;
   }
-  private async evaluate(tx: AdminTransaction, actor: AdminActor, rule: IngestionRule, row: unknown, receipt: ReceiptRow, source: string, rowIndex: number): Promise<Evaluation> {
+  private async evaluate(tx: AdminTransaction, actor: AdminActor, rule: IngestionRule, row: unknown, receipt: ReceiptRow, source: string, rowIndex: number, ruleId: string, ruleVersion: number): Promise<Evaluation> {
     let parsed: ReturnType<typeof evaluateIngestionRow>;
     try { parsed = evaluateIngestionRow(rule, row); } catch (error) {
       if (error instanceof HttpException && error.getStatus() === 400) return { action: 'VALIDATION_FAILED', differences: [], current: null, sourceUpdatedAt: null, errorCode: errorCode(error), errorField: validationField(error, rule) };
@@ -205,6 +210,11 @@ export class IngestionService {
     if (!current) return { action: 'INSERTED', fields: targetFields, differences: [], current: null, sourceUpdatedAt: parsed.sourceUpdatedAt };
     const { permitted, differences, issues } = proposedChanges(rule, parsed.fields, current);
     const processValues = current.values as ProcessDefectIntegrationFields, processSource = parsed.fields as ProcessDefectIntegrationFields;
+    if (this.ai && rule.target === 'PROCESS_DEFECT' && rule.aiDescription && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes('description'))) {
+      const difference = await this.ai.difference(tx, actor, { ruleId, ruleVersion, rule, defectId: current.id, fields: selectedDescriptionInput(rule, row),
+        direct: processSource.description ?? null, invalidDirect: processSource.issues?.includes('description:INVALID') });
+      if (difference) differences.push(difference);
+    }
     const metadata = rule.target === 'PROCESS_DEFECT' ? { receiptId: receipt.id, rowIndex, issues, ...(processValues.externalRecordKey ? { externalRecordKey: processValues.externalRecordKey } : {}), ...(processSource.sourceObservedAt ? { sourceObservedAt: processSource.sourceObservedAt } : {}) } : {};
     const result = { fields: { ...(rule.target === 'PROCESS_DEFECT' ? {} : current.values), ...Object.fromEntries(permitted), ...metadata } as IngestionFields, differences, current, sourceUpdatedAt: parsed.sourceUpdatedAt };
     if (!differences.length) return { ...result, action: 'UNCHANGED' };
@@ -213,7 +223,7 @@ export class IngestionService {
     const timestamp = parsed.sourceUpdatedAt ? new Date(parsed.sourceUpdatedAt) : null;
     const staleSource = latest && (latest.endpoint_id !== receipt.endpoint_id || latest.receipt_received_at > receipt.received_at || latest.target_version !== current.version || timestamp && latest.source_updated_at && sourceVersionIsStale(timestamp, latest.source_updated_at, differences));
     const uncertainHistory = source === 'HISTORY' && (!timestamp || !latest?.source_updated_at);
-    const protectedDifference = 'protectedFields' in current && current.protectedFields?.some(field => differences.some(difference => difference.field === field));
+    const protectedDifference = 'protectedFields' in current && current.protectedFields?.some(field => differences.some(difference => difference.field === field || field === 'description' && difference.field === 'aiDescription'));
     return { ...result, action: rule.mode === 'CONFIRM' || staleSource || uncertainHistory || protectedDifference ? 'AWAITING_CONFIRMATION' : 'UPDATED' };
   }
 
@@ -226,7 +236,7 @@ export class IngestionService {
       const receipt = await this.receipt(tx, organizationId, input.receiptId, rule.endpoint_id), rows = this.payload(receipt);
       integrationInteger(input.rowIndex, 0, Math.max(0, rows.length - 1));
       if (input.rowIndex >= rows.length) ingestionError('INGESTION_RULE_INVALID');
-      const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex);
+      const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex, rule.id, rule.version);
       const preview = await this.storePreview(tx, actor, rule, 'SINGLE', [{ receiptId: receipt.id, indexes: [input.rowIndex], expected: evaluation.current ? { id: evaluation.current.id, version: evaluation.current.version } : null }]);
       await this.event(tx, actor, organizationId, 'INGESTION_PREVIEWED', receipt.id, traceId, { ruleId: rule.id, rowIndex: input.rowIndex });
       return preview;
@@ -235,7 +245,7 @@ export class IngestionService {
       const rule = await this.rule(tx, organizationId, input.ruleId, input.ruleVersion);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
       const receipt = await this.receipt(tx, organizationId, input.receiptId, rule.endpoint_id), rows = this.payload(receipt);
-      const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex);
+      const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex, rule.id, rule.version);
       const process = rule.configuration.target === 'PROCESS_DEFECT', fields = evaluation.fields as ProcessDefectIntegrationFields | undefined;
       const result = evaluation.current ? (await this.targets.results(tx, actor, rule.configuration.target, [evaluation.current.id]))[0] : undefined;
       return { ...preview, action: evaluation.action, ...(evaluation.errorCode ? { errorCode: evaluation.errorCode } : {}), ...(evaluation.errorField ? { errorField: evaluation.errorField } : {}), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(evaluation.current ? { targetId: evaluation.current.id } : {}), ...(process && fields ? { pendingCompletion: result?.pendingCompletion ?? (['occurredAt', 'productCode', 'traceCode', 'description', 'externalRecordKey'].some(field => !fields[field as keyof ProcessDefectIntegrationFields]) || !!fields.issues?.length), ...(result ? { pendingConfiguration: result.pendingConfiguration } : {}), registrationIssues: fields.issues ?? [], defectQuantity: result?.defectQuantity ?? 1 } : {}), differences: evaluation.differences };
@@ -322,7 +332,7 @@ export class IngestionService {
         if (selection.indexes.some(index => index >= rows.length)) ingestionError('CONCURRENCY_CONFLICT', 409);
         if (!selection.indexes.length) continue;
         if (preview.kind === 'SINGLE') {
-          const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[selection.indexes[0]!], receipt, 'SINGLE', selection.indexes[0]!);
+          const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[selection.indexes[0]!], receipt, 'SINGLE', selection.indexes[0]!, rule.id, rule.version);
           if ((evaluation.current?.id ?? null) !== (selection.expected?.id ?? null) || (evaluation.current?.version ?? null) !== (selection.expected?.version ?? null)) ingestionError('CONCURRENCY_CONFLICT', 409);
         }
         const queued = await this.enqueue(tx, rule, receipt.id, selection.indexes, preview.kind, actorSnapshot(actor, organizationId), input.reprocessReason?.trim(), selection.expected);
@@ -452,7 +462,7 @@ export class IngestionService {
             const identity = job.rule_snapshot.target === 'PROCESS_DEFECT' ? (parsed.fields as ProcessDefectIntegrationFields).externalRecordKey ?? `${receipt.id}:${item.row_index}` : (parsed.fields as { code: string }).code;
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion-target:${job.organization_id}:${job.rule_snapshot.target}:${identity}`},0))::text`;
           }
-          const evaluation = await this.evaluate(tx, executionActor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index);
+          const evaluation = await this.evaluate(tx, executionActor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
           if (job.source === 'SINGLE' && ['INSERTED', 'UPDATED'].includes(evaluation.action) && ((item.target_id ?? null) !== (evaluation.current?.id ?? null) || (item.target_version ?? null) !== (evaluation.current?.version ?? null))) evaluation.action = 'AWAITING_CONFIRMATION';
           await this.applyEvaluation(tx, job, item, receipt, evaluation, executionActor, randomUUID());
           await this.refreshJob(tx, job.id);
@@ -467,14 +477,14 @@ export class IngestionService {
     return processed;
   }
 
-  private async reuseDifference(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation): Promise<void> {
+  private async reuseDifference(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation, actor: AdminActor): Promise<void> {
     const candidates = await tx.$queryRaw<ItemRow[]>`SELECT i.* FROM integration_ingestion_items i JOIN integration_ingestion_jobs j ON j.id=i.job_id WHERE i.organization_id=${job.organization_id}::uuid AND i.target_id=${evaluation.current!.id}::uuid AND i.target_version=${evaluation.current!.version} AND i.status='AWAITING_CONFIRMATION' AND j.endpoint_id=${job.endpoint_id}::uuid AND j.rule_snapshot->>'target'=${job.rule_snapshot.target} AND COALESCE(j.rule_snapshot->>'sourceUpdatedAtField','')=${job.rule_snapshot.sourceUpdatedAtField ?? ''} ORDER BY j.sequence,i.row_index`;
     for (const candidate of candidates) {
       const previousJob = await this.jobRow(tx, job.organization_id, candidate.job_id);
       const previousReceipt = await this.receipt(tx, job.organization_id, candidate.receipt_id, previousJob.endpoint_id, true);
       const parsed = evaluateIngestionRow(previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index]);
       if (!parsed.matched) continue;
-      const { differences } = proposedChanges(previousJob.rule_snapshot, parsed.fields, evaluation.current!);
+      const { differences } = await this.evaluate(tx, actor, previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index], previousReceipt, previousJob.source, candidate.row_index, previousJob.rule_id, previousJob.rule_version);
       if (differences.length !== evaluation.differences.length || differences.some(difference => !evaluation.differences.some(current => current.field === difference.field && current.before === difference.before && current.after === difference.after))) continue;
       const sourceUpdatedAt = newestDate(candidate.source_updated_at, evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null);
       const receivedAt = newestDate(candidate.source_received_at ?? previousReceipt.received_at, evaluation.sourceReceivedAt ?? receipt.received_at)!;
@@ -494,7 +504,7 @@ export class IngestionService {
   }
 
   private async applyEvaluation(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation, actor: AdminActor, traceId: string, confirmed = false): Promise<void> {
-    if (evaluation.action === 'AWAITING_CONFIRMATION') await this.reuseDifference(tx, job, item, receipt, evaluation);
+    if (evaluation.action === 'AWAITING_CONFIRMATION') await this.reuseDifference(tx, job, item, receipt, evaluation, actor);
     const receivedAt = newestDate(evaluation.sourceReceivedAt ?? item.source_received_at, receipt.received_at)!;
     const sourceUpdatedAt = newestDate(item.source_updated_at, evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null);
     let current = evaluation.current;
@@ -599,7 +609,7 @@ export class IngestionService {
       const organizationId = await this.access(tx, actor, 'ingestion:read', true), item = await this.itemRow(tx, organizationId, id), job = await this.jobRow(tx, organizationId, item.job_id);
       await this.access(tx, actor, 'ingestion:read', true, job.rule_snapshot.target);
       const receipt = await this.receipt(tx, organizationId, item.receipt_id, job.endpoint_id, true), rows = this.payload(receipt);
-      const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index);
+      const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
       await this.event(tx, actor, organizationId, 'INGESTION_DIFFERENCE_READ', item.id, traceId, { jobId: job.id, receiptId: receipt.id, rowIndex: item.row_index });
       const result = item.target_id ? (await this.targets.results(tx, actor, job.rule_snapshot.target, [item.target_id]))[0] : undefined;
       return { ...itemDto(item), ...(result ? this.resultDto(result) : {}), differences: evaluation.differences, ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(job.rule_snapshot.target === 'PROCESS_DEFECT' ? { registrationIssues: (evaluation.fields as ProcessDefectIntegrationFields | undefined)?.issues ?? [] } : {}), stale: await this.stale(tx, job, item, receipt, evaluation) };
@@ -654,7 +664,7 @@ export class IngestionService {
         await this.access(tx, job.rule_snapshot.authorizedBy ?? job.actor_snapshot, 'ingestion:run', false, job.rule_snapshot.target);
         if (!job.rule_snapshot.authorizedBy && job.rule_snapshot.configuredBy) await this.access(tx, job.rule_snapshot.configuredBy, 'ingestion:run', false, job.rule_snapshot.target);
         const receipt = await this.receipt(tx, organizationId, item.receipt_id, job.endpoint_id, true), rows = this.payload(receipt);
-        const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index);
+        const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
         if (await this.stale(tx, job, item, receipt, evaluation)) ingestionError('INGESTION_STALE_CONFIRMATION', 409);
         if (!evaluation.fields || !evaluation.current || !['AWAITING_CONFIRMATION', 'UPDATED', 'UNCHANGED'].includes(evaluation.action)) ingestionError('CONCURRENCY_CONFLICT', 409);
         evaluation.action = evaluation.differences.length ? 'UPDATED' : 'UNCHANGED';

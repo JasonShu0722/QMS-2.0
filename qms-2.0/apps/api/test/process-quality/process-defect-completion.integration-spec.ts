@@ -120,6 +120,20 @@ describe('process registration snapshots and real bounded Worker completion', ()
     expect((await fixture.ledger.detail(fixture.actor, record.id)).pendingConfiguration).toBe(false);
   });
 
+  it('rolls back automatic completion when its transactional consumer fails and retries the same version', async () => {
+    const row = await fixture.manual({ productCode: 'ATOMIC-COMPLETION' });
+    await mapping('ATOMIC-COMPLETION', '事务细类');
+    const result = await fixture.completion.processDue(100, async () => { throw new Error('Controlled consumer failure'); });
+    expect(result.failed).toBeGreaterThanOrEqual(1);
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ version: row.version, projectSnapshot: null, completionAttempts: 1 });
+    const history = await fixture.prisma.$queryRaw<Array<{ count: number }>>`SELECT count(*)::int AS count FROM process_defect_registration_history WHERE defect_id=${row.id}::uuid AND action='AUTO_COMPLETED'`;
+    expect(history[0]!.count).toBe(0);
+    await due(row.id);
+    const changes: Array<{ id: string; organizationId: string; previousVersion: number; version: number }> = [];
+    await fixture.completion.processDue(100, async (_transaction, change) => { changes.push(change); });
+    expect(changes).toContainEqual({ id: row.id, organizationId: fixture.actor.organizationId, previousVersion: row.version, version: row.version + 1 });
+    expect((await fixture.ledger.detail(fixture.actor, row.id)).productSubcategory).toBe('事务细类');
+  });
   it('reports an unavailable retry record without falsely completing or throwing the entire Worker cycle', async () => {
     const row = await fixture.manual({ productCode: 'RETRY-FAIL', operationName: 'RETRY-OP' });
     await mapping('RETRY-FAIL', '类型');

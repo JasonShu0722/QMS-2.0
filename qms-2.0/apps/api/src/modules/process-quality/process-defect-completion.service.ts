@@ -15,6 +15,7 @@ export type ProcessProjectSnapshot = {
 };
 type RegistrationFacts = { productCode: string | null; operationName: string | null; occurredAt: Date | null; traceCode: string | null; description: string };
 export type ProcessOperationSector = { id: string; organizationId: string; operationName: string; sectorName: string; active: boolean; version: number };
+export type ProcessCompletionVersion = { id: string; organizationId: string; previousVersion: number; version: number };
 
 export function processProjectSnapshot(value: unknown): ProcessProjectSnapshot | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -101,7 +102,7 @@ export class ProcessDefectCompletionService {
         ${previous ? facts(previous) : null}::jsonb, ${facts(record)}::jsonb)`;
   }
 
-  async processDue(limit = 20) {
+  async processDue(limit = 20, onCompleted?: (transaction: AdminTransaction, change: ProcessCompletionVersion) => Promise<void>) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error('PROCESS_DEFECT_COMPLETION_LIMIT_INVALID');
     const candidates = await this.prisma.$queryRaw<{ id: string; organizationId: string; version: number }[]>`SELECT d.id, d.organization_id AS "organizationId", d.version
       FROM process_defects d JOIN organizations o ON o.id = d.organization_id
@@ -134,6 +135,7 @@ export class ProcessDefectCompletionService {
         await ProcessDefectCompletionService.history(tx, record, current, null, 'AUTO_COMPLETED');
         await this.audit.record({ organizationId: current.organizationId, actorUserId: null, action: 'PROCESS_DEFECT_AUTO_COMPLETED',
           resourceType: 'ProcessDefect', resourceId: current.id, outcome: 'SUCCESS', traceId: randomUUID(), metadata: { resourceVersion: record.version } }, tx);
+        await onCompleted?.(tx, { id: current.id, organizationId: current.organizationId, previousVersion: current.version, version: record.version });
         completed++;
       }); } catch {
         failed++;

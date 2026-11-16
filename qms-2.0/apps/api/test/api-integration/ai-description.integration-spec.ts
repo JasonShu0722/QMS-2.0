@@ -60,17 +60,21 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     if (fixture) await fixture.prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${fixture.actor.organizationId}::uuid AND status IN ('PENDING','PAUSED','BLOCKED')`;
   });
 
-  async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode']) {
+  async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode'], strategy: SaveIngestionRuleDto['mode'] = 'UPDATE') {
     const original = await fixture.prisma.integrationReceipt.findUniqueOrThrow({ where: { id: fixture.fields().receiptId } });
     const raw: Record<string, unknown> = { id: randomUUID(), time: '2026-11-16T00:30:00Z', product: 'QMS-AI-COMPLETE', trace: randomUUID(), operation: '目检', direct, fact: '毛刺' };
     const configuration = await engine.saveRule(fixture.actor, { name: '真实入库AI接缝', endpointId: original.endpointId, target: 'PROCESS_DEFECT', enabled: false,
-      match: 'ALL', conditions: [], mode: 'UPDATE', updateFields, mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation', lineCode: 'line', description: 'direct' },
+      match: 'ALL', conditions: [], mode: strategy, updateFields, mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation', lineCode: 'line', description: 'direct' },
       aiDescription: { connectionId: connection.id, model: 'model-b', prompt: '整理{{fact}}。', inputFields: [{ path: 'fact', label: '现象', variable: 'fact' }], output: { mode: 'TEXT', field: 'description', target: 'description' } } }, randomUUID(), randomUUID());
-    async function ingest(rule: IngestionRuleDto = configuration, body: Record<string, unknown> = raw) {
+    async function prepare(rule: IngestionRuleDto = configuration, body: Record<string, unknown> = raw) {
       const receipt = await fixture.receipt();
       const ciphertext = encryptSecret(JSON.stringify([body]), `integration:${fixture.actor.organizationId}:${receipt.endpointId}:${receipt.id}`);
       await fixture.prisma.$executeRaw`UPDATE integration_receipts SET payload_ciphertext=${ciphertext},payload_bytes=${Buffer.byteLength(ciphertext)},row_count=1 WHERE organization_id=${fixture.actor.organizationId}::uuid AND id=${receipt.id}::uuid`;
       const preview = await engine.preview(fixture.actor, { ruleId: rule.id, ruleVersion: rule.version, receiptId: receipt.id, rowIndex: 0 }, randomUUID(), randomUUID());
+      return { preview, receipt };
+    }
+    async function ingest(rule: IngestionRuleDto = configuration, body: Record<string, unknown> = raw) {
+      const { preview } = await prepare(rule, body);
       const imported = await engine.submitImport(fixture.actor, { previewId: preview.previewId, confirmed: true }, randomUUID(), randomUUID());
       await engine.processDue(20);
       const item = (await engine.listItems(fixture.actor, imported.jobIds[0]!, {})).items[0]!;
@@ -81,7 +85,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     async function changePrompt(rule: IngestionRuleDto = configuration) {
       return engine.saveRule(fixture.actor, { ...rule, expectedVersion: rule.version, aiDescription: { ...rule.aiDescription!, prompt: `新版本${rule.version + 1}整理{{fact}}。` } } as SaveIngestionRuleDto, randomUUID(), randomUUID(), rule.id);
     }
-    return { raw, configuration, ingest, changePrompt };
+    return { raw, configuration, ingest, prepare, changePrompt };
   }
 
   async function source(output: 'TEXT' | 'JSON' = 'TEXT', direct = '保底：毛刺') {
@@ -98,6 +102,68 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     return { fields, defect, input, enqueue };
   }
 
+  it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('gates independent AI-only input changes through the %s strategy and preserves current-input deduplication', async strategy => {
+    mode = 'SUCCESS'; const value = await engineSource('直接组合事实', ['description'], strategy);
+    const initial = await value.ingest(); await service.processDue();
+    const before = requests.length;
+    const { preview } = await value.prepare(value.configuration, { ...value.raw, fact: '新的独立AI事实', hidden: '不可外发' });
+    const expected = strategy === 'INSERT_ONLY' ? 'EXISTING_SKIPPED' : strategy === 'UPDATE' ? 'UPDATED' : 'AWAITING_CONFIRMATION';
+    expect(preview.action).toBe(expected);
+    expect(preview.differences).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'aiDescription' })]));
+    expect(JSON.stringify(preview.differences)).not.toContain('不可外发');
+    const queued = await engine.submitImport(fixture.actor, { previewId: preview.previewId, confirmed: true }, randomUUID(), randomUUID());
+    await engine.processDue(20);
+    const item = (await engine.listItems(fixture.actor, queued.jobIds[0]!, {})).items[0]!;
+    expect(item.status).toBe(expected);
+    if (strategy !== 'UPDATE') {
+      expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(1);
+      expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } })).description).toBe('已选事实的整理结果');
+    }
+    if (strategy === 'INSERT_ONLY') { await service.processDue(); expect(requests).toHaveLength(before); return; }
+    if (strategy === 'CONFIRM') await engine.actOnItem(fixture.actor, item.id, { expectedVersion: item.version, reason: '核实独立输入后采用AI整理' }, true, randomUUID(), randomUUID());
+    await service.processDue();
+    expect(requests).toHaveLength(before + 1);
+    expect(JSON.stringify(requests.at(-1))).toContain('新的独立AI事实');
+    expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(2);
+    await value.ingest(value.configuration, { ...value.raw, fact: '新的独立AI事实' }); await service.processDue();
+    expect(requests).toHaveLength(before + 1);
+    expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(2);
+  });
+  it('requires confirmation for prompt-only changes and protects manual descriptions from independent AI input changes', async () => {
+    mode = 'SUCCESS'; const value = await engineSource('直接组合事实', ['description'], 'CONFIRM');
+    const initial = await value.ingest(); await service.processDue();
+    const nextRule = await value.changePrompt();
+    const { preview } = await value.prepare(nextRule);
+    expect(preview.action).toBe('AWAITING_CONFIRMATION');
+    expect(preview.differences.find(difference => difference.field === 'aiDescription')?.after).toContain('新版本');
+    const queued = await engine.submitImport(fixture.actor, { previewId: preview.previewId, confirmed: true }, randomUUID(), randomUUID()); await engine.processDue(20);
+    const pending = (await engine.listItems(fixture.actor, queued.jobIds[0]!, {})).items[0]!;
+    expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(1);
+    await engine.actOnItem(fixture.actor, pending.id, { expectedVersion: pending.version, reason: '确认提示词版本' }, true, randomUUID(), randomUUID()); await service.processDue();
+    const current = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } });
+    await fixture.ledger.update(fixture.actor, current.id, { expectedVersion: current.version, description: '人工修订优先' }, randomUUID(), randomUUID());
+    const updateRule = await engine.saveRule(fixture.actor, { ...nextRule, expectedVersion: nextRule.version, mode: 'UPDATE' } as SaveIngestionRuleDto, randomUUID(), randomUUID(), nextRule.id);
+    const before = (await service.list(fixture.actor, initial.row.id)).items.length;
+    const manual = await value.prepare(updateRule, { ...value.raw, direct: '人工修订优先', fact: '另一份AI输入' });
+    expect(manual.preview.action).toBe('AWAITING_CONFIRMATION');
+    const imported = await engine.submitImport(fixture.actor, { previewId: manual.preview.previewId, confirmed: true }, randomUUID(), randomUUID()); await engine.processDue(20);
+    expect((await engine.listItems(fixture.actor, imported.jobIds[0]!, {})).items[0]!.status).toBe('AWAITING_CONFIRMATION');
+    expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(before);
+    expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } })).description).toBe('人工修订优先');
+  });
+  it('rejects AI-only changes from an older receipt without a source timestamp', async () => {
+    mode = 'SUCCESS'; const value = await engineSource();
+    const older = await value.prepare(value.configuration, { ...value.raw, fact: '旧接收中的独立事实' });
+    const latest = await value.ingest(); await service.processDue();
+    const preview = await engine.preview(fixture.actor, { ruleId: value.configuration.id, ruleVersion: value.configuration.version, receiptId: older.receipt.id, rowIndex: 0 }, randomUUID(), randomUUID());
+    expect(preview.action).toBe('AWAITING_CONFIRMATION');
+    const imported = await engine.submitImport(fixture.actor, { previewId: preview.previewId, confirmed: true }, randomUUID(), randomUUID()); await engine.processDue(20);
+    const pending = (await engine.listItems(fixture.actor, imported.jobIds[0]!, {})).items[0]!;
+    expect(pending.status).toBe('AWAITING_CONFIRMATION');
+    expect((await engine.getItem(fixture.actor, pending.id, randomUUID())).stale).toBe(true);
+    await expect(engine.actOnItem(fixture.actor, pending.id, { expectedVersion: pending.version, reason: '拒绝旧接收重新整理' }, true, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'INGESTION_STALE_CONFIRMATION' } });
+    expect((await service.list(fixture.actor, latest.row.id)).items).toHaveLength(1);
+  });
   it('persists and deduplicates before network, calls only selected fields, and keeps source comparisons stable after AI', async () => {
     mode = 'SUCCESS';
     const value = await source(), before = requests.length;

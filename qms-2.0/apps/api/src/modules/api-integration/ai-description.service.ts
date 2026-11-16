@@ -14,6 +14,7 @@ import type { AiDescriptionTaskActionDto, AiDescriptionTaskDto, AiDescriptionTas
 type TaskRow = { id: string; organization_id: string; defect_id: string; rule_id: string; rule_version: number; connection_id: string; connection_version: number;
   input_fields: AiDescriptionField[]; prompt: string; model: string; output_configuration: AiDescriptionOutput; actor_snapshot: AdminActor; expected_description: string; input_revision: number;
   status: string; result: string | null; error_code: string | null; attempts: number; version: number; updated_at: Date; claim_token: string | null };
+type DescriptionInput = { ruleId: string; ruleVersion: number; rule: IngestionRule; defectId: string; fields: AiDescriptionField[]; direct: string | null; invalidDirect?: boolean };
 const taskDto = (row: TaskRow): AiDescriptionTaskDto => ({ id: row.id, defectId: row.defect_id, ruleId: row.rule_id, ruleVersion: row.rule_version,
   connectionVersion: row.connection_version, status: row.status, attempts: row.attempts, version: row.version, result: row.result, errorCode: row.error_code, updatedAt: row.updated_at.toISOString() });
 const inputIdentity = (fields: AiDescriptionField[]) => JSON.stringify(fields.map(field => [field.path, field.label, field.variable ?? null, field.value]));
@@ -40,7 +41,25 @@ export class AiDescriptionService {
     return this.connections.resolve(organizationId, connectionId, tx);
   }
 
-  async enqueue(tx: AdminTransaction, actor: AdminActor, input: { ruleId: string; ruleVersion: number; rule: IngestionRule; defectId: string; fields: AiDescriptionField[]; direct: string | null; invalidDirect?: boolean }) {
+  async difference(tx: AdminTransaction, actor: AdminActor, input: DescriptionInput): Promise<{ field: string; before: string | null; after: string } | null> {
+    const ai = input.rule.aiDescription;
+    if (!ai) return null;
+    const state = await this.defects.aiDescriptionState(tx, actor, input.defectId);
+    const [existing] = await tx.$queryRaw<TaskRow[]>`SELECT * FROM integration_ai_description_tasks WHERE organization_id=${integrationScope(actor)}::uuid AND defect_id=${input.defectId}::uuid AND id=${state.descriptionTaskId}::uuid AND input_revision=${state.descriptionInputVersion}`;
+    const direct = input.direct ?? state.descriptionDirect ?? state.description;
+    let connectionVersion = ai.connectionVersion ?? 1;
+    try { connectionVersion = (await this.connections.resolve(integrationScope(actor), ai.connectionId, tx)).version; } catch {}
+    if (input.invalidDirect || !input.fields.some(field => field.value !== null && String(field.value).trim()) || Buffer.byteLength(JSON.stringify(input.fields)) > 32768) {
+      if (JSON.stringify(state.descriptionInput) === JSON.stringify(input.fields)) return null;
+    } else if (existing && existing.rule_id === input.ruleId && existing.rule_version === input.ruleVersion && existing.connection_version === connectionVersion
+      && inputIdentity(existing.input_fields) === inputIdentity(input.fields) && existing.expected_description === direct) return null;
+    const before = existing ? JSON.stringify({ ruleId: existing.rule_id, ruleVersion: existing.rule_version, connectionId: existing.connection_id,
+      connectionVersion: existing.connection_version, model: existing.model, prompt: existing.prompt, fields: existing.input_fields, output: existing.output_configuration, direct: existing.expected_description }) : null;
+    return { field: 'aiDescription', before, after: JSON.stringify({ ruleId: input.ruleId, ruleVersion: input.ruleVersion, connectionId: ai.connectionId,
+      connectionVersion, model: ai.model, prompt: ai.prompt, fields: input.fields, output: ai.output, direct }) };
+  }
+
+  async enqueue(tx: AdminTransaction, actor: AdminActor, input: DescriptionInput) {
     if (!input.rule.aiDescription) return;
     const organizationId = integrationScope(actor), ai = input.rule.aiDescription;
     if (input.invalidDirect || (input.direct?.length ?? 0) > 10000 || !input.fields.some(field => field.value !== null && String(field.value).trim()) || Buffer.byteLength(JSON.stringify(input.fields)) > 32768) {

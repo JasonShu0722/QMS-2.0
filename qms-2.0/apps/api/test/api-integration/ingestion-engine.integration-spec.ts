@@ -28,6 +28,8 @@ import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { ProcessQualityModule } from '../../src/modules/process-quality/process-quality.module.js';
 import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
 import type { MasterDataIntegrationTarget } from '../../src/common/integration-master-data.js';
+import { ProcessDefectCompletionService } from '../../src/modules/process-quality/process-defect-completion.service.js';
+import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Ingestion engine requires explicitly disposable real PostgreSQL.');
 
@@ -131,6 +133,29 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(3);
     await machine(item, [{ product: '00003', result: 0 }]); await worker.processDue(20);
     expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(4);
+  });
+  it('synchronizes automatic process completion versions atomically without hiding manual changes from later ingestion', async () => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '自动补配水位', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description', productCode: 'product' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'automatic', product: 'PENDING-PROJECT', description: '来源初值' }, { id: 'manual', product: 'PENDING-PROJECT', description: '来源初值' }]); await worker.processDue(10);
+    const records = await prisma.processDefect.findMany({ where: { organizationId: item.organizationId } });
+    const automatic = records.find(record => record.externalRecordKey === 'automatic')!, manual = records.find(record => record.externalRecordKey === 'manual')!;
+    await app.get(ProcessDefectLedgerService).update(item.actor, manual.id, { expectedVersion: manual.version, description: '人工更新' }, trace(), key());
+    const mappings = app.get(ComponentProjectService);
+    const project = await mappings.createProject(item.actor, item.organizationId, { code: 'PROJECT', name: '后续补配项目', stage: 'NEW_PRODUCT' }, trace(), key());
+    await mappings.createMapping(item.actor, item.organizationId, { componentCode: 'PENDING-PROJECT', projectRecordId: project.id, productSubcategory: '已补细类', productCategory: '产品' }, trace(), key());
+    const completion = app.get(ProcessDefectCompletionService);
+    await completion.processDue(100, (transaction, change) => service.syncProcessCompletionVersion(transaction, change));
+    const completed = await prisma.processDefect.findUniqueOrThrow({ where: { id: automatic.id } });
+    expect(completed).toMatchObject({ version: automatic.version + 1, productSubcategory: '已补细类' });
+    const watermarks = await prisma.$queryRaw<Array<{ id: string; version: number }>>`SELECT target_id AS id,target_version AS version FROM integration_ingestion_target_versions WHERE organization_id=${item.organizationId}::uuid`;
+    expect(watermarks.find(watermark => watermark.id === automatic.id)!.version).toBe(completed.version);
+    expect(watermarks.find(watermark => watermark.id === manual.id)!.version).toBe(manual.version);
+    await machine(item, [{ id: 'automatic', description: '新来源更新' }, { id: 'manual', description: '不得覆盖人工' }]); await worker.processDue(10);
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: automatic.id } })).description).toBe('新来源更新');
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: manual.id } })).description).toBe('人工更新');
+    const job = (await service.listJobs(item.actor, {})).items[0]!;
+    expect((await service.listItems(item.actor, job.id, {})).items.map(row => row.status)).toEqual(['UPDATED','AWAITING_CONFIRMATION']);
   });
   it('writes a process fact through the real public transactional target boundary', async () => {
     const item = await fixture(), receiptId = await received(item, [{ description: '真实目标事务' }]);
