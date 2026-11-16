@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Descriptions, Table } from 'antd';
+import { Alert, Descriptions, Table, Tag } from 'antd';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy } from '../../layouts/UnsavedChanges';
 import { isAborted, useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
+import { Link } from 'react-router-dom';
 
 export type Rule = components['schemas']['IngestionRuleDto'];
 export type Endpoint = components['schemas']['IngestionEndpointDto'];
@@ -17,13 +18,15 @@ export function useIngestionText() {
 }
 export function label(value: string, english: boolean) {
   const labels: Record<string, [string, string]> = {
-    SUPPLIER: ['供应商档案', 'Supplier profiles'], CUSTOMER: ['客户档案', 'Customer profiles'], MATERIAL: ['物料主数据', 'Material master'], COMPONENT: ['组件项目映射', 'Component mapping'],
+    SUPPLIER: ['供应商档案', 'Supplier profiles'], CUSTOMER: ['客户档案', 'Customer profiles'], MATERIAL: ['物料主数据', 'Material master'], COMPONENT: ['组件项目映射', 'Component mapping'], PROCESS_DEFECT: ['制程不良品台账', 'Process defect ledger'],
     INSERT_ONLY: ['仅新增，已有跳过', 'Insert only'], UPDATE: ['新增并更新指定字段', 'Insert and update selected fields'], CONFIRM: ['新增，变更人工确认', 'Insert and confirm changes'],
     PENDING: ['待处理', 'Pending'], PAUSED: ['已暂停', 'Paused'], BLOCKED: ['已阻塞', 'Blocked'], COMPLETED: ['已完成', 'Completed'], CANCELLED: ['已取消', 'Cancelled'],
     INSERTED: ['已新增', 'Inserted'], UPDATED: ['已更新', 'Updated'], UNCHANGED: ['无变化', 'Unchanged'], FILTERED: ['筛选跳过', 'Filtered'], EXISTING_SKIPPED: ['已有跳过', 'Existing skipped'],
     AWAITING_CONFIRMATION: ['待确认', 'Awaiting confirmation'], VALIDATION_FAILED: ['校验失败', 'Validation failed'], PROCESSING_FAILED: ['处理失败', 'Processing failed'], SKIPPED: ['已跳过', 'Skipped'],
     AUTO: ['自动触发', 'Automatic'], SINGLE: ['单条导入', 'Single import'], HISTORY: ['历史导入', 'Historical import'],
     code: ['编码', 'Code'], name: ['名称', 'Name'], contactName: ['联系人', 'Contact'], contactEmail: ['联系邮箱', 'Contact email'],
+    registrationIssues: ['来源字段问题', 'Source field issues'], aiDescription: ['AI整理输入与配置', 'AI description input and configuration'],
+    occurredAt: ['发生时间', 'Occurrence time'], productCode: ['成品编码', 'Product code'], workOrderCode: ['工单号', 'Work order'], lineCode: ['生产线编码', 'Line code'], lineName: ['生产线名称', 'Line name'], operationCode: ['工序编码', 'Operation code'], operationName: ['工序名称', 'Operation name'], traceCode: ['追溯码', 'Trace code'], description: ['不良描述', 'Defect description'], externalRecordKey: ['来源明细编号', 'Source detail ID'], sourceObservedAt: ['来源更新时间', 'Source updated time'],
     PAUSE: ['暂停', 'Pause'], RESUME: ['恢复', 'Resume'], CANCEL: ['取消任务', 'Cancel job'], RETRY: ['重试处理', 'Retry processing'],
   };
   return labels[value]?.[english ? 1 : 0] ?? value;
@@ -115,11 +118,21 @@ export function useIngestionPage<Data extends { items: unknown[]; total: number;
 export function IngestionFields({ fields, differences }: { fields?: Record<string, string>; differences?: components['schemas']['IngestionDifferenceDto'][] }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
   return <div className="qms-ingestion-section">
-    {fields && <Descriptions size="small" bordered column={1} items={Object.entries(fields).map(([field, value]) => ({ key: field, label: label(field, english), children: value }))} />}
+    {fields && <Descriptions size="small" bordered column={1} items={Object.entries(fields).map(([field, value]) => ({ key: field, label: label(field, english), children: <span className="qms-ingestion-field-value">{value}</span> }))} />}
     {!!differences?.length && <Table size="small" rowKey="field" pagination={false} dataSource={differences} scroll={{ x: 480 }} columns={[
       { key: 'field', title: text('字段', 'Field'), dataIndex: 'field', render: value => label(value, english) },
       { key: 'before', title: text('原值', 'Before'), dataIndex: 'before', render: value => value ?? '—' },
       { key: 'after', title: text('新值', 'After'), dataIndex: 'after', render: value => value ?? '—' },
     ]} />}
+  </div>;
+}
+
+export function ProcessIngestionResult({ result, organizationId }: { result: Pick<components['schemas']['IngestionItemDto'], 'targetId' | 'pendingCompletion' | 'pendingConfiguration' | 'defectQuantity'> | Pick<components['schemas']['IngestionPreviewDto'], 'targetId' | 'pendingCompletion' | 'pendingConfiguration' | 'defectQuantity'>; organizationId: string }) {
+  const text = useIngestionText();
+  return <div className="qms-ingestion-counts">
+    {result.targetId ? <Link to={`/app/process-quality?organizationId=${encodeURIComponent(organizationId)}&defectId=${encodeURIComponent(result.targetId)}`}>{text('查看台账', 'View ledger')}</Link> : null}
+    {result.pendingCompletion ? <Tag color="warning">{text('待完善', 'Incomplete facts')}</Tag> : null}
+    {result.pendingConfiguration ? <Tag color="processing">{text('待补配', 'Pending configuration')}</Tag> : null}
+    {result.defectQuantity != null ? <span>{text('不良数量', 'Defect quantity')}: {result.defectQuantity}</span> : null}
   </div>;
 }

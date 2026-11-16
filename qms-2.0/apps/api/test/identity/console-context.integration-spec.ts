@@ -77,9 +77,12 @@ describe('REQ0032 console context with real HTTP sessions and PostgreSQL authori
     await grant(administrator.user.id, administrator.home.id, ['platform:admin']);
     const context = await get(administrator.cookie).expect(200);
     expect(context.body.modules).toContainEqual(expect.objectContaining({ key: 'api-ingestion', scope: 'TARGET', organizationId: administrator.home.id, permissions: expect.arrayContaining(['ingestion:read', 'ingestion:manage', 'ingestion:run']) }));
+    expect(context.body.modules).toContainEqual(expect.objectContaining({ key: 'configuration', permissions: expect.arrayContaining(['configuration:read', 'configuration:manage']) }));
+    await request(app.getHttpServer()).get('/api/v1/process-quality/operation-sectors').set('Cookie', administrator.cookie).expect(200);
     const ordinary = await fixture();
     await get(ordinary.cookie).expect(403);
     await request(app.getHttpServer()).get('/api/v1/admin/integrations/ingestion/rules').set('Cookie', ordinary.cookie).expect(403);
+    await request(app.getHttpServer()).get('/api/v1/process-quality/operation-sectors').set('Cookie', ordinary.cookie).expect(403);
   });
   it('allows workflow-only personnel at their actual session home without user capabilities', async () => {
     const f = await fixture();

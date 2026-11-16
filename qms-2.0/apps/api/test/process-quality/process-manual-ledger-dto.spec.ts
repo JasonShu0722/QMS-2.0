@@ -7,18 +7,22 @@ const options = { whitelist: true, forbidNonWhitelisted: true };
 const id = '904385a2-4a34-4d73-a8bd-e670d332dbd9';
 
 describe('manual process ledger DTO boundaries', () => {
-  it('allows genuinely unknown facts and an empty description without guessing defaults', async () => {
-    const body = plainToInstance(dto.CreateProcessDefectDto, { description: '', responsibilityCategory: null, defectTypeCode: null, defectQuantity: null, occurredAt: null });
+  it('allows partial maintenance of unknown facts while new manual registration requires four facts', async () => {
+    const body = plainToInstance(dto.UpdateProcessDefectDto, { expectedVersion: 1, description: '', responsibilityCategory: null, defectTypeCode: null, defectQuantity: null, occurredAt: null });
     expect(await validate(body, options)).toEqual([]);
     expect(body.defectQuantity).toBeNull();
     expect(body.occurredAt).toBeNull();
-    expect(await validate(plainToInstance(dto.CreateProcessDefectDto, {}), options)).toEqual([]);
+    expect((await validate(plainToInstance(dto.CreateProcessDefectDto, {}), options)).length).toBeGreaterThan(0);
+    const manual = plainToInstance(dto.CreateProcessDefectDto, { description: '不良', occurredAt: '2026-11-16T00:30:00Z', productCode: '00001', traceCode: 'TRACE' });
+    expect(await validate(manual, options)).toEqual([]);
+    expect(manual.defectQuantity).toBe(1);
   });
 
   it('accepts FALSE_POSITIVE and multiple optional material groups but not forged verification', async () => {
-    expect(await validate(plainToInstance(dto.CreateProcessDefectDto, { description: '', responsibilityCategory: 'FALSE_POSITIVE', materials: [{}, { materialCode: 'M1', materialBatch: 'MB', sqeUserId: id }] }), options)).toEqual([]);
+    const facts = { description: '不良', occurredAt: '2026-11-16T00:30:00Z', productCode: '00001', traceCode: 'TRACE' };
+    expect(await validate(plainToInstance(dto.CreateProcessDefectDto, { ...facts, responsibilityCategory: 'FALSE_POSITIVE', materials: [{}, { materialCode: 'M1', materialBatch: 'MB', sqeUserId: id }] }), options)).toEqual([]);
     for (const body of [{ materials: [{ verification: 'CONFIRMED_DEFECT' }] }, { materials: [null] }, { materials: [{ sqeUserId: 'SQE name' }] }, { materials: [{ unit: 'pcs' }] }, { ledgerStatus: 'CLOSED' }, { description: null }, { defectQuantity: 0 }, { defectQuantity: 2147483648 }]) {
-      expect((await validate(plainToInstance(dto.CreateProcessDefectDto, body), options)).length).toBeGreaterThan(0);
+      expect((await validate(plainToInstance(dto.CreateProcessDefectDto, { ...facts, ...body }), options)).length).toBeGreaterThan(0);
     }
   });
 

@@ -216,7 +216,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "72ed08c17b1e07533e0f1a95cad66ff332bc12670d9ec640bd6ec0ba389db195"
+            "sha256": "5c1ca0fc303bf04bc3362994d9c0aae6661bcc633dcd4404530d1ea98fa2f601"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",
@@ -534,7 +534,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "453afb60b77699460a2248aecca659c319cce5e89d2b2689d9ce77fed98e7653"
+            "sha256": "e0099e02b6e98611915b402f6cc6eab970b250446304936570cdd2f9788fa346"
           },
           {
             "path": "apps/web/component-project-preview.html",
@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "f799b59637eb15fb7d5c2ef39003c87f656fa4667e596160b69459c9cc7153b7"
+            "sha256": "bfef60694bbe2735d4299aa01ac736e8a5da276d31638e75fb4370b366883812"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "86aadbe9665e5cb42479ec9e9d1db6b2b4464a24f104db3eae4367c9e51bdb03"
+            "sha256": "b3d245e04f5fb159b46c1442ee603c5ff3f79de732b074655251e9b95adc603b"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
@@ -714,7 +714,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
-            "sha256": "231aabff5c5bdd1a8bf73482938627c602b4359e96e4abdf4c609fd1191b6bb9"
+            "sha256": "b3aa38d7298f91b0badd011e089cf93a63e94313e4817dd835df7e9be9385fe1"
           },
           {
             "path": "apps/web/src/ui/ledger/model.test.ts",
@@ -1052,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "6b8f37d20fd7fb2a8e723e70ca4974f49d7ea06dfe8fabacd042430de8f0c4b7"
+            "sha256": "9058fc3ab6cce0409c2de21237ce2c8ce910846788a5cc3cac433834ef6483c6"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1090,7 +1090,7 @@
           },
           {
             "path": "apps/api/test/operations/data-protection.acceptance.mjs",
-            "sha256": "04ba32a2c384f92894a380059fb81822991a7df7d56b2075d198e22e7adc550f"
+            "sha256": "4973fe5442bc381601f357794192c30880230a075a04bb36578c1b7c9ff6dac5"
           },
           {
             "path": "apps/api/test/operations/operations-alerts.acceptance.mjs",
@@ -1200,7 +1200,7 @@
           },
           {
             "path": "docs/DATA-PROTECTION.md",
-            "sha256": "72ed08c17b1e07533e0f1a95cad66ff332bc12670d9ec640bd6ec0ba389db195"
+            "sha256": "5c1ca0fc303bf04bc3362994d9c0aae6661bcc633dcd4404530d1ea98fa2f601"
           },
           {
             "path": "docs/EMAIL-RECOVERY.md",

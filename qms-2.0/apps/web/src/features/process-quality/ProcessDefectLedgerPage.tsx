@@ -11,6 +11,7 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
+import { ProcessAiDescription } from './ProcessAiDescription';
 import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
 import { categoryLabels, categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, verificationLabels } from './process-ledger';
 
@@ -80,6 +81,8 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const [actionError, setActionError] = useState<unknown>();
   const [action, setAction] = useState<{ mode: 'close' | 'reopen' | 'verification'; record: Defect; materialId?: string }>();
   const [ledgerStatus, setLedgerStatus] = useState<Defect['ledgerStatus']>();
+  const [pendingCompletion, setPendingCompletion] = useState(false);
+  const [pendingConfiguration, setPendingConfiguration] = useState(false);
   const alive = useRef(true);
   const detailRequest = useRef(0);
   const detailController = useRef<AbortController>(undefined);
@@ -170,13 +173,15 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search) query.set('search', search);
     if (ledgerStatus) query.set('ledgerStatus', ledgerStatus);
+    if (pendingCompletion) query.set('pendingCompletion', 'true');
+    if (pendingConfiguration) query.set('pendingConfiguration', 'true');
     void apiRequest<DefectPage>(scoped(`/api/v1/process-quality/defects?${query}`), { signal: controller.signal }).then((value) => {
       if (!controller.signal.aborted) setResult(value);
     }).catch((cause) => {
       if (!controller.signal.aborted) { setResult(undefined); setListError(cause); if (denied(cause)) revoke(cause); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, pageSize, search, revision, ledgerStatus, accessLost, organizationId]);
+  }, [page, pageSize, search, revision, ledgerStatus, pendingCompletion, pendingConfiguration, accessLost, organizationId]);
 
   async function openDetail(id: string) {
     detailController.current?.abort();
@@ -252,9 +257,23 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const columns: TableColumnsType<Defect> = [
     { title: '选择', key: 'select', width: 64, render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={(event) => { const checked = event.target.checked; if (issueDirty) requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(record, checked); }); else toggle(record, checked); }} /> },
     { title: '发生时间', key: 'occurredAt', dataIndex: 'occurredAt', width: 165, render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
-    { title: '失效现象', key: 'description', dataIndex: 'description', width: 260, ellipsis: true, render: (value: string, record) => <Button type="link" className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value}</Button> },
+    { title: '班次', key: 'shift', dataIndex: 'shift', width: 80, render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
+    { title: '项目号', key: 'project', width: 130, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
+    { title: '细分类型', key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, render: value => value ?? '未确认' },
+    { title: '新品/量产', key: 'projectStage', dataIndex: 'projectStage', width: 105, render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+    { title: '生产线名称', key: 'lineName', dataIndex: 'lineName', width: 150, ellipsis: true },
+    { title: '工序名称', key: 'operationName', dataIndex: 'operationName', width: 150, ellipsis: true },
+    { title: '板块', key: 'operationSector', dataIndex: 'operationSector', width: 120, render: value => value ?? '未确认' },
+    { title: '追溯码', key: 'traceCode', dataIndex: 'traceCode', width: 170, ellipsis: true },
+    { title: '不良描述', key: 'description', dataIndex: 'description', width: 260, ellipsis: true, render: (value: string, record) => <Space><Button type="link" className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></Space> },
     { title: '类型', key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115 },
-    { title: '数量', key: 'defectQuantity', dataIndex: 'defectQuantity', width: 75 },
+    { title: '不良数量', key: 'defectQuantity', dataIndex: 'defectQuantity', width: 100 },
+    { title: '成品编码', key: 'productCode', dataIndex: 'productCode', width: 150 },
+    { title: '工单号', key: 'workOrderCode', dataIndex: 'workOrderCode', width: 150 },
+    { title: '生产线编码', key: 'lineCode', dataIndex: 'lineCode', width: 130 },
+    { title: '工序编码', key: 'operationCode', dataIndex: 'operationCode', width: 130 },
+    { title: '登记人', key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
+    { title: '完善情况', key: 'completion', width: 170, render: (_, record) => <Space wrap>{record.pendingCompletion ? <Tag color="warning">待完善</Tag> : null}{record.pendingConfiguration ? <Tag color="processing">待补配</Tag> : null}{!record.pendingCompletion && !record.pendingConfiguration ? '—' : null}</Space> },
     { title: '责任类别', key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
     { title: '状态', key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
@@ -273,6 +292,8 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       <Space className="process-quality-toolbar" wrap>
         <Input.Search aria-label="搜索制程不良" placeholder="搜索现象、批次或工单" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
         <Select aria-label="台账状态" placeholder="全部台账状态" allowClear value={ledgerStatus} options={[{ value: 'FOLLOWING', label: '跟进中' }, { value: 'CLOSED', label: '已关闭' }]} onChange={value => { setPage(1); setLedgerStatus(value); }} />
+        <Checkbox checked={pendingCompletion} onChange={event => { setPage(1); setPendingCompletion(event.target.checked); }}>仅待完善</Checkbox>
+        <Checkbox checked={pendingConfiguration} onChange={event => { setPage(1); setPendingConfiguration(event.target.checked); }}>仅待补配</Checkbox>
         {canIssue ? <Button type="primary" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起内部8D</Button> : null}
         {canCopy ? <Button disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setCopyOpen(true))}>复制为供应商草稿</Button> : null}
         {canWrite ? <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button> : null}
@@ -286,14 +307,24 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1500 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
+      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'lineName', 'operationName', 'operationSector', 'traceCode', 'description', 'defectQuantity', 'actions']} rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
         <Descriptions bordered size="small" column={1} items={[
           { key: 'type', label: '失效类型', children: detail.defectTypeCode },
-          { key: 'description', label: '失效现象', children: detail.description },
+          { key: 'description', label: '不良描述', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
           { key: 'quantity', label: '数量', children: detail.defectQuantity },
+          { key: 'occurredAt', label: '发生时间', children: detail.occurredAt ? new Date(detail.occurredAt).toLocaleString('zh-CN') : '未知' },
+          { key: 'shift', label: '班次', children: detail.shift === 'DAY' ? '白班' : detail.shift === 'NIGHT' ? '夜班' : '未知' },
+          { key: 'project', label: '项目号', children: detail.componentProject?.project?.code ?? '未确认' },
+          { key: 'stage', label: '新品/量产', children: detail.projectStage === 'NEW_PRODUCT' ? '新品' : detail.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+          { key: 'subcategory', label: '细分类型', children: detail.productSubcategory ?? '未确认' },
+          { key: 'sector', label: '板块', children: detail.operationSector ?? '未确认' },
+          { key: 'lineName', label: '生产线名称', children: detail.lineName ?? '—' },
+          { key: 'operationName', label: '工序名称', children: detail.operationName ?? '—' },
+          { key: 'registrant', label: '登记人', children: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
+          { key: 'completion', label: '完善情况', children: <Space>{detail.pendingCompletion ? <Tag>待完善</Tag> : null}{detail.pendingConfiguration ? <Tag>待补配</Tag> : null}<MappingHint record={detail} /></Space> },
           { key: 'responsibility', label: '责任类别', children: responsibility(detail.responsibilityCategory) },
           { key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' },
           { key: 'trace', label: '条码', children: detail.traceCode ?? '—' },
@@ -302,9 +333,10 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
           { key: 'batch', label: '批次 / 工单', children: `${detail.batchCode ?? '—'} / ${detail.workOrderCode ?? '—'}` },
           { key: 'operation', label: '工序 / 产线', children: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
           { key: 'product', label: '产品 / 物料', children: `${detail.productCode ?? '—'} / ${detail.materialCode ?? '—'}` },
-          { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'MANUAL' ? '人工录入' : detail.sourceKind}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem} · 待核验</Tag> : null}</Space> },
+          { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
           { key: 'version', label: '记录版本', children: detail.version },
         ]} />
+        <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} onSaved={saved} onDenied={revoke} />
         <Typography.Title level={4}>已关联问题</Typography.Title>
         <List dataSource={linked} locale={{ emptyText: <Empty description="尚未关联正式问题" /> }} renderItem={(problem) => <List.Item><Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link></List.Item>} />
         <Typography.Title level={4}>可用证据</Typography.Title>

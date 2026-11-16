@@ -11,6 +11,7 @@ export type LedgerTableProps<RecordType extends object> = TableProps<RecordType>
   resizableSelection?: boolean;
   toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
+  defaultVisibleColumnKeys?: string[];
   onColumnOrderChange?: (keys: string[]) => void; onVisibleColumnKeysChange?: (keys: string[]) => void;
 };
 type Column<RecordType extends object> = NonNullable<TableProps<RecordType>['columns']>[number];
@@ -28,7 +29,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -42,7 +43,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   leaves.forEach(column => { const key = columnKey(column); if (key) counts.set(key, (counts.get(key) ?? 0) + 1); });
   const configurable = leaves.filter(column => { const key = columnKey(column); return key && counts.get(key) === 1 && !column.hidden; }).slice(0, 200);
   const keys = configurable.map(column => columnKey(column)!);
-  const normalize = (input: unknown) => normalizePreferences(input, keys, resizableSelection);
+  const normalize = (input: unknown) => normalizePreferences(input === undefined && defaultVisibleColumnKeys !== undefined ? { order: keys, visible: defaultVisibleColumnKeys } : input, keys, resizableSelection);
   const [saved, save] = usePreference(storageKey, scope.sessionScope, normalize, stateKey);
   const defaultFixed = Object.fromEntries(configurable.map(column => [columnKey(column)!, column.fixed === true ? 'left' : column.fixed || false])) as Record<string, Fixed>;
   const order = columnOrder === undefined ? saved.order : normalizePreferences({ order: columnOrder }, keys).order;
@@ -94,7 +95,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   function resetAll() {
     commit(normalize(undefined));
     if (columnOrder !== undefined) onColumnOrderChange?.(keys);
-    if (visibleColumnKeys !== undefined) onVisibleColumnKeysChange?.(keys);
+    if (visibleColumnKeys !== undefined) onVisibleColumnKeysChange?.(normalize(undefined).visible);
   }
   function begin(event: React.PointerEvent<HTMLElement>, key: string, kind: Drag['kind']) {
     event.stopPropagation(); event.preventDefault();

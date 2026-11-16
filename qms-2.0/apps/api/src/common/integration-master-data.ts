@@ -1,6 +1,7 @@
 import type { AdminActor, AdminTransaction } from './security/admin-mutation.service.js';
 
-export type IntegrationTarget = 'SUPPLIER' | 'CUSTOMER' | 'MATERIAL' | 'COMPONENT';
+export type MasterDataIntegrationTarget = 'SUPPLIER' | 'CUSTOMER' | 'MATERIAL' | 'COMPONENT';
+export type IntegrationTarget = MasterDataIntegrationTarget | 'PROCESS_DEFECT';
 
 export type IntegrationFields = {
   code: string;
@@ -9,7 +10,24 @@ export type IntegrationFields = {
   contactEmail?: string;
 };
 
-export type IntegrationRecord = { id: string; version: number; values: IntegrationFields };
+export type ProcessDefectIntegrationFields = {
+  occurredAt?: string;
+  productCode?: string;
+  workOrderCode?: string;
+  lineCode?: string;
+  lineName?: string;
+  operationCode?: string;
+  operationName?: string;
+  traceCode?: string;
+  description?: string;
+  externalRecordKey?: string;
+  sourceObservedAt?: string;
+  receiptId: string;
+  rowIndex: number;
+  issues?: string[];
+};
+export type IntegrationRecord<Fields = IntegrationFields> = { id: string; version: number; values: Fields };
+export type ProcessDefectIntegrationRecord = IntegrationRecord<ProcessDefectIntegrationFields> & { protectedFields?: string[]; pendingCompletion?: boolean; pendingConfiguration?: boolean };
 export type IntegrationExpected = Pick<IntegrationRecord, 'id' | 'version'> | null;
 
 export interface IntegrationMasterDataAdapter {

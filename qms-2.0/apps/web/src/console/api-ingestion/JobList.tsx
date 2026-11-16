@@ -5,7 +5,7 @@ import type { components } from '@qms/contracts';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { isAborted, useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
-import { IngestionError, IngestionFields, ingestionIssue, ingestionPath, label, useIngestionMutation, useIngestionPage, useIngestionText, type Endpoint, type Item, type Job } from './ingestion-ui';
+import { IngestionError, IngestionFields, ProcessIngestionResult, ingestionIssue, ingestionPath, label, useIngestionMutation, useIngestionPage, useIngestionText, type Endpoint, type Item, type Job } from './ingestion-ui';
 
 export function JobList({ scope, endpoints, receiptId, clearReceipt, canReceipts }: { scope: IntegrationScope; endpoints: Endpoint[]; receiptId?: string; clearReceipt: () => void; canReceipts: boolean }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
@@ -30,7 +30,7 @@ export function JobList({ scope, endpoints, receiptId, clearReceipt, canReceipts
 }
 function JobCounts({ job }: { job: Job }) {
   const text = useIngestionText();
-  return <div className="qms-ingestion-counts">{job.expansionComplete === false && job.status !== 'CANCELLED' && job.status !== 'COMPLETED' && <span>{text('准备中', 'Preparing')}</span>}{job.planningPreviewId && <span>{text('接收准备进度', 'Receiving preparation')} {job.planned}/{job.receiptCount}</span>}<span>{text('总数', 'Total')} {job.total ?? text('后台统计', 'Counting in background')}</span><span>{text('待处理', 'Pending')} {job.pending}</span><span>{text('成功', 'Succeeded')} {job.succeeded}</span><span>{text('跳过', 'Skipped')} {job.skipped}</span><span>{text('失败', 'Failed')} {job.failed}</span><span>{text('待确认', 'To confirm')} {job.awaitingConfirmation}</span></div>;
+  return <div className="qms-ingestion-counts">{job.expansionComplete === false && job.status !== 'CANCELLED' && job.status !== 'COMPLETED' && <span>{text('准备中', 'Preparing')}</span>}{job.planningPreviewId && <span>{text('接收准备进度', 'Receiving preparation')} {job.planned}/{job.receiptCount}</span>}<span>{job.target === 'PROCESS_DEFECT' ? text('数据条数', 'Rows') : text('总数', 'Total')} {job.total ?? text('后台统计', 'Counting in background')}</span><span>{text('待处理', 'Pending')} {job.pending}</span><span>{text('成功', 'Succeeded')} {job.succeeded}</span><span>{text('跳过', 'Skipped')} {job.skipped}</span><span>{text('失败', 'Failed')} {job.failed}</span><span>{text('待确认', 'To confirm')} {job.awaitingConfirmation}</span></div>;
 }
 function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }: { scope: IntegrationScope; initial: Job; endpointName: string; close: () => void; changed: () => void; canReceipts: boolean }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en'; const requestLeave = useNavigationGuard();
@@ -57,6 +57,7 @@ function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }
     { key: 'status', title: text('处理结果', 'Result'), width: 160, render: (_, item) => <>{label(item.status, english)}{item.duplicateOfItemId && <small>{text('已关联既有待确认项', 'Linked to an existing confirmation')}</small>}</> },
     { key: 'error', title: text('错误原因', 'Error'), width: 280, render: (_, item) => item.errorCode || item.errorField ? <>{item.errorCode ? ingestionIssue(item.errorCode, english) : '—'}{item.errorField && <small>{text('字段', 'Field')}: <code>{item.errorField}</code></small>}</> : '—' },
     { key: 'version', title: text('版本', 'Version'), width: 80, dataIndex: 'version' },
+    ...(initial.target === 'PROCESS_DEFECT' ? [{ key: 'ledger', title: text('制程台账', 'Process ledger'), width: 240, render: (_: unknown, item: Item) => <ProcessIngestionResult result={item} organizationId={scope.organizationId} /> }] : []),
     { key: 'actions', title: text('操作', 'Actions'), width: 100, render: (_, item) => <Button size="small" disabled={!canReceipts} title={!canReceipts ? text('需要接收正文查看权限', 'Receiving payload permission is required') : undefined} onClick={() => { if (canReceipts) setSelected(item); }}>{text('查看差异', 'View differences')}</Button> },
   ];
   return <Modal open title={`${endpointName} · #${initial.sequence}`} width={1040} footer={null} destroyOnHidden mask={{ closable: false }} onCancel={() => requestLeave(close, true)}>

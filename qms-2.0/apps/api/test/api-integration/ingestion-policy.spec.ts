@@ -4,6 +4,40 @@ import { evaluateIngestionRow, normalizeIngestionRule } from '../../src/modules/
 const rule = { name: '供应商', endpointId: '550e8400-e29b-41d4-a716-446655440000', target: 'SUPPLIER', enabled: true, match: 'ALL', conditions: [{ path: 'kind', operator: 'EQ', value: 'supplier' }], mapping: { code: 'code', name: 'name', contactName: 'contact.name' }, mode: 'UPDATE', updateFields: ['name', 'contactName'] };
 
 describe('API ingestion rule policy', () => {
+  const processRule = { ...rule, target: 'PROCESS_DEFECT', conditions: [], mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace' }, updateFields: ['description', 'productCode'], sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'test', label: '测试：' }, { path: 'zero' }, { path: 'flag', label: '结果：' }, { path: 'empty', label: '' }], separator: '\n' } };
+  it('maps process facts without invented master-data keys and composes scalar description in order', () => {
+    expect(evaluateIngestionRow(normalizeIngestionRule(processRule), { id: '001', time: '2026-11-16T08:30:00', product: '00002', trace: 'T', test: '失败', zero: 0, flag: false, empty: null })).toMatchObject({ matched: true, fields: { externalRecordKey: '001', occurredAt: '2026-11-16T00:30:00.000Z', productCode: '00002', traceCode: 'T', description: '测试：失败\n0\n结果：false' }, sourceUpdatedAt: null });
+  });
+  it('keeps process rows bookable when invalid or missing facts need completion', () => {
+    const result = evaluateIngestionRow(normalizeIngestionRule(processRule), { time: '2026-02-30T00:00:00', product: 2, test: { secret: 'raw' }, zero: null, flag: null });
+    expect(result).toMatchObject({ matched: true, fields: { issues: expect.arrayContaining(['occurredAt:INVALID', 'productCode:TYPE', 'description:TYPE']) } });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(result).not.toHaveProperty('fields.occurredAt');
+  });
+  it('rejects derived field mappings, mixed description modes and unsupported process update fields', () => {
+    for (const configuration of [
+      { ...processRule, mapping: { projectCode: 'project' } },
+      { ...processRule, mapping: { description: 'description' } },
+      { ...processRule, updateFields: ['externalRecordKey'] },
+      { ...processRule, sourceTimezone: 'not/a-zone' },
+      { ...rule, descriptionComposition: processRule.descriptionComposition },
+    ]) expect(() => normalizeIngestionRule(configuration)).toThrow('INGESTION_RULE_INVALID');
+  });
+  it('handles fractional timezone offsets and flags DST gaps or ambiguous wall times for completion', () => {
+    expect(evaluateIngestionRow(normalizeIngestionRule({ ...processRule, sourceTimezone: 'Asia/Kathmandu' }), { time: '2026-11-16T08:30:00' })).toMatchObject({ fields: { occurredAt: '2026-11-16T02:45:00.000Z' } });
+    for (const time of ['2026-03-08T02:30:00', '2026-11-01T01:30:00']) {
+      const result = evaluateIngestionRow(normalizeIngestionRule({ ...processRule, sourceTimezone: 'America/New_York' }), { time });
+      expect(result).toMatchObject({ fields: { issues: expect.arrayContaining(['occurredAt:INVALID']) } });
+      expect(result).not.toHaveProperty('fields.occurredAt');
+    }
+  });
+  it('extracts single-field scalar descriptions and keeps overlong compositions as completion issues without truncating', () => {
+    const single = normalizeIngestionRule({ ...processRule, descriptionComposition: undefined, mapping: { description: 'value' } });
+    for (const value of [0, false]) expect(evaluateIngestionRow(single, { value })).toMatchObject({ fields: { description: String(value) } });
+    const combined = evaluateIngestionRow(normalizeIngestionRule(processRule), { test: '长'.repeat(10001) });
+    expect(combined).toMatchObject({ fields: { issues: expect.arrayContaining(['description:INVALID']) } });
+    expect(combined).not.toHaveProperty('fields.description');
+  });
   it('preserves leading zeroes and omits empty optional fields', () => {
     expect(evaluateIngestionRow(normalizeIngestionRule(rule), { kind: 'supplier', code: ' 001 ', name: ' Name ', contact: { name: null } })).toEqual({ matched: true, fields: { code: '001', name: 'Name' }, sourceUpdatedAt: null });
   });

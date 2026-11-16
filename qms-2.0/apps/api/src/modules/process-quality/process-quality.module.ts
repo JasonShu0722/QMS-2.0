@@ -26,15 +26,20 @@ import { ProcessEightDTaskController } from './process-eight-d-task.controller.j
 import { ProcessEightDReminderService } from './process-eight-d-reminder.service.js';
 import { ProcessEightDReportService } from './process-eight-d-report.service.js';
 import { ProcessEightDReportController } from './process-eight-d-report.controller.js';
+import { ProcessDefectCompletionService } from './process-defect-completion.service.js';
+import { ProcessDefectIngestionAdapter } from './process-defect-ingestion.adapter.js';
+import { ProcessOperationSectorService } from './process-operation-sector.service.js';
+import { ProcessOperationSectorController } from './process-operation-sector.controller.js';
 
 @Module({
   imports: [AdminMutationModule, AuditLogModule, FileManagementModule, ProblemIndexModule, WorkflowModule,
     PlatformConfigurationModule, SupplierQualityModule, OrganizationModule, ProblemReadModule, TaskNotificationModule],
-  controllers: [ProcessQualityController, ProcessEightDTaskController, ProcessEightDReportController, ProcessEightDController],
+  controllers: [ProcessQualityController, ProcessOperationSectorController, ProcessEightDTaskController, ProcessEightDReportController, ProcessEightDController],
   providers: [ProcessDefectLedgerService, ProcessIssueService, ProcessProductionService, ProcessShipmentReportService,
     ProcessDefectFileResourceAdapter, ProcessShipmentReportFileResourceAdapter, ProcessEightDService, ProcessEightDClosureAdapter,
-    ProcessEightDReadAdapter, ProcessEightDFileAdapter, ProcessEightDTaskService, ProcessEightDReminderService, ProcessEightDReportService],
+    ProcessEightDReadAdapter, ProcessEightDFileAdapter, ProcessEightDTaskService, ProcessEightDReminderService, ProcessEightDReportService,
+    ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService],
   exports: [ProcessDefectLedgerService, ProcessIssueService, ProcessProductionService, ProcessShipmentReportService,
-    ProcessEightDService, ProcessEightDReminderService],
+    ProcessEightDService, ProcessEightDReminderService, ProcessDefectCompletionService, ProcessDefectIngestionAdapter],
 })
 export class ProcessQualityModule {}

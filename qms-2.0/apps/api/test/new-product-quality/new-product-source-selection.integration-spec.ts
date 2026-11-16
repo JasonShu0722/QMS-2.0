@@ -70,7 +70,7 @@ describe('new product process source snapshots on PostgreSQL', () => {
   ])('persists the original source time and quantity: %j', async ({ occurredAt, defectQuantity }) => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
     const project = await mappedProject(code, 'Source regression');
-    const defect = await defects.create(actor, { description: 'Source regression', productCode: code, projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
+    const defect = await prisma.processDefect.create({ data: { organizationId, createdById: actor.id, updatedById: actor.id, description: 'Source regression', productCode: code, projectCode: code, occurredAt, defectQuantity } });
     const selection = await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const expected = { id: defect.id, occurredAt: occurredAt?.toISOString() ?? null, defectQuantity, version: defect.version };
     expect(selection.source_snapshot).toMatchObject(expected);
@@ -98,7 +98,7 @@ describe('new product process source snapshots on PostgreSQL', () => {
   ])('denies source-bearing project detail after process read revocation: %j', async ({ occurredAt, defectQuantity }) => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
     const project = await mappedProject(code, 'Source read scope');
-    const defect = await defects.create(actor, { description: 'Protected source', productCode: code, projectCode: code, occurredAt, defectQuantity }, randomUUID(), randomUUID());
+    const defect = await prisma.processDefect.create({ data: { organizationId, createdById: actor.id, updatedById: actor.id, description: 'Protected source', productCode: code, projectCode: code, occurredAt, defectQuantity } });
     const selection = await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const expected = [{ id: selection.id, source_version: selection.source_version, source_snapshot: selection.source_snapshot }];
     expect((await service.projectDetail(actor, project.id)).selected_defects).toMatchObject(expected);
@@ -117,7 +117,7 @@ describe('new product process source snapshots on PostgreSQL', () => {
   it('denies another real organization even when the actor has both read permissions at home', async () => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
     const project = await mappedProject(code, 'Organization scope');
-    const defect = await defects.create(actor, { description: 'Organization source', productCode: code, projectCode: code }, randomUUID(), randomUUID());
+    const defect = await defects.create(actor, { description: 'Organization source', productCode: code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const otherOrganizationId = randomUUID();
     const otherUserId = randomUUID();

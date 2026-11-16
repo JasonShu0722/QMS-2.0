@@ -39,13 +39,13 @@
       "fact": "当前备份工具对 dump 与对象累计设置 256 MiB 上限，对序列化包设置 512 MiB 上限。2026-10-24 重新读取实现确认 dump 与全部对象版本原始字节分别受256 MiB限制，JSON/Base64序列化包受512 MiB限制，读取密文包上限另加33字节封装；5项静态容量守卫断言及现有5项对象引用/恢复映射测试通过，但没有执行接近上限的大包备份或真实恢复。",
       "impact": "Base64和JSON开销使序列化包可能先于两个原始字节上限耗尽；超限仍会失败，阈值不是内存峰值保证，也不是大容量在线备份方案。生产数据量与容量余量未核实。",
       "trigger": "试点容量规划、实际备份接近任一上限或数据保护来源变化时提前复核；无新触发时30天复核。",
-      "nextAction": "在获准的一次性环境测量dump、对象全部版本及序列化包规模，评估有界扩展/分段方案并执行真实PostgreSQL/对象存储恢复；本轮不运行备份CLI、不连接预览或生产，保留open。命令与边界见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。",
-      "reviewedOn": "2026-10-24",
+      "nextAction": "在获准的一次性环境测量dump、对象全部版本及序列化包规模，评估有界扩展/分段方案并执行真实PostgreSQL/对象存储恢复；历史边界见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。2026-11-17 REQ-0038复核：恢复后默认停用AI连接并推进版本，小样本真实PostgreSQL及版本化对象存储恢复8/8通过；容量上限未变，未执行近上限或10GiB恢复，不连接预览或生产，保持open与原reviewDue。",
+      "reviewedOn": "2026-11-16",
       "reviewDue": "2026-11-23",
       "sources": [
         {
           "path": "apps/api/scripts/data-protection.mjs",
-          "sha256": "20d663ade8212d4e37b987cd3a1c89a726f2b2423edaa3e78a7cee1c84ff4899"
+          "sha256": "a48bbb575358a37ca4a6418ee5b7bd831a8e20ec7d5fba6af07c35016c2c7651"
         },
         {
           "path": "apps/api/scripts/data-protection-objects.mjs",

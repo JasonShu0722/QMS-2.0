@@ -149,6 +149,7 @@ async function restore(path) {
     const migrations = (await connection.query('SELECT migration_name, checksum FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name')).rows;
     if (JSON.stringify(references) !== JSON.stringify(bundle.references) || JSON.stringify(migrations) !== JSON.stringify(bundle.migrations)) throw new Error('RESTORED_DATABASE_MISMATCH');
     const mappedReferences = restoredReferences(references, restored);
+    let disabledAiConnections = 0;
     await connection.query('BEGIN');
     try {
       for (const [position, reference] of references.entries()) {
@@ -156,12 +157,15 @@ async function restore(path) {
         const updated = await connection.query('UPDATE file_objects SET object_version_id = $1 WHERE id = $2 AND object_key = $3 AND object_version_id = $4', [mappedReferences[position].object_version_id, reference.id, reference.object_key, reference.object_version_id]);
         if (updated.rowCount !== 1) throw new Error('RESTORED_DATABASE_MISMATCH');
       }
+      if ((await connection.query("SELECT to_regclass('public.ai_connections') AS table_name")).rows[0].table_name) {
+        disabledAiConnections = (await connection.query('UPDATE public.ai_connections SET enabled=false,version=CASE WHEN version<2147483647 THEN version+1 ELSE version END,updated_at=clock_timestamp() WHERE enabled')).rowCount;
+      }
       const actual = (await connection.query(referenceQuery)).rows;
       if (JSON.stringify(actual) !== JSON.stringify(mappedReferences)) throw new Error('RESTORED_DATABASE_MISMATCH');
       assertReferences(actual, await objectSnapshot(client, bucket));
       await connection.query('COMMIT');
     } catch (error) { await connection.query('ROLLBACK'); throw error; }
-    console.info(JSON.stringify({ status: 'RESTORE_PASS', objects: restored.length, references: references.length, migrations: migrations.length }));
+    console.info(JSON.stringify({ status: 'RESTORE_PASS', objects: restored.length, references: references.length, migrations: migrations.length, disabledAiConnections }));
   } finally { await connection.end(); client.destroy(); }
 }
 

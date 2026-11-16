@@ -15,6 +15,9 @@ import { ServiceOperationReceiptService } from './modules/task-notification/serv
 import { DataExchangeObservationService } from './modules/system-management/data-exchange-observation.service.js';
 import { IntegrationRetentionService } from './modules/api-integration/integration-retention.service.js';
 import { IngestionWorkerService } from './modules/api-integration/ingestion-worker.service.js';
+import { IngestionService } from './modules/api-integration/ingestion.service.js';
+import { ProcessDefectCompletionService } from './modules/process-quality/process-defect-completion.service.js';
+import { AiDescriptionService } from './modules/api-integration/ai-description.service.js';
 
 async function bootstrap(): Promise<void> {
   const options = parseWorkerOptions(process.argv.slice(2), process.env);
@@ -26,6 +29,7 @@ async function bootstrap(): Promise<void> {
   const producerId = randomUUID(), startedAt = new Date();
   let lastCycle = { processed: 0, failed: 0, retried: 0 };
   let failed = false;
+  let aiWork: Promise<void> | undefined;
   await receipts.recordWorker(producerId, 'STARTED', startedAt);
   const controller = new AbortController();
   const stop = () => controller.abort();
@@ -42,6 +46,11 @@ async function bootstrap(): Promise<void> {
     await runWorkerLoop(app.get(OutboxWorkerService), handler, options, controller.signal, async () => {
       await app.get(FileScanWorkerService).processDue(options.batchSize);
       await app.get(IngestionWorkerService).processDue(options.batchSize);
+      const completion = await app.get(ProcessDefectCompletionService).processDue(options.batchSize,
+        (transaction, change) => app.get(IngestionService).syncProcessCompletionVersion(transaction, change));
+      if (completion.failed) console.warn('PROCESS_DEFECT_COMPLETION_RETRY_PENDING');
+      if (completion.unrecorded) console.warn('PROCESS_DEFECT_COMPLETION_RETRY_RECORD_UNAVAILABLE');
+      if (!aiWork) aiWork = app.get(AiDescriptionService).processDue(2).catch(() => { console.warn('AI_DESCRIPTION_WORKER_RETRY_PENDING'); }).finally(() => { aiWork = undefined; });
       if (Date.now() < nextMaintenance) return;
       await app.get(FileScanWorkerService).expireUploads();
       await app.get(AuditExportService).purgeExpired();
@@ -68,6 +77,7 @@ async function bootstrap(): Promise<void> {
   } finally {
     process.removeListener('SIGINT', stop);
     process.removeListener('SIGTERM', stop);
+    await aiWork;
     if (!failed) await receipts.recordWorker(producerId, 'STOPPED', startedAt, lastCycle);
     await app.close();
   }

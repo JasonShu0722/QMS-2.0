@@ -12,7 +12,7 @@ export const categoryOptions = Object.entries(categoryLabels).map(([value, label
 export const verificationLabels = { UNREVIEWED: '未复核', CONFIRMED_DEFECT: '不良属实', NOT_MATERIAL: '非物料', NEGOTIATED: '协商', RETURN_ANALYSIS: '返厂解析' };
 export function denied(cause: unknown) { return cause instanceof ApiError && [401, 403].includes(cause.status ?? 0); }
 export function ProcessError({ cause, fallback }: { cause: unknown; fallback: string }) {
-  return cause ? <Alert showIcon type={denied(cause) ? 'warning' : 'error'} title={cause instanceof ApiError ? safeAccountError(cause) : fallback} /> : null;
+  return cause ? <Alert showIcon type={denied(cause) ? 'warning' : 'error'} title={cause instanceof ApiError && cause.code === 'PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT' ? '来源明细编号已用于另一条台账，请核对；当前记录及输入均保留。' : cause instanceof ApiError ? safeAccountError(cause) : fallback} /> : null;
 }
 
 // An unknown write result must retain the exact request, not merely its key.
@@ -77,12 +77,25 @@ const hintLabels: Record<string, string> = {
   PRODUCT_CATEGORY_NOT_CONFIGURED: '映射尚未配置产品分类。',
   MAPPING_OR_PROJECT_DISABLED: '映射或项目已停用，请核对。',
   MANUAL_ENGINEER_DIFFERS: '人工工程师与映射建议不同。',
+  OCCURRED_AT_REQUIRED: '发生时间待完善。', PRODUCT_CODE_REQUIRED: '成品编码待完善。', TRACE_CODE_REQUIRED: '追溯码待完善。', DESCRIPTION_REQUIRED: '不良描述待完善。',
+  HISTORICAL_ASSOCIATION_UNCONFIRMED: '历史关联未确认。', PROJECT_MAPPING_PENDING: '项目映射待补配。', PRODUCT_SUBCATEGORY_PENDING: '细分类型待补配。', OPERATION_SECTOR_PENDING: '工序板块待补配。', SOURCE_IDENTITY_INCOMPLETE: '来源明细编号待补充；跨消息重复推送不能自动去重。',
 };
+const sourceFieldLabels: Record<string, string> = {
+  occurredAt: '发生时间', productCode: '成品编码', workOrderCode: '工单号', lineCode: '生产线编码', lineName: '生产线名称',
+  operationCode: '工序编码', operationName: '工序名称', traceCode: '追溯码', description: '不良描述', externalRecordKey: '来源明细编号', sourceObservedAt: '来源更新时间',
+};
+function sourceIssueMessage(hint: string) {
+  const [field, problem] = hint.split(':');
+  const fieldLabel = Object.hasOwn(sourceFieldLabels, field) ? sourceFieldLabels[field] : undefined;
+  if (fieldLabel && problem === 'TYPE') return `${fieldLabel}来源值类型无效，请核对。`;
+  if (fieldLabel && problem === 'INVALID') return `${fieldLabel}来源值格式或长度无效，请核对。`;
+  return '来源字段待核对';
+}
 export function MappingHint({ record }: { record: Defect }) {
-  const hints = [...(record.issues ?? []), ...(record.componentProject?.issues ?? [])];
+  const hints = [...(record.issues ?? []), ...(record.registrationIssues ?? []), ...(record.componentProject?.issues ?? [])];
   if (record.duplicateCount && !hints.includes('SAME_OPERATION_TRACE_DUPLICATE')) hints.push('SAME_OPERATION_TRACE_DUPLICATE');
   if (!hints.length) return null;
-  return <Tooltip trigger={['hover', 'focus']} title={<ul>{[...new Set(hints)].map(hint => <li key={hint}>{hintLabels[hint] ?? hint}</li>)}</ul>}>
+  return <Tooltip trigger={['hover', 'focus']} title={<ul>{[...new Set(hints)].map(hint => <li key={hint}>{hintLabels[hint] ?? sourceIssueMessage(hint)}</li>)}</ul>}>
     <button type="button" className="process-quality-warning" aria-label={`映射与来源提示 ${record.description}`}>!</button>
   </Tooltip>;
 }

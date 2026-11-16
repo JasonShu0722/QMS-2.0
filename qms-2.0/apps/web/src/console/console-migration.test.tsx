@@ -305,28 +305,37 @@ it.each(['settings', 'portal'] as const)('preserves the real configuration %s dr
     if (path.includes('/settings?')) return { notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 3 };
     if (path.includes('/notification-rules?')) return [{ kind: 'TASK_ASSIGNED', enabled: true, subjectTemplate: 'Saved subject', bodyTemplate: 'Saved body', version: 2 }];
     if (path.includes('/position-categories?')) return [];
+    if (path.includes('/operation-sectors?')) return [];
+    if (path.includes('/ai-connections?')) return [];
     throw new Error(`Unexpected configuration request ${path}`);
   });
   const result = view('/console/configuration');
-  const retention = await screen.findByLabelText('导出保留时间（分钟）');
+  const configuration = within(await screen.findByRole('region', { name: '平台配置' }));
+  const settings = within(configuration.getByText('系统参数', { selector: '.ant-card-head-title' }).closest<HTMLElement>('.ant-card')!);
+  const retention = await settings.findByLabelText('导出保留时间（分钟）');
   await waitFor(() => expect(retention).toHaveValue('60'));
   let input: HTMLElement = retention;
+  let inputOwner = settings;
   if (kind === 'portal') {
-    fireEvent.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
+    const notification = within(configuration.getByText('通知规则', { selector: '.ant-card-head-title' }).closest<HTMLElement>('.ant-card')!);
+    fireEvent.click(notification.getByRole('button', { name: /^编\s*辑$/ }));
     const dialog = await screen.findByRole('dialog', { name: '通知规则' });
-    input = within(dialog).getByLabelText('通知标题');
+    inputOwner = within(dialog);
+    input = inputOwner.getByLabelText('通知标题');
     await waitFor(() => expect(input).toBeVisible());
   }
   fireEvent.change(input, { target: { value: kind === 'portal' ? 'Unsaved subject' : '120' } });
   input.focus();
   const dirty = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(dirty);
   expect(dirty.defaultPrevented).toBe(true);
+  const reads = vi.mocked(apiRequest).mock.calls.length;
   mocks.context = { ...mocks.context, targetOrganization: { ...mocks.context.targetOrganization, name: 'Renamed target', code: 'NEW' }, organizations: mocks.context.organizations.map(entry => ({ ...entry, name: `${entry.name} refreshed` })) };
   result.revalidate();
-  await waitFor(() => expect(kind === 'portal' ? screen.getByLabelText('通知标题') : screen.getByLabelText('导出保留时间（分钟）')).toBe(input));
+  await waitFor(() => expect(inputOwner.getByLabelText(kind === 'portal' ? '通知标题' : '导出保留时间（分钟）')).toBe(input));
   expect(input).toHaveValue(kind === 'portal' ? 'Unsaved subject' : '120');
   expect(input).toHaveFocus();
   expect(getAdminOrganizations).toHaveBeenCalledTimes(1);
+  expect(apiRequest).toHaveBeenCalledTimes(reads);
   expect(vi.mocked(apiRequest).mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
 

@@ -1,6 +1,12 @@
 {
   "version": 1,
   "allowedModuleDependencies": [
+    "ai-configuration -> authorization",
+    "ai-configuration -> audit-log",
+    "ai-configuration -> organization",
+    "ai-configuration -> platform-configuration",
+    "api-integration -> ai-configuration",
+    "api-integration -> process-quality",
     "api-integration -> material-master",
     "api-integration -> supplier-quality",
     "api-integration -> customer-quality",

@@ -32,6 +32,8 @@ function mountConfiguration(saveFailureStatus?: number) {
     if (path.includes('/settings?')) return json(settings);
     if (path.includes('/notification-rules?')) return json([server.rule]);
     if (path.includes('/position-categories?')) return json(server.categories);
+    if (path.includes('/operation-sectors?')) return json([]);
+    if (path.includes('/ai-connections?')) return json([]);
     if (path.includes('/notification-rules/') && init.method === 'PATCH') return json({ ...server.rule, ...JSON.parse(String(init.body)), version: server.rule.version + 1 });
     throw new Error(`unexpected ${path}`);
   }));

@@ -1,12 +1,40 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
+import { AiDescriptionInputSnapshotDto } from '../../common/contracts/ai-description.dto.js';
 import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
 
-import { ComponentProjectResolutionDto } from '../platform-configuration/component-project.dto.js';
+import { ComponentProjectMappingDto, ComponentProjectRecordDto } from '../platform-configuration/component-project.dto.js';
 
 export class ProcessScopeDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
+}
+
+export class ProcessOperationSectorInputDto extends ProcessScopeDto {
+  @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) operationName!: string;
+  @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) sectorName!: string;
+}
+
+export class UpdateProcessOperationSectorDto extends ProcessOperationSectorInputDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+  @ApiProperty() @IsBoolean() active!: boolean;
+}
+
+export class DeleteProcessOperationSectorDto extends ProcessScopeDto {
+  @ApiProperty({ minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+}
+
+export class ProcessOperationSectorDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty() operationName!: string;
+  @ApiProperty() sectorName!: string;
+  @ApiProperty() active!: boolean;
+  @ApiProperty() version!: number;
+}
+
+export class DeletedProcessOperationSectorDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
 }
 
 export class CreateProcessDefectTypeDto extends ProcessScopeDto {
@@ -41,19 +69,20 @@ export class ProcessDefectMaterialInputDto {
 
 export class CreateProcessDefectDto extends ProcessScopeDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) defectTypeCode?: string | null;
-  @ApiPropertyOptional({ maxLength: 10000, default: '' }) @IsString() @MaxLength(10000) description = '';
-  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1, maximum: 2147483647 }) @IsOptional() @IsInt() @Min(1) @Max(2147483647) defectQuantity?: number | null;
-  @ApiPropertyOptional({ type: Date, nullable: true, format: 'date-time' }) @IsOptional() @Type(() => Date) @IsDate() occurredAt?: Date | null;
+  @ApiProperty({ maxLength: 10000 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(10000) description!: string;
+  @ApiPropertyOptional({ type: Number, default: 1, minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) defectQuantity = 1;
+  @ApiProperty({ type: Date, format: 'date-time' }) @Type(() => Date) @IsDate() occurredAt!: Date;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) batchCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) workOrderCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) operationCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) lineCode?: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) projectCode?: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) productCode?: string | null;
+  @ApiProperty({ maxLength: 100 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(100) productCode!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) lineName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) operationName?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) materialCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' }) @IsOptional() @IsUUID() supplierOrganizationId?: string | null;
   @ApiPropertyOptional({ type: String, enum: PROCESS_RESPONSIBILITY_CATEGORIES, nullable: true }) @IsOptional() @IsIn(PROCESS_RESPONSIBILITY_CATEGORIES) responsibilityCategory?: ProcessResponsibilityCategory | null;
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) traceCode?: string | null;
+  @ApiProperty({ maxLength: 200 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(200) traceCode!: string;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 10000 }) @IsOptional() @IsString() @MaxLength(10000) analysisProgress?: string | null;
   @ApiPropertyOptional({ type: [ProcessDefectMaterialInputDto], maxItems: 100 }) @ValidateIf((_, value) => value !== undefined) @IsArray() @ArrayMaxSize(100) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectMaterialInputDto) materials?: ProcessDefectMaterialInputDto[];
   @ApiPropertyOptional({ enum: ['MES', 'IMS'], description: '人工登记的外部来源标识；接口尚未启用' }) @IsOptional() @IsIn(['MES', 'IMS']) externalSourceSystem?: 'MES' | 'IMS';
@@ -71,6 +100,8 @@ export class UpdateProcessDefectDto extends ProcessScopeDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) workOrderCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) operationCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) lineCode?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) lineName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) operationName?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) projectCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) productCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) materialCode?: string | null;
@@ -79,6 +110,7 @@ export class UpdateProcessDefectDto extends ProcessScopeDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) traceCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 10000 }) @IsOptional() @IsString() @MaxLength(10000) analysisProgress?: string | null;
   @ApiPropertyOptional({ type: [ProcessDefectMaterialInputDto], maxItems: 100 }) @ValidateIf((_, value) => value !== undefined) @IsArray() @ArrayMaxSize(100) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectMaterialInputDto) materials?: ProcessDefectMaterialInputDto[];
+  @ApiPropertyOptional({ maxLength: 200, description: '仅为尚未标识的IMS记录补充来源编号' }) @ValidateIf((_, value) => value !== undefined) @IsString() @IsNotEmpty() @MaxLength(200) externalRecordKey?: string;
 }
 
 export class ArchiveProcessDefectDto extends ProcessScopeDto {
@@ -148,6 +180,8 @@ export class ProcessDefectQueryDto extends ProcessScopeDto {
   @ApiPropertyOptional({ enum: ['FOLLOWING', 'CLOSED'] }) @IsOptional() @IsIn(['FOLLOWING', 'CLOSED']) ledgerStatus?: 'FOLLOWING' | 'CLOSED';
   @ApiPropertyOptional({ enum: PROCESS_RESPONSIBILITY_CATEGORIES }) @IsOptional() @IsIn(PROCESS_RESPONSIBILITY_CATEGORIES) responsibilityCategory?: ProcessResponsibilityCategory;
   @ApiPropertyOptional({ default: false }) @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() includeArchived?: boolean;
+  @ApiPropertyOptional() @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() pendingCompletion?: boolean;
+  @ApiPropertyOptional() @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() pendingConfiguration?: boolean;
 }
 
 export class ProcessDefectEvidenceDto {
@@ -199,17 +233,48 @@ export class ProcessDefectClassificationHistoryDto {
   @ApiProperty() defectVersion!: number;
 }
 
+export class ProcessDefectMappingSnapshotDto extends PickType(ComponentProjectMappingDto,
+  ['id', 'version', 'status', 'componentCode', 'componentName', 'projectRecordId', 'productCategory', 'productSubcategory'] as const) {}
+
+export class ProcessDefectProjectSnapshotDto extends PickType(ComponentProjectRecordDto,
+  ['id', 'version', 'status', 'code', 'name', 'stage'] as const) {}
+
+export class ProcessDefectProjectResolutionDto {
+  @ApiProperty({ enum: ['matched'] }) outcome!: 'matched';
+  @ApiProperty() componentCode!: string;
+  @ApiProperty({ type: ProcessDefectMappingSnapshotDto }) mapping!: ProcessDefectMappingSnapshotDto;
+  @ApiProperty({ type: ProcessDefectProjectSnapshotDto }) project!: ProcessDefectProjectSnapshotDto;
+  @ApiProperty({ type: [String] }) issues!: string[];
+}
+
 export class ProcessDefectDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty({ type: String, nullable: true }) defectTypeCode!: string | null;
   @ApiProperty() description!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) descriptionDirect?: string | null;
+  @ApiPropertyOptional({ type: [AiDescriptionInputSnapshotDto], nullable: true }) descriptionInput?: AiDescriptionInputSnapshotDto[] | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) descriptionAi?: string | null;
+  @ApiPropertyOptional({ enum: ['DISABLED','PENDING','PROCESSING','RETRY','FAILED','APPLIED','SUGGESTED','STALE'] }) descriptionAiStatus?: string;
+  @ApiPropertyOptional({ enum: ['DIRECT','AI','MANUAL'] }) descriptionSource?: string;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) descriptionTaskId?: string | null;
   @ApiProperty({ type: Number, nullable: true }) defectQuantity!: number | null;
   @ApiProperty({ type: String, nullable: true, format: 'date-time' }) occurredAt!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) batchCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) workOrderCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) operationCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) lineCode?: string | null;
+  @ApiProperty({ type: String, nullable: true }) lineName!: string | null;
+  @ApiProperty({ type: String, nullable: true }) operationName!: string | null;
+  @ApiProperty({ type: String, enum: ['DAY', 'NIGHT'], nullable: true }) shift!: 'DAY' | 'NIGHT' | null;
+  @ApiProperty({ type: String, nullable: true }) operationSector!: string | null;
+  @ApiProperty({ type: String, nullable: true }) productSubcategory!: string | null;
+  @ApiProperty({ type: String, nullable: true }) projectName!: string | null;
+  @ApiProperty({ type: String, enum: ['NEW_PRODUCT', 'MASS_PRODUCTION'], nullable: true }) projectStage!: 'NEW_PRODUCT' | 'MASS_PRODUCTION' | null;
+  @ApiProperty() pendingCompletion!: boolean;
+  @ApiProperty() pendingConfiguration!: boolean;
+  @ApiProperty({ type: [String] }) registrationIssues!: string[];
+  @ApiProperty({ type: String, nullable: true }) registeredByName!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) projectCode?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) productCode?: string | null;
   @ApiProperty({ type: String, nullable: true }) traceCode!: string | null;
@@ -220,7 +285,7 @@ export class ProcessDefectDto {
   @ApiPropertyOptional({ type: String, nullable: true }) materialCode?: string | null;
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) supplierOrganizationId?: string | null;
   @ApiProperty({ type: String, enum: PROCESS_RESPONSIBILITY_CATEGORIES, nullable: true }) responsibilityCategory!: ProcessResponsibilityCategory | null;
-  @ApiProperty({ enum: ['MANUAL'] }) sourceKind!: string;
+  @ApiProperty({ enum: ['MANUAL', 'IMS'] }) sourceKind!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) externalSourceSystem?: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) externalRecordKey?: string | null;
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) sourceObservedAt?: string | null;
@@ -232,7 +297,7 @@ export class ProcessDefectDto {
   @ApiProperty({ type: [ProcessDefectMaterialVerificationDto] }) materialVerificationHistory!: ProcessDefectMaterialVerificationDto[];
   @ApiProperty({ type: [ProcessDefectLedgerHistoryDto] }) ledgerHistory!: ProcessDefectLedgerHistoryDto[];
   @ApiProperty({ type: [ProcessDefectClassificationHistoryDto] }) classificationHistory!: ProcessDefectClassificationHistoryDto[];
-  @ApiProperty({ type: ComponentProjectResolutionDto, nullable: true }) componentProject!: ComponentProjectResolutionDto | null;
+  @ApiProperty({ type: ProcessDefectProjectResolutionDto, nullable: true }) componentProject!: ProcessDefectProjectResolutionDto | null;
   @ApiProperty() duplicateCount!: number;
   @ApiProperty({ type: [String] }) issues!: string[];
 }

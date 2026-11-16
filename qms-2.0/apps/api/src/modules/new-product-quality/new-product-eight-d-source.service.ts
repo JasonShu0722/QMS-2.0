@@ -10,6 +10,7 @@ import { hasPlatformAdministrator } from '../../common/security/platform-adminis
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { ProcessDefectLedgerService } from '../process-quality/process-defect-ledger.service.js';
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
+import { processProjectSnapshot } from '../process-quality/process-defect-completion.service.js';
 import type { SupplierCopyMaterial, SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 
 export const NEW_PRODUCT_SELECTION_SOURCE = Object.freeze({
@@ -83,7 +84,10 @@ export class NewProductEightDSourceService implements NewProductEightDSourcePort
     if (source.sourceVersion !== reference.sourceVersion) fail('CONCURRENCY_CONFLICT', 409);
     const facts = source.sourceSnapshot;
     if (typeof facts.productCode !== 'string' || !facts.productCode.trim()) fail('NEW_PRODUCT_DEFECT_MAPPING_REQUIRED', 409);
-    const resolution = await this.mappings.resolveForDomain(tx, organizationId, facts.productCode);
+    const saved = processProjectSnapshot(facts.projectSnapshot ?? null);
+    const resolution = facts.registrationVersion === 1
+      ? { outcome: saved ? 'matched' : 'unmapped', mapping: saved?.mapping ?? null, project: saved?.project ?? null }
+      : await this.mappings.resolveForDomain(tx, organizationId, facts.productCode);
     if (resolution.outcome !== 'matched' || !resolution.mapping || !resolution.project) fail('NEW_PRODUCT_DEFECT_MAPPING_REQUIRED', 409);
     if (resolution.project.code !== project.code) fail('NEW_PRODUCT_DEFECT_PROJECT_MISMATCH', 409);
     if (resolution.project.stage !== 'NEW_PRODUCT') fail('NEW_PRODUCT_DEFECT_STAGE_INELIGIBLE', 409);
@@ -92,7 +96,7 @@ export class NewProductEightDSourceService implements NewProductEightDSourcePort
       projectId: project.id, projectCode: project.code, componentCode: facts.productCode,
       mappingId: resolution.mapping.id, mappingVersion: resolution.mapping.version,
       projectRecordId: resolution.project.id, projectRecordVersion: resolution.project.version,
-      observedProjectStage: 'NEW_PRODUCT', observedAt: new Date().toISOString(), occurredAt,
+      observedProjectStage: 'NEW_PRODUCT', observedAt: saved?.associatedAt ?? new Date().toISOString(), occurredAt,
       temporalEvidence: reason ? 'MANUAL_CONFIRMATION' : 'UNVERIFIED', confirmedById: reason ? actor.id : null, confirmationReason: reason,
       warnings: [...(occurredAt === null ? ['OCCURRED_AT_UNKNOWN'] : []), 'HISTORICAL_MAPPING_UNAVAILABLE'],
     };

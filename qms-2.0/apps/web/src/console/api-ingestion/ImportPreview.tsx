@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Form, Input, InputNumber, Modal, Select, Space, Tag } from 'antd';
 import type { components } from '@qms/contracts';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { isAborted, useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
-import { IngestionError, IngestionFields, ingestionIssue, ingestionPath, label, useIngestionMutation, useIngestionText, type Rule } from './ingestion-ui';
+import { IngestionError, IngestionFields, ProcessIngestionResult, ingestionIssue, ingestionPath, label, useIngestionMutation, useIngestionText, type Rule } from './ingestion-ui';
 
 type Preview = components['schemas']['IngestionPreviewDto'];
 type Receipt = components['schemas']['IntegrationReceiptDto'];
@@ -11,15 +11,28 @@ type Values = { receiptId?: string; row: number; from?: string; to?: string; rep
 export function ImportPreview({ scope, rule, history, canReceipts, close, viewJobs }: { scope: IntegrationScope; rule: Rule; history: boolean; canReceipts: boolean; close: () => void; viewJobs?: () => void }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
   const [form] = Form.useForm<Values>(); const requestLeave = useNavigationGuard();
-  const { read, current } = useScopedIntegrationRequests(scope);
+  const { read, write, current } = useScopedIntegrationRequests(scope);
   const [preview, setPreview] = useState<Preview>(); const [submitted, setSubmitted] = useState<components['schemas']['IngestionImportResultDto']>();
   const [dirty, setDirty] = useState(false); const [expired, setExpired] = useState(false);
+  const [aiTrial, setAiTrial] = useState<components['schemas']['AiIngestionPreviewDto']>(); const [aiBusy, setAiBusy] = useState(false); const [aiError, setAiError] = useState<unknown>();
+  const aiAttempt = useRef(0);
   const [receipts, setReceipts] = useState<Receipt[]>([]); const [receiptPage, setReceiptPage] = useState(1); const [receiptTotal, setReceiptTotal] = useState(0);
   const [receiptsLoading, setReceiptsLoading] = useState(false); const [receiptError, setReceiptError] = useState<unknown>(); const [revision, setRevision] = useState(0);
   const previewMutation = useIngestionMutation(scope, { recoverableUnknown: true }); const submitMutation = useIngestionMutation(scope);
   const locked = previewMutation.locked || submitMutation.locked;
   useUnsavedChanges(dirty && !submitted);
-  useEffect(() => { setPreview(undefined); setSubmitted(undefined); }, [rule.id, rule.version]);
+  useEffect(() => { setPreview(undefined); setSubmitted(undefined); resetAi(); return () => { aiAttempt.current += 1; }; }, [rule.id, rule.version]);
+  function resetAi() { aiAttempt.current += 1; setAiTrial(undefined); setAiBusy(false); setAiError(undefined); }
+  async function trialAi() {
+    if (!preview || aiBusy || locked || expired || submitted || history || !rule.aiDescription || !canReceipts) return;
+    const attempt = ++aiAttempt.current; setAiBusy(true); setAiError(undefined); setAiTrial(undefined);
+    const body: components['schemas']['IngestionPreviewInputDto'] = { organizationId: scope.organizationId, ruleId: rule.id, ruleVersion: rule.version, receiptId: form.getFieldValue('receiptId')!, rowIndex: form.getFieldValue('row') - 1 };
+    try {
+      const result = await write<components['schemas']['AiIngestionPreviewDto']>(`${ingestionPath}/preview/ai`, 'POST', body);
+      if (current() && aiAttempt.current === attempt) setAiTrial(result);
+    } catch (cause) { if (current() && aiAttempt.current === attempt && !isAborted(cause)) setAiError(cause); }
+    finally { if (current() && aiAttempt.current === attempt) setAiBusy(false); }
+  }
   useEffect(() => {
     if (history || !canReceipts) return;
     let active = true; setReceiptsLoading(true); setReceiptError(undefined);
@@ -40,7 +53,7 @@ export function ImportPreview({ scope, rule, history, canReceipts, close, viewJo
   }, [preview]);
   function generate(values: Values) {
     if (locked || submitted || !canReceipts) return;
-    setPreview(undefined);
+    setPreview(undefined); resetAi();
     if (history) {
       const body: components['schemas']['IngestionHistoryPreviewInputDto'] = { organizationId: scope.organizationId, ruleId: rule.id, ruleVersion: rule.version, from: new Date(values.from!).toISOString(), to: new Date(values.to!).toISOString() };
       void previewMutation.execute<Preview>({ path: `${ingestionPath}/imports/preview`, method: 'POST', body }, setPreview);
@@ -51,12 +64,13 @@ export function ImportPreview({ scope, rule, history, canReceipts, close, viewJo
   }
   function submit() {
     if (!preview || locked || submitted || !canReceipts || new Date(preview.expiresAt).getTime() <= Date.now()) return;
+    resetAi();
     const reason = form.getFieldValue('reprocessReason')?.trim();
     const body: components['schemas']['SubmitIngestionImportDto'] = { organizationId: scope.organizationId, previewId: preview.previewId, confirmed: true, ...(reason ? { reprocessReason: reason } : {}) };
     void submitMutation.execute<components['schemas']['IngestionImportResultDto']>({ path: `${ingestionPath}/imports`, method: 'POST', body }, result => { setDirty(false); setSubmitted(result); setPreview(undefined); });
   }
   return <Modal open title={`${text(history ? '历史批量导入' : '单条试处理', history ? 'Historical import' : 'Single preview')} · ${rule.name}`} width={760} footer={null} destroyOnHidden mask={{ closable: false }} closable={!locked} keyboard={!locked} onCancel={() => { if (!locked) requestLeave(close, true); }}>
-    <Form className="qms-ingestion-form" form={form} layout="vertical" initialValues={{ row: 1 }} disabled={locked || !!submitted} onFinish={generate} onValuesChange={changed => { setDirty(true); if (!Object.hasOwn(changed, 'reprocessReason')) setPreview(undefined); }}>
+    <Form className="qms-ingestion-form" form={form} layout="vertical" initialValues={{ row: 1 }} disabled={locked || !!submitted} onFinish={generate} onValuesChange={changed => { setDirty(true); if (!Object.hasOwn(changed, 'reprocessReason')) { setPreview(undefined); resetAi(); } }}>
       {history ? <div className="qms-ingestion-grid">
         <Form.Item name="from" label={text('接收时间起', 'Received from')} rules={[{ required: true }, { validator: async (_, value) => { if (value && !Number.isFinite(new Date(value).getTime())) throw new Error(text('请选择有效时间', 'Choose a valid date')); } }]}><Input type="datetime-local" /></Form.Item>
         <Form.Item name="to" label={text('接收时间止', 'Received to')} dependencies={['from']} rules={[{ required: true }, { validator: async (_, value) => { if (value && (!Number.isFinite(new Date(value).getTime()) || new Date(value) <= new Date(form.getFieldValue('from')))) throw new Error(text('截止时间须晚于开始时间', 'End time must follow the start')); if (value && new Date(value).getTime() > Date.now()) throw new Error(text('截止时间不能晚于当前时间', 'End time cannot be in the future')); } }]}><Input type="datetime-local" /></Form.Item>
@@ -76,6 +90,17 @@ export function ImportPreview({ scope, rule, history, canReceipts, close, viewJo
       <span className="qms-ingestion-secondary">{text('预览有效期至', 'Preview expires at')} {new Date(preview.expiresAt).toLocaleString(english ? 'en-US' : 'zh-CN')}</span>
       {preview.errorCode && <Alert type="warning" showIcon title={text('该行未通过校验', 'This row did not pass validation')} description={<>{ingestionIssue(preview.errorCode, english)}{preview.errorField && <div className="qms-ingestion-secondary">{text('字段', 'Field')}: <code>{preview.errorField}</code></div>}</>} />}
       <IngestionFields fields={preview.fields} differences={preview.differences} />
+      {!history && rule.aiDescription && <>
+        <Button disabled={locked || expired || aiBusy || preview.action === 'VALIDATION_FAILED'} loading={aiBusy} onClick={() => void trialAi()}>{text('试运行AI整理', 'Try AI description')}</Button>
+        <IngestionError error={aiError} />
+        {aiTrial && <div role="region" aria-label={text('AI输入事实', 'Selected AI facts')}><strong>{text('AI输入事实', 'Selected AI facts')}</strong>{aiTrial.inputFields.map((field, index) => <div className="qms-ingestion-field-value" key={index}>{field.label || field.path}：{field.value === null ? '—' : String(field.value)}</div>)}</div>}
+        <div role="region" aria-label={text('描述试运行结果', 'Description trial results')} className="qms-ingestion-grid qms-ai-preview">
+          <div><strong>{text('直接组合', 'Direct description')}</strong><p className="qms-ingestion-field-value">{aiTrial?.directDescription ?? String(preview.fields?.description ?? '')}</p></div>
+          <div><strong>{text('AI整理结果', 'AI description')}</strong><p className="qms-ingestion-field-value">{aiTrial?.status === 'SUCCEEDED' && aiTrial.aiDescription ? aiTrial.aiDescription : aiTrial || aiError ? text('整理失败，继续使用直接组合', 'AI failed; use the direct description') : aiBusy ? text('整理中…', 'Generating…') : text('尚未试运行', 'Not tried yet')}</p></div>
+        </div>
+      </>}
+      {rule.target === 'PROCESS_DEFECT' ? <ProcessIngestionResult result={preview} organizationId={scope.organizationId} /> : null}
+      {rule.target === 'PROCESS_DEFECT' && !preview.targetId ? <span className="qms-ingestion-secondary">{text('关联结果待入账后确认', 'Associations will be confirmed after ingestion')}</span> : null}
       {expired && <Alert type="warning" title={text('预览已过期，请重新生成', 'Preview expired. Generate a new preview.')} />}
       {!submitMutation.unknown && <Button type="primary" disabled={locked || expired || preview.receiptCount === 0 || preview.rowCount === 0 || preview.action === 'VALIDATION_FAILED'} loading={submitMutation.busy} onClick={submit}>{text('确认导入', 'Confirm import')}</Button>}
     </div>}

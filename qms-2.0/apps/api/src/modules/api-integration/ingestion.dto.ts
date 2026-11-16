@@ -9,17 +9,43 @@ export class IngestionConditionDto {
   @ApiProperty({ enum: ['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY'] }) @IsIn(['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY']) operator!: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY';
   @ApiPropertyOptional({ oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }, { type: 'array', items: { oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] } }], nullable: true }) @IsOptional() value?: string | number | boolean | null | (string | number | boolean)[];
 }
+export class IngestionDescriptionFieldDto {
+  @ApiProperty({ maxLength: 200 }) @IsString() @MaxLength(200) path!: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) label?: string;
+}
+export class IngestionDescriptionCompositionDto {
+  @ApiProperty({ type: [IngestionDescriptionFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionDescriptionFieldDto) fields!: IngestionDescriptionFieldDto[];
+  @ApiProperty({ maxLength: 10 }) @IsString() @MaxLength(10) separator!: string;
+}
+export class IngestionAiInputFieldDto extends IngestionDescriptionFieldDto {
+  @ApiProperty({ maxLength: 64 }) @IsString() @MaxLength(64) variable!: string;
+}
+export class IngestionAiOutputDto {
+  @ApiProperty({ enum: ['TEXT', 'JSON'] }) @IsIn(['TEXT', 'JSON']) mode!: 'TEXT' | 'JSON';
+  @ApiProperty({ maxLength: 100 }) @IsString() @MaxLength(100) field!: string;
+  @ApiProperty({ enum: ['description'] }) @IsIn(['description']) target!: 'description';
+}
+export class IngestionAiDescriptionDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() connectionId!: string;
+  @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) model!: string;
+  @ApiProperty({ maxLength: 4000 }) @IsString() @MaxLength(4000) prompt!: string;
+  @ApiProperty({ type: [IngestionAiInputFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionAiInputFieldDto) inputFields!: IngestionAiInputFieldDto[];
+  @ApiProperty({ type: IngestionAiOutputDto }) @ValidateNested() @Type(() => IngestionAiOutputDto) output!: IngestionAiOutputDto;
+}
 export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() endpointId!: string;
-  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'] }) @IsIn(['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT']) target!: IngestionTarget;
+  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'] }) @IsIn(['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT']) target!: IngestionTarget;
   @ApiProperty() @IsBoolean() enabled!: boolean;
   @ApiProperty({ enum: ['ALL', 'ANY'] }) @IsIn(['ALL', 'ANY']) match!: 'ALL' | 'ANY';
   @ApiProperty({ type: [IngestionConditionDto], maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionConditionDto) conditions!: IngestionConditionDto[];
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: 'code/name及供应商contactName/contactEmail对应的受限点路径。' }) @IsObject() mapping!: Record<string, string>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: '目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。' }) @IsObject() mapping!: Record<string, string>;
   @ApiProperty({ enum: ['INSERT_ONLY', 'UPDATE', 'CONFIRM'] }) @IsIn(['INSERT_ONLY', 'UPDATE', 'CONFIRM']) mode!: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM';
-  @ApiProperty({ type: [String], maxItems: 3 }) @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) updateFields!: string[];
+  @ApiProperty({ type: [String], maxItems: 9 }) @IsArray() @ArrayMaxSize(9) @IsString({ each: true }) updateFields!: string[];
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sourceUpdatedAtField?: string;
+  @ApiPropertyOptional({ maxLength: 100, description: '制程无时区时间的来源时区，默认Asia/Shanghai。' }) @IsOptional() @IsString() @MaxLength(100) sourceTimezone?: string;
+  @ApiPropertyOptional({ type: IngestionDescriptionCompositionDto }) @IsOptional() @ValidateNested() @Type(() => IngestionDescriptionCompositionDto) descriptionComposition?: IngestionDescriptionCompositionDto;
+  @ApiPropertyOptional({ type: IngestionAiDescriptionDto }) @IsOptional() @ValidateNested() @Type(() => IngestionAiDescriptionDto) aiDescription?: IngestionAiDescriptionDto;
 }
 export class UpdateIngestionRuleDto extends SaveIngestionRuleDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
@@ -78,6 +104,11 @@ export class IngestionPreviewDto {
   @ApiPropertyOptional({ maxLength: 200, description: '受控来源路径或target字段标识，不含业务值。' }) errorField?: string;
   @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' } }) fields?: Record<string, string>;
   @ApiPropertyOptional({ type: [IngestionDifferenceDto] }) differences?: IngestionDifferenceDto[];
+  @ApiPropertyOptional({ format: 'uuid' }) targetId?: string;
+  @ApiPropertyOptional() pendingCompletion?: boolean;
+  @ApiPropertyOptional() pendingConfiguration?: boolean;
+  @ApiPropertyOptional({ type: [String] }) registrationIssues?: string[];
+  @ApiPropertyOptional() defectQuantity?: number;
 }
 export class SubmitIngestionImportDto extends IntegrationScopeDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID() previewId!: string;
@@ -102,7 +133,7 @@ export class IngestionJobDto {
   @ApiProperty({ format: 'uuid', nullable: true, type: String }) planningPreviewId!: string | null;
   @ApiProperty({ format: 'uuid' }) ruleId!: string;
   @ApiProperty() ruleVersion!: number;
-  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'] }) target!: IngestionTarget;
+  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'] }) target!: IngestionTarget;
   @ApiProperty({ enum: ['AUTO', 'SINGLE', 'HISTORY'] }) source!: string;
   @ApiProperty({ enum: ['PENDING', 'PAUSED', 'BLOCKED', 'COMPLETED', 'CANCELLED'] }) status!: string;
   @ApiProperty() sequence!: number;
@@ -136,6 +167,9 @@ export class IngestionItemDto {
   @ApiProperty({ nullable: true, format: 'uuid', type: String }) targetId!: string | null;
   @ApiProperty({ nullable: true, type: Number }) targetVersion!: number | null;
   @ApiProperty() version!: number;
+  @ApiPropertyOptional() pendingCompletion?: boolean;
+  @ApiPropertyOptional() pendingConfiguration?: boolean;
+  @ApiPropertyOptional({ nullable: true, type: Number }) defectQuantity?: number | null;
 }
 export class IngestionItemPageDto {
   @ApiProperty({ type: [IngestionItemDto] }) items!: IngestionItemDto[];
@@ -155,4 +189,5 @@ export class IngestionItemDetailDto extends IngestionItemDto {
   @ApiProperty({ type: [IngestionDifferenceDto] }) differences!: IngestionDifferenceDto[];
   @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' } }) fields?: Record<string, string>;
   @ApiProperty() stale!: boolean;
+  @ApiPropertyOptional({ type: [String] }) registrationIssues?: string[];
 }

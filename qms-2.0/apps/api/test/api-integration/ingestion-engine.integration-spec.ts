@@ -25,6 +25,11 @@ import type { IngestionRuleDto, SaveIngestionRuleDto } from '../../src/modules/a
 import { configureHttpBodyParser } from '../../src/http-body-parser.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
+import { ProcessQualityModule } from '../../src/modules/process-quality/process-quality.module.js';
+import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
+import type { MasterDataIntegrationTarget } from '../../src/common/integration-master-data.js';
+import { ProcessDefectCompletionService } from '../../src/modules/process-quality/process-defect-completion.service.js';
+import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Ingestion engine requires explicitly disposable real PostgreSQL.');
 
@@ -38,7 +43,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   const trace = () => randomUUID();
   const key = () => randomUUID();
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ controllers: [InboundController], providers: [PrismaService, AuditLogService, AdminMutationService, SessionService, IngestionService, IngestionWorkerService, IngestionTargetsService, SupplierProfileIngestionAdapter, CustomerMasterIngestionAdapter, MaterialMasterIngestionAdapter, ComponentProjectIngestionAdapter, InboundService, InboundGuard, IntegrationRetentionService, IntegrationReceiptService] }).compile();
+    const module = await Test.createTestingModule({ imports: [ProcessQualityModule], controllers: [InboundController], providers: [PrismaService, AuditLogService, AdminMutationService, SessionService, IngestionService, IngestionWorkerService, IngestionTargetsService, SupplierProfileIngestionAdapter, CustomerMasterIngestionAdapter, MaterialMasterIngestionAdapter, ComponentProjectIngestionAdapter, InboundService, InboundGuard, IntegrationRetentionService, IntegrationReceiptService] }).compile();
     app = module.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configureHttpBodyParser(app); app.useGlobalFilters(new GlobalExceptionFilter()); await app.init();
     prisma = app.get(PrismaService); service = app.get(IngestionService); worker = app.get(IngestionWorkerService); targets = app.get(IngestionTargetsService);
@@ -82,7 +87,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   async function machine(item: Fixture, rows: unknown[]) {
     return request(app.getHttpServer()).post(`/api/v1/integrations/inbound/${item.endpointId}/messages`).set('Authorization', `Bearer ${item.machineToken}`).set('Content-Type', 'application/json').send(JSON.stringify(rows));
   }
-  async function inspect(item: Fixture, target: IngestionTarget, code: string) { return prisma.$transaction(tx => targets.inspect(tx, item.actor, target, { code, name: '查询占位' })); }
+  async function inspect(item: Fixture, target: MasterDataIntegrationTarget, code: string) { return prisma.$transaction(tx => targets.inspect(tx, item.actor, target, { code, name: '查询占位' })); }
   async function submitSingle(item: Fixture, configuration: IngestionRuleDto, receiptId: string, rowIndex = 0) {
     const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex }, trace(), key());
     const result = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
@@ -104,6 +109,303 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect((await inspect(item, 'MATERIAL', '001'))?.values.name).toBe('预览数据机密');
     expect(await inspect(item, 'MATERIAL', '002')).toBeNull();
     expect(await worker.processDue(10)).toBe(0);
+  });
+  it('books every process object with actual ledger links, preserves anonymous-row identity and exposes completion separately from failure', async () => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '制程来源', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation' }, descriptionComposition: { fields: [{ path: 'description' }, { path: 'result', label: '结果：' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai', mode: 'UPDATE', updateFields: ['description', 'productCode', 'occurredAt', 'traceCode', 'operationName'] }, trace(), key());
+    const response = await machine(item, [{ id: '0001', time: '2026-11-16T08:30:00', product: '00002', trace: 'trace', operation: '目检', description: '不良', result: false }, { product: '00003', result: 0 }, { time: 'bad', product: 4, description: { secret: 'raw' } }]);
+    expect(response.status).toBe(200);
+    await worker.processDue(20);
+    const job = (await service.listJobs(item.actor, {})).items[0]!;
+    expect(job).toMatchObject({ target: 'PROCESS_DEFECT', succeeded: 3, failed: 0 });
+    const items = (await service.listItems(item.actor, job.id, {})).items;
+    expect(items).toHaveLength(3);
+    expect(items.filter(entry => entry.pendingCompletion)).toHaveLength(2);
+    expect(items.filter(entry => entry.pendingConfiguration)).toHaveLength(3);
+    for (const entry of items) expect(entry).toMatchObject({ status: 'INSERTED', targetId: expect.any(String), defectQuantity: 1 });
+    const first = await prisma.processDefect.findUniqueOrThrow({ where: { id: items[0]!.targetId! } });
+    expect(first).toMatchObject({ productCode: '00002', defectQuantity: 1, sourceKind: 'IMS', description: '不良\n结果：false' });
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: items[1]!.receiptId, rowIndex: 1 }, trace(), key());
+    expect(preview).toMatchObject({ action: 'UNCHANGED', targetId: items[1]!.targetId, pendingCompletion: true, defectQuantity: 1 });
+    const repeat = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true, reprocessReason: '验证同一接收行不重复登记' }, trace(), key());
+    await worker.processDue(20);
+    expect((await service.listItems(item.actor, repeat.jobIds[0]!, {})).items[0]).toMatchObject({ targetId: items[1]!.targetId });
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(3);
+    await machine(item, [{ product: '00003', result: 0 }]); await worker.processDue(20);
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(4);
+  });
+  it('synchronizes automatic process completion versions atomically without hiding manual changes from later ingestion', async () => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '自动补配水位', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description', productCode: 'product' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'automatic', product: 'PENDING-PROJECT', description: '来源初值' }, { id: 'manual', product: 'PENDING-PROJECT', description: '来源初值' }]); await worker.processDue(10);
+    const records = await prisma.processDefect.findMany({ where: { organizationId: item.organizationId } });
+    const automatic = records.find(record => record.externalRecordKey === 'automatic')!, manual = records.find(record => record.externalRecordKey === 'manual')!;
+    await app.get(ProcessDefectLedgerService).update(item.actor, manual.id, { expectedVersion: manual.version, description: '人工更新' }, trace(), key());
+    const mappings = app.get(ComponentProjectService);
+    const project = await mappings.createProject(item.actor, item.organizationId, { code: 'PROJECT', name: '后续补配项目', stage: 'NEW_PRODUCT' }, trace(), key());
+    await mappings.createMapping(item.actor, item.organizationId, { componentCode: 'PENDING-PROJECT', projectRecordId: project.id, productSubcategory: '已补细类', productCategory: '产品' }, trace(), key());
+    const completion = app.get(ProcessDefectCompletionService);
+    await completion.processDue(100, (transaction, change) => service.syncProcessCompletionVersion(transaction, change));
+    const completed = await prisma.processDefect.findUniqueOrThrow({ where: { id: automatic.id } });
+    expect(completed).toMatchObject({ version: automatic.version + 1, productSubcategory: '已补细类' });
+    const watermarks = await prisma.$queryRaw<Array<{ id: string; version: number }>>`SELECT target_id AS id,target_version AS version FROM integration_ingestion_target_versions WHERE organization_id=${item.organizationId}::uuid`;
+    expect(watermarks.find(watermark => watermark.id === automatic.id)!.version).toBe(completed.version);
+    expect(watermarks.find(watermark => watermark.id === manual.id)!.version).toBe(manual.version);
+    await machine(item, [{ id: 'automatic', description: '新来源更新' }, { id: 'manual', description: '不得覆盖人工' }]); await worker.processDue(10);
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: automatic.id } })).description).toBe('新来源更新');
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: manual.id } })).description).toBe('人工更新');
+    const job = (await service.listJobs(item.actor, {})).items[0]!;
+    expect((await service.listItems(item.actor, job.id, {})).items.map(row => row.status)).toEqual(['UPDATED','AWAITING_CONFIRMATION']);
+  });
+  it('writes a process fact through the real public transactional target boundary', async () => {
+    const item = await fixture(), receiptId = await received(item, [{ description: '真实目标事务' }]);
+    const result = await prisma.$transaction(tx => targets.write(tx, item.actor, 'PROCESS_DEFECT', { receiptId, rowIndex: 0, description: '真实目标事务' }, null, trace()));
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: result.id } })).toMatchObject({ description: '真实目标事务', sourceKind: 'IMS', defectQuantity: 1 });
+  });
+  it('reuses the previously linked process fact when a later source row loses its mapped identity across rule versions and explicit generations', async () => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '制程接收行身份', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'K', description: 'A行首建' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    await machine(item, [{ id: 'K', description: 'B行更新' }]); await worker.processDue(10);
+    const linkedJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const linked = (await service.listItems(item.actor, linkedJob.id, {})).items[0]!;
+    expect(linked.targetId).toBe(original.id);
+    const remapped = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, mapping: { externalRecordKey: 'alternateId', description: 'description' } }, trace(), key(), configuration.id);
+    const preview = await service.preview(item.actor, { ruleId: remapped.id, ruleVersion: remapped.version, receiptId: linked.receiptId, rowIndex: 0 }, trace(), key());
+    expect(preview).toMatchObject({ action: 'UNCHANGED', targetId: original.id });
+    const submitted = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true, reprocessReason: '同一接收行使用新映射重处理' }, trace(), key()); await worker.processDue(10);
+    expect((await service.listItems(item.actor, submitted.jobIds[0]!, {})).items[0]!.targetId).toBe(original.id);
+    const otherRule = await service.saveRule(item.actor, { ...remapped, enabled: false, name: '同目标另一规则' }, trace(), key());
+    const other = await submitSingle(item, otherRule, linked.receiptId); await worker.processDue(10);
+    expect((await service.listItems(item.actor, other.jobId, {})).items[0]!.targetId).toBe(original.id);
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(1);
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ description: 'B行更新' });
+  });
+  it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('supplements an anonymous process source identity through %s without creating a second keyed fact', async mode => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '补齐来源身份', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { description: 'description' }, mode, updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'supplemented', description: '原始事实' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    const initialJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const source = (await service.listItems(item.actor, initialJob.id, {})).items[0]!;
+    const mapped = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, mapping: { externalRecordKey: 'id', description: 'description' } }, trace(), key(), configuration.id);
+    const preview = await service.preview(item.actor, { ruleId: mapped.id, ruleVersion: mapped.version, receiptId: source.receiptId, rowIndex: 0 }, trace(), key());
+    const expected = mode === 'INSERT_ONLY' ? 'EXISTING_SKIPPED' : mode === 'CONFIRM' ? 'AWAITING_CONFIRMATION' : 'UPDATED';
+    expect(preview).toMatchObject({ action: expected, targetId: original.id, differences: expect.arrayContaining([{ field: 'externalRecordKey', before: null, after: 'supplemented' }]) });
+    const submitted = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true, reprocessReason: '补齐来源编号' }, trace(), key()); await worker.processDue(10);
+    const processed = (await service.listItems(item.actor, submitted.jobIds[0]!, {})).items[0]!;
+    expect(processed).toMatchObject({ status: expected, targetId: original.id });
+    if (mode === 'CONFIRM') {
+      expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).externalRecordKey).toBeNull();
+      await service.actOnItem(item.actor, processed.id, { expectedVersion: processed.version, reason: '确认补齐来源编号' }, true, trace(), key());
+    }
+    if (mode === 'INSERT_ONLY') {
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ externalRecordKey: null, version: original.version });
+      return;
+    }
+    const supplemented = await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } });
+    expect(supplemented).toMatchObject({ externalRecordKey: 'supplemented', version: original.version + 1 });
+    const history = await prisma.$queryRaw<Array<{ before: { externalRecordKey: string | null }; after: { externalRecordKey: string } }>>`SELECT before_facts AS before,after_facts AS after FROM process_defect_registration_history WHERE defect_id=${original.id}::uuid AND action='IMS_UPDATED' ORDER BY defect_version DESC LIMIT 1`;
+    expect(history[0]).toMatchObject({ before: { externalRecordKey: null }, after: { externalRecordKey: 'supplemented' } });
+    await machine(item, [{ id: 'supplemented', description: '原始事实' }]); await worker.processDue(10);
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(1);
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).version).toBe(supplemented.version);
+  });
+  it.each(['UPDATE', 'CONFIRM'] as const)('supplements a missing process identity from the same observed source version with %s', async mode => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '同源版本补齐身份', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { description: 'description' }, mode, updateFields: ['description'], sourceUpdatedAtField: 'updated' }, trace(), key());
+    await machine(item, [{ id: 'same-version', description: '原始事实', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    const initialJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const source = (await service.listItems(item.actor, initialJob.id, {})).items[0]!;
+    const mapped = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, mapping: { externalRecordKey: 'id', description: 'description' } }, trace(), key(), configuration.id);
+    const preview = await service.preview(item.actor, { ruleId: mapped.id, ruleVersion: mapped.version, receiptId: source.receiptId, rowIndex: 0 }, trace(), key());
+    expect(preview).toMatchObject({ action: mode === 'UPDATE' ? 'UPDATED' : 'AWAITING_CONFIRMATION', differences: [{ field: 'externalRecordKey', before: null, after: 'same-version' }] });
+    const submitted = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true, reprocessReason: '同一来源版本补齐此前未映射编号' }, trace(), key()); await worker.processDue(10);
+    if (mode === 'CONFIRM') {
+      const pending = (await service.listItems(item.actor, submitted.jobIds[0]!, {})).items[0]!;
+      expect((await service.getItem(item.actor, pending.id, trace())).stale).toBe(false);
+      await service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '确认同版本补齐编号' }, true, trace(), key());
+    }
+    const supplemented = await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } });
+    expect(supplemented).toMatchObject({ externalRecordKey: 'same-version', sourceObservedAt: original.sourceObservedAt, version: original.version + 1 });
+    await machine(item, [{ id: 'same-version', description: '原始事实', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(1);
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).version).toBe(supplemented.version);
+    await machine(item, [{ id: 'same-version', description: '同版本不得覆盖业务事实', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const repeatedJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const repeated = (await service.listItems(item.actor, repeatedJob.id, {})).items[0]!;
+    expect(repeated.status).toBe('AWAITING_CONFIRMATION');
+    expect((await service.getItem(item.actor, repeated.id, trace())).stale).toBe(true);
+    await expect(service.actOnItem(item.actor, repeated.id, { expectedVersion: repeated.version, reason: '同版本只能补空编号不能覆盖正文' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_STALE_CONFIRMATION' } });
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ description: '原始事实', version: supplemented.version });
+  });
+  it('does not replace an assigned process source identity when the same receipt is remapped', async () => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '不可替换来源身份', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'assigned', alternateId: 'different', description: '原始事实' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    const initialJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const source = (await service.listItems(item.actor, initialJob.id, {})).items[0]!;
+    const mapped = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, mapping: { externalRecordKey: 'alternateId', description: 'description' } }, trace(), key(), configuration.id);
+    const preview = await service.preview(item.actor, { ruleId: mapped.id, ruleVersion: mapped.version, receiptId: source.receiptId, rowIndex: 0 }, trace(), key());
+    const submitted = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true, reprocessReason: '已赋值来源不替换' }, trace(), key()); await worker.processDue(10);
+    expect((await service.listItems(item.actor, submitted.jobIds[0]!, {})).items[0]!.targetId).toBe(original.id);
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ externalRecordKey: 'assigned', version: original.version });
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(1);
+  });
+  it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('persists source-observation-only process changes with %s and preserves history, versions and stale-source protection', async mode => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '来源观察事实', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode, updateFields: ['description'], sourceUpdatedAtField: 'updated' }, trace(), key());
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    const latestJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const processed = (await service.listItems(item.actor, latestJob.id, {})).items[0]!;
+    expect(processed.status).toBe(mode === 'INSERT_ONLY' ? 'EXISTING_SKIPPED' : mode === 'CONFIRM' ? 'AWAITING_CONFIRMATION' : 'UPDATED');
+    if (mode === 'CONFIRM') {
+      expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).sourceObservedAt).toEqual(new Date('2026-01-01T00:00:00Z'));
+      expect((await service.getItem(item.actor, processed.id, trace())).differences).toEqual(expect.arrayContaining([{ field: 'sourceObservedAt', before: '2026-01-01T00:00:00.000Z', after: '2026-02-01T00:00:00.000Z' }]));
+      await service.actOnItem(item.actor, processed.id, { expectedVersion: processed.version, reason: '确认来源观察时间' }, true, trace(), key());
+    }
+    if (mode === 'INSERT_ONLY') {
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ sourceObservedAt: new Date('2026-01-01T00:00:00Z'), version: original.version });
+      return;
+    }
+    const updated = await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } });
+    expect(updated).toMatchObject({ sourceObservedAt: new Date('2026-02-01T00:00:00Z'), description: '原始事实', version: original.version + 1 });
+    const history = await prisma.$queryRaw<Array<{ before: { sourceObservedAt: string }; after: { sourceObservedAt: string }; version: number }>>`SELECT before_facts AS before,after_facts AS after,defect_version AS version FROM process_defect_registration_history WHERE defect_id=${original.id}::uuid AND action='IMS_UPDATED' ORDER BY defect_version DESC LIMIT 1`;
+    expect(history[0]).toMatchObject({ before: { sourceObservedAt: '2026-01-01T00:00:00.000Z' }, after: { sourceObservedAt: '2026-02-01T00:00:00.000Z' }, version: updated.version });
+    const watermark = await prisma.$queryRaw<Array<{ version: number; observed: Date }>>`SELECT target_version AS version,source_updated_at AS observed FROM integration_ingestion_target_versions WHERE organization_id=${item.organizationId}::uuid AND target_id=${original.id}::uuid`;
+    expect(watermark[0]).toEqual({ version: updated.version, observed: updated.sourceObservedAt });
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).version).toBe(updated.version);
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-01-15T00:00:00Z' }]); await worker.processDue(10);
+    const oldJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const oldItem = (await service.listItems(item.actor, oldJob.id, {})).items[0]!;
+    expect(oldItem.status).toBe('AWAITING_CONFIRMATION');
+    expect((await service.getItem(item.actor, oldItem.id, trace())).stale).toBe(true);
+    await expect(service.actOnItem(item.actor, oldItem.id, { expectedVersion: oldItem.version, reason: '不得回退来源观察时间' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_STALE_CONFIRMATION' } });
+    expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).sourceObservedAt).toEqual(updated.sourceObservedAt);
+  });
+  it('retains the last valid process source watermark when a missing observation is accepted for completion', async () => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '来源时间缺项不丢版本', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'], sourceUpdatedAtField: 'updated' }, trace(), key());
+    await machine(item, [{ id: 'source-watermark', description: '已知新版事实', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    await machine(item, [{ id: 'source-watermark', description: '已知新版事实' }]); await worker.processDue(10);
+    const incomplete = await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } });
+    expect(incomplete).toMatchObject({ sourceObservedAt: original.sourceObservedAt, version: original.version + 1 });
+    expect(incomplete.registrationIssues).toContain('sourceObservedAt:INVALID');
+    const watermark = await prisma.$queryRaw<Array<{ observed: Date | null }>>`SELECT source_updated_at AS observed FROM integration_ingestion_target_versions WHERE organization_id=${item.organizationId}::uuid AND target_id=${original.id}::uuid`;
+    expect(watermark[0]!.observed).toEqual(original.sourceObservedAt);
+    await machine(item, [{ id: 'source-watermark', description: '过时来源不得覆盖', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const oldJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const pending = (await service.listItems(item.actor, oldJob.id, {})).items[0]!;
+    expect(pending.status).toBe('AWAITING_CONFIRMATION');
+    expect((await service.getItem(item.actor, pending.id, trace())).stale).toBe(true);
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ description: '已知新版事实', version: incomplete.version });
+  });
+  it('reports conflicting persisted process row links instead of selecting an arbitrary ledger identity', async () => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '制程旧来源冲突', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ id: 'K', description: '事实K' }, { id: 'L', description: '事实L' }]); await worker.processDue(10);
+    const job = (await service.listJobs(item.actor, {})).items[0]!, rows = (await service.listItems(item.actor, job.id, {})).items;
+    const initialPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: rows[0]!.receiptId, rowIndex: 0 }, trace(), key());
+    const replay = await service.submitImport(item.actor, { previewId: initialPreview.previewId, confirmed: true, reprocessReason: '构造既有重复来源链接的历史夹具' }, trace(), key()); await worker.processDue(10);
+    const replayedItem = (await service.listItems(item.actor, replay.jobIds[0]!, {})).items[0]!;
+    await prisma.$executeRaw`UPDATE integration_ingestion_items SET target_id=${rows[1]!.targetId}::uuid,target_version=${rows[1]!.targetVersion} WHERE id=${replayedItem.id}::uuid`;
+    expect(await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: rows[0]!.receiptId, rowIndex: 0 }, trace(), key())).toMatchObject({ action: 'VALIDATION_FAILED', errorCode: 'PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT' });
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(2);
+  });
+  it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('preserves process %s strategy while keeping incomplete source facts from clearing saved facts', async mode => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '制程三策略', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description', productCode: 'product' }, mode, updateFields: ['description', 'productCode'] }, trace(), key());
+    await machine(item, [{ id: 'same', product: '0007', description: '初值' }]); await worker.processDue(10);
+    await machine(item, [{ id: 'same', description: '新值' }]); await worker.processDue(10);
+    const record = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    expect(record.productCode).toBe('0007');
+    expect(record.description).toBe(mode === 'UPDATE' ? '新值' : '初值');
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(1);
+    const jobs = (await service.listJobs(item.actor, {})).items;
+    expect(jobs.some(job => mode === 'CONFIRM' ? job.awaitingConfirmation === 1 : mode === 'INSERT_ONLY' ? job.skipped === 1 : job.succeeded === 1)).toBe(true);
+  });
+  it('requires explicit confirmation for process facts maintained by a person and rejects an older confirmation after a later source', async () => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '制程人工保护', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'], sourceUpdatedAtField: 'updated' }, trace(), key());
+    await machine(item, [{ id: 'manual', description: '来源初值', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const record = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    const updated = await app.get(ProcessDefectLedgerService).update(item.actor, record.id, { expectedVersion: record.version, description: '人工修正' }, trace(), key());
+    await machine(item, [{ id: 'manual', description: '来源覆盖', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    const job = (await service.listJobs(item.actor, {})).items.find(job => job.awaitingConfirmation === 1)!;
+    const pending = (await service.listItems(item.actor, job.id, {})).items[0]!;
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: record.id } })).toMatchObject({ description: '人工修正', version: updated.version });
+    await service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '人工核实采用来源事实' }, true, trace(), key());
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: record.id } })).toMatchObject({ description: '来源覆盖' });
+    await machine(item, [{ id: 'manual', description: '来源旧版', updated: '2026-01-15T00:00:00Z' }]); await worker.processDue(10);
+    const oldJob = (await service.listJobs(item.actor, {})).items.find(job => job.awaitingConfirmation === 1)!;
+    const oldPending = (await service.listItems(item.actor, oldJob.id, {})).items[0]!;
+    expect((await service.getItem(item.actor, oldPending.id, trace())).stale).toBe(true);
+    await expect(service.actOnItem(item.actor, oldPending.id, { expectedVersion: oldPending.version, reason: '不能采用落后版本' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_STALE_CONFIRMATION' } });
+  });
+  it('persists process source issues without clearing valid facts and clears only supplied same-value corrections', async () => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '制程字段问题', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description', lineName: 'line', operationName: 'operation' }, mode: 'UPDATE', updateFields: ['description', 'lineName', 'operationName'], sourceUpdatedAtField: 'updated' }, trace(), key());
+    const load = () => prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
+    await machine(item, [{ id: 'issues', description: '合法事实', line: '原产线', operation: '原工序', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
+    const initial = await load();
+    await machine(item, [{ id: 'issues', line: { raw: '问题只在受控正文' }, operation: ['invalid'], updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    const invalid = await load();
+    expect(invalid).toMatchObject({ lineName: '原产线', operationName: '原工序', description: '合法事实', version: initial.version + 1, pendingCompletion: true });
+    expect(invalid.registrationIssues).toEqual(expect.arrayContaining(['lineName:TYPE', 'operationName:TYPE']));
+    await machine(item, [{ id: 'issues', line: '原产线', updated: '2026-03-01T00:00:00Z' }]); await worker.processDue(10);
+    const corrected = await load();
+    expect(corrected).toMatchObject({ version: invalid.version + 1, lineName: '原产线', operationName: '原工序' });
+    expect(corrected.registrationIssues).not.toContain('lineName:TYPE');
+    expect(corrected.registrationIssues).toContain('operationName:TYPE');
+    await machine(item, [{ id: 'issues', line: '原产线', updated: '2026-04-01T00:00:00Z' }]); await worker.processDue(10);
+    expect(await load()).toMatchObject({ version: corrected.version + 1, sourceObservedAt: new Date('2026-04-01T00:00:00Z') });
+    await machine(item, [{ id: 'issues', line: '原产线', updated: '2026-04-01T00:00:00Z' }]); await worker.processDue(10);
+    expect((await load()).version).toBe(corrected.version + 1);
+    await machine(item, [{ id: 'issues', operation: '原工序', updated: '2026-01-15T00:00:00Z' }]); await worker.processDue(10);
+    const pendingJob = (await service.listJobs(item.actor, {})).items.find(job => job.awaitingConfirmation === 1)!;
+    const pending = (await service.listItems(item.actor, pendingJob.id, {})).items[0]!;
+    expect((await load()).registrationIssues).toContain('operationName:TYPE');
+    await expect(service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '拒绝旧来源消除新问题' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'INGESTION_STALE_CONFIRMATION' } });
+  });
+  it.each(['INSERT_ONLY', 'CONFIRM'] as const)('honors process %s strategy for issues-only changes and applies explicit confirmation', async mode => {
+    const item = await fixture();
+    await service.saveRule(item.actor, { name: '制程字段问题策略', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description', lineName: 'line' }, mode, updateFields: ['description', 'lineName'] }, trace(), key());
+    await machine(item, [{ id: 'issues', description: '原事实', line: '原产线' }]); await worker.processDue(10);
+    await machine(item, [{ id: 'issues', line: { invalid: true } }]); await worker.processDue(10);
+    expect((await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } })).registrationIssues).not.toContain('lineName:TYPE');
+    const job = (await service.listJobs(item.actor, {})).items.find(job => mode === 'CONFIRM' ? job.awaitingConfirmation === 1 : job.skipped === 1)!;
+    expect(job).toBeDefined();
+    if (mode === 'CONFIRM') {
+      const pending = (await service.listItems(item.actor, job.id, {})).items[0]!;
+      expect((await service.getItem(item.actor, pending.id, trace())).differences).toContainEqual(expect.objectContaining({ field: 'registrationIssues' }));
+      await machine(item, [{ id: 'issues', line: { invalid: true } }]); await worker.processDue(10);
+      expect((await service.listJobs(item.actor, {})).items.reduce((count, entry) => count + entry.awaitingConfirmation, 0)).toBe(1);
+      await service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '明确采用来源字段问题' }, true, trace(), key());
+      expect((await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } })).registrationIssues).toContain('lineName:TYPE');
+    }
+  });
+  it('keeps a process identity conflict as a row issue without merging records or blocking later rows', async () => {
+    const item = await fixture();
+    const configuration = await service.saveRule(item.actor, { name: '制程身份冲突', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { externalRecordKey: 'id', description: 'description' }, mode: 'UPDATE', updateFields: ['description'] }, trace(), key());
+    await machine(item, [{ alternateId: 'claimed', description: '原匿名记录' }]); await worker.processDue(10);
+    const anonymousJob = (await service.listJobs(item.actor, {})).items[0]!;
+    const anonymousItem = (await service.listItems(item.actor, anonymousJob.id, {})).items[0]!;
+    await machine(item, [{ id: 'claimed', description: '已占用来源身份' }]); await worker.processDue(10);
+    const changedRule = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, mapping: { externalRecordKey: 'alternateId', description: 'description' } }, trace(), key(), configuration.id);
+    const preview = await service.preview(item.actor, { ruleId: changedRule.id, ruleVersion: changedRule.version, receiptId: anonymousItem.receiptId, rowIndex: 0 }, trace(), key());
+    expect(preview).toMatchObject({ action: 'VALIDATION_FAILED', errorCode: 'PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT' });
+    const submitted = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key()); await worker.processDue(10);
+    expect(await service.getJob(item.actor, submitted.jobIds[0]!)).toMatchObject({ status: 'COMPLETED', failed: 1 });
+    await machine(item, [{ alternateId: 'new', description: '后续来源仍可入账' }]); await worker.processDue(10);
+    expect(await prisma.processDefect.count({ where: { organizationId: item.organizationId } })).toBe(3);
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: anonymousItem.targetId! } })).toMatchObject({ description: '原匿名记录' });
   });
 
   it.each([null, new Date(Date.now() - 600000)])('allows previews and explicit history imports with active authentication last reverified at %s', async reauthenticatedAt => {

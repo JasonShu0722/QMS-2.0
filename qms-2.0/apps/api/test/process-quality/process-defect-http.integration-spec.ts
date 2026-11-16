@@ -45,7 +45,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
 
   it('creates, queries, updates and archives a manual defect through protected routes', async () => {
     await send('post', 'defect-types', { code: 'BURR', name: '毛刺' }).expect(201);
-    const input = { defectTypeCode: 'BURR', description: '端面毛刺', defectQuantity: 3, occurredAt: '2026-09-24T02:00:00Z', batchCode: 'HTTP-B', responsibilityCategory: 'PROCESS' };
+    const input = { defectTypeCode: 'BURR', description: '端面毛刺', defectQuantity: 3, occurredAt: '2026-09-24T02:00:00Z', productCode: 'HTTP-P', traceCode: 'HTTP-T', batchCode: 'HTTP-B', responsibilityCategory: 'PROCESS' };
     const created = await send('post', 'defects', input).expect(201);
     expect(created.body.version).toBe(1);
     const listed = await request(app.getHttpServer()).get('/api/v1/process-quality/defects?batchCode=HTTP-B').set('Cookie', cookie).expect(200);

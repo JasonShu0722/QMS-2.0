@@ -101,7 +101,7 @@ describe('process production facts on PostgreSQL', () => {
     const facts = input();
     const record = await production.create(actor, facts, randomUUID(), randomUUID());
     await defects.createDefectType(actor, { code: 'PROCESS-PP', name: '制程不良' }, randomUUID(), randomUUID());
-    const defect = await defects.create(actor, { defectTypeCode: 'PROCESS-PP', description: '装配毛刺', defectQuantity: 2, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode, responsibilityCategory: 'PROCESS' }, randomUUID(), randomUUID());
+    const defect = await defects.create(actor, { defectTypeCode: 'PROCESS-PP', description: '装配毛刺', productCode: 'PP-PRODUCT', traceCode: randomUUID(), defectQuantity: 2, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode, responsibilityCategory: 'PROCESS' }, randomUUID(), randomUUID());
     const detail = await production.detail(actor, record.id);
     expect(detail.defects.map((item: { id: string }) => item.id)).toContain(defect.id);
     expect(detail.defectQuantity).toBe(2);
@@ -111,7 +111,7 @@ describe('process production facts on PostgreSQL', () => {
     const facts = input();
     const record = await production.create(actor, facts, randomUUID(), randomUUID());
     for (const defectQuantity of quantities) {
-      await defects.create(actor, { description: 'Quantity regression', defectQuantity, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode }, randomUUID(), randomUUID());
+      await prisma.processDefect.create({ data: { organizationId, description: 'Quantity regression', defectQuantity, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode, createdById: actor.id, updatedById: actor.id } });
     }
     return record;
   }
@@ -149,7 +149,7 @@ describe('process production facts on PostgreSQL', () => {
       [record.batchCode, 'OTHER', periodStart],
       ['OTHER', record.operationCode, periodStart],
     ] as const) {
-      await defects.create(actor, { description: 'Unassociated quantity', defectQuantity: null, occurredAt, batchCode, workOrderCode: record.workOrderCode, operationCode }, randomUUID(), randomUUID());
+      await prisma.processDefect.create({ data: { organizationId, description: 'Unassociated quantity', defectQuantity: null, occurredAt, batchCode, workOrderCode: record.workOrderCode, operationCode, createdById: actor.id, updatedById: actor.id } });
     }
     expect((await production.detail(actor, record.id)).defectQuantity).toBe(2);
     expect((await prisma.$transaction(tx => production.snapshot(tx, organizationId, [record.id]))).defectQuantity).toBe(2);
