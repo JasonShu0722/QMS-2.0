@@ -50,6 +50,7 @@ import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEig
 import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d-reminder.js';
 import { SystemManagementModule } from './modules/system-management/system-management.module.js';
 import { ApiIntegrationModule } from './modules/api-integration/api-integration.module.js';
+import { AiConnectionsModule } from './modules/ai-configuration/ai-connections.module.js';
 
 @Module({
   controllers: [AdministrativeReconfigurationController, AdministrativeProblemReconfigurationController],
@@ -70,6 +71,7 @@ import { ApiIntegrationModule } from './modules/api-integration/api-integration.
     TaskNotificationModule,
     SystemManagementModule,
     ApiIntegrationModule,
+    AiConnectionsModule,
     ReportingModule,
     ProblemIndexModule,
     ProblemSavedViewModule,

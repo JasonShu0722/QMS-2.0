@@ -11,9 +11,11 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource }: { resource: { resourceType: string; resourceId: string } }) => <div>附件资源 {resource.resourceType}:{resource.resourceId}</div> }));
+vi.mock('./ProcessTraceScanner', () => ({ ProcessTraceScanner: ({ onScan, onClose }: { onScan: (value: string) => void; onClose: () => void }) => <div role="dialog" aria-label="测试本地扫码"><button onClick={() => { onScan('SCANNED-0001'); onClose(); }}>回填测试码</button><button onClick={onClose}>取消扫码</button></div> }));
 const record: components['schemas']['ProcessDefectDto'] = {
   id: 'defect', organizationId: 'org', description: '原始线索', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE', analysisProgress: null, ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null,
   sourceKind: 'MANUAL', version: 2, materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [], evidence: [], projectCode: 'MANUAL',
+  lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
   materials: [{ id: 'material', organizationId: 'org', defectId: 'defect', position: 0, materialCode: 'MAT-1', materialName: '物料一', supplierProfileId: 'profile-a', supplierOrganizationId: 'supplier-a', materialBatch: 'BATCH-1', sqeUserId: 'sqe', notes: '原物料线索', verification: 'NOT_MATERIAL', verificationNotes: '历史结论', verifiedById: 'sqe', verifiedAt: null, verificationHistory: [] }],
 };
 const suppliers: components['schemas']['SupplierProfileDto'][] = [{ id: 'profile-a', version: 1, supplierOrganizationId: 'supplier-a', businessCode: 'A', displayName: '供应商甲' }, { id: 'profile-b', version: 1, supplierOrganizationId: 'supplier-b', businessCode: 'B', displayName: '供应商乙' }];
@@ -27,8 +29,92 @@ function editor(initial: typeof record | 'new' = record) {
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={initial === 'new' ? undefined : initial} suppliers={suppliers} canReadSuppliers onSaved={onSaved} onClose={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   return onSaved;
 }
+function fillRequiredFacts() {
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '测试不良' } });
+  fireEvent.change(screen.getByLabelText('发生时间'), { target: { value: '2026-11-16T09:30' } });
+  fireEvent.change(screen.getByLabelText('成品编码'), { target: { value: '000123' } });
+  fireEvent.change(screen.getByLabelText('追溯码'), { target: { value: 'TRACE-1' } });
+}
+it('requires four registration facts and defaults quantity to one without creating from an incomplete form', async () => {
+  const saved = editor('new');
+  expect(screen.getByLabelText('不良数量')).toHaveValue('1');
+  fireEvent.click(screen.getByText('保存登记'));
+  await screen.findByText('请填写不良描述');
+  expect(saved).not.toHaveBeenCalled();
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  fillRequiredFacts();
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', productCode: '000123', traceCode: 'TRACE-1', defectQuantity: 1 });
+  expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('projectCode');
+});
+it('allows a missing IMS source identity to be supplemented and preserves its draft on a conflict', async () => {
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (init?.method) throw new ApiError({ code: 'PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT', message: '' }, 409);
+    return path.includes('material-sqes') ? { items: [], total: 0 } : [];
+  });
+  editor({ ...record, sourceKind: 'IMS', externalRecordKey: null });
+  fireEvent.change(screen.getByLabelText('来源明细编号'), { target: { value: '  000099  ' } });
+  fireEvent.click(screen.getByText('保存登记'));
+  await screen.findByText('来源明细编号已用于另一条台账，请核对；当前记录及输入均保留。');
+  expect(screen.getByLabelText('来源明细编号')).toHaveValue('  000099  ');
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ externalRecordKey: '000099', expectedVersion: 2 });
+  expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('sourceKind');
+});
+it('keeps an existing source identity read-only and never resubmits it as a correction', async () => {
+  const saved = editor({ ...record, sourceKind: 'IMS', externalRecordKey: '000001' });
+  expect(screen.getByLabelText('来源明细编号')).toHaveAttribute('readonly');
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '补充说明' } });
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
+  expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('externalRecordKey');
+});
+it('sends only changed IMS facts so a partial completion does not protect untouched source fields', async () => {
+  const saved = editor({ ...record, sourceKind: 'IMS', productCode: '000012' });
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '人工补充' } });
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
+  const body = JSON.parse(String(call?.[1]?.body));
+  expect(body).toMatchObject({ description: '人工补充', expectedVersion: 2 });
+  for (const field of ['productCode', 'traceCode', 'occurredAt', 'workOrderCode', 'operationName', 'lineName']) expect(body).not.toHaveProperty(field);
+});
+it('preserves an IMS material edit when saving only changed facts', async () => {
+  const saved = editor({ ...record, sourceKind: 'IMS' });
+  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
+  fireEvent.change(await screen.findByLabelText('物料说明 1'), { target: { value: '现场补充物料说明' } });
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ materials: [{ id: 'material', notes: '现场补充物料说明', sqeUserId: 'sqe', supplierProfileId: 'profile-a' }] });
+});
+it('fills the scanned trace code without saving and keeps other registration drafts after cancellation', async () => {
+  const saved = editor('new');
+  fillRequiredFacts();
+  fireEvent.click(screen.getByRole('button', { name: '手机扫码' }));
+  fireEvent.click(screen.getByRole('button', { name: '回填测试码' }));
+  expect(screen.getByLabelText('追溯码')).toHaveValue('SCANNED-0001');
+  expect(screen.getByLabelText('成品编码')).toHaveValue('000123');
+  expect(screen.queryByRole('dialog', { name: '测试本地扫码' })).not.toBeInTheDocument();
+  expect(saved).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '手机扫码' }));
+  fireEvent.click(screen.getByRole('button', { name: '取消扫码' }));
+  expect(screen.getByLabelText('追溯码')).toHaveValue('SCANNED-0001');
+  expect(screen.getByLabelText('不良描述')).toHaveValue('测试不良');
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+it('keeps a scanner-gun Enter suffix from submitting the registration', () => {
+  editor('new');
+  fillRequiredFacts();
+  expect(fireEvent.keyDown(screen.getByLabelText('追溯码'), { key: 'Enter', code: 'Enter' })).toBe(false);
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
 it('starts a new registration with one optional material row and preserves appended partial facts while collapsed', async () => {
   const saved = editor('new');
+  fillRequiredFacts();
   expect(screen.queryByRole('heading', { name: '附件与扫描' })).not.toBeInTheDocument();
   expect(screen.queryByText(/附件资源 process-defect:/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
@@ -63,6 +149,7 @@ it('preserves the selected SQE label while paging and retires it after session A
 });
 it('prunes blank added material rows without requiring material facts for a new registration', async () => {
   const saved = editor('new');
+  fillRequiredFacts();
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
   fireEvent.click(screen.getByText('添加物料'));
   fireEvent.change(screen.getByLabelText('物料编码 1'), { target: { value: '   ' } });
@@ -70,7 +157,7 @@ it('prunes blank added material rows without requiring material facts for a new 
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '', defectQuantity: null, occurredAt: null, responsibilityCategory: null, materials: [] });
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', defectQuantity: 1, responsibilityCategory: null, materials: [] });
 });
 it('preserves manual mapping, material identity, batch and SQE without sending read-only review fields', async () => {
   const saved = editor();
@@ -81,7 +168,8 @@ it('preserves manual mapping, material identity, batch and SQE without sending r
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path.endsWith('/defect') && init?.method === 'PUT');
   const body = JSON.parse(String(call?.[1]?.body));
-  expect(body).toMatchObject({ expectedVersion: 2, projectCode: 'MANUAL', defectQuantity: null, occurredAt: null, materials: [{ id: 'material', materialCode: 'MAT-1', materialBatch: 'BATCH-1', supplierProfileId: 'profile-b', supplierOrganizationId: 'supplier-b', sqeUserId: 'sqe' }] });
+  expect(body).toMatchObject({ expectedVersion: 2, defectQuantity: null, occurredAt: null, materials: [{ id: 'material', materialCode: 'MAT-1', materialBatch: 'BATCH-1', supplierProfileId: 'profile-b', supplierOrganizationId: 'supplier-b', sqeUserId: 'sqe' }] });
+  expect(body).not.toHaveProperty('projectCode');
   expect(body.materials[0]).not.toHaveProperty('verification');
   expect(screen.getByText('附件资源 process-defect:defect')).toBeVisible();
 });
@@ -91,18 +179,19 @@ it('keeps a manual edit intact after a real 409 instead of replacing it with fet
     return path.includes('material-sqes') ? { items: [], total: 0 } : [];
   });
   editor();
-  fireEvent.change(screen.getByLabelText('失效现象'), { target: { value: '人工修改保留' } });
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '人工修改保留' } });
   fireEvent.click(screen.getByText('保存登记'));
   await screen.findByText('记录已被其他用户更新，请刷新后重试');
-  expect(screen.getByLabelText('失效现象')).toHaveValue('人工修改保留');
+  expect(screen.getByLabelText('不良描述')).toHaveValue('人工修改保留');
 });
 it('preserves unexpanded clue and material fields when saving only the description', async () => {
   const saved = editor();
-  fireEvent.change(screen.getByLabelText('失效现象'), { target: { value: '只补充现象' } });
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '只补充现象' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '只补充现象', projectCode: 'MANUAL', traceCode: 'TRACE', materials: [{ id: 'material', materialCode: 'MAT-1', supplierProfileId: 'profile-a', sqeUserId: 'sqe' }] });
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '只补充现象', traceCode: 'TRACE', materials: [{ id: 'material', materialCode: 'MAT-1', supplierProfileId: 'profile-a', sqeUserId: 'sqe' }] });
+  expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('projectCode');
 });
 it('leaves retry available after an unknown save outcome and replays the exact create request', async () => {
   let attempts = 0;
@@ -111,10 +200,10 @@ it('leaves retry available after an unknown save outcome and replays the exact c
     return init?.method ? record : path.includes('material-sqes') ? { items: [], total: 0 } : [];
   });
   const saved = editor();
-  fireEvent.change(screen.getByLabelText('失效现象'), { target: { value: '原请求' } });
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '原请求' } });
   fireEvent.click(screen.getByText('保存登记'));
   const retry = await screen.findByText('同请求重试保存');
-  expect(screen.getByLabelText('失效现象')).toBeDisabled();
+  expect(screen.getByLabelText('不良描述')).toBeDisabled();
   expect(retry.closest('button')).toBeEnabled();
   fireEvent.click(retry);
   await waitFor(() => expect(saved).toHaveBeenCalled());

@@ -305,6 +305,7 @@ it.each(['settings', 'portal'] as const)('preserves the real configuration %s dr
     if (path.includes('/settings?')) return { notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 3 };
     if (path.includes('/notification-rules?')) return [{ kind: 'TASK_ASSIGNED', enabled: true, subjectTemplate: 'Saved subject', bodyTemplate: 'Saved body', version: 2 }];
     if (path.includes('/position-categories?')) return [];
+    if (path.includes('/operation-sectors?')) return [];
     throw new Error(`Unexpected configuration request ${path}`);
   });
   const result = view('/console/configuration');

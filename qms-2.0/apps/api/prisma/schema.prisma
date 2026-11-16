@@ -860,12 +860,36 @@ model ProcessDefect {
   organizationId         String    @map("organization_id") @db.Uuid
   defectTypeCode         String?   @map("defect_type_code") @db.VarChar(64)
   description            String    @db.Text
+  descriptionDirect      String?   @map("description_direct") @db.Text
+  descriptionInput       Json?     @map("description_input")
+  descriptionAi          String?   @map("description_ai") @db.Text
+  descriptionAiStatus    String    @default("DISABLED") @map("description_ai_status") @db.VarChar(16)
+  descriptionSource      String    @default("MANUAL") @map("description_source") @db.VarChar(16)
+  descriptionInputVersion Int      @default(0) @map("description_input_version")
+  descriptionTaskId      String?   @map("description_task_id") @db.Uuid
   defectQuantity         Int?      @map("defect_quantity")
   occurredAt             DateTime? @map("occurred_at") @db.Timestamptz(3)
   batchCode              String?   @map("batch_code") @db.VarChar(100)
   workOrderCode          String?   @map("work_order_code") @db.VarChar(100)
   operationCode          String?   @map("operation_code") @db.VarChar(100)
   lineCode               String?   @map("line_code") @db.VarChar(100)
+  operationName          String?   @map("operation_name") @db.VarChar(200)
+  lineName               String?   @map("line_name") @db.VarChar(200)
+  shift                  String?   @db.VarChar(8)
+  registrationVersion    Int?      @map("registration_version")
+  registrationIssues     String[]  @default([]) @map("registration_issues")
+  pendingCompletion      Boolean   @default(false) @map("pending_completion")
+  pendingConfiguration   Boolean   @default(false) @map("pending_configuration")
+  completionNextAttemptAt DateTime? @map("completion_next_attempt_at") @db.Timestamptz(3)
+  completionAttempts     Int       @default(0) @map("completion_attempts")
+  projectSnapshot        Json?     @map("project_snapshot")
+  productSubcategory     String?   @map("product_subcategory") @db.VarChar(100)
+  subcategorySnapshot    Json?     @map("subcategory_snapshot")
+  operationSector        String?   @map("operation_sector") @db.VarChar(200)
+  sectorSnapshot         Json?     @map("sector_snapshot")
+  sourceReceiptId        String?   @map("source_receipt_id") @db.Uuid
+  sourceRowIndex         Int?      @map("source_row_index")
+  manualFields           String[]  @default([]) @map("manual_fields")
   projectCode            String?   @map("project_code") @db.VarChar(100)
   productCode            String?   @map("product_code") @db.VarChar(100)
   materialCode           String?   @map("material_code") @db.VarChar(100)
@@ -889,6 +913,7 @@ model ProcessDefect {
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([organizationId, externalSourceSystem, externalRecordKey], map: "process_defects_external_key")
+  @@unique([organizationId, sourceReceiptId, sourceRowIndex], map: "process_defects_receipt_row_key")
   @@unique([organizationId, id])
   @@index([organizationId, archivedAt, occurredAt])
   @@index([organizationId, batchCode, workOrderCode])

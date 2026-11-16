@@ -9,6 +9,17 @@ import { problemCenterTranslations } from '../features/problem-center/problem-ce
 import { administrativeTranslations } from '../features/admin/administrative-translations';
 
 const translations: Record<string, string> = {
+  'AI连接': 'AI connections', '新增AI连接': 'Add AI connection', '刷新AI连接': 'Refresh AI connections',
+  '连接名称': 'Connection name', '服务API地址': 'Service API URL', '可用模型': 'Allowed models', '默认模型': 'Default model',
+  'API密钥': 'API key', '启用连接': 'Enable connection', '密钥状态': 'Credential status',
+  '已配置': 'Configured', '未配置': 'Not configured', '测试连接': 'Test connection', '连接测试': 'Connection test',
+  '测试成功': 'Test passed', '测试失败，请检查配置': 'Test failed. Check the configuration.',
+  '清除密钥': 'Clear credential', '清除AI密钥': 'Clear AI credential', '确认清除': 'Confirm removal',
+  '留空保留已保存密钥': 'Leave blank to retain the saved credential',
+  '更换服务地址时请填写新密钥': 'Enter a new credential when changing the service URL',
+  '请填写API密钥': 'Enter an API key', '请填写有效的HTTPS地址': 'Enter a valid HTTPS URL',
+  '请选择可用模型': 'Select an allowed model',
+  '清除后连接将停用；再次使用需重新填写密钥。': 'Clearing the credential disables this connection. Enter a new credential before using it again.',
   '问题截止起始': 'Problem due from',
   '问题截止结束': 'Problem due to',
   '尚有未导入行；离开页面将停止后续批次。': 'Rows remain to be imported. Leaving the page stops subsequent batches.',

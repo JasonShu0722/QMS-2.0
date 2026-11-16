@@ -8,5 +8,9 @@
 .qms-ingestion-page small,.qms-ingestion-section small,.qms-ingestion-secondary{display:block;color:var(--qms-muted);font-size:12px}
 .qms-ingestion-counts{display:flex;flex-wrap:wrap;gap:8px 16px}
 .qms-ingestion-actions{margin-top:12px}
+.qms-ingestion-description-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center}
+.qms-ingestion-ai-row{grid-template-columns:repeat(3,minmax(0,1fr)) auto}
+.qms-ingestion-field-value{white-space:pre-wrap;overflow-wrap:anywhere}
 .qms-ingestion-page .ant-table-cell{overflow-wrap:anywhere}
 @media(max-width:680px){.qms-ingestion-grid{grid-template-columns:minmax(0,1fr)}.qms-ingestion-condition{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.qms-ingestion-condition>:last-child{justify-self:start}.qms-ingestion-page .ant-tabs-content-holder{min-width:0}}
+@media(max-width:680px){.qms-ingestion-description-row{grid-template-columns:minmax(0,1fr)}.qms-ingestion-description-row>.ant-space{margin-bottom:12px}}

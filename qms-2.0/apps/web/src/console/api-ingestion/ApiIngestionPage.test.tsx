@@ -71,6 +71,35 @@ beforeEach(() => {
   });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); localStorage.clear(); });
+it('edits process source fields and ordered description composition without exposing derived update fields', async () => {
+  mocks.mutate.mockResolvedValue({});
+  const processRule = { ...rule, target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, updateFields: ['description'], sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } } as Rule;
+  const dialog = editorView(processRule);
+  expect(dialog.getByLabelText('成品编码来源字段')).toHaveValue('product');
+  expect(dialog.queryByLabelText('编码来源字段')).not.toBeInTheDocument();
+  expect(dialog.getByLabelText('描述来源字段1')).toHaveValue('fault');
+  expect(dialog.getByLabelText('描述标签2')).toHaveValue('位置');
+  expect(dialog.queryByLabelText('班次')).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByRole('button', { name: '下移描述字段1' }));
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, descriptionComposition: { fields: [{ path: 'position', label: '位置' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
+  expect(mocks.mutate.mock.calls[0][2].mapping).not.toHaveProperty('code');
+});
+it('previews incomplete process facts as an importable ledger result and shows safe plain text', async () => {
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-process', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'INSERTED', fields: { description: '<b>松脱</b>\n位置：0 / false' }, differences: [], pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED'], defectQuantity: 1 });
+  componentView(<ImportPreview scope={verifiedScope()} rule={{ ...rule, target: 'PROCESS_DEFECT' } as Rule} history canReceipts close={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.change(dialog.getByLabelText('接收时间起'), { target: { value: '2026-11-01T00:00' } });
+  fireEvent.change(dialog.getByLabelText('接收时间止'), { target: { value: '2026-11-13T12:00' } });
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
+  await waitFor(() => expect(preview.getByText('待完善')).toBeVisible());
+  expect(preview.getByText('待补配')).toBeVisible();
+  expect(preview.getByText('不良数量: 1')).toBeVisible();
+  expect(preview.getByText(/<b>松脱<\/b>/)).toBeVisible();
+  expect(preview.getByRole('button', { name: '确认导入' })).toBeEnabled();
+});
 it('requires the scoped ingestion capability even for a platform administrator', () => {
   mocks.context = { ...context(), modules: [] }; view();
   expect(screen.getByRole('alert')).toHaveTextContent('无权访问API入库衔接'); expect(read).not.toHaveBeenCalled();
@@ -83,9 +112,11 @@ it('shows named endpoints and keeps mutation controls absent for readers', async
 it('opens receipt-linked processing jobs and clears the controlled receipt filter', async () => {
   view(`/console/api-ingestion?receiptId=${receiptId}`);
   await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && new URL(call[0], 'http://localhost').searchParams.get('receiptId') === receiptId)).toBe(true));
-  expect(pageTab('处理任务')).toHaveAttribute('aria-selected', 'true');
-  fireEvent.click(screen.getByRole('button', { name: '清除接收记录筛选' })); await screen.findByText('供应商规则');
-  expect(screen.queryByRole('button', { name: '清除接收记录筛选' })).not.toBeInTheDocument();
+  const selectedTab = pageTab('处理任务');
+  expect(selectedTab).toHaveAttribute('aria-selected', 'true');
+  const jobs = within(document.getElementById(selectedTab.getAttribute('aria-controls')!)!);
+  fireEvent.click(jobs.getByRole('button', { name: '清除接收记录筛选' })); await screen.findByText('供应商规则');
+  expect(jobs.queryByRole('button', { name: '清除接收记录筛选' })).not.toBeInTheDocument();
   fireEvent.click(pageTab('处理任务'));
   await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && !new URL(call[0], 'http://localhost').searchParams.has('receiptId'))).toBe(true));
 });

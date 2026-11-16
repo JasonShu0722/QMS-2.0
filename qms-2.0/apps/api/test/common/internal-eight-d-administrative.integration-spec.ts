@@ -49,7 +49,7 @@ describe('internal three-domain administrative recovery / actual App and Postgre
         actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
       await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
       await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
-      const source = await f.process.create(f.manager.actor, { description: 'Original actual process fact', productCode: f.productCode }, randomUUID(), randomUUID());
+      const source = await f.process.create(f.manager.actor, { description: 'Original actual process fact', productCode: f.productCode, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
       id = String((await core.issue(f.professional.actor, { sources: [{ defectId: source.id, expectedVersion: source.version }], severity: 'LOW',
         ownerUserId: f.owner.user.id, responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID())).problem.id);
     } else id = await f.issue([f.chainSource]);

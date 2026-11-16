@@ -51,6 +51,7 @@ describe('process defect ledger on PostgreSQL', () => {
     defectTypeCode: 'OXIDATION', description: '端子表面氧化', defectQuantity: 12,
     occurredAt: new Date('2026-09-24T02:00:00Z'), batchCode: 'B-001', workOrderCode: 'WO-001',
     operationCode: 'ASSEMBLY', lineCode: 'L-01', materialCode: 'MAT-001',
+    productCode: 'PD-00001', traceCode: 'PD-TRACE',
     responsibilityCategory: 'MATERIAL' as const,
   });
 

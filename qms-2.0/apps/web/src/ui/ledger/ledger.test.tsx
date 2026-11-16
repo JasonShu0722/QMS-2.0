@@ -118,6 +118,35 @@ describe('ledger page size', () => {
 });
 
 describe('LedgerTable', () => {
+  it('uses caller default columns only for a new view and restores them without changing required columns', () => {
+    render(<LedgerTable ledgerId="caller-defaults" columns={columns} dataSource={data} defaultVisibleColumnKeys={['a']} requiredColumnKeys={['action']} />);
+    expect(screen.getByRole('columnheader', { name: '编号' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '操作' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '名称' })).not.toBeInTheDocument();
+    settings();
+    fireEvent.click(screen.getByLabelText('显示 名称'));
+    expect(screen.getByRole('columnheader', { name: '名称' })).toBeInTheDocument();
+    expect(screen.getByLabelText('显示 操作')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '恢复全部列' }));
+    expect(screen.queryByRole('columnheader', { name: '名称' })).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '操作' })).toBeInTheDocument();
+  });
+  it('keeps saved column visibility, widths and order when a caller introduces new defaults', () => {
+    const key = preferenceKey({ sessionScope: 'INTERNAL:home:user', portal: 'business' }, 'saved-defaults', 'columns')!;
+    const preference = { schema: 1, value: { order: ['b', 'a', 'action'], visible: ['b', 'action'], widths: { b: 333 }, fixed: {} } };
+    localStorage.setItem(key, JSON.stringify(preference));
+    const view = render(<LedgerTable ledgerId="saved-defaults" columns={columns} dataSource={data} defaultVisibleColumnKeys={['a']} requiredColumnKeys={['action']} />);
+    expect(screen.queryByRole('columnheader', { name: '编号' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader')[0]).toHaveAccessibleName('名称');
+    expect(view.container.querySelector('col')).toHaveStyle({ width: '333px' });
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(preference);
+  });
+  it('lets controlled visibility override caller defaults without persisting it', () => {
+    render(<LedgerTable ledgerId="controlled-defaults" columns={columns} dataSource={data} defaultVisibleColumnKeys={['a']} visibleColumnKeys={['b']} requiredColumnKeys={['action']} />);
+    expect(screen.getByRole('columnheader', { name: '名称' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '编号' })).not.toBeInTheDocument();
+    expect(localStorage.length).toBe(0);
+  });
   it('places native controlled pagination above the table while preserving totals and callbacks', () => {
     const onChange = vi.fn();
     const onTableChange = vi.fn();

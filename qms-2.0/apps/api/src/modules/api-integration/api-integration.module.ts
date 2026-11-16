@@ -23,12 +23,16 @@ import { IngestionController } from './ingestion.controller.js';
 import { IngestionService } from './ingestion.service.js';
 import { IngestionTargetsService } from './ingestion-targets.service.js';
 import { IngestionWorkerService } from './ingestion-worker.service.js';
+import { ProcessQualityModule } from '../process-quality/process-quality.module.js';
+import { AiConnectionsModule } from '../ai-configuration/ai-connections.module.js';
+import { AiDescriptionService } from './ai-description.service.js';
+import { AiDescriptionController } from './ai-description.controller.js';
 
 @Module({
-  imports: [AdminMutationModule, AuditLogModule, SystemManagementModule, AdministrativeLifecycleModule, MaterialMasterModule, SupplierQualityModule, CustomerQualityModule, PlatformConfigurationModule],
-  controllers: [IntegrationAdminController, InboundController, IntegrationReceiptController, IngestionController],
+  imports: [AdminMutationModule, AuditLogModule, SystemManagementModule, AdministrativeLifecycleModule, MaterialMasterModule, SupplierQualityModule, CustomerQualityModule, PlatformConfigurationModule, ProcessQualityModule, AiConnectionsModule],
+  controllers: [IntegrationAdminController, InboundController, IntegrationReceiptController, IngestionController, AiDescriptionController],
   providers: [IntegrationAdminService, IntegrationCredentialService, InboundGuard, InboundService, IntegrationReceiptService,
-    IntegrationRetentionService, IntegrationLifecycleEffect, IngestionService, IngestionTargetsService, IngestionWorkerService, { provide: APP_INTERCEPTOR, useClass: IntegrationObservationInterceptor }],
-  exports: [IntegrationAdminService, IntegrationCredentialService, IntegrationRetentionService, IngestionWorkerService, IngestionService],
+    IntegrationRetentionService, IntegrationLifecycleEffect, IngestionService, IngestionTargetsService, IngestionWorkerService, AiDescriptionService, { provide: APP_INTERCEPTOR, useClass: IntegrationObservationInterceptor }],
+  exports: [IntegrationAdminService, IntegrationCredentialService, IntegrationRetentionService, IngestionWorkerService, IngestionService, AiDescriptionService],
 })
 export class ApiIntegrationModule {}

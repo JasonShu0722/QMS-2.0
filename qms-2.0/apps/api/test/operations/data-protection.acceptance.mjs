@@ -59,6 +59,11 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
     const organizationId = randomUUID(); const userId = randomUUID();
     await source.query('INSERT INTO organizations(id,code,name,type,updated_at) VALUES($1,$2,$2,\'INTERNAL\',NOW())', [organizationId, `backup-${suffix}`]);
     await source.query('INSERT INTO users(id,organization_id,username,password_hash,account_type,updated_at) VALUES($1,$2,$3,$4,\'INTERNAL\',NOW())', [userId, organizationId, `backup-${suffix}`, 'fixture-unused']);
+    const aiConnectionId = randomUUID();
+    const aiContext = `ai-connection:${organizationId}:${aiConnectionId}:https://ai-backup.example.com`;
+    const aiSecret = `backup-fixture-${randomUUID()}`;
+    const aiCiphertext = encryptSecret(aiSecret, aiContext);
+    await source.query("INSERT INTO ai_connections(id,organization_id,name,base_url,models,default_model,enabled,secret_ciphertext) VALUES($1,$2,'Backup AI channel','https://ai-backup.example.com/v1',ARRAY['backup-model'],'backup-model',true,$3)", [aiConnectionId, organizationId, aiCiphertext]);
     const endpointId = randomUUID(), credentialId = randomUUID(), receiptId = randomUUID();
     const receiptContext = `integration:${organizationId}:${endpointId}:${receiptId}`;
     const messageText = '{"technicalFixture":"backup"}';
@@ -87,6 +92,7 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
     await suite.test('encrypted backup validates database references and migrations', async () => {
       passed(cli('backup', artifact)); passed(cli('verify', artifact));
       assert.equal((await readFile(artifact)).includes(bytes), false);
+      assert.equal((await readFile(artifact)).includes(Buffer.from(aiSecret)), false);
       assert.notEqual(cli('backup', artifact).status, 0);
     });
     await suite.test('restore refuses source, non-confirmed targets and corrupted ciphertext', async () => {
@@ -157,6 +163,13 @@ await test('real PostgreSQL and private versioned MinIO backup/restore', async (
         assert.equal(decryptSecret(restoredCredential.secret_ciphertext, credentialContext) === credentialSecret, true);
         const restoredLegacy = (await restoredDatabase.query('SELECT expires_at,secret_ciphertext FROM integration_credentials WHERE id=$1', [legacyId])).rows[0];
         assert.equal(restoredLegacy.expires_at.toISOString(), legacyExpiry.toISOString()); assert.equal(restoredLegacy.secret_ciphertext, null);
+        const restoredAi = (await restoredDatabase.query('SELECT secret_ciphertext,enabled,version,models,default_model FROM ai_connections WHERE id=$1', [aiConnectionId])).rows[0];
+        assert.equal(restoredAi.secret_ciphertext, aiCiphertext);
+        assert.equal(decryptSecret(restoredAi.secret_ciphertext, aiContext), aiSecret);
+        assert.deepEqual(restoredAi.models, ['backup-model']);
+        assert.equal(restoredAi.default_model, 'backup-model');
+        assert.equal(restoredAi.enabled, false);
+        assert.equal(restoredAi.version, 2);
       } finally { await restoredDatabase.end(); }
       assert.notEqual(cli('restore', artifact, { DATABASE_URL: targetUrl.toString(), QMS_OBJECT_STORAGE_BUCKET: targetBucket, QMS_RESTORE_CONFIRM: targetName }).status, 0);
     });

@@ -1,8 +1,8 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
-import { useProcessWrite } from './process-ledger';
+import { MappingHint, useProcessWrite, type Defect } from './process-ledger';
 
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 const session = { userId: 'user', organizationId: 'org', accountType: 'INTERNAL' as const, landingPath: '/app/workbench' as const };
@@ -12,6 +12,24 @@ beforeEach(() => {
   vi.mocked(getSession).mockReset().mockResolvedValue(session);
   vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockReset().mockResolvedValue({ version: 2 });
+});
+it('explains source field issues in the keyboard-focused tooltip without exposing internal codes', async () => {
+  const record: Defect = {
+    id: 'defect-hint', organizationId: 'org', description: '来源行', defectTypeCode: null, defectQuantity: 1, occurredAt: null,
+    lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null,
+    pendingCompletion: true, pendingConfiguration: false, registeredByName: null, traceCode: null, analysisProgress: null, responsibilityCategory: null,
+    ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null, sourceKind: 'IMS', version: 1,
+    materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0,
+    issues: ['MANUAL_PROJECT_DIFFERS'], registrationIssues: ['lineName:INVALID', 'operationName:TYPE', 'privateField:INVALID', 'traceCode:SECRET', 'UNRECOGNIZED_INTERNAL_CODE'],
+  };
+  render(<MappingHint record={record} />);
+  fireEvent.focus(screen.getByRole('button', { name: '映射与来源提示 来源行' }));
+  const tooltip = await screen.findByRole('tooltip');
+  expect(tooltip).toHaveTextContent('人工项目与映射建议不同。');
+  expect(tooltip).toHaveTextContent('生产线名称来源值格式或长度无效，请核对。');
+  expect(tooltip).toHaveTextContent('工序名称来源值类型无效，请核对。');
+  expect(within(tooltip).getAllByText('来源字段待核对')).toHaveLength(3);
+  expect(tooltip).not.toHaveTextContent(/lineName|operationName|privateField|SECRET|UNRECOGNIZED_INTERNAL_CODE/);
 });
 it('retries unknown outcomes with exactly the same key, payload, method and endpoint', async () => {
   vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('network'));

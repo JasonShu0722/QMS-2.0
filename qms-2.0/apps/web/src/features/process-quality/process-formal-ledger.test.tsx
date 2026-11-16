@@ -32,12 +32,23 @@ vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource 
 vi.mock('./ProcessShipmentReportPanel', () => ({ ProcessShipmentReportPanel: () => null }));
 
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [] };
+const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
 const section = { id: '33333333-3333-4333-8333-333333333333', code: 'SEC', name: '制造科' };
 const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人', departmentName: '制造科' };
 const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', reportNumber: 'PQ-OLD', title: '已有问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-exact-1' }];
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
+
+it('shows the approved default columns and filters incomplete and unconfigured rows independently', async () => {
+  mount();
+  await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  for (const title of ['发生时间', '班次', '项目号', '细分类型', '新品/量产', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']) expect(screen.getByRole('columnheader', { name: title })).toBeVisible();
+  expect(screen.queryByRole('columnheader', { name: '成品编码' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('仅待完善'));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'http://localhost').searchParams.get('pendingCompletion') === 'true')).toBe(true));
+  fireEvent.click(screen.getByLabelText('仅待补配'));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'http://localhost').searchParams.get('pendingCompletion') === 'true' && new URL(path, 'http://localhost').searchParams.get('pendingConfiguration') === 'true')).toBe(true));
+});
 
 it('starts the real material-free ledger with selection instead of an empty expand column', async () => {
   const { container } = mount();
@@ -297,13 +308,13 @@ it('previews visible and hidden relations without defaulting recurrence; posts s
   expect(String(call?.[1]?.body)).not.toContain('workflow');
 });
 
-it('registers unknown facts as null without inventing quantity, classification, date or SQE tasks', async () => {
-  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor suppliers={[]} canReadSuppliers={false} onClose={vi.fn()} onSaved={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
-  fireEvent.change(await screen.findByLabelText('失效现象'), { target: { value: '待分析' } });
+it('partially completes imported facts without inventing classification, date or SQE tasks', async () => {
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={{ ...defect, sourceKind: 'IMS' }} suppliers={[]} canReadSuppliers={false} onClose={vi.fn()} onSaved={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  fireEvent.change(await screen.findByLabelText('不良描述'), { target: { value: '待分析' } });
   fireEvent.click(screen.getByText('保存登记'));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/defects', expect.objectContaining({ method: 'POST' }), { replayAfterReauthentication: false }));
-  const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path.endsWith('/defects') && init?.method === 'POST');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '待分析', defectQuantity: null, occurredAt: null, responsibilityCategory: null });
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`, expect.objectContaining({ method: 'PUT' }), { replayAfterReauthentication: false }));
+  const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path.endsWith(`/defects/${defect.id}`) && init?.method === 'PUT');
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ description: '待分析', expectedVersion: 2 });
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/tasks'))).toBe(false);
 });
 
@@ -326,9 +337,14 @@ it('keeps keyboard-accessible warning explanations and saved manual mapping rath
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, items: [{ ...defect, projectCode: 'MANUAL', issues: ['MANUAL_PROJECT_DIFFERS'], duplicateCount: 1 }] } : baseResponse(path));
   mount();
   const hint = await screen.findByLabelText(/映射与来源提示/);
+  const ledger = hint.closest('.qms-ledger') as HTMLElement;
+  const tools = within(ledger.querySelector('.qms-ledger__tools') as HTMLElement);
   fireEvent.focus(hint);
   expect(await screen.findByRole('tooltip')).toHaveTextContent(/人工项目/);
-  expect(screen.getByText('MANUAL')).toBeVisible();
+  fireEvent.blur(hint);
+  fireEvent.click(tools.getByRole('button', { name: '列设置' }));
+  fireEvent.click(await screen.findByLabelText('显示 人工项目 / 映射'));
+  expect(within(ledger).getByText('MANUAL')).toBeVisible();
 });
 
 it('requires an explicit recurrence decision even for a source without existing relations', async () => {
@@ -390,7 +406,7 @@ it.each(['material-sqes', 'defect-types'])('ends the parent session when only ed
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(await screen.findByText('登记不良', { selector: 'button span' }));
-  fireEvent.change(await screen.findByLabelText('失效现象', { selector: 'textarea' }), { target: { value: '敏感登记草稿' } });
+  fireEvent.change(await screen.findByLabelText('不良描述', { selector: 'textarea' }), { target: { value: '敏感登记草稿' } });
   await waitFor(() => expect(reject).toBeTypeOf('function'));
   await act(async () => { reject(new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: 'private' }, 401)); });
   expect(await screen.findByText('会话已退出，请登录')).toBeVisible();
@@ -423,7 +439,7 @@ it.each([
   const time = await screen.findByLabelText('发生时间', { selector: 'input' });
   expect(time).toHaveValue(display);
   if (action !== 'untouched') fireEvent.change(time, { target: { value: action === 'cleared' ? '' : '2026-10-26T14:15' } });
-  fireEvent.change(screen.getByLabelText('失效现象', { selector: 'textarea' }), { target: { value: '只补充描述，不猜时间精度' } });
+  fireEvent.change(screen.getByLabelText('不良描述', { selector: 'textarea' }), { target: { value: '只补充描述，不猜时间精度' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(persisted.version).toBe(3));
   expect(persisted.occurredAt).toBe(action === 'untouched' ? original : action === 'cleared' ? null : edited);

@@ -69,15 +69,18 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     return request(app.getHttpServer())[method](`/api/v1/process-quality/${path}`).set('Cookie', people[who].cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
   }
   function read(id: string) { return request(app.getHttpServer()).get(`/api/v1/process-quality/defects/${id}`).set('Cookie', people.leader.cookie); }
-  async function create(body: object = {}): Promise<ProcessDefectDto> { return (await send('leader', 'post', 'defects', body).expect(201)).body; }
+  async function create(body: object = {}): Promise<ProcessDefectDto> { return (await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '现场不良事实', ...body }).expect(201)).body; }
   const actor = () => ({ id: people.leader.id, organizationId, accountType: 'INTERNAL' as const, sessionId: people.leader.sessionId });
   function editable(material: ProcessDefectDto['materials'][number]): ProcessDefectMaterialInputDto {
     const { id, materialCode, materialName, supplierOrganizationId, supplierProfileId, materialBatch, sqeUserId, notes } = material;
     return { id, materialCode, materialName, supplierOrganizationId, supplierProfileId, materialBatch, sqeUserId, notes };
   }
 
-  it('keeps unknown facts nullable and empty material form groups out of the database', async () => {
-    const record = await create({ description: '', materials: [{}, { materialCode: '   ' }] });
+  it('keeps legacy unknown facts nullable without inventing new registration results', async () => {
+    const registered = await create({ materials: [{}, { materialCode: '   ' }] });
+    expect(registered.materials).toEqual([]);
+    const legacy = await prisma.processDefect.create({ data: { organizationId, description: '', createdById: people.leader.id, updatedById: people.leader.id } });
+    const record = (await read(legacy.id).expect(200)).body as ProcessDefectDto;
     expect(record).toMatchObject({ responsibilityCategory: null, defectTypeCode: null, defectQuantity: null, occurredAt: null, ledgerStatus: 'FOLLOWING', sourceKind: 'MANUAL', materials: [] });
     expect(record.issues).toEqual(expect.arrayContaining(['DESCRIPTION_EMPTY', 'DEFECT_QUANTITY_UNKNOWN', 'OCCURRED_AT_UNKNOWN', 'DEFECT_TYPE_UNKNOWN']));
     const stored = await prisma.processDefect.findUniqueOrThrow({ where: { id: record.id } });
@@ -159,8 +162,9 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     expect(filtered.body.items.some((item: ProcessDefectDto) => item.id === record.id)).toBe(true);
     const reference = await ledger.sourceReference(actor(), record.id);
     expect(reference.sourceSnapshot.materials).toHaveLength(2);
-    await send('leader', 'post', 'defects', { materials: [{ supplierProfileId: foreignProfileId }] }).expect(404);
-    await send('leader', 'post', 'defects', { materials: [{ sqeUserId: people.leader.id }] }).expect(400);
+    const validFacts = { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '材料校验' };
+    await send('leader', 'post', 'defects', { ...validFacts, materials: [{ supplierProfileId: foreignProfileId }] }).expect(404);
+    await send('leader', 'post', 'defects', { ...validFacts, materials: [{ sqeUserId: people.leader.id }] }).expect(400);
   });
 
   it('allows only the designated currently effective SQE to record one of four independent conclusions, with history and no early tasks', async () => {
@@ -355,18 +359,19 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
       expect(record.materials[0]!.sqeUserId).toBe(candidates[0]!.user.id);
       await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: candidates[0]!.role.id, permissionId: marker.id } } });
       expect(await ledger.materialSqes(actor(), { page: 1, pageSize: 1, search })).toMatchObject({ items: [], total: 0 });
-      await send('leader', 'post', 'defects', { materials: [{ materialCode: 'REVOKED-MARKER', sqeUserId: candidates[0]!.user.id }] }).expect(400);
+      await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '撤销权限校验', materials: [{ materialCode: 'REVOKED-MARKER', sqeUserId: candidates[0]!.user.id }] }).expect(400);
     } finally {
       await prisma.rolePermission.deleteMany({ where: { roleId: { in: candidates.map(item => item.role.id) }, permissionId: marker.id } });
     }
   });
 
-  it('resolves an unmapped component without configuration read permission or overwriting the manual project', async () => {
-    const record = await create({ productCode: `UNMAPPED-${randomUUID()}`, projectCode: 'MANUAL-PROJECT' });
+  it('keeps an unconfirmed legacy project readable without manufacturing current mapping history', async () => {
+    const legacy = await prisma.processDefect.create({ data: { organizationId, description: 'Legacy project', productCode: `UNMAPPED-${randomUUID()}`, projectCode: 'MANUAL-PROJECT', createdById: people.leader.id, updatedById: people.leader.id } });
+    const record = (await read(legacy.id).expect(200)).body as ProcessDefectDto;
     expect(record.projectCode).toBe('MANUAL-PROJECT');
-    expect(record.componentProject).toMatchObject({ outcome: 'unmapped', issues: expect.arrayContaining(['MAPPING_NOT_FOUND']) });
-    expect(record.issues).toContain('MAPPING_NOT_FOUND');
-    expect((await read(record.id).expect(200)).body.componentProject.componentCode).toBe(record.productCode);
+    expect(record.componentProject).toBeNull();
+    expect(record.issues).toContain('HISTORICAL_ASSOCIATION_UNCONFIRMED');
+    expect((await read(record.id).expect(200)).body.projectCode).toBe('MANUAL-PROJECT');
   });
 
   it('rejects forged status, CSRF, foreign scope and revoked sessions instead of hiding failures', async () => {

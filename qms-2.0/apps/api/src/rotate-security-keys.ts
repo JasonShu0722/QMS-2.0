@@ -88,6 +88,23 @@ async function rotate() {
       if (rows.length < 100) break;
       credentialCursor = rows.at(-1)!.id;
     }
+    let aiConnectionCursor: string | undefined;
+    while (true) {
+      const rows = await prisma.$queryRaw<Array<{ id: string; organization_id: string }>>`SELECT id,organization_id FROM ai_connections WHERE secret_ciphertext IS NOT NULL AND (${aiConnectionCursor ?? null}::uuid IS NULL OR id>${aiConnectionCursor ?? null}::uuid) ORDER BY id LIMIT 100`;
+      for (const row of rows) {
+        count += await prisma.$transaction(async transaction => {
+          await transaction.$queryRaw`SELECT id FROM organizations WHERE id=${row.organization_id}::uuid FOR UPDATE`;
+          const [current] = await transaction.$queryRaw<Array<{ base_url: string; secret_ciphertext: string | null }>>`SELECT base_url,secret_ciphertext FROM ai_connections WHERE id=${row.id}::uuid AND organization_id=${row.organization_id}::uuid FOR UPDATE`;
+          if (!current?.secret_ciphertext) return 0;
+          const context = `ai-connection:${row.organization_id.toLowerCase()}:${row.id.toLowerCase()}:${new URL(current.base_url).origin}`;
+          const ciphertext = encryptSecret(decryptSecret(current.secret_ciphertext, context), context);
+          await transaction.$executeRaw`UPDATE ai_connections SET secret_ciphertext=${ciphertext} WHERE id=${row.id}::uuid AND organization_id=${row.organization_id}::uuid`;
+          return 1;
+        });
+      }
+      if (rows.length < 100) break;
+      aiConnectionCursor = rows.at(-1)!.id;
+    }
     let receiptCursor: string | undefined;
     while (true) {
       const rows = await prisma.integrationReceipt.findMany({

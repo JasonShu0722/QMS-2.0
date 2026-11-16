@@ -8,6 +8,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { IntegrationPageQueryDto, IntegrationScopeDto } from './integration-admin.dto.js';
 import { DeleteIngestionRuleDto, IngestionControlDto, IngestionEndpointPageDto, IngestionHistoryPreviewInputDto, IngestionImportResultDto, IngestionItemActionDto, IngestionItemDetailDto, IngestionItemDto, IngestionItemPageDto, IngestionJobDto, IngestionJobPageDto, IngestionJobQueryDto, IngestionPreviewDto, IngestionPreviewInputDto, IngestionRuleDto, IngestionRulePageDto, SaveIngestionRuleDto, SubmitIngestionImportDto, UpdateIngestionRuleDto } from './ingestion.dto.js';
 import { IngestionService } from './ingestion.service.js';
+import { AiIngestionPreviewDto } from './ai-description.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest, session = authorized[AUTHENTICATED_SESSION]!;
@@ -45,6 +46,10 @@ export class IngestionController {
   @Post('preview') @Header('Cache-Control', 'no-store') @ApiCreatedResponse({ type: IngestionPreviewDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: bodyScope })
   preview(@Req() request: Request, @Body() input: IngestionPreviewInputDto) { return this.service.preview(actor(request), input, requestTraceId(request), request.get('Idempotency-Key')); }
+
+  @Post('preview/ai') @Header('Cache-Control', 'no-store') @ApiCreatedResponse({ type: AiIngestionPreviewDto }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: bodyScope })
+  previewAi(@Req() request: Request, @Body() input: IngestionPreviewInputDto) { return this.service.previewAi(actor(request), input, requestTraceId(request)); }
 
   @Post('imports/preview') @Header('Cache-Control', 'no-store') @ApiCreatedResponse({ type: IngestionPreviewDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: bodyScope })

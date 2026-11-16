@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../src/generated/prisma/client.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import type { AdminActor } from '../../src/common/security/admin-mutation.service.js';
-import type { IntegrationFields, IntegrationTarget } from '../../src/common/integration-master-data.js';
+import type { IntegrationFields, MasterDataIntegrationTarget as IntegrationTarget } from '../../src/common/integration-master-data.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
 import { MaterialMasterIngestionAdapter } from '../../src/modules/material-master/material-master-ingestion.adapter.js';
 import { SupplierProfileIngestionAdapter } from '../../src/modules/supplier-quality/supplier-profile-ingestion.adapter.js';

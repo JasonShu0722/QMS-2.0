@@ -34,6 +34,11 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
   beforeAll(async () => { await prisma.$connect(); });
   afterAll(async () => { await prisma.$disconnect(); });
 
+  async function legacyDefect(actor: AdminActor, input: { description: string; productCode?: string | null; projectCode?: string | null; occurredAt?: Date | null; defectQuantity?: number | null }) {
+    const record = await prisma.processDefect.create({ data: { ...input, organizationId: actor.organizationId, createdById: actor.id, updatedById: actor.id } });
+    return ledger.detail(actor, record.id);
+  }
+
   async function fixture() {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Selection scope', type: 'INTERNAL' } });
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
@@ -50,7 +55,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     const project = await quality.createProject(actor, { code, name: 'Existing new-product project', productCode }, randomUUID(), randomUUID());
     const projectRecord = await mappings.createProject(actor, organization.id, { code: project.code, name: 'Component project', stage: 'NEW_PRODUCT' }, randomUUID(), randomUUID());
     const mapping = await mappings.createMapping(actor, organization.id, { componentCode: productCode, projectRecordId: projectRecord.id, productCategory: 'Test category' }, randomUUID(), randomUUID());
-    const defect = await ledger.create(actor, { description: 'One process fact', productCode, projectCode: code, occurredAt: null, defectQuantity: null }, randomUUID(), randomUUID());
+    const defect = await legacyDefect(actor, { description: 'One process fact', productCode, projectCode: code, occurredAt: null, defectQuantity: null });
     return { actor, role, project, projectRecord, mapping, defect };
   }
   type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -90,7 +95,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     const f = await fixture();
     const otherProduct = `OTHER-${randomUUID()}`;
     await prisma.$executeRaw`UPDATE new_product_projects SET product_code = ${otherProduct} WHERE id = ${f.project.id}::uuid`;
-    const defect = await ledger.create(f.actor, { description: 'Mapped only', productCode: f.mapping.componentCode, projectCode: null }, randomUUID(), randomUUID());
+    const defect = await legacyDefect(f.actor, { description: 'Mapped only', productCode: f.mapping.componentCode, projectCode: null });
     await expect(select({ ...f, defect })).resolves.toMatchObject({ defect_id: defect.id, project_id: f.project.id });
   });
 
@@ -103,13 +108,13 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
 
   it('does not let a manual reason bypass an absent component mapping', async () => {
     const f = await fixture();
-    const defect = await ledger.create(f.actor, { description: 'Unknown component', productCode: randomUUID(), projectCode: f.project.code }, randomUUID(), randomUUID());
+    const defect = await legacyDefect(f.actor, { description: 'Unknown component', productCode: randomUUID(), projectCode: f.project.code });
     await expect(select({ ...f, defect })).rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_MAPPING_REQUIRED' } });
   });
 
   it('does not use projectCode as a substitute for a missing productCode', async () => {
     const f = await fixture();
-    const defect = await ledger.create(f.actor, { description: 'Missing component', productCode: null, projectCode: f.project.code }, randomUUID(), randomUUID());
+    const defect = await legacyDefect(f.actor, { description: 'Missing component', productCode: null, projectCode: f.project.code });
     await expect(select({ ...f, defect })).rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_MAPPING_REQUIRED' } });
   });
 
@@ -132,7 +137,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
   it('preserves a known occurrence date without requiring a reason or claiming historical verification', async () => {
     const f = await fixture();
     const occurredAt = new Date('2026-10-25T01:23:45.000Z');
-    const defect = await ledger.create(f.actor, { description: 'Known occurrence', productCode: f.mapping.componentCode, occurredAt, defectQuantity: 2 }, randomUUID(), randomUUID());
+    const defect = await ledger.create(f.actor, { description: 'Known occurrence', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt, defectQuantity: 2 }, randomUUID(), randomUUID());
     const selected = await quality.selectProcessDefect(f.actor, f.project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     expect(selected).toMatchObject({ selection_reason: null, source_snapshot: { occurredAt: occurredAt.toISOString(), defectQuantity: 2,
       inclusion: { occurredAt: occurredAt.toISOString(), temporalEvidence: 'UNVERIFIED', warnings: ['HISTORICAL_MAPPING_UNAVAILABLE'] } } });
@@ -144,7 +149,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     await mappings.updateProject(f.actor, f.actor.organizationId, f.projectRecord.id, { expectedVersion: f.projectRecord.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
     expect(await quality.selectedDefects(f.actor, f.project.id)).toMatchObject([{ id: selection.id, source_snapshot: selection.source_snapshot }]);
     expect((await quality.projectDetail(f.actor, f.project.id)).selected_defects).toMatchObject([{ id: selection.id, source_snapshot: selection.source_snapshot }]);
-    const defect = await ledger.create(f.actor, { description: 'After mass production', productCode: f.mapping.componentCode, projectCode: f.project.code, occurredAt: new Date() }, randomUUID(), randomUUID());
+    const defect = await ledger.create(f.actor, { description: 'After mass production', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt: new Date() }, randomUUID(), randomUUID());
     await expect(select({ ...f, defect })).rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_STAGE_INELIGIBLE' } });
   });
 
