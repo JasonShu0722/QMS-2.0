@@ -122,6 +122,8 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
   }
   const displayedError = actionError ?? error;
   const createFrozen = denied || busy || !!uncertain || stale;
+  const pagination = page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Select aria-label={locale === 'en-US' ? 'Page size' : '每页条数'} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={createFrozen || loading} onChange={size => requestLeave(() => { if (!current()) return; setOffset(0); setPageSize(size); })} /><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}>{t('上一页')}</Button>
+    <Button disabled={createFrozen || loading || offset + pageSize >= page.total || offset + pageSize > 10000} onClick={() => setOffset((value) => value + pageSize)}>{t('下一页')}</Button></Space>;
   return <section className="workflow-list">
     <header className="workflow-heading"><Typography.Title level={2}>{t('受控流程列表')}</Typography.Title>
       <Space wrap><Button disabled={createFrozen || templateBusy || !!error} onClick={() => requestLeave(() => { setCreating(false); setCode(''); setName(''); setTemplateOpen(true); })}>{locale === 'en-US' ? 'Initialize closure review template' : '初始化关闭审核模板'}</Button>
@@ -148,9 +150,7 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
 
       <Button htmlType="submit" disabled={createFrozen || !code.trim() || !name.trim()}>{t('创建草稿')}</Button>
     </form></Card>}
-    {page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Select aria-label={locale === 'en-US' ? 'Page size' : '每页条数'} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={createFrozen || loading} onChange={size => requestLeave(() => { if (!current()) return; setOffset(0); setPageSize(size); })} /><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}>{t('上一页')}</Button>
-      <Button disabled={createFrozen || loading || offset + pageSize >= page.total || offset + pageSize > 10000} onClick={() => setOffset((value) => value + pageSize)}>{t('下一页')}</Button></Space>}
-    {loading ? <Spin aria-label={t('加载中')} /> : page && !page.items.length ? <Empty description={t('暂无流程')} /> : page && <LedgerTable ledgerId="workflows" organizationId={expectedOrganizationId} requiredColumnKeys={['code', 'actions']} className="workflow-list__table" rowKey="id" dataSource={page.items} pagination={false} scroll={{ x: 760 }} columns={[
+    {loading ? <>{pagination}<Spin aria-label={t('加载中')} /></> : page && !page.items.length ? <>{pagination}<Empty description={t('暂无流程')} /></> : page && <LedgerTable ledgerId="workflows" organizationId={expectedOrganizationId} toolbarContent={pagination} requiredColumnKeys={['code', 'actions']} className="workflow-list__table" rowKey="id" dataSource={page.items} pagination={false} scroll={{ x: 760 }} columns={[
       { key: 'code', title: t('代码'), render: (_, item) => <code>{item.code}</code> },
       { key: 'name', title: t('名称'), dataIndex: 'name' },
       { key: 'status', title: t('状态'), render: (_, item) => <Tag>{t(workflowLabel(item.version.status))}</Tag> },

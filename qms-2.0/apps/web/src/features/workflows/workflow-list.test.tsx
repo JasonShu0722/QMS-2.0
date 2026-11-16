@@ -29,6 +29,9 @@ it('uses the standard real offset batch size and resets offset when the user cha
   await screen.findByText('质量流程');
   expect(vi.mocked(api.getWorkflows).mock.calls[0][0].get('pageSize')).toBe('20');
   const next = screen.getByRole('button', { name: '下一页' });
+  const toolbar = document.querySelector('.workflow-list__table')!.closest('.qms-ledger')!.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(document.querySelector('.workflow-list__table')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
   await waitFor(() => expect(vi.mocked(api.getWorkflows).mock.calls.at(-1)![0].get('offset')).toBe('20'));

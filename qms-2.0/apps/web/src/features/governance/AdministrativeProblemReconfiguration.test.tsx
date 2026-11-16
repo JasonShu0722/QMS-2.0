@@ -142,6 +142,9 @@ it('uses scan nextOffset even for an empty window, without total or per-record r
   expect(calls.some(call => call.path.includes('/PROCESS?offset=93&pageSize=20'))).toBe(true);
   const section = screen.getByRole('region', { name: '问题责任恢复' });
   const next = within(section).getByRole('button', { name: '下一扫描页' });
+  const toolbar = section.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(within(section).getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(section.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(button('下一扫描页')).toBeDisabled();
 });

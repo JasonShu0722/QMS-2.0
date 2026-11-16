@@ -4,10 +4,10 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 授权 | 用户要求共享表格样式全面横展及顶部留白；沿用本会话常规开发/PR/合并部署授权，不改生产业务或飞书 |
-| 映射 | Issue126，V0.0.54，codex/table-top-pagination，基线已部署b955308c6eede19bb06f76595b13c187f61ad5b1；远端main/开放PR查重无冲突；旧本地归档与$null保留 |
-| 状态 | 本地冻结：共享46及调用方11文件239完整集合共285PASS；SPEC与最终QUALITY通过，类型/构建/契约/治理/隔离/Compose通过；四浏览器路径同生产累计PASS，原工具/初始化FAIL保留 |
-| 下一步 | 提交V0.0.54并创建PR，精确head CI/Review后合并，核主干CI/部署与公网；Issue保持开放/不改飞书，人工与物理设备未验 |
+| 授权 | 用户已明确“按这个方案统一落地”：以接收记录为样板，桌面单行紧凑工具栏/窄屏自然换行；沿用PR/合并部署授权，不改生产业务或飞书 |
+| 映射 | Issue126，V0.0.54-fix1，codex/table-toolbar-compact，已部署基线d2f094b355efe9e2e5725c56f4c4b1c09f95c2cf；旧本地发布归档f402957与$null保留 |
+| 状态 | 本地收口：共享50集合及caller7文件162完整集合PASS、原77无变证据复用；组件1PASS、生产preview业务11场景组合PASS，SPEC/最终QUALITY通过，Weblint/build/治理/归档通过，资源已精确清理 |
+| 下一步 | 提交V0.0.54-fix1及一个PR，核精确head CI/Review后同树合并、mainCI、部署日志与公网；不改飞书或代写人工验收，Issue保持开放 |
 
 规格见[本轮设计](../specs/2026-11-16-qms-table-top-pagination-design.md)。父独占Git/文档/公共注册/资源/整合；共享组件与独立页面分派互不覆盖，heavy测试串行单worker。每shell先加载D:/WorkSpace/QMS-2.0-local/Enter-Qms.ps1，Git外证据D:/WorkSpace/QMS-2.0-local/table-top-pagination-20261116/，不连接55440。
 
@@ -19,6 +19,48 @@
 - [ ] Issue最小发布回写保持开放，本地归档/自有资源清理；业务人工/物理手机未执行如实记录。
 
 沉淀：更新前端统一规格和FRONTEND-DESIGN的顶部工具区/分页默认要求及有效来源摘要；不另建表格框架、依赖或API上限开关。
+
+## fix1 实施任务
+
+- [x] 用户批准视觉方案，复用Issue126，从已部署main建立隔离功能分支，保旧分支归档及$null。
+- [x] 全新共享实现代理：LedgerTable/index、ledger.css、对应完整测试；保原生状态，补桌面单行、非分页/加载/隐藏分页边界。
+- [x] 全新调用方代理：按原主清单调查将外置分页并入同一工具区，保原请求/页长/游标/保护，直接Table只调布局需要的最小范围。
+- [x] 全新浏览器实现代理：在原真实验收文件追加同排/总高度/间距及规则/任务真实路径；一次性PG/API/浏览器串行，不连接55440。
+- [x] 受影响完整文件回归、Web类型/构建/契约/治理及SPEC→QUALITY；有效未变证据复用，原FAIL不抹去。
+- [ ] 版本查重、提交推送一个fix1 PR；精确CI/Review、同树合并、mainCI、部署日志与公网核验。
+- [ ] Issue最小结果回写保持开放；清理本轮自有资源、本地发布归档，人工/物理设备另记。
+
+父独占Git、公共注册、文档、索引与资源。共享/调用方/浏览器文件所有权分离，heavy窗口始终只有一个；Node24.21.0/pnpm11.19.0，每shell先Enter-Qms，证据目录D:/WorkSpace/QMS-2.0-local/table-toolbar-compact-20261116。共享方案优先最小布局而非重写分页状态；跨Spin布局如不能通过真实加载/窄屏验收即换现有可靠接缝，不长期堆补丁。
+
+### fix1 当前实际证据
+
+toolbar_shared_impl：最小原生subgrid跨wrapper/Spin/container共享首行，不复制AntD状态，早版2项预期RED后完整48/48PASS90.07秒；随后补clearfix、自定义slot、48px、原生跳转默认等边界，最终完整集合仍NOT_RUN，不能复用48作为新全部通过。主题背景及局部治理padding重置沿共享CSS，所有调用方覆盖可保留。
+
+toolbar_callers_impl：原23文件再核，只有7处需归并（WorkflowList、Outbox、Audit、ApiMonitoring、DataExchange、AdministrativeReconfiguration、AdministrativeProblemReconfiguration）；7项工具栏归属预期RED均FAIL/155诊断过滤，123.74秒，无timeout。7源码已最小移动原节点，5条件表复用同一ReactNode保空态返回，AST核96个on*、173保护属性、19完整effects与基线一致，162项GREEN仍NOT_RUN；原77未变证据复用。未改API/权限/请求/页长范围及409 helper。
+
+toolbar_browser_impl：新一次性PG qms-table-toolbar-pg/TABLE-TOOLBAR/55636/512MiB tmpfs已156迁移与标准seedPASS；API源码/依赖未变，复用上轮build。首focused筛选错误No tests found为NOT_RUN；第二次实际在规则页tab点击30秒超时，未到几何。补无secret真实失败JSON后，低堆API384/Vite512已正常readiness，但启动PW384时系统可用提交内存跌至482MiB，按保护阈值只收自有PW/API/Vite，记INTERRUPTED、未完成case；没有完整DOM/几何证据，不归因产品或权限。原日志和cleanup保留，不改pagefile或杀用户进程。
+
+独立toolbar_compact_spec初审FAIL/P2两处：Audit/Outbox嵌套治理toolbar原padding/border导致常规行约66px；原hideOnSinglePage浏览器测Account直接Table未覆盖共享subgrid。已接受：共享局部去重复padding/border，另用现有playwright/ledger-fixture真实共享组件补动态隐藏→显示→隐藏与Spin几何；该组件证据与真实业务验收分别记账，不以fixture代业务。可用提交内存约1.5～2.2GiB时不重复启动全栈浏览器；先低资源真实组件验证及静态工作，主机资源足够后再业务路径。
+
+共享最终50/50PASS86.07秒（shared-fix1-green-final50），布局/原生状态/真实loader DOM保留；之前48不冒称新增通过。组件browser首轮在已测得desktop48/gap4/center0后因旧AntD blur类断言FAIL，核实际AntD6改为aria-busy/pointer-events/可见indicator；第二轮桌面多页/loading/hide序列已通过，但total0分页预期错误FAIL，核原生Table有total条件后修fixture空态为0组而非改产品。第三轮component-focused-third完整1/1PASS8.6秒：desktop多页及loading48px/gap4/center0/左右12；隐藏→显示→隐藏及空态39px无空行；390/320多页自然101px/gap4/左右12无溢出且Columns可点击。仅桌面动态hide/loading，不能称三宽hide；模拟数据组件无API请求，不代业务。所有原FAIL/中断和自有进程cleanup保留。
+
+SPEC增量两P2关闭；QUALITY独立只读PASS，无新P0–P2，不代运行门禁。caller6完整文件100/100PASS：workflow7/outbox5/audit7/monitor20/exchange23/待配置38（218.92秒），无OOM及新FAIL；剩责任恢复32+30共62暂NOT_RUN，原77未变复用。
+
+Weblint首轮TS2322为新增测试size:'default'不属于当前AntD6 SizeType；改为推荐'medium'，保explicit覆盖和全部断言。第一次定向正则错误导致50诊断过滤NOT_RUN，改准确选择后1PASS/49过滤（shared-size-type-green-exact），其余49由未受影响完整50证据承接，不为字面量再全跑。最终web-fix1-lint-final、web-fix1-build均PASS；产物index-DUMZLuk3.js/index-B6MuhmDV.css。既有大chunk提示保留，不在此做bundle重构。
+
+资源恢复后，真实业务runner改用本次生产vite preview产物以减少开发编译graph内存；API384/preview128/PW384/outer128，先实际校验5186/3136两个OpenAPI均200/JSON且文档一致再进业务。API及依赖/契约未变，复用上轮同源dist/API/契约通过证据，本轮不重复后端构建；最终CI仍完整重验。一次性local.internal仅3个旧测试会话，预估focused+11后17<=20，无清理会话/MFA/权限绕过。当前业务11项包含新增Audit/Outbox实际路由与原真实数据GET，不以裸组件代替。
+
+### fix1 最终本地验收
+
+caller7文件162完整集合PASS：workflow7/outbox5/audit7/monitor20/exchange23/待配置38/责任恢复62；最后62按原32纯校验与30交互互斥并集完整执行，30项144秒PASS、409用例9178ms，未改helper/预算/motion，不承诺稳定提速。原77无源码变化证据复用，未将212受影响集合冒称全项目全量。
+
+生产preview先focused规则1/1PASS18.1秒，再完整11为9PASS/2FAIL；9项含真实规则、任务、加载、Audit/Outbox、通知、供应商、物料及接收。两个FAIL分别是窄屏空态误用桌面高度上限、固定表头/表体双Table严格定位歧义；未改产品，改为实际Columns高度+上下12px（desktop39、mobile56且触控44）及唯一wrapper/真实thead后，仅两项复验2/2PASS20秒，保同排/高度/gap/无空行/真实API与会话≤20断言。最终为11场景组合PASS，不是单次重跑11/11。两轮preview代理前置实际文档一致525路径。所有原FAIL/INTERRUPTED及日志/cleanup保留。
+
+完整11失败时worker重启额外产生会话，事后实际19而非原正常估17；两项复验需新增3会超20，故本run API登录前仅清一次性qms_table_toolbar/LOCAL-INTERNAL/local.internal且创建时间早于本run的19旧sessions，审计JSON保留，结束3新session/MFA保留。独立QUALITY核Schema与loopback/55440拒绝、专属DB/容器完整ID/标签/55636边界通过，无token/MFA/密码读取，不影响其他user或生产；真实≤20未放宽。
+
+原view_image仍unsupported，但文件PNG头验证正常；父通过Node只读emitImage实际规则页截图已成功显示并核对桌面单行及大空白消除，未编辑图像，不把代理截图审阅写成人工批准。真实物理手机、其他浏览器与生产账号人工验收仍NOT_RUN。
+
+治理最终PASS（38文档/520链接/20来源、3open维护、165依赖及阶段覆盖），归档隔离PASS；API源码、依赖及contracts与已部署基线比较为零差异，对应后端/契约/Compose有效基线证据复用，完整新CI仍重验。最终SPEC增量与QUALITY增量PASS无未解决P0–P2。API/preview/PW已全收；专属PG按完整ID/标签/tmpfs与端口验证精确清理PASS，未碰预览55440/用户应用。最终提交与PR/上线状态见后续。
 
 ## 实施与验证接续
 
