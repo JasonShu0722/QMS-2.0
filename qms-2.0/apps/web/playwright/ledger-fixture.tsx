@@ -7,6 +7,7 @@ import { AppearanceButton } from '../src/theme/AppearanceButton';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { LedgerScopeProvider, LedgerTable, useLedgerPageSize } from '../src/ui/ledger';
 import { useWorkTabsStore } from '../src/work-tabs/workTabsStore';
+import '../src/styles/global.css';
 
 const rows = Array.from({ length: 12 }, (_, index) => ({
   id: String(index + 1), number: `SAMPLE-${String(index + 1).padStart(3, '0')}`,
@@ -53,6 +54,24 @@ function BoundaryFixture() {
       ]} />
   </Space>;
 }
+function ToolbarFixture() {
+  const [mode, setMode] = useState('many');
+  const [loading, setLoading] = useState(false);
+  const data = mode === 'empty' ? [] : mode === 'single' ? rows.slice(0, 2) : rows;
+  return <section aria-label="共享工具栏组件验证">
+    <Space wrap style={{ marginBottom: 8 }}>
+      <Button onClick={() => setMode('many')}>多页数据</Button><Button onClick={() => setMode('single')}>单页数据</Button><Button onClick={() => setMode('empty')}>空数据</Button>
+      <Button onClick={() => setLoading(value => !value)}>{loading ? '结束加载' : '开始加载'}</Button>
+    </Space>
+    <LedgerTable ledgerId="browser-toolbar-compact" rowKey="id" requiredColumnKeys={['number']} dataSource={data} loading={loading} scroll={{ x: 900 }}
+      pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20], hideOnSinglePage: mode !== 'empty', showTotal: total => `总数：${total}` }}
+      columns={[
+        { title: '编号', key: 'number', dataIndex: 'number', width: 180 },
+        { title: '问题说明', key: 'title', dataIndex: 'title', width: 460 },
+        { title: '状态', key: 'status', dataIndex: 'status', width: 220 },
+      ]} />
+  </section>;
+}
 function Fixture() {
   const [organization, setOrganization] = useState('fixture-target-a');
   const [consoleHost, setConsoleHost] = useState(false);
@@ -64,7 +83,7 @@ function Fixture() {
       {consoleHost ? <ConsoleAppearanceControls /> : <AppearanceButton />}
     </Space>
     <p>宿主切换会重建模拟页，不验证业务草稿保持。</p>
-    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{new URLSearchParams(window.location.search).has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
+    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{new URLSearchParams(window.location.search).has('toolbar') ? <ToolbarFixture /> : new URLSearchParams(window.location.search).has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
   </main>;
   return <LanguageProvider><ThemeProvider>{consoleHost ? <ConsoleTheme>{content}</ConsoleTheme> : content}</ThemeProvider></LanguageProvider>;
 }

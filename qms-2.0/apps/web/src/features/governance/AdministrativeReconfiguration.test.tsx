@@ -85,6 +85,9 @@ it('changes the real queue page size and resets offset through the existing leav
   render(scene());
   await screen.findByLabelText('配置 · 待配置对象', { selector: 'button' });
   const queue = screen.getByRole('region', { name: '待配置管理' });
+  const toolbar = queue.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(queue.querySelector('.ant-pagination'));
+  expect(toolbar).toContainElement(within(queue).getByRole('button', { name: '列设置' }));
   expect(queue.querySelector('.ant-pagination')!.compareDocumentPosition(queue.querySelector('.ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByTitle('2'));
   await waitFor(() => expect(calls.some(call => call.path.includes('offset=20'))).toBe(true));

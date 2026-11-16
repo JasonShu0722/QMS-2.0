@@ -58,6 +58,9 @@ it('uses the chosen page length in the request and response validation and reset
   expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
   const next = screen.getByRole('button', { name: '下一页' });
   const ledger = screen.getByRole('region', { name: '分钟聚合明细' });
+  const toolbar = ledger.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(ledger.querySelector('.ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));

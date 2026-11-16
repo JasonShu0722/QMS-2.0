@@ -5,7 +5,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerScopeProvider, LedgerTable, useLedgerPageSize } from './index';
 import { preferenceKey } from './model';
 import { readFileSync } from 'node:fs';
-import { Pagination } from 'antd';
+import { Pagination, Typography } from 'antd';
 import { LanguageProvider } from '../../i18n/Language';
 
 const ledgerCss = readFileSync('src/ui/ledger/ledger.css', 'utf8');
@@ -188,6 +188,88 @@ describe('LedgerTable', () => {
       expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('padding-inline') === '12px' && rule.style.getPropertyValue('flex-wrap') === 'wrap')).toBe(true);
       expect(rules.some(rule => button.matches(rule.selectorText) && rule.style.getPropertyValue('flex-shrink') === '0')).toBe(true);
       expect(rules.some(rule => pagination.matches(rule.selectorText) && rule.style.getPropertyValue('padding-inline') === '12px' && rule.style.getPropertyValue('box-sizing') === 'border-box')).toBe(true);
+    } finally { style.remove(); }
+  });
+  it('shares the native top pagination row through intact Spin containers', () => {
+    const { container, rerender } = render(<LedgerTable ledgerId="compact-native" columns={columns} dataSource={data} loading pagination={{ total: 30, pageSize: 10 }} />);
+    const ledger = container.querySelector('.qms-ledger')!;
+    const tools = ledger.querySelector('.qms-ledger__tools')!;
+    const pagination = ledger.querySelector('.ant-table-pagination')!;
+    const spinContainer = pagination.parentElement!;
+    const spin = spinContainer.parentElement!;
+    expect(spinContainer).toHaveClass('ant-spin-container');
+    expect(spin).toHaveClass('ant-spin', 'ant-spin-spinning');
+    expect(spin).toHaveAttribute('aria-busy', 'true');
+    expect(spinContainer.querySelector('.ant-table')).toBe(pagination.nextElementSibling);
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      const sharesGrid = (element: Element) => rules.some(rule => element.matches(rule.selectorText) && rule.style.getPropertyValue('display') === 'grid' && rule.style.getPropertyValue('grid-template-columns') === 'subgrid' && rule.style.getPropertyValue('grid-template-rows') === 'subgrid');
+      expect(sharesGrid(spinContainer)).toBe(true);
+      expect(sharesGrid(spin)).toBe(true);
+      expect(sharesGrid(spin.parentElement!)).toBe(true);
+      expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '2' && rule.style.getPropertyValue('grid-row') === '1')).toBe(true);
+      expect(rules.some(rule => pagination.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '1' && rule.style.getPropertyValue('grid-row') === '1')).toBe(true);
+      for (const control of [tools, pagination]) {
+        expect(rules.some(rule => control.matches(rule.selectorText) && rule.style.getPropertyValue('min-height') === '48px')).toBe(true);
+        expect(rules.some(rule => control.matches(rule.selectorText) && rule.style.getPropertyValue('background') === 'var(--qms-surface)')).toBe(true);
+      }
+      expect(rules.some(rule => ledger.matches(rule.selectorText) && rule.style.getPropertyValue('row-gap') === '4px')).toBe(true);
+      expect(rules.some(rule => rule.selectorText.includes('.ant-table-wrapper::before') && rule.selectorText.includes('.ant-table-wrapper::after') && rule.style.getPropertyValue('display') === 'none')).toBe(true);
+      expect(rules.some(rule => rule.style.getPropertyValue('display') === 'contents')).toBe(false);
+      rerender(<LedgerTable ledgerId="compact-native" columns={columns} dataSource={data} pagination={{ hideOnSinglePage: true }} />);
+      expect(container.querySelector('.ant-table-pagination')).toBeNull();
+      expect(rules.some(rule => ledger.matches(rule.selectorText) && rule.style.getPropertyValue('display') === 'grid')).toBe(false);
+      rerender(<LedgerTable ledgerId="compact-native" columns={columns} dataSource={data} pagination={{ hideOnSinglePage: true, total: 30, pageSize: 10 }} />);
+      expect(rules.some(rule => ledger.matches(rule.selectorText) && rule.style.getPropertyValue('display') === 'grid')).toBe(true);
+    } finally { style.remove(); }
+  });
+  it('defaults native totals and small controls while respecting explicit pagination choices', () => {
+    const props = { ledgerId: 'compact-defaults', columns, dataSource: data };
+    const { container, rerender } = render(<LedgerTable {...props} pagination={{ total: 30, pageSize: 10 }} />);
+    expect(container.querySelector('.ant-pagination')).toHaveClass('ant-pagination-mini');
+    expect(container.querySelector('.ant-pagination-total-text')).toHaveTextContent('共 30 条');
+    expect(container.querySelector('.ant-pagination-options-quick-jumper input')).toBeInTheDocument();
+    rerender(<LedgerTable {...props} pagination={{ total: 30, pageSize: 10, placement: ['bottomEnd'], size: 'medium', showTotal: () => 'Caller count', showQuickJumper: false }} />);
+    expect(container.querySelector('.ant-pagination')).not.toHaveClass('ant-pagination-mini');
+    expect(container.querySelector('.ant-pagination-total-text')).toHaveTextContent('Caller count');
+    expect(container.querySelector('.ant-pagination-options-quick-jumper')).toBeNull();
+    expect(container.querySelector('.ant-table')?.nextElementSibling).toHaveClass('ant-pagination');
+    rerender(<LedgerTable {...props} pagination={{ total: 30, pageSize: 10, position: ['bottomLeft'], showTotal: undefined }} />);
+    expect(container.querySelector('.ant-table')?.nextElementSibling).toHaveClass('ant-pagination');
+    expect(container.querySelector('.ant-pagination-total-text')).toBeNull();
+  });
+  it('lets external pagination fill the tools row without its old standalone top margins', () => {
+    const { container } = render(<LedgerTable ledgerId="compact-external" columns={columns} dataSource={data} pagination={false} toolbarContent={<><Typography.Text>Record count</Typography.Text><div className="qms-api-pagination qms-exchange-pagination">Caller pagination</div></>} />);
+    const toolbarContent = container.querySelector('.qms-api-pagination')!;
+    const total = container.querySelector('.qms-ledger__tools > .ant-typography')!;
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      expect(rules.some(rule => toolbarContent.matches(rule.selectorText) && rule.style.getPropertyValue('flex') === '1')).toBe(true);
+      expect(rules.some(rule => toolbarContent.matches(rule.selectorText) && rule.style.getPropertyValue('min-width') === '0' && rule.style.getPropertyValue('max-width') === '100%')).toBe(true);
+      expect(rules.some(rule => total.matches(rule.selectorText) && rule.style.getPropertyValue('flex') === '1')).toBe(false);
+      expect(rules.some(rule => toolbarContent.matches(rule.selectorText) && rule.style.getPropertyValue('margin-top') === '0')).toBe(true);
+    } finally { style.remove(); }
+  });
+  it('removes nested governance chrome only inside the shared custom toolbar', () => {
+    const { container } = render(<><div className="governance-toolbar">Standalone actions</div><LedgerTable ledgerId="compact-governance" columns={columns} dataSource={data} pagination={false} toolbarContent={<div className="governance-toolbar"><button>Previous page</button><button>Next page</button></div>} /></>);
+    const tools = container.querySelector('.qms-ledger__tools')!;
+    const nested = tools.querySelector('.governance-toolbar')!;
+    const standalone = container.querySelector(':scope > .governance-toolbar')!;
+    const style = document.createElement('style');
+    style.textContent = ledgerCss;
+    document.head.append(style);
+    try {
+      const rules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSStyleRule => 'selectorText' in rule);
+      const resets = rules.filter(rule => nested.matches(rule.selectorText) && rule.style.getPropertyValue('padding') === '0' && rule.style.getPropertyValue('border') === '0' && rule.style.getPropertyValue('background') === 'transparent');
+      expect(resets).toHaveLength(1);
+      expect(resets.some(rule => standalone.matches(rule.selectorText))).toBe(false);
+      expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('min-height') === '48px' && rule.style.getPropertyValue('box-sizing') === 'border-box')).toBe(true);
     } finally { style.remove(); }
   });
   it('anchors resize handles directly to real grouped, sortable, ellipsis and fixed header cells', () => {

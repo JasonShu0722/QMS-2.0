@@ -43,6 +43,9 @@ it('keeps the failure queue controls above the table and advances the real offse
   render(view());
   await screen.findByText('resource-a');
   const next = screen.getByRole('button', { name: '下一页' });
+  const toolbar = document.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(document.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await userEvent.click(next);
   await waitFor(() => expect(fetch.mock.calls.at(-1)?.[0]).toContain('offset=20'));

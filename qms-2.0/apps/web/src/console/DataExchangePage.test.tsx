@@ -73,6 +73,9 @@ it('uses the chosen page length for real attempt reads and resets the old page',
   await screen.findByText('batch-001');
   expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
   const next = screen.getByRole('button', { name: '下一页' });
+  const toolbar = document.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(document.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));

@@ -18,6 +18,9 @@ it('changes the cursor batch size without carrying the old cursor or discarding 
   await screen.findByText('current-alice');
   expect(fetch.mock.calls[0][0]).toContain('pageSize=20');
   const next = screen.getByRole('button', { name: '下一页' });
+  const toolbar = document.querySelector('.qms-ledger__tools');
+  expect(toolbar).toContainElement(next);
+  expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(document.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
   await waitFor(() => expect(fetch.mock.calls.at(-1)?.[0]).toContain('cursor=next-batch'));

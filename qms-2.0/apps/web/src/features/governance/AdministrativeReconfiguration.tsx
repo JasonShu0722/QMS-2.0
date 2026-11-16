@@ -214,6 +214,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
     if (changed && current()) callbacks.current.onChanged?.();
   }
 
+  const pagination = page && <Pagination size="small" current={Math.floor(offset / pageSize) + 1} pageSize={pageSize} total={page.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} disabled={locked} onChange={(value, size) => requestLeave(() => { if (!current()) return; closeEditor(); setOffset(size === pageSize ? (value - 1) * size : 0); setPageSize(size); })} />;
   if (denied) return <Alert type="error" showIcon title={t('管理权限或会话已失效，已清除待配置内容')} />;
   return <section className="administrative-reconfiguration" aria-label={t('待配置管理')}>
     <Space wrap className="administrative-reconfiguration-toolbar">
@@ -228,8 +229,7 @@ function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditio
       {success.replacementId && <span>{t('替代对象')}：<code>{success.replacementId}</code></span>}
     </Space>} />}
     {loading ? <div role="status" aria-label={t('读取待配置')}><Spin /></div> : page && <>
-      <Pagination size="small" current={Math.floor(offset / pageSize) + 1} pageSize={pageSize} total={page.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} disabled={locked} onChange={(value, size) => requestLeave(() => { if (!current()) return; closeEditor(); setOffset(size === pageSize ? (value - 1) * size : 0); setPageSize(size); })} />
-      {!page.items.length ? <Empty description={t('暂无待配置对象')} /> : <LedgerTable<Item> ledgerId="admin-reconfiguration" organizationId={organization.id} requiredColumnKeys={['label', 'actions']} className="administrative-reconfiguration-table" size="small" rowKey={item => `${item.kind}:${item.id}`} dataSource={page.items} pagination={false} scroll={{ x: 660 }} columns={[
+      {!page.items.length ? <>{pagination}<Empty description={t('暂无待配置对象')} /></> : <LedgerTable<Item> ledgerId="admin-reconfiguration" organizationId={organization.id} toolbarContent={pagination} requiredColumnKeys={['label', 'actions']} className="administrative-reconfiguration-table" size="small" rowKey={item => `${item.kind}:${item.id}`} dataSource={page.items} pagination={false} scroll={{ x: 660 }} columns={[
         { key: 'label', title: t('待配置对象'), width: 220, render: (_, item) => <><Typography.Text strong>{item.label}</Typography.Text> <Tag>{t(names[item.kind])}</Tag></> },
         { key: 'scope', title: t('原归属（历史范围）'), width: 260, render: (_, item) => organizations.find(entry => entry.id === item.originalOrganizationId)?.name ?? item.originalOrganizationId },
         { key: 'actions', title: t('操作'), width: 180, render: (_, item) => <fieldset className="administrative-reconfiguration-actions" disabled={locked}><Space wrap>
