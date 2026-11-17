@@ -671,6 +671,8 @@ export class IngestionService {
     return row;
   }
   private async stale(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation): Promise<boolean> {
+    if (job.rule_snapshot.componentNameLookup && Object.hasOwn(job.rule_snapshot.componentMaterialBaselines ?? {}, String(item.row_index))
+      && !sameMaterialBaseline(job.rule_snapshot.componentMaterialBaselines?.[String(item.row_index)], evaluation.componentMaterialSnapshot)) return true;
     if ((evaluation.current?.id ?? null) !== item.target_id || (evaluation.current?.version ?? null) !== item.target_version) return true;
     if (!evaluation.current) return false;
     const receivedAt = item.source_received_at ?? receipt.received_at;
