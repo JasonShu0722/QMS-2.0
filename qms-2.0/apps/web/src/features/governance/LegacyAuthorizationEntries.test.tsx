@@ -82,7 +82,7 @@ it.each(['limited internal', 'supplier', 'supplier account'] as const)('retains 
   if (kind === 'supplier account') org.permissions = reads;
   const account: AdminUser = { ...user, accountType: kind === 'supplier account' ? 'SUPPLIER' : org.type };
   const fetcher = server(org, account); render(usersScene(org));
-  const manager = await openUserManagement('任职与授权');
+  const manager = await openUserManagement('任职与授权', within((await screen.findByText('entry-user')).closest('tr')!).getByText('管理用户', { selector: 'button > span' }).closest('button')!);
   fireEvent.click(sourceButton(manager));
   const dialog = within(await sourceDialog());
   await waitFor(() => expect(dialog.getByText('原只读角色')).toBeVisible()); expect(dialog.queryByRole('combobox')).not.toBeInTheDocument();
@@ -91,7 +91,7 @@ it.each(['limited internal', 'supplier', 'supplier account'] as const)('retains 
 
 it.each([401, 403])('clears the real user source modal and sensitive parent content and bubbles a current %s', async status => {
   const denied = vi.fn(); server(organization, user, path => path.includes('/authorization-sources?') && path.endsWith('offset=20') ? json({ code: 'DENIED', message: 'denied' }, status) : undefined);
-  render(usersScene(organization, false, denied)); const manager = await openUserManagement('任职与授权'); fireEvent.click(sourceButton(manager));
+  render(usersScene(organization, false, denied)); const manager = await openUserManagement('任职与授权', within((await screen.findByText('entry-user')).closest('tr')!).getByText('管理用户', { selector: 'button > span' }).closest('button')!); fireEvent.click(sourceButton(manager));
   const element = await sourceDialog(); const dialog = within(element);
   await dialog.findByText(/敏感来源角色/);
   const next = dialog.getByLabelText('当前来源下一页', { selector: 'button' });
@@ -118,7 +118,7 @@ it.each(['organization', 'permissions', 'session'] as const)('retires a pending 
 
 it('does not use the new source modal to bypass an unsaved user editor', async () => {
   const org = { ...organization, permissions: [...reads, 'account:users:update'] }; const fetcher = server(org); render(usersScene(org));
-  const editor = await openUserManagement(); const sourceTab = editor.getByText('任职与授权', { selector: '[role="tab"]' });
+  const editor = await openUserManagement(undefined, within((await screen.findByText('entry-user')).closest('tr')!).getByText('管理用户', { selector: 'button > span' }).closest('button')!); const sourceTab = editor.getByText('任职与授权', { selector: '[role="tab"]' });
   const nameInput = editor.getByLabelText('姓名'); fireEvent.change(nameInput, { target: { value: '未保存姓名' } });
   fireEvent.click(sourceTab);
   const guardDialog = await screen.findByLabelText('当前草稿尚未保存，继续将放弃修改。', { selector: '[role="dialog"]' });

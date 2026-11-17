@@ -15,7 +15,7 @@ it('lets a structure reader see complete appointments without directory, role or
     return new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
   }));
   render(<MemoryRouter><UserAdministration organization={organization} organizations={[organization]} /></MemoryRouter>);
-  const manager = await openUserManagement('任职与授权');
+  const manager = await openUserManagement('任职与授权', (await screen.findByText('管理用户', { selector: 'button > span' })).closest('button')!);
   fireEvent.click(manager.getByRole('button', { name: '查看任职' }));
   const detail = within(await screen.findByRole('dialog', { name: 'alice · 用户任职' }));
   expect(await detail.findByText('Full appointment')).toBeInTheDocument();
