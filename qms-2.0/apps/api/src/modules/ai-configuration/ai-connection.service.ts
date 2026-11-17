@@ -25,7 +25,7 @@ export class AiConnectionService {
   async list(actor: AdminActor, organizationId: string): Promise<AiConnectionDto[]> {
     this.identifiers(organizationId);
     return this.prisma.$transaction(async transaction => {
-      await this.access(transaction, actor, organizationId, 'configuration:read');
+      await this.access(transaction, actor, organizationId, 'ai:connections:read');
       const rows = await transaction.$queryRaw<ConnectionRow[]>(Prisma.sql`SELECT ${projection} FROM ai_connections WHERE organization_id=${organizationId}::uuid ORDER BY name,id LIMIT 1000`);
       return rows.map(dto);
     });
@@ -93,7 +93,7 @@ export class AiConnectionService {
       code = allowed.includes(reason as AiFailureCode) ? reason as AiFailureCode : 'AI_CONNECTION_REQUEST_FAILED';
     }
     await this.prisma.$transaction(async transaction => {
-      await this.access(transaction, actor, organizationId, 'configuration:manage');
+      await this.access(transaction, actor, organizationId, 'ai:connections:test');
       await assertActiveAuthentication(transaction, actor);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AI_CONNECTION_TESTED', resourceType: 'AiConnection', resourceId: id,
         outcome: code === 'AI_CONNECTION_OK' ? 'SUCCESS' : 'FAILURE', traceId, metadata: { resourceVersion: input.expectedVersion, reasonCode: code, protocol: connection.protocol } }, transaction);
@@ -147,7 +147,9 @@ export class AiConnectionService {
   private mutate<Result>(actor: AdminActor, organizationId: string, action: string, payload: object, traceId: string, key: string | undefined, work: (transaction: AdminTransaction) => Promise<Result>) {
     this.identifiers(organizationId);
     if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
-    return this.mutations.run({ actor, organizationId, action, payload: { organizationId, ...payload }, permission: 'configuration:manage', traceId, key }, work,
+    const permission = action === 'AI_CONNECTION_KEY_CLEARED' ? 'ai:credentials:manage' : action === 'AI_CONNECTION_TESTED' ? 'ai:connections:test'
+      : ['ai:connections:manage', ...('apiKey' in payload && payload.apiKey ? ['ai:credentials:manage'] : [])];
+    return this.mutations.run({ actor, organizationId, action, payload: { organizationId, ...payload }, permission, traceId, key }, work,
       transaction => this.organization(transaction, organizationId, true));
   }
 

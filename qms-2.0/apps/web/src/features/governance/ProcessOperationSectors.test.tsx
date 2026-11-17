@@ -9,7 +9,7 @@ import { ProcessOperationSectors } from './ProcessOperationSectors';
 
 const mutate = vi.fn();
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), createAdminMutation: vi.fn() }));
-const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL', permissions: ['configuration:read', 'configuration:manage'] } as const;
+const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL', permissions: ['process-quality:configuration:read', 'process-quality:configuration:manage'] } as const;
 const sector = { id: 'sector-1', organizationId: 'org', operationName: '终检', sectorName: '装配', active: true, version: 2 };
 beforeEach(() => {
   localStorage.clear(); vi.stubEnv('NODE_ENV', 'development');
@@ -47,7 +47,7 @@ it('keeps a conflicting edit and offers the exact request after an unknown resul
 it('hides mutations for a reader and retires late rows after identity changes', async () => {
   let resolve!: (value: unknown) => void;
   vi.mocked(apiRequest).mockReturnValue(new Promise(done => { resolve = done; }));
-  mount(['configuration:read']);
+  mount(['process-quality:configuration:read']);
   expect(screen.queryByRole('button', { name: '新建板块规则' })).not.toBeInTheDocument();
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:org:another'));
   await act(async () => resolve([sector]));

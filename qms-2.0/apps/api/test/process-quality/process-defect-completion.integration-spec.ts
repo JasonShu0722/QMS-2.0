@@ -54,6 +54,8 @@ describe('process registration snapshots and real bounded Worker completion', ()
   it('completes only pending active nonarchived records and does not invent legacy facts', async () => {
     const active = await fixture.manual({ productCode: 'LATER', operationName: 'OP' });
     const archived = await fixture.manual({ productCode: 'LATER', operationName: 'OP' });
+    const deletePermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:defects:delete' } });
+    await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: deletePermission.id } });
     await fixture.ledger.archive(fixture.actor, archived.id, archived.version, randomUUID(), randomUUID());
     const legacy = await fixture.prisma.processDefect.create({ data: { organizationId: fixture.actor.organizationId, description: '旧未知', productCode: 'LATER', createdById: fixture.actor.id, updatedById: fixture.actor.id } });
     await mapping('LATER', '类型');
@@ -89,7 +91,7 @@ describe('process registration snapshots and real bounded Worker completion', ()
     await expect(fixture.sectors.create(fixture.actor, { operationName: 'OP', sectorName: '乙' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await fixture.sectors.update(fixture.actor, rule.id, { expectedVersion: 1, operationName: 'OP', sectorName: '乙', active: false }, randomUUID(), randomUUID());
     await expect(fixture.sectors.update(fixture.actor, rule.id, { expectedVersion: 1, operationName: 'OP', sectorName: '丙', active: true }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
-    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:manage' } });
+    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:configuration:manage' } });
     await fixture.prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: fixture.role.id, permissionId: permission.id } } });
     await expect(fixture.sectors.create(fixture.actor, { operationName: 'OTHER', sectorName: '丙' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
   });

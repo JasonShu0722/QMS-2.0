@@ -34,7 +34,7 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
   const effectiveRevision = applicationRevision && applicationRevision.applicationId === applicationId && applicationRevision.publishedVersion === publishedVersion ? applicationRevision : undefined;
   const snapshot = effectiveRevision?.configuration ?? (originalBinding ? rule?.aiDescription : undefined);
   const latest = selectedApplication?.publishedVersion ?? rule?.aiApplicationLatestVersion;
-  const canReadAi = scope.permissions.includes('configuration:read');
+  const canReadAi = scope.permissions.includes('ai:applications:read');
   useEffect(() => {
     if (target !== 'PROCESS_DEFECT' || !aiEnabled || !canReadAi) return;
     let active = true; setApplicationsLoading(true); setApplicationsError(undefined);

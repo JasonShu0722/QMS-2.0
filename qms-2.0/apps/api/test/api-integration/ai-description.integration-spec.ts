@@ -23,7 +23,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     process.env.NODE_ENV = 'test';
     fixture = await processIngestionFixture();
     await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks t SET status='STALE',claim_token=NULL WHERE t.status IN ('PENDING','RETRY','PROCESSING') AND t.organization_id<>${fixture.actor.organizationId}::uuid AND EXISTS(SELECT 1 FROM ai_connections c JOIN organizations o ON o.id=c.organization_id WHERE c.id=t.connection_id AND c.organization_id=t.organization_id AND c.name='测试专用渠道' AND c.base_url LIKE 'http://127.0.0.1:%/v1' AND o.name='S2 disposable scope')`;
-    for (const code of ['ingestion:read','ingestion:run','ingestion:manage','integration:receipts:read','integration:payload:read']) {
+    for (const code of ['ingestion:read','ingestion:run','ingestion:manage','integration:receipts:read','integration:payload:read','ai:connections:read','ai:connections:manage','ai:credentials:manage','ai:applications:manage','ai:applications:publish','process-quality:defects:delete']) {
       const permission = await fixture.prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } });
     }
@@ -485,7 +485,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     const key = randomUUID(), input = { ...source.configuration, aiApplication: undefined, aiDescription: { ...source.configuration.aiDescription!, prompt: '变更配置{{fact}}' }, expectedVersion: source.configuration.version };
     const saved = await engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id);
     expect(await engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id)).toEqual(saved);
-    for (const code of ['process-quality:defects:write', 'configuration:read']) {
+    for (const code of ['process-quality:defects:write', 'ai:applications:read']) {
       const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code } });
       await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
       try { await expect(engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id)).rejects.toMatchObject({ status: 403 }); }
@@ -499,7 +499,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     const input = { ...active, expectedVersion: active.version, enabled: false,
       aiApplication: representation === 'inline' ? undefined : active.aiApplication,
       aiDescription: representation === 'binding' ? undefined : active.aiDescription };
-    const configurationPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    const configurationPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ai:applications:read' } });
     const runPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ingestion:run' } });
     const removed = [configurationPermission.id, runPermission.id];
     await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: { in: removed } } });
@@ -531,7 +531,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
   it('limits the unchanged AI disable exemption to the original endpoint, target and organization', async () => {
     mode = 'SUCCESS'; const value = await engineSource();
     const input = { ...value.configuration, expectedVersion: value.configuration.version, enabled: false };
-    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ai:applications:read' } });
     await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
     try {
       const endpoint = await fixture.prisma.integrationEndpoint.create({ data: { organizationId: fixture.actor.organizationId, code: randomUUID(), name: '另一来源', sourceCode: 'TEST', sourceName: '范围验证', status: 'ENABLED' } });
@@ -550,7 +550,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     const changedKey = randomUUID(), changedInput = { ...disabled, expectedVersion: disabled.version, aiApplication: undefined,
       aiDescription: { ...disabled.aiDescription!, prompt: '后续合法变更{{fact}}' } };
     await engine.saveRule(fixture.actor, changedInput, randomUUID(), changedKey, input.id);
-    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ai:applications:read' } });
     await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
     try {
       expect(await engine.saveRule(fixture.actor, input, randomUUID(), key, input.id)).toEqual(disabled);
@@ -622,6 +622,63 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     expect((await service.list(fixture.actor, value.defect.id)).items[0]).toMatchObject({ status: 'FAILED', errorCode: 'AI_APPLICATION_VERSION_CONFLICT' });
     const [snapshot] = await fixture.prisma.$queryRaw<{ prompt: string; application_id: string | null }[]>`SELECT prompt,application_id FROM integration_ai_description_tasks WHERE defect_id=${value.defect.id}::uuid`;
     expect(snapshot).toEqual({ prompt: value.input.rule.aiDescription!.prompt, application_id: null });
+  });
+
+  it('allows business AI preview with only ingestion run and process write after configuration read is revoked', async () => {
+    mode = 'SUCCESS'; const value = await source();
+    const permissions = await fixture.prisma.permission.findMany({ where: { code: { in: ['configuration:read', 'ai:applications:read', 'ai:connections:read'] } } });
+    await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: { in: permissions.map(permission => permission.id) } } });
+    try {
+      expect(await service.preview(fixture.actor, { connectionId: connection.id, model: 'model-b', prompt: '整理{{fact}}', fields: value.input.fields,
+        output: value.input.rule.aiDescription!.output })).toBe('已选事实的整理结果');
+      const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:defects:write' } });
+      await fixture.prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: fixture.role.id, permissionId: permission.id } } });
+      try {
+        await expect(service.preview(fixture.actor, { connectionId: connection.id, model: 'model-b', prompt: '整理{{fact}}', fields: value.input.fields,
+          output: value.input.rule.aiDescription!.output })).rejects.toMatchObject({ status: 403 });
+      } finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } }); }
+    } finally { await fixture.prisma.rolePermission.createMany({ data: permissions.map(permission => ({ roleId: fixture.role.id, permissionId: permission.id })) }); }
+  });
+
+  it('stales a pending background AI task after deleting the ledger without another provider request or source write', async () => {
+    mode = 'SUCCESS'; const value = await source(); await value.enqueue();
+    const current = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } });
+    await fixture.ledger.deleteDefects(fixture.actor, { sources: [{ defectId: current.id, expectedVersion: current.version }], reason: '取消误导入不良' }, randomUUID(), randomUUID());
+    const before = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: current.id } }), calls = requests.length;
+    await service.processDue();
+    expect(requests).toHaveLength(calls);
+    expect((await service.list(fixture.actor, current.id)).items[0]).toMatchObject({ status: 'STALE' });
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: current.id } })).toEqual(before);
+  });
+
+  it('discards an actual in-flight AI response after the source is deleted', async () => {
+    mode = 'WAIT'; const value = await source(); await value.enqueue();
+    const startedRequest = new Promise<void>(resolve => { started = resolve; });
+    const run = service.processDue(); await startedRequest;
+    let deleted: object | undefined;
+    try {
+      const current = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } });
+      await fixture.ledger.deleteDefects(fixture.actor, { sources: [{ defectId: current.id, expectedVersion: current.version }], reason: '网络响应前确认删除' }, randomUUID(), randomUUID());
+      deleted = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: current.id } });
+    } finally { pending!(); await run; started = undefined; mode = 'SUCCESS'; }
+    expect((await service.list(fixture.actor, value.defect.id)).items[0]).toMatchObject({ status: 'STALE' });
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).toEqual(deleted!);
+  });
+
+  it('skips an IMS identity redelivery after deletion and preserves its deduplication watermark', async () => {
+    mode = 'SUCCESS'; const value = await engineSource(), initial = await value.ingest();
+    const [watermark] = await fixture.prisma.$queryRaw<object[]>`SELECT * FROM integration_ingestion_target_versions WHERE organization_id=${fixture.actor.organizationId}::uuid AND target='PROCESS_DEFECT' AND target_id=${initial.row.id}::uuid`;
+    const current = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } });
+    await fixture.ledger.deleteDefects(fixture.actor, { sources: [{ defectId: current.id, expectedVersion: current.version }], reason: '入库后确认删除' }, randomUUID(), randomUUID());
+    const next = await value.prepare(value.configuration, { ...value.raw, operation: '下一道工序' });
+    expect(next.preview).toMatchObject({ action: 'EXISTING_SKIPPED', errorCode: 'PROCESS_DEFECT_ARCHIVED', targetId: initial.row.id });
+    const imported = await engine.submitImport(fixture.actor, { previewId: next.preview.previewId, confirmed: true }, randomUUID(), randomUUID());
+    await engine.processDue(20);
+    const item = (await engine.listItems(fixture.actor, imported.jobIds[0]!, {})).items[0]!;
+    expect(item).toMatchObject({ status: 'EXISTING_SKIPPED', errorCode: 'PROCESS_DEFECT_ARCHIVED', targetId: initial.row.id });
+    const [after] = await fixture.prisma.$queryRaw<object[]>`SELECT * FROM integration_ingestion_target_versions WHERE organization_id=${fixture.actor.organizationId}::uuid AND target='PROCESS_DEFECT' AND target_id=${initial.row.id}::uuid`;
+    expect(after).toEqual(watermark);
+    expect(await fixture.prisma.processDefect.count({ where: { organizationId: fixture.actor.organizationId, externalRecordKey: value.raw.id as string } })).toBe(1);
   });
 
   it('isolates a soft deletion during actual HTTP without reviving the protected identity', async () => {

@@ -48,7 +48,7 @@ describe('AI channel authenticated HTTP privacy and access', () => {
     const created = (await write(admin, '', body).expect(201)).body;
     expect(created).toMatchObject({ hasKey: true, models: ['model-a', 'model-b'], defaultModel: 'model-a' }); safe(created);
     safe((await read(admin).expect(200)).body);
-    const colleague = await identity(['configuration:read', 'configuration:manage'], admin.organizationId);
+    const colleague = await identity(['ai:connections:read', 'ai:connections:manage', 'ai:credentials:manage', 'ai:connections:test'], admin.organizationId);
     safe((await read(colleague).expect(200)).body);
     const cleared = (await write(colleague, `/${created.id}/clear-key`, { expectedVersion: 1 }).expect(201)).body;
     expect(cleared).toMatchObject({ hasKey: false, enabled: false, version: 2 }); safe(cleared);
@@ -62,7 +62,7 @@ describe('AI channel authenticated HTTP privacy and access', () => {
     const created = (await write(admin, '', body).expect(201)).body;
     await write(admin, `/${created.id}/test`, { expectedVersion: 1, messages: [{ role: 'user', content: 'send any key' }] }).expect(400);
     await write(admin, '', { ...body, secretCiphertext: 'forbidden' }).expect(400);
-    const other = await identity(['configuration:read', 'configuration:manage']);
+    const other = await identity(['ai:connections:read', 'ai:connections:manage', 'ai:credentials:manage']);
     await write(other, `/${created.id}/clear-key`, { expectedVersion: 1 }).expect(404);
     await prisma.organization.update({ where: { id: admin.organizationId }, data: { status: 'DISABLED', configurationRequired: true } });
     expect((await read(admin).expect(401)).body.code).toBe('AUTH_SESSION_REQUIRED');

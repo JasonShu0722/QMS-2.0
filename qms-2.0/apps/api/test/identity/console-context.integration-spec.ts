@@ -72,6 +72,24 @@ describe('REQ0032 console context with real HTTP sessions and PostgreSQL authori
   it('requires a real authenticated session', async () => {
     expect((await request(app.getHttpServer()).get(path).expect(401)).body.code).toBe('AUTH_SESSION_REQUIRED');
   });
+  it.each([
+    ['ai:connections:read', 'ai-connections', '/api/v1/admin/ai-connections'],
+    ['ai:applications:read', 'ai-applications', '/api/v1/admin/ai-applications'],
+    ['process-quality:configuration:read', 'configuration', '/api/v1/process-quality/operation-sectors'],
+  ])('reaches the actual management page with the standalone %s permission', async (code, module, resource) => {
+    const specialist = await fixture();
+    await grant(specialist.user.id, specialist.home.id, [code]);
+    const context = await get(specialist.cookie).expect(200);
+    expect(context.body.modules).toContainEqual(expect.objectContaining({ key: module, permissions: [code] }));
+    const directory = await request(app.getHttpServer()).get('/api/v1/admin/organizations').set('Cookie', specialist.cookie).expect(200);
+    expect(directory.body).toContainEqual(expect.objectContaining({ id: specialist.home.id, permissions: [code] }));
+    const management = await request(app.getHttpServer()).get('/api/v1/admin/organizations/context').set('Cookie', specialist.cookie).expect(200);
+    expect(management.body).toMatchObject({ accessKind: 'ORGANIZATION', permissions: [code] });
+    await request(app.getHttpServer()).get(resource).set('Cookie', specialist.cookie).expect(200);
+    for (const foreign of ['/api/v1/admin/configuration/settings', ...['/api/v1/admin/ai-connections', '/api/v1/admin/ai-applications', '/api/v1/process-quality/operation-sectors'].filter(path => path !== resource)]) {
+      await request(app.getHttpServer()).get(foreign).set('Cookie', specialist.cookie).expect(403);
+    }
+  });
   it('makes new ingestion permissions and management entry available from the platform marker alone', async () => {
     const administrator = await fixture();
     await grant(administrator.user.id, administrator.home.id, ['platform:admin']);

@@ -43,7 +43,7 @@ describe('prompt application authenticated HTTP boundary', () => {
     const created = (await post(admin, '', input, key).expect(201)).body;
     expect((await post(admin, '', input, key).expect(201)).body).toEqual(created);
     const page = await get(admin).expect(200); expect(page.headers['cache-control']).toBe('no-store'); expect(page.body).toMatchObject({ total: 1, items: [{ id: created.id }] });
-    const colleague = await identity(['configuration:read', 'configuration:manage'], admin.organizationId);
+    const colleague = await identity(['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish'], admin.organizationId);
     const published = (await post(colleague, `/${created.id}/publish`, { expectedVersion: 1 }).expect(201)).body;
     expect(published).toMatchObject({ version: 2, publishedVersion: 1 });
     expect((await get(colleague, `/${created.id}/revisions/1`).expect(200)).body.configuration).toMatchObject(input);
@@ -52,13 +52,13 @@ describe('prompt application authenticated HTTP boundary', () => {
   it('denies missing authentication, ordinary accounts, read-only writes, CSRF bypass and unsafe body extensions', async () => {
     await request(app.getHttpServer()).get(path).expect(401);
     const ordinary = await identity([]); await get(ordinary).expect(403); await post(ordinary, '', {}).expect(403);
-    const manager = await identity(['configuration:read', 'configuration:manage']), input = await settings(manager);
-    const reader = await identity(['configuration:read'], manager.organizationId);
+    const manager = await identity(['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:manage', 'ai:credentials:manage']), input = await settings(manager);
+    const reader = await identity(['ai:applications:read'], manager.organizationId);
     await get(reader).expect(200); await post(reader, '', input).expect(403);
     await request(app.getHttpServer()).post(path).query({ organizationId: manager.organizationId }).set('Cookie', manager.cookie).set('Idempotency-Key', randomUUID()).send(input).expect(403);
     await request(app.getHttpServer()).post(path).query({ organizationId: manager.organizationId }).set('Cookie', manager.cookie).set('x-csrf-token', csrf).send(input).expect(400);
     for (const change of [{ apiKey: 'unexpected' }, { domain: 'FUTURE' }, { output: { mode: 'TEXT', field: 'x', target: 'quantity' } }, { variables: [{ variable: 'fact', label: '现象', path: 'private.raw' }] }]) await post(manager, '', { ...input, ...change }).expect(400);
-    const other = await identity(['configuration:read', 'configuration:manage']);
+    const other = await identity(['ai:applications:read', 'ai:applications:manage']);
     await request(app.getHttpServer()).get(path).query({ organizationId: manager.organizationId }).set('Cookie', other.cookie).expect(403);
   });
 });

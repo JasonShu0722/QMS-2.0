@@ -577,6 +577,14 @@ const translations: Record<string, string> = {
 
 type Locale = 'zh-CN' | 'en-US';
 const permissionTranslations: Record<string, string> = {
+  '管理用户': 'Manage user', '基本资料': 'Basic information', '任职与授权': 'Positions and authorization', '状态与删除': 'Status and deletion',
+  '原请求结果尚未确认，请重试原请求或明确放弃。': 'The original request result is unconfirmed. Retry the original request or explicitly abandon it.',
+  '放弃未确认的请求？': 'Abandon the unconfirmed request?',
+  '原请求结果尚未确认，放弃后无法继续重试原请求。': 'The original request result is unconfirmed. Abandoning it prevents retrying the original request.',
+  'group:ai': 'AI management', 'module:ai-connections': 'Model channels', 'module:ai-applications': 'Prompt applications', 'module:process-configuration': 'Operation sector mapping',
+  'operation:ai:connections:read': 'View model channels', 'operation:ai:connections:manage': 'Manage model channels', 'operation:ai:connections:test': 'Test model channels', 'operation:ai:credentials:manage': 'Manage AI channel credentials',
+  'operation:ai:applications:read': 'View and reference prompt applications', 'operation:ai:applications:manage': 'Manage prompt application drafts', 'operation:ai:applications:publish': 'Publish prompt applications', 'operation:ai:applications:test': 'Run prompt application samples',
+  'operation:process-quality:configuration:read': 'View operation sector mappings', 'operation:process-quality:configuration:manage': 'Manage operation sector mappings', 'operation:process-quality:defects:delete': 'Delete process defect ledger records',
   'group:platform': 'Platform features', 'group:supplier': 'Supplier quality', 'group:process': 'Process quality', 'group:customer': 'Customer quality',
   'group:new-product': 'New product quality', 'group:audit': 'Audit management', 'group:system': 'Administration',
   'module:workbench': 'Workbench', 'module:problem-index': 'Problem search', 'module:workflow': 'Controlled workflows',

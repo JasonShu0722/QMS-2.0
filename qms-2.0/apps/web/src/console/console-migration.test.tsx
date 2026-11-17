@@ -51,12 +51,12 @@ type Organization = components['schemas']['AdminOrganizationDto'];
 type Management = components['schemas']['AdminOrganizationContextDto'];
 const home = { id: homeId, code: 'HOME', name: 'Home', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 const target = { ...home, id: targetId, code: 'TARGET', name: 'Target' };
-const permissions = ['account:users:read', 'account:users:create', 'account:users:delete', 'organization:read', 'organization:structure:read', 'organization:force-delete', 'organization:departments:force-delete', 'organization:reconfigure', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'component-project:read', 'component-project:manage', 'configuration:read', 'audit:read', 'outbox:read'];
+const permissions = ['account:users:read', 'account:users:create', 'account:users:delete', 'organization:read', 'organization:structure:read', 'organization:force-delete', 'organization:departments:force-delete', 'organization:reconfigure', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'component-project:read', 'component-project:manage', 'configuration:read', 'ai:connections:read', 'ai:applications:read', 'audit:read', 'outbox:read'];
 const directory: Organization[] = [{ ...home, permissions: [...permissions] }, { ...target, permissions: [...permissions] }];
 const fixed = ['reconfiguration', 'problem-reconfiguration', 'supplier-accounts'];
 function context(): ConsoleContext {
   return { actor: { id: 'actor', accountType: 'INTERNAL', homeOrganization: home }, targetOrganization: target, organizations: [home, target], hasPlatformAdministrator: true,
-    modules: (['users', 'organizations', 'master-data', 'configuration', 'audit', 'outbox', ...fixed] as ConsoleContext['modules'][number]['key'][]).map(key => ({ key, scope: fixed.includes(key) ? 'SESSION_HOME' : 'TARGET', coverage: fixed.includes(key) ? 'PLATFORM' : 'ORGANIZATION', organizationId: fixed.includes(key) ? homeId : targetId, permissions })) };
+    modules: (['users', 'organizations', 'master-data', 'configuration', 'ai-connections', 'ai-applications', 'audit', 'outbox', ...fixed] as ConsoleContext['modules'][number]['key'][]).map(key => ({ key, scope: fixed.includes(key) ? 'SESSION_HOME' : 'TARGET', coverage: fixed.includes(key) ? 'PLATFORM' : 'ORGANIZATION', organizationId: fixed.includes(key) ? homeId : targetId, permissions })) };
 }
 function management(id: string): Management { return { hasPlatformAdministrator: true, homeOrganizationId: homeId, targetOrganizationId: id, accessKind: 'PLATFORM', targetOrganizationStatus: 'ACTIVE', targetConfigurationRequired: false, permissions: [...permissions], authorizationSources: [] }; }
 let navigate: ReturnType<typeof useNavigate>;
@@ -128,8 +128,8 @@ it('does not read the admin directory for workflows, unknown routes or missing m
   expect(await screen.findByRole('alert')).toHaveTextContent('无权访问');
   expect(getAdminOrganizations).not.toHaveBeenCalled();
 });
-it.each(['ai-connections', 'ai-applications'])('denies %s to a user lacking configuration read even with an unrelated console module', async section => {
-  mocks.context.modules = mocks.context.modules.filter(module => module.key !== 'configuration');
+it.each(['ai-connections', 'ai-applications'])('denies %s to a user lacking its dedicated module even with configuration access', async section => {
+  mocks.context.modules = mocks.context.modules.filter(module => module.key !== section);
   view(`/console/${section}`);
   expect(await screen.findByRole('alert')).toHaveTextContent('无权访问');
   expect(getAdminOrganizations).not.toHaveBeenCalled();

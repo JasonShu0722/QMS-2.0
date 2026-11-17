@@ -1,6 +1,6 @@
 import { Button, Checkbox, Popover, Table, type TableProps } from 'antd';
 import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Settings2 } from 'lucide-react';
-import { createContext, useContext, useRef, useState, type ComponentProps, type ElementType, type ReactNode } from 'react';
+import { createContext, isValidElement, useContext, useRef, useState, type ComponentProps, type ElementType, type ReactNode } from 'react';
 import { useLanguage } from '../../i18n/Language';
 import { boundedWidth, columnKey, DEFAULT_WIDTH, MAX_WIDTH, MIN_SELECTION_WIDTH, MIN_WIDTH, moveColumn, normalizePreferences, preferenceKey, SELECTION_WIDTH_KEY, type Fixed, type Preferences } from './model';
 import { getLedgerSessionEpoch, useLedgerScope, useLedgerSessionEpoch, usePreference } from './preferences';
@@ -12,6 +12,7 @@ export type LedgerTableProps<RecordType extends object> = TableProps<RecordType>
   toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
   defaultVisibleColumnKeys?: string[];
+  resetColumnsLabel?: string;
   onColumnOrderChange?: (keys: string[]) => void; onVisibleColumnKeysChange?: (keys: string[]) => void;
 };
 type Column<RecordType extends object> = NonNullable<TableProps<RecordType>['columns']>[number];
@@ -29,7 +30,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -65,7 +66,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   activeScope.current = stateKey;
   const [preview, setPreview] = useState<{ scope?: string; epoch: number; key: string; width: number }>();
   const [dropTarget, setDropTarget] = useState<{ scope?: string; epoch: number; key: string }>();
-  const label = (column: Column<RecordType>) => typeof column.title === 'string' || typeof column.title === 'number' ? String(column.title) : columnKey(column)!;
+  const label = (column: Column<RecordType>) => typeof column.title === 'string' || typeof column.title === 'number' ? String(column.title) : isValidElement<{ 'aria-label'?: string }>(column.title) && column.title.props['aria-label'] ? column.title.props['aria-label'] : columnKey(column)!;
   const getColumn = (key: string) => configurable.find(column => columnKey(column) === key)!;
   const minimumFor = (key: string) => key === SELECTION_WIDTH_KEY ? MIN_SELECTION_WIDTH : boundedWidth(getColumn(key)?.minWidth, MIN_WIDTH);
   const clampWidth = (key: string, value: unknown, fallback = DEFAULT_WIDTH) => boundedWidth(value, fallback, minimumFor(key));
@@ -176,7 +177,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
         <Button size="small" aria-label={`${text('恢复', 'Reset')} ${name}`} icon={<RotateCcw size={12} />} onClick={() => resetColumn(key)} />
       </div>;
     })}
-    <Button size="small" onClick={resetAll}>{text('恢复全部列', 'Reset all columns')}</Button>
+    <Button size="small" onClick={resetAll}>{resetColumnsLabel ?? text('恢复全部列', 'Reset all columns')}</Button>
   </div>;
   const expansion = expandable?.expandedRowRender ? { ...expandable, columnTitle: expandable.columnTitle === undefined ? text('明细', 'Details') : expandable.columnTitle, columnWidth: expandable.columnWidth ?? 64, showExpandColumn: expandable.showExpandColumn ?? (tableProps.dataSource?.some(record => !expandable.rowExpandable || expandable.rowExpandable(record)) ?? false) } : expandable;
   return <div className={`qms-ledger${toolbarContent == null && tableProps.pagination !== false ? ' qms-ledger--native-pagination' : ''}`}>

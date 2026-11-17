@@ -1,0 +1,13 @@
+.admin-user-manage-action {
+  white-space: nowrap;
+}
+
+.admin-user-positions-summary.ant-typography {
+  margin-bottom: 0;
+}
+
+.admin-user-identity {
+  padding-bottom: var(--qms-space-2, 8px);
+  border-bottom: 1px solid var(--qms-border);
+  overflow-wrap: anywhere;
+}

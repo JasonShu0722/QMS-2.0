@@ -36,7 +36,7 @@ describe('process defect ledger on PostgreSQL', () => {
     await prisma.user.create({ data: { id: otherUserId, organizationId: otherOrganizationId, username: `pqe-${otherUserId.slice(0, 8)}`, accountType: 'INTERNAL', passwordHash: 'test-only' } });
     await prisma.session.create({ data: { id: sessionId, userId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), reauthenticatedAt: new Date() } });
     await prisma.role.create({ data: { id: roleId, organizationId, code: 'PQE', name: 'Process QE' } });
-    for (const code of ['process-quality:defects:read', 'process-quality:defects:write']) {
+    for (const code of ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete']) {
       const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } });
     }
@@ -95,7 +95,7 @@ describe('process defect ledger on PostgreSQL', () => {
     const lockedArchive = await prisma.$transaction((tx) => service.lockAndResolve(tx, { sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: record.id, sourceVersion: 2, sourceSnapshot: {}, createdBy: userId }));
     expect(lockedArchive?.archivedAt).toBeTruthy();
     expect((await service.list(actor, { page: 1, pageSize: 20, includeArchived: false })).items.some((item) => item.id === record.id)).toBe(false);
-    expect((await service.list(actor, { page: 1, pageSize: 20, includeArchived: true })).items.some((item) => item.id === record.id)).toBe(true);
+    expect((await service.list(actor, { page: 1, pageSize: 20, includeArchived: true })).items.some((item) => item.id === record.id)).toBe(false);
   });
 
   it('stores external identity once without declaring an unverified integration successful', async () => {
@@ -107,12 +107,13 @@ describe('process defect ledger on PostgreSQL', () => {
     expect(await prisma.processDefectIngestionAudit.count({ where: { defectId: first.id, status: 'PENDING_VERIFICATION' } })).toBe(1);
   });
 
-  it('keeps a formal problem and its source snapshot when the source ledger record is archived', async () => {
+  it('refuses to delete a formal problem source and preserves its source snapshot', async () => {
     const record = await create();
     const problem = await prisma.problemIndex.create({ data: { organizationId, reportNumber: `PD-${randomUUID()}`, domainCode: 'process-quality', problemType: 'PROCESS', sourceType: 'process-defect', sourceId: record.id, severity: 'HIGH', createdById: userId } });
     const source = await prisma.$transaction((tx) => service.lockAndResolve(tx, { sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: record.id, sourceVersion: 1, sourceSnapshot: {}, createdBy: userId }));
     await prisma.domainSourceIssueLink.create({ data: { organizationId, problemIndexId: problem.id, sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: record.id, sourceVersion: 1, sourceSnapshot: source!.sourceSnapshot, createdBy: userId } });
-    await service.archive(actor, record.id, 1, randomUUID(), randomUUID());
+    await expect(service.archive(actor, record.id, 1, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    expect((await service.detail(actor, record.id)).archivedAt).toBeNull();
     expect(await prisma.problemIndex.findUnique({ where: { id: problem.id } })).toMatchObject({ sourceId: record.id });
     expect((await prisma.domainSourceIssueLink.findFirstOrThrow({ where: { problemIndexId: problem.id } })).sourceSnapshot).toMatchObject({ description: '端子表面氧化' });
   });

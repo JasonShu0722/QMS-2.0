@@ -16,7 +16,7 @@ type Update = components['schemas']['UpdateProcessOperationSectorDto'];
 type Command = { path: string; method: 'POST' | 'PUT' | 'DELETE'; body?: Create | Update };
 const sectorPath = '/api/v1/process-quality/operation-sectors';
 export function ProcessOperationSectors({ organization }: { organization: AdminOrganization }) {
-  return <SectorContent key={organization.id} organization={organization} />;
+  return <SectorContent key={`${organization.id}:${organization.permissions.join(',')}`} organization={organization} />;
 }
 function SectorContent({ organization }: { organization: AdminOrganization }) {
   const { t } = useLanguage(); const [form] = Form.useForm<Update>();
@@ -27,7 +27,7 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
   const initialScope = useRef(useWorkTabsStore.getState().sessionScope); const initialEpoch = useRef(getLedgerSessionEpoch());
   const alive = useRef(true); const invalidated = useRef(false); const inFlight = useRef(false); const frozen = useRef<Command>(undefined);
   const controller = useRef<AbortController>(undefined); const [mutate] = useState(() => createAdminMutation({ replayAfterReauthentication: false }));
-  const requestLeave = useNavigationGuard(); const manage = organization.permissions.includes('configuration:manage'); const locked = busy || unknown;
+  const requestLeave = useNavigationGuard(); const manage = organization.permissions.includes('process-quality:configuration:manage'); const locked = busy || unknown;
   useUnsavedChanges(dirty || unknown); useNavigationBusy(busy);
   const current = () => alive.current && !invalidated.current && useWorkTabsStore.getState().sessionScope === initialScope.current && getLedgerSessionEpoch() === initialEpoch.current;
   function retire() { invalidated.current = true; controller.current?.abort(); setRetired(true); setItems([]); setEditor(undefined); setRemoving(undefined); setDirty(false); setUnknown(false); frozen.current = undefined; }
@@ -37,7 +37,7 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
     return () => { alive.current = false; controller.current?.abort(); unsubscribe(); };
   }, []);
   useEffect(() => {
-    if (!organization.permissions.includes('configuration:read') || !current()) return;
+    if (!organization.permissions.includes('process-quality:configuration:read') || !current()) return;
     let active = true; setLoading(true); setError(undefined);
     void apiRequest<Sector[]>(`${sectorPath}?organizationId=${encodeURIComponent(organization.id)}`, { signal: controller.current?.signal }).then(value => {
       if (!active || !current()) return;
@@ -72,7 +72,7 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
   }
   function close() { if (!locked) requestLeave(() => { setDirty(false); setEditor(undefined); setRemoving(undefined); form.resetFields(); }, true); }
   if (retired) return <Alert type="warning" title={t('会话或配置权限已变化，请重新进入。')} />;
-  if (!organization.permissions.includes('configuration:read')) return null;
+  if (!organization.permissions.includes('process-quality:configuration:read')) return null;
   const feedback = <><GovernanceFeedback error={error} />{unknown ? <Alert type="warning" title={t('操作结果未知，输入已保留，请重试原请求。')} /> : null}</>;
   return <Card title={t('工序板块规则')}>
     <Space wrap><Button disabled={locked || loading} onClick={() => requestLeave(() => setRevision(value => value + 1))}>{t('刷新规则')}</Button>{manage ? <Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ active: true }); setError(undefined); setEditor({}); }}>{t('新建板块规则')}</Button> : null}</Space>

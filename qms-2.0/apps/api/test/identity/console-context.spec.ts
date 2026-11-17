@@ -29,6 +29,13 @@ function fixture(codes: string[] = [], accountType: 'INTERNAL' | 'SUPPLIER' = 'I
 
 describe('console context management capability projection', () => {
   it.each([
+    ['ai:connections:read', 'ai-connections'], ['ai:applications:read', 'ai-applications'],
+    ['process-quality:configuration:read', 'configuration'],
+  ])('exposes independent functional permission %s without platform configuration', async (code, key) => {
+    const f = fixture([code]);
+    expect((await f.service.context(f.actor)).modules).toEqual([{ key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: 'home', permissions: [code] }]);
+  });
+  it.each([
     ['console:api:read', 'api-monitoring'],
     ['console:exchanges:read', 'data-exchanges'],
     ['console:services:read', 'services'],

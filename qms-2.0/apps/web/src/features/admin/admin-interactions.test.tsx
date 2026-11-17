@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within, waitFor } from '@testing-library/rea
 import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UserAdministration } from './UserAdministration';
+import { openUserManagement } from './user-management-test-helpers';
 import { RoleAdministration } from './RoleAdministration';
 import type { AdminOrganization, AdminRole, AdminPermission, AdminUser, PermissionCatalogGroup } from './admin';
 import { AdminPage } from './AdminPage';
@@ -21,8 +22,8 @@ it.each([200, 409])('keeps the user editor busy until saving with status %s sett
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  const edit = (await screen.findByText(/^编\s*辑$/, { selector: 'button > span' })).closest('button')!;
-  expect(edit).toHaveAccessibleName(/^编\s*辑$/);
+  const edit = (await screen.findByText('管理用户', { selector: 'button > span' })).closest('button')!;
+  expect(edit).toHaveAccessibleName('管理用户');
   await userEvent.click(edit);
   const editor = screen.getByRole('dialog');
   await userEvent.clear(screen.getByLabelText('邮箱', { selector: 'input' }));
@@ -33,7 +34,8 @@ it.each([200, 409])('keeps the user editor busy until saving with status %s sett
   expect(within(editor).getByLabelText('邮箱')).toBeDisabled();
   expect(within(editor).getByLabelText('姓名')).toBeDisabled();
   expect(within(editor).getByLabelText('电话')).toBeDisabled();
-  within(editor).getAllByRole('combobox').forEach(input => expect(input).toBeDisabled());
+  expect(within(editor).queryByRole('combobox')).not.toBeInTheDocument();
+  within(editor).getAllByRole('tab').forEach(tab => expect(tab).toHaveAttribute('aria-disabled', 'true'));
   expect(within(editor).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
   const create = screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!;
@@ -108,8 +110,8 @@ it('edits only changed user fields and keeps failed writes retryable with safe e
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  const edit = (await screen.findByText(/^编\s*辑$/, { selector: 'button > span' })).closest('button')!;
-  expect(edit).toHaveAccessibleName(/^编\s*辑$/);
+  const edit = (await screen.findByText('管理用户', { selector: 'button > span' })).closest('button')!;
+  expect(edit).toHaveAccessibleName('管理用户');
   await userEvent.click(edit);
   const editor = screen.getByRole('dialog');
   await userEvent.clear(screen.getByLabelText('邮箱', { selector: 'input' }));
@@ -134,17 +136,20 @@ it('retains issued reset only until closing and generates a new code for the nex
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(await screen.findByRole('button', { name: '签发重置凭证' }));
-  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
-  const credential = await screen.findByRole('textbox', { name: '一次性重置凭证' });
+  const management = await openUserManagement('账号安全');
+  fireEvent.click(management.getByRole('button', { name: '签发重置凭证' }));
+  const reset = await screen.findByRole('dialog', { name: '一次性重置凭证' });
+  fireEvent.click(within(reset).getByRole('button', { name: '确认签发' }));
+  const credential = await within(reset).findByRole('textbox', { name: '一次性重置凭证' });
   expect((credential as HTMLTextAreaElement).value.startsWith('reset-id.')).toBe(true);
   expect(codes[0]).toMatch(/^[A-Za-z0-9_-]{43}$/);
-  await userEvent.click(screen.getByRole('button', { name: '关闭并清除' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await userEvent.click(screen.getByRole('button', { name: '签发重置凭证' }));
-  expect(screen.queryByRole('textbox', { name: '一次性重置凭证' })).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: '确认签发' }));
-  await screen.findByRole('textbox', { name: '一次性重置凭证' });
+  fireEvent.click(within(reset).getByRole('button', { name: '关闭并清除' }));
+  await waitFor(() => expect(reset).not.toBeInTheDocument());
+  fireEvent.click(management.getByRole('button', { name: '签发重置凭证' }));
+  const nextReset = await screen.findByRole('dialog', { name: '一次性重置凭证' });
+  expect(within(nextReset).queryByRole('textbox', { name: '一次性重置凭证' })).not.toBeInTheDocument();
+  fireEvent.click(within(nextReset).getByRole('button', { name: '确认签发' }));
+  await within(nextReset).findByRole('textbox', { name: '一次性重置凭证' });
   expect(codes[0] === codes[1]).toBe(false);
 }, 30_000);
 
@@ -245,21 +250,22 @@ it('clears permission details after organization or access changes and role dele
   const other: AdminOrganization = { id: 'org-b', code: 'b', name: 'Organization B', type: 'SUPPLIER', permissions: ['account:roles:read'] };
   const view = render(<RoleAdministration organization={organization} />);
   const row = (await screen.findByText(role.name)).closest('tr')!;
-  await userEvent.click(within(row).getByRole('button', { name: /Reader Role.*详情/ }));
-  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  fireEvent.click(within(row).getByRole('button', { name: /Reader Role.*详情/ }));
+  expect(await screen.findByRole('dialog', { hidden: true })).toBeInTheDocument();
   view.rerender(<RoleAdministration organization={other} />);
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument());
 
   view.rerender(<RoleAdministration organization={{ ...organization, permissions: [] }} />);
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument());
 
   view.rerender(<RoleAdministration organization={organization} />);
   const deletedRow = (await screen.findByText(role.name)).closest('tr')!;
-  await userEvent.click(within(deletedRow).getByRole('button', { name: /Reader Role.*详情/ }));
-  expect(await screen.findByRole('dialog')).toBeInTheDocument();
-  await userEvent.click(within(deletedRow).getByRole('button', { name: '删除角色' }));
-  await userEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(within(deletedRow).getByRole('button', { name: /Reader Role.*详情/ }));
+  expect(await screen.findByRole('dialog', { hidden: true })).toBeInTheDocument();
+  fireEvent.click(within(deletedRow).getByRole('button', { name: '删除角色' }));
+  const confirmation = await screen.findByRole('tooltip', { hidden: true });
+  fireEvent.click(within(confirmation).getByRole('button', { name: /^删\s*除$/ }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument());
   expect(screen.queryByText(role.name)).not.toBeInTheDocument();
 });
 
@@ -326,19 +332,20 @@ it.each([
   }));
   render(<RoleAdministration organization={organization} />);
   await userEvent.click(await screen.findByRole('button', { name: '编辑角色' }));
+  const editor = await screen.findByRole('dialog', { name: '编辑角色' });
   if (action === 'rename') {
     await userEvent.clear(screen.getByLabelText('角色名称', { selector: 'input' }));
     await userEvent.type(screen.getByLabelText('角色名称', { selector: 'input' }), 'Renamed Role');
   }
   if (action === 'remove permission' || action === 'reorder permissions') {
-    await userEvent.click(screen.getByRole('checkbox', { name: '账号 · Read users' }));
+    await userEvent.click(within(editor).getByRole('checkbox', { name: '账号 · Read users' }));
     if (action === 'reorder permissions') {
-      await userEvent.click(screen.getByRole('checkbox', { name: '账号 · Read users' }));
-      expect(screen.getByRole('checkbox', { name: '账号 · Read users' })).toBeChecked();
-      expect(screen.getByRole('checkbox', { name: '账号 · Read roles' })).toBeChecked();
+      await userEvent.click(within(editor).getByRole('checkbox', { name: '账号 · Read users' }));
+      expect(within(editor).getByRole('checkbox', { name: '账号 · Read users' })).toBeChecked();
+      expect(within(editor).getByRole('checkbox', { name: '账号 · Read roles' })).toBeChecked();
     }
   }
-  await userEvent.click(screen.getByRole('button', { name: '保存角色' }));
+  fireEvent.click(within(editor).getByRole('button', { name: '保存角色' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(requests).toEqual(expected);
 }, 15_000);
@@ -353,7 +360,7 @@ it.each(['account:users:read', 'account:roles:read'])('does not offer user role 
   expect(fetch.mock.calls.some(([path]) => String(path).includes('/roles'))).toBe(false);
 });
 
-it('never redisplays a credential when its pending issue dialog was closed', async () => {
+it('retains the credential owner until issuance settles and clears the credential after closing', async () => {
   let resolveIssue: ((response: Response) => void) | undefined;
   vi.stubGlobal('fetch', vi.fn().mockImplementation((path: string) => {
     if (path.endsWith('/csrf')) return Promise.resolve(json({ csrfToken: 'csrf' }));
@@ -361,17 +368,23 @@ it('never redisplays a credential when its pending issue dialog was closed', asy
     return Promise.resolve(json([user]));
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  const issue = (await screen.findByText('签发重置凭证', { selector: 'button > span' })).closest('button')!;
+  const management = await openUserManagement('账号安全');
+  const issue = management.getByRole('button', { name: '签发重置凭证' });
   expect(issue).toHaveAccessibleName('签发重置凭证');
-  await userEvent.click(issue);
-  const dialog = screen.getByRole('dialog');
+  fireEvent.click(issue);
+  const dialog = screen.getByRole('dialog', { name: '一次性重置凭证' });
+  await waitFor(() => expect(dialog).toBeVisible());
   const confirm = within(dialog).getByRole('button', { name: '确认签发' });
-  await userEvent.click(confirm);
+  fireEvent.click(confirm);
   await waitFor(() => expect(resolveIssue).toBeDefined());
-  await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape', keyCode: 27 });
+  expect(dialog).toBeVisible();
   resolveIssue!(json({ resetId: 'reset-id', expiresAt: '2026-09-19' }, 201));
   await screen.findByText('重置凭证已签发');
+  expect((await within(dialog).findByRole('textbox', { name: '一次性重置凭证' }) as HTMLTextAreaElement).value).toMatch(/^reset-id\./);
+  fireEvent.click(within(dialog).getByRole('button', { name: '关闭并清除' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '一次性重置凭证' })).not.toBeInTheDocument());
   expect(screen.queryByRole('textbox', { name: '一次性重置凭证' })).not.toBeInTheDocument();
 }, 15_000);
 

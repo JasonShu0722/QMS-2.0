@@ -7,16 +7,16 @@ const organization = { id: 'a', code: 'A', name: '组织A', type: 'INTERNAL', st
 const module = (key: ConsoleModule['key'], permissions: string[] = []): ConsoleModule => ({ key, permissions, scope: key === 'workflows' ? 'SESSION_HOME' : 'TARGET', coverage: 'ORGANIZATION', organizationId: 'a' });
 const context = (...modules: ConsoleModule[]): ConsoleContext => ({ actor: { id: 'actor', accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false, modules });
 
-it('exposes independent AI entries through configuration read and retains process mappings in platform configuration', () => {
-  const value = context(module('configuration', ['configuration:read', 'configuration:manage']));
+it('exposes AI and process mappings only through their dedicated read capabilities', () => {
+  const value = context(module('ai-connections', ['ai:connections:read']), module('ai-applications', ['ai:applications:read']), module('configuration', ['process-quality:configuration:read']));
   expect(consoleNavigation(value).filter(item => item.group === 'ai').map(item => [item.path, item.label])).toEqual([
     ['/console/ai-connections', '模型渠道'], ['/console/ai-applications', '提示词应用'],
   ]);
-  expect(consoleNavigation(value).find(item => item.path === '/console/process-configuration')).toBeUndefined();
+  expect(consoleNavigation(value).find(item => item.path === '/console/configuration')).toBeDefined();
   expect(consoleRoute('/console/process-configuration', value).status).toBe('not-found');
   for (const path of ['/console/ai-connections', '/console/ai-applications']) {
-    expect(consoleRoute(path, value)).toMatchObject({ status: 'allowed', module: value.modules[0] });
-    expect(consoleRoute(path, context(module('configuration', ['configuration:manage']))).status).toBe('forbidden');
+    expect(consoleRoute(path, value).status).toBe('allowed');
+    expect(consoleRoute(path, context(module('configuration', ['configuration:read', 'configuration:manage']))).status).toBe('forbidden');
     expect(consoleRoute(path, { ...context(), hasPlatformAdministrator: true }).status).toBe('forbidden');
   }
 });

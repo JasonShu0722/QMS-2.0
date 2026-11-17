@@ -107,6 +107,16 @@ describe('process production facts on PostgreSQL', () => {
     expect(detail.defectQuantity).toBe(2);
   });
 
+  it('excludes deleted ledger facts from production detail and shipment snapshot quantities', async () => {
+    const facts = input();
+    const record = await production.create(actor, facts, randomUUID(), randomUUID());
+    await prisma.processDefect.create({ data: { organizationId, description: 'Deleted quantity', defectQuantity: 5, archivedAt: new Date(),
+      occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode,
+      createdById: actor.id, updatedById: actor.id } });
+    expect(await production.detail(actor, record.id)).toMatchObject({ defects: [], defectQuantity: 0 });
+    expect((await prisma.$transaction(tx => production.snapshot(tx, organizationId, [record.id]))).defectQuantity).toBe(0);
+  });
+
   async function batchWithDefects(quantities: Array<number | null>) {
     const facts = input();
     const record = await production.create(actor, facts, randomUUID(), randomUUID());

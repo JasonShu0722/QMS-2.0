@@ -27,7 +27,7 @@ function ApplicationScope({ organization }: { organization: AdminOrganization })
   const [scope] = useState<IntegrationScope>(() => ({ organizationId: organization.id, permissions: organization.permissions, session: useWorkTabsStore.getState().sessionScope!, epoch: getLedgerSessionEpoch(), deny }));
   useEffect(() => useWorkTabsStore.subscribe(state => { if (state.sessionScope !== scope.session || getLedgerSessionEpoch() !== scope.epoch) deny(); }), [scope, deny]);
   if (retired) return <Alert type="warning" title={t('会话或配置权限已变化，请重新进入。')} />;
-  if (!organization.permissions.includes('configuration:read')) return null;
+  if (!organization.permissions.includes('ai:applications:read')) return null;
   return <ApplicationContent organization={organization} scope={scope} />;
 }
 function ApplicationContent({ organization, scope }: { organization: AdminOrganization; scope: IntegrationScope }) {
@@ -39,12 +39,12 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
   const [connections, setConnections] = useState<Connection[]>([]); const [connectionsLoading, setConnectionsLoading] = useState(false); const [connectionError, setConnectionError] = useState<unknown>();
   const requests = useScopedIntegrationRequests(scope); const mutation = useIngestionMutation(scope); const requestLeave = useNavigationGuard();
   const list = useIngestionPage<components['schemas']['AiApplicationPageDto']>(scope, applicationsPath, page, pageSize, revision);
-  const manage = organization.permissions.includes('configuration:manage'); const locked = mutation.locked;
+  const manage = organization.permissions.includes('ai:applications:manage'); const canPublish = organization.permissions.includes('ai:applications:publish'); const canTest = organization.permissions.includes('ai:applications:test'); const readConnections = organization.permissions.includes('ai:connections:read'); const locked = mutation.locked;
   const connectionId = Form.useWatch('connectionId', form); const outputMode = Form.useWatch(['output', 'mode'], form) ?? 'TEXT';
   const selectedConnection = connections.find(item => item.id === connectionId);
   useUnsavedChanges(dirty || mutation.unknown);
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !readConnections) return;
     let active = true; setConnectionsLoading(true); setConnectionError(undefined);
     void requests.read<Connection[]>('/api/v1/admin/ai-connections').then(items => {
       if (!active || !requests.current()) return;
@@ -52,7 +52,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
       setConnections(items);
     }).catch(cause => { if (active && requests.current()) setConnectionError(cause); }).finally(() => { if (active && requests.current()) setConnectionsLoading(false); });
     return () => { active = false; };
-  }, [editor, requests.read, requests.current, scope.deny, organization.id]);
+  }, [editor, requests.read, requests.current, scope.deny, organization.id, readConnections]);
   function reset() { setEditor(undefined); setPublishing(undefined); setTrial(undefined); setTrialResult(undefined); setDirty(false); setShowMutationError(false); }
   function close() { if (!locked) requestLeave(reset, true); }
   function refresh() { if (!locked) requestLeave(() => { reset(); setRevision(value => value + 1); }, true); }
@@ -73,7 +73,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
   }
   function scoped(suffix = '') { return `${applicationsPath}${suffix}?organizationId=${encodeURIComponent(organization.id)}`; }
   function publish() {
-    if (!publishing || !manage || locked) return;
+    if (!publishing || !canPublish || locked) return;
     setShowMutationError(true);
     void mutation.execute<Application>({ path: scoped(`/${publishing.id}/publish`), method: 'POST', body: { expectedVersion: publishing.version } }, result => {
       if (result.organizationId !== organization.id || result.id !== publishing.id) { scope.deny(); return; }
@@ -81,7 +81,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
     });
   }
   function runSamples(values: components['schemas']['TestAiApplicationDto']) {
-    if (!trial || !manage || locked) return;
+    if (!trial || !canTest || locked) return;
     setShowMutationError(true);
     void mutation.execute<Trial>({ path: scoped(`/${trial.id}/test`), method: 'POST', body: { expectedVersion: trial.version, samples: trial.variables.map((variable, index) => ({ variable: variable.variable, value: values.samples[index]?.value ?? '' })) } }, result => {
       if (result.applicationId !== trial.id || result.version !== trial.version) { scope.deny(); return; }
@@ -94,14 +94,14 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
     <Space wrap>
       <Select aria-label={t('业务板块')} style={{ minWidth: 150 }} disabled={locked} allowClear placeholder={t('全部板块')} value={domain} options={[{ value: 'PROCESS_QUALITY', label: t('制程质量') }]} onChange={value => requestLeave(() => { setDomain(value); setPage(1); })} />
       <Select aria-label={t('应用场景')} style={{ minWidth: 180 }} disabled={locked} allowClear placeholder={t('全部场景')} value={scene} options={[{ value: 'PROCESS_DEFECT_DESCRIPTION', label: t('不良描述整理') }]} onChange={value => requestLeave(() => { setScene(value); setPage(1); })} />
-      <Button disabled={locked || list.loading} onClick={refresh}>{t('刷新')}</Button>{manage ? <Button type="primary" disabled={locked} onClick={() => open()}>{t('新增应用')}</Button> : null}
+      <Button disabled={locked || list.loading} onClick={refresh}>{t('刷新')}</Button>{manage && readConnections ? <Button type="primary" disabled={locked} onClick={() => open()}>{t('新增应用')}</Button> : null}
     </Space>
     <IngestionError error={list.error} />{!editor && !publishing && !trial ? <>{feedback}{retry}</> : null}
     <LedgerTable<Application> ledgerId="ai-applications" organizationId={organization.id} requiredColumnKeys={['name', 'actions']} rowKey="id" loading={list.loading} dataSource={(list.data?.items ?? []).filter(item => (!domain || item.domain === domain) && (!scene || item.scene === scene))} scroll={{ x: 950 }} pagination={{ current: page, pageSize, total: list.data?.total ?? 0, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} columns={[
       { key: 'name', title: t('应用名称'), dataIndex: 'name' }, { key: 'domain', title: t('业务板块'), render: () => t('制程质量') }, { key: 'scene', title: t('应用场景'), render: () => t('不良描述整理') },
       { key: 'model', title: t('模型'), dataIndex: 'model' }, { key: 'enabled', title: t('状态'), render: (_, record) => t(record.enabled ? '启用' : '停用') },
       { key: 'version', title: t('草稿版本'), dataIndex: 'version' }, { key: 'publishedVersion', title: t('发布版本'), render: (_, record) => record.publishedVersion === null ? t('未发布') : `v${record.publishedVersion}` },
-      { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => open(record)}>{t('编辑')}</Button><Button disabled={locked || !record.enabled} onClick={() => requestLeave(() => { reset(); setPublishing(record); }, true)}>{t('发布版本')}</Button><Button disabled={locked} onClick={() => requestLeave(() => { reset(); sampleForm.setFieldsValue({ samples: record.variables.map(variable => ({ variable: variable.variable, value: '' })) }); setTrial(record); }, true)}>{t('样本试运行')}</Button></Space> : t('只读') },
+      { key: 'actions', title: t('操作'), render: (_, record) => manage || canPublish || canTest ? <Space wrap>{manage ? <Button disabled={locked} onClick={() => open(record)}>{t('编辑')}</Button> : null}{canPublish ? <Button disabled={locked || !record.enabled} onClick={() => requestLeave(() => { reset(); setPublishing(record); }, true)}>{t('发布版本')}</Button> : null}{canTest ? <Button disabled={locked} onClick={() => requestLeave(() => { reset(); sampleForm.setFieldsValue({ samples: record.variables.map(variable => ({ variable: variable.variable, value: '' })) }); setTrial(record); }, true)}>{t('样本试运行')}</Button> : null}</Space> : t('只读') },
     ]} />
     <Modal open={!!editor} title={t('提示词应用')} width={820} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
       {feedback}<IngestionError error={connectionError} />
@@ -120,8 +120,8 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
           </div>)}<Form.ErrorList errors={errors} /><Button icon={<Plus size={14} />} disabled={locked || fields.length >= 20} onClick={() => add({ variable: '', label: '' })}>{t('添加输入变量')}</Button>
         </>}</Form.List>
         <div className="qms-ingestion-grid qms-ingestion-actions">
-          <Form.Item name="connectionId" label={t('模型渠道')} rules={[{ required: true }]}><Select loading={connectionsLoading} options={connections.map(connection => ({ value: connection.id, label: connection.name, disabled: !connection.enabled || !connection.hasKey }))} onChange={value => form.setFieldValue('model', connections.find(connection => connection.id === value)?.defaultModel)} /></Form.Item>
-          <Form.Item name="model" label={t('模型')} dependencies={['connectionId', 'enabled']} rules={[{ required: true }, { validator: async (_, value: string) => { const retainedDisabledReference = !!editor?.record && form.getFieldValue('enabled') === false && editor.record.connectionId === form.getFieldValue('connectionId') && editor.record.model === value; if (value && selectedConnection && !selectedConnection.models.includes(value) && !retainedDisabledReference) throw new Error(t('请选择可用模型')); } }]}><Select showSearch options={(selectedConnection?.models ?? []).map(value => ({ value, label: value }))} /></Form.Item>
+          <Form.Item name="connectionId" label={t('模型渠道')} rules={[{ required: true }]}><Select disabled={locked || !readConnections} loading={connectionsLoading} options={connections.map(connection => ({ value: connection.id, label: connection.name, disabled: !connection.enabled || !connection.hasKey }))} onChange={value => form.setFieldValue('model', connections.find(connection => connection.id === value)?.defaultModel)} /></Form.Item>
+          <Form.Item name="model" label={t('模型')} dependencies={['connectionId', 'enabled']} rules={[{ required: true }, { validator: async (_, value: string) => { const retainedDisabledReference = !!editor?.record && form.getFieldValue('enabled') === false && editor.record.connectionId === form.getFieldValue('connectionId') && editor.record.model === value; if (value && selectedConnection && !selectedConnection.models.includes(value) && !retainedDisabledReference) throw new Error(t('请选择可用模型')); } }]}><Select disabled={locked || !readConnections} showSearch options={(selectedConnection?.models ?? []).map(value => ({ value, label: value }))} /></Form.Item>
         </div>
         <Form.Item name="prompt" label={t('提示词')} extra={t('使用{{变量名}}引用输入变量')} rules={[{ required: true, whitespace: true }]}><Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} maxLength={4000} /></Form.Item>
         <div className="qms-ingestion-grid">

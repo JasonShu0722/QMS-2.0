@@ -8,8 +8,8 @@ import { ConfigurationScopeDto } from '../platform-configuration/platform-config
 import { AiConnectionDto, AiConnectionTestDto, AiConnectionVersionDto, CreateAiConnectionDto, UpdateAiConnectionDto } from './ai-connection.dto.js';
 import { AiConnectionService } from './ai-connection.service.js';
 
-const readAccess = { featurePermission: 'configuration:read', organizationScope: { source: 'query' as const, field: 'organizationId', optional: true } };
-const writeAccess = { ...readAccess, featurePermission: 'configuration:manage' };
+const readAccess = { featurePermission: 'ai:connections:read', organizationScope: { source: 'query' as const, field: 'organizationId', optional: true } };
+const writeAccess = { ...readAccess, featurePermission: 'ai:connections:manage' };
 
 @Controller('api/v1/admin/ai-connections')
 @ApiCookieAuth('qms_session')
@@ -34,13 +34,13 @@ export class AiConnectionController {
     return this.connections.update(this.actor(request), request.authorizedOrganizationId!, id, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
-  @Post(':id/clear-key') @Header('Cache-Control', 'no-store') @RequireAccess(writeAccess) @ApiCreatedResponse({ type: AiConnectionDto })
+  @Post(':id/clear-key') @Header('Cache-Control', 'no-store') @RequireAccess({ ...readAccess, featurePermission: 'ai:credentials:manage' }) @ApiCreatedResponse({ type: AiConnectionDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   clear(@Param('id', ParseUUIDPipe) id: string, @Query() _query: ConfigurationScopeDto, @Body() dto: AiConnectionVersionDto, @Req() request: AuthorizedRequest) {
     return this.connections.clear(this.actor(request), request.authorizedOrganizationId!, id, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
-  @Post(':id/test') @Header('Cache-Control', 'no-store') @RequireAccess(writeAccess) @ApiCreatedResponse({ type: AiConnectionTestDto })
+  @Post(':id/test') @Header('Cache-Control', 'no-store') @RequireAccess({ ...readAccess, featurePermission: 'ai:connections:test' }) @ApiCreatedResponse({ type: AiConnectionTestDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   test(@Param('id', ParseUUIDPipe) id: string, @Query() _query: ConfigurationScopeDto, @Body() dto: AiConnectionVersionDto, @Req() request: AuthorizedRequest) {
     return this.connections.test(this.actor(request), request.authorizedOrganizationId!, id, dto, requestTraceId(request), request.get('Idempotency-Key'));

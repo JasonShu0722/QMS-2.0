@@ -186,7 +186,7 @@ export class ProcessProductionService {
       const row = (await tx.$queryRaw<ProductionRow[]>`SELECT * FROM process_production_batches WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid`)[0];
       if (!row) reject('PROCESS_PRODUCTION_NOT_FOUND', 404);
       const revisions = await tx.$queryRaw<Array<{ version: number; total_quantity: number; good_quantity: number; first_pass_quantity: number; reason: string; recorded_by_id: string; recorded_at: Date }>>`SELECT version, total_quantity, good_quantity, first_pass_quantity, reason, recorded_by_id, recorded_at FROM process_production_revisions WHERE organization_id = ${organizationId}::uuid AND production_batch_id = ${id}::uuid ORDER BY version`;
-      const defects = await tx.processDefect.findMany({ where: { organizationId, batchCode: row.batch_code, workOrderCode: row.work_order_code, operationCode: row.operation_code, occurredAt: { gte: row.period_start, lt: row.period_end } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] });
+      const defects = await tx.processDefect.findMany({ where: { organizationId, archivedAt: null, batchCode: row.batch_code, workOrderCode: row.work_order_code, operationCode: row.operation_code, occurredAt: { gte: row.period_start, lt: row.period_end } }, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] });
       return { ...mapRow(row), revisions, defects, defectQuantity: defects.reduce<number | null>((total, defect) => total === null || defect.defectQuantity === null ? null : total + defect.defectQuantity, 0) };
     });
   }

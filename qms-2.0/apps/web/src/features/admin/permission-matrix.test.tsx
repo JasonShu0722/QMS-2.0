@@ -9,6 +9,7 @@ import type { components } from '@qms/contracts';
 import { AdminPage } from './AdminPage';
 import { PermissionMatrix } from './PermissionMatrix';
 import { UserAdministration } from './UserAdministration';
+import { openUserManagement } from './user-management-test-helpers';
 import { RoleAdministration } from './RoleAdministration';
 import { GroupedPermissionSelector } from './GroupedPermissionSelector';
 import type { AdminOrganization, AdminRole, AdminUser } from './admin';
@@ -192,13 +193,15 @@ it.each(['update', 'status', 'transfer', 'reset'])('exposes only the authorized 
   render(<UserAdministration organization={scoped} organizations={[scoped]} />);
   await screen.findByText('alice');
   expect(screen.queryByRole('button', { name: '创建用户' })).not.toBeInTheDocument();
+  const dialog = await openUserManagement('状态与删除');
   expect(!!screen.queryByRole('button', { name: /^停\s*用$/ })).toBe(permission === 'status');
+  await openUserManagement('账号安全');
   expect(!!screen.queryByRole('button', { name: '签发重置凭证' })).toBe(permission === 'reset');
   if (permission !== 'reset') {
-    await interaction.click(screen.getByRole('button', { name: /^编\s*辑$/ }));
-    const dialog = within(screen.getByRole('dialog'));
-    expect(!!dialog.queryByLabelText('邮箱')).toBe(permission === 'update');
-    expect(!!dialog.queryByLabelText('状态')).toBe(permission === 'status');
+    await openUserManagement('基本资料');
+    expect(!!dialog.queryByLabelText('邮箱', { selector: 'input' })).toBe(permission === 'update');
+    expect(dialog.queryByLabelText('状态')).not.toBeInTheDocument();
+    await openUserManagement('任职与授权');
     expect(!!dialog.queryByLabelText('主组织')).toBe(permission === 'transfer');
     expect(!!dialog.queryByLabelText('账号类型')).toBe(permission === 'transfer');
   }
@@ -226,8 +229,9 @@ it('requires assign as well as both read permissions for assignment', async () =
   render(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:roles:read', 'account:roles:update'] }} organizations={[organization]} />);
   await screen.findByText('alice');
   expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
+  await openUserManagement('任职与授权');
   await interaction.click(screen.getByRole('button', { name: '查看授权来源' }));
-  const dialog = within(await screen.findByRole('dialog'));
+  const dialog = within(await screen.findByRole('dialog', { name: 'alice · 授权来源' }));
   expect(dialog.queryByRole('combobox')).not.toBeInTheDocument();
   expect(dialog.queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
   expect(fetch.mock.calls.filter(([path]) => path.includes('/roles?'))).toHaveLength(1);
@@ -284,7 +288,8 @@ it.each(['new', 'transfer'])('filters %s organization choices by the correspondi
   const scoped = { ...organization, permissions: ['account:users:read', 'account:users:create', 'account:users:transfer'] };
   render(<UserAdministration organization={scoped} organizations={[scoped, { ...organization, id: 'org-create', name: '仅创建组织', permissions: ['account:users:create'] }, { ...organization, id: 'org-transfer', name: '仅迁移组织', permissions: ['account:users:transfer'] }]} />);
   await screen.findByText('alice');
-  await interaction.click(screen.getByRole('button', { name: mode === 'new' ? '创建用户' : /^编\s*辑$/ }));
+  if (mode === 'new') await interaction.click(screen.getByRole('button', { name: '创建用户' }));
+  else await openUserManagement('任职与授权');
   await interaction.click(within(screen.getByRole('dialog')).getByLabelText('主组织'));
   await waitFor(() => expect(screen.getByText(mode === 'new' ? '仅创建组织' : '仅迁移组织', { selector: '.ant-select-item-option-content' })).toBeVisible());
   expect(screen.queryByText(mode === 'new' ? '仅迁移组织' : '仅创建组织', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument();

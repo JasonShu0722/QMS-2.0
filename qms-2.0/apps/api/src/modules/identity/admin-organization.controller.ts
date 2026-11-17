@@ -3,7 +3,7 @@ import { ApiCookieAuth, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { adminError } from '../../common/security/admin-mutation.service.js';
-import { ADMIN_PERMISSIONS } from '../authorization/permission-catalog.js';
+import { ADMIN_PERMISSIONS, AI_CONFIGURATION_PERMISSIONS, PROCESS_CONFIGURATION_PERMISSIONS } from '../authorization/permission-catalog.js';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { RequireAuthenticated } from '../authorization/access.decorator.js';
 import { AdminOrganizationContextDto, AdminOrganizationContextQueryDto, AdminOrganizationDto } from './dto/admin-user.dto.js';
@@ -41,6 +41,6 @@ export class AdminOrganizationController {
       entry.permissions = [...new Set([...entry.permissions, ...assignment.role.permissions.map((item) => item.permission.code)])].sort();
       result.set(organization.id, entry);
     }
-    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code)) || (actor.accountType === 'INTERNAL' && entry.type === 'INTERNAL' && entry.permissions.some((code) => ['organization:read', 'component-project:read', 'component-project:manage', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)))).sort((first, second) => first.code.localeCompare(second.code));
+    return [...result.values()].filter((entry) => entry.permissions.some((code) => ADMIN_PERMISSIONS.includes(code)) || (actor.accountType === 'INTERNAL' && entry.type === 'INTERNAL' && entry.permissions.some((code) => [...AI_CONFIGURATION_PERMISSIONS, ...PROCESS_CONFIGURATION_PERMISSIONS, 'organization:read', 'component-project:read', 'component-project:manage', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'].includes(code)))).sort((first, second) => first.code.localeCompare(second.code));
   }
 }

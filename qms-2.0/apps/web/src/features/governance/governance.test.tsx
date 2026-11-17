@@ -28,7 +28,7 @@ it('distinguishes audit permission failures from an empty result and hides unaut
 it('uses generated configuration data for a read-only organization', async () => {
   const fetchMock = vi.fn(async (path: string) => json(path.includes('/settings') ? { organizationId: organization.id, notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 1 } : []));
   vi.stubGlobal('fetch', fetchMock);
-  render(<ConfigurationAdministration organization={organization} />);
+  render(<ConfigurationAdministration organization={{ ...organization, permissions: [...organization.permissions, 'process-quality:configuration:read'] }} />);
   await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
   expect(screen.getByLabelText('导出保留时间（分钟）')).toBeDisabled();
   expect(screen.getAllByRole('button', { name: '列设置' })).toHaveLength(3);

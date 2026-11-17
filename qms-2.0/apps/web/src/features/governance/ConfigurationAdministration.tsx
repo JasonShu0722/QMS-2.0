@@ -10,6 +10,10 @@ import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../
 import { ProcessOperationSectors } from './ProcessOperationSectors';
 
 export function ConfigurationAdministration({ organization }: { organization: AdminOrganization }) {
+  if (!organization.permissions.includes('configuration:read')) return organization.permissions.includes('process-quality:configuration:read') ? <ProcessOperationSectors organization={organization} /> : null;
+  return <PlatformConfiguration organization={organization} />;
+}
+function PlatformConfiguration({ organization }: { organization: AdminOrganization }) {
   const [rulePageSize, setRulePageSize] = useLedgerPageSize('configuration-notification-rules', organization.id);
   const [categoryPageSize, setCategoryPageSize] = useLedgerPageSize('configuration-position-categories', organization.id);
   const [rulePage, setRulePage] = useState(1);
@@ -91,7 +95,7 @@ export function ConfigurationAdministration({ organization }: { organization: Ad
     <Card title={t('通知规则')} loading={loading}>
       <LedgerTable ledgerId="configuration-notification-rules" organizationId={organization.id} requiredColumnKeys={['kind', 'actions']} rowKey="kind" dataSource={rules} pagination={{ current: rulePage, pageSize: rulePageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: saving, onChange: (page, size) => requestLeave(() => { setRulePage(size === rulePageSize ? page : 1); setRulePageSize(size); }) }} columns={[{ key: 'kind', title: t('事件类型'), dataIndex: 'kind', render: notificationName }, { key: 'enabled', title: t('状态'), dataIndex: 'enabled', render: (enabled: boolean) => t(enabled ? '启用' : '停用') }, { key: 'version', title: t('版本'), dataIndex: 'version' }, { key: 'actions', title: t('操作'), render: (_value, entry) => manage ? <Button disabled={saving} onClick={() => { ruleForm.setFieldsValue(entry); setError(undefined); setRuleEditor(entry); }}>{t('编辑')}</Button> : t('只读') }]} />
     </Card>
-    <ProcessOperationSectors organization={organization} />
+    {organization.permissions.includes('process-quality:configuration:read') ? <ProcessOperationSectors organization={organization} /> : null}
     <Card title={t('岗位类别')} loading={loading}>
       {manage ? <Button disabled={saving} onClick={() => { categoryForm.resetFields(); categoryForm.setFieldsValue({ sortOrder: 0, status: 'ACTIVE' }); setError(undefined); setCategoryEditor({}); }}>{t('新建')}</Button> : null}
       <LedgerTable ledgerId="configuration-position-categories" organizationId={organization.id} requiredColumnKeys={['code', 'actions']} rowKey="id" dataSource={categories} pagination={{ current: categoryPage, pageSize: categoryPageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: saving, onChange: (page, size) => requestLeave(() => { setCategoryPage(size === categoryPageSize ? page : 1); setCategoryPageSize(size); }) }} columns={[{ key: 'code', title: t('代码'), dataIndex: 'code' }, { key: 'name', title: t('名称'), dataIndex: 'name' }, { key: 'sortOrder', title: t('排序'), dataIndex: 'sortOrder' }, { key: 'status', title: t('状态'), dataIndex: 'status', render: (value: string) => t(value === 'ACTIVE' ? '启用' : '停用') }, { key: 'actions', title: t('操作'), render: (_value, entry) => manage ? <Button disabled={saving} onClick={() => { categoryForm.setFieldsValue(entry); setError(undefined); setCategoryEditor({ record: entry }); }}>{t('编辑')}</Button> : t('只读') }]} />

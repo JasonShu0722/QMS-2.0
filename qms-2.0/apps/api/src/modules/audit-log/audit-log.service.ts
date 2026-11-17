@@ -33,6 +33,7 @@ interface AuditEventWriter {
 }
 
 const configurationTextLimits: Readonly<Record<string, number>> = {
+  deletionReason: 300,
   ingestionReason: 300,
   originalOrganizationCode: 64, originalOrganizationName: 200,
   componentProjectCode: 100, previousComponentProjectCode: 100,

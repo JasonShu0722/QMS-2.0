@@ -47,7 +47,7 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
     if (originalNode === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalNode;
   });
 
-  async function fixture(codes = ['configuration:read', 'configuration:manage'], organizationId?: string) {
+  async function fixture(codes = ['ai:connections:read', 'ai:connections:manage', 'ai:credentials:manage', 'ai:connections:test'], organizationId?: string) {
     const organization = organizationId ? { id: organizationId } : await prisma.organization.create({ data: { code: randomUUID(), name: 'AI disposable scope', type: 'INTERNAL' } });
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'test-only', accountType: 'INTERNAL' } });
     const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), reauthenticatedAt: new Date(), mfaVerifiedAt: new Date() } });
@@ -64,6 +64,27 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
     expect(JSON.stringify(value)).not.toContain(secret);
     for (const key of ['apiKey', 'ciphertext', 'secretCiphertext', 'keySuffix', 'authorization']) expect(JSON.stringify(value)).not.toMatch(new RegExp(`"${key}"`, 'i'));
   };
+  it('separates channel settings, credentials and testing and rechecks credentials on replay', async () => {
+    const owner = await fixture();
+    const value = await connections.create(owner.actor, owner.organizationId, input(), randomUUID(), randomUUID());
+    const manager = await fixture(['ai:connections:read', 'ai:connections:manage'], owner.organizationId);
+    expect(await connections.list(manager.actor, owner.organizationId)).toHaveLength(1);
+    await expect(connections.create(manager.actor, owner.organizationId, input(), randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(connections.update(manager.actor, owner.organizationId, value.id, { ...input(), expectedVersion: 1 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(connections.clear(manager.actor, owner.organizationId, value.id, { expectedVersion: 1 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(connections.test(manager.actor, owner.organizationId, value.id, { expectedVersion: 1 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    expect(await connections.update(manager.actor, owner.organizationId, value.id, { ...input(), apiKey: '', expectedVersion: 1 }, randomUUID(), randomUUID())).toMatchObject({ version: 2 });
+    const tester = await fixture(['ai:connections:test'], owner.organizationId);
+    expect(await connections.test(tester.actor, owner.organizationId, value.id, { expectedVersion: 2 }, randomUUID(), randomUUID())).toMatchObject({ status: 'SUCCESS' });
+    const credential = await fixture(['ai:credentials:manage'], owner.organizationId);
+    expect(await connections.clear(credential.actor, owner.organizationId, value.id, { expectedVersion: 2 }, randomUUID(), randomUUID())).toMatchObject({ hasKey: false });
+    const key = randomUUID();
+    await connections.create(owner.actor, owner.organizationId, input(), randomUUID(), key);
+    await prisma.rolePermission.deleteMany({ where: { roleId: owner.role.id, permission: { code: 'ai:credentials:manage' } } });
+    await expect(connections.create(owner.actor, owner.organizationId, input(), randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+    const legacy = await fixture(['configuration:read', 'configuration:manage'], owner.organizationId);
+    await expect(connections.list(legacy.actor, owner.organizationId)).rejects.toMatchObject({ status: 403 });
+  });
   it('stores only encrypted credentials while create/list/replay/admin-mutation/audit remain secret-free', async () => {
     const fixtureValue = await fixture();
     const key = randomUUID();

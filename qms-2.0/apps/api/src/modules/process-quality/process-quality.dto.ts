@@ -130,6 +130,40 @@ export class ProcessDefectSelectionDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
 }
 
+export class PreviewProcessDefectDeletionDto extends ProcessScopeDto {
+  @ApiProperty({ type: [ProcessDefectSelectionDto], minItems: 1, maxItems: 100 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique((item: ProcessDefectSelectionDto | null) => typeof item?.defectId === 'string' ? item.defectId.toLowerCase() : item?.defectId) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectSelectionDto) sources!: ProcessDefectSelectionDto[];
+}
+
+export class DeleteProcessDefectsDto extends PreviewProcessDefectDeletionDto {
+  @ApiProperty({ minLength: 1, maxLength: 300 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason!: string;
+}
+
+export class DeleteLegacyProcessDefectDto extends ArchiveProcessDefectDto {
+  @ApiProperty({ minLength: 1, maxLength: 300 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason!: string;
+}
+
+export class ProcessDefectDeletionBlockerDto {
+  @ApiProperty() code!: string;
+  @ApiProperty({ type: String, nullable: true }) reportNumber!: string | null;
+}
+
+export class ProcessDefectDeletionPreviewItemDto extends ProcessDefectSelectionDto {
+  @ApiProperty() description!: string;
+  @ApiProperty() blocked!: boolean;
+  @ApiProperty({ type: [ProcessDefectDeletionBlockerDto] }) blockers!: ProcessDefectDeletionBlockerDto[];
+}
+
+export class ProcessDefectDeletionPreviewDto {
+  @ApiProperty({ type: [ProcessDefectDeletionPreviewItemDto] }) items!: ProcessDefectDeletionPreviewItemDto[];
+  @ApiProperty() count!: number;
+  @ApiProperty() canDelete!: boolean;
+}
+
+export class ProcessDefectDeletionResultDto {
+  @ApiProperty({ type: [String] }) deletedIds!: string[];
+  @ApiProperty() count!: number;
+}
+
 export class ClassifyProcessDefectDto extends ArchiveProcessDefectDto {
   @ApiProperty({ type: String, enum: PROCESS_RESPONSIBILITY_CATEGORIES, nullable: true }) @ValidateIf((_, value) => value !== null) @IsIn(PROCESS_RESPONSIBILITY_CATEGORIES) responsibilityCategory!: ProcessResponsibilityCategory | null;
 }

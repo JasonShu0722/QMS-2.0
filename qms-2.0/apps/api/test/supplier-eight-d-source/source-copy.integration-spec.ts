@@ -71,6 +71,21 @@ describe('controlled supplier COPY FACTS HTTP transactions', () => {
     expect(await db.processDefect.findUniqueOrThrow({ where: { id: f.defect.id } })).toEqual(before);
   });
 
+  it('protects a copied ledger source from deletion and hides supplier information from a ledger-only deleter', async () => {
+    const f = await fixture(); await material(f);
+    const copy = await preview(f);
+    await post(f.copier.cookie, 'drafts', { token: copy.token, draft: f.draft }).expect(201);
+    const deleter = await person(f.org.id, ['process-quality:defects:read', 'process-quality:defects:delete']);
+    const csrf = randomUUID(), sources = [{ defectId: f.defect.id, expectedVersion: f.defect.version }];
+    const deletion = (path: string, body: object) => request(app.getHttpServer()).post(`/api/v1/process-quality/defects/${path}`)
+      .set('Cookie', [deleter.cookie, `qms_csrf=${csrf}`]).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
+    const blocked = await deletion('deletion-preview', { sources }).expect(201);
+    expect(blocked.body).toMatchObject({ canDelete: false, items: [expect.objectContaining({ blockers: [{ code: 'SUPPLIER_SOURCE_COPY', reportNumber: null }] })] });
+    expect(JSON.stringify(blocked.body)).not.toContain(f.draft.title);
+    await deletion('deletion', { sources, reason: '复制后的正式来源不可删除' }).expect(409);
+    expect((await db.processDefect.findUniqueOrThrow({ where: { id: f.defect.id } })).archivedAt).toBeNull();
+  });
+
   it('atomically creates only an editable DRAFT with explicit overrides, provenance, audit and an idempotent receipt', async () => {
     const f = await fixture(); const p = await preview(f); const key = randomUUID();
     const body = { token: p.token, draft: f.draft };

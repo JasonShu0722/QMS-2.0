@@ -21,7 +21,7 @@ export class ProcessDefectIngestionAdapter {
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
     if (!Array.isArray(targetIds) || targetIds.length > 1000 || targetIds.some(id => !isUUID(id))) fail('INTEGRATION_INPUT_INVALID', 400);
-    return tx.processDefect.findMany({ where: { organizationId, id: { in: targetIds } },
+    return tx.processDefect.findMany({ where: { organizationId, id: { in: targetIds }, archivedAt: null },
       select: { id: true, pendingCompletion: true, pendingConfiguration: true, defectQuantity: true } });
   }
 
@@ -55,7 +55,7 @@ export class ProcessDefectIngestionAdapter {
       const value = field === 'description' && !row.manualFields.includes('description') ? row.descriptionDirect ?? row.description : row[field];
       if (value !== null && value !== '') values[field] = value instanceof Date ? value.toISOString() : value;
     }
-    return { id: row.id, version: row.version, values, protectedFields: this.protectedFields(row),
+    return { id: row.id, version: row.version, values, deleted: !!row.archivedAt, protectedFields: this.protectedFields(row),
       pendingCompletion: row.pendingCompletion, pendingConfiguration: row.pendingConfiguration };
   }
 
@@ -76,6 +76,9 @@ export class ProcessDefectIngestionAdapter {
     const identity = `${organizationId}:IMS:${fields.externalRecordKey ?? `${fields.receiptId}:${fields.rowIndex}`}`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${identity}, 0))::text`;
     const current = await this.find(tx, organizationId, fields, expected?.id);
+    if (current) await tx.$queryRaw`SELECT id FROM process_defects WHERE id=${current.id}::uuid FOR UPDATE`;
+    const locked = current ? await tx.processDefect.findUniqueOrThrow({ where: { id: current.id } }) : null;
+    if (locked?.archivedAt) fail('PROCESS_DEFECT_ARCHIVED', 409);
     if (expected === null ? !!current : !current || current.id !== expected.id || current.version !== expected.version) fail('CONCURRENCY_CONFLICT', 409);
     if (current?.archivedAt) fail('PROCESS_DEFECT_ARCHIVED', 409);
     const supplied = Object.fromEntries(sourceFields.filter(field => fields[field] !== undefined && fields[field] !== '').map(field => [field, fields[field]]));
@@ -157,7 +160,7 @@ export class ProcessDefectIngestionAdapter {
 
   async markAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, revision: number, status: 'PENDING' | 'FAILED' | 'RETRY' | 'STALE') {
     const row = await this.aiDescriptionState(tx, actor, id);
-    await tx.processDefect.updateMany({ where: { id, organizationId: row.organizationId, descriptionInputVersion: revision }, data: { descriptionAiStatus: status } });
+    await tx.processDefect.updateMany({ where: { id, organizationId: row.organizationId, descriptionInputVersion: revision, archivedAt: null }, data: { descriptionAiStatus: status } });
   }
 
   async applyAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, revision: number, direct: string, text: string, traceId: string, adopt = false) {

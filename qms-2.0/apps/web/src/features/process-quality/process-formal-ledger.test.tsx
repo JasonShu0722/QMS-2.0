@@ -112,7 +112,8 @@ it('opens supplier copy from selected process facts without enabling internal is
     return baseResponse(path);
   });
   mount();
-  const toolbar = within((await screen.findByLabelText('搜索制程不良')).closest('.process-quality-toolbar')!);
+  await screen.findByLabelText('搜索制程不良');
+  const toolbar = within(screen.getByLabelText('台账批量操作'));
   const copy = await toolbar.findByRole('button', { name: '复制为供应商草稿' });
   expect(copy).toBeDisabled();
   fireEvent.click(await screen.findByLabelText(`选择制程不良 ${defect.description}`));
