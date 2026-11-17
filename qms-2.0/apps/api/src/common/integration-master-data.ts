@@ -6,6 +6,8 @@ export type IntegrationTarget = MasterDataIntegrationTarget | 'PROCESS_DEFECT';
 export type IntegrationFields = {
   code: string;
   name: string;
+  componentNameMissing?: boolean;
+  componentMaterialSnapshot?: { id: string; version: number } | null;
   contactName?: string;
   contactEmail?: string;
 };

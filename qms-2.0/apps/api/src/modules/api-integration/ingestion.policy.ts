@@ -9,8 +9,9 @@ export { aiDescriptionDisposition } from '../../common/ai-description.js';
 export type IngestionTarget = IntegrationTarget;
 export type IngestionFields = IntegrationFields | Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>;
 export type IngestionDescriptionComposition = { fields: { path: string; label?: string }[]; separator: string };
+export type ComponentNameLookup = { source: 'MATERIAL'; field: 'materialName' };
 export type IngestionCondition = { path: string; operator: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY'; value?: string | number | boolean | null | (string | number | boolean)[] };
-export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
+export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; componentNameLookup?: ComponentNameLookup; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
 export const processDefectSourceFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
 
 export function ingestionError(code: string, status = 400, field?: string): never { throw new HttpException({ code, message: code, ...(field ? { field } : {}) }, status); }
@@ -33,6 +34,9 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
       || new Set(binding.inputFields.map(field => field.variable)).size !== binding.inputFields.length) ingestionError('INGESTION_RULE_INVALID');
   }
   const fields = process ? processDefectSourceFields : rule.target === 'SUPPLIER' ? ['code', 'name', 'contactName', 'contactEmail'] : ['code', 'name'];
+  const componentLookup = rule.componentNameLookup;
+  if (componentLookup !== undefined && (rule.target !== 'COMPONENT' || !componentLookup || Object.keys(componentLookup).some(key => !['source', 'field'].includes(key)) || componentLookup.source !== 'MATERIAL' || componentLookup.field !== 'materialName')) ingestionError('INGESTION_RULE_INVALID');
+  if (componentLookup && rule.mapping?.name !== undefined) ingestionError('INGESTION_RULE_INVALID');
   if (rule.aiDescription !== undefined && (!process || !rule.aiDescription || !isUUID(rule.aiDescription.connectionId)
     || typeof rule.aiDescription.prompt !== 'string' || !rule.aiDescription.prompt.trim() || rule.aiDescription.prompt.length > 4000
     || /[\u0000]/u.test(rule.aiDescription.prompt))) ingestionError('INGESTION_RULE_INVALID');
@@ -51,7 +55,7 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     || !['ALL', 'ANY'].includes(rule.match) || !['INSERT_ONLY', 'UPDATE', 'CONFIRM'].includes(rule.mode)
     || !Array.isArray(rule.conditions) || rule.conditions.length > 20 || !Array.isArray(rule.updateFields)
     || new Set(rule.updateFields).size !== rule.updateFields.length || rule.updateFields.some(field => ['code', 'externalRecordKey'].includes(field) || !fields.includes(field))
-    || !rule.mapping || typeof rule.mapping !== 'object' || Array.isArray(rule.mapping) || !process && (!validPath(rule.mapping.code) || !validPath(rule.mapping.name))
+    || !rule.mapping || typeof rule.mapping !== 'object' || Array.isArray(rule.mapping) || !process && (!validPath(rule.mapping.code) || (rule.target !== 'COMPONENT' || !componentLookup) && !validPath(rule.mapping.name))
     || Object.entries(rule.mapping).some(([field, path]) => !fields.includes(field) || !validPath(path))
     || rule.sourceUpdatedAtField !== undefined && !validPath(rule.sourceUpdatedAtField)) return ingestionError('INGESTION_RULE_INVALID');
   if (!process && (rule.descriptionComposition !== undefined || rule.sourceTimezone !== undefined)) ingestionError('INGESTION_RULE_INVALID');
@@ -71,7 +75,7 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     if (['IN', 'NOT_IN'].includes(condition.operator) && (!Array.isArray(condition.value) || condition.value.length === 0 || condition.value.length > 50 || condition.value.some(value => !scalar(value)) || new Set(condition.value.map(value => typeof value)).size > 1)) ingestionError('INGESTION_RULE_INVALID');
     if (['EMPTY', 'NOT_EMPTY'].includes(condition.operator) && condition.value !== undefined) ingestionError('INGESTION_RULE_INVALID');
   }
-  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: rule.descriptionComposition } : {}), ...(rule.aiApplication ? { aiApplication: { applicationId: rule.aiApplication.applicationId, publishedVersion: rule.aiApplication.publishedVersion, inputFields: rule.aiApplication.inputFields } } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
+  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, ...(componentLookup ? { componentNameLookup: componentLookup } : {}), mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: rule.descriptionComposition } : {}), ...(rule.aiApplication ? { aiApplication: { applicationId: rule.aiApplication.applicationId, publishedVersion: rule.aiApplication.publishedVersion, inputFields: rule.aiApplication.inputFields } } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
 }
 
 export function selectedDescriptionInput(rule: IngestionRule, row: unknown): { path: string; label: string; variable?: string; value: string | number | boolean | null }[] {

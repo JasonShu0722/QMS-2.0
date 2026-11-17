@@ -39,11 +39,12 @@ function IngestionPage({ context, session, epoch, invalidate, receiptId, clearRe
   const [denied, setDenied] = useState(false);
   const deny = useCallback(() => { setDenied(true); invalidate(); }, [invalidate]);
   const module = context.modules.find(item => item.key === 'api-ingestion' && item.scope === 'TARGET' && item.coverage === 'ORGANIZATION' && item.organizationId === context.targetOrganization.id);
-  const permissions = module?.permissions ?? [];
+  const materialModule = context.modules.find(item => item.key === 'master-data' && item.scope === 'TARGET' && item.coverage === 'ORGANIZATION' && item.organizationId === context.targetOrganization.id);
+  const permissions = [...new Set([...(module?.permissions ?? []), ...(materialModule?.permissions ?? []).filter(permission => permission === 'material-master:read')])];
   const receiptModule = context.modules.find(item => item.key === 'api-integrations' && item.scope === 'TARGET' && item.coverage === 'ORGANIZATION' && item.organizationId === context.targetOrganization.id);
   const valid = !denied && permissions.includes('ingestion:read') && session === `INTERNAL:${context.actor.homeOrganization.id}:${context.actor.id}` && context.actor.accountType === 'INTERNAL'
     && context.targetOrganization.type === 'INTERNAL' && context.targetOrganization.status === 'ACTIVE' && !context.targetOrganization.configurationRequired;
-  const scope = useMemo<IntegrationScope>(() => ({ organizationId: context.targetOrganization.id, session: session ?? '', epoch, permissions, deny }), [context.targetOrganization.id, session, epoch, module, deny]);
+  const scope = useMemo<IntegrationScope>(() => ({ organizationId: context.targetOrganization.id, session: session ?? '', epoch, permissions, deny }), [context.targetOrganization.id, session, epoch, module, materialModule, deny]);
   const [tab, setTab] = useState(receiptId || location.state?.ingestionTab === 'jobs' ? 'jobs' : 'rules');
   useEffect(() => subscribeSessionSignals(signal => { if (signal === 'invalidate') deny(); }), [deny]);
   if (!valid) return <Alert role="alert" type="error" showIcon title={text('无权访问API入库衔接', 'API ingestion access denied')} />;

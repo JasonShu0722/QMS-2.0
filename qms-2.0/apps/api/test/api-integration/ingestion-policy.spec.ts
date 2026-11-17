@@ -67,6 +67,23 @@ describe('API ingestion rule policy', () => {
     expect(() => normalizeIngestionRule({ ...rule, mapping: { code: '__proto__.code', name: 'name' } })).toThrow('INGESTION_RULE_INVALID');
     expect(() => normalizeIngestionRule({ ...rule, target: 'COMPONENT' })).toThrow('INGESTION_RULE_INVALID');
   });
+  it('accepts internal material-name lookup for component mappings without a report name field', () => {
+    const component = { ...rule, target: 'COMPONENT', mapping: { code: 'partCode' }, conditions: [], updateFields: [], componentNameLookup: { source: 'MATERIAL', field: 'materialName' } };
+    const normalized = normalizeIngestionRule(component);
+    expect(normalized).toMatchObject({ target: 'COMPONENT', mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } });
+    expect(evaluateIngestionRow(normalized, { partCode: ' 00042 ' })).toEqual({ matched: true, fields: { code: '00042' }, sourceUpdatedAt: null });
+  });
+  it('keeps external component names required and rejects unsafe internal lookup shapes', () => {
+    const component = { ...rule, target: 'COMPONENT', mapping: { code: 'partCode', name: 'partName' }, conditions: [], updateFields: [] };
+    expect(() => normalizeIngestionRule({ ...component, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } })).toThrow('INGESTION_RULE_INVALID');
+    expect(() => normalizeIngestionRule({ ...component, mapping: { code: 'partCode' } })).toThrow('INGESTION_RULE_INVALID');
+    for (const lookup of [
+      { source: 'MATERIAL', field: 'materialCode' },
+      { source: 'MATERIAL', field: 'materialName', extra: 'x' },
+      { source: 'OTHER', field: 'materialName' },
+    ]) expect(() => normalizeIngestionRule({ ...component, mapping: { code: 'partCode' }, componentNameLookup: lookup })).toThrow('INGESTION_RULE_INVALID');
+    expect(() => normalizeIngestionRule({ ...rule, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } })).toThrow('INGESTION_RULE_INVALID');
+  });
   it('requires explicit source timestamp validity', () => {
     const normalized = normalizeIngestionRule({ ...rule, sourceUpdatedAtField: 'updatedAt' });
     expect(() => evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt: 'yesterday' })).toThrow('INGESTION_SOURCE_VERSION_INVALID');
