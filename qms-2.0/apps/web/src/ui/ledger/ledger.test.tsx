@@ -22,6 +22,24 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const settings = () => fireEvent.click(within(document.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' }));
 
+it('uses the caller reset label with existing preferences and restores each status view independently', () => {
+  const view = render(<LedgerTable ledgerId="reset-label" viewId="ALL" columns={columns} dataSource={data} defaultVisibleColumnKeys={['a']} resetColumnsLabel="恢复录单默认列" />);
+  settings();
+  fireEvent.click(screen.getByLabelText('显示 名称'));
+  expect(screen.getByRole('columnheader', { name: '名称' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '恢复录单默认列' }));
+  expect(screen.queryByRole('columnheader', { name: '名称' })).not.toBeInTheDocument();
+  const originalKeys = Object.keys(localStorage);
+  for (const status of ['FOLLOWING', 'CLOSED', 'ALL']) {
+    view.rerender(<LedgerTable ledgerId="reset-label" viewId={status} columns={columns} dataSource={data} defaultVisibleColumnKeys={['a']} resetColumnsLabel="恢复录单默认列" />);
+    fireEvent.click(screen.getByRole('button', { name: '恢复录单默认列' }));
+    expect(screen.getByRole('columnheader', { name: '编号' })).toBeVisible();
+    expect(screen.queryByRole('columnheader', { name: '名称' })).not.toBeInTheDocument();
+  }
+  expect(originalKeys).toHaveLength(1);
+  expect(Object.keys(localStorage)).toHaveLength(3);
+});
+
 describe('ledger page size', () => {
   it('defaults to twenty, persists legal sizes and isolates target organization on the first render', () => {
     const { result, rerender } = renderHook(({ organizationId }) => useLedgerPageSize('sizes', organizationId), { initialProps: { organizationId: 'a' } });
@@ -169,20 +187,21 @@ describe('LedgerTable', () => {
     const onChange = vi.fn();
     const { container } = render(<LedgerTable ledgerId="top-local" columns={[{ ...columns[0], sorter: (left, right) => left.a.localeCompare(right.a) }, { ...columns[1], filters: [{ text: 'Even', value: 'Even' }], onFilter: (value, record) => record.b === value }]} dataSource={rows} pagination={{ defaultCurrent: 2, defaultPageSize: 2, showSizeChanger: true, pageSizeOptions: [2, 4], showTotal: total => `Filtered ${total}` }} onChange={onChange} />);
     const pagination = container.querySelector('.ant-pagination')!;
+    const header = within(container.querySelector<HTMLElement>('thead')!);
     expect(pagination.nextElementSibling).toHaveClass('ant-table');
     expect(screen.getByText('02')).toBeInTheDocument();
     expect(screen.queryByText('00')).not.toBeInTheDocument();
     fireEvent.click(pagination.querySelector('[title="3"]')!);
     expect(screen.getByText('04')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('columnheader', { name: '编号' }));
+    fireEvent.click(header.getByRole('columnheader', { name: '编号' }));
     expect(onChange.mock.lastCall?.[3]).toMatchObject({ action: 'sort' });
     expect(screen.getByText('04')).toBeInTheDocument();
     await userEvent.click(within(pagination as HTMLElement).getByRole('combobox'));
     await userEvent.click(screen.getByRole('option', { name: '4 / page' }));
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ pageSize: 4 });
-    fireEvent.click(screen.getByRole('button', { name: 'filter' }));
+    fireEvent.click(header.getByRole('button', { name: 'filter' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Even' }));
-    await userEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await userEvent.click(within(container.ownerDocument.querySelector<HTMLElement>('.ant-table-filter-dropdown')!).getByRole('button', { name: 'OK' }));
     expect(onChange.mock.lastCall?.[3]).toMatchObject({ action: 'filter' });
     expect(pagination.querySelector('.ant-pagination-item-active')).toHaveAttribute('title', '1');
     expect(screen.getByText('Filtered 6')).toBeInTheDocument();

@@ -14,6 +14,12 @@ import { SupplierQualityService } from '../supplier-quality/supplier-quality.ser
 import type { SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
 import { processDefectRequiredIssues, processDefectShift } from './process-defect-registration.policy.js';
 import { ProcessDefectCompletionService, processProjectSnapshot } from './process-defect-completion.service.js';
+import { processDeletionProblemReferences } from '../problem-index/process-deletion-references.read-model.js';
+import { processDeletionSelectionReferences } from '../new-product-quality/process-deletion-references.read-model.js';
+import { processDeletionCopyReferences } from '../supplier-eight-d-source/process-deletion-references.read-model.js';
+import { ProblemDomainRegistry } from '../problem-index/problem-domain-registry.js';
+
+type DeletionSelection = { defectId: string; expectedVersion: number };
 
 export const PROCESS_RESPONSIBILITY_CATEGORIES = ['MATERIAL', 'OPERATION', 'EQUIPMENT', 'PROCESS', 'DESIGN', 'FALSE_POSITIVE'] as const;
 export const PROCESS_MATERIAL_VERIFICATIONS = ['UNREVIEWED', 'CONFIRMED_DEFECT', 'NOT_MATERIAL', 'NEGOTIATED', 'RETURN_ANALYSIS'] as const;
@@ -204,7 +210,7 @@ const materialColumns = Prisma.sql`id, organization_id AS "organizationId", defe
 export class ProcessDefectLedgerService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService,
     @Optional() private readonly projects?: ComponentProjectService, @Optional() private readonly suppliers?: SupplierQualityService,
-    @Optional() private readonly completion?: ProcessDefectCompletionService) {}
+    @Optional() private readonly completion?: ProcessDefectCompletionService, @Optional() private readonly readRegistry?: ProblemDomainRegistry) {}
 
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') reject('ORGANIZATION_SCOPE_DENIED', 403);
@@ -307,16 +313,76 @@ export class ProcessDefectLedgerService {
     }, async (tx) => { await this.find(tx, organizationId, id); });
   }
 
-  async archive(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) {
+  async archive(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string, reason = '旧归档入口删除') {
+    await this.deleteDefects(actor, { sources: [{ defectId: id, expectedVersion }], reason }, traceId, key);
+    return this.detail(actor, id);
+  }
+
+  private deletionSources(input: { sources: DeletionSelection[]; organizationId?: string }, actor: AdminActor) {
+    if (input.organizationId !== undefined && input.organizationId !== this.scope(actor)) reject('ORGANIZATION_SCOPE_DENIED', 403);
+    if (!Array.isArray(input.sources) || input.sources.length < 1 || input.sources.length > 100) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    const sources = input.sources.map(source => {
+      if (!source || typeof source !== 'object') reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+      return { defectId: uuid(source.defectId), expectedVersion: version(source.expectedVersion) };
+    }).sort((left, right) => left.defectId.localeCompare(right.defectId));
+    if (new Set(sources.map(source => source.defectId)).size !== sources.length) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    return sources;
+  }
+
+  private async deletionItems(tx: AdminTransaction, actor: AdminActor, sources: DeletionSelection[]) {
     const organizationId = this.scope(actor);
-    if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_ARCHIVED', payload: { id, expectedVersion }, permission: 'process-quality:defects:write' }, async (tx) => {
-      const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: expectedVersion, archivedAt: null }, data: { archivedAt: new Date(), updatedById: actor.id, version: { increment: 1 } } });
-      if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
-      const record = await this.find(tx, organizationId, id);
-      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_ARCHIVED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version } }, tx);
-      return this.view(tx, record);
-    }, async (tx) => { await this.find(tx, organizationId, id); });
+    const ids = sources.map(source => source.defectId);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM process_defects WHERE organization_id = ${organizationId}::uuid
+      AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
+    const records = await tx.processDefect.findMany({ where: { organizationId, id: { in: ids } }, orderBy: { id: 'asc' } });
+    if (records.length !== sources.length) reject('PROCESS_DEFECT_NOT_FOUND', 404);
+    for (const [index, record] of records.entries()) {
+      const source = sources[index]!;
+      if (record.archivedAt || record.version !== source.expectedVersion) reject('CONCURRENCY_CONFLICT', 409);
+    }
+    const granted = await adminPermissions(tx, actor.id, organizationId);
+    const visibility = granted.includes('process-quality:issues:read') ? this.readRegistry?.visibility(actor, organizationId) : undefined;
+    const problems = await processDeletionProblemReferences(tx, organizationId, ids, visibility);
+    const selections = await processDeletionSelectionReferences(tx, organizationId, ids, actor);
+    const copies = await processDeletionCopyReferences(tx, organizationId, ids);
+    return records.map(record => {
+      const blockers: { code: string; reportNumber: string | null }[] = [];
+      for (const problem of problems) {
+        if (problem.domainSourceLinks.some(link => link.sourceId === record.id) || problem.domainCode === 'process-quality' && problem.sourceType === 'process-defect' && problem.sourceId === record.id) {
+          blockers.push({ code: 'FORMAL_PROBLEM', reportNumber: problem.reportNumber });
+        }
+      }
+      for (const selected of selections.filter(selection => selection.defectId === record.id)) blockers.push({ code: 'NEW_PRODUCT_SELECTION', reportNumber: granted.includes('new-product-quality:projects:read') ? selected.projectCode : null });
+      if (copies.some(copy => copy.defectId === record.id)) blockers.push({ code: 'SUPPLIER_SOURCE_COPY', reportNumber: null });
+      return { defectId: record.id, expectedVersion: record.version, description: record.description, blocked: blockers.length > 0, blockers };
+    });
+  }
+
+  async previewDeletion(actor: AdminActor, input: { sources: DeletionSelection[]; organizationId?: string }) {
+    const organizationId = this.scope(actor), sources = this.deletionSources(input, actor);
+    return this.prisma.$transaction(async tx => {
+      await assertActiveAuthentication(tx, actor);
+      await assertAdminAccess(tx, actor, organizationId, ['process-quality:defects:read', 'process-quality:defects:delete']);
+      const items = await this.deletionItems(tx, actor, sources);
+      return { items, count: items.length, canDelete: items.every(item => !item.blocked) };
+    }, { isolationLevel: 'ReadCommitted' });
+  }
+
+  async deleteDefects(actor: AdminActor, input: { sources: DeletionSelection[]; reason: string; organizationId?: string }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor), sources = this.deletionSources(input, actor), reason = required(input.reason, 300);
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_DELETED', payload: { sources, reason },
+      permission: ['process-quality:defects:read', 'process-quality:defects:delete'], isolationLevel: 'ReadCommitted' }, async tx => {
+      const items = await this.deletionItems(tx, actor, sources);
+      if (items.some(item => item.blocked)) reject('PROCESS_DEFECT_DELETE_BLOCKED', 409);
+      const changed = await tx.processDefect.updateMany({ where: { organizationId, id: { in: sources.map(source => source.defectId) }, archivedAt: null },
+        data: { archivedAt: new Date(), updatedById: actor.id, version: { increment: 1 }, descriptionAiStatus: 'STALE' } });
+      if (changed.count !== sources.length) reject('CONCURRENCY_CONFLICT', 409);
+      for (const source of sources) {
+        await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECTS_DELETED', resourceType: 'ProcessDefect', resourceId: source.defectId,
+          outcome: 'SUCCESS', traceId, metadata: { deletionReason: reason, rowCount: sources.length, previousResourceVersion: source.expectedVersion, resourceVersion: source.expectedVersion + 1 } }, tx);
+      }
+      return { deletedIds: sources.map(source => source.defectId), count: sources.length };
+    }, async tx => { for (const source of sources) await this.find(tx, organizationId, source.defectId); });
   }
 
   async close(actor: AdminActor, id: string, input: { expectedVersion: number; reason?: string | null }, traceId: string, key?: string) {
@@ -439,7 +505,7 @@ export class ProcessDefectLedgerService {
       await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
       const materialMatches = query.materialCode ? await tx.$queryRaw<{ defectId: string }[]>`SELECT DISTINCT defect_id AS "defectId" FROM process_defect_material_items WHERE organization_id = ${organizationId}::uuid AND removed_at IS NULL AND material_code = ${query.materialCode}` : null;
       const where: Prisma.ProcessDefectWhereInput = {
-        organizationId, ...(query.includeArchived ? {} : { archivedAt: null }),
+        organizationId, archivedAt: null,
         ...(query.pendingCompletion === undefined ? {} : { pendingCompletion: query.pendingCompletion }),
         ...(query.pendingConfiguration === undefined ? {} : { pendingConfiguration: query.pendingConfiguration }),
         ...(defectTypeCode ? { defectTypeCode } : {}),
@@ -453,7 +519,7 @@ export class ProcessDefectLedgerService {
         ...(query.responsibilityCategory ? { responsibilityCategory: query.responsibilityCategory } : {}),
         ...(query.ledgerStatus ? { ledgerStatus: query.ledgerStatus } : {}),
         ...(query.traceCode ? { traceCode: query.traceCode } : {}),
-        ...(query.search ? { OR: [{ description: { contains: query.search, mode: 'insensitive' } }, { batchCode: { contains: query.search, mode: 'insensitive' } }, { workOrderCode: { contains: query.search, mode: 'insensitive' } }, { traceCode: { contains: query.search, mode: 'insensitive' } }] } : {}),
+        ...(query.search ? { OR: [{ description: { contains: query.search, mode: 'insensitive' } }, { batchCode: { contains: query.search, mode: 'insensitive' } }, { workOrderCode: { contains: query.search, mode: 'insensitive' } }, { traceCode: { contains: query.search, mode: 'insensitive' } }, { productCode: { contains: query.search, mode: 'insensitive' } }] } : {}),
       };
       const [items, total] = await Promise.all([tx.processDefect.findMany({ where, orderBy: [{ occurredAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), tx.processDefect.count({ where })]);
       return { items: await Promise.all(items.map(item => this.view(tx, item))), total, page: query.page, pageSize: query.pageSize };

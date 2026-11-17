@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { RoleAdministration } from './RoleAdministration';
 import { UserAdministration } from './UserAdministration';
+import { openUserManagement } from './user-management-test-helpers';
 import { readXlsxFile } from '../imports/read-xlsx';
 import type { AdminOrganization, AdminRole, AdminUser } from './admin';
 
@@ -30,7 +31,7 @@ it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled clo
     return json(path.includes('/permission-catalog') ? [] : path.includes('/roles?') ? [role] : [account]);
   }));
   render(<MemoryRouter><UnsavedChangesProvider>{kind === 'role' ? <RoleAdministration organization={organization} /> : <UserAdministration organization={organization} organizations={[organization]} />}</UnsavedChangesProvider></MemoryRouter>);
-  await user.click(await screen.findByRole('button', { name: kind === 'role' ? '编辑角色' : /^编\s*辑$/ }));
+  await user.click(await screen.findByRole('button', { name: kind === 'role' ? '编辑角色' : '管理用户' }));
   const editor = screen.getByRole('dialog');
   const label = kind === 'role' ? '角色名称' : '姓名';
   fireEvent.change(within(editor).getByLabelText(label), { target: { value: 'Unsaved draft' } });
@@ -42,7 +43,7 @@ it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled clo
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
   await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await user.click(screen.getByRole('button', { name: kind === 'role' ? '编辑角色' : /^编\s*辑$/ }));
+  await user.click(screen.getByRole('button', { name: kind === 'role' ? '编辑角色' : '管理用户' }));
   expect(screen.getByLabelText(label, { selector: 'input' })).toHaveValue(kind === 'role' ? role.name : account.fullName);
   expect(writes).toEqual([]);
 }, 30000);
@@ -57,13 +58,14 @@ it('opens legacy user authorization as read-only and closes without a draft or w
     return json([account]);
   }));
   render(<MemoryRouter><UnsavedChangesProvider><UserAdministration organization={limitedOrganization} organizations={[limitedOrganization]} /></UnsavedChangesProvider></MemoryRouter>);
+  await openUserManagement('任职与授权');
   await user.click(await screen.findByRole('button', { name: '查看授权来源' }));
   const editor = await screen.findByRole('dialog', { name: 'alice · 授权来源' });
   await waitFor(() => expect(within(editor).getByText(role.name)).toBeVisible());
   expect(within(editor).queryByRole('combobox')).not.toBeInTheDocument();
   expect(within(editor).queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
   await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'alice · 授权来源' })).not.toBeInTheDocument());
   expect(writes).toEqual([]);
 }, 30000);
 

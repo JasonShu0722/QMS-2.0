@@ -7,6 +7,7 @@ import { UnsavedChangesProvider, useNavigationGuard } from '../../layouts/Unsave
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { UserForceDelete, type UserForceDeleteProps } from './UserForceDelete';
 import { UserAdministration } from './UserAdministration';
+import { openUserManagement } from './user-management-test-helpers';
 import type { AdminOrganization } from './admin';
 import { ReauthenticationProvider } from '../auth/ReauthenticationProvider';
 
@@ -30,13 +31,13 @@ function network(write: (init: RequestInit) => Promise<Response> = async () => j
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
-async function open() {
-  await userEvent.click(screen.getByRole('button', { name: '永久删除用户' }));
-  const dialog = await screen.findByRole('dialog');
+async function open(scope: Pick<ReturnType<typeof within>, 'getByRole'> = screen) {
+  await userEvent.click(scope.getByRole('button', { name: '永久删除用户' }));
+  const dialog = await screen.findByRole('dialog', { name: '永久删除用户' });
   await waitFor(() => expect(dialog).toBeVisible());
   return dialog;
 }
-async function confirm() { await userEvent.click(screen.getByRole('button', { name: /确认永久删除/ })); }
+async function confirm(scope: Pick<ReturnType<typeof within>, 'getByRole'> = screen) { await userEvent.click(scope.getByRole('button', { name: /确认永久删除/ })); }
 const writes = (fetch: ReturnType<typeof network>) => fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE');
 beforeEach(() => { useWorkTabsStore.getState().bindSession(session); });
 afterEach(() => { vi.unstubAllGlobals(); useWorkTabsStore.getState().reset(); });
@@ -331,10 +332,11 @@ it.each([false, true])('mounts the row action only with parent-sanitized lifecyc
   const sanitized = { ...organization, permissions: organization.permissions.filter(code => ready || code !== 'account:users:delete') };
   const view = render(<UserAdministration organization={sanitized} organizations={[sanitized]} />);
   await screen.findByText(target.username);
-  expect(screen.getByRole('button', { name: /^停\s*用$/ })).toBeEnabled();
-  expect(!!screen.queryByRole('button', { name: '永久删除用户' })).toBe(ready);
+  const management = await openUserManagement('状态与删除');
+  expect(management.getByRole('button', { name: /^停\s*用$/ })).toBeEnabled();
+  expect(!!management.queryByRole('button', { name: '永久删除用户' })).toBe(ready);
   view.rerender(<UserAdministration organization={{ ...organization, permissions: ['account:users:read', 'account:users:status'] }} organizations={[organization]} />);
-  expect(screen.queryByRole('button', { name: '永久删除用户' })).not.toBeInTheDocument();
+  expect(screen.queryByText('永久删除用户', { selector: 'button > span' })).not.toBeInTheDocument();
 });
 
 it('mount success refreshes the directory through the existing parent callback', async () => {
@@ -344,7 +346,7 @@ it('mount success refreshes the directory through the existing parent callback',
     return json([directoryUser]);
   }); vi.stubGlobal('fetch', fetch);
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await screen.findByText(target.username); await open(); await confirm();
+  await screen.findByText(target.username); const management = await openUserManagement('状态与删除'); const confirmation = within(await open(management)); await confirm(confirmation);
   expect(await screen.findByText('用户已永久删除')).toBeVisible();
   await waitFor(() => expect(fetch.mock.calls.filter(([url]) => url.startsWith('/api/v1/admin/users?'))).toHaveLength(2));
 });
@@ -355,7 +357,7 @@ it('mount denial reaches the existing parent feedback', async () => {
     return init.method === 'DELETE' ? json({ code: 'FEATURE_PERMISSION_DENIED' }, 403) : json([directoryUser]);
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await screen.findByText(target.username); await open(); await confirm();
+  await screen.findByText(target.username); const management = await openUserManagement('状态与删除'); const confirmation = within(await open(management)); await confirm(confirmation);
   expect(await screen.findByText('无权执行此操作')).toBeVisible();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

@@ -9,7 +9,7 @@ import { AiApplications } from './AiApplications';
 
 const mutate = vi.fn();
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn() }));
-const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL' as const, permissions: ['configuration:read', 'configuration:manage'] };
+const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL' as const, permissions: ['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:read'] };
 const application = { id: 'application-1', organizationId: 'org', name: '不良现象整理', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '异常现象' }], connectionId: 'channel-1', model: 'quality-model', prompt: '整理{{fault}}', output: { mode: 'TEXT', field: 'description', target: 'description' }, fallback: 'DIRECT', version: 2, publishedVersion: 1, createdAt: '2026-11-17T00:00:00Z', updatedAt: '2026-11-17T00:00:00Z' };
 beforeEach(() => {
   localStorage.clear(); vi.stubEnv('NODE_ENV', 'development');
@@ -93,11 +93,36 @@ it('runs the saved draft only with explicit sample variables and publishes the s
 it('readers have no write actions and an ABA identity transition retires pending application data', async () => {
   let finish!: (value: unknown) => void;
   vi.mocked(apiRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-  mount(['configuration:read']);
+  mount(['ai:applications:read']);
   expect(screen.queryByRole('button', { name: '新增应用' })).not.toBeInTheDocument();
   act(() => { useWorkTabsStore.getState().bindSession('INTERNAL:org:another'); useWorkTabsStore.getState().bindSession('INTERNAL:org:user'); });
   await act(async () => finish({ items: [application], total: 1, page: 1, limit: 20 }));
   expect(screen.queryByText(application.name)).not.toBeInTheDocument();
+});
+it('keeps draft maintenance separate from publication and sample calls', async () => {
+  mount(['ai:applications:read', 'ai:applications:manage']);
+  const row = (await screen.findByText(application.name, { selector: 'td' })).closest('tr')!;
+  expect(screen.queryByRole('button', { name: '新增应用' })).not.toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: '样本试运行' })).not.toBeInTheDocument();
+  fireEvent.click(within(row).getByRole('button', { name: /^编\s*辑$/ }));
+  const dialog = within(screen.getByRole('dialog', { name: '提示词应用' }));
+  expect(dialog.getByRole('combobox', { name: '模型渠道' })).toBeDisabled();
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('/ai-connections'), expect.anything());
+  fireEvent.change(dialog.getByLabelText('应用名称'), { target: { value: '仅草稿维护' } });
+  fireEvent.click(dialog.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+  expect(mutate.mock.calls[0][2]).toMatchObject({ name: '仅草稿维护', connectionId: application.connectionId, model: application.model });
+});
+it.each([
+  ['ai:applications:publish', '发布版本', '样本试运行'],
+  ['ai:applications:test', '样本试运行', '发布版本'],
+])('exposes only the separately assigned %s operation', async (permission, allowed, denied) => {
+  mount(['ai:applications:read', permission]);
+  const row = (await screen.findByText(application.name, { selector: 'td' })).closest('tr')!;
+  expect(within(row).getByRole('button', { name: allowed })).toBeEnabled();
+  expect(within(row).queryByRole('button', { name: denied })).not.toBeInTheDocument();
+  expect(within(row).queryByRole('button', { name: /^编\s*辑$/ })).not.toBeInTheDocument();
 });
 it('known draft conflicts preserve editable input and busy blocks leaving until the request settles', async () => {
   let rejectWrite!: (cause: unknown) => void;

@@ -34,8 +34,8 @@ const required: Record<string, string[]> = {
   users: ['account:users:read', 'account:users:create'], organizations: ['organization:read', 'organization:structure:read', 'account:roles:read'],
   suppliers: ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'], customers: ['customer-quality:complaints:read', 'customer-quality:complaints:write'],
   materials: ['material-master:read', 'material-master:write', 'material-master:import'], 'component-projects': ['component-project:read', 'component-project:manage'],
-  configuration: ['configuration:read'], 'audit-log': ['audit:read'], outbox: ['outbox:read'], reconfiguration: ['organization:reconfigure'],
-  'ai-connections': ['configuration:read'], 'ai-applications': ['configuration:read'],
+  configuration: ['configuration:read', 'process-quality:configuration:read'], 'audit-log': ['audit:read'], outbox: ['outbox:read'], reconfiguration: ['organization:reconfigure'],
+  'ai-connections': ['ai:connections:read'], 'ai-applications': ['ai:applications:read'],
   'problem-reconfiguration': ['organization:reconfigure'], 'supplier-accounts': ['account:users:delete'],
 };
 

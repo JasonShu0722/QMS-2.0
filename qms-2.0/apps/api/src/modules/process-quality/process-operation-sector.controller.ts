@@ -23,26 +23,26 @@ export class ProcessOperationSectorController {
   constructor(private readonly service: ProcessOperationSectorService) {}
 
   @Get() @ApiOkResponse({ type: [ProcessOperationSectorDto] })
-  @RequireAccess({ featurePermission: 'configuration:read', organizationScope: queryScope })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:read', organizationScope: queryScope })
   list(@Req() request: Request, @Query() _query: ProcessScopeDto) { return this.service.list(actor(request)); }
 
   @Post() @ApiCreatedResponse({ type: ProcessOperationSectorDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
-  @RequireAccess({ featurePermission: 'configuration:manage', organizationScope: bodyScope })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
   create(@Req() request: Request, @Body() body: ProcessOperationSectorInputDto, @Headers('idempotency-key') key?: string) {
     return this.service.create(actor(request), body, requestTraceId(request), key);
   }
 
   @Put(':id') @ApiOkResponse({ type: ProcessOperationSectorDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
-  @RequireAccess({ featurePermission: 'configuration:manage', organizationScope: bodyScope })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
   update(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateProcessOperationSectorDto, @Headers('idempotency-key') key?: string) {
     return this.service.update(actor(request), id, body, requestTraceId(request), key);
   }
 
   @Delete(':id') @ApiOkResponse({ type: DeletedProcessOperationSectorDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
-  @RequireAccess({ featurePermission: 'configuration:manage', organizationScope: queryScope })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: queryScope })
   remove(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: DeleteProcessOperationSectorDto, @Headers('idempotency-key') key?: string) {
     return this.service.remove(actor(request), id, query.expectedVersion, requestTraceId(request), key);
   }

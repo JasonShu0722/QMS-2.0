@@ -55,7 +55,7 @@ describe('process defect issue workflow on PostgreSQL', () => {
     await prisma.user.create({ data: { id: userId, organizationId, username: `pqe-${userId.slice(0, 8)}`, accountType: 'INTERNAL', passwordHash: 'test-only' } });
     await prisma.session.create({ data: { id: sessionId, userId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000), reauthenticatedAt: new Date() } });
     const role = await prisma.role.create({ data: { organizationId, code: 'PROCESS_HANDLER', name: 'Process handler' } });
-    for (const code of ['workflow:start', 'process-quality:defects:read', 'process-quality:defects:write']) {
+    for (const code of ['workflow:start', 'process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete']) {
       const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
     }
@@ -104,7 +104,7 @@ describe('process defect issue workflow on PostgreSQL', () => {
     expect(await prisma.workflowInstance.count({ where: { problemIndexId: problemId, workflowVersionId } })).toBe(1);
     expect(await prisma.auditEvent.count({ where: { resourceId: problemId, action: 'PROBLEM_INDEX_CREATED' } })).toBe(1);
     expect(await prisma.outboxEvent.count({ where: { aggregateId: problemId, aggregateType: 'DomainSourceIssue' } })).toBe(1);
-    await ledger.archive(actor, first.id, first.version, randomUUID(), randomUUID());
+    await expect(ledger.archive(actor, first.id, first.version, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect(await service.problemsForDefect(actor, first.id)).toEqual(expect.arrayContaining([expect.objectContaining({ id: problemId })]));
     expect((await prisma.domainSourceIssueLink.findFirstOrThrow({ where: { sourceId: first.id, problemIndexId: problemId } })).sourceSnapshot).toMatchObject({ description: '端子氧化' });
   });

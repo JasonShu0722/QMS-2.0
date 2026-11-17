@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { adminError } from '../../common/security/admin-mutation.service.js';
 import { effectiveRoleGrants } from '../../common/security/effective-role-grants.js';
-import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, INTEGRATION_PERMISSIONS, INGESTION_PERMISSIONS } from '../authorization/permission-catalog.js';
+import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, INTEGRATION_PERMISSIONS, INGESTION_PERMISSIONS, AI_CONFIGURATION_PERMISSIONS, PROCESS_CONFIGURATION_PERMISSIONS } from '../authorization/permission-catalog.js';
 import type { AuthorizedSessionUser } from '../authorization/authorization.service.js';
 import type { ConsoleContextDto, ConsoleModuleDto, ConsoleOrganizationDto } from './dto/console-context.dto.js';
 
@@ -13,7 +13,9 @@ const modulePermissions: Partial<Record<ConsoleModuleDto['key'], string[]>> = {
   users: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('account:users:')), 'account:users:delete'],
   organizations: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('organization:') || code.startsWith('account:roles:')), 'organization:read', 'organization:force-delete', 'organization:departments:force-delete'],
   'master-data': [...masterMaintenance, 'material-master:read', 'component-project:read', 'customer-quality:complaints:read', 'supplier-quality:profiles:read'],
-  configuration: ['configuration:read', 'configuration:manage'],
+  configuration: ['configuration:read', 'configuration:manage', ...PROCESS_CONFIGURATION_PERMISSIONS],
+  'ai-connections': AI_CONFIGURATION_PERMISSIONS.filter(code => code.startsWith('ai:connections:') || code === 'ai:credentials:manage'),
+  'ai-applications': AI_CONFIGURATION_PERMISSIONS.filter(code => code.startsWith('ai:applications:')),
   audit: ['audit:read', 'audit:export'],
   outbox: ['outbox:read', 'outbox:retry'],
   'api-monitoring': ['console:api:read'],

@@ -27,7 +27,7 @@ export type ProcessDefectIntegrationFields = {
   issues?: string[];
 };
 export type IntegrationRecord<Fields = IntegrationFields> = { id: string; version: number; values: Fields };
-export type ProcessDefectIntegrationRecord = IntegrationRecord<ProcessDefectIntegrationFields> & { protectedFields?: string[]; pendingCompletion?: boolean; pendingConfiguration?: boolean };
+export type ProcessDefectIntegrationRecord = IntegrationRecord<ProcessDefectIntegrationFields> & { protectedFields?: string[]; pendingCompletion?: boolean; pendingConfiguration?: boolean; deleted?: boolean };
 export type IntegrationExpected = Pick<IntegrationRecord, 'id' | 'version'> | null;
 
 export interface IntegrationMasterDataAdapter {

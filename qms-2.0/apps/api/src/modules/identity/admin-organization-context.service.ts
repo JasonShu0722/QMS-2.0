@@ -1,12 +1,13 @@
 import { adminError } from '../../common/security/admin-mutation.service.js';
 import { effectiveRoleGrants, type EffectiveRoleGrantClient } from '../../common/security/effective-role-grants.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
-import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../authorization/permission-catalog.js';
+import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, AI_CONFIGURATION_PERMISSIONS, PROCESS_CONFIGURATION_PERMISSIONS } from '../authorization/permission-catalog.js';
 import type { AuthorizedSessionUser } from '../authorization/authorization.service.js';
 import type { AdminOrganizationContextDto } from './dto/admin-user.dto.js';
 
 const managementPermissions = new Set([
   ...ADMIN_PERMISSIONS, 'organization:read',
+  ...AI_CONFIGURATION_PERMISSIONS, ...PROCESS_CONFIGURATION_PERMISSIONS,
   ...ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES,
   'component-project:read', 'component-project:manage', 'customer-quality:complaints:read', 'customer-quality:complaints:write',
   'material-master:read', 'material-master:write', 'material-master:import',

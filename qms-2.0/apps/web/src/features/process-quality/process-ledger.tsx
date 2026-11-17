@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Tooltip } from 'antd';
+import { Alert, Space, Tag, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, getSession, safeAccountError } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -90,6 +90,12 @@ function sourceIssueMessage(hint: string) {
   if (fieldLabel && problem === 'TYPE') return `${fieldLabel}来源值类型无效，请核对。`;
   if (fieldLabel && problem === 'INVALID') return `${fieldLabel}来源值格式或长度无效，请核对。`;
   return '来源字段待核对';
+}
+export function CompletionStatus({ record }: { record: Defect }) {
+  if (!record.pendingCompletion && !record.pendingConfiguration) return null;
+  const hints = [...new Set([...(record.registrationIssues ?? []), ...(record.issues ?? []), ...(record.componentProject?.issues ?? [])])];
+  const missing = hints.filter(hint => /_(REQUIRED|PENDING)$/.test(hint));
+  return <div className="process-quality-completion"><Space wrap>{record.pendingCompletion ? <Tag color="warning">待完善</Tag> : null}{record.pendingConfiguration ? <Tag color="processing">待补配</Tag> : null}</Space>{missing.length ? <span>{missing.map(hint => hintLabels[hint] ?? sourceIssueMessage(hint)).join(' ')}</span> : null}</div>;
 }
 export function MappingHint({ record }: { record: Defect }) {
   const hints = [...(record.issues ?? []), ...(record.registrationIssues ?? []), ...(record.componentProject?.issues ?? [])];

@@ -22,6 +22,14 @@
 .process-quality-toolbar { margin-bottom: var(--qms-section-gap); }
 .process-quality-toolbar .ant-input-search { width: min(100%, 320px); }
 .process-quality-detail-link { padding: 0; height: auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.process-quality-description-cell, .process-quality-description-heading { min-width: 0; max-width: 100%; }
+.process-quality-description-heading { display: flex; align-items: center; gap: 6px; }
+.process-quality-description-heading .process-quality-detail-link { min-width: 0; flex: 1; }
+.process-quality-description-heading .process-quality-detail-link > span { overflow: hidden; text-overflow: ellipsis; }
+.process-quality-description-heading .process-quality-warning { flex-shrink: 0; }
+.process-quality-completion { display: grid; gap: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+.process-quality-completion > span { color: var(--qms-muted); }
+.process-quality-batch-toolbar { display: flex; padding-block: 8px; border-block-start: 1px solid var(--qms-border); }
 .process-quality-loading { min-height: 180px; display: grid; place-items: center; }
 .process-quality-issue-error { margin-bottom: var(--qms-section-gap); }
 .process-quality-report-detail { width: 100%; }

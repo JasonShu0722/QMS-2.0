@@ -29,7 +29,7 @@ export async function processIngestionFixture() {
   const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), fullName: '真实登记人', passwordHash: 'test-only', accountType: 'INTERNAL' } });
   const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), reauthenticatedAt: new Date(), mfaVerifiedAt: new Date() } });
   const role = await prisma.role.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'S2 permissions' } });
-  for (const code of ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'component-project:read', 'component-project:manage', 'configuration:read', 'configuration:manage']) {
+  for (const code of ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'component-project:read', 'component-project:manage', 'configuration:read', 'configuration:manage', 'process-quality:configuration:read', 'process-quality:configuration:manage', 'ai:applications:read']) {
     const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
     await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
   }

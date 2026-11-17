@@ -29,7 +29,7 @@ describe('central prompt applications with PostgreSQL and actual model requests'
   });
   afterAll(async () => { server?.closeAllConnections(); await new Promise<void>(resolve => server?.close(() => resolve())); await prisma.$disconnect();
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalNodeEnv; });
-  async function fixture(codes = ['configuration:read', 'configuration:manage']) {
+  async function fixture(codes = ['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:manage', 'ai:credentials:manage']) {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Application disposable scope', type: 'INTERNAL' } });
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'test-only', accountType: 'INTERNAL' } });
     const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), reauthenticatedAt: new Date(), mfaVerifiedAt: new Date() } });
@@ -64,6 +64,14 @@ describe('central prompt applications with PostgreSQL and actual model requests'
     const bound = await prisma.$transaction(tx => applications.resolveBinding(tx, scope.actor, { applicationId: draft.id, publishedVersion: 1, inputFields: [{ path: 'ims.symptom', variable: 'fact' }] }));
     expect(bound.aiDescription).toMatchObject({ prompt: '整理{{fact}}', inputFields: [{ path: 'ims.symptom', variable: 'fact', label: '现象' }] });
     await expect(prisma.$executeRaw`UPDATE ai_prompt_application_revisions SET configuration='{}'::jsonb WHERE application_id=${draft.id}::uuid`).rejects.toThrow();
+  });
+  it('does not infer application publication or sample testing from draft maintenance', async () => {
+    const scope = await setup();
+    const draft = await applications.create(scope.actor, scope.organizationId, scope.input, randomUUID(), randomUUID());
+    await prisma.rolePermission.deleteMany({ where: { roleId: scope.role.id, permission: { code: { in: ['ai:applications:publish', 'ai:applications:test'] } } } });
+    await expect(applications.publish(scope.actor, scope.organizationId, draft.id, { expectedVersion: 1 }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await expect(applications.test(scope.actor, scope.organizationId, draft.id, { expectedVersion: 1, samples: [{ variable: 'fact', value: '现场' }] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    expect(await applications.update(scope.actor, scope.organizationId, draft.id, { ...scope.input, expectedVersion: 1, name: '仅维护草稿' }, randomUUID(), randomUUID())).toMatchObject({ version: 2 });
   });
   it('rechecks grants on replay, denies foreign scope, and allows effective platform administrators', async () => {
     const scope = await setup(), key = randomUUID();

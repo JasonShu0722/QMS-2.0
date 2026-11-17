@@ -98,7 +98,7 @@ export class AiApplicationService {
       return { applicationId: id, version: row.version, connectionVersion: connection.version };
     });
     const configuration = await this.prisma.$transaction(async tx => {
-      await this.access(tx, actor, organizationId, 'configuration:manage'); await assertActiveAuthentication(tx, actor);
+      await this.access(tx, actor, organizationId, 'ai:applications:test'); await assertActiveAuthentication(tx, actor);
       const row = await this.row(tx, organizationId, id); this.match(row, preparation.version);
       return row.configuration;
     });
@@ -111,7 +111,7 @@ export class AiApplicationService {
       code = typeof reason === 'string' && /^AI_CONNECTION_(INVALID|NOT_FOUND|UNAVAILABLE|VERSION_CONFLICT|TARGET_DENIED|REQUEST_FAILED|TIMEOUT|RESPONSE_INVALID|RESPONSE_TOO_LARGE)$/.test(reason) ? reason : 'AI_CONNECTION_REQUEST_FAILED';
     }
     await this.prisma.$transaction(async tx => {
-      await this.access(tx, actor, organizationId, 'configuration:manage'); await assertActiveAuthentication(tx, actor);
+      await this.access(tx, actor, organizationId, 'ai:applications:test'); await assertActiveAuthentication(tx, actor);
       const row = await this.row(tx, organizationId, id); this.match(row, preparation.version);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AI_APPLICATION_TESTED', resourceType: 'AiApplication', resourceId: id,
         outcome: text === null ? 'FAILURE' : 'SUCCESS', traceId, metadata: { resourceVersion: row.version, reasonCode: code } }, tx);
@@ -204,14 +204,15 @@ export class AiApplicationService {
     if (!organization || organization.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired) adminError('ORGANIZATION_DISABLED', 403);
   }
-  private async access(tx: AdminTransaction, actor: AdminActor, organizationId: string, permission = 'configuration:read') {
+  private async access(tx: AdminTransaction, actor: AdminActor, organizationId: string, permission = 'ai:applications:read') {
     if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(tx, actor, organizationId, permission); await this.organization(tx, organizationId);
   }
   private mutate<Result>(actor: AdminActor, organizationId: string, action: string, payload: object, traceId: string, key: string | undefined, work: (tx: AdminTransaction) => Promise<Result>) {
     applicationIdentifiers(organizationId);
     if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
-    return this.mutations.run({ actor, organizationId, action, payload: { organizationId, ...payload }, permission: 'configuration:manage', traceId, key }, work, tx => this.organization(tx, organizationId, true));
+    const permission = action === 'AI_APPLICATION_PUBLISHED' ? 'ai:applications:publish' : action === 'AI_APPLICATION_TESTED' ? 'ai:applications:test' : 'ai:applications:manage';
+    return this.mutations.run({ actor, organizationId, action, payload: { organizationId, ...payload }, permission, traceId, key }, work, tx => this.organization(tx, organizationId, true));
   }
   private record(tx: AdminTransaction, actor: AdminActor, row: ApplicationRow, action: string, traceId: string) {
     return this.audit.record({ organizationId: row.organization_id, actorUserId: actor.id, action, resourceType: 'AiApplication', resourceId: row.id, outcome: 'SUCCESS', traceId,

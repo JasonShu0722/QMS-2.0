@@ -78,22 +78,39 @@ it('mounts the separate responsibility recovery view only under verified reconfi
 
 it.each([401, 403])('unmounts sensitive management projections after a real user-row delete returns %s', async status => {
   const org = { ...organization, permissions: [...organization.permissions, 'account:users:delete'] };
-  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => json(path.includes('/organizations/context?')
+  const fetcher = vi.fn(async (path: string, init?: RequestInit) => json(path.includes('/organizations/context?')
     ? { ...context('org-a', true), permissions: org.permissions }
     : path.endsWith('/csrf') ? { csrfToken: 'csrf' }
       : init?.method === 'DELETE' ? { code: 'FEATURE_PERMISSION_DENIED' }
-        : [{ id: '33333333-3333-4333-8333-333333333333', organizationId: 'org-a', securityVersion: 3, username: 'sensitive-user', fullName: 'Sensitive Name', email: 'sensitive@example.test', accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: '组织 A' } }], init?.method === 'DELETE' ? status : 200)));
+        : [{ id: '33333333-3333-4333-8333-333333333333', organizationId: 'org-a', securityVersion: 3, username: 'sensitive-user', fullName: 'Sensitive Name', email: 'sensitive@example.test', accountType: 'INTERNAL', status: 'ACTIVE', mfaEnabled: false, organization: { id: 'org-a', code: 'A', name: '组织 A' } }], init?.method === 'DELETE' ? status : 200));
+  vi.stubGlobal('fetch', fetcher);
   render(page([org]));
-  const button = await screen.findByRole('button', { name: '永久删除用户' });
+  const row = within((await screen.findByText('sensitive-user')).closest('tr')!);
+  const manage = row.getByText('管理用户', { selector: 'button > span' }).closest('button')!;
+  expect(manage).toHaveAccessibleName('管理用户');
+  fireEvent.click(manage);
+  const managerElement = await screen.findByLabelText('管理用户', { selector: '[role="dialog"]' });
+  await waitFor(() => expect(managerElement).toBeVisible());
+  const manager = within(managerElement);
+  const lifecycle = manager.getByText('状态与删除', { selector: '[role="tab"]' });
+  fireEvent.click(lifecycle);
+  expect(lifecycle).toHaveAttribute('aria-selected', 'true');
+  const button = manager.getByText('永久删除用户', { selector: 'button > span' }).closest('button')!;
+  expect(button).toHaveAccessibleName('永久删除用户');
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
-  const dialog = await screen.findByRole('dialog');
+  const dialog = await screen.findByLabelText('永久删除用户', { selector: '[role="dialog"]' });
   await waitFor(() => expect(dialog).toBeVisible());
-  fireEvent.click(within(dialog).getByRole('button', { name: '确认永久删除' }));
+  const confirm = within(dialog).getByText('确认永久删除', { selector: 'button > span' }).closest('button')!;
+  expect(confirm).toHaveAccessibleName('确认永久删除');
+  fireEvent.click(confirm);
   expect(await screen.findByText('管理身份已失效，请刷新权限后重试')).toBeVisible();
   expect(screen.queryByText('sensitive@example.test')).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: '用户' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '创建用户' })).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toMatchObject([
+    ['/api/v1/admin/users/33333333-3333-4333-8333-333333333333?organizationId=org-a', { body: JSON.stringify({ expectedSecurityVersion: 3 }) }],
+  ]);
 });
 
 it.each([200, 403])('irreversibly retires a pending context after principal A-B-A even when the old response is %s', async status => {

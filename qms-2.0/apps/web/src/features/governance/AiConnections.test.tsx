@@ -11,7 +11,7 @@ import { AiConnections } from './AiConnections';
 const mutate = vi.fn();
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn() }));
 vi.mock('./ProcessOperationSectors', () => ({ ProcessOperationSectors: () => <div>工序板块规则</div> }));
-const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL', permissions: ['configuration:read', 'configuration:manage'] } as const;
+const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL', permissions: ['ai:connections:read', 'ai:connections:manage', 'ai:connections:test', 'ai:credentials:manage'] } as const;
 const connection = { id: 'ai-1', organizationId: 'org', name: '生产描述', baseUrl: 'https://models.example.com/v1', models: ['quality-model', 'quality-fast'], defaultModel: 'quality-model', enabled: true, hasKey: true, version: 2, createdAt: '2026-11-16T00:00:00Z', updatedAt: '2026-11-16T00:00:00Z' };
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development'); localStorage.clear();
@@ -34,11 +34,29 @@ function mount(permissions: string[] = [...organization.permissions], leave?: ()
 }
 
 it('platform configuration retains process mappings and does not mount model channels', async () => {
-  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: [...organization.permissions] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: ['configuration:read', 'process-quality:configuration:read'] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   await screen.findByText('系统参数');
   expect(screen.queryByText('AI连接')).not.toBeInTheDocument();
   expect(screen.getByText('工序板块规则')).toBeInTheDocument();
   expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('/ai-connections'), expect.anything());
+});
+it('opens only process mappings for a specialist without fetching platform settings', async () => {
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: ['process-quality:configuration:read'] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  expect(screen.getByText('工序板块规则')).toBeInTheDocument();
+  expect(screen.queryByText('系统参数')).not.toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalled();
+});
+it('lets a settings manager edit metadata without credentials or test controls', async () => {
+  mount(['ai:connections:read', 'ai:connections:manage']);
+  const dialog = await edit();
+  expect(dialog.queryByLabelText('API密钥')).not.toBeInTheDocument();
+  fireEvent.change(dialog.getByLabelText('连接名称'), { target: { value: '仅配置更新' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+  expect(mutate.mock.calls[0][2]).not.toHaveProperty('apiKey');
+  expect(screen.queryByRole('button', { name: '新增AI连接' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '测试连接' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '清除密钥' })).not.toBeInTheDocument();
 });
 
 it('protocol changes require a new write-only key and offer all four supported protocols', async () => {
@@ -107,7 +125,7 @@ it('AI connection retries a private original request after an unknown outcome', 
 it('AI connection hides management from readers and retires an ABA identity response', async () => {
   let resolve!: (value: unknown) => void;
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/ai-connections') ? new Promise(done => { resolve = done; }) : path.includes('/settings') ? { notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 1 } as never : [] as never);
-  mount(['configuration:read']);
+  mount(['ai:connections:read']);
   expect(screen.queryByRole('button', { name: '新增AI连接' })).not.toBeInTheDocument();
   act(() => { useWorkTabsStore.getState().bindSession('INTERNAL:org:another'); useWorkTabsStore.getState().bindSession('INTERNAL:org:user'); });
   await act(async () => resolve([connection]));
@@ -123,7 +141,7 @@ it('AI connection never renders provider error content when a known write fails'
   expect(document.body.textContent).not.toContain('fixture-secret-write-only');
 });
 it('AI connection reader sees safe metadata without management actions', async () => {
-  mount(['configuration:read']);
+  mount(['ai:connections:read']);
   const row = (await screen.findByText('生产描述', { selector: 'td' })).closest('tr')!;
   expect(within(row).getByText('已配置')).toBeVisible();
   expect(within(row).queryByRole('button')).not.toBeInTheDocument();

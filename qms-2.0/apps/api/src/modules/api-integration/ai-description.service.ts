@@ -59,7 +59,6 @@ export class AiDescriptionService {
 
   async validateConnection(tx: AdminTransaction, actor: AdminActor, connectionId: string) {
     const organizationId = integrationScope(actor);
-    await assertAdminAccess(tx, actor, organizationId, 'configuration:read');
     return this.connections.resolve(organizationId, connectionId, tx);
   }
 
@@ -237,7 +236,7 @@ export class AiDescriptionService {
           await this.access(tx, task.actor_snapshot);
           const state = await this.defects.aiDescriptionState(tx, task.actor_snapshot, task.defect_id);
           const [rule] = await tx.$queryRaw<{ version: number; configuration: IngestionRule }[]>`SELECT version,configuration FROM integration_ingestion_rules WHERE organization_id=${task.organization_id}::uuid AND id=${task.rule_id}::uuid`;
-          if (rule?.version !== task.rule_version || state.descriptionInputVersion !== task.input_revision) status = 'STALE';
+          if (state.archivedAt || rule?.version !== task.rule_version || state.descriptionInputVersion !== task.input_revision) status = 'STALE';
           else if (text !== null) {
             const application = taskApplication(task, rule.configuration);
             if (application) await this.applications.assertAvailable(tx, task.organization_id, application.applicationId, application.publishedVersion, applicationAvailability);

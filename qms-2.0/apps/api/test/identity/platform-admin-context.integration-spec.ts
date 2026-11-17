@@ -7,7 +7,7 @@ import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
-import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../../src/modules/authorization/permission-catalog.js';
+import { ADMIN_PERMISSIONS, ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES, AI_CONFIGURATION_PERMISSIONS, PROCESS_CONFIGURATION_PERMISSIONS } from '../../src/modules/authorization/permission-catalog.js';
 import { effectiveRoleGrants } from '../../src/common/security/effective-role-grants.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 
@@ -16,7 +16,7 @@ if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_D
 }
 
 const path = '/api/v1/admin/organizations/context';
-const managementCodes = [...ADMIN_PERMISSIONS, ...ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, 'organization:read', 'component-project:read', 'component-project:manage', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'];
+const managementCodes = [...ADMIN_PERMISSIONS, ...ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES, ...AI_CONFIGURATION_PERMISSIONS, ...PROCESS_CONFIGURATION_PERMISSIONS, 'organization:read', 'component-project:read', 'component-project:manage', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'material-master:import', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write'];
 
 describe('REQ0031 read-only administrator context with real sessions, HTTP and PostgreSQL', () => {
   let app: INestApplication;

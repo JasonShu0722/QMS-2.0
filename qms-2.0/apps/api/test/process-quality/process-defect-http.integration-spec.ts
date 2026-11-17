@@ -29,7 +29,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     await prisma.organization.create({ data: { id: organizationId, code: `PD-HTTP-${organizationId.slice(0, 8)}`, name: 'Process HTTP', type: 'INTERNAL' } });
     await prisma.user.create({ data: { id: userId, organizationId, username: `pqe-${userId.slice(0, 8)}`, passwordHash: 'test-only', accountType: 'INTERNAL' } });
     const role = await prisma.role.create({ data: { organizationId, code: 'PQE', name: 'Process QE' } });
-    for (const code of ['process-quality:defects:read', 'process-quality:defects:write']) {
+    for (const code of ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete']) {
       const permission = await prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
     }
@@ -51,7 +51,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     const listed = await request(app.getHttpServer()).get('/api/v1/process-quality/defects?batchCode=HTTP-B').set('Cookie', cookie).expect(200);
     expect(listed.body.items.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
     await send('put', `defects/${created.body.id}`, { expectedVersion: 1, description: '复测毛刺' }).expect(200);
-    await send('put', `defects/${created.body.id}/archive`, { expectedVersion: 2 }).expect(200);
+    await send('put', `defects/${created.body.id}/archive`, { expectedVersion: 2, reason: '登记错误确认删除' }).expect(200);
     const hidden = await request(app.getHttpServer()).get('/api/v1/process-quality/defects?batchCode=HTTP-B').set('Cookie', cookie).expect(200);
     expect(hidden.body.items.some((item: { id: string }) => item.id === created.body.id)).toBe(false);
   });

@@ -142,7 +142,7 @@ describe('global material governance forward migration with real PostgreSQL', ()
     expect(await grants(roleIds.globalGovernance!)).toEqual([]);
     expect(await grants(roleIds.scopedGovernance!)).toEqual(materialCodes);
     const catalog = await roles.catalog(actor);
-    expect(catalog[0]!.modules.find((module) => module.key === 'material-master')!.operations.every((operation) => !operation.grantable)).toBe(true);
+    expect(catalog.find((group) => group.key === 'platform')!.modules.find((module) => module.key === 'material-master')!.operations.every((operation) => !operation.grantable)).toBe(true);
     await expect(roles.create(actor, { organizationId: internal, code: 'SELF_GRANT', name: 'Self grant', permissionCodes: materialCodes }, randomUUID(), randomUUID()))
       .rejects.toMatchObject({ status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } });
     await expect(roles.assign(actor, internalUser, { roleIds: [roleIds.scopedGovernance!] }, randomUUID(), randomUUID()))
@@ -170,7 +170,7 @@ describe('global material governance forward migration with real PostgreSQL', ()
 
     it('makes material permissions grantable through the real role service without changing global-role immutability', async () => {
       const catalog = await roles.catalog(actor);
-      expect(catalog[0]!.modules.find((module) => module.key === 'material-master')!.operations.every((operation) => operation.grantable)).toBe(true);
+      expect(catalog.find((group) => group.key === 'platform')!.modules.find((module) => module.key === 'material-master')!.operations.every((operation) => operation.grantable)).toBe(true);
       const created = await roles.create(actor, { organizationId: internal, code: 'MATERIAL_DELEGATED', name: 'Material delegated', permissionCodes: materialCodes }, randomUUID(), randomUUID());
       expect(created.permissions.map((permission) => permission.code)).toEqual(materialCodes);
       await expect(roles.assign(actor, internalUser, { roleIds: [created.id] }, randomUUID(), randomUUID()))

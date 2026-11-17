@@ -8,8 +8,8 @@ import { AiApplicationDto, AiApplicationPageDto, AiApplicationQueryDto, AiApplic
 import { AiConnectionVersionDto } from './ai-connection.dto.js';
 import { AiApplicationService } from './ai-application.service.js';
 
-const readAccess = { featurePermission: 'configuration:read', organizationScope: { source: 'query' as const, field: 'organizationId', optional: true } };
-const writeAccess = { ...readAccess, featurePermission: 'configuration:manage' };
+const readAccess = { featurePermission: 'ai:applications:read', organizationScope: { source: 'query' as const, field: 'organizationId', optional: true } };
+const writeAccess = { ...readAccess, featurePermission: 'ai:applications:manage' };
 
 @Controller('api/v1/admin/ai-applications')
 @ApiCookieAuth('qms_session')
@@ -28,10 +28,10 @@ export class AiApplicationController {
   @Patch(':id') @Header('Cache-Control', 'no-store') @RequireAccess(writeAccess) @ApiOkResponse({ type: AiApplicationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   update(@Param('id', ParseUUIDPipe) id: string, @Query() _query: AiApplicationQueryDto, @Body() input: UpdateAiApplicationDto, @Req() request: AuthorizedRequest) { return this.applications.update(this.actor(request), request.authorizedOrganizationId!, id, input, requestTraceId(request), request.get('Idempotency-Key')); }
-  @Post(':id/publish') @Header('Cache-Control', 'no-store') @RequireAccess(writeAccess) @ApiCreatedResponse({ type: AiApplicationDto })
+  @Post(':id/publish') @Header('Cache-Control', 'no-store') @RequireAccess({ ...readAccess, featurePermission: 'ai:applications:publish' }) @ApiCreatedResponse({ type: AiApplicationDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   publish(@Param('id', ParseUUIDPipe) id: string, @Query() _query: AiApplicationQueryDto, @Body() input: AiConnectionVersionDto, @Req() request: AuthorizedRequest) { return this.applications.publish(this.actor(request), request.authorizedOrganizationId!, id, input, requestTraceId(request), request.get('Idempotency-Key')); }
-  @Post(':id/test') @Header('Cache-Control', 'no-store') @RequireAccess(writeAccess) @ApiCreatedResponse({ type: AiApplicationTestResultDto })
+  @Post(':id/test') @Header('Cache-Control', 'no-store') @RequireAccess({ ...readAccess, featurePermission: 'ai:applications:test' }) @ApiCreatedResponse({ type: AiApplicationTestResultDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   test(@Param('id', ParseUUIDPipe) id: string, @Query() _query: AiApplicationQueryDto, @Body() input: TestAiApplicationDto, @Req() request: AuthorizedRequest) { return this.applications.test(this.actor(request), request.authorizedOrganizationId!, id, input, requestTraceId(request), request.get('Idempotency-Key')); }
   private actor(request: AuthorizedRequest) { return { ...request[AUTHENTICATED_SESSION]!.user, sessionId: request[AUTHENTICATED_SESSION]!.id }; }

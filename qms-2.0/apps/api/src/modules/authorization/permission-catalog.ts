@@ -2,6 +2,8 @@ export const PLATFORM_ADMINISTRATOR_PERMISSION = 'platform:admin';
 export const CONSOLE_OBSERVATION_READ_PERMISSIONS = ['console:api:read', 'console:exchanges:read', 'console:services:read'];
 export const INTEGRATION_PERMISSIONS = ['integration:read', 'integration:manage', 'integration:credentials:manage', 'integration:receipts:read', 'integration:payload:read'];
 export const INGESTION_PERMISSIONS = ['ingestion:read', 'ingestion:manage', 'ingestion:run'];
+export const AI_CONFIGURATION_PERMISSIONS = ['ai:connections:read', 'ai:connections:manage', 'ai:connections:test', 'ai:credentials:manage', 'ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test'];
+export const PROCESS_CONFIGURATION_PERMISSIONS = ['process-quality:configuration:read', 'process-quality:configuration:manage'];
 export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
   'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
 ];
@@ -24,6 +26,16 @@ const operation = (code: string, name: string, enforcement: Operation['enforceme
 const planned = (key: string, name: string, names: string[]): Group => ({ key, name, status: 'planned', modules: names.map((moduleName, index) => ({ key: `${key}-${index + 1}`, name: moduleName, status: 'planned', operations: [] })) });
 
 export const PERMISSION_CATALOG: Group[] = [
+  { key: 'ai', name: 'AI管理', status: 'active', modules: [
+    { key: 'ai-connections', name: '模型渠道', status: 'active', operations: [
+      operation('ai:connections:read', '查看模型渠道'), operation('ai:connections:manage', '维护模型渠道'),
+      operation('ai:credentials:manage', '维护AI渠道密钥'), operation('ai:connections:test', '测试模型渠道'),
+    ] },
+    { key: 'ai-applications', name: '提示词应用', status: 'active', operations: [
+      operation('ai:applications:read', '查看和引用提示词应用'), operation('ai:applications:manage', '维护提示词应用草稿'),
+      operation('ai:applications:publish', '发布提示词应用'), operation('ai:applications:test', '试运行提示词应用'),
+    ] },
+  ] },
   { key: 'platform', name: '平台功能', status: 'active', modules: [
     { key: 'api-ingestion', name: 'API入库衔接', status: 'active', operations: [
       operation('ingestion:read', '查看API入库规则与结果'), operation('ingestion:manage', '配置API入库规则'), operation('ingestion:run', '执行导入、队列控制与差异确认'),
@@ -62,9 +74,13 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'supplier-pcn', name: '供应商 PCN', status: 'active', operations: [operation('supplier-pcn:requests:read', '查看供应商 PCN'), operation('supplier-pcn:requests:approve', '审批供应商 PCN'), operation('supplier-pcn:submissions:read', '查看本企业 PCN'), operation('supplier-pcn:submissions:write', '提交本企业 PCN')] },
   ] },
   { key: 'process', name: '制程质量', status: 'active', modules: [
+    { key: 'process-configuration', name: '工序板块映射', status: 'active', operations: [
+      operation('process-quality:configuration:read', '查看工序板块映射'), operation('process-quality:configuration:manage', '维护工序板块映射'),
+    ] },
     { key: 'process-defects', name: '制程不良品台账', status: 'active', operations: [
       operation('process-quality:defects:read', '查看制程不良品台账'),
       operation('process-quality:defects:write', '维护制程不良品台账'),
+      operation('process-quality:defects:delete', '删除制程不良品台账'),
       operation('process-quality:defects:close', '关闭及恢复制程台账'),
       operation('process-quality:materials:review', '复核本人负责的物料不良'),
     ] },

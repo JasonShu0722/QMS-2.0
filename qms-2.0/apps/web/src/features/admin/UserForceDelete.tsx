@@ -14,6 +14,7 @@ export type UserForceDeleteProps = {
   onRefresh?: () => void;
   onDenied?: (error: ApiError) => void;
   disabled?: boolean;
+  onPendingChanged?: (pending: boolean) => void;
   deletePath?: string;
 };
 
@@ -25,7 +26,7 @@ export function UserForceDelete(props: UserForceDeleteProps) {
   return props.canDelete ? <DeleteScope key={JSON.stringify([session, props.target.organizationId, props.target.id, props.deletePath])} {...props} session={session} /> : null;
 }
 
-function DeleteScope({ target, disabled, onDeleted, onRefresh, onDenied, session, deletePath }: UserForceDeleteProps & { session?: string }) {
+function DeleteScope({ target, disabled, onDeleted, onRefresh, onDenied, onPendingChanged, session, deletePath }: UserForceDeleteProps & { session?: string }) {
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [baseline, setBaseline] = useState<UserForceDeleteProps['target']>();
@@ -42,6 +43,7 @@ function DeleteScope({ target, disabled, onDeleted, onRefresh, onDenied, session
   const mutate = useRef(createAdminMutation({ replayAfterReauthentication: false }));
   useNavigationBusy(busy);
   useUnsavedChanges(unknown);
+  useLayoutEffect(() => { onPendingChanged?.(busy || unknown); return () => onPendingChanged?.(false); }, [busy, unknown, onPendingChanged]);
   function clearCommand() {
     attempt.current = undefined;
     mutate.current = createAdminMutation({ replayAfterReauthentication: false });
@@ -125,7 +127,7 @@ function DeleteScope({ target, disabled, onDeleted, onRefresh, onDenied, session
   const reauthenticated = error instanceof ApiError && error.code === 'CLIENT_REAUTHENTICATION_COMPLETED';
   return <>
     <Button size="small" danger disabled={disabled || busy || invalidated || !validVersion} onClick={open}>{t('永久删除用户')}</Button>
-    <Modal title={t('永久删除用户')} open={!!baseline} onCancel={close} onOk={() => void confirm()} okText={t('确认永久删除')} cancelText={t('取消')} confirmLoading={busy} okButtonProps={{ danger: true, disabled: disabled || busy || unknown || blocked || !!error }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} destroyOnHidden footer={(_origin, { OkBtn, CancelBtn }) => <div className="qms-dialog-actions"><CancelBtn /><OkBtn /></div>}>
+    <Modal zIndex={1100} title={t('永久删除用户')} open={!!baseline} onCancel={close} onOk={() => void confirm()} okText={t('确认永久删除')} cancelText={t('取消')} confirmLoading={busy} okButtonProps={{ danger: true, disabled: disabled || busy || unknown || blocked || !!error }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} destroyOnHidden footer={(_origin, { OkBtn, CancelBtn }) => <div className="qms-dialog-actions"><CancelBtn /><OkBtn /></div>}>
       {baseline && <>
         <Typography.Paragraph strong>{baseline.username}</Typography.Paragraph>
         <Alert type="warning" showIcon title={t('永久删除当前账号，不可通过启用恢复。')} description={t('撤销当前凭证和有效任职，解除当前配置；保留历史签章、审批、业务及审计记录，不改写原签署人。')} />

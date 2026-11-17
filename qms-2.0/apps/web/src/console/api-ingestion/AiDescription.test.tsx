@@ -21,7 +21,7 @@ const receiptId = '55555555-5555-4555-8555-555555555555';
 const rule: Rule = { id: '44444444-4444-4444-8444-444444444444', organizationId: org, name: '制程规则', endpointId, target: 'PROCESS_DEFECT', enabled: false, match: 'ALL', conditions: [], mapping: { traceCode: 'barcode' }, mode: 'INSERT_ONLY', updateFields: [], version: 2, creatorId: 'actor', updatedAt: '2026-11-16T00:00:00Z', sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } };
 const application = { id: 'app-1', organizationId: org, name: '制程描述应用', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '现象' }], connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', output: { mode: 'JSON', field: 'aggregate', target: 'description' }, fallback: 'DIRECT', version: 3, publishedVersion: 2 };
 const binding = { applicationId: 'app-1', publishedVersion: 1, inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }] };
-function scope(): IntegrationScope { return { organizationId: org, session: `INTERNAL:${org}:actor`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run', 'configuration:read'], deny: mocks.deny }; }
+function scope(): IntegrationScope { return { organizationId: org, session: `INTERNAL:${org}:actor`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run', 'ai:applications:read'], deny: mocks.deny }; }
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); localStorage.clear();
   useWorkTabsStore.getState().bindSession(`INTERNAL:${org}:actor`);

@@ -7,6 +7,7 @@ import type { AdminOrganization, AdminUser } from './admin';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LanguageProvider } from '../../i18n/Language';
 import { UserMfaPolicy } from './UserMfaPolicy';
+import { openUserManagement } from './user-management-test-helpers';
 
 const organization: AdminOrganization = { id: 'org', code: 'org', name: 'Organization', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:reset'] };
 const user: AdminUser = { securityVersion: 1, fullName: null, phone: null, profileVersion: 1, emailVerifiedAt: null, id: 'u', username: 'alice', email: null, accountType: 'INTERNAL', status: 'ACTIVE', organizationId: 'org', organization: { id: 'org', code: 'org', name: 'Organization' }, mfaEnabled: false, createdAt: '', updatedAt: '' };
@@ -15,18 +16,22 @@ const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLe
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 function page(org = organization) { return <MemoryRouter initialEntries={['/admin']}><Routes><Route path="/admin" element={<UserAdministration organization={org} organizations={[org]} />} /><Route path="/login" element={<p>Login destination</p>} /></Routes></MemoryRouter>; }
 async function confirmSave() {
-  const save = within(screen.getByRole('dialog')).getByRole('button', { name: '保存 MFA 设置' });
-  await userEvent.click(save);
+  const save = within(screen.getByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' })).getByText('保存 MFA 设置', { selector: 'button > span' }).closest('button')!;
+  expect(save).toHaveAccessibleName('保存 MFA 设置');
+  fireEvent.click(save);
   const confirm = (await screen.findByText('确认保存', { selector: 'button > span' })).closest('button')!;
   await waitFor(() => expect(confirm).toBeVisible());
   expect(confirm).toHaveAccessibleName('确认保存');
-  await userEvent.click(confirm);
+  fireEvent.click(confirm);
 }
 async function openPolicy() {
+  await openUserManagement('账号安全');
   const action = (await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!;
   expect(action).toHaveAccessibleName('MFA 设置');
-  await userEvent.click(action);
-  return screen.getByRole('dialog');
+  fireEvent.click(action);
+  const dialog = screen.getByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' });
+  expect(dialog).toHaveAccessibleName('alice · MFA 设置');
+  return dialog;
 }
 beforeEach(() => { localStorage.clear(); useWorkTabsStore.getState().reset(); });
 afterEach(() => vi.unstubAllGlobals());
@@ -39,7 +44,7 @@ it('translates the policy state, security confirmation and conflict recovery', a
     return json(path.includes('mfa-policy') ? policy : [user]);
   }));
   render(<LanguageProvider><MemoryRouter><UserMfaPolicy user={user} organizationId={organization.id} canWrite onSaved={vi.fn()} onClose={vi.fn()} /></MemoryRouter></LanguageProvider>);
-  await screen.findByRole('dialog', { name: 'alice · MFA settings' });
+  await screen.findByLabelText('alice · MFA settings', { selector: '[role="dialog"]' });
   expect(await screen.findByText('Default policy')).toBeInTheDocument();
   expect(screen.getByText('Authenticator binding')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('switch', { name: 'Require MFA' }));
@@ -54,24 +59,26 @@ it('loads target MFA policy only after opening the user action and shows actual 
   const fetcher = vi.fn(async (path: string) => json(path.includes('mfa-policy') ? policy : [user]));
   vi.stubGlobal('fetch', fetcher);
   render(page());
+  await openUserManagement('账号安全');
   const action = (await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!;
   expect(action).toHaveAccessibleName('MFA 设置');
   expect(fetcher.mock.calls.some(([path]) => path.includes('mfa-policy'))).toBe(false);
-  await userEvent.click(action);
+  fireEvent.click(action);
   expect(await screen.findByText('默认策略')).toBeInTheDocument();
   expect(screen.getByText('已绑定')).toBeInTheDocument();
-  expect(screen.getByRole('switch', { name: '要求 MFA' })).not.toBeChecked();
-  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  const dialog = within(screen.getByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' }));
+  expect(dialog.getByLabelText('要求 MFA', { selector: 'button[role="switch"]' })).not.toBeChecked();
+  expect(dialog.queryByRole('textbox')).not.toBeInTheDocument();
 });
 
 it('permits read-only policy inspection without exposing mutation or factor controls', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('mfa-policy') ? { ...policy, required: true, override: true } : [user])));
   render(page({ ...organization, permissions: ['account:users:read'] }));
-  await openPolicy();
+  const dialog = within(await openPolicy());
   expect(await screen.findByText('账号配置')).toBeInTheDocument();
-  expect(screen.getByRole('switch', { name: '要求 MFA' })).toBeDisabled();
+  expect(dialog.getByLabelText('要求 MFA', { selector: 'button[role="switch"]' })).toBeDisabled();
   expect(screen.getByText('没有重置用户权限，仅可查看 MFA 设置。')).toBeInTheDocument();
-  for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('保存 MFA 设置');
+  expect(dialog.queryByRole('button', { name: '保存 MFA 设置' })).not.toBeInTheDocument();
   expect(screen.queryByText('解绑验证器')).not.toBeInTheDocument();
 });
 
@@ -82,9 +89,10 @@ it('retries a failed initial policy read without displaying backend details', as
   const dialog = within(await openPolicy());
   expect(await screen.findByText('请求被拒绝，请检查权限和填写内容后重试')).toBeInTheDocument();
   expect(screen.queryByText('backend secret')).not.toBeInTheDocument();
-  const reload = dialog.getByRole('button', { name: '重新加载 MFA 设置' });
-  await userEvent.click(reload);
-  expect(await screen.findByRole('switch', { name: '要求 MFA' })).toBeEnabled();
+  const reload = dialog.getByText('重新加载 MFA 设置', { selector: 'button > span' }).closest('button')!;
+  expect(reload).toHaveAccessibleName('重新加载 MFA 设置');
+  fireEvent.click(reload);
+  expect(await dialog.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' })).toBeEnabled();
 });
 
 it('preserves failed draft and reuses its idempotency key until content changes', async () => {
@@ -96,16 +104,16 @@ it('preserves failed draft and reuses its idempotency key until content changes'
   }));
   render(page());
   await openPolicy();
-  const required = await screen.findByRole('switch', { name: '要求 MFA' });
+  const required = await screen.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' });
   await userEvent.click(required);
   await confirmSave();
   expect(await screen.findByText('请检查填写内容')).toBeInTheDocument();
-  expect(screen.getByRole('switch', { name: '要求 MFA' })).toBeChecked();
+  expect(required).toBeChecked();
   await confirmSave();
   await waitFor(() => expect(writes).toHaveLength(2));
   expect(writes[0].headers).toEqual(writes[1].headers);
   expect(JSON.parse(String(writes[0].body))).toEqual({ required: true, expectedSecurityVersion: 4 });
-  await userEvent.click(screen.getByRole('switch', { name: '要求 MFA' }));
+  await userEvent.click(required);
   await confirmSave();
   await waitFor(() => expect(writes).toHaveLength(3));
   expect((writes[2].headers as Record<string, string>)['Idempotency-Key']).not.toBe((writes[0].headers as Record<string, string>)['Idempotency-Key']);
@@ -120,15 +128,16 @@ it('requires explicit concurrency refresh and retains the draft with the latest 
     return json(path.includes('mfa-policy') ? { ...policy, securityVersion: ++reads === 1 ? 4 : 6 } : [user]);
   }));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await userEvent.click(await screen.findByRole('switch', { name: '要求 MFA' }));
+  const dialog = within(await openPolicy());
+  await userEvent.click(await dialog.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' }));
   await confirmSave();
   expect(await screen.findByText('设置已更新，请重新加载后再保存。当前选择会保留。')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '保存 MFA 设置' })).toBeDisabled();
+  const save = dialog.getByText('保存 MFA 设置', { selector: 'button > span' }).closest('button')!;
+  expect(save).toBeDisabled();
   expect(reads).toBe(1);
-  await userEvent.click(screen.getByRole('button', { name: '重新加载 MFA 设置' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: '保存 MFA 设置' })).toBeEnabled());
-  expect(screen.getByRole('switch', { name: '要求 MFA' })).toBeChecked();
+  fireEvent.click(dialog.getByText('重新加载 MFA 设置', { selector: 'button > span' }).closest('button')!);
+  await waitFor(() => expect(dialog.getByText('保存 MFA 设置', { selector: 'button > span' }).closest('button')).toBeEnabled());
+  expect(dialog.getByLabelText('要求 MFA', { selector: 'button[role="switch"]' })).toBeChecked();
   await confirmSave();
   await waitFor(() => expect(writes).toHaveLength(2));
   expect(JSON.parse(String(writes[1].body)).expectedSecurityVersion).toBe(6);
@@ -138,8 +147,8 @@ it('isolates a pending read when organization changes and ignores its late respo
   let resolveRead: (response: Response) => void = () => {};
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.includes('mfa-policy') ? new Promise<Response>((resolve) => { resolveRead = resolve; }) : json([user])));
   const view = render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  await openPolicy();
+  expect(screen.getByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' })).toBeInTheDocument();
   view.rerender(page({ ...organization, id: 'other-org' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   resolveRead(json(policy));
@@ -150,9 +159,9 @@ it('allows closing a pending policy read and ignores the late response', async (
   let resolveRead: (response: Response) => void = () => {};
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.includes('mfa-policy') ? new Promise<Response>((resolve) => { resolveRead = resolve; }) : json([user])));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await openPolicy();
+  fireEvent.click(within(screen.getByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' })).getByLabelText('Close', { selector: 'button' }));
+  await waitFor(() => expect(screen.queryByLabelText('alice · MFA 设置', { selector: '[role="dialog"]' })).not.toBeInTheDocument());
   resolveRead(json(policy));
   expect(screen.queryByRole('switch', { name: '要求 MFA' })).not.toBeInTheDocument();
 });
@@ -166,8 +175,8 @@ it('clears work tabs and replaces the route when changing the current account re
     return json(path.includes('mfa-policy') ? { ...policy, ...(init.method === 'PUT' ? { selfSessionRevoked: true, required: true } : {}) } : [user]);
   }));
   render(page());
-  await userEvent.click(await screen.findByRole('button', { name: 'MFA 设置' }));
-  await userEvent.click(await screen.findByRole('switch', { name: '要求 MFA' }));
+  await openPolicy();
+  await userEvent.click(await screen.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' }));
   await confirmSave();
   expect(await screen.findByText('Login destination')).toBeInTheDocument();
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
@@ -183,15 +192,14 @@ it('refreshes policy and user list after saving another account and keeps the di
     userReads++; return json([user]);
   }));
   render(page());
-  await userEvent.click((await screen.findByText('MFA 设置', { selector: 'button > span' })).closest('button')!);
-  const dialog = within(await screen.findByRole('dialog'));
+  const dialog = within(await openPolicy());
   const required = await dialog.findByLabelText('要求 MFA', { selector: 'button[role="switch"]' });
   await waitFor(() => expect(required).toBeEnabled());
   await userEvent.click(required);
-  await userEvent.click(dialog.getByRole('button', { name: '保存 MFA 设置' }));
-  await userEvent.click((await screen.findByText('确认保存', { selector: 'button > span' })).closest('button')!);
+  fireEvent.click(dialog.getByText('保存 MFA 设置', { selector: 'button > span' }).closest('button')!);
+  fireEvent.click((await screen.findByText('确认保存', { selector: 'button > span' })).closest('button')!);
   expect(await screen.findByText('MFA 设置已保存')).toBeInTheDocument();
   await waitFor(() => expect(policyReads).toBe(2));
   expect(userReads).toBe(2);
-  expect(within(screen.getByRole('dialog')).getByText('账号配置')).toBeInTheDocument();
+  expect(dialog.getByText('账号配置')).toBeInTheDocument();
 });

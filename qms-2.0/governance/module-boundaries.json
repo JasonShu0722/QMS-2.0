@@ -66,6 +66,8 @@
     "process-quality -> supplier-quality",
     "process-quality -> task-notification",
     "process-quality -> problem-index",
+    "process-quality -> new-product-quality",
+    "process-quality -> supplier-eight-d-source",
     "process-quality -> workflow",
     "quality-data -> authorization",
     "quality-data -> problem-index",

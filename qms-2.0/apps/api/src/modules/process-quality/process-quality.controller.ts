@@ -9,8 +9,9 @@ import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
 import { ProcessIssueService } from './process-issue.service.js';
 import { ProcessProductionService } from './process-production.service.js';
 import { ProcessShipmentReportService } from './process-shipment-report.service.js';
+import { DeleteProcessDefectsDto, DeleteLegacyProcessDefectDto, PreviewProcessDefectDeletionDto, ProcessDefectDeletionPreviewDto, ProcessDefectDeletionResultDto } from './process-quality.dto.js';
 import { ClassifyProcessDefectDto, ClassifyProcessDefectsDto, CloseProcessDefectDto, ReopenProcessDefectDto, VerifyProcessDefectMaterialDto, ProcessDefectClassificationResultDto, ProcessMaterialSqePageDto, ProcessMaterialSqeQueryDto } from './process-quality.dto.js';
-import { ArchiveProcessDefectDto, ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
+import { ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -133,6 +134,20 @@ export class ProcessQualityController {
   @RequireAccess({ featurePermission: 'process-quality:defects:read', organizationScope: queryScope })
   materialSqes(@Req() request: Request, @Query() query: ProcessMaterialSqeQueryDto) { return this.service.materialSqes(actor(request), query); }
 
+  @Post('defects/deletion-preview') @ApiCreatedResponse({ type: ProcessDefectDeletionPreviewDto })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:delete', organizationScope: bodyScope })
+  deletionPreview(@Req() request: Request, @Body() body: PreviewProcessDefectDeletionDto) {
+    return this.service.previewDeletion(actor(request), body);
+  }
+
+  @Post('defects/deletion') @ApiCreatedResponse({ type: ProcessDefectDeletionResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:defects:delete', organizationScope: bodyScope })
+  deleteDefects(@Req() request: Request, @Body() body: DeleteProcessDefectsDto, @Headers('idempotency-key') key?: string) {
+    return this.service.deleteDefects(actor(request), body, requestTraceId(request), key);
+  }
+
   @Put('defects/classification') @ApiOkResponse({ type: ProcessDefectClassificationResultDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'process-quality:defects:write', organizationScope: bodyScope })
@@ -181,9 +196,9 @@ export class ProcessQualityController {
 
   @Put('defects/:id/archive') @ApiOkResponse({ type: ProcessDefectDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
-  @RequireAccess({ featurePermission: 'process-quality:defects:write', organizationScope: bodyScope })
-  archive(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: ArchiveProcessDefectDto, @Headers('idempotency-key') key?: string) {
-    return this.service.archive(actor(request), id, body.expectedVersion, requestTraceId(request), key);
+  @RequireAccess({ featurePermission: 'process-quality:defects:delete', organizationScope: bodyScope })
+  archive(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: DeleteLegacyProcessDefectDto, @Headers('idempotency-key') key?: string) {
+    return this.service.archive(actor(request), id, body.expectedVersion, requestTraceId(request), key, body.reason);
   }
 
   @Post('issues') @ApiCreatedResponse({ type: ProcessIssueResultDto })

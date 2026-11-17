@@ -104,7 +104,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -190,7 +190,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -254,7 +254,7 @@
           },
           {
             "path": "docs/CAPABILITY-STATUS.md",
-            "sha256": "47fd670445243eeaad325878d99af30329b1bb846fb433dcf5eba5a6e4e33255"
+            "sha256": "3fe671f0fbffbf030f367770ec9205772b0d25d3945d5988c9b06edff3899559"
           },
           {
             "path": "README.md",
@@ -266,7 +266,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
@@ -534,7 +534,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "d952c69d768d81bdc5922eabe0c3ae65afa1c7045b826531e36564da1751319f"
+            "sha256": "27d36569686071c67462a363105d6f258ebe6b3378e0a0ff0c171e67ff96aaa0"
           },
           {
             "path": "apps/web/component-project-preview.html",
@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "b3d245e04f5fb159b46c1442ee603c5ff3f79de732b074655251e9b95adc603b"
+            "sha256": "9b95c4b61e3873ced08a1b608552b0d6798dd9e9bf65ad83daecdaa9e1248ffd"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
@@ -714,7 +714,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
-            "sha256": "b3aa38d7298f91b0badd011e089cf93a63e94313e4817dd835df7e9be9385fe1"
+            "sha256": "aa222fa0e2f469d32da423c0146288f52d2f3f626e193e04228b03c2db7b4296"
           },
           {
             "path": "apps/web/src/ui/ledger/model.test.ts",
@@ -996,7 +996,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -1128,7 +1128,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -1162,7 +1162,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -1238,7 +1238,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bb19f8897981cca9d104a944bf659fe5d3a547d47756700079ac9a1b957a6daa"
+            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",

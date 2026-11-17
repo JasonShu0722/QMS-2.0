@@ -137,7 +137,7 @@ export class IngestionService {
       const preservesAi = Boolean(current?.configuration.aiDescription && !configuration.enabled && (configuration.aiDescription || configuration.aiApplication)
         && (!configuration.aiApplication || unchangedBinding) && (!configuration.aiDescription || aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription)));
       const configurationReadRequired = Boolean(configuration.aiDescription || configuration.aiApplication || current?.configuration.aiDescription || current?.configuration.aiApplication) && !preservesAi;
-      if (configurationReadRequired) await assertAdminAccess(tx, actor, organizationId, 'configuration:read');
+      if (configurationReadRequired) await assertAdminAccess(tx, actor, organizationId, 'ai:applications:read');
       if (configuration.aiDescription || configuration.aiApplication) {
         if (!this.ai) ingestionError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
         if (preservesAi) {
@@ -171,7 +171,7 @@ export class IngestionService {
     }, undefined, async (tx, saved) => {
       await assertIntegrationOrganization(tx, organizationId);
       if (saved.configurationReadRequired === true || saved.configurationReadRequired === undefined && (saved.aiDescription || saved.aiApplication)) {
-        await assertAdminAccess(tx, actor, organizationId, 'configuration:read');
+        await assertAdminAccess(tx, actor, organizationId, 'ai:applications:read');
       }
     });
     const { configurationReadRequired: _configurationReadRequired, ...saved } = result;
@@ -234,6 +234,7 @@ export class IngestionService {
       throw error;
     }
     if (!current) return { action: 'INSERTED', fields: targetFields, differences: [], current: null, sourceUpdatedAt: parsed.sourceUpdatedAt };
+    if ('deleted' in current && current.deleted) return { action: 'EXISTING_SKIPPED', differences: [], current, sourceUpdatedAt: parsed.sourceUpdatedAt, errorCode: 'PROCESS_DEFECT_ARCHIVED' };
     const { permitted, differences, issues } = proposedChanges(rule, parsed.fields, current);
     const processValues = current.values as ProcessDefectIntegrationFields, processSource = parsed.fields as ProcessDefectIntegrationFields;
     if (this.ai && rule.target === 'PROCESS_DEFECT' && rule.aiDescription && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes('description'))) {
