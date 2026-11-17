@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsString, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
-import type { AiFailureCode } from './ai-connection.policy.js';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsString, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { aiConnectionProtocols, type AiConnectionProtocol, type AiFailureCode } from './ai-connection.policy.js';
 
 export class AiConnectionSettingsDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @Length(1, 120) name!: string;
   @ApiProperty({ maxLength: 500 }) @IsString() @Length(1, 500) baseUrl!: string;
+  @ApiPropertyOptional({ enum: aiConnectionProtocols, default: 'OPENAI_CHAT_COMPLETIONS' })
+  @ValidateIf((_object, value) => value !== undefined) @IsIn(aiConnectionProtocols) protocol?: AiConnectionProtocol;
   @ApiProperty({ type: [String], minItems: 1, maxItems: 30, uniqueItems: true })
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @ArrayUnique() @IsString({ each: true }) @Length(1, 120, { each: true }) models!: string[];
   @ApiProperty({ maxLength: 120 }) @IsString() @Length(1, 120) defaultModel!: string;
@@ -26,6 +28,7 @@ export class AiConnectionDto {
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
   @ApiProperty() name!: string;
   @ApiProperty() baseUrl!: string;
+  @ApiProperty({ enum: aiConnectionProtocols }) protocol!: AiConnectionProtocol;
   @ApiProperty({ type: [String] }) models!: string[];
   @ApiProperty() defaultModel!: string;
   @ApiProperty() enabled!: boolean;

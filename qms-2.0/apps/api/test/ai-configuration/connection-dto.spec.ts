@@ -12,6 +12,12 @@ describe('AI connection write-only input DTO', () => {
     expect(await validate(plainToInstance(CreateAiConnectionDto, value))).toHaveLength(0);
     expect(await validate(plainToInstance(CreateAiConnectionDto, { ...value, apiKey: '' }))).not.toHaveLength(0);
   });
+  it('allows only the four optional explicit protocols while retaining legacy input', async () => {
+    for (const protocol of ['OPENAI_CHAT_COMPLETIONS', 'OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT']) {
+      expect(await validate(plainToInstance(CreateAiConnectionDto, { ...value, protocol }), { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+    }
+    for (const protocol of [null, '', 'SYSTEM_ONE']) expect(await validate(plainToInstance(CreateAiConnectionDto, { ...value, protocol }))).not.toHaveLength(0);
+  });
   it('accepts a blank replacement as keep and rejects nulls, stale-shaped versions and extra fields', async () => {
     expect(await validate(plainToInstance(UpdateAiConnectionDto, { ...value, expectedVersion: 1, apiKey: '' }))).toHaveLength(0);
     for (const invalid of [{ apiKey: null }, { name: null }, { expectedVersion: 0 }, { expectedVersion: 2147483648 }, { enabled: 'true' }, { models: [] }, { models: ['same', 'same'] }, { defaultModel: '' }, { secretCiphertext: 'no' }]) {

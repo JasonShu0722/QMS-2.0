@@ -41,10 +41,16 @@ describe('AI connection destination boundary', () => {
 describe('AI channel models and bounded selected facts', () => {
   const settings = { name: '渠道', baseUrl: 'https://models.example/v1', models: ['model-a', 'model-b'], defaultModel: 'model-a', enabled: true };
   it('accepts a channel with several named models and rejects unlisted defaults or duplicate models', () => {
-    expect(policy.normalizeAiSettings(settings)).toEqual(settings);
+    expect(policy.normalizeAiSettings(settings)).toEqual({ ...settings, protocol: 'OPENAI_CHAT_COMPLETIONS' });
     for (const invalid of [{ models: [] }, { models: ['model-a', 'model-a'] }, { defaultModel: 'unknown' }, { models: [' bad-model '] }, { enabled: 'true' }, { name: ' ' }]) {
       expect(() => policy.normalizeAiSettings({ ...settings, ...invalid })).toThrow();
     }
+  });
+  it('accepts only the four explicit protocols and rejects null or invented protocol values', () => {
+    for (const protocol of ['OPENAI_CHAT_COMPLETIONS', 'OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT']) {
+      expect(policy.normalizeAiSettings({ ...settings, protocol })).toMatchObject({ protocol });
+    }
+    for (const protocol of [null, '', 'SYSTEM_ONE', 'openai', 1]) expect(() => policy.normalizeAiSettings({ ...settings, protocol })).toThrow();
   });
   it('keeps facts as data and refuses empty, oversized or executable-shaped inputs', () => {
     const input = { model: 'model-b', prompt: '只汇总已给事实。', selectedData: [{ label: '现象', value: '0' }, { label: '', value: 'false' }] };

@@ -26,11 +26,16 @@ it('distinguishes audit permission failures from an empty result and hides unaut
 });
 
 it('uses generated configuration data for a read-only organization', async () => {
-  vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('/settings') ? { organizationId: organization.id, notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 1 } : [])));
+  const fetchMock = vi.fn(async (path: string) => json(path.includes('/settings') ? { organizationId: organization.id, notificationLocale: 'zh-CN', exportRetentionMinutes: 60, version: 1 } : []));
+  vi.stubGlobal('fetch', fetchMock);
   render(<ConfigurationAdministration organization={organization} />);
   await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
   expect(screen.getByLabelText('导出保留时间（分钟）')).toBeDisabled();
-  expect(screen.getAllByRole('button', { name: '列设置' })).toHaveLength(4);
+  expect(screen.getAllByRole('button', { name: '列设置' })).toHaveLength(3);
+  for (const title of ['通知规则', '工序板块规则', '岗位类别']) expect(screen.getByText(title, { selector: '.ant-card-head-title' })).toBeInTheDocument();
+  expect(screen.queryByText('AI连接')).not.toBeInTheDocument();
+  expect(screen.queryByText('提示词应用')).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([path]) => /\/ai-(connections|applications)(?:[/?]|$)/.test(path))).toBe(false);
 });
 
 it('retries the exact write once after server-requested reauthentication', async () => {

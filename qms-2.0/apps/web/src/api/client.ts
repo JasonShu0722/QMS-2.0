@@ -107,6 +107,7 @@ export function getAdminUser(organizationId: string, userId: string): Promise<co
 
 type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schemas']['UpdateAdminUserDto'] |
   components['schemas']['CreateAiConnectionDto'] | components['schemas']['UpdateAiConnectionDto'] |
+  components['schemas']['AiApplicationSettingsDto'] | components['schemas']['UpdateAiApplicationDto'] | components['schemas']['TestAiApplicationDto'] |
   components['schemas']['AiConnectionVersionDto'] | components['schemas']['AiDescriptionTaskActionDto'] |
   components['schemas']['ProcessOperationSectorInputDto'] | components['schemas']['UpdateProcessOperationSectorDto'] |
   components['schemas']['SaveIngestionRuleDto'] | components['schemas']['UpdateIngestionRuleDto'] |

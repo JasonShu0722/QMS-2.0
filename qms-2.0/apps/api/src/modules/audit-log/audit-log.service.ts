@@ -54,6 +54,7 @@ const configurationIdKeys = new Set([
 ]);
 const configurationDateKeys = new Set(['validFrom', 'validTo', 'previousValidFrom', 'previousValidTo']);
 const SAFE_METADATA_KEYS = new Set([
+  'protocol', 'publishedVersion',
   'rowIndex', 'ruleVersion', 'receiptCount', 'rowCount', 'result', 'target', 'action', 'enabled', 'reprocessed',
   ...Object.keys(configurationTextLimits), ...configurationIdKeys,
   'componentProjectStage', 'previousComponentProjectStage', 'previousStatus',
@@ -126,6 +127,8 @@ export class AuditLogService {
   }
 
   private isSafeConfigurationValue(key: string, value: Prisma.InputJsonValue | null | undefined): boolean {
+    if (key === 'protocol') return ['OPENAI_CHAT_COMPLETIONS', 'OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT'].includes(String(value));
+    if (key === 'publishedVersion') return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 2147483647;
     if (key === 'enabled' || key === 'reprocessed') return typeof value === 'boolean';
     if (key === 'receiptCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
     if (key === 'rowCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

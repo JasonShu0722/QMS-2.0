@@ -10,7 +10,7 @@ import { AiConnections } from './AiConnections';
 
 const mutate = vi.fn();
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn() }));
-vi.mock('./ProcessOperationSectors', () => ({ ProcessOperationSectors: () => null }));
+vi.mock('./ProcessOperationSectors', () => ({ ProcessOperationSectors: () => <div>工序板块规则</div> }));
 const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL', permissions: ['configuration:read', 'configuration:manage'] } as const;
 const connection = { id: 'ai-1', organizationId: 'org', name: '生产描述', baseUrl: 'https://models.example.com/v1', models: ['quality-model', 'quality-fast'], defaultModel: 'quality-model', enabled: true, hasKey: true, version: 2, createdAt: '2026-11-16T00:00:00Z', updatedAt: '2026-11-16T00:00:00Z' };
 beforeEach(() => {
@@ -30,8 +30,32 @@ function NavigationProbe({ leave }: { leave: () => void }) {
   return <button onClick={() => requestLeave(leave)}>离开AI配置</button>;
 }
 function mount(permissions: string[] = [...organization.permissions], leave?: () => void) {
-  return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions }} />{leave ? <NavigationProbe leave={leave} /> : null}</UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><AiConnections organization={{ ...organization, permissions }} />{leave ? <NavigationProbe leave={leave} /> : null}</UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
 }
+
+it('platform configuration retains process mappings and does not mount model channels', async () => {
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: [...organization.permissions] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  await screen.findByText('系统参数');
+  expect(screen.queryByText('AI连接')).not.toBeInTheDocument();
+  expect(screen.getByText('工序板块规则')).toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('/ai-connections'), expect.anything());
+});
+
+it('protocol changes require a new write-only key and offer all four supported protocols', async () => {
+  mount(); const dialog = await edit();
+  const protocol = dialog.getByLabelText('渠道协议');
+  fireEvent.keyDown(protocol, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 });
+  expect(protocol).toHaveAttribute('aria-expanded', 'true');
+  for (const label of ['OpenAI Chat Completions', 'OpenAI Responses', 'Anthropic Messages', 'Gemini Generate Content']) expect(await screen.findByText(label, { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Anthropic Messages', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  expect(await dialog.findByText('更换渠道协议时请填写新密钥')).toBeVisible();
+  expect(mutate).not.toHaveBeenCalled();
+  fireEvent.change(dialog.getByLabelText('API密钥'), { target: { value: 'fixture-secret-write-only' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+  expect(mutate.mock.calls[0][2]).toMatchObject({ protocol: 'ANTHROPIC_MESSAGES', apiKey: 'fixture-secret-write-only' });
+});
 async function edit() {
   const row = (await screen.findByText('生产描述', { selector: 'td' })).closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: /^编\s*辑$/ }));
@@ -50,7 +74,7 @@ it('AI connection keeps saved keys write-only and binds a replacement to a chang
   fireEvent.change(dialog.getByLabelText('API密钥'), { target: { value: 'fixture-secret-write-only' } });
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
-  expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/admin/ai-connections/ai-1?organizationId=org', 'PATCH', { name: '生产描述', baseUrl: 'https://other.example.com/v1', models: ['quality-model', 'quality-fast'], defaultModel: 'quality-model', enabled: true, apiKey: 'fixture-secret-write-only', expectedVersion: 2 }]);
+  expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/admin/ai-connections/ai-1?organizationId=org', 'PATCH', { name: '生产描述', baseUrl: 'https://other.example.com/v1', protocol: 'OPENAI_CHAT_COMPLETIONS', models: ['quality-model', 'quality-fast'], defaultModel: 'quality-model', enabled: true, apiKey: 'fixture-secret-write-only', expectedVersion: 2 }]);
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'AI连接' })).not.toBeInTheDocument());
   expect(document.body.textContent).not.toContain('fixture-secret-write-only');
   expect(JSON.stringify(localStorage)).not.toContain('fixture-secret-write-only');

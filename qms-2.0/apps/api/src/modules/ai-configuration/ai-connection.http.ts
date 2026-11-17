@@ -4,7 +4,8 @@ import { request as httpRequest } from 'node:http';
 import { isIP, type LookupFunction } from 'node:net';
 import { HttpException } from '@nestjs/common';
 import type { AiDescriptionOutput } from '../../common/ai-description.js';
-import { aiConnectionError, isDisposableAiLoopback, normalizeAiBaseUrl, normalizeAiOutput, pinAiAddresses } from './ai-connection.policy.js';
+import { aiConnectionError, isDisposableAiLoopback, normalizeAiBaseUrl, normalizeAiOutput, normalizeAiProtocol, pinAiAddresses, type AiConnectionProtocol } from './ai-connection.policy.js';
+import { aiProtocolRequest, aiProtocolText } from './ai-connection.protocol.js';
 
 export type AiMessage = { role: 'system' | 'user'; content: string };
 const maximumResponseBytes = 65536;
@@ -31,12 +32,14 @@ export async function resolveAiDestination(baseUrl: string) {
   }
 }
 
-export async function requestAiText(baseUrl: string, apiKey: string, model: string, messages: AiMessage[], output?: AiDescriptionOutput): Promise<string> {
+export async function requestAiText(baseUrl: string, apiKey: string, model: string, messages: AiMessage[], output?: AiDescriptionOutput, protocol?: AiConnectionProtocol): Promise<string> {
   const format = normalizeAiOutput(output);
+  const adapter = normalizeAiProtocol(protocol);
+  const request = aiProtocolRequest(adapter, apiKey, model, messages, format);
   const target = await resolveAiDestination(baseUrl);
-  const body = JSON.stringify({ model, messages, stream: false, max_tokens: 1000, ...(format.mode === 'JSON' ? { response_format: { type: 'json_object' } } : {}) });
+  const body = JSON.stringify(request.body);
   if (Buffer.byteLength(body) > 65536 || !apiKey || /[\r\n\u0000]/.test(apiKey)) aiConnectionError('AI_CONNECTION_INVALID', 400);
-  const url = new URL(`${target.url.toString().replace(/\/+$/, '')}/chat/completions`);
+  const url = new URL(`${target.url.toString().replace(/\/+$/, '')}/${request.path}`);
   const pinnedLookup: LookupFunction = (hostname, options, callback) => {
     if (hostname !== target.hostname) { callback(new Error('AI_CONNECTION_TARGET_DENIED'), '', 0); return; }
     if (options.all) callback(null, [{ address: target.address, family: target.family }]);
@@ -56,7 +59,7 @@ export async function requestAiText(baseUrl: string, apiKey: string, model: stri
       method: 'POST', agent: false, lookup: pinnedLookup, autoSelectFamily: false,
       ...(url.protocol === 'https:' && !isIP(target.hostname) ? { servername: target.hostname } : {}),
       maxHeaderSize: 8192,
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), accept: 'application/json' },
+      headers: { ...request.headers, 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), accept: 'application/json' },
     };
     const outbound = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, requestOptions, response => {
       if (response.statusCode !== 200) { fail('AI_CONNECTION_REQUEST_FAILED'); response.destroy(); return; }
@@ -84,14 +87,10 @@ export async function requestAiText(baseUrl: string, apiKey: string, model: stri
   });
   try {
     const parsed: unknown = JSON.parse(raw);
-    const result = parsed as { choices?: Array<{ finish_reason?: string; message?: { content?: unknown; tool_calls?: unknown; function_call?: unknown } }> };
-    const choice = result?.choices?.[0];
-    const message = choice?.message;
-    if (!Array.isArray(result?.choices) || result.choices.length !== 1 || !message || message.tool_calls !== undefined || message.function_call !== undefined
-      || choice?.finish_reason && !['stop', 'STOP'].includes(choice.finish_reason) || typeof message.content !== 'string') throw new Error();
-    let selected: unknown = message.content;
+    const content = aiProtocolText(adapter, parsed);
+    let selected: unknown = content;
     if (format.mode === 'JSON') {
-      const structured: unknown = JSON.parse(message.content);
+      const structured: unknown = JSON.parse(content);
       if (!structured || typeof structured !== 'object' || Array.isArray(structured) || !Object.hasOwn(structured, format.field)) throw new Error();
       selected = (structured as Record<string, unknown>)[format.field];
     }

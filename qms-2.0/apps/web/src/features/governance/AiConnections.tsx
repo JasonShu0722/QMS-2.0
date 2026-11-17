@@ -15,6 +15,10 @@ type Update = components['schemas']['UpdateAiConnectionDto'];
 type TestResult = components['schemas']['AiConnectionTestDto'];
 type Command = { path: string; method: 'POST' | 'PATCH'; body: Create | Update | components['schemas']['AiConnectionVersionDto']; kind: 'save' | 'clear' | 'test' };
 const aiConnectionsPath = '/api/v1/admin/ai-connections';
+const protocols = [
+  { value: 'OPENAI_CHAT_COMPLETIONS', label: 'OpenAI Chat Completions' }, { value: 'OPENAI_RESPONSES', label: 'OpenAI Responses' },
+  { value: 'ANTHROPIC_MESSAGES', label: 'Anthropic Messages' }, { value: 'GEMINI_GENERATE_CONTENT', label: 'Gemini Generate Content' },
+];
 
 export function AiConnections({ organization }: { organization: AdminOrganization }) {
   return <ConnectionContent key={`${organization.id}:${organization.permissions.join(',')}`} organization={organization} />;
@@ -77,7 +81,7 @@ function ConnectionContent({ organization }: { organization: AdminOrganization }
   function save(values: Update) {
     if (locked || !editor) return;
     const record = editor.record;
-    const facts = { name: values.name.trim(), baseUrl: values.baseUrl.trim(), models: values.models.map(value => value.trim()), defaultModel: values.defaultModel.trim(), enabled: values.enabled };
+    const facts = { name: values.name.trim(), baseUrl: values.baseUrl.trim(), protocol: values.protocol ?? 'OPENAI_CHAT_COMPLETIONS', models: values.models.map(value => value.trim()), defaultModel: values.defaultModel.trim(), enabled: values.enabled };
     const key = values.apiKey ? { apiKey: values.apiKey } : {};
     void execute(record ? { path: scoped(`/${record.id}`), method: 'PATCH', body: { ...facts, ...key, expectedVersion: record.version }, kind: 'save' }
       : { path: scoped(), method: 'POST', body: { ...facts, apiKey: values.apiKey! }, kind: 'save' });
@@ -87,22 +91,24 @@ function ConnectionContent({ organization }: { organization: AdminOrganization }
   const feedback = error ? <Alert role="alert" type="error" title={unknown ? t('操作结果未知，请重试原请求。') : t(safeAccountError(error))} /> : null;
   if (retired) return <Alert type="warning" title={t('会话或配置权限已变化，请重新进入。')} />;
   if (!organization.permissions.includes('configuration:read')) return null;
-  return <Card title={t('AI连接')}>
-    <Space wrap><Button disabled={locked || loading} onClick={() => requestLeave(() => setRevision(value => value + 1))}>{t('刷新AI连接')}</Button>{manage ? <Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ enabled: false, models: [] }); setError(undefined); setEditor({}); }}>{t('新增AI连接')}</Button> : null}</Space>
+  return <Card>
+    <Space wrap><Button disabled={locked || loading} onClick={() => requestLeave(() => setRevision(value => value + 1))}>{t('刷新AI连接')}</Button>{manage ? <Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ enabled: false, models: [], protocol: 'OPENAI_CHAT_COMPLETIONS' }); setError(undefined); setEditor({}); }}>{t('新增AI连接')}</Button> : null}</Space>
     {!editor && !clearing ? <>{feedback}{retry}</> : null}
     <LedgerTable<Connection> ledgerId="ai-connections" organizationId={organization.id} requiredColumnKeys={['name', 'actions']} rowKey="id" loading={loading} dataSource={items} scroll={{ x: 800 }} pagination={{ current: page, pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
       { key: 'name', title: t('名称'), dataIndex: 'name' }, { key: 'baseUrl', title: t('服务API地址'), dataIndex: 'baseUrl' }, { key: 'models', title: t('模型'), render: (_, record) => record.models.join(' / ') },
+      { key: 'protocol', title: t('渠道协议'), render: (_, record) => protocols.find(protocol => protocol.value === (record.protocol ?? 'OPENAI_CHAT_COMPLETIONS'))?.label ?? '—' },
       { key: 'enabled', title: t('状态'), dataIndex: 'enabled', render: value => t(value ? '启用' : '停用') }, { key: 'hasKey', title: t('密钥状态'), dataIndex: 'hasKey', render: value => t(value ? '已配置' : '未配置') },
       { key: 'test', title: t('连接测试'), render: (_, record) => tests[record.id] ? <Tag color={tests[record.id].status === 'SUCCESS' ? 'success' : 'warning'}>{t(tests[record.id].status === 'SUCCESS' ? '测试成功' : '测试失败，请检查配置')}</Tag> : '—' },
-      { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ name: record.name, baseUrl: record.baseUrl, models: record.models, defaultModel: record.defaultModel, enabled: record.enabled, apiKey: '' }); setError(undefined); setEditor({ record }); }}>{t('编辑')}</Button><Button disabled={locked || !record.hasKey || !record.enabled} onClick={() => void execute({ path: scoped(`/${record.id}/test`), method: 'POST', body: { expectedVersion: record.version }, kind: 'test' })}>{t('测试连接')}</Button><Button danger disabled={locked || !record.hasKey} onClick={() => { setError(undefined); setClearing(record); }}>{t('清除密钥')}</Button></Space> : t('只读') },
+      { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ name: record.name, baseUrl: record.baseUrl, protocol: record.protocol ?? 'OPENAI_CHAT_COMPLETIONS', models: record.models, defaultModel: record.defaultModel, enabled: record.enabled, apiKey: '' }); setError(undefined); setEditor({ record }); }}>{t('编辑')}</Button><Button disabled={locked || !record.hasKey || !record.enabled} onClick={() => void execute({ path: scoped(`/${record.id}/test`), method: 'POST', body: { expectedVersion: record.version }, kind: 'test' })}>{t('测试连接')}</Button><Button danger disabled={locked || !record.hasKey} onClick={() => { setError(undefined); setClearing(record); }}>{t('清除密钥')}</Button></Space> : t('只读') },
     ]} />
     <Modal open={!!editor} title={t('AI连接')} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
       {feedback}<Form form={form} layout="vertical" disabled={locked} onValuesChange={() => setDirty(true)} onFinish={save}>
         <Form.Item name="name" label={t('连接名称')} rules={[{ required: true, whitespace: true }]}><Input maxLength={120} /></Form.Item>
+        <Form.Item name="protocol" label={t('渠道协议')} rules={[{ required: true }]}><Select options={protocols} /></Form.Item>
         <Form.Item name="baseUrl" label={t('服务API地址')} rules={[{ required: true, whitespace: true }, { type: 'url', message: t('请填写有效的HTTPS地址') }, { validator: async (_, value: string) => { if (value && !value.startsWith('https://')) throw new Error(t('请填写有效的HTTPS地址')); } }]}><Input maxLength={500} autoComplete="off" /></Form.Item>
         <Form.Item name="models" label={t('可用模型')} rules={[{ required: true, type: 'array', min: 1, max: 30 }]}><Select mode="tags" tokenSeparators={[',', '\n']} onChange={value => { if (!value.includes(form.getFieldValue('defaultModel'))) form.setFieldValue('defaultModel', value[0]); }} /></Form.Item>
         <Form.Item name="defaultModel" label={t('默认模型')} dependencies={['models']} rules={[{ required: true }, { validator: async (_, value: string) => { if (value && !form.getFieldValue('models')?.includes(value)) throw new Error(t('请选择可用模型')); } }]}><Select options={models.map((value: string) => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="apiKey" label={t('API密钥')} dependencies={['baseUrl']} extra={editor?.record?.hasKey ? t('留空保留已保存密钥') : undefined} rules={[{ validator: async (_, value: string) => { if (!value && (!editor?.record || form.getFieldValue('baseUrl')?.trim() !== editor.record.baseUrl)) throw new Error(t(editor?.record ? '更换服务地址时请填写新密钥' : '请填写API密钥')); } }]}><Input.Password visibilityToggle={false} maxLength={4096} autoComplete="new-password" /></Form.Item>
+        <Form.Item name="apiKey" label={t('API密钥')} dependencies={['baseUrl', 'protocol']} extra={editor?.record?.hasKey ? t('留空保留已保存密钥') : undefined} rules={[{ validator: async (_, value: string) => { if (value) return; if (!editor?.record) throw new Error(t('请填写API密钥')); if (form.getFieldValue('baseUrl')?.trim() !== editor.record.baseUrl) throw new Error(t('更换服务地址时请填写新密钥')); if (form.getFieldValue('protocol') !== (editor.record.protocol ?? 'OPENAI_CHAT_COMPLETIONS')) throw new Error(t('更换渠道协议时请填写新密钥')); } }]}><Input.Password visibilityToggle={false} maxLength={4096} autoComplete="new-password" /></Form.Item>
         <Form.Item name="enabled" label={t('启用连接')} valuePropName="checked"><Switch /></Form.Item>
         {!unknown ? <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button> : null}
       </Form>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Switch } from 'antd';
+import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Switch } from 'antd';
+import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Minus, Plus } from 'lucide-react';
 import type { components } from '@qms/contracts';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -9,7 +10,7 @@ import { IngestionError, ingestionPath, label, useIngestionMutation, useIngestio
 type Save = components['schemas']['SaveIngestionRuleDto'];
 type Condition = components['schemas']['IngestionConditionDto'];
 type ConditionValues = Omit<Condition, 'value'> & { valueType: 'string' | 'number' | 'boolean'; valueText?: string; scalar?: string | number | boolean };
-type Values = Omit<Save, 'conditions'> & { conditions: ConditionValues[]; descriptionMode: 'single' | 'multiple'; aiEnabled: boolean };
+type Values = Omit<Save, 'conditions' | 'aiDescription'> & { conditions: ConditionValues[]; descriptionMode: 'single' | 'multiple'; aiEnabled: boolean };
 const operators: Condition['operator'][] = ['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY'];
 const processFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
 
@@ -18,30 +19,56 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
   const [form] = Form.useForm<Values>(); const [dirty, setDirty] = useState(false);
   const mutation = useIngestionMutation(scope); const requestLeave = useNavigationGuard();
   const { read, current } = useScopedIntegrationRequests(scope);
-  const [connections, setConnections] = useState<components['schemas']['AiConnectionDto'][]>([]);
-  const [connectionsLoading, setConnectionsLoading] = useState(false); const [connectionsError, setConnectionsError] = useState<unknown>();
+  const [applications, setApplications] = useState<components['schemas']['AiApplicationDto'][]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false); const [applicationsError, setApplicationsError] = useState<unknown>();
+  const [applicationRevision, setApplicationRevision] = useState<components['schemas']['AiApplicationRevisionDto']>();
+  const [revisionLoading, setRevisionLoading] = useState(false); const [revisionError, setRevisionError] = useState<unknown>(); const [reload, setReload] = useState(0);
   useUnsavedChanges(dirty);
   const target = Form.useWatch('target', form) ?? rule?.target ?? 'SUPPLIER';
   const descriptionMode = Form.useWatch('descriptionMode', form) ?? (rule?.descriptionComposition ? 'multiple' : 'single');
-  const aiEnabled = Form.useWatch('aiEnabled', form) ?? !!rule?.aiDescription;
-  const connectionId = Form.useWatch(['aiDescription', 'connectionId'], form);
-  const outputMode = Form.useWatch(['aiDescription', 'output', 'mode'], form) ?? rule?.aiDescription?.output.mode ?? 'TEXT';
-  const selectedConnection = connections.find(connection => connection.id === connectionId);
+  const aiEnabled = Form.useWatch('aiEnabled', form) ?? !!(rule?.aiDescription || rule?.aiApplication);
+  const applicationId = Form.useWatch(['aiApplication', 'applicationId'], form) ?? rule?.aiApplication?.applicationId;
+  const publishedVersion = Form.useWatch(['aiApplication', 'publishedVersion'], form) ?? rule?.aiApplication?.publishedVersion;
+  const selectedApplication = applications.find(application => application.id === applicationId);
+  const originalBinding = !!rule?.aiApplication && rule.aiApplication.applicationId === applicationId && rule.aiApplication.publishedVersion === publishedVersion;
+  const effectiveRevision = applicationRevision && applicationRevision.applicationId === applicationId && applicationRevision.publishedVersion === publishedVersion ? applicationRevision : undefined;
+  const snapshot = effectiveRevision?.configuration ?? (originalBinding ? rule?.aiDescription : undefined);
+  const latest = selectedApplication?.publishedVersion ?? rule?.aiApplicationLatestVersion;
+  const canReadAi = scope.permissions.includes('configuration:read');
   useEffect(() => {
-    if (target !== 'PROCESS_DEFECT' || !aiEnabled) return;
-    let active = true; setConnectionsLoading(true); setConnectionsError(undefined);
-    void read<components['schemas']['AiConnectionDto'][]>('/api/v1/admin/ai-connections').then(result => {
-      if (!active || !current()) return;
-      if (!Array.isArray(result) || result.some(connection => connection.organizationId !== scope.organizationId)) { scope.deny(); return; }
-      setConnections(result);
-    }).catch(cause => { if (active && current()) setConnectionsError(cause); }).finally(() => { if (active && current()) setConnectionsLoading(false); });
+    if (target !== 'PROCESS_DEFECT' || !aiEnabled || !canReadAi) return;
+    let active = true; setApplicationsLoading(true); setApplicationsError(undefined);
+    void (async () => {
+      const items: components['schemas']['AiApplicationDto'][] = [];
+      let page = 1;
+      while (active && current()) {
+        const result = await read<components['schemas']['AiApplicationPageDto']>('/api/v1/admin/ai-applications', { page: String(page), limit: '100' });
+        if (!active || !current()) return;
+        if (!Array.isArray(result.items) || result.items.some(item => item.organizationId !== scope.organizationId) || result.page !== page || result.limit !== 100 || !Number.isSafeInteger(result.total) || result.total < 0 || result.items.length === 0 && items.length < result.total) { scope.deny(); return; }
+        items.push(...result.items);
+        if (items.length >= result.total) break;
+        page += 1;
+      }
+      if (active && current()) setApplications(items.filter(item => item.domain === 'PROCESS_QUALITY' && item.scene === 'PROCESS_DEFECT_DESCRIPTION'));
+    })().catch(cause => { if (active && current()) setApplicationsError(cause); }).finally(() => { if (active && current()) setApplicationsLoading(false); });
     return () => { active = false; };
-  }, [aiEnabled, target, read, current, scope.organizationId, scope.deny]);
-  const initialAiFields: NonNullable<Save['descriptionComposition']>['fields'] = rule?.descriptionComposition?.fields ?? (rule?.mapping.description ? [{ path: rule.mapping.description }] : []);
+  }, [aiEnabled, target, canReadAi, read, current, scope.organizationId, scope.deny, reload]);
+  useEffect(() => {
+    if (target !== 'PROCESS_DEFECT' || !aiEnabled || !canReadAi || !applicationId || !Number.isSafeInteger(publishedVersion) || publishedVersion < 1) return;
+    let active = true; setRevisionLoading(true); setRevisionError(undefined); setApplicationRevision(undefined);
+    void read<components['schemas']['AiApplicationRevisionDto']>(`/api/v1/admin/ai-applications/${encodeURIComponent(applicationId)}/revisions/${publishedVersion}`).then(result => {
+      if (!active || !current()) return;
+      if (result.organizationId !== scope.organizationId || result.applicationId !== applicationId || result.publishedVersion !== publishedVersion) { scope.deny(); return; }
+      setApplicationRevision(result);
+      const existing: NonNullable<Save['aiApplication']>['inputFields'] = form.getFieldValue(['aiApplication', 'inputFields']) ?? [];
+      form.setFieldValue(['aiApplication', 'inputFields'], result.configuration.variables.map(variable => { const saved = existing.find(field => field.variable === variable.variable); return { variable: variable.variable, label: saved?.label ?? variable.label, path: saved?.path ?? '' }; }));
+    }).catch(cause => { if (active && current()) setRevisionError(cause); }).finally(() => { if (active && current()) setRevisionLoading(false); });
+    return () => { active = false; };
+  }, [aiEnabled, target, canReadAi, applicationId, publishedVersion, read, current, scope.organizationId, scope.deny, form, reload]);
   const initial: Values = { organizationId: scope.organizationId, name: rule?.name ?? '', endpointId: rule?.endpointId ?? '', target: rule?.target ?? 'SUPPLIER', enabled: rule?.enabled ?? false,
     match: rule?.match ?? 'ALL', mapping: rule?.mapping ?? { code: '', name: '' }, mode: rule?.mode ?? 'INSERT_ONLY', updateFields: rule?.updateFields ?? [], sourceUpdatedAtField: rule?.sourceUpdatedAtField,
     sourceTimezone: rule?.sourceTimezone ?? 'Asia/Shanghai', descriptionMode: rule?.descriptionComposition ? 'multiple' : 'single', descriptionComposition: rule?.descriptionComposition ?? { fields: [{ path: '' }], separator: '\n' },
-    aiEnabled: !!rule?.aiDescription, aiDescription: rule?.aiDescription ?? { connectionId: '', model: '', prompt: '', inputFields: initialAiFields.map((field, index) => ({ path: field.path, label: field.label ?? field.path, variable: `field${index + 1}` })), output: { mode: 'TEXT', field: 'description', target: 'description' } },
+    aiEnabled: !!(rule?.aiDescription || rule?.aiApplication), aiApplication: rule?.aiApplication ?? { applicationId: '', publishedVersion: 1, inputFields: [] },
     conditions: (rule?.conditions ?? []).map(condition => { const sample = Array.isArray(condition.value) ? condition.value[0] : condition.value; return { path: condition.path, operator: condition.operator, valueType: typeof sample === 'number' ? 'number' : typeof sample === 'boolean' ? 'boolean' : 'string', valueText: Array.isArray(condition.value) ? condition.value.join('\n') : undefined, scalar: !Array.isArray(condition.value) && condition.value !== null ? typeof condition.value === 'boolean' ? String(condition.value) : condition.value : undefined }; }) };
   function save(values: Values) {
     if (mutation.locked) return;
@@ -56,7 +83,7 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
     const body: Save = { organizationId: scope.organizationId, name: values.name.trim(), endpointId: values.endpointId, target: values.target, enabled: values.enabled, match: values.match, conditions, mapping,
       mode: values.mode, updateFields: values.mode === 'INSERT_ONLY' ? [] : values.updateFields.filter(field => allowedFields.includes(field)),
       ...(process ? { sourceTimezone: values.sourceTimezone?.trim() || 'Asia/Shanghai', ...(values.descriptionMode === 'multiple' ? { descriptionComposition: { fields: (values.descriptionComposition?.fields ?? []).map(field => ({ path: field.path.trim(), ...(field.label?.trim() ? { label: field.label.trim() } : {}) })), separator: values.descriptionComposition?.separator ?? '\n' } } : {}) } : {}),
-      ...(process && values.aiEnabled && values.aiDescription ? { aiDescription: { connectionId: values.aiDescription.connectionId, model: values.aiDescription.model.trim(), prompt: values.aiDescription.prompt.trim(), inputFields: values.aiDescription.inputFields.map(field => ({ path: field.path.trim(), label: field.label?.trim() || field.path.trim(), variable: field.variable.trim() })), output: { mode: values.aiDescription.output.mode, target: 'description', field: values.aiDescription.output.mode === 'JSON' ? values.aiDescription.output.field.trim() : 'description' } } } : {}),
+      ...(process && values.aiEnabled && values.aiApplication ? { aiApplication: { applicationId: values.aiApplication.applicationId, publishedVersion: values.aiApplication.publishedVersion, inputFields: values.aiApplication.inputFields.map(field => ({ path: field.path.trim(), variable: field.variable, ...(field.label !== undefined ? { label: field.label } : {}) })) } } : {}),
       ...(values.sourceUpdatedAtField?.trim() ? { sourceUpdatedAtField: values.sourceUpdatedAtField.trim() } : {}) };
     const command = rule ? { path: `${ingestionPath}/rules/${rule.id}`, method: 'PATCH' as const, body: { ...body, expectedVersion: rule.version } satisfies components['schemas']['UpdateIngestionRuleDto'] }
       : { path: `${ingestionPath}/rules`, method: 'POST' as const, body };
@@ -115,29 +142,31 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
         </>}</Form.List>
       </>}
       {target === 'PROCESS_DEFECT' && <Card size="small" className="qms-ingestion-actions">
-        <Form.Item name="aiEnabled" label={text('AI整理', 'AI description')} valuePropName="checked"><Switch /></Form.Item>
+        <Form.Item name="aiEnabled" label={text('AI整理', 'AI description')} valuePropName="checked"><Switch disabled={mutation.locked || !canReadAi && !rule?.aiApplication} /></Form.Item>
         {aiEnabled && <>
-          <IngestionError error={connectionsError} />
+          <IngestionError error={applicationsError ?? revisionError} />
+          {applicationsError || revisionError ? <Button disabled={mutation.locked} onClick={() => setReload(value => value + 1)}>{text('重试应用读取', 'Retry application load')}</Button> : null}
           <div className="qms-ingestion-grid">
-            <Form.Item name={['aiDescription', 'connectionId']} label={text('AI连接', 'AI connection')} rules={[{ required: true }]}><Select loading={connectionsLoading} options={connections.map(connection => ({ value: connection.id, label: connection.name, disabled: !connection.enabled || !connection.hasKey }))} onChange={value => form.setFieldValue(['aiDescription', 'model'], connections.find(connection => connection.id === value)?.defaultModel)} /></Form.Item>
-            <Form.Item name={['aiDescription', 'model']} label={text('AI模型', 'AI model')} dependencies={[[ 'aiDescription', 'connectionId' ]]} rules={[{ required: true }, { validator: async (_, value: string) => { if (value && selectedConnection && !selectedConnection.models.includes(value)) throw new Error(text('请选择该连接的可用模型', 'Select an allowed model for this connection')); } }]}><Select showSearch options={(selectedConnection?.models ?? []).map(value => ({ value, label: value }))} /></Form.Item>
+            <Form.Item name={['aiApplication', 'applicationId']} label={text('提示词应用', 'Prompt application')} rules={[{ required: true }]}><Select disabled={mutation.locked || !canReadAi} showSearch optionFilterProp="label" loading={applicationsLoading} options={applications.map(application => ({ value: application.id, label: application.name, disabled: (!application.enabled || !application.publishedVersion) && application.id !== rule?.aiApplication?.applicationId }))} onChange={value => { form.setFieldValue(['aiApplication', 'publishedVersion'], applications.find(application => application.id === value)?.publishedVersion ?? 1); form.setFieldValue(['aiApplication', 'inputFields'], []); }} /></Form.Item>
+            <Form.Item name={['aiApplication', 'publishedVersion']} label={text('已发布版本', 'Published version')} rules={[{ required: true }, { type: 'integer', min: 1 }, { validator: async () => { if (!originalBinding && !effectiveRevision) throw new Error(text('请读取有效的已发布版本', 'Load a valid published version')); } }]}><InputNumber min={1} max={latest ?? undefined} precision={0} disabled={mutation.locked || !canReadAi || applicationsLoading || !applicationId} /></Form.Item>
           </div>
-          <Button disabled={mutation.locked} onClick={() => { const fields = form.getFieldValue('descriptionMode') === 'single' ? [{ path: form.getFieldValue(['mapping', 'description']) ?? '' }] : form.getFieldValue(['descriptionComposition', 'fields']) ?? []; form.setFieldValue(['aiDescription', 'inputFields'], fields.map((field: NonNullable<Save['descriptionComposition']>['fields'][number], index: number) => ({ path: field.path, label: field.label ?? field.path, variable: `field${index + 1}` }))); setDirty(true); }}>{text('复用描述来源字段', 'Reuse description fields')}</Button>
-          <Form.List name={['aiDescription', 'inputFields']} rules={[{ validator: async (_, fields) => { if (!fields?.length) throw new Error(text('请添加至少一个AI输入字段', 'Add at least one AI input field')); if (new Set(fields.map((field: { variable?: string }) => field.variable?.trim())).size !== fields.length) throw new Error(text('变量名不能重复', 'Variable names must be unique')); } }]}>{(fields, { add, remove }, { errors }) => <>
+          {latest && publishedVersion && latest > publishedVersion ? <Alert type="info" title={text(`已有新发布版本v${latest}，保存切换后新任务使用所选版本。`, `Published v${latest} is available. Save the selected version to use it for new jobs.`)} /> : null}
+          {canReadAi ? <Link to={`/console/ai-applications?organizationId=${encodeURIComponent(scope.organizationId)}`} onClick={event => { if (mutation.locked) event.preventDefault(); }}>{text('管理提示词应用', 'Manage prompt applications')}</Link> : null}
+          <Form.List name={['aiApplication', 'inputFields']} rules={[{ validator: async (_, fields) => { if (!fields?.length) throw new Error(text('请先选择应用和已发布版本', 'Select an application and published version')); } }]}>{(fields, _operations, { errors }) => <>
             {fields.map(field => <div className="qms-ingestion-description-row qms-ingestion-ai-row" key={field.key}>
-              <Form.Item name={[field.name, 'path']} label={text(`AI输入字段${field.name + 1}`, `AI input field ${field.name + 1}`)} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
-              <Form.Item name={[field.name, 'label']} label={text(`AI字段标签${field.name + 1}`, `AI field label ${field.name + 1}`)}><Input maxLength={100} /></Form.Item>
-              <Form.Item name={[field.name, 'variable']} label={text(`提示词变量${field.name + 1}`, `Prompt variable ${field.name + 1}`)} rules={[{ required: true }, { pattern: /^[A-Za-z][A-Za-z0-9_]*$/, message: text('使用字母开头的字母、数字或下划线', 'Start with a letter and use letters, digits or underscores') }]}><Input maxLength={64} /></Form.Item>
-              <Button icon={<Minus size={14} />} aria-label={text(`移除AI输入字段${field.name + 1}`, `Remove AI input field ${field.name + 1}`)} onClick={() => remove(field.name)} />
+              <Form.Item name={[field.name, 'path']} label={text(`IMS来源路径${field.name + 1}`, `IMS source path ${field.name + 1}`)} rules={[{ required: true, whitespace: true }]}><Input disabled={mutation.locked || !canReadAi} maxLength={200} /></Form.Item>
+              <Form.Item name={[field.name, 'label']} label={text(`变量标签${field.name + 1}`, `Variable label ${field.name + 1}`)}><Input readOnly /></Form.Item>
+              <Form.Item name={[field.name, 'variable']} label={text(`应用变量${field.name + 1}`, `Application variable ${field.name + 1}`)}><Input readOnly /></Form.Item>
             </div>)}
-            <Form.ErrorList errors={errors} /><Button icon={<Plus size={14} />} disabled={mutation.locked || fields.length >= 20} onClick={() => add({ path: '', label: '', variable: `field${fields.length + 1}` })}>{text('添加AI输入字段', 'Add AI input field')}</Button>
+            <Form.ErrorList errors={errors} />
           </>}</Form.List>
-          <Form.Item name={['aiDescription', 'prompt']} label={text('描述提示词', 'Description prompt')} extra={text('使用{{变量名}}引用上方输入字段', 'Use {{variable}} to reference selected input fields')} rules={[{ required: true, whitespace: true }]}><Input.TextArea rows={4} maxLength={4000} /></Form.Item>
+          {revisionLoading && !snapshot ? <p role="status">{text('读取发布版本', 'Loading published version')}</p> : null}
+          {snapshot ? <><Form.Item label={text('有效提示词', 'Effective prompt')}><Input.TextArea aria-label={text('有效提示词', 'Effective prompt')} readOnly value={snapshot.prompt} autoSize={{ minRows: 2, maxRows: 6 }} /></Form.Item>
           <div className="qms-ingestion-grid">
-            <Form.Item name={['aiDescription', 'output', 'mode']} label={text('模型输出格式', 'Model output format')}><Select options={[{ value: 'TEXT', label: text('纯文本', 'Plain text') }, { value: 'JSON', label: text('JSON字段', 'JSON field') }]} /></Form.Item>
-            {outputMode === 'JSON' && <Form.Item name={['aiDescription', 'output', 'field']} label={text('提取输出字段', 'Output field')} rules={[{ required: true, whitespace: true }]}><Input maxLength={100} /></Form.Item>}
+            <Form.Item label={text('有效模型', 'Effective model')}><Input aria-label={text('有效模型', 'Effective model')} readOnly value={snapshot.model} /></Form.Item>
+            <Form.Item label={text('有效输出字段', 'Effective output field')}><Input aria-label={text('有效输出字段', 'Effective output field')} readOnly value={snapshot.output.mode === 'JSON' ? snapshot.output.field : text('纯文本', 'Plain text')} /></Form.Item>
             <Form.Item label={text('输出目标', 'Output target')}><Input aria-label={text('输出目标', 'Output target')} readOnly value={text('不良描述', 'Defect description')} /></Form.Item>
-          </div>
+          </div></> : null}
         </>}
       </Card>}
       <Form.Item noStyle shouldUpdate={(before, after) => before.mode !== after.mode}>{({ getFieldValue }) => getFieldValue('mode') !== 'INSERT_ONLY' && <Form.Item name="updateFields" label={text('允许更新字段', 'Allowed update fields')} rules={[{ type: 'array', min: 1, message: text('请选择至少一个允许更新字段', 'Select at least one update field') }]}><Checkbox.Group options={fieldOptions} /></Form.Item>}</Form.Item>

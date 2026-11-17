@@ -10,6 +10,8 @@ import { AdminSupplierAccounts } from '../features/admin/AdminSupplierAccounts';
 import { OrganizationWorkspace } from '../features/governance/OrganizationWorkspace';
 import { ComponentProjectAdministration } from '../features/governance/ComponentProjectAdministration';
 import { ConfigurationAdministration } from '../features/governance/ConfigurationAdministration';
+import { AiConnections } from '../features/governance/AiConnections';
+import { AiApplications } from '../features/governance/AiApplications';
 import { AuditAdministration } from '../features/governance/AuditAdministration';
 import { OutboxAdministration } from '../features/governance/OutboxAdministration';
 import { AdministrativeReconfiguration } from '../features/governance/AdministrativeReconfiguration';
@@ -33,6 +35,7 @@ const required: Record<string, string[]> = {
   suppliers: ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'], customers: ['customer-quality:complaints:read', 'customer-quality:complaints:write'],
   materials: ['material-master:read', 'material-master:write', 'material-master:import'], 'component-projects': ['component-project:read', 'component-project:manage'],
   configuration: ['configuration:read'], 'audit-log': ['audit:read'], outbox: ['outbox:read'], reconfiguration: ['organization:reconfigure'],
+  'ai-connections': ['configuration:read'], 'ai-applications': ['configuration:read'],
   'problem-reconfiguration': ['organization:reconfigure'], 'supplier-accounts': ['account:users:delete'],
 };
 
@@ -143,6 +146,8 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
     case 'materials': return <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} />;
     case 'component-projects': return <ComponentProjectAdministration organization={organization} />;
     case 'configuration': return <ConfigurationAdministration organization={organization} />;
+    case 'ai-connections': return <AiConnections organization={organization} />;
+    case 'ai-applications': return <AiApplications organization={organization} />;
     case 'audit-log': return <AuditAdministration organization={organization} target={query.has('resourceId') ? { resourceType: query.get('resourceType')!, resourceId: query.get('resourceId')! } : undefined} />;
     case 'outbox': return <OutboxAdministration organization={organization} />;
     case 'reconfiguration': return <AdministrativeReconfiguration organization={organization} onChanged={changed} onDenied={denied} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER'

@@ -15,6 +15,12 @@ const messages = {
 } as const;
 export type AiFailureCode = keyof typeof messages;
 export function aiConnectionError(code: AiFailureCode, status: number): never { throw new HttpException({ code, message: messages[code] }, status); }
+export const aiConnectionProtocols = ['OPENAI_CHAT_COMPLETIONS', 'OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT'] as const;
+export type AiConnectionProtocol = typeof aiConnectionProtocols[number];
+export function normalizeAiProtocol(value: unknown = 'OPENAI_CHAT_COMPLETIONS'): AiConnectionProtocol {
+  if (!aiConnectionProtocols.includes(value as AiConnectionProtocol)) aiConnectionError('AI_CONNECTION_INVALID', 400);
+  return value as AiConnectionProtocol;
+}
 
 const denied = new BlockList();
 for (const [address, prefix] of [
@@ -66,14 +72,14 @@ function modelName(value: unknown): string {
   if (/\s/u.test(result)) aiConnectionError('AI_CONNECTION_INVALID', 400);
   return result;
 }
-export function normalizeAiSettings(value: unknown): { name: string; baseUrl: string; models: string[]; defaultModel: string; enabled: boolean } {
+export function normalizeAiSettings(value: unknown): { name: string; baseUrl: string; protocol: AiConnectionProtocol; models: string[]; defaultModel: string; enabled: boolean } {
   if (!value || typeof value !== 'object') aiConnectionError('AI_CONNECTION_INVALID', 400);
   const input = value as Record<string, unknown>;
   if (!Array.isArray(input.models) || input.models.length < 1 || input.models.length > 30 || typeof input.enabled !== 'boolean') aiConnectionError('AI_CONNECTION_INVALID', 400);
   const models = input.models.map(modelName);
   const defaultModel = modelName(input.defaultModel);
   if (new Set(models).size !== models.length || !models.includes(defaultModel)) aiConnectionError('AI_CONNECTION_INVALID', 400);
-  return { name: text(input.name, 120).trim(), baseUrl: normalizeAiBaseUrl(input.baseUrl as string), models, defaultModel, enabled: input.enabled };
+  return { name: text(input.name, 120).trim(), baseUrl: normalizeAiBaseUrl(input.baseUrl as string), protocol: normalizeAiProtocol(input.protocol), models, defaultModel, enabled: input.enabled };
 }
 export function normalizeAiOutput(value?: unknown): AiDescriptionOutput {
   if (value === undefined) return { mode: 'TEXT', field: 'description', target: 'description' };

@@ -19,11 +19,15 @@ const org = '11111111-1111-4111-8111-111111111111';
 const endpointId = '33333333-3333-4333-8333-333333333333';
 const receiptId = '55555555-5555-4555-8555-555555555555';
 const rule: Rule = { id: '44444444-4444-4444-8444-444444444444', organizationId: org, name: '制程规则', endpointId, target: 'PROCESS_DEFECT', enabled: false, match: 'ALL', conditions: [], mapping: { traceCode: 'barcode' }, mode: 'INSERT_ONLY', updateFields: [], version: 2, creatorId: 'actor', updatedAt: '2026-11-16T00:00:00Z', sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } };
+const application = { id: 'app-1', organizationId: org, name: '制程描述应用', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '现象' }], connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', output: { mode: 'JSON', field: 'aggregate', target: 'description' }, fallback: 'DIRECT', version: 3, publishedVersion: 2 };
+const binding = { applicationId: 'app-1', publishedVersion: 1, inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }] };
 function scope(): IntegrationScope { return { organizationId: org, session: `INTERNAL:${org}:actor`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run', 'configuration:read'], deny: mocks.deny }; }
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development'); vi.clearAllMocks(); localStorage.clear();
   useWorkTabsStore.getState().bindSession(`INTERNAL:${org}:actor`);
   vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/revisions/')) return { applicationId: 'app-1', organizationId: org, publishedVersion: Number(path.match(/revisions\/(\d+)/)?.[1]), configuration: application } as never;
+    if (path.includes('/ai-applications')) return { items: [application], total: 1, page: 1, limit: 100 } as never;
     if (path.includes('/ai-connections')) return [{ id: 'ai-1', organizationId: org, name: '质量模型', enabled: true, hasKey: true, models: ['quality-a', 'quality-b'], defaultModel: 'quality-a' }] as never;
     if (path.includes('/receipts?')) return { items: [{ id: receiptId, organizationId: org, endpointId, messageId: 'AI-MSG', receivedAt: '2026-11-16T00:00:00Z', bodyAvailable: true }], total: 1, page: 1, limit: 20 } as never;
     return { items: [], total: 0 } as never;
@@ -31,7 +35,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 function mount(children: ReactNode) { return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider>{children}</UnsavedChangesProvider></MemoryRouter></LanguageProvider>); }
-it('AI description stays opt-in and saves a chosen model, custom inputs and JSON output field', async () => {
+it('AI description stays opt-in and binds a published central application with IMS variable mappings', async () => {
   const user = userEvent.setup();
   mocks.mutate.mockResolvedValue({});
   mount(<RuleEditor scope={scope()} rule={rule} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
@@ -39,55 +43,71 @@ it('AI description stays opt-in and saves a chosen model, custom inputs and JSON
   const toggle = dialog.getByRole('switch', { name: 'AI整理' }); const ai = within(toggle.closest('.ant-card')!);
   expect(toggle).not.toBeChecked();
   await user.click(toggle);
-  fireEvent.mouseDown(await ai.findByLabelText('AI连接'));
-  await user.click(await screen.findByText('质量模型', { selector: '.ant-select-item-option-content' }));
-  fireEvent.mouseDown(ai.getByLabelText('AI模型'));
-  await user.click(await screen.findByText('quality-b', { selector: '.ant-select-item-option-content' }));
-  fireEvent.change(ai.getByLabelText('AI输入字段1'), { target: { value: 'errorName' } });
-  fireEvent.change(ai.getByLabelText('AI字段标签1'), { target: { value: '异常' } });
-  fireEvent.change(ai.getByLabelText('提示词变量1'), { target: { value: 'fault' } });
-  fireEvent.change(ai.getByLabelText('描述提示词'), { target: { value: '仅整理{{fault}}与{{field2}}' } });
-  fireEvent.mouseDown(ai.getByLabelText('模型输出格式'));
-  await user.click(await screen.findByText('JSON字段', { selector: '.ant-select-item-option-content' }));
-  fireEvent.change(ai.getByLabelText('提取输出字段'), { target: { value: 'aggregate' } });
+  fireEvent.mouseDown(await ai.findByLabelText('提示词应用'));
+  await user.click(await screen.findByText('制程描述应用', { selector: '.ant-select-item-option-content' }));
+  await waitFor(() => expect(ai.getByLabelText('已发布版本')).toHaveValue('2'));
+  fireEvent.change(await ai.findByLabelText('IMS来源路径1'), { target: { value: 'errorName' } });
+  expect(ai.queryByLabelText('描述提示词')).not.toBeInTheDocument();
+  expect(ai.getByRole('link', { name: '管理提示词应用' })).toHaveAttribute('href', `/console/ai-applications?organizationId=${org}`);
   await user.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
-  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ aiDescription: { connectionId: 'ai-1', model: 'quality-b', prompt: '仅整理{{fault}}与{{field2}}', inputFields: [{ path: 'errorName', label: '异常', variable: 'fault' }, { path: 'position', label: '位置', variable: 'field2' }], output: { mode: 'JSON', field: 'aggregate', target: 'description' } }, descriptionComposition: rule.descriptionComposition });
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ aiApplication: { applicationId: 'app-1', publishedVersion: 2, inputFields: [{ path: 'errorName', label: '现象', variable: 'fault' }] }, descriptionComposition: rule.descriptionComposition });
+  expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('aiDescription');
 });
 it('AI description unknown rule save retries its complete original configuration outside the disabled form', async () => {
   const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }], output: { mode: 'TEXT' as const, field: 'description', target: 'description' as const } };
   const saved = vi.fn(); mocks.mutate.mockRejectedValueOnce(new TypeError('network')).mockResolvedValueOnce({});
-  mount(<RuleEditor scope={scope()} rule={{ ...rule, aiDescription }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={saved} />);
+  mount(<RuleEditor scope={scope()} rule={{ ...rule, aiDescription, aiApplication: binding }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={saved} />);
   const dialog = within(screen.getByRole('dialog'));
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   const retry = await dialog.findByRole('button', { name: '重试原请求' });
   expect(retry).toBeEnabled();
-  expect(dialog.getByLabelText('描述提示词')).toBeDisabled();
+  expect(dialog.getByLabelText('IMS来源路径1')).toBeDisabled();
   fireEvent.click(retry);
   await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
   expect(mocks.mutate.mock.calls[1].slice(0, 3)).toEqual(mocks.mutate.mock.calls[0].slice(0, 3));
-  expect(mocks.mutate.mock.calls[1][2]).toMatchObject({ aiDescription, expectedVersion: 2 });
+  expect(mocks.mutate.mock.calls[1][2]).toMatchObject({ aiApplication: binding, expectedVersion: 2 });
+  expect(mocks.mutate.mock.calls[1][2]).not.toHaveProperty('aiDescription');
 });
-it('AI description preserves a saved single-field rule when only its name is edited', async () => {
+it.each(['规则现场标签', ''])('AI description preserves a saved single-field rule and explicit label %j when only its name is edited', async storedLabel => {
   const user = userEvent.setup();
-  const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }], output: { mode: 'JSON' as const, field: 'aggregate', target: 'description' as const } };
+  const customBinding = { ...binding, inputFields: [{ path: 'fault', label: storedLabel, variable: 'fault' }] };
+  const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: customBinding.inputFields, output: { mode: 'JSON' as const, field: 'aggregate', target: 'description' as const } };
   mocks.mutate.mockResolvedValue({});
-  mount(<RuleEditor scope={scope()} rule={{ ...rule, mapping: { description: 'fallback' }, descriptionComposition: undefined, aiDescription }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
+  mount(<RuleEditor scope={scope()} rule={{ ...rule, mapping: { description: 'fallback' }, descriptionComposition: undefined, aiDescription, aiApplication: customBinding, aiApplicationLatestVersion: 2 }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
   const dialog = within(screen.getByRole('dialog'));
   const descriptionMode = dialog.getByLabelText('不良描述来源');
   fireEvent.mouseDown(descriptionMode);
   await user.click(await screen.findByText('多字段组合', { selector: '.ant-select-item-option-content' }));
-  expect(dialog.getByLabelText('描述提示词')).toHaveValue('整理{{fault}}');
+  expect(dialog.getByLabelText('有效提示词')).toHaveValue('整理{{fault}}');
   fireEvent.mouseDown(descriptionMode);
   await user.click(await screen.findByText('单字段', { selector: '.ant-select-item-option-content' }));
   expect(await dialog.findByLabelText('不良描述来源字段')).toHaveValue('fallback');
   fireEvent.change(dialog.getByLabelText('规则名称'), { target: { value: '重命名单字段规则' } });
   await user.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
-  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ name: '重命名单字段规则', mapping: { description: 'fallback' }, aiDescription });
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ name: '重命名单字段规则', mapping: { description: 'fallback' }, aiApplication: customBinding });
+  expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('aiDescription');
   expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('descriptionComposition');
   expect(dialog.getByRole('switch', { name: 'AI整理' })).toBeChecked();
-  expect(dialog.getByLabelText('描述提示词')).toHaveValue('整理{{fault}}');
+  expect(dialog.getByLabelText('已发布版本')).toHaveValue('1');
+  expect(dialog.getByLabelText('变量标签1')).toHaveValue(storedLabel);
+  expect(dialog.getByText('已有新发布版本v2，保存切换后新任务使用所选版本。')).toBeVisible();
+});
+it('an ingestion manager without configuration read keeps the saved binding without fetching the AI center', async () => {
+  mocks.mutate.mockResolvedValue({});
+  const restricted = { ...scope(), permissions: ['ingestion:read', 'ingestion:manage'] };
+  mount(<RuleEditor scope={restricted} rule={{ ...rule, aiApplication: binding, aiDescription: { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: binding.inputFields, output: { mode: 'TEXT', field: 'description', target: 'description' } } }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog'));
+  await waitFor(() => expect(dialog.getByLabelText('有效提示词')).toHaveValue('整理{{fault}}'));
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('/ai-applications'), expect.anything());
+  expect(dialog.getByLabelText('提示词应用')).toBeDisabled();
+  expect(dialog.getByLabelText('已发布版本')).toBeDisabled();
+  expect(dialog.queryByRole('link', { name: '管理提示词应用' })).not.toBeInTheDocument();
+  fireEvent.change(dialog.getByLabelText('规则名称'), { target: { value: '仅重命名' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ name: '仅重命名', aiApplication: binding });
 });
 it('AI description ordinary preview never calls a model and confirmation stays available during a trial', async () => {
   let finish!: (value: unknown) => void;

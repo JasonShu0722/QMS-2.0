@@ -32,6 +32,9 @@ vi.mock('../features/customer-quality/CustomerMasterSection', () => ({ CustomerM
 vi.mock('../features/material-master/MaterialMasterPage', () => ({ MaterialMasterPage: page('materials') }));
 vi.mock('../features/governance/ComponentProjectAdministration', () => ({ ComponentProjectAdministration: page('component-projects') }));
 vi.mock('../features/governance/ConfigurationAdministration', () => ({ ConfigurationAdministration: vi.fn(page('configuration')) }));
+vi.mock('../features/governance/AiConnections', () => ({ AiConnections: page('ai-connections') }));
+vi.mock('../features/governance/AiApplications', () => ({ AiApplications: page('ai-applications') }));
+vi.mock('../features/governance/ProcessOperationSectors', () => ({ ProcessOperationSectors: () => null }));
 vi.mock('../features/governance/AuditAdministration', () => ({ AuditAdministration: page('audit-log') }));
 vi.mock('../features/governance/OutboxAdministration', () => ({ OutboxAdministration: page('outbox') }));
 vi.mock('../features/governance/AdministrativeReconfiguration', () => ({ AdministrativeReconfiguration: page('reconfiguration') }));
@@ -88,7 +91,7 @@ it('dispatches the real user component only after directory and matching managem
 });
 
 it.each([
-  ['organizations', 'organizations'], ['master-data/suppliers', 'suppliers'], ['master-data/customers', 'customers'], ['master-data/materials', 'materials'], ['master-data/component-projects', 'component-projects'], ['configuration', 'configuration'], ['audit-log', 'audit-log'], ['outbox', 'outbox'], ['reconfiguration', 'reconfiguration'], ['problem-reconfiguration', 'problem-reconfiguration'], ['supplier-accounts', 'supplier-accounts'],
+  ['organizations', 'organizations'], ['master-data/suppliers', 'suppliers'], ['master-data/customers', 'customers'], ['master-data/materials', 'materials'], ['master-data/component-projects', 'component-projects'], ['configuration', 'configuration'], ['ai-connections', 'ai-connections'], ['ai-applications', 'ai-applications'], ['audit-log', 'audit-log'], ['outbox', 'outbox'], ['reconfiguration', 'reconfiguration'], ['problem-reconfiguration', 'problem-reconfiguration'], ['supplier-accounts', 'supplier-accounts'],
 ])('routes %s to its standalone existing domain component', async (path, name) => {
   view(`/console/${path}?organizationId=${targetId}`);
   await screen.findByTestId(name);
@@ -125,8 +128,15 @@ it('does not read the admin directory for workflows, unknown routes or missing m
   expect(await screen.findByRole('alert')).toHaveTextContent('无权访问');
   expect(getAdminOrganizations).not.toHaveBeenCalled();
 });
+it.each(['ai-connections', 'ai-applications'])('denies %s to a user lacking configuration read even with an unrelated console module', async section => {
+  mocks.context.modules = mocks.context.modules.filter(module => module.key !== 'configuration');
+  view(`/console/${section}`);
+  expect(await screen.findByRole('alert')).toHaveTextContent('无权访问');
+  expect(getAdminOrganizations).not.toHaveBeenCalled();
+  expect(Object.keys(mocks.props)).toEqual([]);
+});
 
-it.each(['/console/workflows', '/console/unknown'])('leaves %s outside this management dispatcher', async path => {
+it.each(['/console/workflows', '/console/unknown', '/console/process-configuration'])('leaves %s outside this management dispatcher', async path => {
   mocks.context.modules.push({ key: 'workflows', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', organizationId: homeId, permissions: ['workflow:manage'] });
   view(path);
   expect(await screen.findByRole('alert')).toBeInTheDocument();

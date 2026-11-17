@@ -119,7 +119,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const resourceOrganization = fixedHome ? context?.actor.homeOrganization : context?.targetOrganization;
   const entries = context ? consoleNavigation(context) : [];
   const label = (item: ConsoleNavigationItem) => text(item.label, item.english);
-  const groups = [['workspace', '工作空间', 'Workspace'], ['administration', '组织与授权', 'Organizations & access'], ['configuration', '基础数据与配置', 'Data & configuration'], ['security', '安全与运行', 'Security & operations']];
+  const groups = [['workspace', '工作空间', 'Workspace'], ['administration', '组织与授权', 'Organizations & access'], ['configuration', '基础数据与配置', 'Data & configuration'], ['ai', 'AI管理', 'AI management'], ['security', '安全与运行', 'Security & operations']];
   const href = (path: string) => organizationId === undefined ? path : `${path}?${new URLSearchParams({ organizationId })}`;
   const brand = <Link className="qms-console-brand" to={href('/console')} aria-label={text('QMS Console · 管理首页', 'QMS Console · Management home')} title={text('返回管理首页', 'Return to management home')}><ShieldCheck size={24} aria-hidden="true" /><span className="qms-console-nav-label"><strong>QMS Console</strong><small>{text('管理工作空间', 'Management workspace')}</small></span></Link>;
   const navigation = (mobile = false) => <nav ref={mobile ? undefined : navigationElement} className="qms-console-menu" aria-label={text('管理导航', 'Management navigation')} onScroll={mobile ? undefined : event => {

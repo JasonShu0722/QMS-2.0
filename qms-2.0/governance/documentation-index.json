@@ -534,7 +534,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "e0099e02b6e98611915b402f6cc6eab970b250446304936570cdd2f9788fa346"
+            "sha256": "d952c69d768d81bdc5922eabe0c3ae65afa1c7045b826531e36564da1751319f"
           },
           {
             "path": "apps/web/component-project-preview.html",
@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "bfef60694bbe2735d4299aa01ac736e8a5da276d31638e75fb4370b366883812"
+            "sha256": "621c69fce0111baa2bb818ed01836e2649e218d39b619beede22986d71095703"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
@@ -730,7 +730,7 @@
           },
           {
             "path": "apps/web/src/console/ConsoleLayout.tsx",
-            "sha256": "36a63220eb2df2c4222fc0e0394205159133063856d15243e117d8828746c389"
+            "sha256": "ca65affcd2bb8a3cdb3e0108bf37b4d4e155d5c6c89be3b6b319ac4730167986"
           },
           {
             "path": "apps/web/src/styles/global.css",

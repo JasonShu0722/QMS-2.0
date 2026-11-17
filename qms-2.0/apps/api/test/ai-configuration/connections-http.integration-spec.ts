@@ -67,4 +67,19 @@ describe('AI channel authenticated HTTP privacy and access', () => {
     await prisma.organization.update({ where: { id: admin.organizationId }, data: { status: 'DISABLED', configurationRequired: true } });
     expect((await read(admin).expect(401)).body.code).toBe('AUTH_SESSION_REQUIRED');
   }, 15000);
+  it('exposes explicit protocols through authenticated HTTP and requires key replacement when switching protocol', async () => {
+    const admin = await identity(['platform:admin']);
+    for (const protocol of ['OPENAI_CHAT_COMPLETIONS', 'OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT']) {
+      const created = (await write(admin, '', { ...body, protocol }).expect(201)).body;
+      expect(created.protocol).toBe(protocol); safe(created);
+      const changedProtocol = protocol === 'OPENAI_CHAT_COMPLETIONS' ? 'ANTHROPIC_MESSAGES' : 'OPENAI_CHAT_COMPLETIONS';
+      const update = (apiKey: string) => request(app.getHttpServer()).patch(`${path}/${created.id}`).query({ organizationId: admin.organizationId }).set('Cookie', admin.cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ ...body, apiKey, protocol: changedProtocol, expectedVersion: 1 });
+      expect((await update('').expect(400)).body.code).toBe('AI_CONNECTION_INVALID');
+      const changed = (await update(secret).expect(200)).body;
+      expect(changed.protocol).toBe(changedProtocol); safe(changed);
+    }
+    await write(admin, '', { ...body, protocol: 'SYSTEM_ONE' }).expect(400);
+    await write(admin, '', { ...body, protocol: null }).expect(400);
+    safe((await read(admin).expect(200)).body);
+  }, 15000);
 });
