@@ -552,6 +552,10 @@ export class IngestionService {
     const candidates = await tx.$queryRaw<ItemRow[]>`SELECT i.* FROM integration_ingestion_items i JOIN integration_ingestion_jobs j ON j.id=i.job_id WHERE i.organization_id=${job.organization_id}::uuid AND i.target_id=${evaluation.current!.id}::uuid AND i.target_version=${evaluation.current!.version} AND i.status='AWAITING_CONFIRMATION' AND j.endpoint_id=${job.endpoint_id}::uuid AND j.rule_snapshot->>'target'=${job.rule_snapshot.target} AND COALESCE(j.rule_snapshot->>'sourceUpdatedAtField','')=${job.rule_snapshot.sourceUpdatedAtField ?? ''} ORDER BY j.sequence,i.row_index`;
     for (const candidate of candidates) {
       const previousJob = await this.jobRow(tx, job.organization_id, candidate.job_id);
+      const previousLookup = previousJob.rule_snapshot.componentNameLookup;
+      const currentLookup = job.rule_snapshot.componentNameLookup;
+      if (Boolean(previousLookup) !== Boolean(currentLookup)
+        || previousLookup && currentLookup && (previousLookup.source !== currentLookup.source || previousLookup.field !== currentLookup.field)) continue;
       const previousReceipt = await this.receipt(tx, job.organization_id, candidate.receipt_id, previousJob.endpoint_id, true);
       const parsed = evaluateIngestionRow(previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index]);
       if (!parsed.matched) continue;
