@@ -154,6 +154,28 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     await expect(service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '基线已变化不可确认' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
     expect(await prisma.$queryRaw`SELECT id FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='WORKER-42'`).toEqual([]);
   });
+  it('supersedes an old component confirmation when a reprocess observes a newer material snapshot', async () => {
+    const item = await fixture();
+    await prisma.materialMaster.create({ data: { organizationId: item.organizationId, materialCode: 'COMP-ABA', materialName: '物料A', createdById: item.userId, updatedById: item.userId } });
+    await prisma.$transaction(tx => targets.write(tx, item.actor, 'COMPONENT', { code: 'COMP-ABA', name: '组件旧名' }, null, trace()));
+    const configuration = await service.saveRule(item.actor, { name: '组件确认物料重处理', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'CONFIRM', updateFields: ['name'] }, trace(), key());
+    const receiptId = await received(item, [{ partCode: 'COMP-ABA' }]);
+    const firstPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    const firstImport = await service.submitImport(item.actor, { previewId: firstPreview.previewId, confirmed: true }, trace(), key());
+    await worker.processDue(10);
+    const oldItem = (await service.listItems(item.actor, firstImport.jobIds[0]!, {})).items[0]!;
+    expect(oldItem.status).toBe('AWAITING_CONFIRMATION');
+    await prisma.materialMaster.update({ where: { organizationId_materialCode: { organizationId: item.organizationId, materialCode: 'COMP-ABA' } }, data: { materialName: '物料B', version: { increment: 1 } } });
+    const secondPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    const secondImport = await service.submitImport(item.actor, { previewId: secondPreview.previewId, confirmed: true, reprocessReason: '物料快照更新后重新确认' }, trace(), key());
+    await worker.processDue(10);
+    const newItem = (await service.listItems(item.actor, secondImport.jobIds[0]!, {})).items[0]!;
+    expect(newItem.status).toBe('AWAITING_CONFIRMATION');
+    expect(newItem.id).not.toBe(oldItem.id);
+    expect((await service.listItems(item.actor, firstImport.jobIds[0]!, {})).items[0]).toMatchObject({ status: 'SKIPPED', duplicateOfItemId: newItem.id });
+    await service.actOnItem(item.actor, newItem.id, { expectedVersion: newItem.version, reason: '确认最新物料名称' }, true, trace(), key());
+    expect(await inspect(item, 'COMPONENT', 'COMP-ABA')).toMatchObject({ values: { name: '物料B' } });
+  });
   it('enforces exact material lookup scope and blocks component execution after lookup access or rule availability is withdrawn', async () => {
     const item = await fixture();
     const foreign = await fixture();

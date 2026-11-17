@@ -555,11 +555,14 @@ export class IngestionService {
       const previousReceipt = await this.receipt(tx, job.organization_id, candidate.receipt_id, previousJob.endpoint_id, true);
       const parsed = evaluateIngestionRow(previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index]);
       if (!parsed.matched) continue;
-      const { differences } = await this.evaluate(tx, actor, previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index], previousReceipt, previousJob.source, candidate.row_index, previousJob.rule_id, previousJob.rule_version);
+      const previousEvaluation = await this.evaluate(tx, actor, previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index], previousReceipt, previousJob.source, candidate.row_index, previousJob.rule_id, previousJob.rule_version);
+      const { differences } = previousEvaluation;
       if (differences.length !== evaluation.differences.length || differences.some(difference => !evaluation.differences.some(current => current.field === difference.field && current.before === difference.before && current.after === difference.after))) continue;
       const sourceUpdatedAt = newestDate(candidate.source_updated_at, evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null);
       const receivedAt = newestDate(candidate.source_received_at ?? previousReceipt.received_at, evaluation.sourceReceivedAt ?? receipt.received_at)!;
-      if (await this.stale(tx, previousJob, candidate, previousReceipt, evaluation)) {
+      const materialSnapshotStale = previousJob.rule_snapshot.componentNameLookup && Object.hasOwn(previousJob.rule_snapshot.componentMaterialBaselines ?? {}, String(candidate.row_index))
+        && !sameMaterialBaseline(previousJob.rule_snapshot.componentMaterialBaselines?.[String(candidate.row_index)], previousEvaluation.componentMaterialSnapshot);
+      if (materialSnapshotStale || await this.stale(tx, previousJob, candidate, previousReceipt, evaluation)) {
         await tx.$executeRaw`UPDATE integration_ingestion_items SET status='SKIPPED',duplicate_of_item_id=${item.id}::uuid,error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=${candidate.id}::uuid`;
         await tx.$executeRaw`UPDATE integration_ingestion_items SET duplicate_of_item_id=${item.id}::uuid WHERE duplicate_of_item_id=${candidate.id}::uuid`;
         evaluation.sourceUpdatedAt = sourceUpdatedAt?.toISOString() ?? null;
