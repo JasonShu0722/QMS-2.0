@@ -19,6 +19,8 @@
 
 ## 本地验证事实
 
+PR #131已建立：https://github.com/JasonShu0722/QMS-2.0/pull/131 。首候选`d7f27e0e89f3b677986bba52df7cfc223950ad64`的CI43996065786完整24项结束：22成功；web-tests(14)唯一业务失败是旧governance只读测试仍期待平台4表，实际AI移出后3表；foundation仅依赖该失败。自动Review精确head无发现。已保留完整job133748436398、汇总job133753519212日志及不可变run JSON；未盲目重跑。`V0.0.55-fix4`仅同步此旧caller断言，保只读字段并补三表名称、平台无AI界面/请求断言；完整governance7/7PASS及独立增量QUALITY PASS。产品源码、契约、迁移、依赖及浏览器执行路径不变，沿用已验证证据；同PR继续最终新head CI/Review，不新增PR或部署旧候选。
+
 证据统一位于Git外`D:/WorkSpace/QMS-2.0-local/ai-center-20261117/`；原始FAIL/NOT_RUN保留，不覆盖旧标签日志。
 
 | 范围 | 有效结果 | 证据与边界 |
