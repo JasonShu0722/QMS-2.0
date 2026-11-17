@@ -1,5 +1,9 @@
 # API 接入管理
 
+## 组件名称内部物料快照（2026-11-17，REQ-0040）
+
+负责人已确认：组件入库规则可选择内部物料名称来源，以 API 组件编码精确匹配同组织物料编码，保存物料名称快照；未匹配时新建名称为空、已有名称不清空。物料改名或补录不自动回刷组件。实现使用现有 API 入库规则、物料主数据读取接缝和 Worker，支持预览提交、自动入库、历史处理、单条重试及人工确认的物料版本保护；撤销物料读取权限后仍可停用保持不变的既有内部规则，但新建、重新启用、修改来源和执行继续拒绝。设计与计划见[设计规格](../../docs/superpowers/specs/2026-11-17-qms-component-material-name-snapshot-design.md)和[实施计划](../../docs/superpowers/plans/2026-11-17-qms-component-material-name-snapshot.md)。真实 PostgreSQL/Worker、Web 定向场景、原相关 Web 集合、契约、构建、治理和归档检查已通过；真实浏览器、PR、部署和公网验收以本轮发布证据为准。
+
 ## 二期第二阶段制程入库（2026-11-16，实施中）
 
 负责人已确认制程不良品入库及手工录单统一，已登记[REQ-0038](https://larkcommunity.feishu.cn/record/SbOVrpsR1eDx4rcQzD6c9uoUn4c)，见[第二阶段需求](../../docs/superpowers/specs/2026-11-16-qms-api-ingestion-phase-2-stage-2-requirements.md)和[具体实施方案](../../docs/superpowers/plans/2026-11-16-qms-api-ingestion-phase-2-stage-2.md)。复用入库衔接配置及队列，增加制程目标、多字段描述、缺项入账及人工完善；缺映射自动补待补项，已有关联冻结，新品转量产保历史，不开放批量刷新历史。手工数量默认1可改，IMS一条对象一条不良且数量1；真实字段上线配置。本轮只整理及登记需求，不代表该能力已实现、联调或发布，也不改变下文当前接收/四主数据目标事实。

@@ -46,6 +46,16 @@ export class MaterialMasterService {
     });
   }
 
+  async findForIngestion(transaction: AdminTransaction, actor: AdminActor, materialCode: string): Promise<{ id: string; version: number; materialCode: string; materialName: string } | null> {
+    const organizationId = this.scope(actor);
+    await assertAdminAccess(transaction, actor, organizationId, 'material-master:read');
+    await this.assertInternalOrganization(transaction, organizationId);
+    const code = materialCode.trim();
+    if (!code || code.length > 100) fail('MATERIAL_MASTER_INPUT_INVALID', 400);
+    const [row] = await transaction.$queryRaw<{ id: string; version: number; materialCode: string; materialName: string }[]>`SELECT id, version, material_code AS "materialCode", material_name AS "materialName" FROM material_masters WHERE organization_id=${organizationId}::uuid AND material_code=${code}`;
+    return row ?? null;
+  }
+
   private async insert(tx: AdminTransaction, actor: AdminActor, input: { materialCode: unknown; materialName: unknown }, traceId: string, permission: string) {
     const organizationId = this.scope(actor);
     await assertAdminAccess(tx, actor, organizationId, permission);

@@ -11243,6 +11243,12 @@ export interface components {
             operator: "EQ" | "NE" | "IN" | "NOT_IN" | "EMPTY" | "NOT_EMPTY";
             value?: (string | number | boolean | (string | number | boolean)[]) | null;
         };
+        ComponentNameLookupDto: {
+            /** @enum {string} */
+            source: "MATERIAL";
+            /** @enum {string} */
+            field: "materialName";
+        };
         IngestionDescriptionFieldDto: {
             path: string;
             label?: string;
@@ -11293,6 +11299,7 @@ export interface components {
             mapping: {
                 [key: string]: string;
             };
+            componentNameLookup?: components["schemas"]["ComponentNameLookupDto"];
             /** @enum {string} */
             mode: "INSERT_ONLY" | "UPDATE" | "CONFIRM";
             updateFields: string[];
@@ -11334,6 +11341,7 @@ export interface components {
             mapping: {
                 [key: string]: string;
             };
+            componentNameLookup?: components["schemas"]["ComponentNameLookupDto"];
             /** @enum {string} */
             mode: "INSERT_ONLY" | "UPDATE" | "CONFIRM";
             updateFields: string[];
@@ -11360,6 +11368,7 @@ export interface components {
             mapping: {
                 [key: string]: string;
             };
+            componentNameLookup?: components["schemas"]["ComponentNameLookupDto"];
             /** @enum {string} */
             mode: "INSERT_ONLY" | "UPDATE" | "CONFIRM";
             updateFields: string[];
@@ -11413,6 +11422,9 @@ export interface components {
             pendingConfiguration?: boolean;
             registrationIssues?: string[];
             defectQuantity?: number;
+            materialMatched?: boolean;
+            /** @enum {string} */
+            materialNameSource?: "MATERIAL_MASTER";
         };
         AiDescriptionInputSnapshotDto: {
             path: string;

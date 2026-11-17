@@ -28,9 +28,10 @@ const ruleId = '44444444-4444-4444-8444-444444444444';
 const receiptId = '55555555-5555-4555-8555-555555555555';
 const home = { id: homeId, code: 'HOME', name: '组织', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 const rule: Rule = { organizationId: homeId, id: ruleId, name: '供应商规则', endpointId, target: 'SUPPLIER', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'code', name: 'name' }, mode: 'CONFIRM', updateFields: ['name'], version: 2, creatorId: actorId, updatedAt: '2026-11-14T02:00:00Z' };
-function context(permissions = ['ingestion:read', 'ingestion:manage', 'ingestion:run']): ConsoleContext {
+function context(permissions = ['ingestion:read', 'ingestion:manage', 'ingestion:run'], materialPermissions: string[] = []): ConsoleContext {
+  const materialModules: ConsoleContext['modules'] = materialPermissions.length ? [{ key: 'master-data', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: homeId, permissions: materialPermissions }] : [];
   return { actor: { id: actorId, accountType: 'INTERNAL', homeOrganization: home }, targetOrganization: home, organizations: [home], hasPlatformAdministrator: true,
-    modules: [{ key: 'api-ingestion', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: homeId, permissions }, { key: 'api-integrations', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: homeId, permissions: ['integration:receipts:read', 'integration:payload:read'] }] };
+    modules: [{ key: 'api-ingestion', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: homeId, permissions }, ...materialModules, { key: 'api-integrations', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: homeId, permissions: ['integration:receipts:read', 'integration:payload:read'] }] };
 }
 function view(initialEntry = '/console/api-ingestion') {
   const tree = () => <LanguageProvider><ConsoleTheme><MemoryRouter initialEntries={[initialEntry]}><UnsavedChangesProvider><ApiIngestionPage /></UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider>;
@@ -39,15 +40,15 @@ function view(initialEntry = '/console/api-ingestion') {
 function componentView(children: ReactNode) {
   return render(<LanguageProvider><ConsoleTheme><MemoryRouter><UnsavedChangesProvider>{children}</UnsavedChangesProvider></MemoryRouter></ConsoleTheme></LanguageProvider>);
 }
-function verifiedScope(): IntegrationScope {
-  return { organizationId: homeId, session: `INTERNAL:${homeId}:${actorId}`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run'], deny: mocks.invalidate };
+function verifiedScope(extraPermissions: string[] = []): IntegrationScope {
+  return { organizationId: homeId, session: `INTERNAL:${homeId}:${actorId}`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run', ...extraPermissions], deny: mocks.invalidate };
 }
 function previewView(history = false, viewJobs = vi.fn()) {
   componentView(<ImportPreview scope={verifiedScope()} rule={rule} history={history} canReceipts close={vi.fn()} viewJobs={viewJobs} />);
   return within(screen.getByRole('dialog', { name: `${history ? '历史批量导入' : '单条试处理'} · ${rule.name}` }));
 }
 function editorView(existing = rule) {
-  componentView(<RuleEditor scope={verifiedScope()} rule={existing} endpoints={[{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
+  componentView(<RuleEditor scope={verifiedScope(existing.target === 'COMPONENT' ? ['material-master:read'] : [])} rule={existing} endpoints={[{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
   return within(screen.getByRole('dialog', { name: '编辑入库规则' }));
 }
 function jobsView() {
@@ -86,6 +87,18 @@ it('edits process source fields and ordered description composition without expo
   expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, descriptionComposition: { fields: [{ path: 'position', label: '位置' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
   expect(mocks.mutate.mock.calls[0][2].mapping).not.toHaveProperty('code');
 });
+it('configures component names from the internal material master snapshot', async () => {
+  mocks.mutate.mockResolvedValue({});
+  const componentRule = { ...rule, name: '组件规则', target: 'COMPONENT', mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } } as Rule;
+  const dialog = editorView(componentRule);
+  expect(dialog.getByRole('combobox', { name: '名称来源方式' })).toBeInTheDocument();
+  await waitFor(() => expect(dialog.getByText('内部物料主数据', { selector: '.ant-select-content' })).toBeVisible());
+  expect(dialog.getByText('物料名称', { selector: '.ant-select-content' })).toBeVisible();
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'COMPONENT', mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } });
+  expect(mocks.mutate.mock.calls[0][2].mapping).not.toHaveProperty('name');
+});
 it('previews incomplete process facts as an importable ledger result and shows safe plain text', async () => {
   mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-process', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'INSERTED', fields: { description: '<b>松脱</b>\n位置：0 / false' }, differences: [], pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED'], defectQuantity: 1 });
   componentView(<ImportPreview scope={verifiedScope()} rule={{ ...rule, target: 'PROCESS_DEFECT' } as Rule} history canReceipts close={vi.fn()} />);
@@ -108,6 +121,22 @@ it('shows named endpoints and keeps mutation controls absent for readers', async
   mocks.context = context(['ingestion:read']); view(); await screen.findByText('供应商规则');
   expect(screen.getByText('供应商接收')).toBeVisible(); expect(screen.queryByRole('button', { name: '新增规则' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '单条试处理' })).not.toBeInTheDocument();
+});
+it('projects material master read permission into the component rule editor', async () => {
+  const componentRule = { ...rule, name: '组件规则', target: 'COMPONENT', mapping: { code: 'partCode', name: 'name' } } as Rule;
+  mocks.context = context(['ingestion:read', 'ingestion:manage', 'ingestion:run'], ['material-master:read']);
+  read.mockImplementation(async path => {
+    if (path.includes('/ingestion/rules')) return { items: [componentRule], total: 1, page: 1, limit: 20 } as never;
+    if (path.includes('/ingestion/endpoints')) return { items: [{ id: endpointId, name: '供应商接收', code: 'SUP', status: 'ENABLED' }], total: 1, page: 1, limit: 100 } as never;
+    return { items: [], total: 0, page: 1, limit: 20 } as never;
+  });
+  view();
+  const row = (await screen.findByText('组件规则')).closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: '编辑组件规则' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '编辑入库规则' }));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: '名称来源方式' }));
+  const option = await screen.findByText('内部物料主数据', { selector: '.ant-select-item-option-content' });
+  expect(option.closest('.ant-select-item-option')).not.toHaveAttribute('aria-disabled', 'true');
 });
 it('opens receipt-linked processing jobs and clears the controlled receipt filter', async () => {
   view(`/console/api-ingestion?receiptId=${receiptId}`);
@@ -141,6 +170,22 @@ it('previews a selected receipt without submitting an import until explicit conf
   mocks.mutate.mockResolvedValueOnce({ jobIds: ['job-one'], reused: false, receiptCount: 1, rowCount: 1 });
   fireEvent.click(dialog.getByRole('button', { name: '确认导入' })); await dialog.findByText(/已提交/);
   expect(mocks.mutate.mock.calls[1]?.[2]).toEqual({ organizationId: homeId, previewId: 'preview-one', confirmed: true });
+});
+it.each([
+  { materialMatched: true, targetId: undefined, status: '物料已匹配' },
+  { materialMatched: false, targetId: undefined, status: '物料未匹配，名称将留空' },
+  { materialMatched: false, targetId: '66666666-6666-4666-8666-666666666666', status: '物料未匹配，保留已有名称' },
+])('shows the material name source status without treating an unmatched item as a failure ($status)', async ({ materialMatched, targetId, status }) => {
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-component', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'INSERTED', fields: { code: '00042', name: materialMatched ? '控制器A' : targetId ? '人工名称' : '' }, differences: [], materialMatched, ...(targetId ? { targetId } : {}), materialNameSource: 'MATERIAL_MASTER' });
+  const componentRule = { ...rule, name: '组件规则', target: 'COMPONENT', mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } } as Rule;
+  componentView(<ImportPreview scope={verifiedScope()} rule={componentRule} history={false} canReceipts close={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog', { name: `单条试处理 · ${componentRule.name}` }));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' })); fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  const source = within(await dialog.findByRole('region', { name: '名称来源' }));
+  expect(source.getByText('名称来源：内部物料主数据')).toBeVisible(); expect(source.getByText(status)).toBeVisible();
+  expect(dialog.getByRole('button', { name: '确认导入' })).toBeEnabled();
+  expect(dialog.queryByRole('alert')).not.toBeInTheDocument();
 });
 it('keeps a failed preview editable and retries the changed preview request', async () => {
   const failure = new ApiError({ code: 'HTTP_502', message: 'Unknown', fields: {}, traceId: 'trace' }, 502);

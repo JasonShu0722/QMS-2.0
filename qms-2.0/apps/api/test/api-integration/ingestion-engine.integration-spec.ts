@@ -30,6 +30,7 @@ import { ProcessDefectLedgerService } from '../../src/modules/process-quality/pr
 import type { MasterDataIntegrationTarget } from '../../src/common/integration-master-data.js';
 import { ProcessDefectCompletionService } from '../../src/modules/process-quality/process-defect-completion.service.js';
 import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
+import { MaterialMasterService } from '../../src/modules/material-master/material-master.service.js';
 
 if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_DISPOSABLE_TEST_DB !== 'true') throw new Error('Ingestion engine requires explicitly disposable real PostgreSQL.');
 
@@ -43,7 +44,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   const trace = () => randomUUID();
   const key = () => randomUUID();
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [ProcessQualityModule], controllers: [InboundController], providers: [PrismaService, AuditLogService, AdminMutationService, SessionService, IngestionService, IngestionWorkerService, IngestionTargetsService, SupplierProfileIngestionAdapter, CustomerMasterIngestionAdapter, MaterialMasterIngestionAdapter, ComponentProjectIngestionAdapter, InboundService, InboundGuard, IntegrationRetentionService, IntegrationReceiptService] }).compile();
+    const module = await Test.createTestingModule({ imports: [ProcessQualityModule], controllers: [InboundController], providers: [PrismaService, AuditLogService, AdminMutationService, SessionService, IngestionService, IngestionWorkerService, IngestionTargetsService, SupplierProfileIngestionAdapter, CustomerMasterIngestionAdapter, MaterialMasterIngestionAdapter, MaterialMasterService, ComponentProjectIngestionAdapter, InboundService, InboundGuard, IntegrationRetentionService, IntegrationReceiptService] }).compile();
     app = module.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configureHttpBodyParser(app); app.useGlobalFilters(new GlobalExceptionFilter()); await app.init();
     prisma = app.get(PrismaService); service = app.get(IngestionService); worker = app.get(IngestionWorkerService); targets = app.get(IngestionTargetsService);
@@ -59,8 +60,8 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: '入库一次性验收组织', type: 'INTERNAL' } });
     fixtureOrganizations.push(organization.id);
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'unused', accountType: 'INTERNAL' } });
-    const permissions = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', 'ingestion:read', 'ingestion:manage', 'ingestion:run', 'integration:read', 'integration:manage', 'integration:receipts:read', 'integration:payload:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:write', 'material-master:write', 'component-project:manage'] } } });
-    expect(permissions).toHaveLength(12);
+    const permissions = await prisma.permission.findMany({ where: { code: { in: ['platform:admin', 'ingestion:read', 'ingestion:manage', 'ingestion:run', 'integration:read', 'integration:manage', 'integration:receipts:read', 'integration:payload:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'component-project:manage'] } } });
+    expect(permissions).toHaveLength(13);
     const role = await prisma.role.create({ data: { organizationId: organization.id, code: randomUUID(), name: '真实管理员测试角色', permissions: { create: permissions.map(permission => ({ permissionId: permission.id })) } } });
     await prisma.userRole.create({ data: { organizationId: organization.id, userId: user.id, roleId: role.id } });
     const token = await app.get(SessionService).create(user.id, prisma, { mfaVerified: true, reauthenticated: true });
@@ -109,6 +110,126 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect((await inspect(item, 'MATERIAL', '001'))?.values.name).toBe('预览数据机密');
     expect(await inspect(item, 'MATERIAL', '002')).toBeNull();
     expect(await worker.processDue(10)).toBe(0);
+  });
+  it('resolves component names from same-organization material snapshots and preserves existing names on misses', async () => {
+    const item = await fixture();
+    await prisma.materialMaster.create({ data: { organizationId: item.organizationId, materialCode: '00042', materialName: '物料名称快照', createdById: item.userId, updatedById: item.userId } });
+    const configuration = await service.saveRule(item.actor, { name: '组件物料名称快照', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'UPDATE', updateFields: ['name'] }, trace(), key());
+    const receiptId = await received(item, [{ partCode: '00042' }, { partCode: '00043' }]);
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    expect(preview).toMatchObject({ action: 'INSERTED', fields: { code: '00042', name: '物料名称快照' } });
+    await prisma.materialMaster.update({ where: { organizationId_materialCode: { organizationId: item.organizationId, materialCode: '00042' } }, data: { materialName: '物料名称新版本', version: { increment: 1 } } });
+    await expect(service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+    const currentPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    expect(currentPreview).toMatchObject({ action: 'INSERTED', fields: { code: '00042', name: '物料名称新版本' } });
+    await service.submitImport(item.actor, { previewId: currentPreview.previewId, confirmed: true }, trace(), key());
+    await worker.processDue(10);
+    const resolved = await prisma.$queryRaw<{ component_name: string | null }[]>`SELECT component_name FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='00042'`;
+    expect(resolved).toEqual([{ component_name: '物料名称新版本' }]);
+    const miss = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 1 }, trace(), key());
+    expect(miss).toMatchObject({ action: 'INSERTED', fields: { code: '00043' } });
+    expect(miss.fields).not.toHaveProperty('name');
+    await service.submitImport(item.actor, { previewId: miss.previewId, confirmed: true }, trace(), key()); await worker.processDue(10);
+    const missing = await prisma.$queryRaw<{ component_name: string | null }[]>`SELECT component_name FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='00043'`;
+    expect(missing).toEqual([{ component_name: null }]);
+    await prisma.$executeRaw`UPDATE component_project_mappings SET component_name='人工名称' WHERE organization_id=${item.organizationId}::uuid AND component_code='00043'`;
+    const again = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 1 }, trace(), key());
+    expect(again.action).toBe('UNCHANGED');
+    await service.submitImport(item.actor, { previewId: again.previewId, confirmed: true, reprocessReason: '验证未匹配不清空已有名称' }, trace(), key()); await worker.processDue(10);
+    const preserved = await prisma.$queryRaw<{ component_name: string | null }[]>`SELECT component_name FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='00043'`;
+    expect(preserved).toEqual([{ component_name: '人工名称' }]);
+  });
+  it('blocks a queued component write when the material snapshot changes before Worker execution', async () => {
+    const item = await fixture();
+    await prisma.materialMaster.create({ data: { organizationId: item.organizationId, materialCode: 'WORKER-42', materialName: 'Worker旧名', createdById: item.userId, updatedById: item.userId } });
+    const configuration = await service.saveRule(item.actor, { name: '组件Worker基线', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'UPDATE', updateFields: ['name'] }, trace(), key());
+    const receiptId = await received(item, [{ partCode: 'WORKER-42' }]);
+    const preview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
+    await prisma.materialMaster.update({ where: { organizationId_materialCode: { organizationId: item.organizationId, materialCode: 'WORKER-42' } }, data: { materialName: 'Worker新名', version: { increment: 1 } } });
+    expect(await worker.processDue(10)).toBeGreaterThanOrEqual(1);
+    const job = (await service.listJobs(item.actor, {})).items.find(entry => entry.ruleId === configuration.id)!;
+    const pending = (await service.listItems(item.actor, job.id, {})).items[0]!;
+    expect(pending).toMatchObject({ status: 'AWAITING_CONFIRMATION', targetId: null });
+    await expect(service.actOnItem(item.actor, pending.id, { expectedVersion: pending.version, reason: '基线已变化不可确认' }, true, trace(), key())).rejects.toMatchObject({ response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await prisma.$queryRaw`SELECT id FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='WORKER-42'`).toEqual([]);
+  });
+  it('supersedes an old component confirmation when a reprocess observes a newer material snapshot', async () => {
+    const item = await fixture();
+    await prisma.materialMaster.create({ data: { organizationId: item.organizationId, materialCode: 'COMP-ABA', materialName: '物料A', createdById: item.userId, updatedById: item.userId } });
+    await prisma.$transaction(tx => targets.write(tx, item.actor, 'COMPONENT', { code: 'COMP-ABA', name: '组件旧名' }, null, trace()));
+    const configuration = await service.saveRule(item.actor, { name: '组件确认物料重处理', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'CONFIRM', updateFields: ['name'] }, trace(), key());
+    const receiptId = await received(item, [{ partCode: 'COMP-ABA' }]);
+    const firstPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    const firstImport = await service.submitImport(item.actor, { previewId: firstPreview.previewId, confirmed: true }, trace(), key());
+    await worker.processDue(10);
+    const oldItem = (await service.listItems(item.actor, firstImport.jobIds[0]!, {})).items[0]!;
+    expect(oldItem.status).toBe('AWAITING_CONFIRMATION');
+    await prisma.materialMaster.update({ where: { organizationId_materialCode: { organizationId: item.organizationId, materialCode: 'COMP-ABA' } }, data: { materialName: '物料B', version: { increment: 1 } } });
+    const secondPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    const secondImport = await service.submitImport(item.actor, { previewId: secondPreview.previewId, confirmed: true, reprocessReason: '物料快照更新后重新确认' }, trace(), key());
+    await worker.processDue(10);
+    const newItem = (await service.listItems(item.actor, secondImport.jobIds[0]!, {})).items[0]!;
+    expect(newItem.status).toBe('AWAITING_CONFIRMATION');
+    expect(newItem.id).not.toBe(oldItem.id);
+    expect((await service.listItems(item.actor, firstImport.jobIds[0]!, {})).items[0]).toMatchObject({ status: 'SKIPPED', duplicateOfItemId: newItem.id });
+    await service.actOnItem(item.actor, newItem.id, { expectedVersion: newItem.version, reason: '确认最新物料名称' }, true, trace(), key());
+    expect(await inspect(item, 'COMPONENT', 'COMP-ABA')).toMatchObject({ values: { name: '物料B' } });
+  });
+  it('enforces exact material lookup scope and blocks component execution after lookup access or rule availability is withdrawn', async () => {
+    const item = await fixture();
+    const foreign = await fixture();
+    const platformMarker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: item.roleId, permissionId: platformMarker.id } } });
+    await prisma.materialMaster.createMany({ data: [
+      { organizationId: item.organizationId, materialCode: 'AbC-001', materialName: '精确名称', createdById: item.userId, updatedById: item.userId },
+      { organizationId: item.organizationId, materialCode: '001', materialName: '前导零名称', createdById: item.userId, updatedById: item.userId },
+      { organizationId: foreign.organizationId, materialCode: 'AbC-001', materialName: '跨组织名称', createdById: foreign.userId, updatedById: foreign.userId },
+      { organizationId: foreign.organizationId, materialCode: 'FOREIGN-ONLY', materialName: '不可跨组织读取', createdById: foreign.userId, updatedById: foreign.userId },
+    ] });
+    const configuration = await service.saveRule(item.actor, { name: '组件物料权限边界', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'UPDATE', updateFields: ['name'] }, trace(), key());
+    const receiptId = await received(item, [{ partCode: 'AbC-001' }, { partCode: 'abc-001' }, { partCode: '001' }, { partCode: '1' }, { partCode: 'FOREIGN-ONLY' }]);
+    const exact = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), key());
+    expect(exact).toMatchObject({ fields: { code: 'AbC-001', name: '精确名称' }, materialMatched: true, materialNameSource: 'MATERIAL_MASTER' });
+    const caseMismatch = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 1 }, trace(), key());
+    expect(caseMismatch).toMatchObject({ fields: { code: 'abc-001' }, materialMatched: false });
+    expect(caseMismatch.fields).not.toHaveProperty('name');
+    const zeroExact = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 2 }, trace(), key());
+    expect(zeroExact).toMatchObject({ fields: { code: '001', name: '前导零名称' }, materialMatched: true });
+    const zeroMismatch = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 3 }, trace(), key());
+    expect(zeroMismatch).toMatchObject({ fields: { code: '1' }, materialMatched: false });
+    expect(zeroMismatch.fields).not.toHaveProperty('name');
+    const foreignOnly = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 4 }, trace(), key());
+    expect(foreignOnly).toMatchObject({ fields: { code: 'FOREIGN-ONLY' }, materialMatched: false });
+    expect(foreignOnly.fields).not.toHaveProperty('name');
+
+    const previewKey = key();
+    const pendingPreview = await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId, rowIndex: 0 }, trace(), previewKey);
+    const importKey = key();
+    const initialImport = await service.submitImport(item.actor, { previewId: pendingPreview.previewId, confirmed: true }, trace(), importKey);
+    const denied = await prisma.permission.findMany({ where: { code: 'material-master:read' } });
+    await prisma.rolePermission.deleteMany({ where: { roleId: item.roleId, permissionId: { in: denied.map(permission => permission.id) } } });
+    try {
+      await expect(service.saveRule(item.actor, { name: '无物料权限不可保存', endpointId: item.endpointId, target: 'COMPONENT', enabled: false, match: 'ALL', conditions: [], mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' }, mode: 'UPDATE', updateFields: ['name'] }, trace(), key())).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+      await expect(service.submitImport(item.actor, { previewId: pendingPreview.previewId, confirmed: true }, trace(), importKey)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+      await expect(worker.processDue(10)).resolves.toBeGreaterThanOrEqual(1);
+      expect(await service.getJob(item.actor, initialImport.jobIds[0]!)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+    } finally {
+      await prisma.rolePermission.createMany({ data: denied.map(permission => ({ roleId: item.roleId, permissionId: permission.id })) });
+      await service.controlJob(item.actor, initialImport.jobIds[0]!, { action: 'CANCEL', reason: '权限边界专项收尾' }, trace(), key());
+    }
+
+    const enabled = await service.saveRule(item.actor, { ...configuration, expectedVersion: configuration.version, enabled: true }, trace(), key(), configuration.id);
+    await machine(item, [{ partCode: 'AbC-001' }]);
+    const disabledJob = (await service.listJobs(item.actor, {})).items.find(entry => entry.ruleId === enabled.id)!;
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: item.roleId, permissionId: denied[0]!.id } } });
+    const disabled = await service.saveRule(item.actor, { ...enabled, expectedVersion: enabled.version, enabled: false }, trace(), key(), enabled.id);
+    await prisma.rolePermission.create({ data: { roleId: item.roleId, permissionId: denied[0]!.id } });
+    expect(disabled.enabled).toBe(false);
+    await expect(worker.processDue(10)).resolves.toBeGreaterThanOrEqual(1);
+    expect(await service.getJob(item.actor, disabledJob.id)).toMatchObject({ status: 'BLOCKED', errorCode: 'INGESTION_AUTHORIZATION_REVOKED' });
+    expect((await service.listItems(item.actor, disabledJob.id, {})).items[0]).toMatchObject({ status: 'PROCESSING_FAILED', targetId: null });
+    expect(await prisma.$queryRaw`SELECT id FROM component_project_mappings WHERE organization_id=${item.organizationId}::uuid AND component_code='AbC-001'`).toEqual([]);
   });
   it('books every process object with actual ledger links, preserves anonymous-row identity and exposes completion separately from failure', async () => {
     const item = await fixture();

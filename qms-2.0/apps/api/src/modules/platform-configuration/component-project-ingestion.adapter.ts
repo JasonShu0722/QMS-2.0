@@ -20,11 +20,13 @@ export class ComponentProjectIngestionAdapter implements IntegrationMasterDataAd
     const organization = await transaction.organization.findUnique({ where: { id: organizationId }, select: { type: true, status: true } });
     if (organization?.type !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     if (organization.status !== 'ACTIVE') fail('ORGANIZATION_DISABLED', 403);
-    if (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).some(key => !['code', 'name'].includes(key))
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).some(key => !['code', 'name', 'componentNameMissing', 'componentMaterialSnapshot'].includes(key))
       || typeof fields.code !== 'string' || typeof fields.name !== 'string'
-      || !fields.code.trim() || [...fields.code.trim()].length > 100 || !fields.name.trim() || [...fields.name.trim()].length > 200
+      || fields.componentNameMissing !== undefined && typeof fields.componentNameMissing !== 'boolean'
+      || fields.componentMaterialSnapshot !== undefined && fields.componentMaterialSnapshot !== null && (typeof fields.componentMaterialSnapshot !== 'object' || typeof fields.componentMaterialSnapshot.id !== 'string' || !Number.isSafeInteger(fields.componentMaterialSnapshot.version) || fields.componentMaterialSnapshot.version < 1)
+      || !fields.code.trim() || [...fields.code.trim()].length > 100 || !fields.componentNameMissing && !fields.name.trim() || !fields.componentNameMissing && [...fields.name.trim()].length > 200
       || [fields.code, fields.name].some(value => /[\u0000\uD800-\uDFFF]/u.test(value))) fail('INTEGRATION_INPUT_INVALID', 400);
-    return { organizationId, code: fields.code.trim(), name: fields.name.trim() };
+    return { organizationId, code: fields.code.trim(), name: fields.componentNameMissing ? null : fields.name.trim(), componentNameMissing: fields.componentNameMissing, componentMaterialSnapshot: fields.componentMaterialSnapshot };
   }
 
   private async find(transaction: AdminTransaction, organizationId: string, code: string, lock = false) {
@@ -39,10 +41,11 @@ export class ComponentProjectIngestionAdapter implements IntegrationMasterDataAd
   }
 
   async write(transaction: AdminTransaction, actor: AdminActor, fields: IntegrationFields, expected: IntegrationExpected, traceId: string): Promise<IntegrationRecord> {
-    const { organizationId, code, name } = await this.input(transaction, actor, fields);
+    const input = await this.input(transaction, actor, fields);
+    const { organizationId, code, name } = input;
     const current = await this.find(transaction, organizationId, code, true);
     if (expected === null ? !!current : !current || current.id !== expected.id || current.version !== expected.version) fail('CONCURRENCY_CONFLICT', 409);
-    if (current?.name === name) return record(current);
+    if (!input.componentNameMissing && current?.name === name || input.componentNameMissing && current) return record(current);
     const id = current?.id ?? randomUUID();
     const [updated] = current
       ? await transaction.$queryRaw<ComponentRow[]>`UPDATE component_project_mappings SET component_name = ${name}, version = version + 1, updated_by_user_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND version = ${current.version} RETURNING id, version, component_code AS code, component_name AS name`

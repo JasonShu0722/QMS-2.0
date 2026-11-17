@@ -37,6 +37,10 @@ export class IngestionAiApplicationBindingDto {
   @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) publishedVersion!: number;
   @ApiProperty({ type: [IngestionAiInputFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionAiInputFieldDto) inputFields!: IngestionAiInputFieldDto[];
 }
+export class ComponentNameLookupDto {
+  @ApiProperty({ enum: ['MATERIAL'] }) @IsIn(['MATERIAL']) source!: 'MATERIAL';
+  @ApiProperty({ enum: ['materialName'] }) @IsIn(['materialName']) field!: 'materialName';
+}
 export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() endpointId!: string;
@@ -45,6 +49,7 @@ export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty({ enum: ['ALL', 'ANY'] }) @IsIn(['ALL', 'ANY']) match!: 'ALL' | 'ANY';
   @ApiProperty({ type: [IngestionConditionDto], maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionConditionDto) conditions!: IngestionConditionDto[];
   @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: '目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。' }) @IsObject() mapping!: Record<string, string>;
+  @ApiPropertyOptional({ type: ComponentNameLookupDto }) @IsOptional() @ValidateNested() @Type(() => ComponentNameLookupDto) componentNameLookup?: ComponentNameLookupDto;
   @ApiProperty({ enum: ['INSERT_ONLY', 'UPDATE', 'CONFIRM'] }) @IsIn(['INSERT_ONLY', 'UPDATE', 'CONFIRM']) mode!: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM';
   @ApiProperty({ type: [String], maxItems: 9 }) @IsArray() @ArrayMaxSize(9) @IsString({ each: true }) updateFields!: string[];
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sourceUpdatedAtField?: string;
@@ -116,6 +121,8 @@ export class IngestionPreviewDto {
   @ApiPropertyOptional() pendingConfiguration?: boolean;
   @ApiPropertyOptional({ type: [String] }) registrationIssues?: string[];
   @ApiPropertyOptional() defectQuantity?: number;
+  @ApiPropertyOptional({ type: Boolean }) materialMatched?: boolean;
+  @ApiPropertyOptional({ enum: ['MATERIAL_MASTER'] }) materialNameSource?: 'MATERIAL_MASTER';
 }
 export class SubmitIngestionImportDto extends IntegrationScopeDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID() previewId!: string;

@@ -56,6 +56,7 @@ const configurationIdKeys = new Set([
 const configurationDateKeys = new Set(['validFrom', 'validTo', 'previousValidFrom', 'previousValidTo']);
 const SAFE_METADATA_KEYS = new Set([
   'protocol', 'publishedVersion',
+  'materialId', 'materialVersion', 'materialMatched',
   'rowIndex', 'ruleVersion', 'receiptCount', 'rowCount', 'result', 'target', 'action', 'enabled', 'reprocessed',
   ...Object.keys(configurationTextLimits), ...configurationIdKeys,
   'componentProjectStage', 'previousComponentProjectStage', 'previousStatus',

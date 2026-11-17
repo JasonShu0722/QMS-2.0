@@ -4,7 +4,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { decryptSecret } from '../../common/security/security-keyring.js';
-import type { ProcessDefectIntegrationFields } from '../../common/integration-master-data.js';
+import type { IntegrationFields, ProcessDefectIntegrationFields } from '../../common/integration-master-data.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { assertIntegrationOrganization, integrationInteger, integrationScope, lockIntegrationEndpoint } from './integration-types.js';
@@ -12,27 +12,32 @@ import { IngestionTargetsService, type IngestionTargetFields, type IngestionTarg
 import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { evaluateIngestionRow, ingestionError, ingestionTargetPermission, normalizeIngestionRule, processDefectSourceFields, selectedDescriptionInput, type IngestionFields, type IngestionRule } from './ingestion.policy.js';
 import { AiDescriptionService } from './ai-description.service.js';
+import { MaterialMasterService } from '../material-master/material-master.service.js';
 import type { AiIngestionPreviewDto } from './ai-description.dto.js';
 import type { ProcessCompletionVersion } from '../process-quality/process-defect-completion.service.js';
 import type { DeleteIngestionRuleDto, IngestionControlDto, IngestionDifferenceDto, IngestionEndpointDto, IngestionEndpointPageDto, IngestionHistoryPreviewInputDto, IngestionImportResultDto, IngestionItemActionDto, IngestionItemDetailDto, IngestionItemDto, IngestionItemPageDto, IngestionJobDto, IngestionJobPageDto, IngestionJobQueryDto, IngestionPreviewDto, IngestionPreviewInputDto, IngestionRuleDto, IngestionRulePageDto, SaveIngestionRuleDto, SubmitIngestionImportDto, UpdateIngestionRuleDto } from './ingestion.dto.js';
 import type { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
 type RuleRow = { id: string; organization_id: string; endpoint_id: string; creator_id: string; configuration: IngestionRule; actor_snapshot: AdminActor; version: number; enabled: boolean; updated_at: Date };
-type SavedRuleMutation = IngestionRuleDto & { configurationReadRequired?: boolean };
+type SavedRuleMutation = IngestionRuleDto & { configurationReadRequired?: boolean; materialReadRequired?: boolean };
 type ReceiptRow = { id: string; endpoint_id: string; organization_id: string; received_at: Date; payload_ciphertext: string | null; available: boolean };
-type Selection = { receiptId: string; indexes: number[]; expected?: { id: string; version: number } | null };
+type Selection = { receiptId: string; indexes: number[]; expected?: { id: string; version: number } | null; componentMaterialSnapshot?: { id: string; version: number } | null };
+type ComponentMaterialBaseline = { id: string; version: number } | null;
+type IngestionJobRuleSnapshot = IngestionRule & { configuredBy?: AdminActor; authorizedBy?: AdminActor; componentMaterialBaselines?: Record<string, ComponentMaterialBaseline> };
 type PreviewRow = { id: string; actor_id: string; endpoint_id: string; rule_id: string; rule_version: number; kind: 'SINGLE' | 'HISTORY'; selections: Selection[]; valid: boolean; expires_at: Date };
-type JobRow = { id: string; organization_id: string; endpoint_id: string; receipt_id: string | null; rule_id: string; rule_version: number; rule_snapshot: IngestionRule & { configuredBy?: AdminActor; authorizedBy?: AdminActor }; actor_snapshot: AdminActor; source: 'AUTO' | 'SINGLE' | 'HISTORY'; status: string; sequence: bigint; generation: number; error_code: string | null; created_at: Date; next_row_index: number; expansion_complete: boolean; parent_job_id: string | null; planning_preview_id: string | null; reprocess_reason: string | null };
+type JobRow = { id: string; organization_id: string; endpoint_id: string; receipt_id: string | null; rule_id: string; rule_version: number; rule_snapshot: IngestionJobRuleSnapshot; actor_snapshot: AdminActor; source: 'AUTO' | 'SINGLE' | 'HISTORY'; status: string; sequence: bigint; generation: number; error_code: string | null; created_at: Date; next_row_index: number; expansion_complete: boolean; parent_job_id: string | null; planning_preview_id: string | null; reprocess_reason: string | null };
 type ItemRow = { id: string; organization_id: string; job_id: string; receipt_id: string; row_index: number; status: string; target_id: string | null; target_version: number | null; source_updated_at: Date | null; source_received_at: Date | null; error_code: string | null; error_field: string | null; duplicate_of_item_id: string | null; version: number };
-type Evaluation = { action: string; fields?: IngestionFields; differences: IngestionDifferenceDto[]; current: IngestionTargetRecord | null; sourceUpdatedAt: string | null; sourceReceivedAt?: Date; errorCode?: string; errorField?: string; duplicateOfItemId?: string };
+type Evaluation = { action: string; fields?: IngestionFields; differences: IngestionDifferenceDto[]; current: IngestionTargetRecord | null; sourceUpdatedAt: string | null; sourceReceivedAt?: Date; componentMaterialSnapshot?: { id: string; version: number } | null; errorCode?: string; errorField?: string; duplicateOfItemId?: string };
 const actorSnapshot = (actor: AdminActor, organizationId: string): AdminActor => ({ id: actor.id, organizationId: actor.organizationId, accountType: actor.accountType, sessionId: '', scopeOrganizationId: organizationId });
 const itemDto = (row: ItemRow): IngestionItemDto => ({ id: row.id, jobId: row.job_id, receiptId: row.receipt_id, rowIndex: row.row_index, status: row.status, errorCode: row.error_code, errorField: row.error_field, duplicateOfItemId: row.duplicate_of_item_id, targetId: row.target_id, targetVersion: row.target_version, version: row.version });
 const ruleDto = (row: RuleRow): IngestionRuleDto => ({ ...row.configuration, organizationId: row.organization_id, id: row.id, version: row.version, creatorId: row.creator_id, updatedAt: row.updated_at.toISOString() });
 const aiRuleIdentity = (ai: IngestionRule['aiDescription']) => ai ? JSON.stringify([ai.connectionId, ai.model, ai.prompt, ai.inputFields.map(field => [field.path, field.label ?? '', field.variable]), ai.output.mode, ai.output.field, ai.output.target]) : null;
 const aiBindingIdentity = (binding: IngestionRule['aiApplication']) => binding ? JSON.stringify([binding.applicationId, binding.publishedVersion, binding.inputFields.map(field => [field.path, field.label ?? '', field.variable])]) : null;
-const displayedFields = (fields: IngestionFields): Record<string, string> => Object.fromEntries(Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['receiptId', 'sourceObservedAt'].includes(entry[0])));
+const displayedFields = (fields: IngestionFields): Record<string, string> => Object.fromEntries(Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['receiptId', 'sourceObservedAt'].includes(entry[0]) && !(entry[0] === 'name' && (fields as IntegrationFields).componentNameMissing)));
+const sameMaterialBaseline = (first: ComponentMaterialBaseline | undefined, second: ComponentMaterialBaseline | null | undefined) => JSON.stringify(first ?? null) === JSON.stringify(second ?? null);
 function proposedChanges(rule: IngestionRule, fields: IngestionFields, current: IngestionTargetRecord) {
-  const permitted = Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['code', 'externalRecordKey', 'receiptId', 'sourceObservedAt'].includes(entry[0]) && (rule.target !== 'PROCESS_DEFECT' || processDefectSourceFields.includes(entry[0])) && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes(entry[0])));
+  const componentNameMissing = rule.target === 'COMPONENT' && (fields as IntegrationFields).componentNameMissing === true;
+  const permitted = Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !(componentNameMissing && entry[0] === 'name') && !['code', 'externalRecordKey', 'receiptId', 'sourceObservedAt', 'componentNameMissing', 'componentMaterialSnapshot'].includes(entry[0]) && (rule.target !== 'PROCESS_DEFECT' || processDefectSourceFields.includes(entry[0])) && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes(entry[0])));
   const currentValues = current.values as unknown as Record<string, unknown>;
   const differences: IngestionDifferenceDto[] = permitted.filter(([field, value]) => currentValues[field] !== value).map(([field, value]) => ({ field, before: typeof currentValues[field] === 'string' ? currentValues[field] as string : null, after: value }));
   const source = fields as ProcessDefectIntegrationFields;
@@ -65,7 +70,7 @@ const historyParentHasBlockedSource = Prisma.sql`EXISTS(SELECT 1 FROM integratio
 
 @Injectable()
 export class IngestionService {
-  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly targets: IngestionTargetsService, @Optional() private readonly ai?: AiDescriptionService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService, private readonly targets: IngestionTargetsService, @Optional() private readonly ai?: AiDescriptionService, @Optional() private readonly materials?: MaterialMasterService) {}
 
   async syncProcessCompletionVersion(transaction: AdminTransaction, change: ProcessCompletionVersion): Promise<void> {
     await transaction.$executeRaw`UPDATE integration_ingestion_target_versions SET target_version=${change.version} WHERE organization_id=${change.organizationId}::uuid AND target='PROCESS_DEFECT' AND target_id=${change.id}::uuid AND target_version=${change.previousVersion}`;
@@ -133,6 +138,16 @@ export class IngestionService {
       await this.access(tx, actor, 'ingestion:manage', false, configuration.target);
       const current = id ? await this.rule(tx, organizationId, id, (input as UpdateIngestionRuleDto).expectedVersion) : undefined;
       if (current && (current.endpoint_id !== configuration.endpointId || current.configuration.target !== configuration.target)) ingestionError('INGESTION_RULE_INVALID');
+      const preservesDisabledMaterialBinding = Boolean(
+        current
+        && !configuration.enabled
+        && current.configuration.target === 'COMPONENT'
+        && current.configuration.componentNameLookup
+        && configuration.componentNameLookup
+        && current.configuration.componentNameLookup.source === configuration.componentNameLookup.source
+        && current.configuration.componentNameLookup.field === configuration.componentNameLookup.field,
+      );
+      if (configuration.componentNameLookup && !preservesDisabledMaterialBinding) await assertAdminAccess(tx, actor, organizationId, 'material-master:read');
       const unchangedBinding = configuration.aiApplication && aiBindingIdentity(current?.configuration.aiApplication) === aiBindingIdentity(configuration.aiApplication);
       const preservesAi = Boolean(current?.configuration.aiDescription && !configuration.enabled && (configuration.aiDescription || configuration.aiApplication)
         && (!configuration.aiApplication || unchangedBinding) && (!configuration.aiDescription || aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription)));
@@ -167,14 +182,15 @@ export class IngestionService {
       }
       if (!row!) ingestionError('CONCURRENCY_CONFLICT', 409);
       await this.event(tx, actor, organizationId, 'INGESTION_RULE_SAVED', row.id, traceId, { resourceVersion: row.version, endpointId: row.endpoint_id, target: configuration.target, enabled: configuration.enabled });
-      return { ...ruleDto(row), configurationReadRequired };
+      return { ...ruleDto(row), configurationReadRequired, materialReadRequired: Boolean(configuration.componentNameLookup && !preservesDisabledMaterialBinding) };
     }, undefined, async (tx, saved) => {
       await assertIntegrationOrganization(tx, organizationId);
+      if (saved.materialReadRequired ?? Boolean(saved.componentNameLookup)) await assertAdminAccess(tx, actor, organizationId, 'material-master:read');
       if (saved.configurationReadRequired === true || saved.configurationReadRequired === undefined && (saved.aiDescription || saved.aiApplication)) {
         await assertAdminAccess(tx, actor, organizationId, 'ai:applications:read');
       }
     });
-    const { configurationReadRequired: _configurationReadRequired, ...saved } = result;
+    const { configurationReadRequired: _configurationReadRequired, materialReadRequired: _materialReadRequired, ...saved } = result;
     return saved;
   }
 
@@ -219,7 +235,15 @@ export class IngestionService {
       throw error;
     }
     if (!parsed.matched) return { action: 'FILTERED', differences: [], current: null, sourceUpdatedAt: null };
-    const targetFields: IngestionTargetFields = rule.target === 'PROCESS_DEFECT' ? { ...parsed.fields as Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>, receiptId: receipt.id, rowIndex } : parsed.fields as IngestionTargetFields;
+    let targetFields: IngestionTargetFields = rule.target === 'PROCESS_DEFECT' ? { ...parsed.fields as Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>, receiptId: receipt.id, rowIndex } : parsed.fields as IngestionTargetFields;
+    let componentMaterialSnapshot: { id: string; version: number } | null | undefined;
+    if (rule.target === 'COMPONENT' && rule.componentNameLookup) {
+      if (!this.materials) ingestionError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
+      const code = (targetFields as IntegrationFields).code;
+      const material = await this.materials.findForIngestion(tx, actor, code);
+      componentMaterialSnapshot = material ? { id: material.id, version: material.version } : null;
+      targetFields = { ...(targetFields as IntegrationFields), name: material?.materialName ?? '', componentNameMissing: !material, componentMaterialSnapshot };
+    }
     let current: IngestionTargetRecord | null;
     try {
       let linkedTargetId: string | undefined;
@@ -233,25 +257,25 @@ export class IngestionService {
       if (error instanceof HttpException && (error.getStatus() === 400 || rule.target === 'PROCESS_DEFECT' && error.getStatus() === 409 && errorCode(error) === 'PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT')) return { action: 'VALIDATION_FAILED', differences: [], current: null, sourceUpdatedAt: parsed.sourceUpdatedAt, errorCode: errorCode(error), errorField: validationField(error, rule) };
       throw error;
     }
-    if (!current) return { action: 'INSERTED', fields: targetFields, differences: [], current: null, sourceUpdatedAt: parsed.sourceUpdatedAt };
+    if (!current) return { action: 'INSERTED', fields: targetFields, differences: [], current: null, sourceUpdatedAt: parsed.sourceUpdatedAt, componentMaterialSnapshot };
     if ('deleted' in current && current.deleted) return { action: 'EXISTING_SKIPPED', differences: [], current, sourceUpdatedAt: parsed.sourceUpdatedAt, errorCode: 'PROCESS_DEFECT_ARCHIVED' };
-    const { permitted, differences, issues } = proposedChanges(rule, parsed.fields, current);
+    const { permitted, differences, issues } = proposedChanges(rule, targetFields, current);
     const processValues = current.values as ProcessDefectIntegrationFields, processSource = parsed.fields as ProcessDefectIntegrationFields;
     if (this.ai && rule.target === 'PROCESS_DEFECT' && rule.aiDescription && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes('description'))) {
       const difference = await this.ai.difference(tx, actor, { ruleId, ruleVersion, rule, defectId: current.id, fields: selectedDescriptionInput(rule, row),
         direct: processSource.description ?? null, invalidDirect: processSource.issues?.includes('description:INVALID') });
       if (difference) differences.push(difference);
     }
-    const metadata = rule.target === 'PROCESS_DEFECT' ? { receiptId: receipt.id, rowIndex, issues, ...(processValues.externalRecordKey ? { externalRecordKey: processValues.externalRecordKey } : {}), ...(processSource.sourceObservedAt ? { sourceObservedAt: processSource.sourceObservedAt } : {}) } : {};
+    const metadata = rule.target === 'PROCESS_DEFECT' ? { receiptId: receipt.id, rowIndex, issues, ...(processValues.externalRecordKey ? { externalRecordKey: processValues.externalRecordKey } : {}), ...(processSource.sourceObservedAt ? { sourceObservedAt: processSource.sourceObservedAt } : {}) } : componentMaterialSnapshot !== undefined ? { componentNameMissing: (targetFields as IntegrationFields).componentNameMissing, componentMaterialSnapshot } : {};
     const result = { fields: { ...(rule.target === 'PROCESS_DEFECT' ? {} : current.values), ...Object.fromEntries(permitted), ...metadata } as IngestionFields, differences, current, sourceUpdatedAt: parsed.sourceUpdatedAt };
-    if (!differences.length) return { ...result, action: 'UNCHANGED' };
+    if (!differences.length) return { ...result, action: 'UNCHANGED', componentMaterialSnapshot };
     if (rule.mode === 'INSERT_ONLY') return { ...result, action: 'EXISTING_SKIPPED' };
     const [latest] = await tx.$queryRaw<{ endpoint_id: string; receipt_received_at: Date; source_updated_at: Date | null; target_version: number }[]>`SELECT endpoint_id,receipt_received_at,source_updated_at,target_version FROM integration_ingestion_target_versions WHERE organization_id=${receipt.organization_id}::uuid AND target=${rule.target} AND target_id=${current.id}::uuid`;
     const timestamp = parsed.sourceUpdatedAt ? new Date(parsed.sourceUpdatedAt) : null;
     const staleSource = latest && (latest.endpoint_id !== receipt.endpoint_id || latest.receipt_received_at > receipt.received_at || latest.target_version !== current.version || timestamp && latest.source_updated_at && sourceVersionIsStale(timestamp, latest.source_updated_at, differences));
     const uncertainHistory = source === 'HISTORY' && (!timestamp || !latest?.source_updated_at);
     const protectedDifference = 'protectedFields' in current && current.protectedFields?.some(field => differences.some(difference => difference.field === field || field === 'description' && difference.field === 'aiDescription'));
-    return { ...result, action: rule.mode === 'CONFIRM' || staleSource || uncertainHistory || protectedDifference ? 'AWAITING_CONFIRMATION' : 'UPDATED' };
+    return { ...result, action: rule.mode === 'CONFIRM' || staleSource || uncertainHistory || protectedDifference ? 'AWAITING_CONFIRMATION' : 'UPDATED', componentMaterialSnapshot };
   }
 
   async preview(actor: AdminActor, input: IngestionPreviewInputDto, traceId: string, key?: string): Promise<IngestionPreviewDto> {
@@ -264,7 +288,7 @@ export class IngestionService {
       integrationInteger(input.rowIndex, 0, Math.max(0, rows.length - 1));
       if (input.rowIndex >= rows.length) ingestionError('INGESTION_RULE_INVALID');
       const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex, rule.id, rule.version);
-      const preview = await this.storePreview(tx, actor, rule, 'SINGLE', [{ receiptId: receipt.id, indexes: [input.rowIndex], expected: evaluation.current ? { id: evaluation.current.id, version: evaluation.current.version } : null }]);
+      const preview = await this.storePreview(tx, actor, rule, 'SINGLE', [{ receiptId: receipt.id, indexes: [input.rowIndex], expected: evaluation.current ? { id: evaluation.current.id, version: evaluation.current.version } : null, ...(rule.configuration.componentNameLookup ? { componentMaterialSnapshot: evaluation.componentMaterialSnapshot ?? null } : {}) }]);
       await this.event(tx, actor, organizationId, 'INGESTION_PREVIEWED', receipt.id, traceId, { ruleId: rule.id, rowIndex: input.rowIndex });
       return preview;
     });
@@ -275,7 +299,7 @@ export class IngestionService {
       const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex, rule.id, rule.version);
       const process = rule.configuration.target === 'PROCESS_DEFECT', fields = evaluation.fields as ProcessDefectIntegrationFields | undefined;
       const result = evaluation.current ? (await this.targets.results(tx, actor, rule.configuration.target, [evaluation.current.id]))[0] : undefined;
-      return { ...preview, action: evaluation.action, ...(evaluation.errorCode ? { errorCode: evaluation.errorCode } : {}), ...(evaluation.errorField ? { errorField: evaluation.errorField } : {}), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(evaluation.current ? { targetId: evaluation.current.id } : {}), ...(process && fields ? { pendingCompletion: result?.pendingCompletion ?? (['occurredAt', 'productCode', 'traceCode', 'description', 'externalRecordKey'].some(field => !fields[field as keyof ProcessDefectIntegrationFields]) || !!fields.issues?.length), ...(result ? { pendingConfiguration: result.pendingConfiguration } : {}), registrationIssues: fields.issues ?? [], defectQuantity: result?.defectQuantity ?? 1 } : {}), differences: evaluation.differences };
+      return { ...preview, action: evaluation.action, ...(evaluation.errorCode ? { errorCode: evaluation.errorCode } : {}), ...(evaluation.errorField ? { errorField: evaluation.errorField } : {}), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(evaluation.current ? { targetId: evaluation.current.id } : {}), ...(rule.configuration.componentNameLookup ? { materialMatched: evaluation.componentMaterialSnapshot !== null, materialNameSource: 'MATERIAL_MASTER' as const } : {}), ...(process && fields ? { pendingCompletion: result?.pendingCompletion ?? (['occurredAt', 'productCode', 'traceCode', 'description', 'externalRecordKey'].some(field => !fields[field as keyof ProcessDefectIntegrationFields]) || !!fields.issues?.length), ...(result ? { pendingConfiguration: result.pendingConfiguration } : {}), registrationIssues: fields.issues ?? [], defectQuantity: result?.defectQuantity ?? 1 } : {}), differences: evaluation.differences };
     }, { isolationLevel: 'RepeatableRead' });
   }
   async previewHistory(actor: AdminActor, input: IngestionHistoryPreviewInputDto, traceId: string, key?: string): Promise<IngestionPreviewDto> {
@@ -360,9 +384,10 @@ export class IngestionService {
         if (!selection.indexes.length) continue;
         if (preview.kind === 'SINGLE') {
           const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[selection.indexes[0]!], receipt, 'SINGLE', selection.indexes[0]!, rule.id, rule.version);
-          if ((evaluation.current?.id ?? null) !== (selection.expected?.id ?? null) || (evaluation.current?.version ?? null) !== (selection.expected?.version ?? null)) ingestionError('CONCURRENCY_CONFLICT', 409);
+          if ((evaluation.current?.id ?? null) !== (selection.expected?.id ?? null) || (evaluation.current?.version ?? null) !== (selection.expected?.version ?? null)
+            || rule.configuration.componentNameLookup && JSON.stringify(evaluation.componentMaterialSnapshot ?? null) !== JSON.stringify(selection.componentMaterialSnapshot ?? null)) ingestionError('CONCURRENCY_CONFLICT', 409);
         }
-        const queued = await this.enqueue(tx, rule, receipt.id, selection.indexes, preview.kind, actorSnapshot(actor, organizationId), input.reprocessReason?.trim(), selection.expected);
+        const queued = await this.enqueue(tx, rule, receipt.id, selection.indexes, preview.kind, actorSnapshot(actor, organizationId), input.reprocessReason?.trim(), selection.expected, selection.componentMaterialSnapshot);
         result.jobIds.push(queued.id, ...queued.additionalIds); result.reused &&= queued.reused; result.rowCount! += selection.indexes.length;
       }
       result.jobIds = [...new Set(result.jobIds)];
@@ -373,7 +398,10 @@ export class IngestionService {
       if (!preview) ingestionError('INGESTION_PREVIEW_EXPIRED', 410);
       const rule = await this.rule(tx, organizationId, preview.rule_id, preview.rule_version);
       await this.access(tx, actor, 'ingestion:run', true, rule.configuration.target);
+      if (rule.configuration.componentNameLookup) await assertAdminAccess(tx, actor, organizationId, 'material-master:read');
     }, async (tx, response) => {
+      const [materialJob] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${organizationId}::uuid AND id=ANY(${response.jobIds}::uuid[]) AND rule_snapshot->'componentNameLookup' IS NOT NULL LIMIT 1`;
+      if (materialJob) await assertAdminAccess(tx, actor, organizationId, 'material-master:read');
       const metadata = await this.audit.readSuccessfulResourceMetadata(tx, { organizationId, actorUserId: actor.id, action: 'INGESTION_IMPORT_SUBMITTED', resourceType: 'IntegrationIngestion', resourceId: input.previewId });
       const target = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata.target : undefined;
       const auditedRuleId = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata.ruleId : undefined;
@@ -396,7 +424,7 @@ export class IngestionService {
     if (!rowCount) return;
     for (const rule of rules) await this.enqueue(tx, rule, receiptId, Array.from({ length: rowCount }, (_, index) => index), 'AUTO', rule.actor_snapshot);
   }
-  private async enqueue(tx: AdminTransaction, rule: RuleRow, receiptId: string, indexes: number[], source: 'AUTO' | 'SINGLE' | 'HISTORY', actor: AdminActor, reprocessReason?: string, expected?: { id: string; version: number } | null): Promise<{ id: string; additionalIds: string[]; reused: boolean }> {
+  private async enqueue(tx: AdminTransaction, rule: RuleRow, receiptId: string, indexes: number[], source: 'AUTO' | 'SINGLE' | 'HISTORY', actor: AdminActor, reprocessReason?: string, expected?: { id: string; version: number } | null, componentMaterialSnapshot?: ComponentMaterialBaseline): Promise<{ id: string; additionalIds: string[]; reused: boolean }> {
     const organizationId = rule.organization_id, endpointId = rule.endpoint_id;
     let generation = 0;
     if (reprocessReason) {
@@ -421,7 +449,8 @@ export class IngestionService {
     await tx.$executeRaw`INSERT INTO integration_ingestion_queues(organization_id,endpoint_id) VALUES(${organizationId}::uuid,${endpointId}::uuid) ON CONFLICT DO NOTHING`;
     const [queue] = await tx.$queryRaw<{ next_sequence: bigint }[]>`UPDATE integration_ingestion_queues SET next_sequence=next_sequence+1 WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid RETURNING next_sequence-1 AS next_sequence`;
     const id = randomUUID();
-    await tx.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,sequence,generation,selection_key,reprocess_reason) VALUES(${id}::uuid,${organizationId}::uuid,${endpointId}::uuid,${receiptId}::uuid,${rule.id}::uuid,${rule.version},${JSON.stringify({ ...rule.configuration, configuredBy: rule.actor_snapshot })}::jsonb,${JSON.stringify(actor)}::jsonb,${source},${queue!.next_sequence},${generation},${selectionKey},${reprocessReason ?? null})`;
+    const ruleSnapshot: IngestionJobRuleSnapshot = { ...rule.configuration, configuredBy: rule.actor_snapshot, ...(rule.configuration.componentNameLookup && componentMaterialSnapshot !== undefined ? { componentMaterialBaselines: Object.fromEntries(indexes.map(index => [String(index), componentMaterialSnapshot])) } : {}) };
+    await tx.$executeRaw`INSERT INTO integration_ingestion_jobs(id,organization_id,endpoint_id,receipt_id,rule_id,rule_version,rule_snapshot,actor_snapshot,source,sequence,generation,selection_key,reprocess_reason) VALUES(${id}::uuid,${organizationId}::uuid,${endpointId}::uuid,${receiptId}::uuid,${rule.id}::uuid,${rule.version},${JSON.stringify(ruleSnapshot)}::jsonb,${JSON.stringify(actor)}::jsonb,${source},${queue!.next_sequence},${generation},${selectionKey},${reprocessReason ?? null})`;
     for (let offset = 0; offset < indexes.length; offset += 500) await tx.$executeRaw(Prisma.sql`INSERT INTO integration_ingestion_items(id,organization_id,job_id,receipt_id,rule_id,rule_version,row_index,generation,target_id,target_version) VALUES ${Prisma.join(indexes.slice(offset, offset + 500).map(index => Prisma.sql`(${randomUUID()}::uuid,${organizationId}::uuid,${id}::uuid,${receiptId}::uuid,${rule.id}::uuid,${rule.version},${index},${generation},${expected?.id ?? null}::uuid,${expected?.version ?? null})`))} ON CONFLICT(organization_id,receipt_id,rule_id,rule_version,row_index,generation) DO NOTHING`);
     await this.refreshJob(tx, id);
     return { id, additionalIds: coveredJobs, reused: false };
@@ -481,6 +510,10 @@ export class IngestionService {
           }
           if (!item) { await this.refreshJob(tx, job.id); return !job.expansion_complete; }
           itemId = item.id;
+          if (job.source === 'AUTO' && job.rule_snapshot.componentNameLookup) {
+            const [activeRule] = await tx.$queryRaw<{ enabled: boolean }[]>`SELECT enabled FROM integration_ingestion_rules WHERE organization_id=${job.organization_id}::uuid AND id=${job.rule_id}::uuid`;
+            if (activeRule && !activeRule.enabled) ingestionError('INGESTION_AUTHORIZATION_REVOKED', 403);
+          }
           receipt ??= await this.receipt(tx, job.organization_id, item.receipt_id, job.endpoint_id, true);
           rows ??= this.payload(receipt);
           if (item.row_index >= rows.length) ingestionError('INTEGRATION_MESSAGE_INVALID');
@@ -490,6 +523,17 @@ export class IngestionService {
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ingestion-target:${job.organization_id}:${job.rule_snapshot.target}:${identity}`},0))::text`;
           }
           const evaluation = await this.evaluate(tx, executionActor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
+          if (job.rule_snapshot.componentNameLookup) {
+            const baselines = job.rule_snapshot.componentMaterialBaselines ?? {};
+            const key = String(item.row_index);
+            if (Object.hasOwn(baselines, key)) {
+              if (!sameMaterialBaseline(baselines[key], evaluation.componentMaterialSnapshot)) evaluation.action = 'AWAITING_CONFIRMATION';
+            } else {
+              baselines[key] = evaluation.componentMaterialSnapshot ?? null;
+              await tx.$executeRaw`UPDATE integration_ingestion_jobs SET rule_snapshot=jsonb_set(rule_snapshot,'{componentMaterialBaselines}',${JSON.stringify(baselines)}::jsonb,true) WHERE id=${job.id}::uuid`;
+              job.rule_snapshot = { ...job.rule_snapshot, componentMaterialBaselines: baselines };
+            }
+          }
           if (job.source === 'SINGLE' && ['INSERTED', 'UPDATED'].includes(evaluation.action) && ((item.target_id ?? null) !== (evaluation.current?.id ?? null) || (item.target_version ?? null) !== (evaluation.current?.version ?? null))) evaluation.action = 'AWAITING_CONFIRMATION';
           await this.applyEvaluation(tx, job, item, receipt, evaluation, executionActor, randomUUID());
           await this.refreshJob(tx, job.id);
@@ -508,14 +552,21 @@ export class IngestionService {
     const candidates = await tx.$queryRaw<ItemRow[]>`SELECT i.* FROM integration_ingestion_items i JOIN integration_ingestion_jobs j ON j.id=i.job_id WHERE i.organization_id=${job.organization_id}::uuid AND i.target_id=${evaluation.current!.id}::uuid AND i.target_version=${evaluation.current!.version} AND i.status='AWAITING_CONFIRMATION' AND j.endpoint_id=${job.endpoint_id}::uuid AND j.rule_snapshot->>'target'=${job.rule_snapshot.target} AND COALESCE(j.rule_snapshot->>'sourceUpdatedAtField','')=${job.rule_snapshot.sourceUpdatedAtField ?? ''} ORDER BY j.sequence,i.row_index`;
     for (const candidate of candidates) {
       const previousJob = await this.jobRow(tx, job.organization_id, candidate.job_id);
+      const previousLookup = previousJob.rule_snapshot.componentNameLookup;
+      const currentLookup = job.rule_snapshot.componentNameLookup;
+      if (Boolean(previousLookup) !== Boolean(currentLookup)
+        || previousLookup && currentLookup && (previousLookup.source !== currentLookup.source || previousLookup.field !== currentLookup.field)) continue;
       const previousReceipt = await this.receipt(tx, job.organization_id, candidate.receipt_id, previousJob.endpoint_id, true);
       const parsed = evaluateIngestionRow(previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index]);
       if (!parsed.matched) continue;
-      const { differences } = await this.evaluate(tx, actor, previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index], previousReceipt, previousJob.source, candidate.row_index, previousJob.rule_id, previousJob.rule_version);
+      const previousEvaluation = await this.evaluate(tx, actor, previousJob.rule_snapshot, this.payload(previousReceipt)[candidate.row_index], previousReceipt, previousJob.source, candidate.row_index, previousJob.rule_id, previousJob.rule_version);
+      const { differences } = previousEvaluation;
       if (differences.length !== evaluation.differences.length || differences.some(difference => !evaluation.differences.some(current => current.field === difference.field && current.before === difference.before && current.after === difference.after))) continue;
       const sourceUpdatedAt = newestDate(candidate.source_updated_at, evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null);
       const receivedAt = newestDate(candidate.source_received_at ?? previousReceipt.received_at, evaluation.sourceReceivedAt ?? receipt.received_at)!;
-      if (await this.stale(tx, previousJob, candidate, previousReceipt, evaluation)) {
+      const materialSnapshotStale = previousJob.rule_snapshot.componentNameLookup && Object.hasOwn(previousJob.rule_snapshot.componentMaterialBaselines ?? {}, String(candidate.row_index))
+        && !sameMaterialBaseline(previousJob.rule_snapshot.componentMaterialBaselines?.[String(candidate.row_index)], previousEvaluation.componentMaterialSnapshot);
+      if (materialSnapshotStale || await this.stale(tx, previousJob, candidate, previousReceipt, evaluation)) {
         await tx.$executeRaw`UPDATE integration_ingestion_items SET status='SKIPPED',duplicate_of_item_id=${item.id}::uuid,error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=${candidate.id}::uuid`;
         await tx.$executeRaw`UPDATE integration_ingestion_items SET duplicate_of_item_id=${item.id}::uuid WHERE duplicate_of_item_id=${candidate.id}::uuid`;
         evaluation.sourceUpdatedAt = sourceUpdatedAt?.toISOString() ?? null;
@@ -531,7 +582,7 @@ export class IngestionService {
   }
 
   private async applyEvaluation(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation, actor: AdminActor, traceId: string, confirmed = false): Promise<void> {
-    if (evaluation.action === 'AWAITING_CONFIRMATION') await this.reuseDifference(tx, job, item, receipt, evaluation, actor);
+    if (evaluation.action === 'AWAITING_CONFIRMATION' && evaluation.current) await this.reuseDifference(tx, job, item, receipt, evaluation, actor);
     const receivedAt = newestDate(evaluation.sourceReceivedAt ?? item.source_received_at, receipt.received_at)!;
     const sourceUpdatedAt = newestDate(item.source_updated_at, evaluation.sourceUpdatedAt ? new Date(evaluation.sourceUpdatedAt) : null);
     let current = evaluation.current;
@@ -549,7 +600,8 @@ export class IngestionService {
       if (version !== undefined) current = { ...current, version };
     }
     await tx.$executeRaw`UPDATE integration_ingestion_items SET status=${evaluation.action},target_id=${current?.id ?? null}::uuid,target_version=${current?.version ?? null},source_updated_at=${sourceUpdatedAt},source_received_at=${receivedAt},error_code=${evaluation.errorCode ?? null},error_field=${evaluation.errorField ?? null},duplicate_of_item_id=${evaluation.duplicateOfItemId ?? null}::uuid,version=version+1,updated_at=clock_timestamp() WHERE id=${item.id}::uuid`;
-    await this.event(tx, actor, job.organization_id, 'INGESTION_ITEM_PROCESSED', item.id, traceId, { jobId: job.id, receiptId: item.receipt_id, rowIndex: item.row_index, ruleVersion: job.rule_version, result: evaluation.action, target: job.rule_snapshot.target });
+    const material = evaluation.componentMaterialSnapshot !== undefined ? { materialMatched: evaluation.componentMaterialSnapshot !== null, ...(evaluation.componentMaterialSnapshot ? { materialId: evaluation.componentMaterialSnapshot.id, materialVersion: evaluation.componentMaterialSnapshot.version } : {}) } : {};
+    await this.event(tx, actor, job.organization_id, 'INGESTION_ITEM_PROCESSED', item.id, traceId, { jobId: job.id, receiptId: item.receipt_id, rowIndex: item.row_index, ruleVersion: job.rule_version, result: evaluation.action, target: job.rule_snapshot.target, ...material });
   }
   private async recordFailure(candidate: JobRow, itemId: string | undefined, error: unknown) {
     const validation = error instanceof HttpException && error.getStatus() === 400;
@@ -623,6 +675,8 @@ export class IngestionService {
     return row;
   }
   private async stale(tx: AdminTransaction, job: JobRow, item: ItemRow, receipt: ReceiptRow, evaluation: Evaluation): Promise<boolean> {
+    if (job.rule_snapshot.componentNameLookup && Object.hasOwn(job.rule_snapshot.componentMaterialBaselines ?? {}, String(item.row_index))
+      && !sameMaterialBaseline(job.rule_snapshot.componentMaterialBaselines?.[String(item.row_index)], evaluation.componentMaterialSnapshot)) return true;
     if ((evaluation.current?.id ?? null) !== item.target_id || (evaluation.current?.version ?? null) !== item.target_version) return true;
     if (!evaluation.current) return false;
     const receivedAt = item.source_received_at ?? receipt.received_at;
@@ -692,6 +746,8 @@ export class IngestionService {
         if (!job.rule_snapshot.authorizedBy && job.rule_snapshot.configuredBy) await this.access(tx, job.rule_snapshot.configuredBy, 'ingestion:run', false, job.rule_snapshot.target);
         const receipt = await this.receipt(tx, organizationId, item.receipt_id, job.endpoint_id, true), rows = this.payload(receipt);
         const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
+        if (job.rule_snapshot.componentNameLookup && Object.hasOwn(job.rule_snapshot.componentMaterialBaselines ?? {}, String(item.row_index))
+          && !sameMaterialBaseline(job.rule_snapshot.componentMaterialBaselines?.[String(item.row_index)], evaluation.componentMaterialSnapshot)) ingestionError('CONCURRENCY_CONFLICT', 409);
         if (await this.stale(tx, job, item, receipt, evaluation)) ingestionError('INGESTION_STALE_CONFIRMATION', 409);
         if (!evaluation.fields || !evaluation.current || !['AWAITING_CONFIRMATION', 'UPDATED', 'UNCHANGED'].includes(evaluation.action)) ingestionError('CONCURRENCY_CONFLICT', 409);
         evaluation.action = evaluation.differences.length ? 'UPDATED' : 'UNCHANGED';
