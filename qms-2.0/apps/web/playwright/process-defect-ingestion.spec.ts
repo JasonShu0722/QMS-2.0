@@ -393,6 +393,20 @@ test('AI management separates configuration and publishes prompt applications ac
     expect(calls[2]!.headers['x-api-key']).toBe(secret);
     expect(calls[3]!.headers['x-goog-api-key']).toBe(secret);
     expect(calls.every(call => !call.path.includes(secret) && !JSON.stringify(call.body).includes('{{fault}}'))).toBe(true);
+    await positionWrite(page.request, `/api/v1/admin/ai-connections/${channels[0]!.id}`, 'PATCH', {
+      expectedVersion: channels[0]!.version, name: channels[0]!.name, baseUrl: channels[0]!.baseUrl,
+      protocol: channels[0]!.protocol, models: ['fixture-other'], defaultModel: 'fixture-other', enabled: true,
+    });
+    await page.goto(`/console/ai-applications?organizationId=${organizationId}`);
+    await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: /^编\s*辑$/ }).click();
+    const disableEditor = page.getByRole('dialog', { name: '提示词应用', exact: true });
+    await disableEditor.getByLabel('启用应用', { exact: true }).click();
+    const disabledResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/ai-applications/${application.id}`) && response.request().method() === 'PATCH');
+    await disableEditor.getByRole('button', { name: '保存草稿', exact: true }).click();
+    const disabledResult = await disabledResponse;
+    expect(disabledResult.status()).toBe(200);
+    expect(await disabledResult.json()).toMatchObject({ enabled: false, model: 'fixture-center', connectionId: channels[0]!.id });
+    await expect(disableEditor).toHaveCount(0);
     await page.goto(`/console/configuration?organizationId=${organizationId}`);
     await expect(page.getByRole('button', { name: '新增AI连接', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '新建板块规则', exact: true })).toBeVisible();

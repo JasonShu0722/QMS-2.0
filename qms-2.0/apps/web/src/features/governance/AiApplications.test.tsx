@@ -44,6 +44,20 @@ it('preserves a migrated variable label with newline and tab when only renaming 
   await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
   expect(mutate.mock.calls[0][2]).toMatchObject({ name: '仅重命名应用', variables: legacy.variables, prompt: legacy.prompt, enabled: legacy.enabled, expectedVersion: legacy.version });
 });
+it.each([false, true])('allows a removed saved model only when disabling the application: enabled=%s', async enabled => {
+  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/ai-connections') ? [{ id: 'channel-1', organizationId: 'org', name: '质量模型', enabled: true, hasKey: true, models: ['replacement-model'], defaultModel: 'replacement-model' }] as never : { items: [application], total: 1, page: 1, limit: 20 } as never);
+  mount(); const dialog = await edit();
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(expect.stringContaining('/ai-connections?'), expect.anything()));
+  if (!enabled) fireEvent.click(dialog.getByRole('switch', { name: '启用应用' }));
+  fireEvent.click(dialog.getByRole('button', { name: '保存草稿' }));
+  if (enabled) {
+    expect(await dialog.findByText('请选择可用模型')).toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+  } else {
+    await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+    expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/admin/ai-applications/application-1?organizationId=org', 'PATCH', { ...Object.fromEntries(Object.entries(application).filter(([key]) => !['id', 'organizationId', 'createdAt', 'updatedAt', 'version', 'publishedVersion'].includes(key))), enabled: false, expectedVersion: 2 }]);
+  }
+});
 it('retries the complete original draft after an unknown result and retains normal navigation protection', async () => {
   mutate.mockRejectedValueOnce(new TypeError('provider-private-detail')).mockResolvedValueOnce({ ...application, version: 3 });
   mount(); const dialog = await edit();

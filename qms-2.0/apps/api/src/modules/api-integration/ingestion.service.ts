@@ -18,6 +18,7 @@ import type { DeleteIngestionRuleDto, IngestionControlDto, IngestionDifferenceDt
 import type { IntegrationPageQueryDto } from './integration-admin.dto.js';
 
 type RuleRow = { id: string; organization_id: string; endpoint_id: string; creator_id: string; configuration: IngestionRule; actor_snapshot: AdminActor; version: number; enabled: boolean; updated_at: Date };
+type SavedRuleMutation = IngestionRuleDto & { configurationReadRequired?: boolean };
 type ReceiptRow = { id: string; endpoint_id: string; organization_id: string; received_at: Date; payload_ciphertext: string | null; available: boolean };
 type Selection = { receiptId: string; indexes: number[]; expected?: { id: string; version: number } | null };
 type PreviewRow = { id: string; actor_id: string; endpoint_id: string; rule_id: string; rule_version: number; kind: 'SINGLE' | 'HISTORY'; selections: Selection[]; valid: boolean; expires_at: Date };
@@ -126,19 +127,22 @@ export class IngestionService {
 
   async saveRule(actor: AdminActor, input: SaveIngestionRuleDto | UpdateIngestionRuleDto, traceId: string, key?: string, id?: string): Promise<IngestionRuleDto> {
     const organizationId = integrationScope(actor), configuration = normalizeIngestionRule(input);
-    const permissions = ['ingestion:manage', ingestionTargetPermission(configuration.target), ...(configuration.enabled ? ['ingestion:run'] : []), ...((configuration.aiDescription || configuration.aiApplication) ? ['configuration:read'] : [])];
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_RULE_SAVED', payload: { id, ...input }, permission: permissions, isolationLevel: 'ReadCommitted' }, async tx => {
+    const permissions = ['ingestion:manage', ingestionTargetPermission(configuration.target), ...(configuration.enabled ? ['ingestion:run'] : [])];
+    const result = await this.mutations.run<SavedRuleMutation>({ actor, organizationId, key, traceId, action: 'INGESTION_RULE_SAVED', payload: { id, ...input }, permission: permissions, isolationLevel: 'ReadCommitted' }, async tx => {
       const endpoint = await lockIntegrationEndpoint(tx, organizationId, configuration.endpointId);
       await this.access(tx, actor, 'ingestion:manage', false, configuration.target);
       const current = id ? await this.rule(tx, organizationId, id, (input as UpdateIngestionRuleDto).expectedVersion) : undefined;
       if (current && (current.endpoint_id !== configuration.endpointId || current.configuration.target !== configuration.target)) ingestionError('INGESTION_RULE_INVALID');
+      const unchangedBinding = configuration.aiApplication && aiBindingIdentity(current?.configuration.aiApplication) === aiBindingIdentity(configuration.aiApplication);
+      const preservesAi = Boolean(current?.configuration.aiDescription && !configuration.enabled && (configuration.aiDescription || configuration.aiApplication)
+        && (!configuration.aiApplication || unchangedBinding) && (!configuration.aiDescription || aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription)));
+      const configurationReadRequired = Boolean(configuration.aiDescription || configuration.aiApplication || current?.configuration.aiDescription || current?.configuration.aiApplication) && !preservesAi;
+      if (configurationReadRequired) await assertAdminAccess(tx, actor, organizationId, 'configuration:read');
       if (configuration.aiDescription || configuration.aiApplication) {
         if (!this.ai) ingestionError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
-        const unchangedBinding = configuration.aiApplication && aiBindingIdentity(current?.configuration.aiApplication) === aiBindingIdentity(configuration.aiApplication);
-        if (current?.configuration.aiDescription && !configuration.enabled && (!configuration.aiApplication || unchangedBinding)
-          && (!configuration.aiDescription || aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription))) {
-          configuration.aiDescription = current.configuration.aiDescription;
-          if (current.configuration.aiApplication) configuration.aiApplication = current.configuration.aiApplication;
+        if (preservesAi) {
+          configuration.aiDescription = current!.configuration.aiDescription;
+          if (current!.configuration.aiApplication) configuration.aiApplication = current!.configuration.aiApplication;
         } else {
           const resolved = configuration.aiApplication ? await this.ai.resolveApplication(tx, actor, configuration.aiApplication)
             : await this.ai.importApplication(tx, actor, configuration.name, configuration.aiDescription!);
@@ -163,8 +167,15 @@ export class IngestionService {
       }
       if (!row!) ingestionError('CONCURRENCY_CONFLICT', 409);
       await this.event(tx, actor, organizationId, 'INGESTION_RULE_SAVED', row.id, traceId, { resourceVersion: row.version, endpointId: row.endpoint_id, target: configuration.target, enabled: configuration.enabled });
-      return ruleDto(row);
+      return { ...ruleDto(row), configurationReadRequired };
+    }, undefined, async (tx, saved) => {
+      await assertIntegrationOrganization(tx, organizationId);
+      if (saved.configurationReadRequired === true || saved.configurationReadRequired === undefined && (saved.aiDescription || saved.aiApplication)) {
+        await assertAdminAccess(tx, actor, organizationId, 'configuration:read');
+      }
     });
+    const { configurationReadRequired: _configurationReadRequired, ...saved } = result;
+    return saved;
   }
 
   private async receipt(tx: AdminTransaction, organizationId: string, id: string, endpointId: string, allowProtected = false): Promise<ReceiptRow> {

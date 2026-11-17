@@ -21,6 +21,10 @@
 
 PR #131已建立：https://github.com/JasonShu0722/QMS-2.0/pull/131 。首候选`d7f27e0e89f3b677986bba52df7cfc223950ad64`的CI43996065786完整24项结束：22成功；web-tests(14)唯一业务失败是旧governance只读测试仍期待平台4表，实际AI移出后3表；foundation仅依赖该失败。自动Review精确head无发现。已保留完整job133748436398、汇总job133753519212日志及不可变run JSON；未盲目重跑。`V0.0.55-fix4`仅同步此旧caller断言，保只读字段并补三表名称、平台无AI界面/请求断言；完整governance7/7PASS及独立增量QUALITY PASS。产品源码、契约、迁移、依赖及浏览器执行路径不变，沿用已验证证据；同PR继续最终新head CI/Review，不新增PR或部署旧候选。
 
+fix4候选`207e76afd5a9dc0fb2a15092fdf46f059185fef5`的CI43998155999完整24项22成功：全部前端与已执行集成通过，integration(1)在源码checkout/测试前Mailpit端口51026被占用而启动失败，foundation仅依赖该失败；原日志及不可变run JSON保留。该head自动Review另发现两项P2，`V0.0.55-fix5`同PR修复：无configuration:read的业务管理者可停用原AI语义不变的规则；新增/修改/移除/启用AI仍复验权限，回执只保内部布尔授权标记且不公开。既有应用原模型被移除后允许保引用停用，新引用与启用仍校验。真实AI完整36/36PASS、应用完整8/8PASS，原RED和旧busy例10000ms超时FAIL保留，未增预算。API/Web最终lint/build四项PASS；新增真实PW实际移除模型后UI停用保存200保原引用，连同四协议/发布/样本/几何整场景1/1PASS。迁移/DTO/依赖未变化，原契约/迁移证据保持；最终API18文件260项、Web10文件216项为有效完整文件组合。
+
+fix5资源验证使用独立`qms-ai-center-fix5-pg`/`qms_ai_center_fix5`，与首轮已清理资源分开存证。164迁移PASS；首次seed仅泛化失败且根因未显露，未断言为产品或环境问题。父用同源seed的编译模块、相同受控数据库复验完整成功；诊断脚本曾先后因Windows import路径与tsx装饰器入口不正确在数据库操作前失败，改用既有编译模块完成，未改产品seed/事务预算/凭据。秘密未输出，首失败日志保留。
+
 证据统一位于Git外`D:/WorkSpace/QMS-2.0-local/ai-center-20261117/`；原始FAIL/NOT_RUN保留，不覆盖旧标签日志。
 
 | 范围 | 有效结果 | 证据与边界 |

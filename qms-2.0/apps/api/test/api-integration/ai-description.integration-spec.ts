@@ -482,7 +482,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
 
   it('rechecks configuration and target permissions on successful rule-save replay without granting business writes', async () => {
     mode = 'SUCCESS'; const source = await engineSource();
-    const key = randomUUID(), input = { ...source.configuration, expectedVersion: source.configuration.version };
+    const key = randomUUID(), input = { ...source.configuration, aiApplication: undefined, aiDescription: { ...source.configuration.aiDescription!, prompt: '变更配置{{fact}}' }, expectedVersion: source.configuration.version };
     const saved = await engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id);
     expect(await engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id)).toEqual(saved);
     for (const code of ['process-quality:defects:write', 'configuration:read']) {
@@ -491,6 +491,73 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
       try { await expect(engine.saveRule(fixture.actor, input, randomUUID(), key, source.configuration.id)).rejects.toMatchObject({ status: 403 }); }
       finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } }); }
     }
+  });
+
+  it.each(['binding', 'inline', 'both'] as const)('allows a scoped unchanged %s AI rule to be disabled and replayed without configuration read', async representation => {
+    mode = 'SUCCESS'; const value = await engineSource();
+    const active = await engine.saveRule(fixture.actor, { ...value.configuration, expectedVersion: value.configuration.version, enabled: true }, randomUUID(), randomUUID(), value.configuration.id);
+    const input = { ...active, expectedVersion: active.version, enabled: false,
+      aiApplication: representation === 'inline' ? undefined : active.aiApplication,
+      aiDescription: representation === 'binding' ? undefined : active.aiDescription };
+    const configurationPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    const runPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ingestion:run' } });
+    const removed = [configurationPermission.id, runPermission.id];
+    await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: { in: removed } } });
+    try {
+      const key = randomUUID();
+      const disabled = await engine.saveRule(fixture.actor, input, randomUUID(), key, active.id);
+      expect(disabled).toMatchObject({ enabled: false, aiApplication: active.aiApplication, aiDescription: active.aiDescription });
+      expect(disabled).not.toHaveProperty('configurationReadRequired');
+      expect(await engine.saveRule(fixture.actor, input, randomUUID(), key, active.id)).toEqual(disabled);
+      await expect(engine.saveRule(fixture.actor, { ...disabled, expectedVersion: disabled.version, enabled: true }, randomUUID(), randomUUID(), disabled.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...disabled, expectedVersion: disabled.version, aiApplication: undefined,
+        aiDescription: { ...disabled.aiDescription!, prompt: '擅改提示词{{fact}}' } }, randomUUID(), randomUUID(), disabled.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...disabled, expectedVersion: disabled.version,
+        aiApplication: { ...disabled.aiApplication!, publishedVersion: disabled.aiApplication!.publishedVersion + 1 }, aiDescription: undefined }, randomUUID(), randomUUID(), disabled.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...disabled, aiApplication: undefined, aiDescription: undefined, expectedVersion: disabled.version }, randomUUID(), randomUUID(), disabled.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...disabled, name: '未授权新规则' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+      for (const code of ['process-quality:defects:write', 'ingestion:manage']) {
+        const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code } });
+        await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
+        try { await expect(engine.saveRule(fixture.actor, input, randomUUID(), key, active.id)).rejects.toMatchObject({ status: 403 }); }
+        finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } }); }
+      }
+    } finally {
+      for (const permissionId of removed) await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId } });
+      await fixture.prisma.$executeRaw`UPDATE integration_ingestion_rules SET enabled=false,configuration=jsonb_set(configuration,'{enabled}','false'::jsonb) WHERE id=${active.id}::uuid AND organization_id=${fixture.actor.organizationId}::uuid`;
+    }
+  });
+
+  it('limits the unchanged AI disable exemption to the original endpoint, target and organization', async () => {
+    mode = 'SUCCESS'; const value = await engineSource();
+    const input = { ...value.configuration, expectedVersion: value.configuration.version, enabled: false };
+    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
+    try {
+      const endpoint = await fixture.prisma.integrationEndpoint.create({ data: { organizationId: fixture.actor.organizationId, code: randomUUID(), name: '另一来源', sourceCode: 'TEST', sourceName: '范围验证', status: 'ENABLED' } });
+      await expect(engine.saveRule(fixture.actor, { ...input, endpointId: endpoint.id }, randomUUID(), randomUUID(), input.id)).rejects.toMatchObject({ response: { code: 'INGESTION_RULE_INVALID' } });
+      const foreign = await fixture.prisma.organization.create({ data: { code: randomUUID(), name: '停用边界另一组织', type: 'INTERNAL' } });
+      await expect(engine.saveRule({ ...fixture.actor, scopeOrganizationId: foreign.id }, input, randomUUID(), randomUUID(), input.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...input, target: 'MATERIAL', sourceTimezone: undefined, mapping: { code: 'code', name: 'name' }, updateFields: ['name'], aiDescription: undefined, aiApplication: undefined }, randomUUID(), randomUUID(), input.id)).rejects.toMatchObject({ status: 403 });
+      await expect(engine.saveRule(fixture.actor, { ...input, enabled: true }, randomUUID(), randomUUID(), input.id)).rejects.toMatchObject({ status: 403 });
+    } finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } }); }
+  });
+
+  it('keeps a disable replay exemption tied to its original operation after later configuration changes and protects older receipts', async () => {
+    mode = 'SUCCESS'; const value = await engineSource();
+    const key = randomUUID(), input = { ...value.configuration, expectedVersion: value.configuration.version, enabled: false };
+    const disabled = await engine.saveRule(fixture.actor, input, randomUUID(), key, input.id);
+    const changedKey = randomUUID(), changedInput = { ...disabled, expectedVersion: disabled.version, aiApplication: undefined,
+      aiDescription: { ...disabled.aiDescription!, prompt: '后续合法变更{{fact}}' } };
+    await engine.saveRule(fixture.actor, changedInput, randomUUID(), changedKey, input.id);
+    const permission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'configuration:read' } });
+    await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: permission.id } });
+    try {
+      expect(await engine.saveRule(fixture.actor, input, randomUUID(), key, input.id)).toEqual(disabled);
+      await expect(engine.saveRule(fixture.actor, changedInput, randomUUID(), changedKey, input.id)).rejects.toMatchObject({ status: 403 });
+      await fixture.prisma.$executeRaw`UPDATE admin_mutations SET response=jsonb_set(response,'{value}',(response->'value')-'configurationReadRequired') WHERE organization_id=${fixture.actor.organizationId}::uuid AND actor_user_id=${fixture.actor.id}::uuid AND key=${changedKey}`;
+      await expect(engine.saveRule(fixture.actor, changedInput, randomUUID(), changedKey, input.id)).rejects.toMatchObject({ status: 403 });
+    } finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } }); }
   });
 
   it('guards an existing null-reference task through its same-version migrated rule binding without rewriting the task', async () => {
